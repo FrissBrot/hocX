@@ -254,8 +254,22 @@ export type SubmissionAssignment = {
   reviewer_ids?: string[];
   /** Wer darf eingereichte Dateien sehen? (Kontext-Freigabe, Migration 0196) */
   file_visibility?: SubmissionFileVisibility;
+  /** Von Hand angelegte Elemente einer Einzelabgabe (Migration 0198), sonst leer */
+  manual_elements?: SubmissionManualElement[];
   created_at: string;
   updated_at: string;
+};
+
+/** Element einer Einzelabgabe (Migration 0198): Name, optionales Zeitfenster, Verantwortliche. */
+export type SubmissionManualElement = {
+  id: string;
+  /** «manual» beim Standard-Element, sonst «manual-<id>» */
+  element_ref: string;
+  name: string;
+  window_start: string | null;
+  window_end: string | null;
+  is_default: boolean;
+  responsible_participant_ids: string[];
 };
 
 /** Kontext-Freigabe eines Abgabe-Auftrags (Migration 0196): «default» = Standard der Organisation. */

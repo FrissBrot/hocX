@@ -11,8 +11,9 @@ Installationen aktualisieren können.
 ## [1.4.1] - 2026-11-19
 
 Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem Design «Abgaben v4»
-(in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt).
-Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+(in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt). Einzelabgaben haben neu
+beliebig viele, von Hand angelegte Abgabeelemente mit eigenem Stichtag und eigenen Verantwortlichen.
+Eine Migration (0198), keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -21,6 +22,17 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   `traefik.docker.network=hocx_default` für `abgabebox-backend`) angelegt hat: das Update verschiebt
   die Datei automatisch nach `backups/`, die Korrektur ist im Release enthalten. Enthält die Datei
   weitere eigene Einstellungen, bleibt sie unverändert (Hinweis im Deploy-Log).
+- **Migration 0198 (`0198_submission_manual_elements`):** neue Tabelle `submission_manual_element`
+  (Elemente der Einzelabgaben, `tenant_id NOT NULL`, RLS für `hocx_app`, für `hocx_abgabebox` nur
+  lesend und nur für den Mandanten des Upload-Links, ohne Verantwortliche) und die Spalte
+  `submission_upload.manual_element_id` (Fremdschlüssel nur auf Elemente derselben Abgabe). Jede
+  bestehende Einzelabgabe bekommt genau ein Standard-Element: Name = Titel der Abgabe, Stichtag =
+  bisheriger Stichtag (der Stichtag der Abgabe selbst wird geleert). Das Element behält die
+  Referenz `manual`, bestehende Einreichungen, verknüpfte Dateien, Pendenzen und persönliche Links
+  gehören weiter dazu. Trigger und Zählfunktionen der Abgabebox kennen die neuen Elemente.
+  Downgrade möglich: Einreichungen zusätzlicher Elemente gehen im einen Element der Einzelabgabe
+  auf, deren persönliche Links werden widerrufen, der Stichtag kommt vom Standard-Element zurück.
+  Abgabebox-Backend und Backend gemeinsam ausrollen (das Deploy-Skript tut das).
 
 ### Geändert
 
@@ -66,6 +78,14 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, die Datei selbst wird nicht
   verändert. Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
   Migration `0200_photo_capture_override` (neue Spalten in `stored_file`).
+- **Einzelabgaben mit mehreren Abgabeelementen:** Im Assistenten legt man bei «Einzelabgabe» in
+  Schritt 2 («Elemente») beliebig viele Elemente an («+ Element», Entfernen per Icon), je mit Name,
+  optionalem Start und Stichtag; in Schritt 3 wählt man je Element eine oder mehrere verantwortliche
+  Personen. Jedes Element verhält sich wie ein Termin oder Listeneintrag: eigene Kachel im Detail,
+  einzeln wählbar und hochladbar in der Abgabebox, eigene Pendenz für die Verantwortlichen (fällig am
+  Stichtag, nachgeführt bei Änderung und Entfernen), Fortschritt, ZIP-Download und Datenexport je
+  Element. Bestehende Einzelabgaben behalten ihr eines Element und verhalten sich wie bisher. Die
+  Datenauskunft listet die Elemente, für die eine Person verantwortlich ist.
 
 ## [1.4.0] - 2026-11-19
 

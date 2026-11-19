@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.models.entities import CycleConfig, ListDefinition, Tenant
 from app.schemas.base import PublicIdModel
@@ -26,6 +26,39 @@ OffsetDays = Annotated[int, Field(ge=0, le=OFFSET_DAYS_MAX)]
 SLUG_PATTERN = r"^[a-z0-9-]+$"
 
 LinkName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+ManualElementName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+# Obergrenzen gegen übergrosse Anfragen (Formular: von Hand angelegte Elemente)
+MAX_MANUAL_ELEMENTS = 200
+MAX_ELEMENT_RESPONSIBLE = 50
+
+
+class SubmissionManualElementWrite(BaseModel):
+    """Element einer Einzelabgabe im Formular (Migration 0198). ``id`` = bestehendes Element dieser
+    Abgabe, ``None`` = neu. Verantwortliche sind öffentliche Personen-IDs des eigenen Mandanten."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID | None = None
+    name: ManualElementName
+    window_start: date | None = None
+    window_end: date | None = None
+    responsible_participant_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_ELEMENT_RESPONSIBLE)
+
+    @model_validator(mode="after")
+    def _window_order(self) -> "SubmissionManualElementWrite":
+        if self.window_start is not None and self.window_end is not None and self.window_start > self.window_end:
+            raise ValueError("Der Start liegt nach dem Ende")
+        return self
+
+
+class SubmissionManualElementRead(BaseModel):
+    id: uuid.UUID
+    element_ref: str
+    name: str
+    window_start: date | None = None
+    window_end: date | None = None
+    is_default: bool = False
+    responsible_participant_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SubmissionAssignmentBase(BaseModel):
@@ -75,6 +108,8 @@ class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
     # Kontext-Freigabe (Migration 0196); None = Standard des Moduls
     file_visibility: SubmissionFileVisibility | None = None
+    # Elemente einer Einzelabgabe (0198); None = ein Standard-Element mit Titel und Stichtag
+    manual_elements: list[SubmissionManualElementWrite] | None = Field(default=None, max_length=MAX_MANUAL_ELEMENTS)
 
 
 class SubmissionAssignmentUpdate(BaseModel):
@@ -105,6 +140,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
     # None = Kontext-Freigabe unverändert lassen (Migration 0196)
     file_visibility: SubmissionFileVisibility | None = None
+    # None = Elemente der Einzelabgabe unverändert; fehlende werden entfernt (samt Einreichungen)
+    manual_elements: list[SubmissionManualElementWrite] | None = Field(default=None, max_length=MAX_MANUAL_ELEMENTS)
 
 
 class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
@@ -120,6 +157,8 @@ class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
     file_visibility: SubmissionFileVisibility = Field(default_factory=SubmissionFileVisibility)
     # Alle Elemente abgegeben oder geschlossen (Reiter «Abgeschlossen», Migration 0182)
     completed_at: datetime | None = None
+    # Elemente einer Einzelabgabe (Migration 0198), sonst leer
+    manual_elements: list[SubmissionManualElementRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

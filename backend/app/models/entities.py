@@ -2207,6 +2207,48 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     )
 
 
+class SubmissionManualElement(Base, TimestampMixin, UpdatedAtMixin):
+    """Von Hand angelegtes Element einer Einzelabgabe (source_type 'manual', Migration 0198).
+
+    Name, optionales Zeitfenster und Verantwortliche (Personen-IDs des Mandanten als JSONB wie bei
+    Terminen). Das Standard-Element (``is_default``) behält die Referenz ``manual`` und den alten
+    Einreichungs-Schlüssel (alle Ziele NULL); alle anderen heissen ``manual-<public_id>`` und ihre
+    Einreichungen tragen ``submission_upload.manual_element_id``. Geschrieben nur über
+    SubmissionService (prüft Mandant der Verantwortlichen)."""
+
+    __tablename__ = "submission_manual_element"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "id", name="uq_submission_manual_element_assignment_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"], ["submission_assignment.tenant_id", "submission_assignment.id"],
+            ondelete="CASCADE", name="fk_submission_manual_element_assignment",
+        ),
+        CheckConstraint("length(btrim(name)) BETWEEN 1 AND 200", name="ck_submission_manual_element_name"),
+        CheckConstraint(
+            "window_start IS NULL OR window_end IS NULL OR window_start <= window_end", name="ck_submission_manual_element_window"
+        ),
+        CheckConstraint("jsonb_typeof(responsible_participant_ids) = 'array'", name="ck_submission_manual_element_responsible"),
+        Index("uq_submission_manual_element_default", "assignment_id", unique=True, postgresql_where=text("is_default")),
+        Index("idx_submission_manual_element_tenant", "tenant_id"),
+        Index("idx_submission_manual_element_assignment", "assignment_id", "sort_index"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    assignment_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    window_start: Mapped[date | None] = mapped_column(Date)
+    window_end: Mapped[date | None] = mapped_column(Date)
+    responsible_participant_ids: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list
+    )
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+
+
 class SubmissionLink(Base, TimestampMixin, UpdatedAtMixin):
     """Zugangslink zur oeffentlichen Abgabebox. `token` ist ein zufaelliger, nicht erratbarer
     Wert, der selbst die Authentifizierung ist (Teil der URL: <abgabebox-domain>/<token>);
@@ -2252,15 +2294,22 @@ class SubmissionUpload(Base, TimestampMixin):
     abgabebox-backend-Service darf auf dieser Tabelle nur INSERT (kein UPDATE/DELETE),
     damit ein kompromittierter öffentlicher Prozess frühere Abgaben nicht verändern kann.
     Der aktuelle Zustand eines Elements ist der Status der Zeile mit der höchsten id
-    je (assignment_id, event_id, list_entry_id). Uploads einer manuellen Abgabe tragen weder
-    event_id noch list_entry_id (Migration 0080_submission_manual_source).
+    je (assignment_id, event_id, list_entry_id, manual_element_id). Uploads des Standard-Elements
+    einer manuellen Abgabe tragen kein Ziel (Migration 0080), die der weiteren Elemente
+    ``manual_element_id`` (Migration 0198).
     """
 
     __tablename__ = "submission_upload"
     __table_args__ = (
         CheckConstraint(
-            "event_id IS NULL OR list_entry_id IS NULL",
+            "num_nonnulls(event_id, list_entry_id, manual_element_id) <= 1",
             name="ck_submission_upload_at_most_one_target",
+        ),
+        # Element einer Einzelabgabe gehört zur selben Abgabe (Migration 0198)
+        ForeignKeyConstraint(
+            ["assignment_id", "manual_element_id"],
+            ["submission_manual_element.assignment_id", "submission_manual_element.id"],
+            ondelete="CASCADE", name="fk_submission_upload_manual_element",
         ),
         # 'reopened' bleibt in der CHECK-Liste fuer historische Zeilen aus vor der 2026-08-17
         # Umstellung auf kumulative Uploads (siehe submission_service.py) - der Service erzeugt
@@ -2279,6 +2328,8 @@ class SubmissionUpload(Base, TimestampMixin):
     assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="CASCADE"))
     list_entry_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_entry.id", ondelete="CASCADE"))
+    # Zusätzliches Element einer Einzelabgabe (0198); NULL beim Standard-Element «manual»
+    manual_element_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

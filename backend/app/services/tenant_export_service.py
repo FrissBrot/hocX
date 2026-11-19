@@ -86,6 +86,7 @@ from app.models import (
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
+    SubmissionManualElement,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
@@ -452,6 +453,13 @@ class TenantExportService:
             ).all()
             tables["submission_assignment"] = self._rows(submission_assignments, "submission_assignment")
             assignment_ids = [a.id for a in submission_assignments]
+            # Elemente der Einzelabgaben (0198); Verantwortliche als interne Personen-IDs wie bei Terminen
+            tables["submission_manual_element"] = self._rows(
+                db.scalars(
+                    select(SubmissionManualElement).where(SubmissionManualElement.tenant_id == tenant_id)
+                ).all(),
+                "submission_manual_element",
+            )
             submission_uploads = (
                 db.scalars(select(SubmissionUpload).where(SubmissionUpload.assignment_id.in_(assignment_ids))).all()
                 if assignment_ids

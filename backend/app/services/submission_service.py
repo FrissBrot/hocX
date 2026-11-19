@@ -14,14 +14,16 @@ from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
 from app.core.features_generated import F
-from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, TenantFeature, TodoStatus, ProtocolTodoFile
-from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionManualElement, SubmissionUpload, SubmissionUploadFile, TenantFeature, TodoStatus, ProtocolTodoFile
+from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository, manual_element_ref
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
     SubmissionAssignmentRead,
     SubmissionAssignmentUpdate,
     SubmissionElementRead,
     SubmissionFileRead,
+    SubmissionManualElementRead,
+    SubmissionManualElementWrite,
     SubmissionUploadLogEntry,
 )
 from app.notifications import todos as todo_notifications
@@ -105,6 +107,30 @@ def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uui
     return MANUAL_ELEMENT_REF
 
 
+def raw_element_ref(raw: dict) -> str:
+    """element_ref eines Elements aus _resolve_raw_elements (Elemente einer Einzelabgabe tragen ihre
+    Referenz selbst, Migration 0198)."""
+    return raw.get("element_ref") or _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
+
+
+ElementKey = tuple[int | None, int | None, int | None]
+
+
+def raw_element_key(raw: dict) -> ElementKey:
+    """Schlüssel der Einreichungen eines Elements: (event_id, list_entry_id, manual_element_id)."""
+    return raw["event_id"], raw["list_entry_id"], raw.get("manual_element_id")
+
+
+def upload_key(upload: SubmissionUpload) -> ElementKey:
+    return upload.event_id, upload.list_entry_id, upload.manual_element_id
+
+
+def upload_key_filter(key: ElementKey) -> list:
+    """WHERE-Bedingungen für die Einreichungen eines Elements (NULL-sicher)."""
+    columns = (SubmissionUpload.event_id, SubmissionUpload.list_entry_id, SubmissionUpload.manual_element_id)
+    return [column == value if value is not None else column.is_(None) for column, value in zip(columns, key)]
+
+
 def _resolve_event_responsible(event: Event, source: str | None) -> list[int]:
     """Alle Personen im Verantwortlichen-Feld des Termins (mehrere = gemeinsam verantwortlich)."""
     if not source:
@@ -124,9 +150,11 @@ def _resolve_list_responsible(entry: ListEntry, definition: ListDefinition, sour
     return list(dict.fromkeys(int(pid) for pid in ids if pid))
 
 
-def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int | None]:
+def _parse_element_ref(db: Session, element_ref: str) -> ElementKey:
+    """Referenz -> (event_id, list_entry_id, manual_element_id). Löst ohne Mandantenfilter auf: der
+    Aufrufer prüft danach, dass das Element zu seiner (mandantengebundenen) Abgabe gehört."""
     if element_ref == MANUAL_ELEMENT_REF:
-        return None, None
+        return None, None, None
     kind, _, raw_id = element_ref.partition("-")
     try:
         public_id = uuid.UUID(raw_id)
@@ -136,12 +164,17 @@ def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int |
         internal_id = public_id_service.resolve_internal_id(db, Event, public_id)
         if internal_id is None:
             raise ValueError("Ungültige Element-Referenz")
-        return internal_id, None
+        return internal_id, None, None
     if kind == "entry":
         internal_id = public_id_service.resolve_internal_id(db, ListEntry, public_id)
         if internal_id is None:
             raise ValueError("Ungültige Element-Referenz")
-        return None, internal_id
+        return None, internal_id, None
+    if kind == "manual":
+        element = public_id_service.get_by_public_id(db, SubmissionManualElement, public_id)  # nosemgrep: public-id-lookup-without-tenant -- Aufrufer prüft die Zugehörigkeit zur Abgabe
+        if element is None or element.is_default:
+            raise ValueError("Ungültige Element-Referenz")
+        return None, None, element.id
     raise ValueError("Ungültige Element-Referenz")
 
 
@@ -174,13 +207,140 @@ class SubmissionService:
     def __init__(self, repository: SubmissionRepository | None = None) -> None:
         self.repository = repository or SubmissionRepository()
 
-    def _assignment_read(self, assignment: SubmissionAssignment) -> SubmissionAssignmentRead:
+    def _assignment_read(self, assignment: SubmissionAssignment, db: Session | None = None) -> SubmissionAssignmentRead:
         read = SubmissionAssignmentRead.model_validate(assignment)
         read.link_ids = [link.public_id for link in assignment.links]
+        if assignment.source_type == "manual":
+            session = db or Session.object_session(assignment)
+            if session is not None:
+                read.manual_elements = self.manual_elements_read(session, assignment)
         return read
 
+    def manual_elements_read(self, db: Session, assignment: SubmissionAssignment) -> list[SubmissionManualElementRead]:
+        elements = self.repository.list_manual_elements(db, assignment_id=assignment.id)
+        all_ids = {int(pid) for element in elements for pid in (element.responsible_participant_ids or [])}
+        public_ids = self._tenant_participant_public_ids(db, assignment.tenant_id, all_ids)
+        return [
+            SubmissionManualElementRead(
+                id=element.public_id,
+                element_ref=manual_element_ref(element),
+                name=element.name,
+                window_start=element.window_start,
+                window_end=element.window_end,
+                is_default=element.is_default,
+                responsible_participant_ids=[
+                    public_ids[int(pid)] for pid in (element.responsible_participant_ids or []) if int(pid) in public_ids
+                ],
+            )
+            for element in elements
+        ]
+
+    @staticmethod
+    def _tenant_participant_public_ids(db: Session, tenant_id: int, ids: set[int]) -> dict[int, uuid.UUID]:
+        """Nur Personen des Mandanten (gespeicherte IDs fremder oder gelöschter Personen fallen weg)."""
+        if not ids:
+            return {}
+        return dict(db.execute(
+            select(Participant.id, Participant.public_id).where(Participant.id.in_(ids), Participant.tenant_id == tenant_id)
+        ).all())
+
+    @staticmethod
+    def _resolve_responsible(db: Session, tenant_id: int, public_ids: list[uuid.UUID]) -> list[int]:
+        """Öffentliche Personen-IDs -> interne, nur im eigenen Mandanten. Eine fremde oder unbekannte
+        ID lehnt die ganze Änderung ab (gleiche Meldung, kein Existenz-Orakel)."""
+        result: list[int] = []
+        for public_id in dict.fromkeys(public_ids):
+            internal_id = public_id_service.resolve_internal_id(db, Participant, public_id, tenant_id=tenant_id)
+            if internal_id is None:
+                raise ValueError("Verantwortliche Person nicht gefunden")
+            result.append(internal_id)
+        return result
+
+    def _sync_manual_elements(
+        self,
+        db: Session,
+        assignment: SubmissionAssignment,
+        items: list[SubmissionManualElementWrite] | None,
+        *,
+        fallback_deadline: date | None = None,
+    ) -> None:
+        """Elemente einer Einzelabgabe anlegen, ändern, entfernen (ohne Commit; das Entfernen von
+        Einreichungen committet selbst, siehe deletion_service). `items` None = unverändert; gibt es
+        noch keine Elemente, entsteht das Standard-Element aus Titel und (altem) Stichtag. Bestehende
+        Elemente werden über ihre öffentliche ID erkannt - nur Elemente dieser Abgabe, sonst ValueError.
+        Alle Prüfungen laufen, bevor etwas geändert wird."""
+        existing = self.repository.list_manual_elements(db, assignment_id=assignment.id)
+        if items is None:
+            if not existing:
+                db.add(SubmissionManualElement(
+                    tenant_id=assignment.tenant_id, assignment_id=assignment.id, is_default=True,
+                    name=(assignment.title or "").strip()[:200] or "Abgabe", window_end=fallback_deadline, sort_index=0,
+                ))
+                db.flush()
+            return
+        if not items:
+            raise ValueError("Eine Einzelabgabe braucht mindestens ein Element")
+        by_public_id = {element.public_id: element for element in existing}
+        kept: set[int] = set()
+        prepared: list[tuple[SubmissionManualElement | None, SubmissionManualElementWrite, list[int]]] = []
+        for item in items:
+            current = None
+            if item.id is not None:
+                current = by_public_id.get(item.id)
+                if current is None or current.id in kept:
+                    raise ValueError("Element nicht gefunden")
+                kept.add(current.id)
+            prepared.append((current, item, self._resolve_responsible(db, assignment.tenant_id, item.responsible_participant_ids)))
+        for element in existing:
+            if element.id not in kept:
+                self._delete_manual_element(db, assignment, element)
+        has_default = any(element.is_default for element in existing if element.id in kept)
+        for index, (current, item, responsible) in enumerate(prepared):
+            if current is None:
+                # Neue Abgabe: das erste Element ist das Standard-Element (Referenz «manual»)
+                current = SubmissionManualElement(
+                    tenant_id=assignment.tenant_id, assignment_id=assignment.id,
+                    is_default=not existing and not has_default and index == 0,
+                )
+                has_default = has_default or current.is_default
+            current.name = item.name
+            current.window_start = item.window_start
+            current.window_end = item.window_end
+            current.responsible_participant_ids = responsible
+            current.sort_index = index
+            db.add(current)
+        db.flush()
+
+    def _delete_manual_element(self, db: Session, assignment: SubmissionAssignment, element: SubmissionManualElement) -> None:
+        """Element entfernen: Dateien seiner Einreichungen vollständig löschen (wie beim Löschen eines
+        Listeneintrags, PRIV-003), App-Verknüpfungen lösen. Pendenzen gleicht der Abgleich danach ab."""
+        from app.services import deletion_service
+
+        ref = manual_element_ref(element)
+        if element.is_default:
+            deletion_service.erase_uploads_of(db, manual_default_assignment_id=assignment.id)
+            # Schliessen/Wiederöffnen-Zeilen ohne Dateien
+            db.execute(
+                SubmissionUpload.__table__.delete().where(
+                    SubmissionUpload.assignment_id == assignment.id, *upload_key_filter((None, None, None))
+                )
+            )
+        else:
+            deletion_service.erase_uploads_of(db, manual_element_id=element.id)
+        db.execute(
+            GalleryImage.__table__.update()
+            .where(
+                GalleryImage.tenant_id == assignment.tenant_id,
+                GalleryImage.submission_assignment_id == assignment.id,
+                GalleryImage.submission_element_ref == ref,
+            )
+            .values(submission_assignment_id=None, submission_element_ref=None, submission_withdrawn_at=None)
+        )
+        db.delete(element)
+        db.flush()
+
     def list_assignments(self, db: Session, *, tenant_id: int) -> list[SubmissionAssignmentRead]:
-        return [self._assignment_read(item) for item in self.repository.list_assignments(db, tenant_id=tenant_id)]
+        return [self._assignment_read(item, db) for item in self.repository.list_assignments(db, tenant_id=tenant_id)]
 
     def get_assignment(self, db: Session, assignment_id: int) -> SubmissionAssignment | None:
         return self.repository.get_assignment(db, assignment_id)
@@ -189,9 +349,16 @@ class SubmissionService:
         self, db: Session, payload: SubmissionAssignmentCreate, *, tenant_id: int
     ) -> SubmissionAssignmentRead:
         self._validate_source_fields(payload)
+        if payload.manual_elements is not None and payload.source_type != "manual":
+            raise ValueError("Elemente gibt es nur bei Einzelabgaben")
         list_definition_id = self._resolve_list_definition_tenant(db, payload.list_definition_id, tenant_id=tenant_id)
-        values = payload.model_dump(exclude={"reviewer_ids", "file_visibility"})  # Prüfer/Freigabe setzt die Route (submission_reviewer_service)
+        values = payload.model_dump(exclude={"reviewer_ids", "file_visibility", "manual_elements"})  # Prüfer/Freigabe setzt die Route (submission_reviewer_service)
         link_ids = values.pop("link_ids")
+        # Einzelabgabe: das Zeitfenster gehört zu den Elementen (0198); ein Stichtag von älteren
+        # Clients wird zum Ende des Standard-Elements
+        fallback_deadline = values["deadline"] if payload.source_type == "manual" else None
+        if payload.source_type == "manual":
+            values["deadline"] = None
         values["list_definition_id"] = list_definition_id
         values["cycle_config_id"] = self._resolve_cycle_config_tenant(db, payload.cycle_config_id, tenant_id=tenant_id)
         values["cycle_offsets"] = sorted(set(values["cycle_offsets"]), reverse=True)
@@ -201,9 +368,14 @@ class SubmissionService:
             else submission_link_service.resolve_links(db, link_ids, tenant_id=tenant_id)
         )
         entity = SubmissionAssignment(tenant_id=tenant_id, links=links, **values)
+        if payload.source_type == "manual":
+            # Abgabe und Elemente in einer Transaktion (eine fremde Person bricht alles ab)
+            db.add(entity)
+            db.flush()
+            self._sync_manual_elements(db, entity, payload.manual_elements, fallback_deadline=fallback_deadline)
         created = self.repository.create_assignment(db, entity)
         self.sync_todos_if_tracked(db, created)
-        return self._assignment_read(created)
+        return self._assignment_read(created, db)
 
     def update_assignment(
         self, db: Session, assignment_id: int, payload: SubmissionAssignmentUpdate
@@ -219,17 +391,32 @@ class SubmissionService:
                 values.pop(key)  # null = unverändert (Spalten sind NOT NULL)
         values.pop("reviewer_ids", None)  # Prüfer setzt die Route (submission_reviewer_service)
         values.pop("file_visibility", None)  # Kontext-Freigabe setzt die Route (context_visibility_service)
+        values.pop("manual_elements", None)
+        manual_items = payload.manual_elements
         link_ids = values.pop("link_ids", None)
+        sync_manual = False
+        fallback_deadline = None
+        if values.get("source_type", assignment.source_type) == "manual":
+            # Stichtag älterer Clients: Ende des Standard-Elements, falls es noch keine Elemente gibt
+            fallback_deadline = values.pop("deadline", None) or assignment.deadline
+            if assignment.deadline is not None:
+                values["deadline"] = None
+            sync_manual = manual_items is not None or not self.repository.list_manual_elements(db, assignment_id=assignment.id)
+        elif manual_items is not None:
+            raise ValueError("Elemente gibt es nur bei Einzelabgaben")
         if link_ids is not None:
             assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)
         if not values:
-            if link_ids is not None:
+            if sync_manual:
+                self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline)
+            if link_ids is not None or sync_manual:
                 db.add(assignment)
                 db.commit()
                 db.refresh(assignment)
-                self.refresh_todo_links(db, assignment)
+                if link_ids is not None:
+                    self.refresh_todo_links(db, assignment)
                 self.sync_todos_if_tracked(db, assignment)
-            return self._assignment_read(assignment)
+            return self._assignment_read(assignment, db)
         if "list_definition_id" in values:
             values["list_definition_id"] = self._resolve_list_definition_tenant(
                 db, values["list_definition_id"], tenant_id=assignment.tenant_id
@@ -251,11 +438,14 @@ class SubmissionService:
             "deadline": values.get("deadline", assignment.deadline),
         }
         self._validate_source_fields_dict(merged)
+        if sync_manual:
+            # Erst nach allen Prüfungen: das Entfernen von Einreichungen committet selbst
+            self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline)
         updated = self.repository.update_assignment(db, assignment, values)
         if link_ids is not None:
             self.refresh_todo_links(db, updated)
         self.sync_todos_if_tracked(db, updated)
-        return self._assignment_read(updated)
+        return self._assignment_read(updated, db)
 
     def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
         # list_definition_id is client-supplied - without this, a writer could point a
@@ -370,20 +560,36 @@ class SubmissionService:
             return self._sort_raw_elements(raw, assignment.sort_order)
 
         if assignment.source_type == "manual":
-            # Genau ein Element: die Abgabe selbst. Kein Event/Listen-Eintrag dahinter,
-            # daher event_id = list_entry_id = None (siehe Migration 0080).
+            # Von Hand angelegte Elemente (Migration 0198) in ihrer Reihenfolge aus dem Formular.
+            # Das Standard-Element hat kein Ziel in der Einreichung (Schlüssel wie vor 0198).
+            elements = self.repository.list_manual_elements(db, assignment_id=assignment.id)
+            if not elements:
+                # Ohne Elemente (nur bei Daten, die am Dienst vorbei entstanden sind): wie vor 0198
+                # ein Element, die Abgabe selbst - gleiche Regel wie die Abgabebox
+                return [{
+                    "event_id": None, "event_public_id": None, "list_entry_id": None, "list_entry_public_id": None,
+                    "manual_element_id": None, "element_ref": MANUAL_ELEMENT_REF, "label": assignment.title,
+                    "sort_date": None, "window_start": None, "window_end": None, "responsible_participant_ids": [],
+                }]
+            all_ids = {int(pid) for element in elements for pid in (element.responsible_participant_ids or [])}
+            own = set(self._tenant_participant_public_ids(db, assignment.tenant_id, all_ids))
             return [
                 {
                     "event_id": None,
                     "event_public_id": None,
                     "list_entry_id": None,
                     "list_entry_public_id": None,
-                    "label": assignment.title,
-                    "sort_date": None,
-                    "window_start": None,
-                    "window_end": assignment.deadline,
-                    "responsible_participant_ids": [],
+                    "manual_element_id": None if element.is_default else element.id,
+                    "element_ref": manual_element_ref(element),
+                    "label": element.name,
+                    "sort_date": element.window_end or element.window_start,
+                    "window_start": element.window_start,
+                    "window_end": element.window_end,
+                    "responsible_participant_ids": list(dict.fromkeys(
+                        int(pid) for pid in (element.responsible_participant_ids or []) if int(pid) in own
+                    )),
                 }
+                for element in elements
             ]
 
         definition = self.repository.get_list_definition(db, assignment.list_definition_id) if assignment.list_definition_id else None
@@ -458,7 +664,8 @@ class SubmissionService:
         """Referenzen aller Elemente, die heute zur Abgabe gehören - ohne Bezeichnungen und
         Verantwortliche (für den Fortschritt, günstiger als _resolve_raw_elements)."""
         if assignment.source_type == "manual":
-            return [MANUAL_ELEMENT_REF]
+            elements = self.repository.list_manual_elements(db, assignment_id=assignment.id)
+            return [manual_element_ref(element) for element in elements] if elements else [MANUAL_ELEMENT_REF]
         if assignment.source_type == "events":
             return [f"event-{event.public_id}" for event in self.list_assignment_events(db, assignment)]
         if assignment.list_definition_id is None:
@@ -493,9 +700,9 @@ class SubmissionService:
         """
         raw_elements = self._resolve_raw_elements(db, assignment)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
-        uploads_by_key: dict[tuple[int | None, int | None], list[SubmissionUpload]] = {}
+        uploads_by_key: dict[ElementKey, list[SubmissionUpload]] = {}
         for upload in uploads:
-            uploads_by_key.setdefault((upload.event_id, upload.list_entry_id), []).append(upload)
+            uploads_by_key.setdefault(upload_key(upload), []).append(upload)
 
         linked_files: dict[str, list[StoredFile]] = {}
         for gallery_image, stored_file in db.execute(
@@ -512,15 +719,15 @@ class SubmissionService:
             linked_files.setdefault(gallery_image.submission_element_ref, []).append(stored_file)
 
         files_by_upload = self.repository.list_files_for_uploads(db, upload_ids=[upload.id for upload in uploads])
-        withdrawn_by_key: dict[tuple[int | None, int | None], int] = {}
+        withdrawn_by_key: dict[ElementKey, int] = {}
         if uploads:
-            for event_id, list_entry_id, count in db.execute(
-                select(SubmissionUpload.event_id, SubmissionUpload.list_entry_id, func.count(SubmissionUploadFile.id))
+            for event_id, list_entry_id, manual_element_id, count in db.execute(
+                select(SubmissionUpload.event_id, SubmissionUpload.list_entry_id, SubmissionUpload.manual_element_id, func.count(SubmissionUploadFile.id))
                 .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
                 .where(SubmissionUpload.assignment_id == assignment.id, SubmissionUploadFile.withdrawn_at.is_not(None))
-                .group_by(SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
+                .group_by(SubmissionUpload.event_id, SubmissionUpload.list_entry_id, SubmissionUpload.manual_element_id)
             ):
-                withdrawn_by_key[(event_id, list_entry_id)] = int(count)
+                withdrawn_by_key[(event_id, list_entry_id, manual_element_id)] = int(count)
         withdrawn_linked = dict(db.execute(
             select(GalleryImage.submission_element_ref, func.count(GalleryImage.id))
             .where(
@@ -534,7 +741,7 @@ class SubmissionService:
 
         results: list[SubmissionElementRead] = []
         for raw in raw_elements:
-            key = (raw["event_id"], raw["list_entry_id"])
+            key = raw_element_key(raw)
             element_uploads = uploads_by_key.get(key, [])
 
             files: list[SubmissionFileRead] = []
@@ -554,9 +761,7 @@ class SubmissionService:
                         )
                     )
 
-            element_ref = _element_ref(
-                event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"]
-            )
+            element_ref = raw_element_ref(raw)
             known_file_ids = {file.id for file in files}
             for stored_file in linked_files.get(element_ref, []):
                 if stored_file.public_id in known_file_ids:
@@ -601,26 +806,23 @@ class SubmissionService:
 
     def _latest_upload_for_element(
         self, db: Session, assignment: SubmissionAssignment, element_ref: str
-    ) -> tuple[int | None, int | None, SubmissionUpload | None]:
+    ) -> tuple[ElementKey, SubmissionUpload | None]:
         # Nur Elemente dieser Abgabe (und damit dieses Mandanten): eine fremde oder erfundene
         # Referenz darf weder eine Zeile anlegen noch verraten, ob es den Termin gibt.
-        known = {
-            _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
-            for raw in self._resolve_raw_elements(db, assignment)
-        }
-        if element_ref not in known:
+        raw = next((item for item in self._resolve_raw_elements(db, assignment) if raw_element_ref(item) == element_ref), None)
+        if raw is None:
             raise ValueError("Element gehört nicht zu dieser Abgabe")
-        event_id, list_entry_id = _parse_element_ref(db, element_ref)
+        key = raw_element_key(raw)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
-        matching = [u for u in uploads if u.event_id == event_id and u.list_entry_id == list_entry_id]
-        return event_id, list_entry_id, (matching[-1] if matching else None)
+        matching = [u for u in uploads if upload_key(u) == key]
+        return key, (matching[-1] if matching else None)
 
     def close_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
         """Schliesst ein Element manuell (keine weiteren Uploads mehr moeglich), unabhaengig
         davon, ob schon Dateien eingegangen sind - das Gegenstueck zu reopen_element, seit
         Abgaben ohne Tage-Fenster sonst unbegrenzt offen blieben."""
         lock_submission_element(db, assignment.id)
-        event_id, list_entry_id, latest = self._latest_upload_for_element(db, assignment, element_ref)
+        (event_id, list_entry_id, manual_element_id), latest = self._latest_upload_for_element(db, assignment, element_ref)
         if latest is not None and latest.status == "closed":
             raise ValueError("Element ist bereits geschlossen")
 
@@ -630,6 +832,7 @@ class SubmissionService:
                 assignment_id=assignment.id,
                 event_id=event_id,
                 list_entry_id=list_entry_id,
+                manual_element_id=manual_element_id,
                 status="closed",
                 submitted_at=None,
             ),
@@ -640,7 +843,7 @@ class SubmissionService:
         """Hebt eine manuelle Schliessung wieder auf. Bereits eingereichte Dateien bleiben
         erhalten (kumulatives Modell) - anders als vor der 2026-08-17 Umstellung, als reopen
         die bisherigen Dateien geloescht hat."""
-        event_id, list_entry_id, latest = self._latest_upload_for_element(db, assignment, element_ref)
+        (event_id, list_entry_id, manual_element_id), latest = self._latest_upload_for_element(db, assignment, element_ref)
         if latest is None or latest.status != "closed":
             raise ValueError("Element ist nicht geschlossen")
 
@@ -650,6 +853,7 @@ class SubmissionService:
                 assignment_id=assignment.id,
                 event_id=event_id,
                 list_entry_id=list_entry_id,
+                manual_element_id=manual_element_id,
                 status="submitted",
                 submitted_at=None,
             ),
@@ -813,7 +1017,7 @@ class SubmissionService:
         Fehlerprotokoll. Rückgabe False nur bei einem solchen Fehler."""
         tenant_id = assignment.tenant_id
         try:
-            if submission_link_service.preferred_link(assignment) is None or assignment.source_type == "manual":
+            if submission_link_service.preferred_link(assignment) is None:
                 # Keine Aufgaben abzugleichen, «abgeschlossen» trotzdem nachführen
                 if self.refresh_completion(db, assignment):
                     db.commit()
@@ -844,7 +1048,9 @@ class SubmissionService:
         # an; der zweite scheiterte an uix_protocol_todo_submission_element und landete im
         # Fehlerprotokoll. Mit dem Lock je Abgabe wartet er und sieht danach die Pendenzen des ersten.
         lock_submission_element(db, assignment.id)
-        raw_elements =self._resolve_raw_elements(db, assignment) if assignment.responsible_participant_source else []
+        # Einzelabgaben: Verantwortliche je Element von Hand (0198), ohne Quelle
+        tracked = bool(assignment.responsible_participant_source) or assignment.source_type == "manual"
+        raw_elements = self._resolve_raw_elements(db, assignment) if tracked else []
         states = (
             {element.element_ref: element for element in self.get_assignment_elements(db, assignment)}
             if raw_elements else {}
@@ -865,10 +1071,11 @@ class SubmissionService:
             participant_ids = raw.get("responsible_participant_ids") or []
             if not participant_ids:
                 continue
-            element_ref = _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
+            element_ref = raw_element_ref(raw)
             current_refs.add(element_ref)
             url = f"{submission_link_service.link_url(base_url, link)}/{assignment.public_slug}/{element_ref}"
-            task = f"{assignment.title}: {raw['label']}"
+            # Das Standard-Element einer Einzelabgabe heisst meist wie die Abgabe: nicht doppelt
+            task = assignment.title if raw["label"] == assignment.title else f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
             state = states.get(element_ref)
             expired = state is not None and window_expired(state, assignment, today)

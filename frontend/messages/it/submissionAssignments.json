@@ -124,7 +124,7 @@
   "logValidationFailed": "Errore di validazione",
   "makeDefaultButton": "Imposta come predefinito",
   "manageLinksAction": "Gestisci link di consegna",
-  "manualSubject": "Questa consegna ha un unico campo, indipendente da eventi e liste.",
+  "manualSubject": "Questa consegna singola ha {count, plural, one {un elemento} other {# elementi}}, indipendente da eventi e liste.",
   "maxFilesCount": "max. {count, plural, one {# file} other {# file}}",
   "maxFilesLabel": "Max. file",
   "maxSizeLabel": "Dimensione max. (MB)",
@@ -205,9 +205,9 @@
   "sourceListDescription": "Un campo di consegna per voce di lista, una scadenza comune.",
   "sourceListNamed": "Lista \"{name}\"",
   "sourceManual": "Consegna singola",
-  "sourceManualDescription": "Un singolo campo di consegna, indipendente da eventi e liste.",
+  "sourceManualDescription": "Creare a mano gli elementi di consegna, indipendenti da eventi e liste.",
   "sourceSummary": "Fonte: {source} · {window}",
-  "sourceSummaryManual": "Fonte: consegna singola · {deadline}",
+  "sourceSummaryManual": "Fonte: consegna singola · {elements} · {deadline}",
   "special1": "Speciale 1",
   "special2": "Speciale 2",
   "special3": "Speciale 3",
@@ -342,7 +342,6 @@
     "withDeadline": "Con scadenza",
     "openUntilClosed": "Aperta fino alla chiusura manuale",
     "deadlineHelp": "Si può consegnare fino a questo giorno. I compiti dei responsabili scadono in questo giorno.",
-    "noResponsibleManual": "Le consegne singole non hanno un responsabile – non vengono creati compiti.",
     "noResponsibleList": "La lista scelta non ha una colonna di persone. Senza di essa non ci sono responsabili.",
     "ownerDaysBefore": "Link valido per",
     "ownerDaysAfter": "giorni dall'invio dell'e-mail",
@@ -356,14 +355,16 @@
       "window": "Periodo",
       "responsible": "Responsabile",
       "files": "File",
-      "access": "Accesso"
+      "access": "Accesso",
+      "windowManual": "Elementi"
     },
     "questions": {
       "basics": "Che cosa va consegnato?",
       "window": "Quando è aperta la consegna?",
       "responsible": "Chi è responsabile?",
       "files": "Quali file?",
-      "access": "Chi può consegnare e chi vede i file?"
+      "access": "Chi può consegnare e chi vede i file?",
+      "windowManual": "Quali elementi vanno consegnati?"
     },
     "visibilityChip": {
       "default": "Standard",
@@ -391,14 +392,13 @@
       "listDetail": "Ogni voce riceve un proprio campo di consegna",
       "listNoName": "Lista – mancante",
       "listMissing": "Scegli una lista",
-      "manualDetail": "Un unico campo di consegna per tutti",
+      "manualDetail": "Elementi di consegna creati a mano",
       "before": "da {count, plural, one {# giorno} other {# giorni}} prima",
       "after": "fino a {count, plural, one {# giorno} other {# giorni}} dopo",
       "openUntilClosed": "aperta fino alla chiusura manuale",
       "noDeadline": "Nessuna scadenza",
       "deadlineDetail": "I compiti dei responsabili scadono in questo giorno",
       "noDeadlineDetail": "Resta aperta finché non viene chiusa manualmente.",
-      "responsibleManual": "Non possibile per le consegne singole",
       "responsibleNoColumn": "Lista senza colonna di persone",
       "responsibleValue": "{name} · Link: {mode}",
       "todoPerEvent": "Compito per appuntamento",
@@ -415,7 +415,34 @@
       "noLink": "Nessun link",
       "reviewers": "{count, plural, =0 {nessun revisore} one {# revisore} other {# revisori}}",
       "visibility": "Vedono i file: {who}",
-      "unreachable": "Senza link la consegna non è raggiungibile"
+      "unreachable": "Senza link la consegna non è raggiungibile",
+      "manualElements": "{count, plural, one {# elemento} other {# elementi}}",
+      "manualNextDeadline": "prossima scadenza {date}",
+      "manualResponsibleValue": "{count, plural, one {# elemento} other {# elementi}} con responsabili · Link: {mode}",
+      "todoPerElement": "Compito per elemento"
+    },
+    "manual": {
+      "elementsLabel": "Elementi di consegna",
+      "help": "Ogni elemento è un campo di consegna a sé: propria tessera, proprio caricamento nella casella di consegna, proprio compito. Senza scadenza resta aperto finché non viene chiuso manualmente.",
+      "nameLabel": "Nome",
+      "namePlaceholder": "p. es. Modulo d'iscrizione",
+      "startLabel": "Inizio (facoltativo)",
+      "endLabel": "Scadenza",
+      "startAria": "Inizio dell'elemento {index}",
+      "endAria": "Scadenza dell'elemento {index}",
+      "addElement": "+ Elemento",
+      "removeElement": "Rimuovi l'elemento «{name}»",
+      "unnamed": "senza nome",
+      "windowHelp": "Senza inizio l'elemento è subito aperto. I compiti dei responsabili scadono alla data di scadenza.",
+      "responsibleHelp": "Chi è responsabile di un elemento riceve un compito, in scadenza alla data dell'elemento.",
+      "responsibleNone": "Nessuno",
+      "responsibleAria": "Responsabili di «{name}»",
+      "noParticipants": "Nessuna persona trovata",
+      "elementsMissing": "Creare almeno un elemento",
+      "nameMissing": "Ogni elemento ha bisogno di un nome",
+      "windowInvalid": "Un elemento inizia dopo la sua scadenza",
+      "removeConfirm": "Rimuovere l'elemento «{name}»? I file già consegnati per questo elemento verranno eliminati al salvataggio.",
+      "removeConfirmLabel": "Rimuovi"
     }
   },
   "offsetOutOfRange": "Finestra temporale: al massimo {max} giorni prima o dopo l’evento",
@@ -424,5 +451,10 @@
     "all": "Tutti",
     "done": "Consegnati",
     "pending": "In sospeso"
-  }
+  },
+  "manualNextDeadlineSentence": "La prossima scadenza è il {date}.",
+  "manualNoDeadlineSentence": "Senza scadenza un elemento resta aperto finché non viene chiuso manualmente.",
+  "manualTodoSentence": "{count, plural, one {Per un elemento nasce un compito.} other {Per # elementi nasce un compito ciascuno.}}",
+  "manualElementsLabel": "Elementi di consegna",
+  "manualElementCount": "{count, plural, one {# elemento} other {# elementi}}"
 }

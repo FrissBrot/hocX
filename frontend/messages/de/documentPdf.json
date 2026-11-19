@@ -473,7 +473,8 @@
       "mentions": "Erwähnungen",
       "agenda_items": "Anliegen",
       "todo_fines": "Pendenzen-Bussen",
-      "notifications": "E-Mail-Benachrichtigungen"
+      "notifications": "E-Mail-Benachrichtigungen",
+      "submission_elements": "Abgabe-Elemente"
     },
     "col": {
       "first_name": "Vorname",

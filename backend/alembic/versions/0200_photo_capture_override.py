@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0200_photo_capture_override"
-down_revision = "0197_photo_worker_columns"
+down_revision = "0198_submission_manual_elements"
 branch_labels = None
 depends_on = None
 

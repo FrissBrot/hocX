@@ -161,7 +161,7 @@ def set_assignment_override(db: Session, user: CurrentUser, assignment: Submissi
 
 
 def abgabe_links(*, include_withdrawn: bool = True):
-    """(stored_file_id, assignment_id, event_id, list_entry_id, element_ref) jeder Verknüpfung
+    """(stored_file_id, assignment_id, event_id, list_entry_id, manual_element_id, element_ref) jeder Verknüpfung
     einer Datei mit einem Abgabe-Auftrag: Einreichung über die Abgabebox oder Direkt-Upload in
     der Galerie mit Abgabe-Bezug (inkl. Clip eines Live Photos)."""
     upload = (
@@ -170,6 +170,7 @@ def abgabe_links(*, include_withdrawn: bool = True):
             SubmissionUpload.assignment_id.label("assignment_id"),
             SubmissionUpload.event_id.label("event_id"),
             SubmissionUpload.list_entry_id.label("list_entry_id"),
+            SubmissionUpload.manual_element_id.label("manual_element_id"),
             cast(null(), Text).label("element_ref"),
         )
         .select_from(SubmissionUploadFile)
@@ -185,6 +186,7 @@ def abgabe_links(*, include_withdrawn: bool = True):
             GalleryImage.submission_assignment_id.label("assignment_id"),
             cast(null(), BigInteger).label("event_id"),
             cast(null(), BigInteger).label("list_entry_id"),
+            cast(null(), BigInteger).label("manual_element_id"),
             GalleryImage.submission_element_ref.label("element_ref"),
         ).where(GalleryImage.submission_assignment_id.is_not(None), column.is_not(None))
         if not include_withdrawn:
@@ -258,18 +260,20 @@ def _type_ok(rule: Rule, mime_type: str | None) -> bool:
     return rule.file_filter == "all" or _is_image(mime_type)
 
 
-def _responsible_refs(db: Session, assignment: SubmissionAssignment, participant_id: int) -> tuple[set[tuple[int | None, int | None]], set[str]]:
-    """Elemente des Auftrags, für die die Person verantwortlich ist: als (event_id, list_entry_id)
-    und als element_ref (Galerie-Direkt-Uploads speichern nur die Referenz)."""
+def _responsible_refs(
+    db: Session, assignment: SubmissionAssignment, participant_id: int
+) -> tuple[set[tuple[int | None, int | None, int | None]], set[str]]:
+    """Elemente des Auftrags, für die die Person verantwortlich ist: als (event_id, list_entry_id,
+    manual_element_id) und als element_ref (Galerie-Direkt-Uploads speichern nur die Referenz)."""
     from app.services.submission_access_service import _still_responsible
-    from app.services.submission_service import SubmissionService, _element_ref
+    from app.services.submission_service import SubmissionService, raw_element_key, raw_element_ref
 
-    keys: set[tuple[int | None, int | None]] = set()
+    keys: set[tuple[int | None, int | None, int | None]] = set()
     refs: set[str] = set()
     for raw in SubmissionService()._resolve_raw_elements(db, assignment):
-        ref = _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
+        ref = raw_element_ref(raw)
         if _still_responsible(db, assignment, ref, participant_id, raw):
-            keys.add((raw["event_id"], raw["list_entry_id"]))
+            keys.add(raw_element_key(raw))
             refs.add(ref)
     return keys, refs
 
@@ -294,7 +298,9 @@ def _own_file_ids(db: Session, user: CurrentUser, assignment_ids: set[int]) -> s
         for row in rows:
             if row.assignment_id != assignment_id:
                 continue
-            if (row.element_ref is not None and row.element_ref in refs) or (row.element_ref is None and (row.event_id, row.list_entry_id) in keys):
+            if (row.element_ref is not None and row.element_ref in refs) or (
+                row.element_ref is None and (row.event_id, row.list_entry_id, row.manual_element_id) in keys
+            ):
                 result.add(row.stored_file_id)
     return result
 

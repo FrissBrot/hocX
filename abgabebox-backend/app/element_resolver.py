@@ -22,9 +22,11 @@ _TZ = ZoneInfo("Europe/Zurich")
 def local_today() -> date:
     return datetime.now(_TZ).date()
 
-# element_ref des einzigen Elements einer manuellen Abgabe (Duplikation aus
+# element_ref des Standard-Elements einer manuellen Abgabe, weitere Elemente heissen
+# "manual-<public_id>" (Migration 0198; Duplikation aus
 # backend/app/repositories/submission_repository.py, siehe Modul-Docstring).
 MANUAL_ELEMENT_REF = "manual"
+MANUAL_ELEMENT_PREFIX = "manual-"
 
 
 def _reset_boundary(year: int, reset_month: int, reset_day: int) -> date:
@@ -129,7 +131,7 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     locked = repository.withdrawn_elements(db, assignment_id=assignment["id"])
     if not locked:
         return elements
-    return [element for element in elements if (element["event_id"], element["list_entry_id"]) not in locked]
+    return [element for element in elements if repository.element_key(element) not in locked]
 
 
 def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
@@ -174,7 +176,7 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                 continue
             if window_end is not None and today > window_end and not keep_open:
                 continue
-            status = latest_status.get((event["id"], None))
+            status = latest_status.get((event["id"], None, None))
             if status == "closed":
                 continue
             element_ref = f"event-{event['public_id']}"
@@ -184,33 +186,49 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                     "element_ref": element_ref,
                     "event_id": event["id"],
                     "list_entry_id": None,
+                    "manual_element_id": None,
                     "label": event["title"],
                     "window_start": window_start.isoformat() if window_start else None,
                     "window_end": window_end.isoformat() if window_end else None,
-                    "uploaded_count": file_counts.get((event["id"], None), 0),
+                    "uploaded_count": file_counts.get((event["id"], None, None), 0),
                 }
             )
         return _sort_elements(elements, assignment["sort_order"], sort_dates)
 
+    if assignment["source_type"] == "manual":
+        # Von Hand angelegte Elemente (Migration 0198), je mit eigenem Zeitfenster wie Termine, in
+        # der Reihenfolge aus dem Formular. Bewusste Duplikation von
+        # SubmissionService._resolve_raw_elements, siehe Modul-Docstring.
+        manual_elements = repository.list_manual_elements(db, assignment_id=assignment["id"]) or [
+            # Ohne Elemente (Daten am Backend vorbei): wie vor 0198 ein Element, die Abgabe selbst
+            {"id": None, "public_id": None, "is_default": True, "name": assignment["title"], "window_start": None, "window_end": None},
+        ]
+        for item in manual_elements:
+            key = (None, None, None if item["is_default"] else item["id"])
+            window_start, window_end = item.get("window_start"), item.get("window_end")
+            if window_start is not None and today < window_start:
+                continue
+            if window_end is not None and today > window_end and not keep_open:
+                continue
+            if latest_status.get(key) == "closed":
+                continue
+            elements.append(
+                {
+                    "element_ref": MANUAL_ELEMENT_REF if item["is_default"] else f"{MANUAL_ELEMENT_PREFIX}{item['public_id']}",
+                    "event_id": None,
+                    "list_entry_id": None,
+                    "manual_element_id": key[2],
+                    "label": item["name"],
+                    "window_start": window_start.isoformat() if window_start else None,
+                    "window_end": window_end.isoformat() if window_end else None,
+                    "uploaded_count": file_counts.get(key, 0),
+                }
+            )
+        return elements
+
     deadline = assignment["deadline"]
     if deadline is not None and today > deadline and not keep_open:
         return []
-    if assignment["source_type"] == "manual":
-        # Genau ein Element: die Abgabe selbst (weder Termin noch Listen-Eintrag dahinter).
-        # Bewusste Duplikation von SubmissionService._resolve_raw_elements, siehe Modul-Docstring.
-        if latest_status.get((None, None)) == "closed":
-            return []
-        return [
-            {
-                "element_ref": MANUAL_ELEMENT_REF,
-                "event_id": None,
-                "list_entry_id": None,
-                "label": assignment["title"],
-                "window_start": None,
-                "window_end": deadline.isoformat() if deadline else None,
-                "uploaded_count": file_counts.get((None, None), 0),
-            }
-        ]
     definition = repository.get_list_definition(db, list_definition_id=assignment["list_definition_id"])
     if definition is None:
         return []
@@ -236,7 +254,7 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     events_by_id = repository.get_events(db, event_ids=list(event_ids))
 
     for entry in entries:
-        status = latest_status.get((None, entry["id"]))
+        status = latest_status.get((None, entry["id"], None))
         if status == "closed":
             continue
         element_ref = f"entry-{entry['public_id']}"
@@ -248,6 +266,7 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                 "element_ref": element_ref,
                 "event_id": None,
                 "list_entry_id": entry["id"],
+                "manual_element_id": None,
                 "label": _value_label(
                     value_type,
                     label_value(entry),
@@ -256,7 +275,7 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                 ),
                 "window_start": None,
                 "window_end": deadline.isoformat() if deadline else None,
-                "uploaded_count": file_counts.get((None, entry["id"]), 0),
+                "uploaded_count": file_counts.get((None, entry["id"], None), 0),
             }
         )
     return _sort_elements(elements, assignment["sort_order"], sort_dates)

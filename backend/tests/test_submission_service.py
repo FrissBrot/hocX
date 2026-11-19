@@ -25,7 +25,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.cycle_utils import get_cycle_year
-from app.models.entities import EventCycle, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
+from app.models.entities import EventCycle, StoredFile, SubmissionAssignment, SubmissionManualElement, SubmissionUpload, SubmissionUploadFile
 from app.services.submission_service import SubmissionService
 from tests.factories import make_cycle_config, make_event, make_list_definition, make_list_entry, make_tenant
 
@@ -467,9 +467,13 @@ def _make_manual_assignment(db, tenant_id: int, *, deadline: date | None = None)
         title="Vereinsfotos",
         public_slug="vereinsfotos",
         source_type="manual",
-        deadline=deadline,
     )
     db.add(assignment)
+    db.flush()
+    # Seit 0198 liegt der Stichtag am (Standard-)Element der Einzelabgabe
+    db.add(SubmissionManualElement(
+        tenant_id=tenant_id, assignment_id=assignment.id, is_default=True, name=assignment.title, window_end=deadline,
+    ))
     db.flush()
     return assignment
 
@@ -551,7 +555,7 @@ def test_manual_assignment_rejects_event_and_list_fields(db):
         )
 
 
-def test_manual_assignment_accepts_an_optional_deadline(db):
+def test_manual_assignment_element_has_an_optional_deadline(db):
     tenant = make_tenant(db)
     assignment = _make_manual_assignment(db, tenant.id, deadline=date(2026, 12, 31))
     service = SubmissionService()

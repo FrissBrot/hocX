@@ -71,6 +71,20 @@ describe("Dokumentauswahl", () => {
     await expect(AssignmentElementsPage(listParams)).rejects.toThrow("NEXT_REDIRECT replace /tok/jahresbericht/el-1");
   });
 
+  it("zeigt die Elemente einer Einzelabgabe (Migration 0198) einzeln mit eigenem Stichtag", async () => {
+    const extra = "manual-01900000-0000-7000-8000-000000000042";
+    api.listElements.mockResolvedValue([
+      element("manual", "Anmeldung"),
+      { ...element(extra, "Fotos"), window_end: "2026-12-31", uploaded_count: 2 },
+    ]);
+    const html = renderToStaticMarkup(await AssignmentElementsPage(listParams));
+    expect(html).toContain('href="/tok/jahresbericht/manual"');
+    expect(html).toContain(`href="/tok/jahresbericht/${extra}"`);
+    expect(html).toContain("Anmeldung");
+    expect(html).toContain("Fotos");
+    expect(html).toContain("31.12.2026");
+  });
+
   it("zeigt bei mehreren Dokumenten die Liste samt Beschreibung", async () => {
     api.listElements.mockResolvedValue([element("el-1", "Bericht"), element("el-2", "Beilage")]);
     const html = renderToStaticMarkup(await AssignmentElementsPage(listParams));

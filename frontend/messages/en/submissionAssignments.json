@@ -124,7 +124,7 @@
   "logValidationFailed": "Validation error",
   "makeDefaultButton": "Set as default",
   "manageLinksAction": "Manage submission links",
-  "manualSubject": "This submission has a single field, independent of events and lists.",
+  "manualSubject": "This single submission has {count, plural, one {one item} other {# items}}, independent of events and lists.",
   "maxFilesCount": "max. {count, plural, one {# file} other {# files}}",
   "maxFilesLabel": "Max. files",
   "maxSizeLabel": "Max. size (MB)",
@@ -205,9 +205,9 @@
   "sourceListDescription": "One submission field per list entry, one shared deadline.",
   "sourceListNamed": "List \"{name}\"",
   "sourceManual": "Single submission",
-  "sourceManualDescription": "A single submission field, independent of events and lists.",
+  "sourceManualDescription": "Create submission items by hand, independent of events and lists.",
   "sourceSummary": "Source: {source} · {window}",
-  "sourceSummaryManual": "Source: single submission · {deadline}",
+  "sourceSummaryManual": "Source: single submission · {elements} · {deadline}",
   "special1": "Special 1",
   "special2": "Special 2",
   "special3": "Special 3",
@@ -342,7 +342,6 @@
     "withDeadline": "With deadline",
     "openUntilClosed": "Open until closed manually",
     "deadlineHelp": "Submissions are possible until this day. The responsible people's to-dos are due on this day.",
-    "noResponsibleManual": "Single submissions have no responsible person – no to-dos are created.",
     "noResponsibleList": "The selected list has no people column. Without it there are no responsible people.",
     "ownerDaysBefore": "Link valid for",
     "ownerDaysAfter": "days after the email is sent",
@@ -356,14 +355,16 @@
       "window": "Period",
       "responsible": "Responsible",
       "files": "Files",
-      "access": "Access"
+      "access": "Access",
+      "windowManual": "Items"
     },
     "questions": {
       "basics": "What should be submitted?",
       "window": "When is the submission open?",
       "responsible": "Who is responsible?",
       "files": "Which files?",
-      "access": "Who can submit and who sees the files?"
+      "access": "Who can submit and who sees the files?",
+      "windowManual": "Which items should be submitted?"
     },
     "visibilityChip": {
       "default": "Default",
@@ -391,14 +392,13 @@
       "listDetail": "Every entry gets its own submission field",
       "listNoName": "List – missing",
       "listMissing": "Please choose a list",
-      "manualDetail": "One single submission field for everyone",
+      "manualDetail": "Submission items created by hand",
       "before": "from {count, plural, one {# day} other {# days}} before",
       "after": "until {count, plural, one {# day} other {# days}} after",
       "openUntilClosed": "open until closed manually",
       "noDeadline": "No deadline",
       "deadlineDetail": "The responsible people's to-dos are due on this day",
       "noDeadlineDetail": "Stays open until it is closed manually.",
-      "responsibleManual": "Not possible for single submissions",
       "responsibleNoColumn": "List without a people column",
       "responsibleValue": "{name} · Link: {mode}",
       "todoPerEvent": "To-do per event",
@@ -415,7 +415,34 @@
       "noLink": "No link",
       "reviewers": "{count, plural, =0 {no reviewers} one {# reviewer} other {# reviewers}}",
       "visibility": "Who sees files: {who}",
-      "unreachable": "Without a link the submission cannot be reached"
+      "unreachable": "Without a link the submission cannot be reached",
+      "manualElements": "{count, plural, one {# item} other {# items}}",
+      "manualNextDeadline": "next deadline {date}",
+      "manualResponsibleValue": "{count, plural, one {# item} other {# items}} with responsible people · Link: {mode}",
+      "todoPerElement": "Task per item"
+    },
+    "manual": {
+      "elementsLabel": "Submission items",
+      "help": "Each item is its own submission field: its own tile, its own upload in the submission box, its own task. Without a deadline it stays open until closed manually.",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Registration form",
+      "startLabel": "Start (optional)",
+      "endLabel": "Deadline",
+      "startAria": "Start of item {index}",
+      "endAria": "Deadline of item {index}",
+      "addElement": "+ Item",
+      "removeElement": "Remove item «{name}»",
+      "unnamed": "unnamed",
+      "windowHelp": "Without a start the item is open right away. Tasks of the responsible people are due on the deadline.",
+      "responsibleHelp": "Whoever is responsible for an item gets a task for it, due on the item's deadline.",
+      "responsibleNone": "Nobody",
+      "responsibleAria": "Responsible for «{name}»",
+      "noParticipants": "No people found",
+      "elementsMissing": "Add at least one item",
+      "nameMissing": "Every item needs a name",
+      "windowInvalid": "An item starts after its deadline",
+      "removeConfirm": "Remove item «{name}»? Files already submitted for this item will be deleted when you save.",
+      "removeConfirmLabel": "Remove"
     }
   },
   "offsetOutOfRange": "Time window: at most {max} days before or after the event",
@@ -424,5 +451,10 @@
     "all": "All",
     "done": "Submitted",
     "pending": "Outstanding"
-  }
+  },
+  "manualNextDeadlineSentence": "The next deadline is {date}.",
+  "manualNoDeadlineSentence": "Without a deadline, an item stays open until it is closed manually.",
+  "manualTodoSentence": "{count, plural, one {One item creates a task.} other {# items each create a task.}}",
+  "manualElementsLabel": "Submission items",
+  "manualElementCount": "{count, plural, one {# item} other {# items}}"
 }

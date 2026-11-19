@@ -34,6 +34,7 @@ from app.models import (
     ProtocolElementBlock,
     ProtocolTodo,
     ProtocolTodoAssignee,
+    SubmissionManualElement,
     SubmissionUpload,
     TodoStatus,
 )
@@ -125,12 +126,15 @@ def _matching_submission():
     element_ref = case(
         (SubmissionUpload.event_id.is_not(None), literal("event-") + cast(Event.public_id, Text)),
         (SubmissionUpload.list_entry_id.is_not(None), literal("entry-") + cast(ListEntry.public_id, Text)),
+        # Weitere Elemente einer Einzelabgabe (0198); das Standard-Element bleibt «manual»
+        (SubmissionUpload.manual_element_id.is_not(None), literal("manual-") + cast(SubmissionManualElement.public_id, Text)),
         else_=literal("manual"),
     )
     return exists(
         select(SubmissionUpload.id)
         .outerjoin(Event, Event.id == SubmissionUpload.event_id)
         .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+        .outerjoin(SubmissionManualElement, SubmissionManualElement.id == SubmissionUpload.manual_element_id)
         .where(
             SubmissionUpload.assignment_id == ProtocolTodo.submission_assignment_id,
             SubmissionUpload.status == "submitted",

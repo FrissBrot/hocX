@@ -280,7 +280,7 @@ def test_linked_upload_counts_as_submission(db, monkeypatch, image, closed, scan
 
     # A public submission for the same element adds a file, not another completed element.
     from app.services.submission_service import _parse_element_ref
-    event_id, entry_id = _parse_element_ref(db, ref)
+    event_id, entry_id, _manual_element_id = _parse_element_ref(db, ref)
     public_upload = SubmissionUpload(
         assignment_id=assignment.id, event_id=event_id, list_entry_id=entry_id, status="submitted",
     )

@@ -18,10 +18,48 @@ import {
   SubmissionAutoClose,
   SubmissionFileVisibility,
   SubmissionLink,
+  SubmissionManualElement,
   SubmissionReviewerCandidate,
   SubmissionSortOrder,
   SubmissionSourceType,
 } from "@/types/api";
+
+/** Element einer Einzelabgabe im Formular (Migration 0198). `id` = gespeichertes Element, sonst neu. */
+export type ManualElementForm = {
+  /** Nur für React-Listen (stabil auch für neue Elemente ohne `id`) */
+  key: string;
+  id: string | null;
+  name: string;
+  window_start: string;
+  window_end: string;
+  responsible_participant_ids: string[];
+};
+
+/** Wählbare Person für die Verantwortlichen eines Elements (Teilnehmende des Mandanten). */
+export type ResponsibleCandidate = { id: string; display_name: string; is_active?: boolean };
+
+let manualElementCounter = 0;
+
+export function newManualElement(name = "", values: Partial<ManualElementForm> = {}): ManualElementForm {
+  manualElementCounter += 1;
+  return { key: `new-${manualElementCounter}`, id: null, name, window_start: "", window_end: "", responsible_participant_ids: [], ...values };
+}
+
+function manualElementFromApi(element: SubmissionManualElement): ManualElementForm {
+  return {
+    key: element.id,
+    id: element.id,
+    name: element.name,
+    window_start: element.window_start ?? "",
+    window_end: element.window_end ?? "",
+    responsible_participant_ids: element.responsible_participant_ids,
+  };
+}
+
+/** Eine Einzelabgabe hat immer mindestens ein Element: fehlt es, eines mit dem Titel anlegen. */
+export function withManualElement(form: FormState): FormState {
+  return form.manual_elements.length > 0 ? form : { ...form, manual_elements: [newManualElement(form.title.trim())] };
+}
 
 export type FormState = {
   title: string;
@@ -52,6 +90,8 @@ export type FormState = {
   /** Wer darf eingereichte Dateien sehen? «default» = Standard der Organisation (Migration 0196) */
   file_visibility: "default" | SubmissionFileVisibility["audience"];
   file_visibility_filter: SubmissionFileVisibility["file_filter"];
+  /** Elemente einer Einzelabgabe (Migration 0198), bei anderen Quellen ungenutzt */
+  manual_elements: ManualElementForm[];
 };
 
 export const initialForm: FormState = {
@@ -81,6 +121,7 @@ export const initialForm: FormState = {
   reviewer_ids: [],
   file_visibility: "default",
   file_visibility_filter: "images",
+  manual_elements: [],
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -169,6 +210,12 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     reviewer_ids: assignment.reviewer_ids ?? [],
     file_visibility: assignment.file_visibility?.mode === "custom" ? assignment.file_visibility.audience : "default",
     file_visibility_filter: assignment.file_visibility?.mode === "custom" ? assignment.file_visibility.file_filter : "images",
+    manual_elements:
+      assignment.source_type !== "manual"
+        ? []
+        : assignment.manual_elements && assignment.manual_elements.length > 0
+          ? assignment.manual_elements.map(manualElementFromApi)
+          : [newManualElement(assignment.title, { window_end: assignment.deadline ?? "" })],
   };
 }
 
@@ -177,6 +224,7 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
  * Nur was zur gewaehlten Verknuepfung gehoert, wird gesendet - der Rest wird beim Wechsel geleert. */
 export function assignmentPayload(form: FormState) {
   const isEvents = form.source_type === "events";
+  const isManual = form.source_type === "manual";
   return {
     title: form.title.trim(),
     description: form.description || null,
@@ -188,7 +236,8 @@ export function assignmentPayload(form: FormState) {
     cycle_config_id: isEvents ? form.cycle_config_id || null : null,
     cycle_offsets: isEvents && form.cycle_config_id ? form.cycle_offsets : [],
     list_definition_id: form.source_type === "list" ? form.list_definition_id || null : null,
-    deadline: isEvents ? null : form.deadline || null,
+    // Einzelabgaben: Zeitfenster je Element (Migration 0198)
+    deadline: isEvents || isManual ? null : form.deadline || null,
     allowed_file_types: form.allowed_file_types,
     max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
     max_file_size_mb: Number(form.max_file_size_mb),
@@ -204,6 +253,17 @@ export function assignmentPayload(form: FormState) {
     file_visibility: form.file_visibility === "default"
       ? { mode: "default" as const }
       : { mode: "custom" as const, audience: form.file_visibility, file_filter: form.file_visibility_filter },
+    ...(isManual
+      ? {
+          manual_elements: form.manual_elements.map((element) => ({
+            id: element.id,
+            name: element.name.trim(),
+            window_start: element.window_start || null,
+            window_end: element.window_end || null,
+            responsible_participant_ids: element.responsible_participant_ids,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -222,11 +282,20 @@ export function formProblem(form: FormState, t: TFunc): string | null {
     if (offsetOutOfRange(form.offset_days_before) || offsetOutOfRange(form.offset_days_after)) return t("offsetOutOfRange", { max: OFFSET_DAYS_MAX });
   }
   if (form.source_type === "list" && !form.list_definition_id) return t("listMissing");
+  if (form.source_type === "manual") {
+    if (form.manual_elements.length === 0) return t("wizard.manual.elementsMissing");
+    if (form.manual_elements.some((element) => !element.name.trim())) return t("wizard.manual.nameMissing");
+    if (form.manual_elements.some(manualWindowInvalid)) return t("wizard.manual.windowInvalid");
+  }
   return null;
 }
 
+function manualWindowInvalid(element: ManualElementForm): boolean {
+  return Boolean(element.window_start && element.window_end && element.window_start > element.window_end);
+}
+
 /** Welches Feld den Fehler aus formProblem hat (für die Markierung). */
-function problemFieldOf(form: FormState): "title" | "tag" | "cycle" | "window" | "list" | null {
+function problemFieldOf(form: FormState): "title" | "tag" | "cycle" | "window" | "list" | "elements" | null {
   if (!form.title.trim()) return "title";
   if (form.source_type === "events") {
     if (!form.tag_filter) return "tag";
@@ -234,6 +303,9 @@ function problemFieldOf(form: FormState): "title" | "tag" | "cycle" | "window" |
     if (offsetOutOfRange(form.offset_days_before) || offsetOutOfRange(form.offset_days_after)) return "window";
   }
   if (form.source_type === "list" && !form.list_definition_id) return "list";
+  if (form.source_type === "manual" && (form.manual_elements.length === 0 || form.manual_elements.some((e) => !e.name.trim() || manualWindowInvalid(e)))) {
+    return "elements";
+  }
   return null;
 }
 
@@ -287,7 +359,7 @@ export function assignmentTemplates(t: TFunc): AssignmentTemplate[] {
       key: "form-deadline",
       title: t("templateFormTitle"),
       description: t("templateFormDescription"),
-      apply: (c) => ({
+      apply: (c) => withManualElement({
         ...c, source_type: "manual", tag_filter: "", offset_days_before: "", offset_days_after: "", cycle_config_id: "", cycle_offsets: [],
         list_definition_id: "", allowed_file_types: ["pdf"], max_files_per_element: 1, auto_close: "first_upload", responsible_participant_source: "",
       }),
@@ -319,7 +391,19 @@ function windowSentence(before: number | "", after: number | "", t: TFunc): stri
 
 /** Hat die Abgabe ein Ende (Tage danach bzw. Stichtag)? Nur dann gibt es «offen halten». */
 export function hasEnd(form: FormState): boolean {
+  if (form.source_type === "manual") return form.manual_elements.some((element) => Boolean(element.window_end));
   return form.source_type === "events" ? form.offset_days_after !== "" : Boolean(form.deadline);
+}
+
+/** Frühester Stichtag der Elemente einer Einzelabgabe (ISO) oder null. */
+function nextManualDeadline(form: FormState): string | null {
+  const ends = form.manual_elements.map((element) => element.window_end).filter(Boolean).sort();
+  return ends[0] ?? null;
+}
+
+/** Elemente mit mindestens einer verantwortlichen Person. */
+function manualResponsibleCount(form: FormState): number {
+  return form.manual_elements.filter((element) => element.responsible_participant_ids.length > 0).length;
 }
 
 function autoCloseSentence(form: FormState, t: TFunc): string | null {
@@ -343,7 +427,12 @@ function describeBase(form: FormState, listName: string | null, t: TFunc): strin
       : t("listSubjectUnnamed");
     return `${subject} ${deadlineSentence(form.deadline, t)}`;
   }
-  return `${t("manualSubject")} ${deadlineSentence(form.deadline, t)}`;
+  const next = nextManualDeadline(form);
+  return [
+    t("manualSubject", { count: form.manual_elements.length }),
+    next ? t("manualNextDeadlineSentence", { date: formatDateInputValue(next) }) : t("manualNoDeadlineSentence"),
+    manualResponsibleCount(form) > 0 ? t("manualTodoSentence", { count: manualResponsibleCount(form) }) : null,
+  ].filter(Boolean).join(" ");
 }
 
 /** Erklärt in einem Satz, wie sich die Abgabe mit den aktuellen Einstellungen verhält. */
@@ -379,6 +468,7 @@ type SummaryContext = {
 export function sectionSummaries(form: FormState, context: SummaryContext, t: TFunc): Record<SectionKey, SectionSummary> {
   const isEvents = form.source_type === "events";
   const isList = form.source_type === "list";
+  const isManual = form.source_type === "manual";
   const basics: SectionSummary = isEvents
     ? form.tag_filter
       ? { label: t("linkTypeLabel"), value: t("wizard.summary.eventsTagged", { tag: form.tag_filter }), detail: t("wizard.summary.eventsDetail"), warn: false }
@@ -393,7 +483,18 @@ export function sectionSummaries(form: FormState, context: SummaryContext, t: TF
     form.offset_days_before !== "" ? t("wizard.summary.before", { count: Number(form.offset_days_before) }) : null,
     form.offset_days_after !== "" ? t("wizard.summary.after", { count: Number(form.offset_days_after) }) : null,
   ].filter(Boolean);
-  const window: SectionSummary = isEvents
+  const nextDeadline = nextManualDeadline(form);
+  const window: SectionSummary = isManual
+    ? {
+        label: t("wizard.manual.elementsLabel"),
+        value: t("wizard.summary.manualElements", { count: form.manual_elements.length }),
+        detail: [
+          form.manual_elements.map((element) => element.name.trim()).filter(Boolean).join(", "),
+          nextDeadline ? t("wizard.summary.manualNextDeadline", { date: formatDateInputValue(nextDeadline) }) : t("wizard.summary.noDeadline"),
+        ].filter(Boolean).join(" · "),
+        warn: form.manual_elements.length === 0 || form.manual_elements.some((element) => !element.name.trim()),
+      }
+    : isEvents
     ? {
         label: t("windowLabel"),
         value: `${windowParts.length ? windowParts.join(", ") : t("wizard.summary.openUntilClosed")}${context.cycleName ? ` · ${context.cycleName}` : ""}`,
@@ -408,8 +509,21 @@ export function sectionSummaries(form: FormState, context: SummaryContext, t: TF
       };
 
   const ownerMode = t(`wizard.ownerShort.${form.owner_access}`);
-  const responsible: SectionSummary = !context.hasResponsibleOptions
-    ? { label: t("wizard.steps.responsible"), value: "—", detail: form.source_type === "manual" ? t("wizard.summary.responsibleManual") : t("wizard.summary.responsibleNoColumn"), warn: false }
+  const manualResponsible = manualResponsibleCount(form);
+  const responsible: SectionSummary = isManual
+    ? manualResponsible > 0
+      ? {
+          label: t("wizard.steps.responsible"),
+          value: t("wizard.summary.manualResponsibleValue", { count: manualResponsible, mode: ownerMode }),
+          detail: [
+            t("wizard.summary.todoPerElement"),
+            form.owner_access !== "off" ? t("wizard.summary.ownerDays", { days: form.owner_access_days === "" ? 30 : Number(form.owner_access_days) }) : null,
+          ].filter(Boolean).join(" · "),
+          warn: false,
+        }
+      : { label: t("wizard.steps.responsible"), value: t("noAssignment"), detail: t("wizard.summary.nobodyGetsTodo"), warn: false }
+    : !context.hasResponsibleOptions
+    ? { label: t("wizard.steps.responsible"), value: "—", detail: t("wizard.summary.responsibleNoColumn"), warn: false }
     : form.responsible_participant_source
       ? {
           label: t("wizard.steps.responsible"),
@@ -473,6 +587,10 @@ type Props = {
   availableEvents?: (ExampleEvent & { tag: string | null })[];
   /** Wählbare Prüfer (aktive Konten mit Login, Migration 0195) */
   availableReviewers?: SubmissionReviewerCandidate[];
+  /** Personen des Mandanten für die Verantwortlichen der Elemente einer Einzelabgabe (0198) */
+  availableParticipants?: ResponsibleCandidate[];
+  /** Rückfrage vor dem Entfernen eines gespeicherten Elements (seine Dateien werden gelöscht). Ohne: sofort */
+  confirmRemoveElement?: (name: string) => Promise<boolean>;
   onSubmit: () => void | Promise<void>;
   onClose: () => void;
   onManageLinks: () => void;
@@ -490,6 +608,8 @@ export function SubmissionAssignmentFormModal({
   availableCycleConfigs,
   availableEvents = [],
   availableReviewers = [],
+  availableParticipants = [],
+  confirmRemoveElement,
   onSubmit,
   onClose,
   onManageLinks,
@@ -574,6 +694,29 @@ export function SubmissionAssignmentFormModal({
     }));
   }
 
+  const isManual = form.source_type === "manual";
+  // Aktive Personen; bereits gewählte bleiben wählbar (sonst verschwänden sie aus der Auswahl)
+  const chosenResponsible = new Set(form.manual_elements.flatMap((element) => element.responsible_participant_ids));
+  const responsibleCandidates = availableParticipants.filter((person) => person.is_active !== false || chosenResponsible.has(person.id));
+
+  function stepLabel(key: SectionKey): string {
+    return isManual && key === "window" ? t("wizard.steps.windowManual") : t(`wizard.steps.${key}`);
+  }
+
+  function updateElement(key: string, values: Partial<ManualElementForm>) {
+    setForm((c) => ({ ...c, manual_elements: c.manual_elements.map((element) => (element.key === key ? { ...element, ...values } : element)) }));
+  }
+
+  function addElement() {
+    setForm((c) => ({ ...c, manual_elements: [...c.manual_elements, newManualElement()] }));
+  }
+
+  async function removeElement(element: ManualElementForm) {
+    // Gespeicherte Elemente können Einreichungen haben: nur nach Rückfrage entfernen
+    if (element.id !== null && confirmRemoveElement && !(await confirmRemoveElement(element.name.trim() || t("wizard.manual.unnamed")))) return;
+    setForm((c) => ({ ...c, manual_elements: c.manual_elements.filter((item) => item.key !== element.key) }));
+  }
+
   function toggleReviewer(id: string) {
     setForm((c) => ({ ...c, reviewer_ids: c.reviewer_ids.includes(id) ? c.reviewer_ids.filter((x) => x !== id) : [...c.reviewer_ids, id] }));
   }
@@ -608,7 +751,13 @@ export function SubmissionAssignmentFormModal({
                     autoFocus
                     onChange={(e) => {
                       const title = e.target.value;
-                      setForm((c) => ({ ...c, title, public_slug: slugify(title) }));
+                      setForm((c) => ({
+                        ...c,
+                        title,
+                        public_slug: slugify(title),
+                        // Elemente, die bisher wie die Abgabe hiessen, ziehen mit
+                        manual_elements: c.manual_elements.map((element) => (element.id === null && element.name === c.title.trim() ? { ...element, name: title.trim() } : element)),
+                      }));
                     }}
                   />
                 </label>
@@ -636,7 +785,10 @@ export function SubmissionAssignmentFormModal({
                     role="radio"
                     aria-checked={form.source_type === option.value}
                     className="subm-edit-source-card"
-                    onClick={() => setForm((c) => ({ ...c, source_type: option.value, responsible_participant_source: "" }))}
+                    onClick={() => setForm((c) => {
+                      const next = { ...c, source_type: option.value, responsible_participant_source: "" };
+                      return option.value === "manual" ? withManualElement(next) : next;
+                    })}
                   >
                     <strong>{option.title}</strong>
                     <small>{option.description}</small>
@@ -707,6 +859,63 @@ export function SubmissionAssignmentFormModal({
         );
 
       case "window":
+        if (isManual) {
+          return (
+            <div className={problemField === "elements" ? "field-stack subm-edit-invalid" : "field-stack"}>
+              <span className="field-label">
+                <span id="subm-elements-label">{t("wizard.manual.elementsLabel")}</span>
+                <HelpPopover topic={t("wizard.manual.elementsLabel")} docs={help("stichtag")}>{t("wizard.manual.help")}</HelpPopover>
+              </span>
+              <ul className="subm-edit-elements" aria-labelledby="subm-elements-label">
+                {form.manual_elements.map((element, index) => (
+                  <li key={element.key} className="subm-edit-element-row">
+                    <label className="field-stack subm-edit-element-name">
+                      <span className="field-label">{t("wizard.manual.nameLabel")}</span>
+                      <input
+                        value={element.name}
+                        aria-invalid={!element.name.trim() ? true : undefined}
+                        placeholder={t("wizard.manual.namePlaceholder")}
+                        onChange={(event) => updateElement(element.key, { name: event.target.value })}
+                      />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("wizard.manual.startLabel")}</span>
+                      <DateInput
+                        value={element.window_start}
+                        max={element.window_end || undefined}
+                        onChange={(value) => updateElement(element.key, { window_start: value })}
+                        aria-label={t("wizard.manual.startAria", { index: index + 1 })}
+                      />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("wizard.manual.endLabel")}</span>
+                      <DateInput
+                        value={element.window_end}
+                        min={element.window_start || undefined}
+                        onChange={(value) => updateElement(element.key, { window_end: value })}
+                        aria-label={t("wizard.manual.endAria", { index: index + 1 })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button-icon-soft button-icon-soft-danger subm-edit-element-remove"
+                      aria-label={t("wizard.manual.removeElement", { name: element.name.trim() || t("wizard.manual.unnamed") })}
+                      title={t("wizard.manual.removeElement", { name: element.name.trim() || t("wizard.manual.unnamed") })}
+                      disabled={form.manual_elements.length === 1}
+                      onClick={() => void removeElement(element)}
+                    >
+                      <ActionIcon name="delete" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div>
+                <button type="button" className="button-secondary" onClick={addElement}>{t("wizard.manual.addElement")}</button>
+              </div>
+              <span className="field-help">{t("wizard.manual.windowHelp")}</span>
+            </div>
+          );
+        }
         return form.source_type === "events" ? (
           <>
             <div className={problemField === "window" ? "field-stack subm-edit-invalid" : "field-stack"}>
@@ -802,11 +1011,37 @@ export function SubmissionAssignmentFormModal({
         );
 
       case "responsible":
-        if (responsibleOptions.length === 0) {
-          return <p className="muted">{form.source_type === "manual" ? t("wizard.noResponsibleManual") : t("wizard.noResponsibleList")}</p>;
+        if (!isManual && responsibleOptions.length === 0) {
+          return <p className="muted">{t("wizard.noResponsibleList")}</p>;
         }
         return (
           <>
+            {isManual ? (
+              <div className="field-stack">
+                <span className="field-label">
+                  <span id="subm-element-responsible-label">{t("responsiblePersonLabel")}</span>
+                  <HelpPopover topic={t("responsiblePersonLabel")} docs={help("verantwortliche")}>{t("helpResponsible")}</HelpPopover>
+                </span>
+                <span className="field-help">{t("wizard.manual.responsibleHelp")}</span>
+                <ul className="subm-edit-elements" aria-labelledby="subm-element-responsible-label">
+                  {form.manual_elements.map((element) => (
+                    <li key={element.key} className="subm-edit-element-responsible">
+                      <span className="subm-edit-element-title">{element.name.trim() || t("wizard.manual.unnamed")}</span>
+                      <SearchableMultiSelect
+                        options={responsibleCandidates}
+                        getId={(person) => person.id}
+                        getLabel={(person) => person.display_name}
+                        values={element.responsible_participant_ids}
+                        onChange={(ids) => updateElement(element.key, { responsible_participant_ids: ids })}
+                        emptySelectionLabel={t("wizard.manual.responsibleNone")}
+                        emptyLabel={t("wizard.manual.noParticipants")}
+                        triggerProps={{ "aria-label": t("wizard.manual.responsibleAria", { name: element.name.trim() || t("wizard.manual.unnamed") }) }}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
             <div className="field-stack">
               <span className="field-label">
                 <span id="subm-responsible-label">{t("responsiblePersonLabel")}</span>
@@ -831,7 +1066,8 @@ export function SubmissionAssignmentFormModal({
                 ))}
               </div>
             </div>
-            {form.responsible_participant_source ? (
+            )}
+            {(isManual ? manualResponsibleCount(form) > 0 : form.responsible_participant_source) ? (
               <div className="field-stack">
                 <span className="field-label">
                   <span id="subm-owner-label">{t("ownerAccessLabel")}</span>
@@ -1088,13 +1324,13 @@ export function SubmissionAssignmentFormModal({
                   <button
                     type="button"
                     className="subm-edit-step"
-                    aria-label={`${index + 1}. ${t(`wizard.steps.${key}`)}`}
+                    aria-label={`${index + 1}. ${stepLabel(key)}`}
                     aria-current={index === step ? "step" : undefined}
                     data-done={index < step ? "true" : undefined}
                     onClick={() => setStep(index)}
                   >
                     <span className="subm-edit-step-bar" aria-hidden="true" />
-                    <span>{index + 1}. {t(`wizard.steps.${key}`)}</span>
+                    <span>{index + 1}. {stepLabel(key)}</span>
                   </button>
                 </li>
               ))}
@@ -1135,7 +1371,9 @@ export function SubmissionAssignmentFormModal({
               })
             ) : (
               <div className="subm-edit-step-body subm-edit-reveal" key={SECTION_KEYS[step]}>
-                <h3 className="subm-edit-question">{t(`wizard.questions.${SECTION_KEYS[step]}`)}</h3>
+                <h3 className="subm-edit-question">
+                  {isManual && SECTION_KEYS[step] === "window" ? t("wizard.questions.windowManual") : t(`wizard.questions.${SECTION_KEYS[step]}`)}
+                </h3>
                 {sectionBody(SECTION_KEYS[step])}
               </div>
             )}

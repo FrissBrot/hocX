@@ -16,6 +16,7 @@ from app.models import (
     ProtocolTodo,
     StoredFile,
     SubmissionAssignment,
+    SubmissionManualElement,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
@@ -23,8 +24,25 @@ from app.models import (
 )
 from app.services import public_id_service
 
-# element_ref des einzigen Elements einer manuellen Abgabe (weder Termin noch Listen-Eintrag).
+# element_ref des Standard-Elements einer manuellen Abgabe (weder Termin noch Listen-Eintrag); weitere
+# von Hand angelegte Elemente heissen "manual-<public_id>" (Migration 0198).
 MANUAL_ELEMENT_REF = "manual"
+MANUAL_ELEMENT_PREFIX = "manual-"
+
+
+def manual_element_ref(element: SubmissionManualElement) -> str:
+    return MANUAL_ELEMENT_REF if element.is_default else f"{MANUAL_ELEMENT_PREFIX}{element.public_id}"
+
+
+def upload_ref(event_public_id, entry_public_id, manual_public_id) -> str:
+    """element_ref einer Einreichung aus den öffentlichen IDs ihres Ziels (Standard-Element: kein Ziel)."""
+    if event_public_id is not None:
+        return f"event-{event_public_id}"
+    if entry_public_id is not None:
+        return f"entry-{entry_public_id}"
+    if manual_public_id is not None:
+        return f"{MANUAL_ELEMENT_PREFIX}{manual_public_id}"
+    return MANUAL_ELEMENT_REF
 
 
 class SubmissionRepository:
@@ -95,6 +113,15 @@ class SubmissionRepository:
             select(ListEntry)
             .where(ListEntry.list_definition_id == list_definition_id)
             .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+        )
+        return list(db.scalars(statement))
+
+    def list_manual_elements(self, db: Session, *, assignment_id: int) -> list[SubmissionManualElement]:
+        """Elemente einer Einzelabgabe in der Reihenfolge aus dem Formular."""
+        statement = (
+            select(SubmissionManualElement)
+            .where(SubmissionManualElement.assignment_id == assignment_id)
+            .order_by(SubmissionManualElement.sort_index.asc(), SubmissionManualElement.id.asc())
         )
         return list(db.scalars(statement))
 
@@ -198,26 +225,26 @@ class SubmissionRepository:
         trägt wie überall die öffentliche ID (``event-<public_id>``), sonst fänden die Einträge des
         Upload-Logs ihr Element nicht."""
         statement = (
-            select(StoredFile, Event.public_id.label("event_public_id"), ListEntry.public_id.label("entry_public_id"))
+            select(
+                StoredFile,
+                Event.public_id.label("event_public_id"),
+                ListEntry.public_id.label("entry_public_id"),
+                SubmissionManualElement.public_id.label("manual_public_id"),
+            )
             .join(SubmissionUploadFile, SubmissionUploadFile.stored_file_id == StoredFile.id)
             .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
             .outerjoin(Event, Event.id == SubmissionUpload.event_id)
             .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+            .outerjoin(SubmissionManualElement, SubmissionManualElement.id == SubmissionUpload.manual_element_id)
             .where(
                 SubmissionUpload.assignment_id == assignment_id,
                 StoredFile.scan_status == "pending",
             )
         )
-        result = []
-        for row in db.execute(statement):
-            if row.event_public_id is not None:
-                element_ref = f"event-{row.event_public_id}"
-            elif row.entry_public_id is not None:
-                element_ref = f"entry-{row.entry_public_id}"
-            else:
-                element_ref = MANUAL_ELEMENT_REF
-            result.append((row.StoredFile, element_ref))
-        return result
+        return [
+            (row.StoredFile, upload_ref(row.event_public_id, row.entry_public_id, row.manual_public_id))
+            for row in db.execute(statement)
+        ]
 
     def list_assignment_ids_with_pending_files(self, db: Session) -> list[int]:
         """Used by the periodic rescan job (main.py) - previously ClamAV-fail-open uploads only
@@ -242,19 +269,17 @@ class SubmissionRepository:
         def entry(assignment_id: int, ref: str) -> dict:
             return states.setdefault(assignment_id, {}).setdefault(ref, {"scan": set(), "latest": None})
 
-        def ref_of(event_id, entry_id) -> str:
-            return f"event-{event_id}" if event_id else f"entry-{entry_id}" if entry_id else "manual"
-
-        for assignment_id, event_id, entry_id, status in db.execute(
-            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, StoredFile.scan_status)
+        for assignment_id, event_id, entry_id, manual_id, status in db.execute(
+            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, SubmissionManualElement.public_id, StoredFile.scan_status)
             .select_from(SubmissionUpload)
             .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
             .outerjoin(Event, Event.id == SubmissionUpload.event_id)
             .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+            .outerjoin(SubmissionManualElement, SubmissionManualElement.id == SubmissionUpload.manual_element_id)
             .where(SubmissionUpload.assignment_id.in_(assignment_ids), SubmissionUploadFile.withdrawn_at.is_(None))
         ):
-            entry(assignment_id, ref_of(event_id, entry_id))["scan"].add(status)
+            entry(assignment_id, upload_ref(event_id, entry_id, manual_id))["scan"].add(status)
         for assignment_id, ref, status in db.execute(
             select(GalleryImage.submission_assignment_id, GalleryImage.submission_element_ref, StoredFile.scan_status)
             .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
@@ -269,15 +294,16 @@ class SubmissionRepository:
             if ref:
                 entry(assignment_id, ref)["scan"].add(status)
         # Von Hand geschlossen: jüngste Zeile des Elements ist «closed» (siehe get_assignment_elements)
-        for assignment_id, event_id, entry_id, status in db.execute(
-            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, SubmissionUpload.status)
+        for assignment_id, event_id, entry_id, manual_id, status in db.execute(
+            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, SubmissionManualElement.public_id, SubmissionUpload.status)
             .select_from(SubmissionUpload)
             .outerjoin(Event, Event.id == SubmissionUpload.event_id)
             .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+            .outerjoin(SubmissionManualElement, SubmissionManualElement.id == SubmissionUpload.manual_element_id)
             .where(SubmissionUpload.assignment_id.in_(assignment_ids))
             .order_by(SubmissionUpload.id)
         ):
-            entry(assignment_id, ref_of(event_id, entry_id))["latest"] = status
+            entry(assignment_id, upload_ref(event_id, entry_id, manual_id))["latest"] = status
         return states
 
     @staticmethod
