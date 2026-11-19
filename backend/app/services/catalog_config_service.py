@@ -42,7 +42,7 @@ from app.schemas.catalog_config import (
     CatalogPlanEntry,
     CatalogStoragePackageEntry,
 )
-from app.services.admin_tenant_service import AdminTenantService
+from app.services.admin_tenant_service import _DOMAIN_FEATURES, AdminTenantService
 
 # Gleiche Umrechnung wie das Preiskatalog-Formular im Frontend (1 GB = 1024 MB).
 BYTES_PER_GB = 1024**3
@@ -443,15 +443,25 @@ class CatalogConfigService:
 
         quota_plans: set[str] = set()
         quota_packages: set[str] = set()
+        feature_plans: set[str] = set()
         for op in ops:
             if op.section == "features":
                 self._apply_feature(db, op)
             elif op.section == "plans":
-                if self._apply_plan(db, op, state.sections["plans"].get(op.code)):
+                old_plan = state.sections["plans"].get(op.code)
+                if self._apply_plan(db, op, old_plan):
                     quota_plans.add(op.code)
+                if op.action != "delete" and sorted(op.target["feature_codes"]) != sorted((old_plan or {}).get("feature_codes") or []):
+                    feature_plans.add(op.code)
             elif self._apply_storage_package(db, op, state.sections["storage_packages"].get(op.code)):
                 quota_packages.add(op.code)
         db.flush()
+
+        # Module der Mandanten auf geänderten Plänen nachführen - gleiche Regeln wie upsert_plan
+        # (Audit 08): weggefallene Module nur lesen bzw. weg, neue voll, Zusatzmodule unangetastet.
+        changed_features: set[str] = set()
+        for tenant_id, plan_code in db.execute(select(Tenant.id, Tenant.plan_code).where(Tenant.plan_code.in_(feature_plans))).all() if feature_plans else []:
+            changed_features |= self.tenant_service._apply_plan_features(db, tenant_id, plan_code, admin_id=None)
 
         # Kontingente der betroffenen Mandanten nachführen (Plan-Speicher oder Paketgrösse geändert).
         tenant_ids: set[int] = set()
@@ -464,6 +474,10 @@ class CatalogConfigService:
         for tenant_id in sorted(tenant_ids):
             self.tenant_service.apply_effective_storage_quota(db, tenant_id)
         db.commit()
+        if changed_features & _DOMAIN_FEATURES:
+            from app.services import traefik_config_service
+
+            traefik_config_service.regenerate(db)
         return self._preview_model(state, ops, [], unchanged, overwrite=overwrite)
 
     @staticmethod
