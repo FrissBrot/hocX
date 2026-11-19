@@ -194,7 +194,12 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const needsPassword = offersEncryption && encrypt;
   const excludedKey = JSON.stringify(excludedColumns);
   useEffect(() => {
-    if (!open || !templateId || format === "ics") return;
+    // Ohne Vorschau (Kalender, keine Vorlage): Ladeanzeige/Fehler einer abgebrochenen Vorschau
+    // nicht stehen lassen - der Abbruch unten setzt den Zustand bewusst nicht zurück
+    if (!open || !templateId || format === "ics") {
+      setPreviewState("idle");
+      return;
+    }
     const cached = format === "pdf" ? cache.current.get(requestKey) : undefined;
     if (cached) {
       setPages(cached.pages);
