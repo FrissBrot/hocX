@@ -91,7 +91,7 @@ def _skip(rows: list[Notification], reason: str) -> None:
         row.skip_reason = reason
 
 
-def _fail(db: Session, rows: list[Notification], error: str) -> None:
+def _fail(db: Session, rows: list[Notification], error: str, *, smtp_status: bool = True) -> None:
     now = datetime.now(timezone.utc)
     for row in rows:
         row.attempts += 1
@@ -100,14 +100,16 @@ def _fail(db: Session, rows: list[Notification], error: str) -> None:
             row.status = "failed"
         else:
             row.deliver_after = now + timedelta(minutes=RETRY_MINUTES[min(row.attempts, len(RETRY_MINUTES)) - 1])
-    settings_row = db.get(PlatformNotificationSettings, 1)
+    # Der «letzte Fehler» in den Mail-Einstellungen beschreibt den Versand - ein Fehler vor dem
+    # Versand (Laden/Rendern) gehört nur ins Fehlerprotokoll.
+    settings_row = db.get(PlatformNotificationSettings, 1) if smtp_status else None
     if settings_row is not None:
         settings_row.email_last_error = error[:500]
         settings_row.email_last_error_at = now
 
 
-def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: int, recipient_id: int, group: str) -> str:
-    rows = db.scalars(
+def _due_rows(db: Session, tenant_id: int, recipient_id: int, group: str) -> list[Notification]:
+    return list(db.scalars(
         select(Notification)
         .where(
             Notification.recipient_id == recipient_id, Notification.group_key == group, Notification.status == "pending",
@@ -115,7 +117,24 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
         )
         .order_by(Notification.id)
         .with_for_update(skip_locked=True)
-    ).all()
+    ).all())
+
+
+def _count_failed_attempt(db: Session, tenant_id: int, recipient_id: int, group: str, exc: Exception) -> None:
+    """Auch ein Fehler vor dem Versand (Laden, Rendern) zählt als Versuch. Sonst blieb die Gruppe
+    ohne Zähler «pending», lief jede Minute erneut, schrieb jedes Mal ins Fehlerprotokoll und
+    endete nie als «failed». Ist die Datenbank selbst weg, scheitert auch das - dann zählt der
+    Versuch eben nicht."""
+    try:
+        _fail(db, _due_rows(db, tenant_id, recipient_id, group), type(exc).__name__, smtp_status=False)
+        db.commit()
+    except Exception:  # noqa: BLE001 - der ursprüngliche Fehler ist bereits protokolliert
+        db.rollback()
+        _logger.warning("Fehlversuch für Empfänger %s nicht gezählt", recipient_id, exc_info=True)
+
+
+def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: int, recipient_id: int, group: str) -> str:
+    rows = _due_rows(db, tenant_id, recipient_id, group)
     if not rows:
         return "none"
     person = db.get(Participant, recipient_id)
@@ -219,9 +238,10 @@ def run(db: Session) -> dict[str, int]:
         try:
             counts[_deliver_group(db, config, tenant_id, recipient_id, group)] += 1
             db.commit()
-        except Exception as exc:  # Datenbankfehler: Gruppe auslassen, der Rest läuft weiter
+        except Exception as exc:  # Daten- oder Programmfehler: Gruppe auslassen, der Rest läuft weiter
             db.rollback()
             _logger.exception("Benachrichtigung an Empfänger %s fehlgeschlagen", recipient_id)
             record_system_error(db, exc=exc, tenant_id=tenant_id)
             counts["error"] += 1
+            _count_failed_attempt(db, tenant_id, recipient_id, group, exc)
     return dict(counts)
