@@ -19,7 +19,7 @@ from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
 from app import runtime_metrics
 from app.db import SessionLocal, engine
-from app.repository import insert_error_log, upload_path_referenced
+from app.repository import insert_error_log, redact_path, upload_path_referenced
 from app.routes import public, verify
 from app.objstore_client import StorageWriteFenced
 from app.storage import cleanup_stale_quarantine_files
@@ -221,7 +221,7 @@ async def _record_error_off_loop(request: Request, exc: Exception, status_code: 
     if not _ERROR_LOG_SLOTS.acquire(blocking=False):
         # Ohne Fehlertext: der kann Personendaten enthalten (Datenschutz-Audit PRIV-002); er steht
         # nur redigiert im Fehlerprotokoll, das hier gerade überlastet ist.
-        _logger.error("Fehlerprotokoll überlastet, nur im Log: %s %s -> %s", request.method, request.url.path, type(exc).__name__)
+        _logger.error("Fehlerprotokoll überlastet, nur im Log: %s %s -> %s", request.method, redact_path(request.url.path), type(exc).__name__)
         return
     try:
         await asyncio.to_thread(_record_error, request, exc, status_code)

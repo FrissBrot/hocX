@@ -410,6 +410,19 @@ def redact(text: str) -> str:
     return text
 
 
+# Der Abgabebox-Link trägt sein Zugangsgeheimnis im Pfad (/api/public/{link_token}/…). Ohne
+# Maskierung stünde es bei jedem 500 im Fehlerprotokoll bzw. Log - wer es liest, könnte danach
+# selbst hochladen (SECURITY-RULES 5.1, wie backend/app/core/error_log.redact_path). Ausgenommen
+# sind die festen öffentlichen Pfade ohne Geheimnis.
+_PATH_SECRET = re.compile(r"^/api/public/(?!(?:verify|maintenance-status)(?:/|$))[^/]+")
+
+
+def redact_path(path: str | None) -> str | None:
+    if path is None:
+        return None
+    return _PATH_SECRET.sub("/api/public/<token>", path, count=1)
+
+
 def insert_error_log(
     db: Session,
     *,
@@ -427,7 +440,7 @@ def insert_error_log(
             tenant_id=tenant_id,
             actor_email=None,
             request_method=request_method,
-            request_path=request_path,
+            request_path=redact_path(request_path),
             status_code=status_code,
             error_type=error_type,
             error_message=redact(error_message)[:4000],
