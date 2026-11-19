@@ -238,11 +238,28 @@ class EventService:
         ihre Dateien werden vorher vollständig gelöscht, sonst blieben sie verwaist (PRIV-003)."""
         from app.services import deletion_service, erasure_journal
 
-        event = self.repository.get(db, event_id)
-        if event is None:
+        if self.repository.get(db, event_id) is None:
             return False
-        if deletion_service.erase_uploads_of(db, event_id=event_id):
-            event = self.repository.get(db, event_id)
+        # erase_uploads_of committet. Eine Einreichung, die danach, aber vor dem Löschen des
+        # Termins eintrifft, fiele per Kaskade weg und liesse ihre Datei verwaist zurück. Daher
+        # den Termin sperren (ein neuer Upload braucht per FK einen Key-Share-Lock auf ihn und
+        # wartet) und erst löschen, wenn unter der Sperre keine Datei mehr dranhängt.
+        for _attempt in range(5):
+            deletion_service.erase_uploads_of(db, event_id=event_id)
+            event = db.scalar(select(Event).where(Event.id == event_id).with_for_update().execution_options(populate_existing=True))
+            if event is None:
+                return False
+            remaining = db.scalar(
+                select(SubmissionUploadFile.id)
+                .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+                .where(SubmissionUpload.event_id == event_id)
+                .limit(1)
+            )
+            if remaining is None:
+                break
+            # Nächster Durchgang löscht die neue Datei (und committet, gibt die Sperre frei).
+        else:
+            raise RuntimeError("Einreichungen des Termins konnten nicht vollständig gelöscht werden")
         erasure_journal.record(db, "event", event.public_id, tenant_id=event.tenant_id)
         self.repository.delete(db, event)
         return True
