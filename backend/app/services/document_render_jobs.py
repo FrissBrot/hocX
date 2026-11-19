@@ -67,6 +67,20 @@ def enqueue(db: Session, *, tenant_id: int, user_id: int | None, request_json: d
     return job
 
 
+def record_reused(db: Session, *, tenant_id: int, user_id: int | None, request_json: dict[str, Any], protocol_id: int | None, export_id: int):
+    """Auftrag, der sofort erledigt ist: das verlangte PDF liegt schon vor (finales PDF eines
+    abgeschlossenen Protokolls). Kein Umweg über den job-worker - der Client bekommt «done» mit
+    dem bestehenden Export in derselben Antwort und muss nicht warten."""
+    job = _model()(
+        tenant_id=tenant_id, requested_by=user_id, protocol_id=protocol_id, request_json=request_json,
+        status="done", export_id=export_id, finished_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def enqueue_protocol_pdf(db: Session, *, protocol) -> None:
     """Auto-PDF nach dem Abschliessen (vorher BackgroundTask im Request-Prozess)."""
     enqueue(

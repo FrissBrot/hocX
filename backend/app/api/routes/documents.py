@@ -172,6 +172,29 @@ def _render_job_read(db: Session, job) -> DocumentRenderJobRead:
     )
 
 
+def _audit_render(db: Session, user: CurrentUser, job, export_id: int) -> None:
+    """Gleicher Audit-Eintrag wie beim fertigen Auftrag im job-worker (document_render_jobs)."""
+    from app.services.audit_service import AuditService
+
+    export = db.get(DocumentExport, export_id)
+    if export is None:
+        return
+    AuditService().log(
+        db,
+        action="document.render",
+        actor=user,
+        tenant_id=job.tenant_id,
+        entity_type="document_export",
+        entity_id=export.id,
+        details={
+            "document_type": export.document_type,
+            "version": export.version_label,
+            "protocol_id": job.request_json.get("protocol_id"),
+            "template_id": job.request_json.get("template_id"),
+        },
+    )
+
+
 @router.post("/documents/render", response_model=DocumentRenderJobRead, status_code=202)
 async def render_document(body: DocumentRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """PDF-Export als Auftrag (Concurrency-Audit CONC-003/-004, Nutzerentscheid «Job mit
@@ -181,16 +204,32 @@ async def render_document(body: DocumentRequest, db: Session = Depends(get_db), 
     permissions.require_export(user)
 
     def validate_and_enqueue() -> DocumentRenderJobRead:
+        reused_export_id: int | None = None
         savepoint = db.begin_nested()
         try:
             prepared = document_service.prepare(db, user, user.current_tenant_id, body)
             protocol_id = prepared.protocol.id if prepared.protocol is not None else None
+            # Abgeschlossenes Protokoll mit finalem PDF: sofort liefern statt über den job-worker
+            # (der würde dasselbe PDF nach erneuter Vorbereitung zurückgeben, der Nutzer sah so bei
+            # jedem «PDF öffnen» die Ladeseite). Rechte hat prepare() eben geprüft; die Sicht
+            # (document_view_key) und die Regeln für Sprache/Vorlage/Optionen/Titel sind dieselben
+            # wie im Worker (_reuse_closed_export).
+            reused = document_service.reuse_closed_export(db, user, body, prepared)
+            reused_export_id = reused.export.id if reused is not None else None
         finally:
             if savepoint.is_active:
                 savepoint.rollback()
+        request_json = body.model_dump(mode="json", exclude_unset=True)
+        if reused_export_id is not None:
+            job = document_render_jobs.record_reused(
+                db, tenant_id=user.current_tenant_id, user_id=user.user_id,
+                request_json=request_json, protocol_id=protocol_id, export_id=reused_export_id,
+            )
+            _audit_render(db, user, job, reused_export_id)
+            return _render_job_read(db, job)
         job = document_render_jobs.enqueue(
             db, tenant_id=user.current_tenant_id, user_id=user.user_id,
-            request_json=body.model_dump(mode="json", exclude_unset=True), protocol_id=protocol_id,
+            request_json=request_json, protocol_id=protocol_id,
         )
         return _render_job_read(db, job)
 

@@ -854,6 +854,12 @@ def _reuse_existing_export(
     return RenderResult(export=export, stored_file=stored)
 
 
+def reuse_closed_export(db: Session, user: CurrentUser | None, request: DocumentRequest, prepared: PreparedDocument) -> RenderResult | None:
+    """Finales PDF eines abgeschlossenen Protokolls für diese Person (ihre Sicht), falls vorhanden -
+    für die Route, die damit den Umweg über den job-worker spart. Gleiche Regeln wie render()."""
+    return _reuse_closed_export(db, request, prepared, document_view_key(db, user))
+
+
 def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: PreparedDocument, view: str) -> RenderResult | None:
     """Abgeschlossenes Protokoll: das finale PDF bleibt dasselbe (gleiche Dokument-ID, gleiche
     Bytes, gleicher Prüf-Hash), egal wie oft es geöffnet wird - erst nach Zurückstufen und

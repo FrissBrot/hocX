@@ -33,6 +33,12 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
 - **Mitglied erfassen:** Der Anzeigename füllt sich beim Tippen aus Vor- und Nachname und lässt sich
   danach von Hand ändern; eine eigene Eingabe bleibt stehen.
 
+### Behoben
+
+- **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
+  über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
+  PDF mit derselben Dokument-ID zurückkam.
+
 ## [1.4.0] - 2026-11-19
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten

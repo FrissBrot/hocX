@@ -129,3 +129,33 @@ def test_finished_jobs_are_removed_by_retention(db):
     from app.services import retention_service
 
     assert any(rule.table == "document_render_job" for rule in retention_service.RULES)
+
+
+def test_closed_protocol_with_final_pdf_is_done_immediately_without_worker(db):
+    """«PDF öffnen» bei einem abgeschlossenen Protokoll: das finale PDF kommt in derselben Antwort
+    (status done), kein Auftrag für den job-worker - vorher sah man bei jedem Öffnen die Ladeseite."""
+    from app.documents.service import document_view_key
+    from app.services.protocol_service import ProtocolService
+    from tests.test_closed_protocol_pdf_stable import _pdf
+
+    tenant, protocol, user = _world(db)
+    protocol.title = "Sitzung"  # finale PDFs tragen einen Titel im Register (_reuse_closed_export)
+    ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
+    final = _pdf(db, protocol, "abgeschlossen", view=document_view_key(db, user))
+    db.commit()
+
+    job = asyncio.run(routes.render_document(DocumentRequest(protocol_id=protocol.public_id, document_type="protocol"), db=db, user=user))
+    assert job.status == "done"
+    assert job.export is not None and job.export.id == final.public_id
+    assert db.scalar(text("SELECT count(*) FROM document_render_job WHERE tenant_id = :t AND status = 'queued'"), {"t": tenant.id}) == 0
+    assert db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'document.render' AND tenant_id = :t"), {"t": tenant.id}) == 1
+
+    # Eine andere Sicht (anderes Konto ohne volle Rechte) bekommt das PDF nicht, sondern einen Auftrag
+    colleague = make_current_user(tenant.id, role="writer", user_id=make_app_user(db, email=f"o-{uuid.uuid4().hex[:8]}@example.com", tenant_id=tenant.id, role_code="writer").id)
+    if document_view_key(db, colleague) != document_view_key(db, user):
+        other = asyncio.run(routes.render_document(DocumentRequest(protocol_id=protocol.public_id, document_type="protocol"), db=db, user=colleague))
+        assert other.status == "queued"
+
+    # Ausdrücklich andere Sprache: neues PDF über den Worker
+    french = asyncio.run(routes.render_document(DocumentRequest(protocol_id=protocol.public_id, document_type="protocol", language="fr"), db=db, user=user))
+    assert french.status == "queued"
