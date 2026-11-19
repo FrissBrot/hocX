@@ -97,6 +97,10 @@ Frontend und Backend-API der Hauptdomain, Abgabebox-Frontend und -API inklusive 
 Admin-Frontend und -API ueber Port `TRAEFIK_ADMIN_PORT`, Docs, Website). Erreicht ein Router seinen Dienst
 nicht (z. B. 504 wegen falschem Docker-Netz), rollt `deploy.sh` automatisch auf das vorherige Release zurueck;
 bei der allerersten Installation gibt es nur eine Warnung.
+Docs- und Website-Domain sind davon ausgenommen (nur Warnung). Ein automatischer Rollback setzt nur
+die App-Images zurück, die Datenbank bleibt migriert: über Migration `0198_submission_manual_elements`
+hinweg (1.4.1 → 1.4.0) ist das alte Backend für Einzelabgaben nicht mehr schemakompatibel - in
+diesem Fall den Fehler beheben und vorwärts deployen statt beim alten Release zu bleiben.
 
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar

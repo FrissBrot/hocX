@@ -1104,6 +1104,9 @@ fi
 # Demo-Seed) ändern daran nichts mehr. Bisher stand das erst am Ende, ein Fehler dazwischen
 # liess current.env auf dem alten Release stehen.
 install -m 600 "$PROJECT_DIR/.releases/${HOCX_VERSION}.env" "$PROJECT_DIR/.releases/current.env"
+# Erst jetzt (Release läuft und ist über Traefik geprüft): bekannte, im Release enthaltene Hotfixes
+# aus docker-compose.local.yml wegräumen. Vorher brauchte sie ein Rollback auf das alte Release.
+retire_local_compose_hotfixes "$PROJECT_DIR" || true
 
 # Lokales S3 in den Sollzustand bringen (z. B. nach einem Wechsel zu externem S3 wieder stoppen,
 # das `up -d` oben hat es gestartet). Stoppt nur, löscht nie Daten.

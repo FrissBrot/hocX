@@ -263,9 +263,11 @@ class SubmissionService:
         items: list[SubmissionManualElementWrite] | None,
         *,
         fallback_deadline: date | None = None,
+        eraser=None,
     ) -> None:
-        """Elemente einer Einzelabgabe anlegen, ändern, entfernen (ohne Commit; das Entfernen von
-        Einreichungen committet selbst, siehe deletion_service). `items` None = unverändert; gibt es
+        """Elemente einer Einzelabgabe anlegen, ändern, entfernen (ohne Commit). Dateien entfernter
+        Elemente sammelt `eraser`: der Aufrufer committet die ganze Änderung und löscht die
+        Speicherobjekte danach (eraser.after_commit) - kein halber Stand bei einem späteren Fehler. `items` None = unverändert; gibt es
         noch keine Elemente, entsteht das Standard-Element aus Titel und (altem) Stichtag. Bestehende
         Elemente werden über ihre öffentliche ID erkannt - nur Elemente dieser Abgabe, sonst ValueError.
         Alle Prüfungen laufen, bevor etwas geändert wird."""
@@ -293,7 +295,7 @@ class SubmissionService:
             prepared.append((current, item, self._resolve_responsible(db, assignment.tenant_id, item.responsible_participant_ids)))
         for element in existing:
             if element.id not in kept:
-                self._delete_manual_element(db, assignment, element)
+                self._delete_manual_element(db, assignment, element, eraser=eraser)
         has_default = any(element.is_default for element in existing if element.id in kept)
         for index, (current, item, responsible) in enumerate(prepared):
             if current is None:
@@ -311,14 +313,14 @@ class SubmissionService:
             db.add(current)
         db.flush()
 
-    def _delete_manual_element(self, db: Session, assignment: SubmissionAssignment, element: SubmissionManualElement) -> None:
+    def _delete_manual_element(self, db: Session, assignment: SubmissionAssignment, element: SubmissionManualElement, *, eraser=None) -> None:
         """Element entfernen: Dateien seiner Einreichungen vollständig löschen (wie beim Löschen eines
         Listeneintrags, PRIV-003), App-Verknüpfungen lösen. Pendenzen gleicht der Abgleich danach ab."""
         from app.services import deletion_service
 
         ref = manual_element_ref(element)
         if element.is_default:
-            deletion_service.erase_uploads_of(db, manual_default_assignment_id=assignment.id)
+            deletion_service.erase_uploads_of(db, manual_default_assignment_id=assignment.id, eraser=eraser)
             # Schliessen/Wiederöffnen-Zeilen ohne Dateien
             db.execute(
                 SubmissionUpload.__table__.delete().where(
@@ -326,7 +328,7 @@ class SubmissionService:
                 )
             )
         else:
-            deletion_service.erase_uploads_of(db, manual_element_id=element.id)
+            deletion_service.erase_uploads_of(db, manual_element_id=element.id, eraser=eraser)
         db.execute(
             GalleryImage.__table__.update()
             .where(
@@ -404,14 +406,19 @@ class SubmissionService:
             sync_manual = manual_items is not None or not self.repository.list_manual_elements(db, assignment_id=assignment.id)
         elif manual_items is not None:
             raise ValueError("Elemente gibt es nur bei Einzelabgaben")
+        from app.services.file_eraser import FileEraser
+
+        # Dateien entfernter Elemente erst nach dem Commit der ganzen Änderung löschen
+        eraser = FileEraser()
         if link_ids is not None:
             assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)
         if not values:
             if sync_manual:
-                self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline)
+                self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline, eraser=eraser)
             if link_ids is not None or sync_manual:
                 db.add(assignment)
                 db.commit()
+                eraser.after_commit(db)
                 db.refresh(assignment)
                 if link_ids is not None:
                     self.refresh_todo_links(db, assignment)
@@ -439,9 +446,9 @@ class SubmissionService:
         }
         self._validate_source_fields_dict(merged)
         if sync_manual:
-            # Erst nach allen Prüfungen: das Entfernen von Einreichungen committet selbst
-            self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline)
-        updated = self.repository.update_assignment(db, assignment, values)
+            self._sync_manual_elements(db, assignment, manual_items, fallback_deadline=fallback_deadline, eraser=eraser)
+        updated = self.repository.update_assignment(db, assignment, values)  # committet alles zusammen
+        eraser.after_commit(db)
         if link_ids is not None:
             self.refresh_todo_links(db, updated)
         self.sync_todos_if_tracked(db, updated)

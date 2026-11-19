@@ -15,7 +15,7 @@ stored_file:
 Priorität siehe backend/app/services/capture_date.py: korrigiert > EXIF > geschätzt > Upload.
 
 Revision ID: 0200_photo_capture_override
-Revises: 0197_photo_worker_columns
+Revises: 0198_submission_manual_elements
 Create Date: 2026-11-19
 """
 

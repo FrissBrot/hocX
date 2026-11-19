@@ -588,38 +588,45 @@ class FileService:
         return [PhotoTimelineDay(date=row.day, count=int(row.count)) for row in rows]
 
     def _attach_submission_elements(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
-        """Element der Abgabe je Abgabe-Upload: Termin (Titel, Datum) oder Listeneintrag
-        (Bezeichnung) - eine Abfragerunde je Seite, immer im Mandanten der Datei."""
-        from app.models.entities import ListDefinition, ListEntry, SubmissionUpload
+        """Element der Abgabe je Abgabe-Upload: Termin (Titel, Datum), Listeneintrag (Bezeichnung)
+        oder Element einer Einzelabgabe (Name, Stichtag; ohne Ziel = Standard-Element) - eine
+        Abfragerunde je Seite, immer im Mandanten der Datei."""
+        from app.models.entities import ListDefinition, ListEntry, SubmissionManualElement, SubmissionUpload
         from app.services.list_columns import label_of
 
         pairs = [(row, item) for row, item in zip(rows, items) if row.source == "submission_upload" and row.upload_id is not None]
         if not pairs:
             return
+        tenant_ids = {row.tenant_id for row, _ in pairs}
         uploads = {
-            upload_id: (event_id, list_entry_id)
-            for upload_id, event_id, list_entry_id in db.execute(
-                select(SubmissionUpload.id, SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
-                .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
-                .where(
-                    SubmissionUpload.id.in_({row.upload_id for row, _ in pairs}),
-                    SubmissionAssignment.tenant_id.in_({row.tenant_id for row, _ in pairs}),
+            upload_id: (event_id, list_entry_id, manual_element_id, assignment_id, source_type)
+            for upload_id, event_id, list_entry_id, manual_element_id, assignment_id, source_type in db.execute(
+                select(
+                    SubmissionUpload.id, SubmissionUpload.event_id, SubmissionUpload.list_entry_id,
+                    SubmissionUpload.manual_element_id, SubmissionUpload.assignment_id, SubmissionAssignment.source_type,
                 )
+                .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
+                .where(SubmissionUpload.id.in_({row.upload_id for row, _ in pairs}), SubmissionAssignment.tenant_id.in_(tenant_ids))
             ).all()
         }
-        event_ids = {event_id for event_id, _ in uploads.values() if event_id is not None}
-        entry_ids = {entry_id for _, entry_id in uploads.values() if entry_id is not None}
-        events = {
-            event.id: event
-            for event in db.scalars(select(Event).where(Event.id.in_(event_ids))).all()
-        } if event_ids else {}
+        event_ids = {u[0] for u in uploads.values() if u[0] is not None}
+        entry_ids = {u[1] for u in uploads.values() if u[1] is not None}
+        manual_assignment_ids = {u[3] for u in uploads.values() if u[4] == "manual"}
+        events = {event.id: event for event in db.scalars(select(Event).where(Event.id.in_(event_ids))).all()} if event_ids else {}
         entries = {entry.id: entry for entry in db.scalars(select(ListEntry).where(ListEntry.id.in_(entry_ids))).all()} if entry_ids else {}
         definitions = {
             definition.id: definition
             for definition in db.scalars(select(ListDefinition).where(ListDefinition.id.in_({entry.list_definition_id for entry in entries.values()}))).all()
         } if entries else {}
+        manual_elements = list(db.scalars(
+            select(SubmissionManualElement).where(
+                SubmissionManualElement.assignment_id.in_(manual_assignment_ids), SubmissionManualElement.tenant_id.in_(tenant_ids)
+            )
+        ).all()) if manual_assignment_ids else []
+        manual_by_id = {element.id: element for element in manual_elements}
+        default_by_assignment = {element.assignment_id: element for element in manual_elements if element.is_default}
         for row, item in pairs:
-            event_id, entry_id = uploads.get(row.upload_id, (None, None))
+            event_id, entry_id, manual_id, assignment_id, source_type = uploads.get(row.upload_id, (None, None, None, None, None))
             event = events.get(event_id) if event_id is not None else None
             if event is not None and event.tenant_id == row.tenant_id:
                 item.element_label = event.title or None
@@ -630,6 +637,12 @@ class FileService:
                 definition = definitions.get(entry.list_definition_id)
                 if definition is not None and definition.tenant_id == row.tenant_id:
                     item.element_label = label_of(entry, definition) or None
+                continue
+            if source_type == "manual":
+                element = manual_by_id.get(manual_id) if manual_id is not None else default_by_assignment.get(assignment_id)
+                if element is not None and element.tenant_id == row.tenant_id:
+                    item.element_label = element.name
+                    item.element_date = element.window_end
 
     def _attach_documents(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
         """Kurzstatus des logischen Dokuments je Eintrag (eine Abfragerunde je Seite). Nur für

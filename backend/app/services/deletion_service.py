@@ -236,9 +236,15 @@ def delete_assignment(db: Session, assignment: SubmissionAssignment, *, delete_f
     return result
 
 
-def delete_submission_files(db: Session, rows: list[tuple[SubmissionUploadFile, StoredFile]], *, file_service=None) -> int:
-    """Einzelne eingereichte Dateien löschen; leere Einreichungen verschwinden mit."""
-    eraser = FileEraser(file_service)
+def delete_submission_files(
+    db: Session, rows: list[tuple[SubmissionUploadFile, StoredFile]], *, file_service=None, eraser: FileEraser | None = None
+) -> int:
+    """Einzelne eingereichte Dateien löschen; leere Einreichungen verschwinden mit.
+
+    Mit `eraser` (vom Aufrufer): kein Commit hier - der Aufrufer committet seine ganze Änderung und
+    ruft danach `eraser.after_commit(db)` (Speicherobjekte erst nach dem Commit). Ohne: Commit hier."""
+    deferred = eraser is not None
+    eraser = eraser or FileEraser(file_service)
     upload_ids = {upload_file.upload_id for upload_file, _ in rows}
     erased = 0
     for upload_file, stored_file in rows:
@@ -254,6 +260,9 @@ def delete_submission_files(db: Session, rows: list[tuple[SubmissionUploadFile, 
             tenant_id = db.scalar(select(SubmissionAssignment.tenant_id).where(SubmissionAssignment.id == upload.assignment_id))
             erasure_journal.record(db, "submission_upload", upload.public_id, tenant_id=tenant_id)
             db.execute(delete(SubmissionUpload).where(SubmissionUpload.id == upload_id))
+    if deferred:
+        db.flush()
+        return erased
     db.commit()
     eraser.after_commit(db)
     return erased
@@ -296,6 +305,7 @@ def erase_uploads_of(
     list_entry_id: int | None = None,
     manual_element_id: int | None = None,
     manual_default_assignment_id: int | None = None,
+    eraser: FileEraser | None = None,
 ) -> int:
     """Einreichungen hängen per CASCADE an Termin bzw. Listeneintrag bzw. Element einer Einzelabgabe
     (0198). Vor deren Löschung hier die Dateien vollständig löschen, sonst blieben sie verwaist im
@@ -322,5 +332,5 @@ def erase_uploads_of(
     else:
         return 0
     rows = [(row[0], row[1]) for row in db.execute(statement).all()]
-    return delete_submission_files(db, rows) if rows else 0
+    return delete_submission_files(db, rows, eraser=eraser) if rows else 0
 

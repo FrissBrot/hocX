@@ -121,20 +121,24 @@ append_local_compose_override() {
     return 1
   fi
   [ -f "$file" ] || return 0
-  retire_local_compose_hotfixes "$repo_dir" || return 0
+  # Bekannte Hotfixes bleiben bis zum erfolgreichen Update geladen (sie sind mit dem neuen Release
+  # gleichwertig): ein Rollback auf das alte Release braucht sie noch. deploy.sh räumt sie erst
+  # nach den Prüfungen über Traefik weg (retire_local_compose_hotfixes).
   target_args+=(-f "$file")
 }
 
 # Bekannte Hotfixes in docker-compose.local.yml, die ein späteres Release selbst enthält: liegt
 # genau ein solcher Hotfix vor und bringt der versionierte Stand die Korrektur schon mit, wird die
-# Datei nach backups/ verschoben (Rückgabe 1 = nicht mehr laden). Steht mehr in der Datei, bleibt
-# sie unverändert, es gibt nur einen Hinweis.
+# Datei nach backups/ verschoben (Rückgabe 1 = verschoben). Steht mehr in der Datei, bleibt sie
+# unverändert, es gibt nur einen Hinweis. Nur deploy.sh ruft das auf, und erst nach einem
+# erfolgreichen Update - sonst fehlte der Hotfix einem Rollback auf das alte Release.
 #   1.4.0 → 1.4.1: traefik.docker.network für abgabebox-backend (504 auf Prüfseite/Abgabebox)
 HOCX_KNOWN_LOCAL_HOTFIXES=(
   'services:abgabebox-backend:labels:-"traefik.docker.network=hocx_default"'
 )
 retire_local_compose_hotfixes() {
   local repo_dir="$1" file="$1/$HOCX_LOCAL_COMPOSE_FILE" normalized hotfix target
+  [ -f "$file" ] && [ ! -L "$file" ] || return 0
   grep -q 'abgabebox-backend' "$file" 2> /dev/null || return 0
   # Nur wenn das Release die Korrektur selbst mitbringt
   # (im Block des Dienstes abgabebox-backend - das Backend trägt dasselbe Label schon länger)

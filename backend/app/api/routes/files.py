@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -79,6 +80,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.gallery_upload_route import GalleryUploadRoute
 from app.core.offload import run_coroutine_in_thread
+
+# Form einer Abgabe-Element-Referenz (submission_service._element_ref / manual_element_ref)
+_ELEMENT_REF_SHAPE = re.compile(r"manual|(?:event|entry|manual)-[0-9a-fA-F-]{36}")
 
 router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
@@ -369,6 +373,10 @@ def _resolve_upload_target(
         try:
             parsed_key = _parse_element_ref(db, submission_element_ref)
         except ValueError:
+            # Formal gültige, aber unbekannte Referenz wie eine fremde: 404 (kein Existenz-Orakel,
+            # Security-Review 1.4.1); nur eine kaputte Referenz ist 422.
+            if _ELEMENT_REF_SHAPE.fullmatch(submission_element_ref or ""):
+                raise HTTPException(status_code=404, detail="Abgabe-Element nicht gefunden") from None
             raise HTTPException(status_code=422, detail="Ungültige Abgabe-Element-Referenz") from None
         # _parse_element_ref resolves the event/list-entry public id without a tenant
         # filter (see its docstring) - only trust it once it's confirmed as one of *this*
@@ -1225,6 +1233,16 @@ def bulk_update_capture_date(
         db.scalars(select(StoredFile.public_id).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)))
     )
     _ensure_files_in_scope(db, user, own_ids)
+    # Schreiben braucht dieselbe Leseprüfung wie der Einzel-PATCH: Protokollbilder von Protokollen,
+    # die das Konto nicht lesen darf, werden nicht angefasst und kommen wie unbekannte als not_found
+    # zurück (Security-Review 1.4.1).
+    unreadable: list[uuid.UUID] = []
+    for stored in db.scalars(select(StoredFile).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(own_ids))):
+        try:
+            access_service.ensure_can_read_stored_file(db, user, stored.id, allow_context_grant=False)
+        except HTTPException:
+            unreadable.append(stored.public_id)
+    writable_ids = [file_id for file_id in ids if file_id not in set(unreadable)]
     corrected = (
         image_metadata_service.corrected_datetime(payload.corrected_date, payload.corrected_time)
         if payload.mode == "set" and payload.corrected_date is not None
@@ -1234,8 +1252,9 @@ def bulk_update_capture_date(
         raise HTTPException(status_code=422, detail="Ungültiges Aufnahmedatum")
     shift = timedelta(days=payload.shift_days, hours=payload.shift_hours) if payload.mode == "shift" else None
     outcome = service.correct_capture_dates(
-        db, user.current_tenant_id, ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
     )
+    outcome.not_found_ids.extend(unreadable)
     details: dict = {}
     if corrected is not None:
         details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]}

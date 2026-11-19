@@ -37,3 +37,30 @@ def test_submission_file_shows_its_event_element(db):
     assert item.element_label == "Scharanlass"
     assert item.element_date == date(2026, 10, 25)
     assert items[manual.public_id].element_label is None
+
+
+def test_manual_submission_file_shows_its_element(db):
+    from app.models.entities import SubmissionManualElement
+
+    tenant = make_tenant(db)
+    assignment = SubmissionAssignment(tenant_id=tenant.id, title="Berichte", public_slug=f"a-{uuid.uuid4().hex[:8]}", source_type="manual")
+    db.add(assignment)
+    db.flush()
+    default = SubmissionManualElement(tenant_id=tenant.id, assignment_id=assignment.id, is_default=True, name="Jahresbericht", window_end=date(2026, 12, 1), sort_index=0)
+    extra = SubmissionManualElement(tenant_id=tenant.id, assignment_id=assignment.id, is_default=False, name="Lagerbericht", sort_index=1)
+    db.add_all([default, extra])
+    db.flush()
+    in_default = _upload(db, assignment, name="jahr.pdf")
+    upload = SubmissionUpload(assignment_id=assignment.id, status="submitted", manual_element_id=extra.id)
+    db.add(upload)
+    db.flush()
+    stored = StoredFile(tenant_id=tenant.id, original_name="lager.pdf", mime_type="application/pdf",
+                        storage_path=f"abgabebox/{uuid.uuid4().hex}.pdf", scan_status="clean")
+    db.add(stored)
+    db.flush()
+    db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored.id, sort_index=0))
+    db.flush()
+
+    items = {item.id: item for item in FileService().list_tenant_files(db, tenant.id, limit=50)}
+    assert (items[in_default.public_id].element_label, items[in_default.public_id].element_date) == ("Jahresbericht", date(2026, 12, 1))
+    assert items[stored.public_id].element_label == "Lagerbericht"

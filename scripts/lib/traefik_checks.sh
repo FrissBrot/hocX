@@ -84,11 +84,13 @@ traefik_route_checks() {
     _traefik_check "Admin: Frontend" probe_domain "$admin/admin/login" || return 1
     _traefik_check "Admin: API" probe_domain "$admin/api/admin/auth/oidc/public-config" || return 1
   fi
+  # Docs und Website sind keine Kernfunktion (oft eigene DNS/Zertifikate): ein Fehler dort ist
+  # eine Warnung, kein Rollback - ein Rollback setzt nur die Images zurück, nicht die Datenbank.
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
-    _traefik_check "Docs" probe_domain "https://${TRAEFIK_DOCS_DOMAIN}/" || return 1
+    _traefik_check "Docs" probe_domain "https://${TRAEFIK_DOCS_DOMAIN}/" || echo "    WARNUNG: Docs über Traefik nicht erreichbar (kein Rollback)." >&2
   fi
   if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
-    _traefik_check "Website (Landing Page)" probe_website_domain "https://${TRAEFIK_WEBSITE_DOMAIN}/" || return 1
+    _traefik_check "Website (Landing Page)" probe_website_domain "https://${TRAEFIK_WEBSITE_DOMAIN}/" || echo "    WARNUNG: Website über Traefik nicht erreichbar (kein Rollback)." >&2
   fi
 }
 
