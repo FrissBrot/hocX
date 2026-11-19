@@ -228,3 +228,32 @@ def test_apply_rejects_stale_fingerprint(db, service):
     AdminTenantService().upsert_storage_package(db, "cat_pkg_10", AdminStoragePackageWrite(name="Changed", bytes=BYTES_PER_GB))
     with pytest.raises(CatalogChangedError):
         service.apply(db, config, overwrite=False, base_fingerprint=preview.base_fingerprint)
+
+
+def test_import_changing_plan_features_updates_tenants_already_on_it(db, service, monkeypatch):
+    """Wie upsert_plan (Audit 08): ein Katalog-Import, der einem Plan Module nimmt oder gibt, führt
+    die Mandanten auf diesem Plan nach - sonst behielten sie entfernte Module (inkl. eigener Domain)."""
+    from app.models.entities import TenantFeature
+    from app.services import traefik_config_service
+
+    regenerated: list[bool] = []
+    monkeypatch.setattr(traefik_config_service, "regenerate", lambda db: regenerated.append(True))
+    admin_service = AdminTenantService()
+    admin_service.upsert_plan(
+        db, "cat_sync", AdminPlanWrite(
+            name="Cat Sync", price_monthly_rp=None, price_yearly_rp=None, included_user_limit=None,
+            included_storage_bytes=None, feature_codes=["finance", "custom_domain"],
+        ),
+    )
+    tenant = make_tenant(db, features=())
+    admin_service.update_tenant_subscription(db, tenant.id, AdminTenantSubscriptionUpdate(plan_code="cat_sync"), admin_id=None)
+    db.commit()
+    regenerated.clear()
+
+    service.apply(db, {"schema_version": 1, "plans": [{"code": "cat_sync", "feature_codes": ["abgabebox"]}]}, overwrite=False)
+
+    rows = {row.feature_code: row for row in db.query(TenantFeature).filter(TenantFeature.tenant_id == tenant.id)}
+    assert rows["abgabebox"].access == "full"
+    assert rows["finance"].access == "read_only"
+    assert "custom_domain" not in rows
+    assert regenerated, "Domain-Modul weggefallen: Traefik-Konfiguration muss neu geschrieben werden"
