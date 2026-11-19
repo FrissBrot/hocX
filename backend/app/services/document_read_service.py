@@ -106,7 +106,7 @@ def get_document_for_user(db: Session, user: CurrentUser, document_id: uuid.UUID
     if document is None or user.current_tenant_id is None or document.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
     if document.source_kind == DOCUMENT_SOURCE_PROTOCOL_EXPORT:
-        access_service.ensure_can_read_protocol(db, user, document.protocol_id)
+        access_service.ensure_can_read_protocol(db, user, document.protocol_id, detail="Dokument nicht gefunden")
         return document
     if document.current_version_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")

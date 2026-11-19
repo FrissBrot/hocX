@@ -504,7 +504,7 @@ def list_document_exports(
         internal = public_id_service.resolve_internal_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
         if internal is None:
             raise HTTPException(status_code=404, detail=text(_lang(user), "apiError.notFound"))
-        access_service.ensure_can_read_protocol(db, user, internal)
+        access_service.ensure_can_read_protocol(db, user, internal, detail=text(_lang(user), "apiError.notFound"))
         statement = statement.where(DocumentExport.protocol_id == internal)
     elif access_service.is_restricted_reader(db, user):
         statement = statement.where(DocumentExport.created_by == user.user_id)
@@ -602,9 +602,10 @@ def list_source_options(
         ]
     if source in ("protocol_elements", "protocol_blocks"):
         internal = public_id_service.resolve_internal_id(db, Protocol, protocol_id, tenant_id=tenant_id) if protocol_id else None
-        if internal is None:
+        # Nicht lesbares Protokoll (z. B. Entwurf ohne meetings.read_drafts) wie ein unbekanntes:
+        # leere Auswahl statt 403 (kein Existenz-Orakel, SECURITY-RULES 1.6).
+        if internal is None or not access_service.can_read_protocol(db, user, internal):
             return []
-        access_service.ensure_can_read_protocol(db, user, internal)
         elements = list(db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id == internal).order_by(ProtocolElement.sort_index)))
         if source == "protocol_elements":
             return [SourceOption(id=element.public_id, label=element.section_name_snapshot) for element in elements]

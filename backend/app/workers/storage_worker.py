@@ -447,7 +447,9 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
         for info in source.list(namespace, ""):
             ctx.check()
             if info.size < 0:
-                raise sms.MigrationError(f"Ungültiger Dateiname: {namespace}/{info.key}")
+                # Schlüssel nur ins Server-Log: last_error lesen auch Support-Admins
+                _logger.warning("Storage-Migration %s: ungültiger Dateiname %s/%s", migration.id, namespace, info.key)
+                raise sms.MigrationError(f"Ungültiger Dateiname in {namespace} (Details im Server-Log)")
             if is_internal_key(info.key):
                 # Backup-Hold, Restore-Staging, Verbindungstests: nie fachliche Objekte, werden
                 # nicht migriert (ein Backup-Hold gehört zur Quellgeneration).
@@ -890,7 +892,7 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
         if migration.cutover_committed_at is None:
             # Vor dem Commit: Quelle bleibt aktiv, Fence wieder weg.
             unfence_storage(db, reason)
-            event(db, migration, "cutover_aborted", f"Cutover abgebrochen, Quelle bleibt aktiv: {exc}", level="warning")
+            event(db, migration, "cutover_aborted", f"Cutover abgebrochen, Quelle bleibt aktiv: {public_error_message(exc)}", level="warning")
             back = "ready_for_cutover"
             # Cutover-Abbrüche eigens zählen: attempt wird nach jeder erfolgreichen Phase
             # zurückgesetzt und würde einen immer wieder scheiternden Cutover nie begrenzen
@@ -899,9 +901,9 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
             move(db, ctx, migration, back, checkpoint={**(migration.checkpoint or {}), "cutover_aborts": aborts})
             _close_cutover_window(db, migration)
             if aborts >= MAX_CUTOVER_ATTEMPTS:
-                raise sms.MigrationError(f"Cutover {aborts}-mal abgebrochen, zuletzt: {exc}") from exc
+                raise sms.MigrationError(f"Cutover {aborts}-mal abgebrochen, zuletzt: {public_error_message(exc)}") from exc
             # Vorübergehend behandeln: erneuter Versuch mit Backoff.
-            raise StorageUnavailable(f"Cutover abgebrochen: {exc}") from exc
+            raise StorageUnavailable(f"Cutover abgebrochen: {public_error_message(exc)}") from exc
         raise
     _close_cutover_window(db, migration)
 
@@ -1021,10 +1023,27 @@ def handle_cancel(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
         db.commit()
 
 
+def public_error_message(exc: BaseException) -> str:
+    """Fehlertext für ``last_error``, Migrations-Ereignisse und das Wartungsfenster - die lesen
+    auch Support-Admins. Objektschlüssel und Pfade sehen nur Owner (Objektliste, Bericht), also
+    kommen hier nur kuratierte Meldungen durch: ``ObjectNotFound`` trägt den Schlüssel, ``OSError``
+    den Dateipfad, ``OperationalError`` SQL samt Parametern, unbekannte Fehler beliebigen Text.
+    Die vollen Details stehen im Fehlerprotokoll bzw. im Server-Log."""
+    name = type(exc).__name__
+    if isinstance(exc, ObjectNotFound):
+        return f"{name}: Objekt fehlt im Speicher"
+    if isinstance(exc, OSError):
+        return f"{name}: {exc.strerror}" if exc.strerror else name
+    if isinstance(exc, (sms.MigrationError, StorageError)):
+        return f"{name}: {exc}"
+    return f"{name} (Details im Fehlerprotokoll)"
+
+
 def handle_failure(db: Session, ctx: Ctx, migration: StorageMigration, exc: BaseException, *, permanent: bool) -> None:
     db.rollback()
     db.refresh(migration)
-    message = f"{type(exc).__name__}: {exc}"[:2000]
+    _logger.warning("Storage-Migration %s: Phase fehlgeschlagen: %s: %s", migration.id, type(exc).__name__, exc)
+    message = public_error_message(exc)[:2000]
     attempt = migration.attempt + 1
     if not permanent and attempt < MAX_RUN_ATTEMPTS and migration.state not in ("retrying",):
         delay = backoff_seconds(attempt, base=5, cap=900)

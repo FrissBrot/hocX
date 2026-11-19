@@ -136,8 +136,9 @@ def list_todos(
     # Gleiche Prüfung wie ensure_can_read_protocol_block, aber das Protokoll nur einmal ermitteln
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
     if protocol_id is None:
-        raise HTTPException(status_code=404, detail="Protocol block not found")
-    access_service.ensure_can_read_protocol(db, user, protocol_id)
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    # Meldung wie _todo_block_or_404: nicht lesbarer Entwurf = unbekannter Block
+    access_service.ensure_can_read_protocol(db, user, protocol_id, detail="Protocol element block not found")
     snapshot = _frozen_todo_snapshot(db, protocol_id)
     if snapshot is not None:
         return service.snapshot_todos_for_block(snapshot, block.id)
@@ -215,8 +216,10 @@ def create_todo(
 ):
     require_permission(user, P.MEETINGS_EDIT)
     block = _todo_block_or_404(db, user, protocol_element_block_id)
-    access_service.ensure_can_read_protocol_block(db, user, block.id)
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
+    if protocol_id is None:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    access_service.ensure_can_read_protocol(db, user, protocol_id, detail="Protocol element block not found")
     protocol = _get_protocol_or_404(db, protocol_id)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:

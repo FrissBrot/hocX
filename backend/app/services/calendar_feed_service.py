@@ -225,11 +225,16 @@ def touch(db: Session, feed: CalendarFeed, *, now: datetime | None = None) -> No
 # --- iCal-Ausgabe -----------------------------------------------------------------------------
 
 
+_LINE_BREAKING = frozenset("\x7f\u0085\u2028\u2029")
+
+
 def _escape(value: str) -> str:
     """TEXT-Wert nach RFC 5545 3.3.11; uebrige Steuerzeichen fliegen raus (sie sind in iCal
-    nicht erlaubt und brechen sonst einzelne Clients)."""
+    nicht erlaubt und brechen sonst einzelne Clients). Dazu DEL und die Unicode-Zeilentrenner
+    U+0085/U+2028/U+2029: Parser mit ``splitlines()`` (z. B. Python ``icalendar``) beginnen dort
+    eine neue Zeile - ein Termintext könnte so eigene Eigenschaften einschleusen."""
     value = value.replace("\r\n", "\n").replace("\r", "\n")
-    value = "".join(ch for ch in value if ch == "\n" or ch == "\t" or ord(ch) >= 0x20)
+    value = "".join(ch for ch in value if ch == "\n" or ch == "\t" or (ord(ch) >= 0x20 and ch not in _LINE_BREAKING))
     return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 

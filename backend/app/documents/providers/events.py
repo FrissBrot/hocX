@@ -220,7 +220,7 @@ def provide_agenda(ctx: BuildContext, spec: BlockSpec, params: EventAgendaParams
 
 def ics(events: list[Event], *, tenant_name: str) -> str:
     """Termine als iCalendar (ganztägig, wie in der App erfasst)."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, date, datetime, timedelta
 
     # Gleiche Regeln wie das Kalender-Abo: Steuerzeichen (auch ein einzelnes CR) entfernen, damit
     # kein Termintext eine neue iCal-Zeile beginnt, und Zeilen auf 75 Oktette falten.
@@ -232,7 +232,10 @@ def ics(events: list[Event], *, tenant_name: str) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//hocX//Dokument-Engine//DE", f"X-WR-CALNAME:{escape(tenant_name)}"]
     for event in events:
-        end = (event.event_end_date or event.event_date) + timedelta(days=1)
+        # Wie das Kalender-Abo: Enddatum vor dem Beginn ignorieren und vor date.max kappen -
+        # DTEND ist exklusiv (+1 Tag), ein Altdatum 9999-12-31 liefe sonst mit OverflowError über.
+        last = event.event_end_date if event.event_end_date and event.event_end_date >= event.event_date else event.event_date
+        end = min(last, date.max - timedelta(days=1)) + timedelta(days=1)
         lines += [
             "BEGIN:VEVENT",
             f"UID:{event.public_id}@hocx",

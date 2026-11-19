@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import OperationalError
 
-from app.core.objstore_client import S3Backend, StorageUnavailable
+from app.core.objstore_client import ObjectNotFound, S3Backend, StorageUnavailable
 from app.core.storage import MAIN, get_object_store
 from app.models import MaintenanceWindow, StorageGeneration, StorageMigration, StorageMigrationObject, StorageProfile, StorageState, StoredFile
 from app.services import storage_migration_service as sms
@@ -123,6 +123,42 @@ def test_database_errors_in_a_phase_lead_to_retry_not_to_data_loss(setup, monkey
     kinds = db.execute(text("SELECT to_state FROM storage_migration_event WHERE migration_id = :id"), {"id": migration.id}).scalars().all()
     assert "retrying" in kinds
     assert_files_intact(db, files)
+
+
+# Fehlertexte für Support-Admins ohne Objektschlüssel -------------------------------------------
+
+
+SECRET_KEY = "tenant-geheim/protokolle/vorstand-2026.pdf"
+
+
+@pytest.mark.parametrize("error", [
+    ObjectNotFound(SECRET_KEY),
+    FileNotFoundError(2, "No such file or directory", f"/data/storage/{SECRET_KEY}"),
+    OperationalError("SELECT key FROM stored_file WHERE key = %(k)s", {"k": SECRET_KEY}, Exception("boom")),
+    KeyError(SECRET_KEY),
+], ids=["object_not_found", "os_error", "operational_error", "unknown"])
+def test_phase_errors_shown_to_support_admins_never_contain_object_keys(setup, monkeypatch, error):
+    """last_error und Migrations-Ereignisse liest auch die Support-Rolle (GET /storage/migrations,
+    get_current_admin); Objektschlüssel sind nur für Owner (Objektliste/Bericht). handle_failure
+    schrieb bisher str(exc) - bei ObjectNotFound genau den Schlüssel (Review 2026-11-19)."""
+    db, _tenant, _files, local, _external = setup
+
+    def failing(db_, ctx, migration):
+        storage_worker.move(db_, ctx, migration, "preflight")  # wie phase_preflight, sonst kein Übergang nach retrying
+        raise error
+
+    monkeypatch.setitem(storage_worker.PHASES, "pending", failing)
+    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    storage_worker.run_once("w1")
+    db.expire_all()
+
+    row = db.get(StorageMigration, migration.id)
+    assert row.state == "retrying"
+    assert row.last_error and type(error).__name__ in row.last_error
+    messages = db.execute(text("SELECT coalesce(message, '') FROM storage_migration_event WHERE migration_id = :id"), {"id": migration.id}).scalars().all()
+    for value in [row.last_error, *messages]:
+        assert "geheim" not in value and "vorstand" not in value, value
 
 
 # 1/2/13/14/15: Absturz, zwei Worker, Lease-Verlust, veralteter Worker -------------------------

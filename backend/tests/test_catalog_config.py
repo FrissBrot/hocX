@@ -257,3 +257,30 @@ def test_import_changing_plan_features_updates_tenants_already_on_it(db, service
     assert rows["finance"].access == "read_only"
     assert "custom_domain" not in rows
     assert regenerated, "Domain-Modul weggefallen: Traefik-Konfiguration muss neu geschrieben werden"
+
+
+def test_import_records_the_importing_admin_on_new_tenant_features(db, service):
+    """Wie upsert_plan: neu gebuchte Module eines Katalog-Imports tragen den importierenden
+    Admin (enabled_by_admin_id), nicht NULL (Review Nachtlauf katalogimport-features)."""
+    from app.models.entities import PlatformAdmin, TenantFeature
+
+    admin = PlatformAdmin(email="catalog-import@example.com", password_hash="x", display_name="Ops", role="owner")
+    db.add(admin)
+    admin_service = AdminTenantService()
+    admin_service.upsert_plan(
+        db, "cat_actor", AdminPlanWrite(
+            name="Cat Actor", price_monthly_rp=None, price_yearly_rp=None, included_user_limit=None,
+            included_storage_bytes=None, feature_codes=["finance"],
+        ),
+    )
+    tenant = make_tenant(db, features=())
+    admin_service.update_tenant_subscription(db, tenant.id, AdminTenantSubscriptionUpdate(plan_code="cat_actor"), admin_id=None)
+    db.commit()
+
+    service.apply(
+        db, {"schema_version": 1, "plans": [{"code": "cat_actor", "feature_codes": ["finance", "abgabebox"]}]},
+        overwrite=False, admin_id=admin.id,
+    )
+
+    row = db.query(TenantFeature).filter(TenantFeature.tenant_id == tenant.id, TenantFeature.feature_code == "abgabebox").one()
+    assert row.enabled_by_admin_id == admin.id

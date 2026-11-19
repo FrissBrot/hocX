@@ -161,16 +161,24 @@ def _revalidate(token: str | None, protocol_public_id: uuid.UUID) -> tuple[Curre
     return current, protocol_id
 
 
-def _public_user_id_map(user_ids: set[int]) -> dict[int, uuid.UUID]:
+def _tenant_session(tenant_id: int | None) -> Session:
+    """Hilfssession des Sockets, an den Mandanten des Kontos gebunden (RLS wie im REST-Pfad,
+    get_optional_current_user): auch eine fremde interne ID liefert so keine fremden Zeilen."""
     db = SessionLocal()
+    bind_tenant_scope(db, tenant_id)
+    return db
+
+
+def _public_user_id_map(user_ids: set[int], tenant_id: int | None) -> dict[int, uuid.UUID]:
+    db = _tenant_session(tenant_id)
     try:
         return public_id_service.resolve_public_ids(db, AppUser, list(user_ids))
     finally:
         db.close()
 
 
-def _public_list_id_map(list_ids: set[int]) -> dict[int, uuid.UUID]:
-    db = SessionLocal()
+def _public_list_id_map(list_ids: set[int], tenant_id: int | None) -> dict[int, uuid.UUID]:
+    db = _tenant_session(tenant_id)
     try:
         return public_id_service.resolve_public_ids(db, ListDefinition, list(list_ids))
     finally:
@@ -195,8 +203,8 @@ def _field_update_requires_lock(field_key: str) -> bool:
     return field_key.startswith("block-") and not field_key.endswith(("-todos", "-images"))
 
 
-def _referenced_list_ids(protocol_id: int) -> set[int]:
-    db = SessionLocal()
+def _referenced_list_ids(protocol_id: int, tenant_id: int | None) -> set[int]:
+    db = _tenant_session(tenant_id)
     try:
         # Verknüpfte Tabellenblöcke und die Tabellen hinter den Verantwortlichen der Traktanden
         return list_snapshot_service.referenced_list_definition_ids(db, protocol_id) | responsible_list_definition_ids(db, protocol_id)
@@ -204,10 +212,10 @@ def _referenced_list_ids(protocol_id: int) -> set[int]:
         db.close()
 
 
-def _list_content_versions(list_ids: set[int]) -> dict[int, int]:
+def _list_content_versions(list_ids: set[int], tenant_id: int | None) -> dict[int, int]:
     if not list_ids:
         return {}
-    db = SessionLocal()
+    db = _tenant_session(tenant_id)
     try:
         rows = db.execute(
             select(ListDefinition.id, ListDefinition.content_version).where(ListDefinition.id.in_(list_ids))
@@ -329,9 +337,9 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     # and independent of connection-pool sharing - never root-caused further). A poll
     # every 15s is simple, has no such reliability question, and is a perfectly adequate
     # latency for a background "the data changed elsewhere" indicator.
-    list_ids = await asyncio.to_thread(_referenced_list_ids, protocol_id)
-    known_list_versions = await asyncio.to_thread(_list_content_versions, list_ids)
-    public_list_ids = await asyncio.to_thread(_public_list_id_map, list_ids) if list_ids else {}
+    list_ids = await asyncio.to_thread(_referenced_list_ids, protocol_id, user.current_tenant_id)
+    known_list_versions = await asyncio.to_thread(_list_content_versions, list_ids, user.current_tenant_id)
+    public_list_ids = await asyncio.to_thread(_public_list_id_map, list_ids, user.current_tenant_id) if list_ids else {}
 
     async def poll_list_versions() -> None:
         try:
@@ -339,7 +347,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 await asyncio.sleep(LIST_VERSION_POLL_INTERVAL_SECONDS)
                 if websocket.application_state != WebSocketState.CONNECTED:
                     break
-                current = await asyncio.to_thread(_list_content_versions, list_ids)
+                current = await asyncio.to_thread(_list_content_versions, list_ids, user.current_tenant_id)
                 for list_id, version in current.items():
                     if version > known_list_versions.get(list_id, 0):
                         known_list_versions[list_id] = version
@@ -405,7 +413,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
         # storage itself stays internal-int throughout (see collaboration_service.py,
         # unchanged), only this outbound copy is rewritten to public ids.
         outbound_user_ids = {entry["user_id"] for entry in presence} | {entry["user_id"] for entry in locks.values()}
-        public_user_ids = await asyncio.to_thread(_public_user_id_map, outbound_user_ids) if outbound_user_ids else {}
+        public_user_ids = await asyncio.to_thread(_public_user_id_map, outbound_user_ids, user.current_tenant_id) if outbound_user_ids else {}
         public_presence = [{**entry, "user_id": str(public_user_ids[entry["user_id"]])} for entry in presence]
         public_locks = {key: {**entry, "user_id": str(public_user_ids[entry["user_id"]])} for key, entry in locks.items()}
         await websocket.send_json({
@@ -446,7 +454,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                         "display_name": user.display_name,
                     })
                 else:
-                    holder_public_id = await asyncio.to_thread(_public_user_id_map, {holder["user_id"]})
+                    holder_public_id = await asyncio.to_thread(_public_user_id_map, {holder["user_id"]}, user.current_tenant_id)
                     public_holder = {**holder, "user_id": str(holder_public_id[holder["user_id"]])}
                     await websocket.send_json({"type": "lock_denied", "field_key": field_key, "holder": public_holder})
 

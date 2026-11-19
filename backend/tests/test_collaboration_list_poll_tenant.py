@@ -54,6 +54,37 @@ def test_list_poll_ignores_lists_of_other_tenants(db, shared):
         sort_index=2,
     )
 
-    list_ids = ws._referenced_list_ids(protocol.id)
+    list_ids = ws._referenced_list_ids(protocol.id, tenant_a.id)
 
     assert list_ids == {own.id}
+
+
+def test_ws_helper_sessions_are_bound_to_the_tenant_under_rls(db, shared):
+    """Review 2026-11-19: Die Hilfssessions des Sockets (Listen-Poll, public_id-Übersetzung)
+    laufen mit bind_tenant_scope - unter RLS (Rolle hocx_app) liefern sie fremde Listen und Konten
+    auch dann nicht, wenn eine fremde interne ID hineingerät."""
+    from app.core.tenant_scope import bound_tenant_id
+    from tests.factories import make_app_user
+    from tests.test_tenant_rls import as_app
+
+    tenant_a = make_tenant(db, "Tenant A")
+    tenant_b = make_tenant(db, "Tenant B")
+    own = make_list_definition(db, tenant_a.id)
+    foreign = make_list_definition(db, tenant_b.id)
+    own_user = make_app_user(db, email="ws-own@example.com", tenant_id=tenant_a.id)
+    foreign_user = make_app_user(db, email="ws-foreign@example.com", tenant_id=tenant_b.id)
+    template = make_template(db, tenant_a.id)
+    protocol = make_protocol(db, tenant_a.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    make_protocol_element_block(db, element.id, configuration_snapshot_json={"linked_list_id": own.id})
+
+    # IDs vorher festhalten: as_app verwirft den Objektzustand, fremde Zeilen sind danach unsichtbar
+    own_id, foreign_id, own_user_id, foreign_user_id = own.id, foreign.id, own_user.id, foreign_user.id
+    protocol_id, tenant_a_id = protocol.id, tenant_a.id
+
+    with as_app(db, None):
+        assert set(ws._list_content_versions({own_id, foreign_id}, tenant_a_id)) == {own_id}
+        assert set(ws._public_list_id_map({own_id, foreign_id}, tenant_a_id)) == {own_id}
+        assert set(ws._public_user_id_map({own_user_id, foreign_user_id}, tenant_a_id)) == {own_user_id}
+        assert ws._referenced_list_ids(protocol_id, tenant_a_id) == {own_id}
+        assert bound_tenant_id(db) == tenant_a_id

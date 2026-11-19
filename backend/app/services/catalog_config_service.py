@@ -430,8 +430,11 @@ class CatalogConfigService:
     # --- Anwenden ------------------------------------------------------------------------
 
     def apply(
-        self, db: Session, config: dict[str, Any], *, overwrite: bool, base_fingerprint: str | None = None
+        self, db: Session, config: dict[str, Any], *, overwrite: bool, base_fingerprint: str | None = None,
+        admin_id: int | None = None,
     ) -> CatalogImportPreview:
+        """``admin_id``: der importierende Plattform-Admin - landet wie bei upsert_plan in
+        ``tenant_feature.enabled_by_admin_id`` neu gebuchter Module."""
         state = self._load_state(db)
         if base_fingerprint and base_fingerprint != state.fingerprint():
             raise CatalogChangedError(
@@ -461,7 +464,7 @@ class CatalogConfigService:
         # (Audit 08): weggefallene Module nur lesen bzw. weg, neue voll, Zusatzmodule unangetastet.
         changed_features: set[str] = set()
         for tenant_id, plan_code in db.execute(select(Tenant.id, Tenant.plan_code).where(Tenant.plan_code.in_(feature_plans))).all() if feature_plans else []:
-            changed_features |= self.tenant_service._apply_plan_features(db, tenant_id, plan_code, admin_id=None)
+            changed_features |= self.tenant_service._apply_plan_features(db, tenant_id, plan_code, admin_id=admin_id)
 
         # Kontingente der betroffenen Mandanten nachführen (Plan-Speicher oder Paketgrösse geändert).
         tenant_ids: set[int] = set()

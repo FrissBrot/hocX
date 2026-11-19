@@ -201,7 +201,7 @@ def test_writer_cannot_read_protocol_of_another_tenant(db):
     assert service.can_read_protocol(db, user_in_tenant_a, protocol_b.id) is False
     with pytest.raises(HTTPException) as exc_info:
         service.ensure_can_read_protocol(db, user_in_tenant_a, protocol_b.id)
-    assert exc_info.value.status_code == 403
+    assert exc_info.value.status_code == 404
 
 
 def test_admin_cannot_read_template_of_another_tenant(db):

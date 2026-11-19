@@ -781,7 +781,8 @@ def apply_catalog_import(
 ):
     try:
         result = catalog_config_service.apply(
-            db, payload.config, overwrite=payload.overwrite, base_fingerprint=payload.base_fingerprint
+            db, payload.config, overwrite=payload.overwrite, base_fingerprint=payload.base_fingerprint,
+            admin_id=current_admin.admin_id,
         )
     except CatalogChangedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
