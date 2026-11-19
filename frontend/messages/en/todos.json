@@ -203,5 +203,6 @@
     "legendEvent": "Event / meeting",
     "calendarSubscribe": "Subscribe in Apple or Google Calendar",
     "boardDueToday": "due today"
-  }
+  },
+  "createEyebrow": "New to-do"
 }

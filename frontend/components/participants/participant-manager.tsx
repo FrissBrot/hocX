@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import { withNameUpdate } from "@/lib/utils/display-name";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -130,6 +131,7 @@ function emptyNewMember(roles: RoleRead[]): NewMemberForm {
 
 /** Mitgliederliste (Konzept «Personen an einem Ort»): einziger Ort zum Anlegen, Spalten Login,
  * Rollen und Tarif, Filter und Mehrfachaktionen. Ein Klick öffnet die Personenseite. */
+
 export function ParticipantManager({ initialParticipants, templates, tenantId, roles, tariffs, permissions, initialTariffFilter = null }: ParticipantManagerProps) {
   const t = useTranslations("participants");
   const tNav = useTranslations("nav");
@@ -693,11 +695,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{t("editModal.firstName")}</span>
-                <input value={newMember.first_name} onChange={(event) => setNewMember({ ...newMember, first_name: event.target.value })} />
+                <input value={newMember.first_name} onChange={(event) => setNewMember(withNameUpdate(newMember, { first_name: event.target.value }))} />
               </label>
               <label className="field-stack">
                 <span className="field-label">{t("editModal.lastName")}</span>
-                <input value={newMember.last_name} onChange={(event) => setNewMember({ ...newMember, last_name: event.target.value })} />
+                <input value={newMember.last_name} onChange={(event) => setNewMember(withNameUpdate(newMember, { last_name: event.target.value }))} />
               </label>
             </div>
             <label className="field-stack">

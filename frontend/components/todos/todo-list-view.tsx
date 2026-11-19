@@ -9,7 +9,6 @@ import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
-import { TagInput } from "@/components/ui/tag-input";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
@@ -38,11 +37,14 @@ import {
   type TodoGroupKey,
 } from "@/components/todos/todo-overview-utils";
 import { formatDate } from "@/lib/utils/format";
-import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
 // Erst beim Oeffnen laden: das Bearbeiten-Modal zieht den TipTap-Editor mit.
 const TodoEditModal = dynamic(() => import("@/components/todos/todo-edit-modal").then((m) => m.TodoEditModal), {
+  ssr: false,
+});
+// Wie das Bearbeiten-Modal erst beim Oeffnen laden (TipTap-Editor fuer Notizen).
+const TodoCreateModal = dynamic(() => import("@/components/todos/todo-create-modal").then((m) => m.TodoCreateModal), {
   ssr: false,
 });
 const TodoCalendarModal = dynamic(() => import("@/components/todos/todo-calendar-modal").then((m) => m.TodoCalendarModal), {
@@ -89,10 +91,6 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [createTask, setCreateTask] = useState("");
-  const [createBlockId, setCreateBlockId] = useState<string>("");
-  const [createTags, setCreateTags] = useState("");
-  const [creating, setCreating] = useState(false);
   const [editTodoId, setEditTodoId] = useState<string | null>(null);
   const editingTodo = editTodoId != null ? [...todos.all, ...todos.my].find((t) => t.id === editTodoId) ?? null : null;
 
@@ -234,32 +232,6 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
       applyToTodo(todo.id, previous);
       showToast(error instanceof Error ? error.message : t("v2.reassignFailed"), "error");
       return false;
-    }
-  }
-
-  async function createTodo() {
-    const task = createTask.trim();
-    if (!task) return;
-    setCreating(true);
-    try {
-      const tags = createTags ? createTags.split(",").map((t) => t.trim()).filter(Boolean) : [];
-      const url = createBlockId
-        ? `/api/protocol-element-blocks/${createBlockId}/todos`
-        : `/api/todos`;
-      const created = await browserApiFetch<TodoListItem>(url, {
-        method: "POST",
-        body: JSON.stringify({ task, tags, todo_status_id: TODO_STATUS.open }),
-      });
-      if (created) {
-        setTodos((prev) => ({ all: [created, ...prev.all], my: prev.my }));
-      }
-      setCreateTask("");
-      setCreateTags("");
-      setShowCreate(false);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("createFailed"), "error");
-    } finally {
-      setCreating(false);
     }
   }
 
@@ -486,60 +458,16 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
         </div>
       )}
 
-      <Modal
-        open={showCreate}
-        title={t("createModalTitle")}
-        description={t("createModalDescription")}
+      {showCreate && <TodoCreateModal
+        participants={participants}
+        todoBlocks={todoBlocks}
+        tagSuggestions={allTagSuggestions}
         onClose={() => setShowCreate(false)}
-      >
-        <ModalSaveForm
-          className="grid"
-          style={{ gap: "var(--space-4)", minWidth: 320 }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            return createTodo();
-          }}
-        >
-          <label className="field-stack">
-            <span className="field-label">{t("colTask")}</span>
-            <input
-              value={createTask}
-              onChange={(event) => setCreateTask(event.target.value)}
-              placeholder={t("taskPlaceholder")}
-              autoFocus
-              required
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">{t("colTags")}</span>
-            <TagInput
-              value={createTags}
-              onChange={setCreateTags}
-              suggestions={allTagSuggestions}
-              placeholder={t("tagsPlaceholder")}
-            />
-            <span className="field-help">{t("tagsHelp")}</span>
-          </label>
-
-          <div className="field-stack">
-            <span className="field-label">{t("protocolLabel")}</span>
-            <SearchableSelect
-              options={todoBlocks}
-              getId={(block) => block.block_id}
-              getLabel={(block) => `${block.protocol_number}${block.protocol_title ? ` · ${block.protocol_title}` : ""}${block.block_title ? ` — ${block.block_title}` : ""}`}
-              value={createBlockId || null}
-              onChange={(block) => setCreateBlockId(block ? String(block.block_id) : "")}
-              nullLabel={t("noProtocolOption")}
-            />
-            <span className="field-help">{t("protocolHelp")}</span>
-          </div>
-
-          <button data-modal-save type="submit" disabled={creating || !createTask.trim()}>
-            {creating ? t("creatingEllipsis") : t("createModalTitle")}
-          </button>
-        </ModalSaveForm>
-      </Modal>
+        onCreated={(created) => {
+          setTodos((prev) => ({ all: [created, ...prev.all], my: prev.my }));
+          setShowCreate(false);
+        }}
+      />}
 
       {editingTodo && <TodoEditModal
         key={editingTodo.id}

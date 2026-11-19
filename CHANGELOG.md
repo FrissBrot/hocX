@@ -28,6 +28,10 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   als Kacheln mit Statuspunkt und Kurzinfo, unten der Hinweis zur ClamAV-Prüfung neben «Alle Dateien
   (.zip)». Ein einzelner Termin oder Eintrag öffnet sich im selben Fenster, «← Termine» führt
   zurück. Der Links-Dialog erklärt kurz, wie Links und Abgaben zusammenhängen.
+- **Pendenz erstellen** sieht aus wie «Pendenz bearbeiten»: Aufgabe gross oben, links Status, Tags,
+  Notizen und Dateien, rechts Zuweisung (auch mehrere Personen), Fälligkeit und Protokoll.
+- **Mitglied erfassen:** Der Anzeigename füllt sich beim Tippen aus Vor- und Nachname und lässt sich
+  danach von Hand ändern; eine eigene Eingabe bleibt stehen.
 
 ## [1.4.0] - 2026-11-19
 
