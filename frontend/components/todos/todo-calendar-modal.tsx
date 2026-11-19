@@ -143,13 +143,13 @@ export function TodoCalendarModal({ open, onClose, todos, today, nameById, onOpe
     <div className="todo-calendar-head">
       <h2 className="todo-calendar-month">{dateParts.monthYear(month, locale)}</h2>
       <div className="todo-calendar-nav">
-        <button type="button" className="button-icon" aria-label={t("v2.calendarPrev")} onClick={() => setMonth((cur) => shiftMonth(cur, -1))}>
+        <button type="button" className="button-secondary button-icon" aria-label={t("v2.calendarPrev")} onClick={() => setMonth((cur) => shiftMonth(cur, -1))}>
           <MobileIcon name="chevronLeft" size={16} />
         </button>
         <button type="button" className="button-secondary" onClick={() => setMonth(monthStart(today))}>
           {t("v2.calendarToday")}
         </button>
-        <button type="button" className="button-icon" aria-label={t("v2.calendarNext")} onClick={() => setMonth((cur) => shiftMonth(cur, 1))}>
+        <button type="button" className="button-secondary button-icon" aria-label={t("v2.calendarNext")} onClick={() => setMonth((cur) => shiftMonth(cur, 1))}>
           <MobileIcon name="chevronRight" size={16} />
         </button>
       </div>
@@ -157,15 +157,10 @@ export function TodoCalendarModal({ open, onClose, todos, today, nameById, onOpe
   );
 
   const toggles = (
-    <div className="todo-calendar-toggles">
-      <button type="button" className={`button-pill todo-calendar-toggle${showTodos ? " todo-calendar-toggle-on" : ""}`} aria-pressed={showTodos} onClick={() => setShowTodos((v) => !v)}>
-        <span className="todo-calendar-swatch todo-calendar-swatch-todo" aria-hidden="true" />
-        {t("v2.calendarShowTodos")}
-      </button>
-      <button type="button" className={`button-pill todo-calendar-toggle${showEvents ? " todo-calendar-toggle-on" : ""}`} aria-pressed={showEvents} onClick={() => setShowEvents((v) => !v)}>
-        <span className="todo-calendar-swatch todo-calendar-swatch-event" aria-hidden="true" />
-        {t("v2.calendarShowEvents")}
-      </button>
+    <div className="todo-calendar-filters" role="group" aria-label={t("v2.calendarShowLabel")}>
+      <span className="todo-calendar-filters-label" aria-hidden="true">{t("v2.calendarShowLabel")}</span>
+      <CalendarFilter tone="todo" active={showTodos} label={t("v2.calendarShowTodos")} onToggle={() => setShowTodos((v) => !v)} />
+      <CalendarFilter tone="event" active={showEvents} label={t("v2.calendarShowEvents")} onToggle={() => setShowEvents((v) => !v)} />
     </div>
   );
 
@@ -197,7 +192,7 @@ export function TodoCalendarModal({ open, onClose, todos, today, nameById, onOpe
                     {entries.slice(0, MAX_PER_DAY).map((entry) =>
                       entry.type === "event" ? (
                         <span key={entry.key} className="todo-calendar-entry todo-calendar-entry-event" title={entry.tooltip}>
-                          {entry.time ? <span className="todo-calendar-entry-time">{entry.time}</span> : null}
+                          {entry.time ? <span className="todo-calendar-entry-time">{entry.time}</span> : <span className="todo-calendar-dot" aria-hidden="true" />}
                           <span className="todo-calendar-entry-label">{entry.label}</span>
                         </span>
                       ) : (
@@ -233,18 +228,30 @@ export function TodoCalendarModal({ open, onClose, todos, today, nameById, onOpe
               return <SideCard key={todo.id} todo={todo} sub={names ? t("v2.calendarUndatedWithNames", { kind, names }) : kind} tone="normal" onOpen={openTodo} />;
             })}
           </section>
-          <div className="todo-calendar-legend">
-            <span><span className="todo-calendar-swatch todo-calendar-swatch-todo" aria-hidden="true" />{t("v2.legendTodo")}</span>
-            <span><span className="todo-calendar-swatch todo-calendar-swatch-overdue" aria-hidden="true" />{t("v2.legendOverdue")}</span>
-            <span><span className="todo-calendar-swatch todo-calendar-swatch-event" aria-hidden="true" />{t("v2.legendEvent")}</span>
+          <div className="todo-calendar-side-foot">
+            <div className="todo-calendar-legend">
+              <span><span className="todo-calendar-box" aria-hidden="true" />{t("v2.legendTodo")}</span>
+              <span><span className="todo-calendar-dot" aria-hidden="true" />{t("v2.legendEvent")}</span>
+            </div>
+            <Link href={CONNECTIONS_HREF as Route} className="todo-calendar-subscribe">
+              {t("v2.calendarSubscribe")}
+            </Link>
           </div>
-          <Link href={CONNECTIONS_HREF as Route} className="todo-calendar-subscribe">
-            {t("v2.calendarSubscribe")}
-            <MobileIcon name="chevronRight" size={12} strokeWidth={2.4} />
-          </Link>
         </aside>
       </div>
     </Modal>
+  );
+}
+
+/** Umschalter im Feld «Anzeigen»: Chip mit Häkchen-Kästchen in der Farbe der Eintragsart. */
+function CalendarFilter({ tone, active, label, onToggle }: { tone: "todo" | "event"; active: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button type="button" className={`todo-calendar-filter todo-calendar-filter-${tone}${active ? " todo-calendar-filter-on" : ""}`} aria-pressed={active} onClick={onToggle}>
+      <span className="todo-calendar-filter-check" aria-hidden="true">
+        {active ? <MobileIcon name="check" size={10} strokeWidth={3.2} /> : null}
+      </span>
+      {label}
+    </button>
   );
 }
 
@@ -252,7 +259,7 @@ function CalendarTodoEntry({ entry, onOpen }: { entry: Extract<DayEntry, { type:
   const className = `todo-calendar-entry todo-calendar-entry-todo${entry.overdue ? " todo-calendar-entry-overdue" : ""}${entry.done ? " todo-calendar-entry-done" : ""}`;
   const content = (
     <>
-      <span className="todo-calendar-swatch todo-calendar-swatch-inline" aria-hidden="true" />
+      <span className="todo-calendar-box" aria-hidden="true" />
       <span className="todo-calendar-entry-label">{entry.todo.task}</span>
     </>
   );

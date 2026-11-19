@@ -96,8 +96,8 @@ test("Pendenzen v2: Liste, Board und Kalender", async ({ request, page }) => {
       await expect(dialog.locator(".todo-calendar-side")).toContainText(`V2 überfällig ${suffix}`);
       await expect(dialog.getByRole("link", { name: /In Apple oder Google Kalender abonnieren/ })).toBeVisible();
       await page.screenshot({ path: `test-results/todos-v2-calendar-${theme}-1440.png` });
-      await dialog.getByRole("button", { name: "Termine einblenden" }).click();
-      await expect(dialog.getByRole("button", { name: "Termine einblenden" })).toHaveAttribute("aria-pressed", "false");
+      await dialog.getByRole("button", { name: "Termine", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "Termine", exact: true })).toHaveAttribute("aria-pressed", "false");
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
     }

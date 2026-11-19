@@ -41,6 +41,11 @@ Installationen aktualisieren können.
   anderen Sprachen gefunden («logs», «settings», «paramètres» auf Deutsch und umgekehrt), dazu
   mehr Synonyme je Eintrag. Ein Tippfehler je Wort (ab 5 Buchstaben) wird verziehen; solche
   Treffer stehen zuunterst.
+- **Pendenzen-Kalender neu gestaltet:** Monat gross im Kopf, daneben ‹ / Heute / ›, rechts das
+  Feld «Anzeigen» mit den Umschaltern «Pendenzen» und «Termine». Tage anderer Monate sind grau
+  hinterlegt, Einträge stehen als einzeilige Chips (Pendenzen mit Kästchen, überfällige rot,
+  Termine grün mit Uhrzeit). Die rechte Spalte mit «Überfällig», «Ohne festes Datum», Legende und
+  Abo-Link scrollt eigenständig; auf schmalen Bildschirmen steht sie unter dem Raster.
 
 ## [1.4.0] - 2026-11-18
 
