@@ -264,4 +264,40 @@ describe("DocumentExportDialog", () => {
     expect(screen.getByRole("button", { name: /^Text kopieren/ })).toBeInTheDocument();
     catalog.document_types[0].formats = ["csv", "xlsx"];
   });
+  // Kalender (ICS) hat keine Vorschau: der Wechsel bricht die laufende Vorschau ab. Vorher blieb
+  // «wird aktualisiert» (bzw. die Fehlermeldung der letzten Vorschau) dauerhaft stehen.
+  describe("switching to the calendar format", () => {
+    beforeEach(() => {
+      api.studioApi.catalog.mockResolvedValue({ document_types: [{ key: "events", category: "events", needs_protocol: false, formats: ["csv", "xlsx", "ics"] }] });
+      api.studioApi.listTemplates.mockResolvedValue([template("e", { document_type: "events", category: "events", is_default: true })]);
+    });
+
+    it("clears the loading state of an aborted preview", async () => {
+      api.previewDocument.mockImplementation(
+        (_request: unknown, _pages: number, signal: AbortSignal) =>
+          new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))
+      );
+      render(<DocumentExportDialog open onClose={() => undefined} context={{ documentType: "events" }} />);
+      await flushPreview();
+      await waitFor(() => expect(api.previewDocument).toHaveBeenCalled());
+      expect(screen.getByText("wird aktualisiert")).toBeInTheDocument();
+
+      fireEvent.click(within(screen.getByRole("radiogroup", { name: "Format" })).getByRole("radio", { name: /Kalender/ }));
+      await flushPreview();
+      expect(screen.getByText("Für Kalenderdateien gibt es keine Vorschau.")).toBeInTheDocument();
+      expect(screen.queryByText("wird aktualisiert")).not.toBeInTheDocument();
+    });
+
+    it("drops the error of the previous preview", async () => {
+      api.previewDocument.mockRejectedValue(new Error("Vorlage fehlerhaft."));
+      render(<DocumentExportDialog open onClose={() => undefined} context={{ documentType: "events" }} />);
+      await flushPreview();
+      expect(await screen.findByText("Vorlage fehlerhaft.")).toBeInTheDocument();
+
+      fireEvent.click(within(screen.getByRole("radiogroup", { name: "Format" })).getByRole("radio", { name: /Kalender/ }));
+      await flushPreview();
+      expect(screen.getByText("Für Kalenderdateien gibt es keine Vorschau.")).toBeInTheDocument();
+      expect(screen.queryByText("Vorlage fehlerhaft.")).not.toBeInTheDocument();
+    });
+  });
 });
