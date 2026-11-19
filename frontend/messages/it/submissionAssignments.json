@@ -335,5 +335,87 @@
       "images": "Solo immagini",
       "all": "Tutti i tipi di file"
     }
+  },
+  "wizard": {
+    "quickStart": "Avvio rapido:",
+    "sourceQuestion": "Per che cosa si consegna singolarmente?",
+    "withDeadline": "Con scadenza",
+    "openUntilClosed": "Aperta fino alla chiusura manuale",
+    "deadlineHelp": "Si può consegnare fino a questo giorno. I compiti dei responsabili scadono in questo giorno.",
+    "noResponsibleManual": "Le consegne singole non hanno un responsabile – non vengono creati compiti.",
+    "noResponsibleList": "La lista scelta non ha una colonna di persone. Senza di essa non ci sono responsabili.",
+    "ownerDaysBefore": "Link valido per",
+    "ownerDaysAfter": "giorni dall'invio dell'e-mail",
+    "done": "Fatto",
+    "change": "Modifica",
+    "back": "Indietro",
+    "next": "Avanti",
+    "stepOf": "Passo {step} di {total}",
+    "steps": {
+      "basics": "Base",
+      "window": "Periodo",
+      "responsible": "Responsabile",
+      "files": "File",
+      "access": "Accesso"
+    },
+    "questions": {
+      "basics": "Che cosa va consegnato?",
+      "window": "Quando è aperta la consegna?",
+      "responsible": "Chi è responsabile?",
+      "files": "Quali file?",
+      "access": "Chi può consegnare e chi vede i file?"
+    },
+    "visibilityChip": {
+      "default": "Standard",
+      "role_only": "Solo diritti dei ruoli",
+      "all_participants": "Tutti con login",
+      "own_submissions": "Solo le proprie"
+    },
+    "visibilityShort": {
+      "default": "standard dell'organizzazione",
+      "role_only": "solo tramite i diritti dei ruoli",
+      "all_participants": "tutti i partecipanti con login",
+      "own_submissions": "solo la propria consegna"
+    },
+    "ownerShort": {
+      "manage": "gestire",
+      "view": "vedere",
+      "off": "disattivato"
+    },
+    "summary": {
+      "eventsTagged": "Appuntamenti con tag «{tag}»",
+      "eventsDetail": "Ogni appuntamento con questo tag riceve un proprio campo di consegna",
+      "eventsNoTag": "Appuntamenti – tag mancante",
+      "eventsMissing": "Scegli un tag",
+      "listNamed": "Lista «{name}»",
+      "listDetail": "Ogni voce riceve un proprio campo di consegna",
+      "listNoName": "Lista – mancante",
+      "listMissing": "Scegli una lista",
+      "manualDetail": "Un unico campo di consegna per tutti",
+      "before": "da {count, plural, one {# giorno} other {# giorni}} prima",
+      "after": "fino a {count, plural, one {# giorno} other {# giorni}} dopo",
+      "openUntilClosed": "aperta fino alla chiusura manuale",
+      "noDeadline": "Nessuna scadenza",
+      "deadlineDetail": "I compiti dei responsabili scadono in questo giorno",
+      "noDeadlineDetail": "Resta aperta finché non viene chiusa manualmente.",
+      "responsibleManual": "Non possibile per le consegne singole",
+      "responsibleNoColumn": "Lista senza colonna di persone",
+      "responsibleValue": "{name} · Link: {mode}",
+      "todoPerEvent": "Compito per appuntamento",
+      "todoPerEntry": "Compito per voce",
+      "ownerDays": "link personale valido {days} giorni",
+      "nobodyGetsTodo": "Nessuno riceve un compito",
+      "autoClose": {
+        "never": "Non si chiude mai automaticamente",
+        "first_upload": "Si chiude dopo la prima consegna",
+        "max_files": "Si chiude al massimo"
+      },
+      "keepOpen": "tenere aperta dopo la fine",
+      "sort": "Ordinamento: {sort}",
+      "noLink": "Nessun link",
+      "reviewers": "{count, plural, =0 {nessun revisore} one {# revisore} other {# revisori}}",
+      "visibility": "Vedono i file: {who}",
+      "unreachable": "Senza link la consegna non è raggiungibile"
+    }
   }
 }

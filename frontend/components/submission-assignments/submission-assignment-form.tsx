@@ -1,6 +1,6 @@
 "use client";
 
-import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
@@ -8,6 +8,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { formatDate, formatDateInputValue } from "@/lib/utils/format";
 import {
@@ -21,7 +22,6 @@ import {
   SubmissionSortOrder,
   SubmissionSourceType,
 } from "@/types/api";
-import { Select } from "@/components/ui/select";
 
 export type FormState = {
   title: string;
@@ -350,6 +350,106 @@ export function publicUrlParts(link: SubmissionLink | null, slug: string): { bas
   return { base: `${link.url.replace(/^https?:\/\//, "").replace(/\/+$/, "")}/`, slug: slug || "…" };
 }
 
+/** Abschnitte des Dialogs (Design «hocX Abgaben v4»): beim Anlegen fünf Schritte, beim Bearbeiten
+ * fünf Karten mit Zusammenfassung, die sich einzeln öffnen lassen. */
+export const SECTION_KEYS = ["basics", "window", "responsible", "files", "access"] as const;
+export type SectionKey = (typeof SECTION_KEYS)[number];
+
+export type SectionSummary = { label: string; value: string; detail: string; warn: boolean };
+
+type SummaryContext = {
+  listName: string | null;
+  cycleName: string | null;
+  responsibleLabel: string | null;
+  hasResponsibleOptions: boolean;
+  linkNames: string[];
+  exampleEvent?: ExampleEvent | null;
+};
+
+/** Zusammenfassung je Abschnitt für die Karten beim Bearbeiten (rein, getestet). */
+export function sectionSummaries(form: FormState, context: SummaryContext, t: TFunc): Record<SectionKey, SectionSummary> {
+  const isEvents = form.source_type === "events";
+  const isList = form.source_type === "list";
+  const basics: SectionSummary = isEvents
+    ? form.tag_filter
+      ? { label: t("linkTypeLabel"), value: t("wizard.summary.eventsTagged", { tag: form.tag_filter }), detail: t("wizard.summary.eventsDetail"), warn: false }
+      : { label: t("linkTypeLabel"), value: t("wizard.summary.eventsNoTag"), detail: t("wizard.summary.eventsMissing"), warn: true }
+    : isList
+      ? context.listName
+        ? { label: t("linkTypeLabel"), value: t("wizard.summary.listNamed", { name: context.listName }), detail: t("wizard.summary.listDetail"), warn: false }
+        : { label: t("linkTypeLabel"), value: t("wizard.summary.listNoName"), detail: t("wizard.summary.listMissing"), warn: true }
+      : { label: t("linkTypeLabel"), value: t("sourceManual"), detail: t("wizard.summary.manualDetail"), warn: false };
+
+  const windowParts = [
+    form.offset_days_before !== "" ? t("wizard.summary.before", { count: Number(form.offset_days_before) }) : null,
+    form.offset_days_after !== "" ? t("wizard.summary.after", { count: Number(form.offset_days_after) }) : null,
+  ].filter(Boolean);
+  const window: SectionSummary = isEvents
+    ? {
+        label: t("windowLabel"),
+        value: `${windowParts.length ? windowParts.join(", ") : t("wizard.summary.openUntilClosed")}${context.cycleName ? ` · ${context.cycleName}` : ""}`,
+        detail: windowExample(form, context.exampleEvent ?? null, t),
+        warn: false,
+      }
+    : {
+        label: t("deadlineLabel"),
+        value: form.deadline ? formatDateInputValue(form.deadline) : t("wizard.summary.noDeadline"),
+        detail: form.deadline ? t("wizard.summary.deadlineDetail") : t("wizard.summary.noDeadlineDetail"),
+        warn: false,
+      };
+
+  const ownerMode = t(`wizard.ownerShort.${form.owner_access}`);
+  const responsible: SectionSummary = !context.hasResponsibleOptions
+    ? { label: t("wizard.steps.responsible"), value: "—", detail: form.source_type === "manual" ? t("wizard.summary.responsibleManual") : t("wizard.summary.responsibleNoColumn"), warn: false }
+    : form.responsible_participant_source
+      ? {
+          label: t("wizard.steps.responsible"),
+          value: t("wizard.summary.responsibleValue", { name: context.responsibleLabel ?? "", mode: ownerMode }),
+          detail: [
+            isEvents ? t("wizard.summary.todoPerEvent") : t("wizard.summary.todoPerEntry"),
+            form.owner_access !== "off" ? t("wizard.summary.ownerDays", { days: form.owner_access_days === "" ? 30 : Number(form.owner_access_days) }) : null,
+          ].filter(Boolean).join(" · "),
+          warn: false,
+        }
+      : { label: t("wizard.steps.responsible"), value: t("noAssignment"), detail: t("wizard.summary.nobodyGetsTodo"), warn: false };
+
+  const typeCount = form.allowed_file_types.length;
+  const files: SectionSummary = {
+    label: t("wizard.steps.files"),
+    value: [
+      typeCount === 0 ? t("allFileTypes") : t("fileTypeCount", { count: typeCount }),
+      form.max_files_per_element === "" ? t("unlimitedFiles") : t("maxFilesCount", { count: Number(form.max_files_per_element) }),
+      t("maxSizeMb", { size: form.max_file_size_mb }),
+    ].join(" · "),
+    detail: [
+      t(`wizard.summary.autoClose.${form.auto_close}`),
+      hasEnd(form) && form.keep_open_after_end ? t("wizard.summary.keepOpen") : null,
+      form.source_type !== "manual" ? t("wizard.summary.sort", { sort: sortOrderLabel(t)[form.sort_order] }) : null,
+    ].filter(Boolean).join(" · "),
+    warn: false,
+  };
+
+  const access: SectionSummary = {
+    label: t("wizard.steps.access"),
+    value: `${context.linkNames.length ? context.linkNames.join(", ") : t("wizard.summary.noLink")} · ${t("wizard.summary.reviewers", { count: form.reviewer_ids.length })}`,
+    detail: context.linkNames.length ? t("wizard.summary.visibility", { who: t(`wizard.visibilityShort.${form.file_visibility}`) }) : t("wizard.summary.unreachable"),
+    warn: context.linkNames.length === 0,
+  };
+
+  return { basics, window, responsible, files, access };
+}
+
+// Bis zu so vielen Einträgen als Chips (wie im Design), darüber mit Suche
+const MAX_CHIPS = 12;
+
+const SECTION_ICONS: Record<SectionKey, ReactNode> = {
+  basics: <ActionIcon name="link" />,
+  window: <NavIcon name="events" />,
+  responsible: <NavIcon name="participants" />,
+  files: <NavIcon name="files" />,
+  access: <ActionIcon name="lock" />,
+};
+
 type Props = {
   open: boolean;
   editing: boolean;
@@ -390,15 +490,23 @@ export function SubmissionAssignmentFormModal({
   const problem = formProblem(form, t);
   const problemField = problemFieldOf(form);
   const exampleEvent = form.tag_filter ? pickExampleEvent(availableEvents, form.tag_filter) : null;
-  // «Erweitert» startet zu; bei jedem Öffnen des Formulars wieder zu
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Anlegen: Schritt 0..4; Bearbeiten: höchstens eine offene Karte. Bei jedem Öffnen von vorn.
+  const [step, setStep] = useState(0);
+  const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   useEffect(() => {
-    if (open) setAdvancedOpen(false);
+    if (open) {
+      setStep(0);
+      setOpenSection(null);
+    }
   }, [open]);
   const selectedList = availableLists.find((list) => list.id === form.list_definition_id) ?? null;
   const selectedLinks = links.filter((link) => form.link_ids.includes(link.id));
   const previewLink = selectedLinks.find((link) => link.is_default) ?? selectedLinks[0] ?? null;
   const url = publicUrlParts(previewLink, form.public_slug);
+  const lastStep = SECTION_KEYS.length - 1;
+  const tagsAsChips = availableTags.length > 0 && availableTags.length <= MAX_CHIPS; // i18n-ok: Vergleich, kein UI-Text
+  const listsAsChips = availableLists.length > 0 && availableLists.length <= MAX_CHIPS; // i18n-ok: Vergleich, kein UI-Text
+  const noLinkChosen = links.length > 0 && form.link_ids.length === 0;
 
   const responsibleOptions =
     form.source_type === "events"
@@ -413,6 +521,19 @@ export function SubmissionAssignmentFormModal({
             .filter((column) => column.value_type === "participant" || column.value_type === "participants")
             .map((column) => ({ value: column.id, label: column.title }))
         : [];
+
+  const summaries = sectionSummaries(
+    form,
+    {
+      listName: selectedList?.name ?? null,
+      cycleName: availableCycleConfigs.find((cycle) => cycle.id === form.cycle_config_id)?.name ?? null,
+      responsibleLabel: responsibleOptions.find((option) => option.value === form.responsible_participant_source)?.label ?? null,
+      hasResponsibleOptions: responsibleOptions.length > 0,
+      linkNames: selectedLinks.map((link) => link.name),
+      exampleEvent,
+    },
+    t
+  );
 
   function toggleLink(linkId: string) {
     setForm((c) => ({
@@ -444,8 +565,17 @@ export function SubmissionAssignmentFormModal({
     }));
   }
 
+  function toggleReviewer(id: string) {
+    setForm((c) => ({ ...c, reviewer_ids: c.reviewer_ids.includes(id) ? c.reviewer_ids.filter((x) => x !== id) : [...c.reviewer_ids, id] }));
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Enter im Assistenten geht zum nächsten Schritt; erstellt wird erst im letzten
+    if (!editing && step < lastStep) {
+      setStep((current) => Math.min(lastStep, current + 1));
+      return;
+    }
     if (problem === null) return onSubmit();
   }
 
@@ -454,44 +584,30 @@ export function SubmissionAssignmentFormModal({
   const summaryText = describeAssignment(form, selectedList?.name ?? null, t);
   const help = (anchor: string) => ({ page: "abgabebox" as const, anchor });
 
-  return (
-    <Modal open={open} title={editing ? t("editAssignment") : t("createAssignment")} className="subm-edit-modal" hideCloseButton onClose={onClose}>
-      <ModalSaveForm className="subm-edit-form" onSubmit={handleSubmit}>
-        <header className="subm-edit-heading">
-          <div className="subm-edit-eyebrow">
-            {editing ? t("editAssignment") : t("newAssignment")}
-            {tenantName ? <><span aria-hidden="true">·</span><span>{tenantName}</span></> : null}
-          </div>
-          <input
-            aria-label={t("titleLabel")}
-            aria-invalid={problemField === "title" ? true : undefined}
-            className="subm-edit-title"
-            placeholder={t("titlePlaceholder")}
-            value={form.title}
-            autoFocus={!editing}
-            onChange={(e) => {
-              const title = e.target.value;
-              setForm((c) => ({ ...c, title, ...(editing ? {} : { public_slug: slugify(title) }) }));
-            }}
-          />
-          <button type="button" className="subm-edit-close" title={t("close")} aria-label={t("close")} onClick={onClose}><ActionIcon name="close" /></button>
-        </header>
-
-        <div className="subm-edit-body">
-          <div className="subm-edit-main grid">
+  function sectionBody(key: SectionKey): ReactNode {
+    switch (key) {
+      case "basics":
+        return (
+          <>
             {!editing ? (
-              <div className="field-stack">
-                <span className="field-label" id="subm-template-label">{t("templatesLabel")}</span>
-                <div className="subm-edit-templates" role="group" aria-labelledby="subm-template-label">
+              <div className="subm-edit-basics">
+                <label className={problemField === "title" && step === lastStep ? "field-stack subm-edit-invalid" : "field-stack"}>
+                  <span className="field-label">{t("titleLabel")}</span>
+                  <input
+                    value={form.title}
+                    placeholder={t("titlePlaceholder")}
+                    autoFocus
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      setForm((c) => ({ ...c, title, public_slug: slugify(title) }));
+                    }}
+                  />
+                </label>
+                <div className="subm-edit-quickstart" role="group" aria-label={t("templatesLabel")}>
+                  <span>{t("wizard.quickStart")}</span>
                   {assignmentTemplates(t).map((template) => (
-                    <button
-                      key={template.key}
-                      type="button"
-                      className="subm-edit-template"
-                      onClick={() => setForm((c) => template.apply(c))}
-                    >
-                      <strong>{template.title}</strong>
-                      <small>{template.description}</small>
+                    <button key={template.key} type="button" className="subm-edit-template-chip" title={template.description} onClick={() => setForm((c) => template.apply(c))}>
+                      {template.title}
                     </button>
                   ))}
                 </div>
@@ -500,7 +616,7 @@ export function SubmissionAssignmentFormModal({
 
             <div className="field-stack">
               <span className="field-label">
-                <span id="subm-source-label">{t("linkTypeLabel")}</span>
+                <span id="subm-source-label">{t("wizard.sourceQuestion")}</span>
                 <HelpPopover topic={t("linkTypeLabel")} docs={help("quelle")}>{t("helpSource")}</HelpPopover>
               </span>
               <div className="subm-edit-sources" role="radiogroup" aria-labelledby="subm-source-label">
@@ -520,321 +636,498 @@ export function SubmissionAssignmentFormModal({
               </div>
             </div>
 
-            <div className="subm-edit-panel subm-edit-reveal" key={form.source_type}>
-              {form.source_type === "events" ? (
-                <>
-                  <div className={problemField === "tag" ? "field-stack subm-edit-invalid" : "field-stack"}>
-                    <span className="field-label">{t("tagFilterLabel")}</span>
-                    <SearchableSelect
-                      options={availableTags}
-                      getId={(tag) => tag}
-                      getLabel={(tag) => tag}
-                      value={form.tag_filter || null}
-                      onChange={(tag) => setForm((c) => ({ ...c, tag_filter: tag ?? "" }))}
-                      placeholder={t("chooseTagPlaceholder")}
-                      searchPlaceholder={t("searchTagPlaceholder")}
-                      emptyLabel={t("noTagsFound")}
-                    />
+            {form.source_type === "events" ? (
+              <div className={problemField === "tag" ? "field-stack subm-edit-invalid" : "field-stack"}>
+                <span className="field-label" id="subm-tag-label">{t("tagFilterLabel")}</span>
+                {tagsAsChips ? (
+                  <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-tag-label">
+                    {availableTags.map((tag) => (
+                      <button key={tag} type="button" role="radio" className="subm-edit-chip" aria-checked={form.tag_filter === tag} onClick={() => setForm((c) => ({ ...c, tag_filter: tag }))}>
+                        {tag}
+                      </button>
+                    ))}
                   </div>
-
-                  <div className="field-stack">
-                    <span className="field-label">
-                      {t("windowLabel")}
-                      <HelpPopover topic={t("windowLabel")} docs={help("zeitfenster")}>{t("helpWindow")}</HelpPopover>
-                    </span>
-                    <div className="subm-edit-window">
-                      <span>{t("opens")}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        aria-label={t("daysBeforeEvent")}
-                        placeholder={t("noLimitPlaceholder")}
-                        value={form.offset_days_before}
-                        onChange={(e) => setForm((c) => ({ ...c, offset_days_before: e.target.value === "" ? "" : Number(e.target.value) }))}
-                      />
-                      <span>{t("daysBeforeEventAndCloses")}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        aria-label={t("daysAfterEvent")}
-                        placeholder={t("noLimitPlaceholder")}
-                        value={form.offset_days_after}
-                        onChange={(e) => setForm((c) => ({ ...c, offset_days_after: e.target.value === "" ? "" : Number(e.target.value) }))}
-                      />
-                      <span>{t("daysAfterSuffix")}</span>
-                    </div>
-                    <p className="subm-edit-example" aria-live="polite">{windowExample(form, exampleEvent, t)}</p>
-                    <span className="field-help">{t("windowHelp")}</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {form.source_type === "list" ? (
-                    <div className={problemField === "list" ? "field-stack subm-edit-invalid" : "field-stack"}>
-                      <span className="field-label">{t("listLabel")}</span>
-                      <SearchableSelect
-                        options={availableLists}
-                        getId={(list) => list.id}
-                        getLabel={(list) => list.name}
-                        value={form.list_definition_id || null}
-                        onChange={(list) => setForm((c) => ({ ...c, list_definition_id: list ? list.id : "", responsible_participant_source: "" }))}
-                        placeholder={t("chooseListPlaceholder")}
-                        searchPlaceholder={t("searchListPlaceholder")}
-                        emptyLabel={t("noListsFound")}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="field-stack">
-                    <span className="field-label">
-                      {t("deadlineLabel")}
-                      <HelpPopover topic={t("deadlineLabel")} docs={help("stichtag")}>{t("helpDeadline")}</HelpPopover>
-                    </span>
-                    <DateInput value={form.deadline} onChange={(deadline) => setForm((c) => ({ ...c, deadline }))} aria-label={t("deadlineLabel")} />
-                    <span className="field-help">{t("deadlineHelp")}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {responsibleOptions.length > 0 ? (
-              <div className="field-stack">
-                <span className="field-label">
-                  {t("responsiblePersonLabel")}
-                  <HelpPopover topic={t("responsiblePersonLabel")} docs={help("verantwortliche")}>{t("helpResponsible")}</HelpPopover>
-                </span>
-                <SearchableSelect
-                  options={responsibleOptions}
-                  getId={(option) => option.value}
-                  getLabel={(option) => option.label}
-                  value={form.responsible_participant_source || null}
-                  onChange={(option) => setForm((c) => ({ ...c, responsible_participant_source: option ? option.value : "" }))}
-                  nullLabel={t("noAssignment")}
-                />
-                <span className="field-help">
-                  {form.source_type === "events"
-                    ? t("responsiblePersonHelpEvents")
-                    : t("responsiblePersonHelpList")}
-                </span>
+                ) : (
+                  <SearchableSelect
+                    options={availableTags}
+                    getId={(tag) => tag}
+                    getLabel={(tag) => tag}
+                    value={form.tag_filter || null}
+                    onChange={(tag) => setForm((c) => ({ ...c, tag_filter: tag ?? "" }))}
+                    placeholder={t("chooseTagPlaceholder")}
+                    searchPlaceholder={t("searchTagPlaceholder")}
+                    emptyLabel={t("noTagsFound")}
+                  />
+                )}
               </div>
             ) : null}
 
-            {form.responsible_participant_source && form.source_type !== "manual" ? (
-              <label className="field-stack">
+            {form.source_type === "list" ? (
+              <div className={problemField === "list" ? "field-stack subm-edit-invalid" : "field-stack"}>
+                <span className="field-label" id="subm-list-label">{t("listLabel")}</span>
+                {listsAsChips ? (
+                  <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-list-label">
+                    {availableLists.map((list) => (
+                      <button
+                        key={list.id}
+                        type="button"
+                        role="radio"
+                        className="subm-edit-chip"
+                        aria-checked={form.list_definition_id === list.id}
+                        onClick={() => setForm((c) => ({ ...c, list_definition_id: list.id, responsible_participant_source: "" }))}
+                      >
+                        {list.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <SearchableSelect
+                    options={availableLists}
+                    getId={(list) => list.id}
+                    getLabel={(list) => list.name}
+                    value={form.list_definition_id || null}
+                    onChange={(list) => setForm((c) => ({ ...c, list_definition_id: list ? list.id : "", responsible_participant_source: "" }))}
+                    placeholder={t("chooseListPlaceholder")}
+                    searchPlaceholder={t("searchListPlaceholder")}
+                    emptyLabel={t("noListsFound")}
+                  />
+                )}
+              </div>
+            ) : null}
+          </>
+        );
+
+      case "window":
+        return form.source_type === "events" ? (
+          <>
+            <div className="field-stack">
+              <span className="field-label">
+                {t("windowLabel")}
+                <HelpPopover topic={t("windowLabel")} docs={help("zeitfenster")}>{t("helpWindow")}</HelpPopover>
+              </span>
+              <div className="subm-edit-window">
+                <span>{t("opens")}</span>
+                <input
+                  type="number"
+                  min={0}
+                  aria-label={t("daysBeforeEvent")}
+                  placeholder={t("noLimitPlaceholder")}
+                  value={form.offset_days_before}
+                  onChange={(e) => setForm((c) => ({ ...c, offset_days_before: e.target.value === "" ? "" : Number(e.target.value) }))}
+                />
+                <span>{t("daysBeforeEventAndCloses")}</span>
+                <input
+                  type="number"
+                  min={0}
+                  aria-label={t("daysAfterEvent")}
+                  placeholder={t("noLimitPlaceholder")}
+                  value={form.offset_days_after}
+                  onChange={(e) => setForm((c) => ({ ...c, offset_days_after: e.target.value === "" ? "" : Number(e.target.value) }))}
+                />
+                <span>{t("daysAfterSuffix")}</span>
+              </div>
+              <p className="subm-edit-example" aria-live="polite">{windowExample(form, exampleEvent, t)}</p>
+              <span className="field-help">{t("windowHelp")}</span>
+            </div>
+            {availableCycleConfigs.length > 0 ? (
+              <div className={problemField === "cycle" ? "field-stack subm-edit-invalid" : "field-stack"}>
                 <span className="field-label">
-                  {t("ownerAccessLabel")}
+                  <span id="subm-cycle-label">{t("cycleLabel")}</span>
+                  <HelpPopover topic={t("cycleLabel")} docs={help("zyklus")}>{t("cycleHelp")}</HelpPopover>
+                </span>
+                <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-cycle-label">
+                  <button type="button" role="radio" className="subm-edit-chip" aria-checked={!form.cycle_config_id} onClick={() => setForm((c) => ({ ...c, cycle_config_id: "", cycle_offsets: [] }))}>
+                    {t("allCyclesNoFilter")}
+                  </button>
+                  {availableCycleConfigs.map((cycle) => (
+                    <button
+                      key={cycle.id}
+                      type="button"
+                      role="radio"
+                      className="subm-edit-chip"
+                      aria-checked={form.cycle_config_id === cycle.id}
+                      // Beim Aktivieren des Filters ist der aktuelle Zyklus vorausgewählt.
+                      onClick={() => setForm((c) => ({ ...c, cycle_config_id: cycle.id, cycle_offsets: c.cycle_offsets.length > 0 ? c.cycle_offsets : [0] }))}
+                    >
+                      {cycle.name}
+                    </button>
+                  ))}
+                </div>
+                {form.cycle_config_id ? (
+                  <div className="subm-edit-chips">
+                    {CYCLE_OFFSET_OPTIONS.map((offset) => (
+                      <button key={offset} type="button" className="subm-edit-chip" aria-pressed={form.cycle_offsets.includes(offset)} onClick={() => toggleCycleOffset(offset)}>
+                        {cycleOffsetLabel(offset, t)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="field-stack">
+            <span className="field-label">
+              <span id="subm-deadline-label">{t("deadlineLabel")}</span>
+              <HelpPopover topic={t("deadlineLabel")} docs={help("stichtag")}>{t("helpDeadline")}</HelpPopover>
+            </span>
+            <div className="subm-edit-segment" role="radiogroup" aria-labelledby="subm-deadline-label">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={Boolean(form.deadline)}
+                // Vorschlag: in zwei Wochen; lässt sich darunter ändern
+                onClick={() => setForm((c) => ({ ...c, deadline: c.deadline || addDays(new Date().toISOString().slice(0, 10), 14) }))}
+              >
+                {t("wizard.withDeadline")}
+              </button>
+              <button type="button" role="radio" aria-checked={!form.deadline} onClick={() => setForm((c) => ({ ...c, deadline: "" }))}>
+                {t("wizard.openUntilClosed")}
+              </button>
+            </div>
+            {form.deadline ? <DateInput value={form.deadline} onChange={(deadline) => setForm((c) => ({ ...c, deadline }))} aria-label={t("deadlineLabel")} /> : null}
+            <span className="field-help">{form.deadline ? t("wizard.deadlineHelp") : t("wizard.summary.noDeadlineDetail")}</span>
+          </div>
+        );
+
+      case "responsible":
+        if (responsibleOptions.length === 0) {
+          return <p className="muted">{form.source_type === "manual" ? t("wizard.noResponsibleManual") : t("wizard.noResponsibleList")}</p>;
+        }
+        return (
+          <>
+            <div className="field-stack">
+              <span className="field-label">
+                <span id="subm-responsible-label">{t("responsiblePersonLabel")}</span>
+                <HelpPopover topic={t("responsiblePersonLabel")} docs={help("verantwortliche")}>{t("helpResponsible")}</HelpPopover>
+              </span>
+              <span className="field-help">{form.source_type === "events" ? t("responsiblePersonHelpEvents") : t("responsiblePersonHelpList")}</span>
+              <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-responsible-label">
+                <button type="button" role="radio" className="subm-edit-chip" aria-checked={!form.responsible_participant_source} onClick={() => setForm((c) => ({ ...c, responsible_participant_source: "" }))}>
+                  {t("noAssignment")}
+                </button>
+                {responsibleOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    className="subm-edit-chip"
+                    aria-checked={form.responsible_participant_source === option.value}
+                    onClick={() => setForm((c) => ({ ...c, responsible_participant_source: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {form.responsible_participant_source ? (
+              <div className="field-stack">
+                <span className="field-label">
+                  <span id="subm-owner-label">{t("ownerAccessLabel")}</span>
                   <HelpPopover topic={t("ownerAccessLabel")} docs={help("persoenlicher-link")}>{t("helpOwnerAccess")}</HelpPopover>
                 </span>
-                <Select value={form.owner_access} onChange={(event) => setForm((c) => ({ ...c, owner_access: event.target.value as FormState["owner_access"] }))}>
-                  <option value="manage">{t("ownerAccess.manage")}</option>
-                  <option value="view">{t("ownerAccess.view")}</option>
-                  <option value="off">{t("ownerAccess.off")}</option>
-                </Select>
-                <span className="field-help">{t(`ownerAccessHelp.${form.owner_access}`)}</span>
-              </label>
-            ) : null}
-            {form.responsible_participant_source && form.source_type !== "manual" && form.owner_access !== "off" ? (
-              <>
-                <label className="field-stack">
-                  <span className="field-label">{t("ownerAccessDaysLabel")}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={form.owner_access_days}
-                    onChange={(event) => setForm((c) => ({ ...c, owner_access_days: event.target.value === "" ? "" : Number(event.target.value) }))}
-                  />
-                  <span className="field-help">{t("ownerAccessDaysHelp")}</span>
-                </label>
+                <div className="subm-edit-options" role="radiogroup" aria-labelledby="subm-owner-label">
+                  {(["manage", "view", "off"] as const).map((mode) => (
+                    <button key={mode} type="button" role="radio" className="subm-edit-option" aria-checked={form.owner_access === mode} onClick={() => setForm((c) => ({ ...c, owner_access: mode }))}>
+                      <strong>{t(`ownerAccess.${mode}`)}</strong>
+                      {form.owner_access === mode ? <small>{t(`ownerAccessHelp.${mode}`)}</small> : null}
+                    </button>
+                  ))}
+                </div>
+                {form.owner_access !== "off" ? (
+                  <label className="subm-edit-inline">
+                    <span>{t("wizard.ownerDaysBefore")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      aria-label={t("ownerAccessDaysLabel")}
+                      value={form.owner_access_days}
+                      onChange={(event) => setForm((c) => ({ ...c, owner_access_days: event.target.value === "" ? "" : Number(event.target.value) }))}
+                    />
+                    <span>{t("wizard.ownerDaysAfter")}</span>
+                  </label>
+                ) : null}
                 {form.owner_access === "manage" ? (
                   <label className="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={form.owner_resubmit_only_personal}
-                      onChange={(event) => setForm((c) => ({ ...c, owner_resubmit_only_personal: event.target.checked }))}
-                    />
+                    <input type="checkbox" checked={form.owner_resubmit_only_personal} onChange={(event) => setForm((c) => ({ ...c, owner_resubmit_only_personal: event.target.checked }))} />
                     <span>
                       {t("ownerResubmitOnlyPersonalLabel")}
                       <span className="field-help"> {t("ownerResubmitOnlyPersonalHelp")}</span>
                     </span>
                   </label>
                 ) : null}
-              </>
+              </div>
+            ) : null}
+          </>
+        );
+
+      case "files":
+        return (
+          <>
+            <div className="field-stack">
+              <div className="subm-edit-label-row">
+                <span className="field-label">
+                  {t("allowedFileTypesLabel")}
+                  <HelpPopover topic={t("allowedFileTypesLabel")} docs={help("dateien")}>{t("helpFileTypes")}</HelpPopover>
+                </span>
+                <span className="subm-edit-count">{fileTypeCount === 0 ? t("allAllowed") : t("countSelected", { count: fileTypeCount })}</span>
+              </div>
+              <div className="subm-edit-types">
+                {fileTypeGroups(t).map((group) => {
+                  const allSelected = group.types.every((t) => form.allowed_file_types.includes(t));
+                  return (
+                    <div key={group.label} className="subm-edit-type-row">
+                      <strong>{group.label}</strong>
+                      <div className="subm-edit-chips">
+                        {group.types.map((type) => (
+                          <button key={type} type="button" className="subm-edit-chip" aria-pressed={form.allowed_file_types.includes(type)} onClick={() => toggleFileType(type)}>
+                            .{type}
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button" className="subm-edit-type-all" onClick={() => toggleFileGroup(group.types, allSelected)}>
+                        {allSelected ? t("noneAction") : t("allAction")}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <span className="field-help">{t("noSelectionAllTypesAllowed")}</span>
+            </div>
+
+            <div className="subm-edit-grid subm-edit-grid-2">
+              <label className="field-stack">
+                <span className="field-label">{t("maxFilesLabel")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder={t("unlimited")}
+                  value={form.max_files_per_element}
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? "" : Number(e.target.value);
+                    // Ohne Maximum gibt es nichts zu erreichen: "Sobald Höchstzahl erreicht" fällt auf "Nie" zurück.
+                    setForm((c) => ({ ...c, max_files_per_element: value, auto_close: value === "" && c.auto_close === "max_files" ? "never" : c.auto_close }));
+                  }}
+                />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("maxSizeLabel")}</span>
+                <input type="number" min={1} value={form.max_file_size_mb} onChange={(e) => setForm((c) => ({ ...c, max_file_size_mb: Number(e.target.value) }))} />
+              </label>
+            </div>
+
+            {form.source_type !== "manual" ? (
+              <div className="field-stack">
+                <span className="field-label" id="subm-sort-label">{t("sortOrderLabel")}</span>
+                <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-sort-label">
+                  {(Object.keys(sortOrderLabel(t)) as SubmissionSortOrder[]).map((value) => (
+                    <button key={value} type="button" role="radio" className="subm-edit-chip" aria-checked={form.sort_order === value} onClick={() => setForm((c) => ({ ...c, sort_order: value }))}>
+                      {sortOrderLabel(t)[value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
 
-            <div className={advancedOpen ? "subm-edit-advanced subm-edit-advanced-open" : "subm-edit-advanced"}>
-              <button
-                type="button"
-                className="subm-edit-advanced-toggle"
-                aria-expanded={advancedOpen}
-                aria-controls="subm-edit-advanced-body"
-                onClick={() => setAdvancedOpen((value) => !value)}
-              >
-                <span className="subm-edit-advanced-chevron" aria-hidden="true">›</span>
-                <span className="subm-edit-advanced-title">{t("advancedLabel")}</span>
-                <span className="subm-edit-advanced-summary">{t("advancedSummary", { files: maxFilesLabel, size: form.max_file_size_mb, types: fileTypeCount === 0 ? t("allFileTypes") : t("fileTypeCount", { count: fileTypeCount }) })}</span>
-              </button>
-              {advancedOpen ? (
-                <div id="subm-edit-advanced-body" className="subm-edit-advanced-body grid subm-edit-reveal">
-                  <label className="field-stack">
-                    <span className="field-label">{t("descriptionLabel")}</span>
-                    <textarea
-                      rows={2}
-                      value={form.description}
-                      placeholder={t("descriptionPlaceholder")}
-                      onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
-                    />
-                  </label>
+            <div className="field-stack">
+              <span className="field-label">
+                <span id="subm-auto-close-label">{t("autoCloseLabel")}</span>
+                <HelpPopover topic={t("autoCloseLabel")} docs={help("automatisch-schliessen")}>{t("helpAutoClose")}</HelpPopover>
+              </span>
+              <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-auto-close-label">
+                {autoCloseOptions(t).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    className="subm-edit-chip"
+                    aria-checked={form.auto_close === option.value}
+                    aria-describedby={option.value === "max_files" ? "subm-auto-close-help" : undefined}
+                    disabled={option.value === "max_files" && form.max_files_per_element === ""}
+                    onClick={() => setForm((c) => ({ ...c, auto_close: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <span className="field-help" id="subm-auto-close-help">
+                {form.max_files_per_element === "" ? t("autoCloseHelpUnlimited") : t("autoCloseHelp")}
+              </span>
+            </div>
 
-                  {form.source_type === "events" ? (
-                    <div className="field-stack">
-                      <span className="field-label">
-                        {t("cycleLabel")}
-                        <HelpPopover topic={t("cycleLabel")} docs={help("zyklus")}>{t("cycleHelp")}</HelpPopover>
-                      </span>
-                      <SearchableSelect
-                        options={availableCycleConfigs}
-                        getId={(cfg) => cfg.id}
-                        getLabel={(cfg) => cfg.name}
-                        value={form.cycle_config_id || null}
-                        onChange={(cfg) =>
-                          setForm((c) => ({
-                            ...c,
-                            cycle_config_id: cfg ? cfg.id : "",
-                            // Beim Aktivieren des Filters ist der aktuelle Zyklus vorausgewählt.
-                            cycle_offsets: cfg ? (c.cycle_offsets.length > 0 ? c.cycle_offsets : [0]) : [],
-                          }))
-                        }
-                        nullLabel={t("allCyclesNoFilter")}
-                      />
-                      {form.cycle_config_id ? (
-                        <div className="subm-edit-chips">
-                          {CYCLE_OFFSET_OPTIONS.map((offset) => (
-                            <button
-                              key={offset}
-                              type="button"
-                              className="subm-edit-chip"
-                              aria-pressed={form.cycle_offsets.includes(offset)}
-                              onClick={() => toggleCycleOffset(offset)}
-                            >
-                              {cycleOffsetLabel(offset, t)}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+            {hasEnd(form) ? (
+              <label className="checkbox-row">
+                <input type="checkbox" checked={form.keep_open_after_end} onChange={(event) => setForm((c) => ({ ...c, keep_open_after_end: event.target.checked }))} />
+                <span>
+                  {t("keepOpenLabel")}
+                  <span className="field-help"> {t("keepOpenHelp")}</span>
+                </span>
+              </label>
+            ) : null}
 
-                  <div className="field-stack">
-                    <div className="subm-edit-label-row">
-                      <span className="field-label">
-                        {t("allowedFileTypesLabel")}
-                        <HelpPopover topic={t("allowedFileTypesLabel")} docs={help("dateien")}>{t("helpFileTypes")}</HelpPopover>
-                      </span>
-                      <span className="subm-edit-count">{fileTypeCount === 0 ? t("allAllowed") : t("countSelected", { count: fileTypeCount })}</span>
-                    </div>
-                    <div className="subm-edit-types">
-                      {fileTypeGroups(t).map((group) => {
-                        const allSelected = group.types.every((t) => form.allowed_file_types.includes(t));
-                        return (
-                          <div key={group.label} className="subm-edit-type-row">
-                            <strong>{group.label}</strong>
-                            <div className="subm-edit-chips">
-                              {group.types.map((type) => (
-                                <button
-                                  key={type}
-                                  type="button"
-                                  className="subm-edit-chip"
-                                  aria-pressed={form.allowed_file_types.includes(type)}
-                                  onClick={() => toggleFileType(type)}
-                                >
-                                  .{type}
-                                </button>
-                              ))}
-                            </div>
-                            <button type="button" className="subm-edit-type-all" onClick={() => toggleFileGroup(group.types, allSelected)}>
-                              {allSelected ? t("noneAction") : t("allAction")}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <span className="field-help">{t("noSelectionAllTypesAllowed")}</span>
-                  </div>
+            <label className="field-stack">
+              <span className="field-label">{t("descriptionLabel")}</span>
+              <textarea rows={2} value={form.description} placeholder={t("descriptionPlaceholder")} onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))} />
+            </label>
+          </>
+        );
 
-                  <div className={form.source_type === "manual" ? "subm-edit-grid subm-edit-grid-2" : "subm-edit-grid"}>
-                    <label className="field-stack">
-                      <span className="field-label">{t("maxFilesLabel")}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder={t("unlimited")}
-                        value={form.max_files_per_element}
-                        onChange={(e) => {
-                          const value = e.target.value === "" ? "" : Number(e.target.value);
-                          // Ohne Maximum gibt es nichts zu erreichen: "Sobald Höchstzahl erreicht" fällt auf "Nie" zurück.
-                          setForm((c) => ({ ...c, max_files_per_element: value, auto_close: value === "" && c.auto_close === "max_files" ? "never" : c.auto_close }));
-                        }}
-                      />
+      case "access":
+        return (
+          <>
+            <div className="field-stack">
+              <span className="field-label">
+                {t("reachableViaLabel")}
+                <HelpPopover topic={t("publicLinkLabel")} docs={help("links")}>{t("helpLinks")}</HelpPopover>
+              </span>
+              {links.length === 0 ? (
+                <span className="field-help">{t("noLinkYetHelp")}</span>
+              ) : (
+                <div className="subm-edit-links">
+                  {links.map((link) => (
+                    <label key={link.id} className="subm-edit-link-option">
+                      <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
+                      <span>{link.name}</span>
+                      {link.is_default ? <small>{t("defaultLabel")}</small> : null}
                     </label>
-                    <label className="field-stack">
-                      <span className="field-label">{t("maxSizeLabel")}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={form.max_file_size_mb}
-                        onChange={(e) => setForm((c) => ({ ...c, max_file_size_mb: Number(e.target.value) }))}
-                      />
-                    </label>
-                    {form.source_type !== "manual" ? (
-                      <label className="field-stack">
-                        <span className="field-label">{t("sortOrderLabel")}</span>
-                        <Select value={form.sort_order} onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}>
-                          {(Object.keys(sortOrderLabel(t)) as SubmissionSortOrder[]).map((value) => (
-                            <option key={value} value={value}>{sortOrderLabel(t)[value]}</option>
-                          ))}
-                        </Select>
-                      </label>
-                    ) : null}
-                  </div>
+                  ))}
+                </div>
+              )}
+              {url ? <code className="subm-edit-url">{url.base}<strong>{url.slug}</strong></code> : null}
+              {noLinkChosen ? <span className="subm-edit-warn">{t("noLinkSelectedHelp")}</span> : null}
+            </div>
 
-                  <div className="field-stack">
-                    <span className="field-label">
-                      <span id="subm-auto-close-label">{t("autoCloseLabel")}</span>
-                      <HelpPopover topic={t("autoCloseLabel")} docs={help("automatisch-schliessen")}>{t("helpAutoClose")}</HelpPopover>
-                    </span>
-                    <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-auto-close-label">
-                      {autoCloseOptions(t).map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="radio"
-                          className="subm-edit-chip"
-                          aria-checked={form.auto_close === option.value}
-                          aria-describedby={option.value === "max_files" ? "subm-auto-close-help" : undefined}
-                          disabled={option.value === "max_files" && form.max_files_per_element === ""}
-                          onClick={() => setForm((c) => ({ ...c, auto_close: option.value }))}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="field-help" id="subm-auto-close-help">
-                      {form.max_files_per_element === "" ? t("autoCloseHelpUnlimited") : t("autoCloseHelp")}
-                    </span>
-                  </div>
+            <div className="field-stack">
+              <span className="field-label" id="subm-reviewers-label">{t("reviewers.label")}</span>
+              {availableReviewers.length === 0 ? (
+                <span className="field-help">{t("reviewers.noCandidates")}</span>
+              ) : availableReviewers.length <= MAX_CHIPS ? (
+                <div className="subm-edit-chips" role="group" aria-labelledby="subm-reviewers-label">
+                  {availableReviewers.map((reviewer) => (
+                    <button key={reviewer.id} type="button" className="subm-edit-chip" aria-pressed={form.reviewer_ids.includes(reviewer.id)} onClick={() => toggleReviewer(reviewer.id)}>
+                      {reviewer.display_name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <SearchableMultiSelect
+                  options={availableReviewers}
+                  getId={(reviewer) => reviewer.id}
+                  getLabel={(reviewer) => reviewer.display_name}
+                  values={form.reviewer_ids}
+                  onChange={(ids) => setForm((c) => ({ ...c, reviewer_ids: ids }))}
+                  emptySelectionLabel={t("reviewers.none")}
+                  emptyLabel={t("reviewers.noCandidates")}
+                />
+              )}
+              <span className="field-help">{t("reviewers.help")}</span>
+            </div>
 
-                  {hasEnd(form) ? (
-                    <label className="checkbox-row">
-                      <input type="checkbox" checked={form.keep_open_after_end} onChange={(event) => setForm((c) => ({ ...c, keep_open_after_end: event.target.checked }))} />
-                      <span>
-                        {t("keepOpenLabel")}
-                        <span className="field-help"> {t("keepOpenHelp")}</span>
-                      </span>
-                    </label>
-                  ) : null}
+            <div className="field-stack">
+              <span className="field-label" id="subm-visibility-label">{t("fileVisibility.label")}</span>
+              <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-visibility-label">
+                {(["default", "role_only", "all_participants", "own_submissions"] as const).map((mode) => (
+                  <button key={mode} type="button" role="radio" className="subm-edit-chip" aria-checked={form.file_visibility === mode} onClick={() => setForm((c) => ({ ...c, file_visibility: mode }))}>
+                    {t(`wizard.visibilityChip.${mode}`)}
+                  </button>
+                ))}
+              </div>
+              <span className="field-help">{t(`fileVisibility.help.${form.file_visibility}`)}</span>
+              {form.file_visibility === "all_participants" || form.file_visibility === "own_submissions" ? (
+                <div className="subm-edit-chips" role="radiogroup" aria-label={t("fileVisibility.filterLabel")}>
+                  {(["images", "all"] as const).map((filter) => (
+                    <button key={filter} type="button" role="radio" className="subm-edit-chip" aria-checked={form.file_visibility_filter === filter} onClick={() => setForm((c) => ({ ...c, file_visibility_filter: filter }))}>
+                      {t(`fileVisibility.filter.${filter}`)}
+                    </button>
+                  ))}
                 </div>
               ) : null}
             </div>
+          </>
+        );
+    }
+  }
+
+  return (
+    <Modal open={open} title={editing ? t("editAssignment") : t("createAssignment")} className={editing ? "subm-edit-modal" : "subm-edit-modal subm-edit-modal-wizard"} hideCloseButton onClose={onClose}>
+      <ModalSaveForm className="subm-edit-form" onSubmit={handleSubmit}>
+        <header className="subm-edit-heading">
+          <div className="subm-edit-eyebrow">
+            {editing ? t("editAssignment") : t("newAssignment")}
+            {tenantName ? <><span aria-hidden="true">·</span><span>{tenantName}</span></> : null}
+          </div>
+          {editing ? (
+            <input
+              aria-label={t("titleLabel")}
+              aria-invalid={problemField === "title" ? true : undefined}
+              className="subm-edit-title"
+              placeholder={t("titlePlaceholder")}
+              value={form.title}
+              onChange={(e) => setForm((c) => ({ ...c, title: e.target.value }))}
+            />
+          ) : (
+            <h2 className="subm-edit-new-title">{form.title.trim() || t("newAssignment")}</h2>
+          )}
+          <button type="button" className="subm-edit-close" title={t("close")} aria-label={t("close")} onClick={onClose}><ActionIcon name="close" /></button>
+          {!editing ? (
+            <ol className="subm-edit-steps">
+              {SECTION_KEYS.map((key, index) => (
+                <li key={key}>
+                  <button
+                    type="button"
+                    className="subm-edit-step"
+                    aria-label={`${index + 1}. ${t(`wizard.steps.${key}`)}`}
+                    aria-current={index === step ? "step" : undefined}
+                    data-done={index < step ? "true" : undefined}
+                    onClick={() => setStep(index)}
+                  >
+                    <span className="subm-edit-step-bar" aria-hidden="true" />
+                    <span>{index + 1}. {t(`wizard.steps.${key}`)}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </header>
+
+        <div className="subm-edit-body">
+          <div className="subm-edit-main">
+            {editing ? (
+              SECTION_KEYS.map((key) => {
+                const summary = summaries[key];
+                const isOpen = openSection === key;
+                return (
+                  <section key={key} className={isOpen ? "subm-edit-section subm-edit-section-open" : "subm-edit-section"}>
+                    <button
+                      type="button"
+                      className="subm-edit-section-toggle"
+                      aria-expanded={isOpen}
+                      aria-controls={`subm-section-${key}`}
+                      onClick={() => setOpenSection(isOpen ? null : key)}
+                    >
+                      <span className="subm-edit-section-icon" aria-hidden="true">{SECTION_ICONS[key]}</span>
+                      <span className="subm-edit-section-text">
+                        <span className="subm-edit-section-label">{summary.label}</span>
+                        <span className="subm-edit-section-value">{summary.value}</span>
+                        <span className={summary.warn ? "subm-edit-section-detail subm-edit-warn" : "subm-edit-section-detail"}>{summary.detail}</span>
+                      </span>
+                      <span className="subm-edit-section-action">{isOpen ? t("wizard.done") : t("wizard.change")}</span>
+                    </button>
+                    {isOpen ? (
+                      <div id={`subm-section-${key}`} className="subm-edit-section-body subm-edit-reveal">
+                        {sectionBody(key)}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })
+            ) : (
+              <div className="subm-edit-step-body subm-edit-reveal" key={SECTION_KEYS[step]}>
+                <h3 className="subm-edit-question">{t(`wizard.questions.${SECTION_KEYS[step]}`)}</h3>
+                {sectionBody(SECTION_KEYS[step])}
+              </div>
+            )}
           </div>
 
           <aside className="subm-edit-sidebar">
@@ -853,96 +1146,35 @@ export function SubmissionAssignmentFormModal({
                 {t("clamavScanNote")}
               </p>
             </div>
-
-            <div className="field-stack">
-              <span className="field-label">
-                {t("publicLinkLabel")}
-                <HelpPopover topic={t("publicLinkLabel")} docs={help("links")}>{t("helpLinks")}</HelpPopover>
-              </span>
-              {url ? (
-                <code className="subm-edit-url">{url.base}<strong>{url.slug}</strong></code>
-              ) : (
-                <span className="field-help">{t("noLinkSelectedYet")}</span>
-              )}
-            </div>
-
-            <div className="field-stack">
-              <span className="field-label">{t("reachableViaLabel")}</span>
-              {links.length === 0 ? (
-                <span className="field-help">
-                  {t("noLinkYetHelp")}
-                </span>
-              ) : (
-                <>
-                  <div className="subm-edit-links">
-                    {links.map((link) => (
-                      <label key={link.id} className="subm-edit-link-option">
-                        <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
-                        <span>{link.name}</span>
-                        {link.is_default ? <small>{t("defaultLabel")}</small> : null}
-                      </label>
-                    ))}
-                  </div>
-                  {form.link_ids.length === 0 ? (
-                    <span className="field-help">{t("noLinkSelectedHelp")}</span>
-                  ) : null}
-                </>
-              )}
-            </div>
-
-            <label className="field-stack">
-              <span className="field-label">{t("reviewers.label")}</span>
-              <SearchableMultiSelect
-                options={availableReviewers}
-                getId={(reviewer) => reviewer.id}
-                getLabel={(reviewer) => reviewer.display_name}
-                values={form.reviewer_ids}
-                onChange={(ids) => setForm((c) => ({ ...c, reviewer_ids: ids }))}
-                emptySelectionLabel={t("reviewers.none")}
-                emptyLabel={t("reviewers.noCandidates")}
-              />
-              <span className="field-help">{t("reviewers.help")}</span>
-            </label>
-
-            <label className="field-stack">
-              <span className="field-label">{t("fileVisibility.label")}</span>
-              <Select
-                value={form.file_visibility}
-                onChange={(event) => setForm((c) => ({ ...c, file_visibility: event.target.value as FormState["file_visibility"] }))}
-              >
-                <option value="default">{t("fileVisibility.default")}</option>
-                <option value="role_only">{t("fileVisibility.audience.role_only")}</option>
-                <option value="all_participants">{t("fileVisibility.audience.all_participants")}</option>
-                <option value="own_submissions">{t("fileVisibility.audience.own_submissions")}</option>
-              </Select>
-              <span className="field-help">{t(`fileVisibility.help.${form.file_visibility}`)}</span>
-            </label>
-            {form.file_visibility === "all_participants" || form.file_visibility === "own_submissions" ? (
-              <label className="field-stack">
-                <span className="field-label">{t("fileVisibility.filterLabel")}</span>
-                <Select
-                  value={form.file_visibility_filter}
-                  onChange={(event) => setForm((c) => ({ ...c, file_visibility_filter: event.target.value as FormState["file_visibility_filter"] }))}
-                >
-                  <option value="images">{t("fileVisibility.filter.images")}</option>
-                  <option value="all">{t("fileVisibility.filter.all")}</option>
-                </Select>
-              </label>
-            ) : null}
           </aside>
         </div>
 
         <footer className="subm-edit-footer">
-          <button type="button" className="subm-edit-manage" onClick={onManageLinks}>{t("manageLinksAction")}</button>
-          <div className="subm-edit-actions">
-            {problem !== null ? (
-              <span className="subm-edit-problem" role="status">{t("saveBlockedHint", { problem })}</span>
-            ) : null}
-            <button type="button" className="button-secondary" onClick={onClose}>{t("cancel")}</button>
-            <button data-modal-save type="submit" className="button-primary" disabled={problem !== null}>
-              {editing ? t("saveAssignment") : t("createAssignment")}
-            </button>
-          </div>
+          {editing ? (
+            <>
+              <button type="button" className="subm-edit-manage" onClick={onManageLinks}>{t("manageLinksAction")}</button>
+              <div className="subm-edit-actions">
+                {problem !== null ? <span className="subm-edit-problem" role="status">{t("saveBlockedHint", { problem })}</span> : null}
+                <button type="button" className="button-secondary" onClick={onClose}>{t("cancel")}</button>
+                <button data-modal-save type="submit" className="button-primary" disabled={problem !== null}>{t("saveAssignment")}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button type="button" className="button-secondary" onClick={step === 0 ? onClose : () => setStep(step - 1)}>
+                {step === 0 ? t("cancel") : t("wizard.back")}
+              </button>
+              <span className="subm-edit-step-count">{t("wizard.stepOf", { step: step + 1, total: SECTION_KEYS.length })}</span>
+              <div className="subm-edit-actions">
+                {step === lastStep && problem !== null ? <span className="subm-edit-problem" role="status">{t("saveBlockedHint", { problem })}</span> : null}
+                {step < lastStep ? (
+                  <button type="button" className="button-primary" onClick={() => setStep(step + 1)}>{t("wizard.next")}</button>
+                ) : (
+                  <button data-modal-save type="submit" className="button-primary" disabled={problem !== null}>{t("createAssignment")}</button>
+                )}
+              </div>
+            </>
+          )}
         </footer>
       </ModalSaveForm>
     </Modal>

@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import { KeyboardEvent, MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { NavIcon } from "@/components/ui/nav-icons";
@@ -13,6 +13,7 @@ import { can, roleName } from "@/lib/permissions";
 import { storeSearchHandoff } from "@/lib/search/handoff";
 import { focusListSearch } from "@/lib/search/list-search";
 import { rankEntries } from "@/lib/search/match";
+import { crossLanguageKeywords, loadOtherLanguages, type LanguageBundle } from "@/lib/search/multilingual";
 import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { buildStaticEntries, type SearchEntry, type SearchGroup } from "@/lib/search/static-entries";
 import type { GlobalSearchResult, RoleRead, SessionInfo } from "@/types/api";
@@ -93,7 +94,25 @@ export function GlobalSearch({
   const [roles, setRoles] = useState<RoleRead[] | null>(null);
   const shortcut = useShortcutLabel();
 
-  const staticEntries = useMemo(() => buildStaticEntries(session, tNav, t), [session, tNav, t]);
+  const locale = useLocale();
+  // Andere Sprachen als zusätzliche Suchbegriffe («settings», «logs» auch auf Deutsch), beim
+  // Öffnen nachgeladen (lib/search/multilingual.ts)
+  const [otherLanguages, setOtherLanguages] = useState<LanguageBundle[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void loadOtherLanguages(locale).then((bundles) => { if (active) setOtherLanguages(bundles); });
+    return () => { active = false; };
+  }, [open, locale]);
+  const staticEntries = useMemo(() => {
+    const entries = buildStaticEntries(session, tNav, t);
+    if (otherLanguages.length === 0) return entries;
+    const extra = crossLanguageKeywords(session, otherLanguages);
+    return entries.map((entry) => {
+      const words = extra.get(entry.id);
+      return words ? { ...entry, keywords: [entry.keywords, words].filter(Boolean).join(" ") } : entry;
+    });
+  }, [session, tNav, t, otherLanguages]);
 
   useEffect(() => {
     if (!open) return;

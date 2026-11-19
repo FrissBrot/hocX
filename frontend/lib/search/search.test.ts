@@ -194,3 +194,33 @@ describe("einzelne Einstellungen", () => {
     expect(reader.some((entry) => entry.id.startsWith("setting:tenant"))).toBe(false);
   });
 });
+
+describe("Suche in allen Sprachen und mit Tippfehlern", () => {
+  async function entriesWithOtherLanguages() {
+    const { crossLanguageKeywords, loadOtherLanguages } = await import("./multilingual");
+    const session = sessionFor("admin");
+    const extra = crossLanguageKeywords(session, await loadOtherLanguages("de"));
+    return buildStaticEntries(session, tNav, tSearch).map((entry) => ({
+      ...entry,
+      keywords: [entry.keywords, extra.get(entry.id)].filter(Boolean).join(" "),
+    }));
+  }
+
+  it("findet deutsche Einträge mit englischen und französischen Wörtern", async () => {
+    const entries = await entriesWithOtherLanguages();
+    const hrefs = (query: string) => rankEntries(entries, query, 20).map((entry) => entry.href);
+    expect(hrefs("logs")).toContain("/tenant-settings/activity");
+    expect(hrefs("settings")).toContain("/tenant-settings");
+    expect(hrefs("paramètres")).toContain("/tenant-settings");
+    expect(hrefs("roles")).toContain("/users/roles");
+  });
+
+  it("verzeiht einen Tippfehler, aber nur als schwächsten Treffer", () => {
+    expect(matchScore({ label: "Verlauf" }, "verluaf")).toBeGreaterThan(0);
+    expect(matchScore({ label: "Einstellungen" }, "einstelungen")).toBeGreaterThan(0);
+    expect(matchScore({ label: "Verlauf" }, "verlauf")).toBeGreaterThan(matchScore({ label: "Verlauf" }, "verluaf"));
+    // Kurze Wörter und zwei Fehler: kein Treffer
+    expect(matchScore({ label: "Abo" }, "abx")).toBe(0);
+    expect(matchScore({ label: "Verlauf" }, "vrluaf")).toBe(0);
+  });
+});

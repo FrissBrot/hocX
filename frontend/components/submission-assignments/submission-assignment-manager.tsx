@@ -783,6 +783,12 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         title={selectedAssignment?.title ?? ""}
         description={selectedAssignment ? metaLine(selectedAssignment) : undefined}
         size="wide"
+        // Design «Abgaben v4»: direkt aus dem Detail bearbeiten
+        headerActions={selectedAssignment && canManage ? (
+          <button type="button" className="button-secondary" onClick={() => { const current = selectedAssignment; setSelectedId(null); openEdit(current); }}>
+            {t("editAction")}
+          </button>
+        ) : undefined}
       >
         {selectedId !== null ? (
           <div className="grid subm-detail">

@@ -21,6 +21,17 @@ Installationen aktualisieren können.
 - **Foto-Angaben nur bei Bildern:** Aufnahmedatum, Standort und Kamera werden beim Teilen nur
   angeboten, wenn auch Bilder geteilt werden; Dokumente gehen ohne diese Auswahl.
 - **Dateien:** Die Liste nutzt die volle Breite wie die Fotos-Seite.
+- **Abgabe anlegen und bearbeiten (Design «Abgaben v4»):** Eine neue Abgabe entsteht in fünf
+  Schritten – Grundlage, Zeitraum, Verantwortlich, Dateien, Zugriff – mit anklickbarer
+  Schrittleiste; rechts steht laufend, wie sich die Abgabe verhält. Beim Bearbeiten fasst je eine
+  Karte die Abschnitte zusammen (fehlender Tag oder Link in Warnfarbe), «Ändern» öffnet jeweils
+  einen Abschnitt. Tags, Listen, Zyklus, Verantwortliche, Sortierung, Prüfer und Sichtbarkeit
+  werden als Chips gewählt (bei sehr vielen Einträgen weiter mit Suche). Im Detail einer Abgabe
+  gibt es «Bearbeiten» direkt im Kopf.
+- **Suche (Ctrl+K) in allen Sprachen:** Menüs und Einstellungen werden auch mit Begriffen der
+  anderen Sprachen gefunden («logs», «settings», «paramètres» auf Deutsch und umgekehrt), dazu
+  mehr Synonyme je Eintrag. Ein Tippfehler je Wort (ab 5 Buchstaben) wird verziehen; solche
+  Treffer stehen zuunterst.
 
 ## [1.4.0] - 2026-11-18
 

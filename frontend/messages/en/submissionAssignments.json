@@ -335,5 +335,87 @@
       "images": "Images only",
       "all": "All file types"
     }
+  },
+  "wizard": {
+    "quickStart": "Quick start:",
+    "sourceQuestion": "What is each submission for?",
+    "withDeadline": "With deadline",
+    "openUntilClosed": "Open until closed manually",
+    "deadlineHelp": "Submissions are possible until this day. The responsible people's to-dos are due on this day.",
+    "noResponsibleManual": "Single submissions have no responsible person – no to-dos are created.",
+    "noResponsibleList": "The selected list has no people column. Without it there are no responsible people.",
+    "ownerDaysBefore": "Link valid for",
+    "ownerDaysAfter": "days after the email is sent",
+    "done": "Done",
+    "change": "Change",
+    "back": "Back",
+    "next": "Next",
+    "stepOf": "Step {step} of {total}",
+    "steps": {
+      "basics": "Basics",
+      "window": "Period",
+      "responsible": "Responsible",
+      "files": "Files",
+      "access": "Access"
+    },
+    "questions": {
+      "basics": "What should be submitted?",
+      "window": "When is the submission open?",
+      "responsible": "Who is responsible?",
+      "files": "Which files?",
+      "access": "Who can submit and who sees the files?"
+    },
+    "visibilityChip": {
+      "default": "Default",
+      "role_only": "Role permissions only",
+      "all_participants": "Everyone with login",
+      "own_submissions": "Own only"
+    },
+    "visibilityShort": {
+      "default": "organisation default",
+      "role_only": "role permissions only",
+      "all_participants": "all participants with login",
+      "own_submissions": "own submission only"
+    },
+    "ownerShort": {
+      "manage": "manage",
+      "view": "view",
+      "off": "off"
+    },
+    "summary": {
+      "eventsTagged": "Events tagged «{tag}»",
+      "eventsDetail": "Every event with this tag gets its own submission field",
+      "eventsNoTag": "Events – tag missing",
+      "eventsMissing": "Please choose a tag",
+      "listNamed": "List «{name}»",
+      "listDetail": "Every entry gets its own submission field",
+      "listNoName": "List – missing",
+      "listMissing": "Please choose a list",
+      "manualDetail": "One single submission field for everyone",
+      "before": "from {count, plural, one {# day} other {# days}} before",
+      "after": "until {count, plural, one {# day} other {# days}} after",
+      "openUntilClosed": "open until closed manually",
+      "noDeadline": "No deadline",
+      "deadlineDetail": "The responsible people's to-dos are due on this day",
+      "noDeadlineDetail": "Stays open until it is closed manually.",
+      "responsibleManual": "Not possible for single submissions",
+      "responsibleNoColumn": "List without a people column",
+      "responsibleValue": "{name} · Link: {mode}",
+      "todoPerEvent": "To-do per event",
+      "todoPerEntry": "To-do per entry",
+      "ownerDays": "personal link valid for {days} days",
+      "nobodyGetsTodo": "Nobody gets a to-do",
+      "autoClose": {
+        "never": "Never closes automatically",
+        "first_upload": "Closes after the first submission",
+        "max_files": "Closes at the maximum"
+      },
+      "keepOpen": "keep open after the end",
+      "sort": "Sorting: {sort}",
+      "noLink": "No link",
+      "reviewers": "{count, plural, =0 {no reviewers} one {# reviewer} other {# reviewers}}",
+      "visibility": "Who sees files: {who}",
+      "unreachable": "Without a link the submission cannot be reached"
+    }
   }
 }

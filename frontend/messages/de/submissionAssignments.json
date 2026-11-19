@@ -335,5 +335,87 @@
       "images": "Nur Bilder",
       "all": "Alle Dateitypen"
     }
+  },
+  "wizard": {
+    "quickStart": "Schnellstart:",
+    "sourceQuestion": "Wofür wird einzeln abgegeben?",
+    "withDeadline": "Mit Stichtag",
+    "openUntilClosed": "Offen bis von Hand geschlossen",
+    "deadlineHelp": "Bis zu diesem Tag kann abgegeben werden. Die Pendenzen der Verantwortlichen sind an diesem Tag fällig.",
+    "noResponsibleManual": "Einzelabgaben haben keine verantwortliche Person – es entstehen keine Pendenzen.",
+    "noResponsibleList": "Die gewählte Liste hat keine Personen-Spalte. Ohne sie gibt es keine Verantwortlichen.",
+    "ownerDaysBefore": "Link gültig für",
+    "ownerDaysAfter": "Tage ab Versand der Mail",
+    "done": "Fertig",
+    "change": "Ändern",
+    "back": "Zurück",
+    "next": "Weiter",
+    "stepOf": "Schritt {step} von {total}",
+    "steps": {
+      "basics": "Grundlage",
+      "window": "Zeitraum",
+      "responsible": "Verantwortlich",
+      "files": "Dateien",
+      "access": "Zugriff"
+    },
+    "questions": {
+      "basics": "Was soll abgegeben werden?",
+      "window": "Wann ist die Abgabe offen?",
+      "responsible": "Wer ist verantwortlich?",
+      "files": "Welche Dateien?",
+      "access": "Wer kann abgeben und wer sieht die Dateien?"
+    },
+    "visibilityChip": {
+      "default": "Standard",
+      "role_only": "Nur Rollenrechte",
+      "all_participants": "Alle mit Login",
+      "own_submissions": "Nur eigene"
+    },
+    "visibilityShort": {
+      "default": "Standard der Organisation",
+      "role_only": "nur über Rollenrechte",
+      "all_participants": "alle Teilnehmenden mit Login",
+      "own_submissions": "nur die eigene Einreichung"
+    },
+    "ownerShort": {
+      "manage": "verwalten",
+      "view": "ansehen",
+      "off": "aus"
+    },
+    "summary": {
+      "eventsTagged": "Termine mit Tag «{tag}»",
+      "eventsDetail": "Jeder Termin mit diesem Tag bekommt ein eigenes Abgabefeld",
+      "eventsNoTag": "Termine – Tag fehlt",
+      "eventsMissing": "Bitte einen Tag wählen",
+      "listNamed": "Liste «{name}»",
+      "listDetail": "Jeder Eintrag bekommt ein eigenes Abgabefeld",
+      "listNoName": "Liste – fehlt",
+      "listMissing": "Bitte eine Liste wählen",
+      "manualDetail": "Ein einziges Abgabefeld für alle",
+      "before": "ab {count, plural, one {# Tag} other {# Tagen}} vorher",
+      "after": "bis {count, plural, one {# Tag} other {# Tage}} danach",
+      "openUntilClosed": "offen bis von Hand geschlossen",
+      "noDeadline": "Kein Stichtag",
+      "deadlineDetail": "Die Pendenzen der Verantwortlichen sind an diesem Tag fällig",
+      "noDeadlineDetail": "Bleibt offen, bis sie von Hand geschlossen wird.",
+      "responsibleManual": "Bei Einzelabgaben nicht möglich",
+      "responsibleNoColumn": "Liste ohne Personen-Spalte",
+      "responsibleValue": "{name} · Link: {mode}",
+      "todoPerEvent": "Pendenz je Termin",
+      "todoPerEntry": "Pendenz je Eintrag",
+      "ownerDays": "persönlicher Link {days} Tage gültig",
+      "nobodyGetsTodo": "Niemand bekommt eine Pendenz",
+      "autoClose": {
+        "never": "Schliesst nie automatisch",
+        "first_upload": "Schliesst nach der ersten Abgabe",
+        "max_files": "Schliesst bei Höchstzahl"
+      },
+      "keepOpen": "nach dem Ende offen halten",
+      "sort": "Sortierung: {sort}",
+      "noLink": "Kein Link",
+      "reviewers": "{count, plural, =0 {keine Prüfer} one {# Prüfer} other {# Prüfer}}",
+      "visibility": "Dateien sehen: {who}",
+      "unreachable": "Ohne Link ist die Abgabe nicht erreichbar"
+    }
   }
 }

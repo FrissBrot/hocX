@@ -335,5 +335,87 @@
       "images": "Images uniquement",
       "all": "Tous les types de fichiers"
     }
+  },
+  "wizard": {
+    "quickStart": "Démarrage rapide :",
+    "sourceQuestion": "Pour quoi chaque dépôt est-il fait ?",
+    "withDeadline": "Avec date limite",
+    "openUntilClosed": "Ouvert jusqu'à fermeture manuelle",
+    "deadlineHelp": "Les dépôts sont possibles jusqu'à ce jour. Les tâches des responsables sont dues ce jour-là.",
+    "noResponsibleManual": "Les dépôts uniques n'ont pas de responsable – aucune tâche n'est créée.",
+    "noResponsibleList": "La liste choisie n'a pas de colonne de personnes. Sans elle, il n'y a pas de responsables.",
+    "ownerDaysBefore": "Lien valable",
+    "ownerDaysAfter": "jours après l'envoi du courriel",
+    "done": "Terminé",
+    "change": "Modifier",
+    "back": "Retour",
+    "next": "Suivant",
+    "stepOf": "Étape {step} sur {total}",
+    "steps": {
+      "basics": "Base",
+      "window": "Période",
+      "responsible": "Responsable",
+      "files": "Fichiers",
+      "access": "Accès"
+    },
+    "questions": {
+      "basics": "Que faut-il déposer ?",
+      "window": "Quand le dépôt est-il ouvert ?",
+      "responsible": "Qui est responsable ?",
+      "files": "Quels fichiers ?",
+      "access": "Qui peut déposer et qui voit les fichiers ?"
+    },
+    "visibilityChip": {
+      "default": "Standard",
+      "role_only": "Droits des rôles",
+      "all_participants": "Tous avec connexion",
+      "own_submissions": "Seulement les siens"
+    },
+    "visibilityShort": {
+      "default": "standard de l'organisation",
+      "role_only": "uniquement via les droits des rôles",
+      "all_participants": "tous les participants avec connexion",
+      "own_submissions": "uniquement son propre dépôt"
+    },
+    "ownerShort": {
+      "manage": "gérer",
+      "view": "consulter",
+      "off": "désactivé"
+    },
+    "summary": {
+      "eventsTagged": "Rendez-vous avec le tag «{tag}»",
+      "eventsDetail": "Chaque rendez-vous avec ce tag reçoit son propre champ de dépôt",
+      "eventsNoTag": "Rendez-vous – tag manquant",
+      "eventsMissing": "Veuillez choisir un tag",
+      "listNamed": "Liste «{name}»",
+      "listDetail": "Chaque entrée reçoit son propre champ de dépôt",
+      "listNoName": "Liste – manquante",
+      "listMissing": "Veuillez choisir une liste",
+      "manualDetail": "Un seul champ de dépôt pour tous",
+      "before": "dès {count, plural, one {# jour} other {# jours}} avant",
+      "after": "jusqu'à {count, plural, one {# jour} other {# jours}} après",
+      "openUntilClosed": "ouvert jusqu'à fermeture manuelle",
+      "noDeadline": "Pas de date limite",
+      "deadlineDetail": "Les tâches des responsables sont dues ce jour-là",
+      "noDeadlineDetail": "Reste ouvert jusqu'à sa fermeture manuelle.",
+      "responsibleManual": "Impossible pour les dépôts uniques",
+      "responsibleNoColumn": "Liste sans colonne de personnes",
+      "responsibleValue": "{name} · Lien : {mode}",
+      "todoPerEvent": "Tâche par rendez-vous",
+      "todoPerEntry": "Tâche par entrée",
+      "ownerDays": "lien personnel valable {days} jours",
+      "nobodyGetsTodo": "Personne ne reçoit de tâche",
+      "autoClose": {
+        "never": "Ne se ferme jamais automatiquement",
+        "first_upload": "Se ferme après le premier dépôt",
+        "max_files": "Se ferme au maximum"
+      },
+      "keepOpen": "garder ouvert après la fin",
+      "sort": "Tri : {sort}",
+      "noLink": "Aucun lien",
+      "reviewers": "{count, plural, =0 {aucun vérificateur} one {# vérificateur} other {# vérificateurs}}",
+      "visibility": "Voient les fichiers : {who}",
+      "unreachable": "Sans lien, le dépôt n'est pas accessible"
+    }
   }
 }
