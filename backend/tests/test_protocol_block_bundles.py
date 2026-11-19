@@ -174,10 +174,12 @@ def test_permission_parity_with_per_block_route(db, route, status):
         assert actual == expected, name
     assert results["writer"] == 200
     assert results["no_permission"] == 403
-    assert results["scoped_unassigned"] == 403
+    # Bilder: nicht lesbare Protokolle wie unbekannte IDs (404, SECURITY-RULES 1.6, Nachtlauf 2026-11-19)
+    hidden = 404 if route == "images" else 403
+    assert results["scoped_unassigned"] == hidden
     assert results["scoped_assigned"] == 200
     # Ohne meetings.read_drafts nur abgeschlossene Protokolle
-    assert results["reader"] == (200 if status == "abgeschlossen" else 403)
+    assert results["reader"] == (200 if status == "abgeschlossen" else hidden)
 
 
 def _count_queries(db, call):
