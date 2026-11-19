@@ -10,6 +10,14 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Abo und Rechnungen (Mandant-Einstellungen › Abo):** Die Seite hat zwei Reiter. «Abo &
+  Nutzung» zeigt Plan und Rhythmus, das Total pro Monat bzw. Jahr und die offenen Rechnungen als
+  Kennzahlen, darunter die Kostenaufstellung «Plan & Module» (Grundplan mit den enthaltenen
+  Funktionen, Zusatzmodule nach Bereich mit Preisen, Rabatt, Total) sowie Nutzer und Speicher.
+  «Rechnungen» (`?tab=invoices`, Zähler rot bei Überfälligem) zeigt Offenes, die nächste Rechnung
+  und das im Jahr Bezahlte, die Liste mit Filter Alle/Offen/Erledigt und pro Rechnung ein
+  Seitenpanel mit Periode, Fälligkeit, Zahlung und Positionen. Der Überfällig-Hinweis öffnet die
+  Rechnung direkt.
 - **Protokoll scrollen ohne Sprung:** Mit eingeklappten Punkten öffnet sich der nächste Punkt
   schon beim Hinscrollen schrittweise, der vorherige schliesst sich im gleichen Mass. Der Inhalt
   in der Bildmitte läuft genau mit dem Mausrad mit; kein schlagartiges Auf-/Zuklappen und kein

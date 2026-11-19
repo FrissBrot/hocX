@@ -152,31 +152,6 @@
   font-size: var(--text-sm);
 }
 
-.tenant-module-list {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-  gap: var(--space-3);
-}
-
-.tenant-module-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-}
-
-.tenant-module-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.tenant-module-status {
-  flex-shrink: 0;
-}
-
 .tenant-avatar-row {
   display: flex;
   align-items: center;
@@ -406,7 +381,7 @@
   .docverify-side { position: static; }
 }
 
-/* Abo & Nutzung: Überfällig-Hinweis, Kennzahlenleiste, Abrechnungsperioden (tenant-charges.tsx) */
+/* Abo & Nutzung / Rechnungen: Überfällig-Hinweis, Kennzahlenleiste, Rechnungsliste und -panel (tenant-charges.tsx) */
 .tenant-overdue-banner {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-4);
   padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
@@ -472,25 +447,6 @@
 
 .tenant-charges-overdue { color: var(--danger-fg); }
 
-.tenant-charges-timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
-
-.tenant-charges-timeline-item { display: grid; gap: var(--space-1); }
-
-.tenant-charges-bar { height: 10px; border-radius: var(--radius-xs); background: var(--border); }
-
-.tenant-charges-bar-paid { background: var(--success); }
-
-.tenant-charges-bar-overdue { background: var(--danger); }
-
-.tenant-charges-bar-waived { background: var(--border-strong); }
-
-.tenant-charges-bar-open {
-  background: var(--warning);
-  background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--panel-solid) 45%, transparent) 4px 7px);
-}
-
-.tenant-charges-month { font-size: var(--text-xs); font-weight: 500; color: var(--muted); }
-
 .tenant-charges-period, .tenant-charges-date { display: block; font-variant-numeric: tabular-nums; }
 
 .tenant-charges-period { font-weight: 600; }
@@ -508,6 +464,119 @@
 .tenant-charges-row-overdue td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
 
 .tenant-charges-row-waived td { color: var(--muted); }
+
+.tenant-charges-period { font-size: var(--text-base); }
+
+.tenant-charges-row-overdue td:first-child .tenant-charges-period { color: var(--text); }
+
+/* Kennzahl «Rechnungen» als Kachel-Button (springt in den Reiter, DESIGN.md 7: eigene Klasse) */
+.tenant-usage-summary-link {
+  width: 100%; min-height: 0; border: none; border-radius: 0; background: transparent; box-shadow: none;
+  color: inherit; text-align: left; font-weight: inherit; letter-spacing: normal; cursor: pointer;
+}
+
+.tenant-usage-summary-link:hover { background: var(--bg); }
+
+.tenant-usage-summary-link-head { display: flex; justify-content: space-between; gap: var(--space-2); }
+
+.tenant-usage-summary-link-more { color: var(--accent); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; font-weight: 600; }
+
+.tenant-abo-stack { display: grid; gap: var(--space-5); min-width: 0; }
+
+.tenant-abo-columns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5); }
+
+.tenant-abo-side { flex: 1 1 280px; min-width: 0; display: grid; gap: var(--space-5); }
+
+/* Kostenaufstellung «Plan & Module»: Zeilen laufen bis an den Kartenrand, daher ohne Kartenpadding */
+.tenant-plan-card { flex: 999 1 520px; min-width: 0; padding: 0; overflow: hidden; }
+
+.tenant-plan-head {
+  display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.tenant-plan-title { display: grid; gap: var(--space-1); }
+
+.tenant-plan-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-5);
+}
+
+.tenant-plan-row-flush { padding-inline: 0; }
+
+.tenant-plan-base { padding-block: var(--space-3); border-top: 1px solid var(--border); background: var(--bg); }
+
+.tenant-plan-copy { display: grid; gap: 2px; min-width: 0; }
+
+.tenant-plan-copy .muted { font-size: var(--text-sm); }
+
+.tenant-plan-copy-inline { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
+
+.tenant-plan-price { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+
+.tenant-plan-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+
+.tenant-plan-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--panel-solid);
+  font-size: var(--text-sm); font-weight: 500;
+}
+
+.tenant-plan-chip-check { color: var(--success); font-weight: 700; }
+
+.tenant-plan-section { display: grid; gap: var(--space-1); padding: var(--space-4) var(--space-5) 0; border-top: 1px solid var(--border); }
+
+.tenant-plan-group { display: grid; padding-top: var(--space-1); }
+
+.tenant-plan-group-head {
+  display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-5) var(--space-1);
+  color: var(--muted); font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+.tenant-plan-group-head > span:first-child { color: var(--text); }
+
+.tenant-plan-discount { color: var(--success); font-weight: 500; }
+
+.tenant-plan-total { margin-top: var(--space-2); padding-block: var(--space-4); border-top: 2px solid var(--text); font-weight: 700; }
+
+.tenant-plan-total .tenant-plan-price { font-size: var(--text-lg); font-weight: 700; }
+
+.tenant-plan-foot { margin: 0; padding: 0 var(--space-5) var(--space-4); }
+
+/* Seitenpanel einer Rechnung: Modal, rechts angedockt */
+/* Die negativen Ränder heben das Padding von .modal-backdrop auf (gleicher clamp-Wert), das
+   margin-left: auto schiebt die Shell im Flex-Backdrop an den rechten Rand. */
+.modal-shell.tenant-invoice-panel {
+  --tenant-panel-inset: clamp(var(--space-4), 2.5vw, var(--space-5));
+  align-self: stretch; width: min(440px, 100vw); max-height: none;
+  margin: calc(-1 * var(--tenant-panel-inset)) calc(-1 * var(--tenant-panel-inset)) calc(-1 * var(--tenant-panel-inset)) auto;
+  border-width: 0 0 0 1px; border-radius: 0; box-shadow: var(--shadow-overlay);
+}
+
+.tenant-invoice-panel-head { display: grid; justify-items: start; gap: var(--space-2); }
+
+.tenant-invoice-panel-head h2 { margin: 0; font-size: var(--text-xl); }
+
+/* Inhalt oben ausrichten statt die Zeilen über die ganze Panelhöhe zu strecken */
+.tenant-invoice-panel .modal-content { align-content: start; }
+
+.tenant-invoice-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); margin: 0; }
+
+.tenant-invoice-facts dt { color: var(--muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.tenant-invoice-facts dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+
+.tenant-invoice-lines { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+
+.tenant-invoice-line { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+
+.tenant-invoice-line-discount { color: var(--success); }
+
+.tenant-invoice-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.tenant-invoice-total { border-bottom: none; background: var(--bg); font-size: var(--text-base); font-weight: 700; }
+
+.tenant-invoice-note { margin: 0; font-size: var(--text-sm); }
 
 @media (max-width: 640px) {
   .tenant-usage-summary, .tenant-usage-summary-3 { grid-template-columns: minmax(0, 1fr); }

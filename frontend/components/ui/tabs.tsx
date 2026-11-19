@@ -9,6 +9,8 @@ export type TabItem = {
   note?: string | null;
   /** Anzahl als kleines Zählerabzeichen hinter dem Titel (0/leer = ohne) */
   count?: number | null;
+  /** «danger»: Zähler rot, z. B. wenn darunter etwas Überfälliges liegt */
+  countTone?: "danger";
   content: ReactNode;
 };
 
@@ -36,7 +38,7 @@ export function Tabs({ tabs, activeId, onChange }: { tabs: TabItem[]; activeId?:
           >
             {tab.label}
             {tab.note ? <span className="tabs-note">{tab.note}</span> : null}
-            {tab.count ? <span className="tabs-count">{tab.count}</span> : null}
+            {tab.count ? <span className={tab.countTone === "danger" ? "tabs-count tabs-count-danger" : "tabs-count"}>{tab.count}</span> : null}
           </button>
         ))}
       </div>
