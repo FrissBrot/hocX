@@ -60,7 +60,9 @@ def _resolve_ids_for_assignments(
                 definition = definitions_by_id.get(int(list_definition_id))
             else:
                 definition = db.get(ListDefinition, int(list_definition_id)) if db is not None else None
-            if entry is not None and definition is not None:
+            # Nur Einträge der genannten Liste: list_entry_id stammt aus der frei setzbaren
+            # Block-Konfiguration (gleiches Muster wie list_snapshot_service, Nachtlauf 2026-11-19)
+            if entry is not None and definition is not None and entry.list_definition_id == definition.id:
                 ids = _list_entry_participant_ids(entry, definition)
         for pid in ids:
             if not pid or pid in seen_ids:

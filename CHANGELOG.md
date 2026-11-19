@@ -8,6 +8,27 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+### Sicherheit
+
+- Fixes aus dem Nachtlauf 2026-11-19: Live-Updates melden keine Änderungen fremder Listen mehr;
+  Listeneinträge werden nur aus der verknüpften Liste übernommen (auch bei Verantwortlichen);
+  Support-Admins sehen die Objektliste einer Speicher-Migration nicht mehr; Mail «Abgabe
+  zurückgezogen» nur an Konten mit Abgaben-Verwaltung; Katalog-Import gleicht die Module der
+  Mandanten an; Abgabebox-Links erscheinen nicht mehr im Fehlerprotokoll; ICS-Export entfernt
+  Steuerzeichen; Bildrouten antworten bei fremden Protokollen mit 404; Termin- und
+  Listeneintrag-Löschen lassen bei gleichzeitigem Upload keine Datei zurück.
+- pydantic-Update mit Sicherheitsfix (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29).
+
+### Behoben
+
+- Aus dem Nachtlauf: Termindaten auf 1900–2999 begrenzt (Kalender-Abo übersteht Altdaten), Tags
+  höchstens 100 Zeichen, Terminsuche behandelt % und _ als Text, kaputte CSV ergibt 400 statt
+  500; parallele Abgleiche (Aufgabenpakete, Abgabe-Pendenzen, Termin bearbeiten, erstes
+  Kalender-Abo) warten statt zu scheitern; Fehler in Dokumentverarbeitung, Mail-Aufbau, ntfy
+  und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
+  Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
+  Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
+
 ### Geändert
 
 - **Sitzungsvorlagen:** Duplizieren, Archivieren und Löschen stehen im ⋮-Menü der Zeile; die

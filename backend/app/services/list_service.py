@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Event, ListColumn, ListDefinition, ListEntry, Participant
+from app.models.entities import SubmissionUpload, SubmissionUploadFile
 from app.repositories.list_repository import ListRepository
 from app.schemas.list_definition import (
     ListColumnCreate,
@@ -344,11 +345,26 @@ class ListService:
     def delete_entry(self, db: Session, list_entry_id: int) -> bool:
         from app.services import deletion_service
 
-        entry = self.repository.get_entry(db, list_entry_id)
-        if entry is None:
+        if self.repository.get_entry(db, list_entry_id) is None:
             return False
         # Einreichungen zu diesem Eintrag samt Dateien löschen (sonst verwaist, PRIV-003).
-        if deletion_service.erase_uploads_of(db, list_entry_id=list_entry_id):
-            entry = self.repository.get_entry(db, list_entry_id)
+        # erase_uploads_of committet: wie beim Termin (event_service.delete_event) den Eintrag
+        # sperren und erst löschen, wenn unter der Sperre keine Datei mehr dranhängt - sonst fiele
+        # eine Einreichung, die genau dazwischen eintrifft, per Kaskade weg und ihre Datei verwaiste.
+        for _attempt in range(5):
+            deletion_service.erase_uploads_of(db, list_entry_id=list_entry_id)
+            entry = db.scalar(select(ListEntry).where(ListEntry.id == list_entry_id).with_for_update().execution_options(populate_existing=True))
+            if entry is None:
+                return False
+            remaining = db.scalar(
+                select(SubmissionUploadFile.id)
+                .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+                .where(SubmissionUpload.list_entry_id == list_entry_id)
+                .limit(1)
+            )
+            if remaining is None:
+                break
+        else:
+            raise RuntimeError("Einreichungen des Listeneintrags konnten nicht vollständig gelöscht werden")
         self.repository.delete_entry(db, entry)
         return True

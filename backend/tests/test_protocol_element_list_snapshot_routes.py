@@ -125,9 +125,9 @@ def test_row_link_with_foreign_list_entry_id_does_not_copy_foreign_values(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     own_definition = make_list_definition(db, tenant_a.id)
-    own_entry = make_list_entry(db, own_definition.id, column_one_value={"text_value": "eigen"})
+    own_entry = make_list_entry(db, own_definition.id, first_value={"text_value": "eigen"})
     foreign_definition = make_list_definition(db, tenant_b.id)
-    foreign_entry = make_list_entry(db, foreign_definition.id, column_one_value={"text_value": "geheim"})
+    foreign_entry = make_list_entry(db, foreign_definition.id, first_value={"text_value": "geheim"})
     _protocol, block = _row_block(db, tenant_a, own_definition, own_entry)
     user = make_current_user(tenant_a.id)
 
@@ -150,7 +150,7 @@ def test_row_link_with_entry_of_other_own_list_is_not_resolved(db):
     tenant = make_tenant(db)
     list_one = make_list_definition(db, tenant.id)
     list_two = make_list_definition(db, tenant.id, name="Zweite Liste")
-    entry_two = make_list_entry(db, list_two.id, column_one_value={"text_value": "andere Liste"})
+    entry_two = make_list_entry(db, list_two.id, first_value={"text_value": "andere Liste"})
 
     snapshot = list_snapshot_service.compute_row_list_snapshot(db, list_one.id, entry_two.id, tenant.id)
     assert snapshot["entry_exists"] is False
