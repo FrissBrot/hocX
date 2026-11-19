@@ -229,7 +229,7 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
       >
         {roles.map((role) => (
           <tr key={role.id} className="table-row-clickable" onClick={() => openRole(role)}>
-            <td>
+            <td className="roles-table-name-cell">
               <span className="roles-table-name">
                 <strong>{roleName(role, tNav)}</strong>
                 <RoleBadge role={role} />

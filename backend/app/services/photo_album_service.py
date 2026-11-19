@@ -148,7 +148,9 @@ class AlbumWithStats:
     pending_share_count: int = 0
 
 
-def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[AlbumWithStats]:
+def list_albums_with_stats(
+    db: Session, file_service, tenant_id: int, *, readable_assignment_ids: set[int] | None = None
+) -> list[AlbumWithStats]:
     """Every album owned by this tenant, PLUS every "manual" album another tenant has shared
     with it (accepted photo_album_tenant_share - see photo_album_share_service.py), with
     item/best-of counts and up to 4 cover thumbnails (best-of items first, then newest) -
@@ -162,12 +164,25 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
             .order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc())
         )
     )
+    if readable_assignment_ids is not None:
+        # Automatische Alben eines nicht lesbaren Abgabe-Auftrags verraten schon mit dem Namen
+        # dessen Titel: ganz ausblenden.
+        albums = [
+            album for album in albums
+            if album.submission_assignment_id is None or album.submission_assignment_id in readable_assignment_ids
+        ]
     if not albums:
         return []
     album_ids = [album.id for album in albums]
     # Noch nicht freigegebene Fotos (share_pending) zaehlen nur in eigenen Alben mit - ein
     # Partner sieht sie weder in den Zahlen noch als Cover.
     item_visible = or_(PhotoAlbumItem.share_pending.is_(False), PhotoAlbum.tenant_id == tenant_id)
+    if readable_assignment_ids is not None:
+        # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Fotos anderer Aufträge zählen weder
+        # mit noch erscheinen sie als Cover.
+        from app.services.context_visibility_service import abgabe_scope_clause
+
+        item_visible = and_(item_visible, abgabe_scope_clause(StoredFile.id, readable_assignment_ids))
 
     count_rows = db.execute(
         select(
@@ -177,6 +192,7 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
             func.count().filter(PhotoAlbumItem.share_pending).label("pending_share_count"),
         )
         .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+        .outerjoin(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
         .where(PhotoAlbumItem.album_id.in_(album_ids), item_visible)
         .group_by(PhotoAlbumItem.album_id)
     ).all()

@@ -2199,6 +2199,11 @@ input[type="color"]::-moz-color-swatch {
   gap: var(--space-2);
 }
 
+/* Beschreibungen umbrechen statt die Tabelle über die Seitenbreite zu schieben (data-table-lg: nowrap) */
+.data-table-lg td.roles-table-name-cell {
+  white-space: normal;
+}
+
 .roles-table-name {
   display: flex;
   flex-wrap: wrap;
@@ -9680,6 +9685,12 @@ button.table-row-link:hover {
 }
 
 /* Preise: Plan-Karten */
+/* Reiter dürfen die Seite auf dem Handy nicht verbreitern: eigener Scrollbereich */
+.admin-pricing-tabs {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .admin-plan-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
@@ -9771,6 +9782,7 @@ button.table-row-link:hover {
 
 .admin-plan-card-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
@@ -9779,13 +9791,15 @@ button.table-row-link:hover {
   border-top: 1px solid var(--border);
 }
 
-.admin-plan-card-foot .button-ghost { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
+.admin-plan-card-foot .button-ghost,
+.admin-plan-card-foot .button-danger { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
   width: auto;
   min-height: 32px;
   padding: 0 var(--space-2);
 }
 
 .admin-plan-card-link {
+  white-space: nowrap;
   color: var(--primary);
   font-size: var(--text-sm);
   font-weight: 600;

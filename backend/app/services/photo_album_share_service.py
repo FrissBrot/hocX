@@ -134,13 +134,26 @@ class PendingReleaseRow:
     pending_count: int
 
 
-def list_pending_releases(db: Session, tenant_id: int) -> list[PendingReleaseRow]:
+def list_pending_releases(
+    db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None
+) -> list[PendingReleaseRow]:
     """Eigene, aktuell geteilte Alben mit noch nicht freigegebenen Fotos - fuer den Hinweis
-    auf der Fotos-Seite."""
-    rows = db.execute(
+    auf der Fotos-Seite. Mit Reichweite «nur zugewiesene» (Phase 4/5) fehlen automatische Alben
+    nicht lesbarer Aufträge (Name = Auftragstitel), und Abgabe-Fotos solcher Aufträge zählen nicht."""
+    query = (
         select(PhotoAlbum.id, PhotoAlbum.name, PhotoAlbum.kind, func.count())
         .join(PhotoAlbumItem, PhotoAlbumItem.album_id == PhotoAlbum.id)
         .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.share_pending.is_(True))
+    )
+    if readable_assignment_ids is not None:
+        from app.services.context_visibility_service import abgabe_scope_clause
+
+        query = query.outerjoin(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id).where(
+            or_(PhotoAlbum.submission_assignment_id.is_(None), PhotoAlbum.submission_assignment_id.in_(list(readable_assignment_ids))),
+            abgabe_scope_clause(StoredFile.id, readable_assignment_ids),
+        )
+    rows = db.execute(
+        query
         .group_by(PhotoAlbum.id, PhotoAlbum.name, PhotoAlbum.kind)
         .order_by(PhotoAlbum.name)
     ).all()

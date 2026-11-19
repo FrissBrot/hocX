@@ -40,7 +40,7 @@ export function FileVisibilitySettings({ initialModules }: { initialModules: Con
       </div>
       <p className="muted">{t("fileVisibility.intro")}</p>
       {modules.map((module) => (
-        <div key={module.module} className="section-stack">
+        <div key={module.module} className="file-visibility-module">
           <h3 className="docverify-heading">{t(`fileVisibility.module.${module.module}`)}</h3>
           <p className="field-help">{t(`fileVisibility.moduleHint.${module.module}`)}</p>
           <div className="grid two-col">

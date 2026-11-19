@@ -612,9 +612,9 @@ class FileService:
             active_job_image_count=active_job_image_count,
         )
 
-    def file_stats(self, db: Session, tenant_id: int) -> FileStats:
+    def file_stats(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> FileStats:
         """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
-        counts = self.stored_file_repository.tenant_file_stats(db, tenant_id)
+        counts = self.stored_file_repository.tenant_file_stats(db, tenant_id, readable_assignment_ids=readable_assignment_ids)
         return FileStats(
             document_count=counts.document_count,
             photo_count=counts.photo_count,
@@ -1048,10 +1048,13 @@ class FileService:
                 created += 1
         return created
 
-    def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
+    def list_distinct_tags(
+        self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS,
+        readable_assignment_ids: set[int] | None = None,
+    ) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
         deduped and sorted, for the tag-filter/editor autocomplete."""
-        rows = self.stored_file_repository.list_tag_sources(db, tenant_id)
+        rows = self.stored_file_repository.list_tag_sources(db, tenant_id, readable_assignment_ids=readable_assignment_ids)
         seen: set[str] = set()
         needle = query.strip().lower() if query else None
         for row in rows:

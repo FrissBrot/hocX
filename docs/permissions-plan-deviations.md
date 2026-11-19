@@ -289,9 +289,11 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   `submissions.manage` oder ganz ohne `submissions.read` verlieren nichts. Album-Mitgliedschaft
   zählt nicht als zusätzlicher Kontext (Abgabe-Fotos kommen automatisch in Alben) – sichere Richtung.
   Mehrfachaktionen (Tags, Löschen, Fotos ins Album) lehnen Dateien nicht lesbarer Aufträge mit 404 ab.
-  **OFFEN:** `GET /api/files/tags`, `GET /api/files/stats` und die Album-Übersicht (Cover/Namen der
-  automatischen Abgabe-Alben) filtern nicht nach Reichweite (Tags enthalten die Herkunft «Abgabe:
-  <Titel>», Statistik nur Zahlen).
+  Nachgezogen (19.11.2026): `GET /api/files/tags`, `GET /api/files/stats` und die Album-Übersicht
+  (Anzahl, Cover) zählen nur Dateien in Reichweite; automatische Alben nicht lesbarer Aufträge fehlen
+  ganz, ebenso im Hinweis «noch nicht freigegeben» (`GET /api/files/album-pending-releases`).
+  Bewusst offen: der Fortschritt der Foto-Analyse (`/api/files/analysis-progress`) zählt mandantenweit
+  (nur Zahlen, keine Titel oder Inhalte).
 - **Security-Review Phase 5 (18.11.2026), behoben:** (1) `gallery_image` enthält auch Ablage-Dokumente
   und Direkt-Uploads zu Abgaben – die Album-Freigabe gilt nur für Zeilen ohne Abgabe-Bezug, deren
   Hauptdatei ein Bild ist (plus Live-Clip); für Abgabe-Uploads gilt allein die Abgabe-Regel inkl.

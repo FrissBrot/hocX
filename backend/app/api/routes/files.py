@@ -234,7 +234,10 @@ def list_file_tags(
     require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
+    return service.list_distinct_tags(
+        db, user.current_tenant_id, query=query, limit=limit,
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+    )
 
 
 @router.get("/files/analysis-progress", response_model=PhotoAnalysisProgress)
@@ -253,7 +256,9 @@ def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(ge
     require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    return service.file_stats(db, user.current_tenant_id)
+    return service.file_stats(
+        db, user.current_tenant_id, readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user)
+    )
 
 
 @router.get("/files/similarity-groups", response_model=SimilarityGroupList)
@@ -1282,7 +1287,9 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
     require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    entries = photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
+    entries = photo_album_service.list_albums_with_stats(
+        db, service, user.current_tenant_id, readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user)
+    )
     own_album_ids = [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
     foreign_entries = [entry for entry in entries if entry.album.tenant_id != user.current_tenant_id]
     shared_ids = photo_album_share_service.shared_album_ids(db, own_album_ids)
@@ -1357,7 +1364,9 @@ def list_album_pending_releases(db: Session = Depends(get_db), user: CurrentUser
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
         AlbumPendingReleaseRead(album_id=row.album_id, album_name=row.album_name, album_kind=row.album_kind, pending_count=row.pending_count)
-        for row in photo_album_share_service.list_pending_releases(db, user.current_tenant_id)
+        for row in photo_album_share_service.list_pending_releases(
+            db, user.current_tenant_id, readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user)
+        )
     ]
 
 

@@ -613,7 +613,7 @@ class StoredFileRepository:
         )
         return db.execute(query).one()
 
-    def tenant_file_stats(self, db: Session, tenant_id: int) -> Row:
+    def tenant_file_stats(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> Row:
         """Counts/bytes behind the Dateien page's stat cards - same union as
         list_tenant_files (not storage_service's admin-only, per-origin-table breakdown) so
         these numbers always match what the Fotos/Dateien pages actually list."""
@@ -626,6 +626,7 @@ class StoredFileRepository:
             func.count().filter(is_document).label("document_count"),
             func.coalesce(func.sum(union_query.c.file_size_bytes), 0).label("total_bytes"),
         ).where(union_query.c.scan_status != "infected")
+        query = self._scope(query, union_query, readable_assignment_ids)
         return db.execute(query).one()
 
     def get_file_overview_row(self, db: Session, tenant_id: int, stored_file_id: int) -> Row | None:
@@ -638,7 +639,7 @@ class StoredFileRepository:
         query = select(union_query).where(union_query.c.id == stored_file_id).limit(1)
         return db.execute(query).first()
 
-    def list_tag_sources(self, db: Session, tenant_id: int) -> list[Row]:
+    def list_tag_sources(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> list[Row]:
         """Raw (tags, origin_tag) pairs across every file the tenant has, for building the
         tag-suggestion/autocomplete list - see MAX_TAG_SOURCE_ROWS for why this isn't paged."""
         branches = self._files_overview_branches(tenant_id)
@@ -648,7 +649,17 @@ class StoredFileRepository:
             .where(union_query.c.scan_status != "infected")
             .limit(MAX_TAG_SOURCE_ROWS)
         )
+        query = self._scope(query, union_query, readable_assignment_ids)
         return list(db.execute(query).all())
+
+    @staticmethod
+    def _scope(query, union_query, readable_assignment_ids: set[int] | None):
+        """Reichweite «nur zugewiesene» (Phase 4/5) wie in list_tenant_files."""
+        if readable_assignment_ids is None:
+            return query
+        from app.services.context_visibility_service import abgabe_scope_clause
+
+        return query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
 
     def list_pipeline_status(
         self,

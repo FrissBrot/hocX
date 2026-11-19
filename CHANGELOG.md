@@ -238,7 +238,8 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - **Prüfer je Abgabe:** Im Abgabe-Auftrag lassen sich Prüfer (Personen mit Login) zuweisen. Im
   Rollen-Editor gibt es für «Abgaben ansehen» und «Abgaben prüfen» die Reichweite «Alle» oder «Nur
   zugewiesene»; mit «Nur zugewiesene» sieht und prüft man nur die Aufträge, denen man als Prüfer
-  zugewiesen ist (Liste, Dateien, ZIP). «Abgaben verwalten» gilt immer für alle.
+  zugewiesen ist (Liste, Dateien, ZIP, Tags, Statistik, Album-Übersicht; automatische Alben fremder
+  Aufträge fehlen). «Abgaben verwalten» gilt immer für alle.
 - **Abgaben für Leser:** Die Seite Abgaben ist mit «Abgaben ansehen» erreichbar (nur lesen);
   Verwalten braucht weiterhin «Abgaben verwalten», Schliessen/Öffnen «Abgaben prüfen».
 - **Rollen-Dialog:** Implizierte Berechtigungen sind automatisch angehakt und ausgegraut, mit dem

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Globale Suche (Ctrl+K): Menüs/Einstellungen ohne Server, Personen über /api/search mit Sprung
-// in die Bearbeitung, Ctrl+F springt auf Listenseiten ins Suchfeld der Liste.
+// auf die Personenseite, Ctrl+F springt auf Listenseiten ins Suchfeld der Liste.
 // Mit SEARCH_SHOTS=<Ordner> entstehen zusätzlich Screenshots (Light/Dark, 1440 und 390 px).
 
 const SHOTS = process.env.SEARCH_SHOTS;
@@ -44,9 +44,10 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     const option = dialog.getByRole("option", { name: new RegExp(name) });
     await expect(option).toBeVisible();
     await option.click();
-    await expect(page).toHaveURL(/\/participants$/, { timeout: 30_000 });
+    // Personen-Konzept: der Treffer öffnet die Personenseite (Stammdaten), keinen Dialog mehr
+    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible({ timeout: 30_000 });
     await expect
-      .poll(() => page.getByRole("dialog").locator("input").evaluateAll((inputs, wanted) => inputs.some((input) => (input as HTMLInputElement).value === wanted), name))
+      .poll(() => page.locator("main input").evaluateAll((inputs, wanted) => inputs.some((input) => (input as HTMLInputElement).value === wanted), name))
       .toBe(true);
   } finally {
     await request.delete(`/api/participants/${participant.id}`);

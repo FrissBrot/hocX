@@ -413,6 +413,61 @@ def test_assigned_reviewer_sees_only_assigned_submission_photos(db, org):
     assert _can_read(db, user, org.andere_photo)
 
 
+def test_reviewer_scope_also_limits_tags_stats_and_album_overview(db, org):
+    from app.models.entities import PhotoAlbum, PhotoAlbumItem
+
+    reviewer_role = _role(db, org.admin_user, "Prüfer", ["submissions.review", "photos.read", "files.read", "meetings.read"], {"submissions.review": "assigned"})
+    reviewer = _account(db, "pruefer-tags@a.example", org.tenant.id, reviewer_role)
+    submission_routes.patch_assignment(org.lager.public_id, SubmissionAssignmentUpdate(reviewer_ids=[reviewer.public_id]), db=db, user=org.admin_user)
+    org.andere_photo.tags = ["geheimer-tag"]
+    org.lager_photo.tags = ["lager-tag"]
+    album = PhotoAlbum(tenant_id=org.tenant.id, name="Gemischt")
+    db.add(album)
+    db.flush()
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=org.lager_photo.public_id), PhotoAlbumItem(album_id=album.id, file_id=org.andere_photo.public_id)])
+    db.flush()
+    user = _user(db, reviewer)
+
+    def tags(viewer):
+        return set(files_routes.list_file_tags(query=None, limit=200, db=db, user=viewer))
+
+    assert {"geheimer-tag", "lager-tag"} <= tags(org.admin_user)
+    assert "lager-tag" in tags(user) and "geheimer-tag" not in tags(user)
+
+    stats_admin = files_routes.get_file_stats(db=db, user=org.admin_user)
+    stats_user = files_routes.get_file_stats(db=db, user=user)
+    assert stats_user.photo_count == stats_admin.photo_count - 1
+
+    def album_count(viewer):
+        return next(entry.photo_count for entry in files_routes.list_albums(db=db, user=viewer) if entry.id == album.id)
+
+    assert album_count(org.admin_user) == 2
+    assert album_count(user) == 1
+
+    hidden = PhotoAlbum(tenant_id=org.tenant.id, name="Abgabe: Andere", kind="submission", submission_assignment_id=org.andere.id)
+    db.add(hidden)
+    db.flush()
+    assert hidden.id in {entry.id for entry in files_routes.list_albums(db=db, user=org.admin_user)}
+    assert hidden.id not in {entry.id for entry in files_routes.list_albums(db=db, user=user)}
+
+    # Hinweis «noch nicht freigegeben» geteilter Alben: Auftragstitel/-fotos ebenso ausgeblendet
+    from app.models.entities import PhotoAlbumTenantShare
+
+    db.add_all([
+        PhotoAlbumItem(album_id=hidden.id, file_id=org.andere_photo.public_id, share_pending=True),
+        PhotoAlbumItem(album_id=album.id, file_id=uuid.uuid4(), share_pending=True),
+        PhotoAlbumTenantShare(album_id=hidden.id, tenant_id=org.other.id, status="pending"),
+        PhotoAlbumTenantShare(album_id=album.id, tenant_id=org.other.id, status="pending"),
+    ])
+    db.flush()
+
+    def pending(viewer):
+        return {row.album_id: row.pending_count for row in files_routes.list_album_pending_releases(db=db, user=viewer)}
+
+    assert pending(org.admin_user) == {hidden.id: 1, album.id: 1}
+    assert pending(user) == {album.id: 1}
+
+
 def test_unrestricted_accounts_lose_nothing(db, org):
     photos_only = _account(db, "fotos@a.example", org.tenant.id, _role(db, org.admin_user, "Fotos", ["photos.read", "meetings.read"]))
     for user in (org.admin_user, _user(db, photos_only)):

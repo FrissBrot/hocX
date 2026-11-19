@@ -474,7 +474,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         </div>
       </div>
 
-      <div>
+      <div className="admin-pricing-tabs">
         <FilterTabs
           value={view}
           onChange={setView}
