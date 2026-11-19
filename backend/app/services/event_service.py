@@ -412,7 +412,11 @@ class EventService:
             dialect = csv.excel
 
         reader = csv.DictReader(StringIO(normalized), dialect=dialect)
-        if not reader.fieldnames:
+        try:
+            fieldnames = reader.fieldnames
+        except csv.Error as exc:
+            raise ValueError(f"CSV file could not be read: {exc}") from exc
+        if not fieldnames:
             raise ValueError("CSV headers missing")
         return reader
 
@@ -435,6 +439,14 @@ class EventService:
         return resolved
 
     def _parse_csv_rows(self, reader: csv.DictReader, resolved_map: dict[str, str]) -> list[dict]:
+        # csv.Error (z. B. Feld über dem Feldlimit) ist ein Eingabefehler wie jeder andere: als
+        # ValueError weitergeben, damit die Route mit 400 statt 500 antwortet.
+        try:
+            return self._parse_csv_rows_unchecked(reader, resolved_map)
+        except csv.Error as exc:
+            raise ValueError(f"CSV file could not be read: {exc}") from exc
+
+    def _parse_csv_rows_unchecked(self, reader: csv.DictReader, resolved_map: dict[str, str]) -> list[dict]:
         results: list[dict] = []
         for row_number, row in enumerate(reader, start=2):
             if not row or not any(str(value or "").strip() for value in row.values()):
