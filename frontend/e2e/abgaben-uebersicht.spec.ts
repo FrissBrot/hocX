@@ -72,11 +72,11 @@ test.describe("Abgaben-Übersicht", () => {
     await dialog.getByRole("tab", { name: /Ausstehend\s*2/ }).click();
     await expect(dialog.locator(".subm-element-card")).toHaveCount(2);
     await expect(dialog.getByText("Jede Datei wird vor der Freigabe per ClamAV geprüft.")).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath("abgaben-detail.png"), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("abgaben-detail.png") }); // ohne fullPage: der Seitenwechsel beim Vollbild schloss in der CI das Popup
 
     await dialog.locator(".subm-element-card").first().click();
     await expect(dialog.getByRole("button", { name: /← Termine/ })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath("abgaben-element.png"), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("abgaben-element.png") });
     await dialog.getByRole("button", { name: /← Termine/ }).click();
     await expect(dialog.locator(".subm-element-card")).toHaveCount(2);
   });
