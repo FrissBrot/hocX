@@ -8,7 +8,7 @@ import time
 import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -200,6 +200,17 @@ def _read_object(namespace: str, key: str) -> bytes | None:
 
 
 @dataclass
+class CaptureCorrectionOutcome:
+    """Ergebnis von FileService.correct_capture_dates (je Liste die öffentlichen IDs)."""
+
+    updated_ids: list[uuid.UUID] = field(default_factory=list)
+    unchanged_ids: list[uuid.UUID] = field(default_factory=list)
+    skipped_no_date_ids: list[uuid.UUID] = field(default_factory=list)
+    invalid_ids: list[uuid.UUID] = field(default_factory=list)
+    not_found_ids: list[uuid.UUID] = field(default_factory=list)
+
+
+@dataclass
 class _CaptureView:
     """Minimaler Traeger fuer capture_date.effective_capture, wenn exif_taken_at nur live
     gelesen (noch nicht gespeichert) wurde."""
@@ -207,6 +218,7 @@ class _CaptureView:
     exif_taken_at: datetime | None
     estimated_taken_on: date | None
     created_at: datetime
+    capture_corrected_at: datetime | None = None
 
 
 def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
@@ -702,6 +714,7 @@ class FileService:
             date_source=row.date_source,
             exif_taken_at=row.exif_taken_at,
             estimated_taken_on=row.estimated_taken_on,
+            capture_corrected_at=row.capture_corrected_at,
             context_label=row.context_label,
             live_video_url=self.build_content_url(row.live_video_public_id) if row.live_video_public_id else None,
             scan_status=getattr(row, "scan_status", None) or "clean",
@@ -1106,8 +1119,17 @@ class FileService:
         if stored_file.estimated_taken_set_by is not None:
             estimator = db.get(AppUser, stored_file.estimated_taken_set_by)
             estimated_by_name = estimator.display_name if estimator is not None else None
+        corrected_by_name = None
+        if stored_file.capture_corrected_set_by is not None:
+            corrector = db.get(AppUser, stored_file.capture_corrected_set_by)
+            corrected_by_name = corrector.display_name if corrector is not None else None
         effective_date, date_source = effective_capture(
-            _CaptureView(exif_taken_at=exif_taken_at, estimated_taken_on=stored_file.estimated_taken_on, created_at=stored_file.created_at)
+            _CaptureView(
+                exif_taken_at=exif_taken_at,
+                estimated_taken_on=stored_file.estimated_taken_on,
+                created_at=stored_file.created_at,
+                capture_corrected_at=stored_file.capture_corrected_at,
+            )
         )
         gps = None
         if stored_file.gps_latitude is not None and stored_file.gps_longitude is not None:
@@ -1142,6 +1164,10 @@ class FileService:
             estimated_taken_on=stored_file.estimated_taken_on,
             estimated_taken_set_at=stored_file.estimated_taken_set_at,
             estimated_taken_set_by_name=estimated_by_name,
+            capture_corrected_at=stored_file.capture_corrected_at,
+            capture_corrected_has_time=bool(stored_file.capture_corrected_has_time) if stored_file.capture_corrected_at else False,
+            capture_corrected_set_at=stored_file.capture_corrected_set_at,
+            capture_corrected_set_by_name=corrected_by_name,
             effective_date=effective_date,
             date_source=date_source,
             camera_make=camera_make,
@@ -1163,6 +1189,70 @@ class FileService:
             photo_event_link_service.resync_photo_after_date_change(db, stored_file)
             db.commit()
         return changed
+
+    def correct_capture_dates(
+        self,
+        db: Session,
+        tenant_id: int,
+        file_ids: list[uuid.UUID],
+        *,
+        mode: str,
+        corrected: tuple[datetime, bool] | None = None,
+        shift: timedelta | None = None,
+        user_id: int | None,
+    ) -> CaptureCorrectionOutcome:
+        """Korrigiertes Aufnahmedatum für mehrere Bilder setzen ("set"), verschieben ("shift")
+        oder entfernen ("reset") - Einzelbearbeitung im Foto-Viewer und Mehrfachauswahl der
+        Galerie. Nur Bilder des eigenen Mandanten (tenant_id gebunden): unbekannte IDs, Fotos
+        anderer Mandanten (auch Partner-Fotos geteilter Alben) und Nicht-Bilder landen
+        gleichermassen in not_found. EXIF-Datum und Datei-Bytes bleiben unverändert. Danach
+        werden automatische Termin-Verknüpfungen neu bewertet. Committet NICHT - der Aufrufer
+        schreibt den Audit-Eintrag in dieselbe Transaktion."""
+        outcome = CaptureCorrectionOutcome()
+        requested = list(dict.fromkeys(file_ids))
+        found = {
+            stored_file.public_id: stored_file
+            for stored_file in db.scalars(
+                select(StoredFile)
+                .where(
+                    StoredFile.tenant_id == tenant_id,
+                    StoredFile.public_id.in_(requested),
+                    StoredFile.mime_type.like("image/%"),
+                )
+                .with_for_update()
+            )
+        }
+        for public_id in requested:
+            stored_file = found.get(public_id)
+            if stored_file is None:
+                outcome.not_found_ids.append(public_id)
+                continue
+            if mode == "reset":
+                target: tuple[datetime, bool] | None = None
+            elif mode == "set":
+                target = corrected
+            else:
+                target = image_metadata_service.shifted_correction(stored_file, shift or timedelta())
+                if target is None:
+                    outcome.skipped_no_date_ids.append(public_id)
+                    continue
+            try:
+                changed = image_metadata_service.set_capture_correction(
+                    stored_file,
+                    target[0] if target is not None else None,
+                    has_time=target[1] if target is not None else False,
+                    user_id=user_id,
+                )
+            except ValueError:
+                outcome.invalid_ids.append(public_id)
+                continue
+            if changed:
+                photo_event_link_service.resync_photo_after_date_change(db, stored_file)
+                outcome.updated_ids.append(public_id)
+            else:
+                outcome.unchanged_ids.append(public_id)
+        db.flush()
+        return outcome
 
     def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
         return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)
@@ -1572,6 +1662,7 @@ class FileService:
                     date_source=date_source,
                     exif_taken_at=stored_file.exif_taken_at,
                     estimated_taken_on=stored_file.estimated_taken_on,
+                    capture_corrected_at=stored_file.capture_corrected_at,
                     context_label=linked_event.title if linked_event is not None else None,
                     live_video_url=self.build_content_url(live_video_file.public_id) if live_video_file is not None else None,
                 )

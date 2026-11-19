@@ -2,7 +2,7 @@ import json
 import uuid
 import zipfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -35,7 +35,11 @@ from app.schemas.files import (
     AlbumShareRequestRead,
     AlbumShareRespond,
     AlbumTenantShareStatus,
+    CaptureCorrectionUpdate,
     CaptureDateUpdate,
+    FileBulkCaptureDate,
+    FileBulkCaptureDateResult,
+    MAX_CAPTURE_DATE_BULK,
     ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
@@ -58,6 +62,7 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services import apple_media
 from app.services import context_visibility_service
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
@@ -77,6 +82,7 @@ from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
+audit = AuditService()
 access_service = AccessService()
 submission_service = SubmissionService()
 
@@ -1120,6 +1126,130 @@ def update_stored_file_capture_date(
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     return metadata
+
+
+def _capture_correction_audit(
+    db: Session,
+    user: CurrentUser,
+    *,
+    mode: str,
+    outcome,
+    requested: int,
+    entity_id: int | None = None,
+    details: dict | None = None,
+) -> None:
+    """Ein Audit-Eintrag je Aktion (Einzelbearbeitung oder Mehrfachauswahl), in derselben
+    Transaktion wie die Änderung (commit=False)."""
+    action = {"set": "photo.capture_date_corrected", "shift": "photo.capture_date_shifted", "reset": "photo.capture_date_reset"}[mode]
+    audit.log(
+        db,
+        action=action,
+        actor=user,
+        entity_type="stored_file",
+        entity_id=entity_id,
+        details={
+            **(details or {}),
+            "requested": requested,
+            "updated": len(outcome.updated_ids),
+            "unchanged": len(outcome.unchanged_ids),
+            "skipped_no_date": len(outcome.skipped_no_date_ids),
+            "invalid": len(outcome.invalid_ids),
+            "not_found": len(outcome.not_found_ids),
+            # Nur eigene, tatsächlich geänderte Bilder - nie IDs fremder Mandanten.
+            "file_ids": [str(public_id) for public_id in outcome.updated_ids],
+        },
+        commit=False,
+    )
+
+
+@router.patch("/stored-files/{stored_file_id}/capture-correction", response_model=StoredFileMetadata)
+def update_stored_file_capture_correction(
+    stored_file_id: uuid.UUID,
+    payload: CaptureCorrectionUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Korrigiertes Aufnahmedatum eines Bildes setzen (Datum, optional Uhrzeit) oder mit
+    corrected_date null entfernen. Vorrang vor EXIF und Schätzung; das EXIF-Datum und die
+    Datei bleiben unverändert. Gleiche Regel wie das Schätzdatum: photos.manage, nur Bilder des
+    eigenen Mandanten, nie Partner-Fotos aus geteilten Alben."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
+    if stored_file is None or stored_file.tenant_id != user.current_tenant_id or not (stored_file.mime_type or "").startswith("image/"):
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)  # schreibt: nur Rollenrechte
+    _ensure_files_in_scope(db, user, [stored_file.public_id])
+    mode = "reset" if payload.corrected_date is None else "set"
+    corrected = (
+        image_metadata_service.corrected_datetime(payload.corrected_date, payload.corrected_time)
+        if payload.corrected_date is not None
+        else None
+    )
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, [stored_file.public_id], mode=mode, corrected=corrected, user_id=user.user_id
+    )
+    if outcome.invalid_ids:
+        # Nichts geändert (set_capture_correction prüft vor dem Schreiben)
+        raise HTTPException(status_code=422, detail="Ungültiges Aufnahmedatum")
+    if outcome.updated_ids:
+        details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]} if corrected else {}
+        _capture_correction_audit(db, user, mode=mode, outcome=outcome, requested=1, entity_id=stored_file.id, details=details)
+    db.commit()
+    db.refresh(stored_file)
+    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    return metadata
+
+
+@router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
+def bulk_update_capture_date(
+    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Mehrfachauswahl der Galerie «Aufnahmedatum ändern»: alle auf ein Datum setzen, um einen
+    Versatz verschieben (Bilder ohne Aufnahmedatum werden übersprungen und gemeldet) oder die
+    Korrektur entfernen. Höchstens MAX_CAPTURE_DATE_BULK Bilder; nur Bilder des eigenen
+    Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
+    not_found zurück. Ein Audit-Eintrag pro Aufruf."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > MAX_CAPTURE_DATE_BULK:
+        raise HTTPException(status_code=422, detail=f"Bitte 1 bis {MAX_CAPTURE_DATE_BULK} Bilder auswählen")
+    # Reichweite «nur zugewiesene» nur für Bilder des eigenen Mandanten prüfen - fremde IDs
+    # dürfen hier keine andere Antwort auslösen als unbekannte (kein Existenz-Orakel, auch ohne RLS).
+    own_ids = list(
+        db.scalars(select(StoredFile.public_id).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)))
+    )
+    _ensure_files_in_scope(db, user, own_ids)
+    corrected = (
+        image_metadata_service.corrected_datetime(payload.corrected_date, payload.corrected_time)
+        if payload.mode == "set" and payload.corrected_date is not None
+        else None
+    )
+    if corrected is not None and image_metadata_service.valid_capture_datetime(corrected[0]) is None:
+        raise HTTPException(status_code=422, detail="Ungültiges Aufnahmedatum")
+    shift = timedelta(days=payload.shift_days, hours=payload.shift_hours) if payload.mode == "shift" else None
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+    )
+    details: dict = {}
+    if corrected is not None:
+        details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]}
+    elif shift is not None:
+        details = {"shift_days": payload.shift_days, "shift_hours": payload.shift_hours}
+    _capture_correction_audit(db, user, mode=payload.mode, outcome=outcome, requested=len(ids), details=details)
+    db.commit()
+    return FileBulkCaptureDateResult(
+        updated_ids=outcome.updated_ids,
+        unchanged_ids=outcome.unchanged_ids,
+        skipped_no_date_ids=outcome.skipped_no_date_ids,
+        invalid_ids=outcome.invalid_ids,
+        not_found_ids=outcome.not_found_ids,
+    )
 
 
 @router.get("/stored-files/{stored_file_id}/thumbnail")

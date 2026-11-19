@@ -28,6 +28,16 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   als Kacheln mit Statuspunkt und Kurzinfo, unten der Hinweis zur ClamAV-Prüfung neben «Alle Dateien
   (.zip)». Ein einzelner Termin oder Eintrag öffnet sich im selben Fenster, «← Termine» führt
   zurück. Der Links-Dialog erklärt kurz, wie Links und Abgaben zusammenhängen.
+- **Fotos: Aufnahmedatum korrigieren:** Stimmt das Aufnahmedatum eines Bildes nicht (z. B. falsch
+  gestellte Kamera), lässt es sich im Foto-Viewer korrigieren (Datum, optional Uhrzeit) oder in der
+  Galerie per Mehrfachauswahl «Aufnahmedatum» für bis zu 500 Bilder ändern: alle auf dasselbe Datum
+  setzen, um Tage/Stunden verschieben (Bilder ohne Aufnahmedatum werden übersprungen und gemeldet)
+  oder das Original wiederherstellen. Jede Änderung braucht eine Bestätigung, die erklärt, was sie
+  bewirkt. Das korrigierte Datum gilt überall vor EXIF und Schätzung (Zeitstrahl, Sortierung,
+  Monatsgruppen, Datumsfilter, Termin-Zuordnung, Metadaten, Teilen-Seite, Downloads/Exporte); das
+  EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, die Datei selbst wird nicht
+  verändert. Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
+  Migration `0200_photo_capture_override` (neue Spalten in `stored_file`).
 
 ## [1.4.0] - 2026-11-19
 

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Literal
 
 from app.schemas.documents import DocumentSummary
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
 PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
 
-DateSource = Literal["exif", "estimated", "upload", "context"]
+DateSource = Literal["corrected", "exif", "estimated", "upload", "context"]
+
+# Obergrenze der Mehrfachaktion «Aufnahmedatum ändern» (POST /files/bulk-capture-date).
+MAX_CAPTURE_DATE_BULK = 500
 
 # Ergebnis je Datei eines Uploads bzw. Vorab-Abgleichs (siehe UPLOAD_DUPLICATES.md).
 UploadFileStatus = Literal["uploaded", "skipped", "metadata_updated", "failed"]
@@ -87,12 +90,14 @@ class FileOverviewItem(BaseModel):
     # import date, else the central capture-date priority (capture_date.py): real EXIF date,
     # estimated date, upload date.
     group_date: date | None = None
-    # Woher group_date stammt: "exif" (echtes Aufnahmedatum), "estimated" (geschaetzt),
+    # Woher group_date stammt: "corrected" (vom Benutzer korrigiert), "exif" (echtes
+    # Aufnahmedatum), "estimated" (geschaetzt),
     # "upload" (Fallback Uploaddatum) oder "context" (Protokoll-/Word-Import-Datum). Steuert
     # die dezente Kennzeichnung in der Galerie.
     date_source: DateSource = "upload"
     exif_taken_at: datetime | None = None
     estimated_taken_on: date | None = None
+    capture_corrected_at: datetime | None = None
     # Short context label for that date group's header (protocol title + block title, word-
     # import display name, submission assignment title, or event title) - None when there's
     # nothing more specific than the plain upload date (e.g. an event-less gallery upload).
@@ -265,6 +270,54 @@ class CaptureDateUpdate(BaseModel):
     estimated_taken_on: date | None
 
 
+class CaptureCorrectionUpdate(BaseModel):
+    """PATCH /stored-files/{id}/capture-correction - korrigiertes Aufnahmedatum setzen
+    (Datum, optional Uhrzeit) oder mit corrected_date null entfernen."""
+
+    corrected_date: date | None
+    corrected_time: time | None = None
+
+
+class FileBulkCaptureDate(BaseModel):
+    """POST /files/bulk-capture-date - Mehrfachauswahl der Galerie.
+
+    mode "set": alle auf corrected_date (+ optional corrected_time); "shift": um shift_days/
+    shift_hours verschieben (Bilder ohne Aufnahmedatum werden übersprungen); "reset":
+    Korrektur entfernen."""
+
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_CAPTURE_DATE_BULK)
+    mode: Literal["set", "shift", "reset"]
+    corrected_date: date | None = None
+    corrected_time: time | None = None
+    shift_days: int = Field(default=0, ge=-36500, le=36500)
+    shift_hours: int = Field(default=0, ge=-8760, le=8760)
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> "FileBulkCaptureDate":
+        if self.mode == "set" and self.corrected_date is None:
+            raise ValueError("corrected_date fehlt")
+        if self.mode != "set" and (self.corrected_date is not None or self.corrected_time is not None):
+            raise ValueError("corrected_date/corrected_time nur mit mode 'set'")
+        if self.mode == "shift" and self.shift_days == 0 and self.shift_hours == 0:
+            raise ValueError("Versatz fehlt")
+        if self.mode != "shift" and (self.shift_days or self.shift_hours):
+            raise ValueError("Versatz nur mit mode 'shift'")
+        return self
+
+
+class FileBulkCaptureDateResult(BaseModel):
+    updated_ids: list[uuid.UUID]
+    # Schon auf dem Zielwert (z. B. «zurücksetzen» ohne Korrektur).
+    unchanged_ids: list[uuid.UUID]
+    # Nur beim Verschieben: kein Aufnahmedatum (weder korrigiert, EXIF noch geschätzt).
+    skipped_no_date_ids: list[uuid.UUID]
+    # Ergebnis ausserhalb des gültigen Bereichs (vor 1826 oder in der Zukunft).
+    invalid_ids: list[uuid.UUID]
+    # Unbekannt, fremder Mandant (auch Partner-Fotos geteilter Alben) oder kein Bild -
+    # bewusst nicht unterschieden (kein Existenz-Orakel).
+    not_found_ids: list[uuid.UUID]
+
+
 class GpsMetadataRead(BaseModel):
     latitude: float
     longitude: float
@@ -298,6 +351,12 @@ class StoredFileMetadata(BaseModel):
     estimated_taken_on: date | None = None
     estimated_taken_set_at: datetime | None = None
     estimated_taken_set_by_name: str | None = None
+    # Korrigiertes Aufnahmedatum (Vorrang vor EXIF, Migration 0200); ohne Uhrzeit steht technisch
+    # 12:00 drin und capture_corrected_has_time ist False.
+    capture_corrected_at: datetime | None = None
+    capture_corrected_has_time: bool = False
+    capture_corrected_set_at: datetime | None = None
+    capture_corrected_set_by_name: str | None = None
     effective_date: date | None = None
     date_source: DateSource = "upload"
     camera_make: str | None = None

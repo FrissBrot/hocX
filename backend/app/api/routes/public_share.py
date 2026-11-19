@@ -35,6 +35,7 @@ from app.core.storage import MAIN, get_object_store, object_response, read_bytes
 from app.services.file_service import FileService
 from app.services.stored_file_location import namespace_for_stored_file
 from app.services import image_export_service
+from app.services.capture_date import effective_capture_moment
 from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, MetadataPolicy, sanitize_image
 
 router = APIRouter()
@@ -223,14 +224,19 @@ def get_public_share(token: str, request: Request, db: Session = Depends(get_db)
                 is_image=is_image,
                 width=stored_file.width,
                 height=stored_file.height,
-                taken_at=stored_file.exif_taken_at if link.share_capture_date else None,
+                # Korrigiertes Aufnahmedatum vor EXIF (capture_date.py), nur wenn der Link das Datum teilt.
+                taken_at=effective_capture_moment(stored_file) if link.share_capture_date else None,
                 thumbnail_url=thumbnail_url,
                 view_url=f"{base}/files/{stored_file.public_id}/view" if mime_type in _INLINE_IMAGE_TYPES else (thumbnail_url if is_image else None),
                 page_count=page_count,
                 download_url=f"{base}/files/{stored_file.public_id}/download",
             )
         )
-    taken_dates = [f.exif_taken_at for f in stored_files if f.exif_taken_at is not None] if link.share_capture_date else []
+    taken_dates = (
+        [moment for moment in (effective_capture_moment(f) for f in stored_files) if moment is not None]
+        if link.share_capture_date
+        else []
+    )
     album_name = db.scalar(select(PhotoAlbum.name).where(PhotoAlbum.id == link.album_id)) if link.album_id is not None else None
     tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == link.tenant_id)) or ""
     return PublicShareRead(
@@ -357,7 +363,7 @@ def _share_zip_dir() -> Path:
 # Policy des Links und Standortfreigabe des Partners über policy).
 _SHARE_ZIP_FILE_FIELDS = (
     "id", "checksum_sha256", "source_checksum_sha256", "original_name", "mime_type",
-    "exif_taken_at", "estimated_taken_on", "gps_latitude", "gps_longitude", "gps_source",
+    "exif_taken_at", "estimated_taken_on", "capture_corrected_at", "capture_corrected_has_time", "gps_latitude", "gps_longitude", "gps_source",
 )
 
 

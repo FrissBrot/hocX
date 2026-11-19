@@ -23,7 +23,7 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 
 from PIL import Image
@@ -599,6 +599,73 @@ def set_estimated_date(stored_file: Any, estimated: date | None, *, user_id: int
     stored_file.estimated_taken_on = estimated
     stored_file.estimated_taken_set_at = datetime.now(UTC) if estimated is not None else None
     stored_file.estimated_taken_set_by = user_id if estimated is not None else None
+    return True
+
+
+# --- Korrigiertes Aufnahmedatum (Migration 0200) -------------------------------------------
+
+# Ohne Uhrzeit wird technisch Mittag gespeichert - wie beim Export eines geschätzten Datums
+# (image_export_service.ESTIMATED_TIME_CONVENTION), damit keine Zeitzonenumrechnung den Tag kippt.
+CORRECTED_DATE_ONLY_TIME = time(12, 0)
+
+
+def corrected_datetime(day: date, at: time | None) -> tuple[datetime, bool]:
+    """(naive Kamerazeit, mit Uhrzeit?) aus Datum und optionaler Uhrzeit (Sekunden entfallen)."""
+    if at is None:
+        return datetime.combine(day, CORRECTED_DATE_ONLY_TIME), False
+    return datetime.combine(day, at.replace(second=0, microsecond=0, tzinfo=None)), True
+
+
+def shift_base(stored_file: Any) -> tuple[datetime, bool] | None:
+    """Ausgangspunkt fürs Verschieben: korrigiertes Datum, sonst EXIF, sonst geschätztes Datum
+    (ohne Uhrzeit). None, wenn das Bild kein Aufnahmedatum hat - das Uploaddatum wird nie
+    verschoben."""
+    if stored_file.capture_corrected_at is not None:
+        return _stored_naive(stored_file.capture_corrected_at), bool(stored_file.capture_corrected_has_time)
+    if stored_file.exif_taken_at is not None:
+        return _stored_naive(stored_file.exif_taken_at), True
+    if stored_file.estimated_taken_on is not None:
+        return datetime.combine(stored_file.estimated_taken_on, CORRECTED_DATE_ONLY_TIME), False
+    return None
+
+
+def shifted_correction(stored_file: Any, delta: timedelta) -> tuple[datetime, bool] | None:
+    """Neues korrigiertes Datum nach Verschieben um `delta` oder None (kein Aufnahmedatum).
+    Ohne Uhrzeit zählt nur der neue Kalendertag."""
+    base = shift_base(stored_file)
+    if base is None:
+        return None
+    moment, has_time = base
+    shifted = moment + delta
+    if not has_time:
+        shifted = datetime.combine(shifted.date(), CORRECTED_DATE_ONLY_TIME)
+    return shifted, has_time
+
+
+def set_capture_correction(
+    stored_file: Any, corrected: datetime | None, *, has_time: bool, user_id: int | None
+) -> bool:
+    """Setzt, ändert oder entfernt (None) das korrigierte Aufnahmedatum. EXIF-Datum, Schätzung
+    und Uploaddatum bleiben unberührt, die Datei wird nie umgeschrieben. ValueError bei einem
+    unplausiblen Datum (vor 1826 oder in der Zukunft). True, wenn sich etwas geändert hat."""
+    if corrected is None:
+        if stored_file.capture_corrected_at is None:
+            return False
+        stored_file.capture_corrected_at = None
+        stored_file.capture_corrected_has_time = False
+        stored_file.capture_corrected_set_at = None
+        stored_file.capture_corrected_set_by = None
+        return True
+    naive = valid_capture_datetime(corrected)
+    if naive is None:
+        raise ValueError("Ungültiges Aufnahmedatum")
+    current = stored_file.capture_corrected_at
+    if current is not None and _stored_naive(current) == naive and bool(stored_file.capture_corrected_has_time) == has_time:
+        return False
+    stored_file.capture_corrected_at = naive.replace(tzinfo=UTC)
+    stored_file.capture_corrected_has_time = has_time
+    stored_file.capture_corrected_set_at = datetime.now(UTC)
+    stored_file.capture_corrected_set_by = user_id
     return True
 
 

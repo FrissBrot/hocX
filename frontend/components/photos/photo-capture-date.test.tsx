@@ -10,6 +10,10 @@ vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
 }));
 
+const confirmMock = vi.fn();
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
+
 import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoViewer } from "./photo-viewer";
@@ -124,6 +128,77 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
     expect(await screen.findByText("05.05.1999")).toBeInTheDocument();
     expect(document.querySelector(".photo-viewer-estimate input")).toBeNull();
     expect(screen.queryByRole("button", { name: "Ändern" })).toBeNull();
+  });
+});
+
+describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+    confirmMock.mockReset();
+    vi.stubGlobal("Image", vi.fn(function () { return { src: "", decode: () => Promise.resolve() }; }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("korrigiert ein falsches EXIF-Datum nur nach Bestätigung und zeigt das Original", async () => {
+    confirmMock.mockResolvedValue(true);
+    const onCaptureDateSaved = vi.fn();
+    const exif = { exif_taken_at: "2001-01-01T00:05:00Z", date_source: "exif" as const, effective_date: "2001-01-01" };
+    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
+      if (init?.method === "PATCH") {
+        const { corrected_date, corrected_time } = JSON.parse(init.body ?? "{}");
+        return Promise.resolve(metadata({ ...exif, capture_corrected_at: `${corrected_date}T${corrected_time}:00Z`, capture_corrected_has_time: true, date_source: "corrected", effective_date: corrected_date }));
+      }
+      return Promise.resolve(metadata(exif));
+    });
+    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} onCaptureDateSaved={onCaptureDateSaved} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Korrigieren" }));
+    const date = screen.getByLabelText("Datum") as HTMLInputElement;
+    expect(date.value).toBe("01.01.2001"); // vorbelegt mit dem gültigen Datum
+    fireEvent.change(date, { target: { value: "14.07.2023" } });
+    fireEvent.blur(date);
+    const time = screen.getByLabelText("Uhrzeit (optional)");
+    fireEvent.change(time, { target: { value: "10:30" } });
+    fireEvent.blur(time);
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => expect(onCaptureDateSaved).toHaveBeenCalledWith("x", expect.objectContaining({ date_source: "corrected" })));
+    expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 1 Bild wird auf 14.07.2023, 10:30 gesetzt.");
+    const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(patch[0]).toBe("/api/stored-files/x/capture-correction");
+    expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: "2023-07-14", corrected_time: "10:30" });
+    expect(await screen.findByText("Aufnahmedatum · korrigiert")).toBeInTheDocument();
+    expect(screen.getByText("14.07.2023, 10:30")).toBeInTheDocument();
+    expect(screen.getByText("Ursprünglich (EXIF): 01.01.2001, 00:05")).toBeInTheDocument();
+  });
+
+  it("stellt das Original nach Bestätigung wieder her, ohne Bestätigung nicht", async () => {
+    const corrected = { exif_taken_at: "2001-01-01T00:05:00Z", capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false, date_source: "corrected" as const };
+    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string }) =>
+      Promise.resolve(init?.method === "PATCH" ? metadata({ exif_taken_at: corrected.exif_taken_at, date_source: "exif" }) : metadata(corrected)),
+    );
+    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(await screen.findByText("14.07.2023")).toBeInTheDocument(); // ohne Uhrzeit nur der Tag
+    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
+
+    confirmMock.mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+    expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+
+    confirmMock.mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
+    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    expect(confirmMock.mock.calls[1][0].message).toContain("Bei 1 Bild wird die Korrektur entfernt");
+    const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: null });
+    expect(await screen.findByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
+  });
+
+  it("bietet ohne Schreibrecht (z. B. Partner-Foto) keine Korrektur an", async () => {
+    browserApiFetchMock.mockResolvedValue(metadata({ can_edit_capture_date: false, exif_taken_at: "2001-01-01T00:05:00Z", date_source: "exif" }));
+    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(await screen.findByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Korrigieren" })).toBeNull();
   });
 });
 

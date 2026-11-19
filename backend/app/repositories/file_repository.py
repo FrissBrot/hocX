@@ -165,6 +165,7 @@ class StoredFileRepository:
             StoredFile.height.label("height"),
             StoredFile.exif_taken_at.label("exif_taken_at"),
             StoredFile.estimated_taken_on.label("estimated_taken_on"),
+            StoredFile.capture_corrected_at.label("capture_corrected_at"),
         ]
 
     def _files_overview_branches(self, tenant_id: int | None, *, include_exports: bool = True):
@@ -594,9 +595,10 @@ class StoredFileRepository:
         order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
         orderings = [order]
         if sort_by == "group_date":
-            # Innerhalb eines Tages nach Aufnahmezeit (ein geschaetztes Datum hat keine Uhrzeit,
-            # dort entscheidet die Uploadzeit) - gleiche Richtung wie der Tag selbst.
-            moment = func.coalesce(union_query.c.exif_taken_at, union_query.c.created_at)
+            # Innerhalb eines Tages nach Aufnahmezeit, korrigierte vor EXIF (capture_date.py; ein
+            # geschaetztes Datum hat keine Uhrzeit, dort entscheidet die Uploadzeit) - gleiche
+            # Richtung wie der Tag selbst.
+            moment = func.coalesce(union_query.c.capture_corrected_at, union_query.c.exif_taken_at, union_query.c.created_at)
             orderings.append(moment.asc() if sort_dir == "asc" else moment.desc())
         query = query.order_by(*orderings, union_query.c.id.desc()).offset(skip).limit(limit)
 

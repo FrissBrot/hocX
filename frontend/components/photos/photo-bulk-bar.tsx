@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { HelpPopover } from "@/components/ui/help-popover";
 
 import { PhotoActionIcon } from "./photo-action-icon";
+import { PhotoCaptureDateDialog } from "./photo-capture-date-dialog";
 import { Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -39,6 +40,7 @@ export function PhotoBulkBar({
 }) {
   const t = useTranslations("photos.bulkBar");
   const tShareRelease = useTranslations("photos.shareRelease");
+  const tCapture = useTranslations("photos.captureCorrection");
   const confirm = useConfirm();
   const showToast = useToast();
   const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
@@ -51,6 +53,7 @@ export function PhotoBulkBar({
   const [albumOpen, setAlbumOpen] = useState(false);
   const [bestOpen, setBestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [captureDateOpen, setCaptureDateOpen] = useState(false);
 
   useEffect(() => {
     browserApiFetch<PhotoAlbum[]>("/api/files/albums").then((data) => setAlbums(data ?? [])).catch(() => {});
@@ -193,11 +196,15 @@ export function PhotoBulkBar({
             <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("exclude"); }}>{t("unmarkBest")}</button>
           </Popover>
         </div>
+        <button type="button" className="button-secondary button-ghost" onClick={() => setCaptureDateOpen(true)} disabled={busy}><PhotoActionIcon name="calendar" />{tCapture("bulkAction")}</button>
         {selectedItems.length > 0 && <button type="button" className="button-secondary button-ghost" onClick={() => void downloadSelected()} disabled={busy}><PhotoActionIcon name="download" />{t("download")}</button>}
         <button type="button" className="button-secondary button-ghost" onClick={() => setShareOpen(true)} disabled={busy}><PhotoActionIcon name="share" />{t("share")}</button>
         {onRemoveFromAlbum && <button type="button" className="button-secondary button-ghost photo-bulk-remove-from-album" onClick={onRemoveFromAlbum} disabled={busy}><PhotoActionIcon name="album" />{t("removeFromAlbum")}</button>}
         <button type="button" className="button-secondary button-ghost photo-bulk-delete" onClick={() => void deleteSelected()} disabled={busy}><PhotoActionIcon name="delete" />{t("delete")}</button>
       </div>
+      {captureDateOpen && (
+        <PhotoCaptureDateDialog open fileIds={selectedIds} onClose={() => setCaptureDateOpen(false)} onDone={onDone} />
+      )}
       <ShareLinkModal
         open={shareOpen}
         onClose={() => setShareOpen(false)}
