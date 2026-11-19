@@ -924,6 +924,19 @@ function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefi
   return label;
 }
 
+export type WordImportDoneSummary = { attendance: number; events: number; lists: number; matrices: number; skipped: number; warnings: string[] };
+
+/** Abschluss des Imports: was übernommen bzw. übersprungen wurde (ICU-Plural je Sprache). */
+export function WordImportDoneStats({ summary }: { summary: WordImportDoneSummary }) {
+  const t = useTranslations("tools.wordImport");
+  return (
+    <p className="muted word-import-success-stats">
+      {t("doneSummary", { attendance: summary.attendance, events: summary.events, lists: summary.lists, matrices: summary.matrices })}
+      {summary.skipped > 0 && <> {t("doneSkipped", { count: summary.skipped })}</>}
+    </p>
+  );
+}
+
 export function WordImportWizard({
   templates,
   participants,
@@ -978,9 +991,7 @@ export function WordImportWizard({
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
   const [expandedAttendance, setExpandedAttendance] = useState<Set<number>>(new Set());
   const [expandedLists, setExpandedLists] = useState<Set<number>>(new Set());
-  const [doneSummary, setDoneSummary] = useState<
-    { attendance: number; events: number; lists: number; matrices: number; skipped: number; warnings: string[] } | null
-  >(null);
+  const [doneSummary, setDoneSummary] = useState<WordImportDoneSummary | null>(null);
   // Participants eligible for THIS template's attendance tracking (excludes people marked
   // "keine Anwesenheitskontrolle" for the template, mirroring the backend's own attendance
   // matching pool) - falls back to the full tenant participant list until loaded so the
@@ -2624,7 +2635,7 @@ export function WordImportWizard({
             // in the wizard to flag, making the loss invisible to the reviewer.
             <details className="word-import-alert word-import-alert-block">
               <summary style={{ cursor: "pointer" }}>
-                <WarningIcon /> {analysis.warnings.length} Hinweis{analysis.warnings.length === 1 ? "" : "e"} zur Analyse
+                <WarningIcon /> {t("analysisWarnings", { count: analysis.warnings.length })}
               </summary>
               <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "var(--space-4)" }}>
                 {analysis.warnings.map((warning, index) => (
@@ -3474,13 +3485,7 @@ export function WordImportWizard({
             </div>
             <div>
               <h3 style={{ margin: "0 0 var(--space-2)" }}>{t("protocolCreated")}</h3>
-              <p className="muted word-import-success-stats">
-                {doneSummary &&
-                  `${doneSummary.attendance} Anwesenheiten, ${doneSummary.events} Termine, ${doneSummary.lists} Listeneinträge und ${doneSummary.matrices} Matrix-Werte wurden übernommen.`}
-                {doneSummary && doneSummary.skipped > 0 && (
-                  <> {doneSummary.skipped} Einträge wurden übersprungen und können manuell nachgetragen werden.</>
-                )}
-              </p>
+              {doneSummary && <WordImportDoneStats summary={doneSummary} />}
               {doneSummary && doneSummary.warnings.length > 0 && (
                 <div className="word-import-alert word-import-alert-block" style={{ marginTop: "var(--space-3)" }}>
                   <WarningIcon />

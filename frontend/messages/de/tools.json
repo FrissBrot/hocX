@@ -103,6 +103,9 @@
     "previewLabel": "Vorschau",
     "protocolCreateFailed": "Protokoll konnte nicht erstellt werden",
     "protocolCreated": "Protokoll erstellt",
+    "analysisWarnings": "{count, plural, one {# Hinweis} other {# Hinweise}} zur Analyse",
+    "doneSummary": "{attendance, plural, one {# Anwesenheit} other {# Anwesenheiten}}, {events, plural, one {# Termin} other {# Termine}}, {lists, plural, one {# Listeneintrag} other {# Listeneinträge}} und {matrices, plural, one {# Matrix-Wert} other {# Matrix-Werte}} wurden übernommen.",
+    "doneSkipped": "{count, plural, one {# Eintrag wurde übersprungen und kann manuell nachgetragen werden.} other {# Einträge wurden übersprungen und können manuell nachgetragen werden.}}",
     "protocolDateNotDetected": "Protokolldatum konnte nicht automatisch erkannt werden.",
     "queueView": {
       "alreadyImportedNamed": "„{name}“ (bereits importiert)",
