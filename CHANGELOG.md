@@ -8,56 +8,27 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
-### Sicherheit
+## [1.4.0] - 2026-11-19
 
-- Fixes aus dem Nachtlauf 2026-11-19: Live-Updates melden keine Änderungen fremder Listen mehr;
-  Listeneinträge werden nur aus der verknüpften Liste übernommen (auch bei Verantwortlichen);
-  Support-Admins sehen die Objektliste einer Speicher-Migration nicht mehr; Mail «Abgabe
-  zurückgezogen» nur an Konten mit Abgaben-Verwaltung; Katalog-Import gleicht die Module der
-  Mandanten an; Abgabebox-Links erscheinen nicht mehr im Fehlerprotokoll; ICS-Export entfernt
-  Steuerzeichen; Bildrouten antworten bei fremden Protokollen mit 404; Termin- und
-  Listeneintrag-Löschen lassen bei gleichzeitigem Upload keine Datei zurück.
-- pydantic-Update mit Sicherheitsfix (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29).
-- Härtungen aus dem Nachtlauf-Review: Protokolle (Entwürfe, nicht zugeordnete), die man nicht
-  lesen darf, antworten überall wie unbekannte (404 statt 403, auch Aufgaben, Dateien,
-  Dokumente und Document-Studio-Referenzen); Hilfsabfragen der Live-Zusammenarbeit laufen an den
-  Mandanten gebunden (RLS); Kalender-Abo und ICS-Export entfernen auch U+0085/U+2028/U+2029 und
-  DEL; Fehlertexte einer Speicher-Migration (auch für Support-Admins sichtbar) enthalten keine
-  Objektschlüssel, Pfade oder SQL-Parameter mehr.
-- Offene Verdachte aus dem Nachtlauf 2026-11-19 geklärt: Anwesenheitslisten übernehmen und zeigen
-  nur Personen des eigenen Vereins; Vorlagen nehmen Listeneinträge nur aus der genannten Liste des
-  eigenen Vereins an; der Foto-Worker darf an Analyseaufträgen nur noch Status, Zeiten und Fehler
-  ändern (Migration 0197); Logos, Bilder und Schriften des Document Studio zählen zum
-  Speicherkontingent und werden bei vollem Kontingent abgelehnt.
+Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
+Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte und ausgeblendete
+ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutrale Begriffe
+(«Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
+den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein neu gestalteter
+Tabellenblock mit Assistent, ein einheitliches, tolerantes Uhrzeitfeld, Dateien als Kacheln mit
+PDF-Vorschau, gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen, und eine
+Prüfseite, die veränderte Dateien über die Dokument-ID zuordnet und Seite für Seite vergleicht.
+Ausserdem Listen mit beliebig vielen Spalten, ein neues Dashboard und eine neue Statistik, alles zu
+einer Person auf einer Personenseite, MFA-Pflicht für ganze Organisationen, ein geführter
+Erstlogin über die Einladung und eine neu gestaltete öffentliche Teilen-Seite.
+Neu gestaltet sind ausserdem die Einstellungen (eigene Übersicht, Rahmen und Seitenleiste nur
+noch mit Arbeitsbereichen), Abo & Rechnungen, die Personenseite, der Pendenzen-Kalender und das
+Anlegen von Abgaben; das Protokoll scrollt ohne Sprung, die Suche (Ctrl+K) versteht alle Sprachen.
+Dazu alle Funde des Nachtlaufs vom 19.11. samt Härtungen und den Major-Updates auf Node 26 und
+TypeScript 7.
+Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
-### Behoben
-
-- Aus dem Nachtlauf: Termindaten auf 1900–2999 begrenzt (Kalender-Abo übersteht Altdaten), Tags
-  höchstens 100 Zeichen, Terminsuche behandelt % und _ als Text, kaputte CSV ergibt 400 statt
-  500; parallele Abgleiche (Aufgabenpakete, Abgabe-Pendenzen, Termin bearbeiten, erstes
-  Kalender-Abo) warten statt zu scheitern; Fehler in Dokumentverarbeitung, Mail-Aufbau, ntfy
-  und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
-  Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
-  Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
-- Restpunkte aus dem Nachtlauf 2026-11-19: eine scheiternde Bereinigung alter Speichergenerationen
-  wird mit wachsendem Abstand (30 s bis 1 h) statt alle 5 s wiederholt; unbekannte Generation ergibt
-  404 statt 409. Hinweise der Word-Import-Analyse und des Imports erscheinen in der UI-Sprache.
-  CSV-Importe von Terminen und Personen nehmen höchstens 2000 Zeilen an (übersetzte Meldung statt
-  langer Verarbeitung). Das Zeitfenster einer Abgabe ist auf 3650 Tage vor/nach dem Termin begrenzt;
-  Altbestände mit grösserem Wert gleichen wieder ab. Ein Termin, der gleichzeitig mit einem neuen
-  Zyklus (oder einer Stichtag-Änderung) angelegt wird, landet jetzt zuverlässig im richtigen Zyklus.
-  Weitere fest deutsche Texte (Vorlagen-Teilnehmerauswahl, Verantwortliche, Matrix-Löschfragen,
-  Word-Import-Feldabgleich, Rückfrage beim Teilen von Fotos) übersetzt; der Hardcoded-Text-Check
-  erkennt jetzt auch Text neben `{Ausdrücken}` und Template-Literale.
-- ICS-Export im Document Studio übersteht Termine mit Enddatum 9999-12-31 (wie das Kalender-Abo);
-  der Katalog-Import vermerkt den importierenden Admin bei neu gebuchten Modulen.
-- Suchen behandeln % und _ überall als Text (Vorlagen, Protokolle, Dateien, Pendenzen-Termine,
-  Plattform-Admin: Mandanten, Domains, Rechnungen, Mail-Protokoll, Audit-Log); im Mail-Protokoll
-  findet «max_muster» die Adresse wieder.
-- Termine: Wählen zwei Personen gleichzeitig jemanden in eine Rolle (Teilnehmende, Leitung …),
-  bleiben beide Änderungen erhalten - gespeichert wird nur noch die Differenz zum Ausgangsstand.
-
-### Geändert
+### Neu und geändert am 19.11.: Designs, Navigation und Suche
 
 - **Sitzungsvorlagen:** Duplizieren, Archivieren und Löschen stehen im ⋮-Menü der Zeile; die
   Tabelle passt so auch neben die Einstellungs-Navigation.
@@ -117,28 +88,62 @@ Installationen aktualisieren können.
   Termine grün mit Uhrzeit). Die rechte Spalte mit «Überfällig», «Ohne festes Datum», Legende und
   Abo-Link scrollt eigenständig; auf schmalen Bildschirmen steht sie unter dem Raster.
 
-### Abhängigkeiten
+### Sicherheit (Nachtlauf 19.11., Härtungen und geklärte Verdachte)
+
+- Fixes aus dem Nachtlauf 2026-11-19: Live-Updates melden keine Änderungen fremder Listen mehr;
+  Listeneinträge werden nur aus der verknüpften Liste übernommen (auch bei Verantwortlichen);
+  Support-Admins sehen die Objektliste einer Speicher-Migration nicht mehr; Mail «Abgabe
+  zurückgezogen» nur an Konten mit Abgaben-Verwaltung; Katalog-Import gleicht die Module der
+  Mandanten an; Abgabebox-Links erscheinen nicht mehr im Fehlerprotokoll; ICS-Export entfernt
+  Steuerzeichen; Bildrouten antworten bei fremden Protokollen mit 404; Termin- und
+  Listeneintrag-Löschen lassen bei gleichzeitigem Upload keine Datei zurück.
+- pydantic-Update mit Sicherheitsfix (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29).
+- Härtungen aus dem Nachtlauf-Review: Protokolle (Entwürfe, nicht zugeordnete), die man nicht
+  lesen darf, antworten überall wie unbekannte (404 statt 403, auch Aufgaben, Dateien,
+  Dokumente und Document-Studio-Referenzen); Hilfsabfragen der Live-Zusammenarbeit laufen an den
+  Mandanten gebunden (RLS); Kalender-Abo und ICS-Export entfernen auch U+0085/U+2028/U+2029 und
+  DEL; Fehlertexte einer Speicher-Migration (auch für Support-Admins sichtbar) enthalten keine
+  Objektschlüssel, Pfade oder SQL-Parameter mehr.
+- Offene Verdachte aus dem Nachtlauf 2026-11-19 geklärt: Anwesenheitslisten übernehmen und zeigen
+  nur Personen des eigenen Vereins; Vorlagen nehmen Listeneinträge nur aus der genannten Liste des
+  eigenen Vereins an; der Foto-Worker darf an Analyseaufträgen nur noch Status, Zeiten und Fehler
+  ändern (Migration 0197); Logos, Bilder und Schriften des Document Studio zählen zum
+  Speicherkontingent und werden bei vollem Kontingent abgelehnt.
+
+### Behoben (Nachtlauf 19.11. und Restpunkte)
+
+- Aus dem Nachtlauf: Termindaten auf 1900–2999 begrenzt (Kalender-Abo übersteht Altdaten), Tags
+  höchstens 100 Zeichen, Terminsuche behandelt % und _ als Text, kaputte CSV ergibt 400 statt
+  500; parallele Abgleiche (Aufgabenpakete, Abgabe-Pendenzen, Termin bearbeiten, erstes
+  Kalender-Abo) warten statt zu scheitern; Fehler in Dokumentverarbeitung, Mail-Aufbau, ntfy
+  und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
+  Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
+  Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
+- Restpunkte aus dem Nachtlauf 2026-11-19: eine scheiternde Bereinigung alter Speichergenerationen
+  wird mit wachsendem Abstand (30 s bis 1 h) statt alle 5 s wiederholt; unbekannte Generation ergibt
+  404 statt 409. Hinweise der Word-Import-Analyse und des Imports erscheinen in der UI-Sprache.
+  CSV-Importe von Terminen und Personen nehmen höchstens 2000 Zeilen an (übersetzte Meldung statt
+  langer Verarbeitung). Das Zeitfenster einer Abgabe ist auf 3650 Tage vor/nach dem Termin begrenzt;
+  Altbestände mit grösserem Wert gleichen wieder ab. Ein Termin, der gleichzeitig mit einem neuen
+  Zyklus (oder einer Stichtag-Änderung) angelegt wird, landet jetzt zuverlässig im richtigen Zyklus.
+  Weitere fest deutsche Texte (Vorlagen-Teilnehmerauswahl, Verantwortliche, Matrix-Löschfragen,
+  Word-Import-Feldabgleich, Rückfrage beim Teilen von Fotos) übersetzt; der Hardcoded-Text-Check
+  erkennt jetzt auch Text neben `{Ausdrücken}` und Template-Literale.
+- ICS-Export im Document Studio übersteht Termine mit Enddatum 9999-12-31 (wie das Kalender-Abo);
+  der Katalog-Import vermerkt den importierenden Admin bei neu gebuchten Modulen.
+- Suchen behandeln % und _ überall als Text (Vorlagen, Protokolle, Dateien, Pendenzen-Termine,
+  Plattform-Admin: Mandanten, Domains, Rechnungen, Mail-Protokoll, Audit-Log); im Mail-Protokoll
+  findet «max_muster» die Adresse wieder.
+- Termine: Wählen zwei Personen gleichzeitig jemanden in eine Rolle (Teilnehmende, Leitung …),
+  bleiben beide Änderungen erhalten - gespeichert wird nur noch die Differenz zum Ausgangsstand.
+
+### Abhängigkeiten (Node 26, TypeScript 7, msoffcrypto-tool 6)
 
 - Frontend und Abgabebox-Frontend laufen auf Node.js 26 (`node:26-bookworm` bzw.
   `node:26-bookworm-slim`, per Digest gepinnt; CI-Jobs mit `setup-node` ebenfalls auf 26).
 - TypeScript 7.0.2 (nativer Compiler) und `@types/node` 26.6.6 in beiden Frontends; Typprüfung,
   Tests und `next build` (Next.js 16.4.5) laufen ohne Codeänderungen.
 - `msoffcrypto-tool` 6.0.0 (Excel-Verschlüsselung der Document-Studio-Exporte), API unverändert.
-
-## [1.4.0] - 2026-11-18
-
-Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
-Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte und ausgeblendete
-ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutrale Begriffe
-(«Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
-den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein neu gestalteter
-Tabellenblock mit Assistent, ein einheitliches, tolerantes Uhrzeitfeld, Dateien als Kacheln mit
-PDF-Vorschau, gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen, und eine
-Prüfseite, die veränderte Dateien über die Dokument-ID zuordnet und Seite für Seite vergleicht.
-Ausserdem Listen mit beliebig vielen Spalten, ein neues Dashboard und eine neue Statistik, alles zu
-einer Person auf einer Personenseite, MFA-Pflicht für ganze Organisationen, ein geführter
-Erstlogin über die Einladung und eine neu gestaltete öffentliche Teilen-Seite.
-Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -193,6 +198,12 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   Organisation und Abgabe-Auftrag, RLS je Mandant). Alle Organisationen starten mit «nur Rolle» –
   nach dem Update sieht niemand eine Datei, die er vorher nicht sah. Rücknahme mit
   `alembic downgrade` entfernt die Freigaben; danach gelten nur noch die Rollenrechte.
+- Migration `0197_photo_worker_columns`: Die Datenbankrolle des Foto-Workers darf an
+  `photo_analysis_job` nur noch `status`, `started_at`, `finished_at` und `error` ändern (vorher die
+  ganze Zeile). Kein Verhalten ändert sich; Rücknahme mit `alembic downgrade` stellt das alte Recht
+  wieder her.
+- Die Frontend-Images laufen auf **Node 26** (vorher 24) und bauen mit TypeScript 7. Nach dem Update
+  auf dem Test-Host die Abnahme ausführen.
 
 ### Neu: Server aus dem Backup wiederherstellen
 
