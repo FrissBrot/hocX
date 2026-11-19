@@ -21,6 +21,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
@@ -133,9 +134,32 @@ def upsert(db: Session, *, user: CurrentUser, kind: str, settings: FeedSettings)
     feed = get_for_user(db, user.user_id, kind)
     created = feed is None
     if feed is None:
-        feed = CalendarFeed(tenant_id=user.current_tenant_id, user_id=user.user_id, kind=kind)
-        _assign_new_token(feed)
-        db.add(feed)
+        # Zwei gleichzeitige erste Anfragen (Doppelklick, zwei Tabs) legten sonst beide an; die
+        # zweite scheiterte an uq_calendar_feed_user_kind (500). ON CONFLICT: die zweite wartet
+        # auf die erste und übernimmt deren Feed (gleiche URL, Optionen dieser Anfrage).
+        draft = CalendarFeed()
+        _assign_new_token(draft)
+        inserted_id = db.scalar(
+            pg_insert(CalendarFeed)
+            .values(
+                tenant_id=user.current_tenant_id,
+                user_id=user.user_id,
+                kind=kind,
+                calendar_name=settings.calendar_name,
+                todo_scope=settings.todo_scope,
+                include_completed=settings.include_completed,
+                hide_details=settings.hide_details,
+                token_hash=draft.token_hash,
+                token_encrypted=draft.token_encrypted,
+                token_created_at=draft.token_created_at,
+            )
+            .on_conflict_do_nothing(constraint="uq_calendar_feed_user_kind")
+            .returning(CalendarFeed.id)
+        )
+        created = inserted_id is not None
+        feed = get_for_user(db, user.user_id, kind)
+        if feed is None:
+            raise RuntimeError("Kalender-Abo konnte nicht angelegt werden")
     feed.calendar_name = settings.calendar_name
     feed.todo_scope = settings.todo_scope
     feed.include_completed = settings.include_completed
