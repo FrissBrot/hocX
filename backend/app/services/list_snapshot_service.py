@@ -289,7 +289,15 @@ def referenced_list_definition_ids(db: Session, protocol_id: int) -> set[int]:
         if config.get("linked_list_id"):
             ids.add(int(config["linked_list_id"]))
         ids.update(_row_list_ids(config))
-    return ids
+    if not ids:
+        return ids
+    # Die ids stammen aus frei setzbarer Block-Konfiguration, und der Aufrufer (Listen-Poll in
+    # collaboration_ws) arbeitet in Sessions ohne Mandantenbindung, also ohne RLS: nur Listen
+    # des Protokoll-Mandanten, sonst meldet der Socket Änderungen fremder Listen (Nachtlauf 2026-11-19).
+    tenant_id = select(Protocol.tenant_id).where(Protocol.id == protocol_id).scalar_subquery()
+    return set(
+        db.scalars(select(ListDefinition.id).where(ListDefinition.id.in_(ids), ListDefinition.tenant_id == tenant_id))
+    )
 
 
 def list_linked_blocks_for_protocol(db: Session, protocol_id: int) -> list[ProtocolElementBlock]:
