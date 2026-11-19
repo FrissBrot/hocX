@@ -1614,7 +1614,9 @@
     "field": {
       "anchor": "Riferimento",
       "angle": "Angolo",
+      "appearance": "Aspetto degli elementi",
       "asset_id": "Immagine",
+      "block_appearance": "Aspetto dei blocchi",
       "break_before": "Interruzione prima",
       "breakable": "Divisibile",
       "caption": "Didascalia",

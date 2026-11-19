@@ -1614,7 +1614,9 @@
     "field": {
       "anchor": "Bezug",
       "angle": "Winkel",
+      "appearance": "Elementdarstellung",
       "asset_id": "Bild",
+      "block_appearance": "Bausteindarstellung",
       "break_before": "Neue Seite davor",
       "breakable": "Umbruch erlaubt",
       "caption": "Bildunterschrift",

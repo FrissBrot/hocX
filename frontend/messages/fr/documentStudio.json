@@ -1614,7 +1614,9 @@
     "field": {
       "anchor": "Référence",
       "angle": "Angle",
+      "appearance": "Apparence des éléments",
       "asset_id": "Image",
+      "block_appearance": "Apparence des blocs",
       "break_before": "Saut de page avant",
       "breakable": "Peut être coupé",
       "caption": "Légende",

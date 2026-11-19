@@ -1614,7 +1614,9 @@
     "field": {
       "anchor": "Reference",
       "angle": "Angle",
+      "appearance": "Element appearance",
       "asset_id": "Image",
+      "block_appearance": "Block appearance",
       "break_before": "Page break before",
       "breakable": "Breakable",
       "caption": "Caption",
