@@ -17,6 +17,10 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
 ### Update
 
 - Von **1.4.0**: `./scripts/deploy.sh <test|prod>`.
+- Wer den Hotfix für die Prüfseite (`docker-compose.local.yml` nur mit
+  `traefik.docker.network=hocx_default` für `abgabebox-backend`) angelegt hat: das Update verschiebt
+  die Datei automatisch nach `backups/`, die Korrektur ist im Release enthalten. Enthält die Datei
+  weitere eigene Einstellungen, bleibt sie unverändert (Hinweis im Deploy-Log).
 
 ### Geändert
 

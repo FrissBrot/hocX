@@ -26,6 +26,7 @@ jobs:
           bash -n scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh scripts/testhost/*.sh .githooks/pre-commit
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
+          bash scripts/tests/test_local_hotfix_cleanup.sh
           python3 -m unittest discover -s scripts/tests -p "test_release_notes.py"
           python3 -m unittest discover -s scripts/tests -p "test_security_rules.py"
           python3 -m unittest discover -s scripts/tests -p "test_i18n_hardcoded_text.py"

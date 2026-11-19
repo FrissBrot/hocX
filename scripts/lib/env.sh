@@ -121,7 +121,40 @@ append_local_compose_override() {
     return 1
   fi
   [ -f "$file" ] || return 0
+  retire_local_compose_hotfixes "$repo_dir" || return 0
   target_args+=(-f "$file")
+}
+
+# Bekannte Hotfixes in docker-compose.local.yml, die ein späteres Release selbst enthält: liegt
+# genau ein solcher Hotfix vor und bringt der versionierte Stand die Korrektur schon mit, wird die
+# Datei nach backups/ verschoben (Rückgabe 1 = nicht mehr laden). Steht mehr in der Datei, bleibt
+# sie unverändert, es gibt nur einen Hinweis.
+#   1.4.0 → 1.4.1: traefik.docker.network für abgabebox-backend (504 auf Prüfseite/Abgabebox)
+HOCX_KNOWN_LOCAL_HOTFIXES=(
+  'services:abgabebox-backend:labels:-"traefik.docker.network=hocx_default"'
+)
+retire_local_compose_hotfixes() {
+  local repo_dir="$1" file="$1/$HOCX_LOCAL_COMPOSE_FILE" normalized hotfix target
+  grep -q 'abgabebox-backend' "$file" 2> /dev/null || return 0
+  # Nur wenn das Release die Korrektur selbst mitbringt
+  # (im Block des Dienstes abgabebox-backend - das Backend trägt dasselbe Label schon länger)
+  # shellcheck disable=SC2016 # Literal aus der Compose-Datei, keine Shell-Variable
+  awk '/^  abgabebox-backend:/{f=1;next} /^  [a-z0-9-]+:/{f=0} f' "$repo_dir/docker-compose.release.yml" 2> /dev/null |
+    grep -qF 'traefik.docker.network=${COMPOSE_PROJECT_NAME}_default' || return 0
+  normalized="$(tr -d '[:space:]' < "$file")"
+  for hotfix in "${HOCX_KNOWN_LOCAL_HOTFIXES[@]}"; do
+    if [ "$normalized" = "$hotfix" ]; then
+      mkdir -p "$repo_dir/backups"
+      target="$repo_dir/backups/docker-compose.local.yml.hotfix-$(date +%Y%m%d%H%M%S)"
+      mv "$file" "$target"
+      echo "    Hotfix aus $HOCX_LOCAL_COMPOSE_FILE ist im Release enthalten - Datei entfernt (Kopie: $target)." >&2
+      return 1
+    fi
+  done
+  if grep -q 'traefik.docker.network' "$file"; then
+    echo "    Hinweis: $HOCX_LOCAL_COMPOSE_FILE setzt traefik.docker.network - seit 1.4.1 im Release enthalten, der Eintrag kann weg." >&2
+  fi
+  return 0
 }
 
 # Laufzeitverzeichnisse, die bewusst anderen Besitzern gehoeren (Container-Nutzer 5000/5001,
