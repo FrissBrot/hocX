@@ -335,10 +335,10 @@ def test_reader_can_download_own_rendered_pdf(db, setup):
     access = AccessService()
     with pytest.raises(HTTPException) as excinfo:
         access.ensure_can_read_stored_file(db, make_current_user(tenant.id, role="reader", user_id=other.id), stored.id)
-    assert excinfo.value.status_code == 403
+    assert excinfo.value.status_code == 404
     with pytest.raises(HTTPException) as excinfo:
         access.ensure_can_read_stored_file(db, make_current_user(setup["other"].id, role="reader", user_id=owner.id), stored.id)
-    assert excinfo.value.status_code == 403
+    assert excinfo.value.status_code == 404
     access.ensure_can_read_stored_file(db, make_current_user(tenant.id, role="writer", user_id=other.id), stored.id)
 
 

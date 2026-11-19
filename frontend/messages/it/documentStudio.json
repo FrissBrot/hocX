@@ -1386,7 +1386,8 @@
     "invitation_only": "Solo i punti dell’invito",
     "include_undated": "Includi attività senza scadenza",
     "overdue_only": "Solo scadute",
-    "show_fines": "Colonna «Multa» (se presente)"
+    "show_fines": "Colonna «Multa» (se presente)",
+    "visible_columns": "Colonne visibili"
   },
   "preview": {
     "chooseProtocol": "Scegli verbale",

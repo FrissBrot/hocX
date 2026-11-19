@@ -30,6 +30,7 @@
     "permission": "Für diesen Inhalt fehlt die Berechtigung.",
     "previewOnly": "Diese Angaben sind nur in der Vorschau erlaubt.",
     "protocolRequired": "Dieser Dokumenttyp braucht ein Protokoll.",
+    "quotaExceeded": "Das Speicherkontingent des Vereins ist erreicht - die Datei wurde nicht gespeichert.",
     "scanFailed": "Die Datei konnte nicht auf Viren geprüft werden. Bitte später erneut versuchen.",
     "systemTemplate": "Systemvorlagen können nicht geändert werden. Bitte zuerst duplizieren.",
     "templateInUse": "Die Vorlage wurde bereits für Exporte verwendet. Bitte archivieren statt löschen.",
@@ -37,7 +38,6 @@
     "templateNotPublished": "Die Vorlage ist noch nicht veröffentlicht.",
     "templateTypeMismatch": "Die Vorlage gehört zu einem anderen Dokumenttyp.",
     "tooLarge": "Die Datei ist zu gross.",
-    "quotaExceeded": "Das Speicherkontingent des Vereins ist erreicht - die Datei wurde nicht gespeichert.",
     "unknownType": "Unbekannter Dokumenttyp.",
     "verificationAlreadyPending": "Es gibt bereits einen offenen Antrag.",
     "verificationAlreadyVerified": "Die Organisation ist bereits verifiziert.",
@@ -674,16 +674,16 @@
   },
   "restricted": {
     "banner": "Eingeschränkte Fassung: Dieses Dokument ist unvollständig, weil dir für einen Teil der Daten die Berechtigung fehlt. Die betroffenen Stellen sind markiert. Es ist ein Entwurf und kein offizielles Dokument.",
-    "todos": "Nicht enthalten: Pendenzen aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
-    "todosHidden": "Nicht enthalten: weitere Pendenzen ({count}) aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
-    "otherFines": "Nicht enthalten: Bussen anderer Personen (fehlende Berechtigung). Beträge zeigen nur deine eigenen Bussen.",
+    "fileSuffix": "eingeschraenkt",
     "finesHidden": "Nicht enthalten: Bussen anderer Personen ({count}) (fehlende Berechtigung).",
-    "sessionsHidden": "Nicht enthalten: Sitzungen ({count}), die du nicht sehen darfst (fehlende Berechtigung).",
+    "otherFines": "Nicht enthalten: Bussen anderer Personen (fehlende Berechtigung). Beträge zeigen nur deine eigenen Bussen.",
     "peopleHidden": "Nicht enthalten: Angaben zu weiteren Personen ({count}) (fehlende Berechtigung). Gezeigt wird nur deine eigene Zeile.",
+    "sessionsHidden": "Nicht enthalten: Sitzungen ({count}), die du nicht sehen darfst (fehlende Berechtigung).",
+    "sheetTitle": "Hinweis",
     "statisticsScope": "Unvollständig: Die Zahlen umfassen nur die Vorlagen, auf die du Zugriff hast (fehlende Berechtigung).",
     "tableBanner": "Eingeschränkte Fassung: Diese Daten sind unvollständig, weil dir für einen Teil die Berechtigung fehlt. Es fehlen:",
-    "sheetTitle": "Hinweis",
-    "fileSuffix": "eingeschraenkt"
+    "todos": "Nicht enthalten: Pendenzen aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
+    "todosHidden": "Nicht enthalten: weitere Pendenzen ({count}) aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung)."
   },
   "role": {
     "admin": "Administration",
@@ -753,12 +753,12 @@
     "title": "Inhaltsverzeichnis"
   },
   "todoField": {
-    "task": "Aufgabe",
     "description": "Beschreibung",
-    "participant": "Zugewiesen an",
     "due_date": "Fällig",
+    "origin": "Herkunft",
+    "participant": "Zugewiesen an",
     "status": "Status",
-    "origin": "Herkunft"
+    "task": "Aufgabe"
   },
   "todoStatus": {
     "cancelled": "Abgebrochen",

@@ -1386,7 +1386,8 @@
     "invitation_only": "Only agenda items of the invitation",
     "include_undated": "Include tasks without due date",
     "overdue_only": "Overdue only",
-    "show_fines": "“Fine” column (if any)"
+    "show_fines": "“Fine” column (if any)",
+    "visible_columns": "Visible columns"
   },
   "preview": {
     "chooseProtocol": "Choose protocol",

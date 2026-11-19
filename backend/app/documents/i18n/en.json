@@ -30,6 +30,7 @@
     "permission": "You do not have permission for this content.",
     "previewOnly": "These settings are only allowed in the preview.",
     "protocolRequired": "This document type requires a protocol.",
+    "quotaExceeded": "The organisation's storage quota has been reached - the file was not saved.",
     "scanFailed": "The file could not be scanned for viruses. Please try again later.",
     "systemTemplate": "System templates cannot be changed. Please duplicate it first.",
     "templateInUse": "The template has already been used for exports. Please archive it instead of deleting it.",
@@ -37,7 +38,6 @@
     "templateNotPublished": "The template has not been published yet.",
     "templateTypeMismatch": "The template belongs to a different document type.",
     "tooLarge": "The file is too large.",
-    "quotaExceeded": "The organisation's storage quota has been reached - the file was not saved.",
     "unknownType": "Unknown document type.",
     "verificationAlreadyPending": "There is already an open request.",
     "verificationAlreadyVerified": "The organisation is already verified.",
@@ -674,16 +674,16 @@
   },
   "restricted": {
     "banner": "Restricted version: this document is incomplete because you lack permission for part of the data. The affected places are marked. It is a draft, not an official document.",
-    "todos": "Not included: to-dos from minutes you are not allowed to see (missing permission).",
-    "todosHidden": "Not included: further to-dos ({count}) from minutes you are not allowed to see (missing permission).",
-    "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
+    "fileSuffix": "restricted",
     "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
-    "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
+    "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
     "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",
+    "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
+    "sheetTitle": "Notice",
     "statisticsScope": "Incomplete: the figures only cover the templates you have access to (missing permission).",
     "tableBanner": "Restricted version: this data is incomplete because you lack permission for part of it. Missing:",
-    "sheetTitle": "Notice",
-    "fileSuffix": "restricted"
+    "todos": "Not included: to-dos from minutes you are not allowed to see (missing permission).",
+    "todosHidden": "Not included: further to-dos ({count}) from minutes you are not allowed to see (missing permission)."
   },
   "role": {
     "admin": "Administrator",
@@ -753,12 +753,12 @@
     "title": "Contents"
   },
   "todoField": {
-    "task": "Task",
     "description": "Description",
-    "participant": "Assigned to",
     "due_date": "Due",
+    "origin": "Origin",
+    "participant": "Assigned to",
     "status": "Status",
-    "origin": "Origin"
+    "task": "Task"
   },
   "todoStatus": {
     "cancelled": "Cancelled",

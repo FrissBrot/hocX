@@ -30,6 +30,7 @@
     "permission": "Vous n’avez pas l’autorisation pour ce contenu.",
     "previewOnly": "Ces indications ne sont autorisées que dans l’aperçu.",
     "protocolRequired": "Ce type de document nécessite un procès-verbal.",
+    "quotaExceeded": "Le quota de stockage de l’association est atteint - le fichier n’a pas été enregistré.",
     "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
     "systemTemplate": "Les modèles système ne peuvent pas être modifiés. Veuillez d’abord le dupliquer.",
     "templateInUse": "Le modèle a déjà été utilisé pour des exports. Veuillez l’archiver au lieu de le supprimer.",
@@ -37,7 +38,6 @@
     "templateNotPublished": "Le modèle n’est pas encore publié.",
     "templateTypeMismatch": "Le modèle appartient à un autre type de document.",
     "tooLarge": "Le fichier est trop volumineux.",
-    "quotaExceeded": "Le quota de stockage de l’association est atteint - le fichier n’a pas été enregistré.",
     "unknownType": "Type de document inconnu.",
     "verificationAlreadyPending": "Une demande est déjà en cours.",
     "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
@@ -674,16 +674,16 @@
   },
   "restricted": {
     "banner": "Version restreinte : ce document est incomplet, car il te manque l’autorisation pour une partie des données. Les endroits concernés sont signalés. C’est un brouillon, pas un document officiel.",
-    "todos": "Non inclus : tâches issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
-    "todosHidden": "Non inclus : autres tâches ({count}) issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
-    "otherFines": "Non inclus : amendes d’autres personnes (autorisation manquante). Les montants ne montrent que tes propres amendes.",
+    "fileSuffix": "restreint",
     "finesHidden": "Non inclus : amendes d’autres personnes ({count}) (autorisation manquante).",
-    "sessionsHidden": "Non inclus : séances ({count}) que tu n’as pas le droit de voir (autorisation manquante).",
+    "otherFines": "Non inclus : amendes d’autres personnes (autorisation manquante). Les montants ne montrent que tes propres amendes.",
     "peopleHidden": "Non inclus : données d’autres personnes ({count}) (autorisation manquante). Seule ta propre ligne est affichée.",
+    "sessionsHidden": "Non inclus : séances ({count}) que tu n’as pas le droit de voir (autorisation manquante).",
+    "sheetTitle": "Remarque",
     "statisticsScope": "Incomplet : les chiffres ne couvrent que les modèles auxquels tu as accès (autorisation manquante).",
     "tableBanner": "Version restreinte : ces données sont incomplètes, car il te manque l’autorisation pour une partie d’entre elles. Manquent :",
-    "sheetTitle": "Remarque",
-    "fileSuffix": "restreint"
+    "todos": "Non inclus : tâches issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
+    "todosHidden": "Non inclus : autres tâches ({count}) issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante)."
   },
   "role": {
     "admin": "Administration",
@@ -753,12 +753,12 @@
     "title": "Table des matières"
   },
   "todoField": {
-    "task": "Tâche",
     "description": "Description",
-    "participant": "Attribuée à",
     "due_date": "Échéance",
+    "origin": "Origine",
+    "participant": "Attribuée à",
     "status": "Statut",
-    "origin": "Origine"
+    "task": "Tâche"
   },
   "todoStatus": {
     "cancelled": "Annulé",

@@ -30,6 +30,7 @@
     "permission": "Non hai l’autorizzazione per questo contenuto.",
     "previewOnly": "Queste indicazioni sono consentite solo nell’anteprima.",
     "protocolRequired": "Questo tipo di documento richiede un verbale.",
+    "quotaExceeded": "La quota di archiviazione dell’associazione è esaurita - il file non è stato salvato.",
     "scanFailed": "Impossibile controllare il file. Riprova più tardi.",
     "systemTemplate": "I modelli di sistema non possono essere modificati. Duplicalo prima.",
     "templateInUse": "Il modello è già stato usato per esportazioni. Archivialo invece di eliminarlo.",
@@ -37,7 +38,6 @@
     "templateNotPublished": "Il modello non è ancora pubblicato.",
     "templateTypeMismatch": "Il modello appartiene a un altro tipo di documento.",
     "tooLarge": "Il file è troppo grande.",
-    "quotaExceeded": "La quota di archiviazione dell’associazione è esaurita - il file non è stato salvato.",
     "unknownType": "Tipo di documento sconosciuto.",
     "verificationAlreadyPending": "Esiste già una richiesta aperta.",
     "verificationAlreadyVerified": "L’organizzazione è già verificata.",
@@ -674,16 +674,16 @@
   },
   "restricted": {
     "banner": "Versione limitata: questo documento è incompleto perché ti manca l’autorizzazione per una parte dei dati. I punti interessati sono segnalati. È una bozza, non un documento ufficiale.",
-    "todos": "Non incluse: attività da verbali che non puoi vedere (autorizzazione mancante).",
-    "todosHidden": "Non incluse: altre attività ({count}) da verbali che non puoi vedere (autorizzazione mancante).",
-    "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
+    "fileSuffix": "limitato",
     "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
-    "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
+    "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
     "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",
+    "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
+    "sheetTitle": "Avviso",
     "statisticsScope": "Incompleto: i dati comprendono solo i modelli a cui hai accesso (autorizzazione mancante).",
     "tableBanner": "Versione limitata: questi dati sono incompleti perché ti manca l’autorizzazione per una parte. Mancano:",
-    "sheetTitle": "Avviso",
-    "fileSuffix": "limitato"
+    "todos": "Non incluse: attività da verbali che non puoi vedere (autorizzazione mancante).",
+    "todosHidden": "Non incluse: altre attività ({count}) da verbali che non puoi vedere (autorizzazione mancante)."
   },
   "role": {
     "admin": "Amministrazione",
@@ -753,12 +753,12 @@
     "title": "Indice"
   },
   "todoField": {
-    "task": "Compito",
     "description": "Descrizione",
-    "participant": "Assegnato a",
     "due_date": "Scadenza",
+    "origin": "Origine",
+    "participant": "Assegnato a",
     "status": "Stato",
-    "origin": "Origine"
+    "task": "Compito"
   },
   "todoStatus": {
     "cancelled": "Annullato",

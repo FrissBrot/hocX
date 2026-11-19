@@ -55,7 +55,7 @@ from app.models.entities import (
     Tenant,
     UserMfaFactor,
 )
-from app.schemas.list_definition import ListDefinitionCreate, ListEntryCreate
+from app.schemas.list_definition import ListColumnCreate, ListDefinitionCreate, ListEntryCreate
 from app.schemas.protocol import ProtocolCreateFromTemplate
 from app.schemas.submission import SubmissionAssignmentCreate
 from app.services.admin_tenant_service import AdminTenantService
@@ -123,7 +123,7 @@ def wipe_existing_tenant(db) -> None:
 
 
 def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
-    tenant = Tenant(name=DEMO_TENANT_NAME, public_slug=DEMO_TENANT_SLUG)
+    tenant = Tenant(name=DEMO_TENANT_NAME)
     db.add(tenant)
     db.flush()
     submission_link_service.create_default_link(db, tenant.id, commit=False)
@@ -284,18 +284,19 @@ def create_participants(db, tenant: Tenant) -> list[Participant]:
 
 
 def create_participant_list(db, tenant: Tenant, participants: list[Participant]) -> ListDefinition:
-    ListService().create_definition(
+    created = ListService().create_definition(
         db,
         ListDefinitionCreate(
             name="Mitgliederliste",
             description="Alle aktiven Teilnehmenden der Gruppe",
-            column_one_title="Name",
-            column_one_value_type="participant",
-            column_two_title="Bemerkung",
-            column_two_value_type="text",
+            columns=[
+                ListColumnCreate(title="Name", value_type="participant"),
+                ListColumnCreate(title="Bemerkung", value_type="text"),
+            ],
         ),
         tenant_id=tenant.id,
     )
+    name_column, remark_column = (column.id for column in created.columns)
     list_definition = db.query(ListDefinition).filter(ListDefinition.tenant_id == tenant.id, ListDefinition.name == "Mitgliederliste").one()
     remarks = ["Neu dazugestossen", "", "Leitungsteam-Nachwuchs", "", "", "Zieht Ende Jahr weg", "", "", "", "", "", "", "", ""]
     for index, (participant, remark) in enumerate(zip(participants, remarks)):
@@ -304,8 +305,10 @@ def create_participant_list(db, tenant: Tenant, participants: list[Participant])
             list_definition.id,
             ListEntryCreate(
                 sort_index=index,
-                column_one_value={"participant_id": str(participant.public_id)},
-                column_two_value={"text_value": remark},
+                values={
+                    name_column: {"participant_id": str(participant.public_id)},
+                    remark_column: {"text_value": remark},
+                },
             ),
         )
     db.flush()

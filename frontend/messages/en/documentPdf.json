@@ -757,6 +757,32 @@
     "location": "Location",
     "spezial_text1": "Special text 1",
     "spezial_text2": "Special text 2",
-    "spezial_text3": "Special text 3"
+    "spezial_text3": "Special text 3",
+    "end_time": "End",
+    "program": "Programme",
+    "spezial_time1": "Special time 1",
+    "spezial_time2": "Special time 2",
+    "start_time": "Start"
+  },
+  "restricted": {
+    "banner": "Restricted version: this document is incomplete because you lack permission for part of the data. The affected places are marked. It is a draft, not an official document.",
+    "todos": "Not included: to-dos from minutes you are not allowed to see (missing permission).",
+    "todosHidden": "Not included: further to-dos ({count}) from minutes you are not allowed to see (missing permission).",
+    "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
+    "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
+    "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
+    "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",
+    "statisticsScope": "Incomplete: the figures only cover the templates you have access to (missing permission).",
+    "tableBanner": "Restricted version: this data is incomplete because you lack permission for part of it. Missing:",
+    "sheetTitle": "Notice",
+    "fileSuffix": "restricted"
+  },
+  "todoField": {
+    "task": "Task",
+    "description": "Description",
+    "participant": "Assigned to",
+    "due_date": "Due",
+    "status": "Status",
+    "origin": "Origin"
   }
 }

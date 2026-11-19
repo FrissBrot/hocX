@@ -757,6 +757,32 @@
     "location": "Luogo",
     "spezial_text1": "Testo speciale 1",
     "spezial_text2": "Testo speciale 2",
-    "spezial_text3": "Testo speciale 3"
+    "spezial_text3": "Testo speciale 3",
+    "end_time": "Fine",
+    "program": "Programma",
+    "spezial_time1": "Orario speciale 1",
+    "spezial_time2": "Orario speciale 2",
+    "start_time": "Inizio"
+  },
+  "restricted": {
+    "banner": "Versione limitata: questo documento è incompleto perché ti manca l’autorizzazione per una parte dei dati. I punti interessati sono segnalati. È una bozza, non un documento ufficiale.",
+    "todos": "Non incluse: attività da verbali che non puoi vedere (autorizzazione mancante).",
+    "todosHidden": "Non incluse: altre attività ({count}) da verbali che non puoi vedere (autorizzazione mancante).",
+    "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
+    "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
+    "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
+    "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",
+    "statisticsScope": "Incompleto: i dati comprendono solo i modelli a cui hai accesso (autorizzazione mancante).",
+    "tableBanner": "Versione limitata: questi dati sono incompleti perché ti manca l’autorizzazione per una parte. Mancano:",
+    "sheetTitle": "Avviso",
+    "fileSuffix": "limitato"
+  },
+  "todoField": {
+    "task": "Compito",
+    "description": "Descrizione",
+    "participant": "Assegnato a",
+    "due_date": "Scadenza",
+    "status": "Stato",
+    "origin": "Origine"
   }
 }

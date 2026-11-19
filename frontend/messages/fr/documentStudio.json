@@ -1386,7 +1386,8 @@
     "invitation_only": "Seulement les points de l’invitation",
     "include_undated": "Inclure les tâches sans échéance",
     "overdue_only": "Seulement en retard",
-    "show_fines": "Colonne « Amende » (si présente)"
+    "show_fines": "Colonne « Amende » (si présente)",
+    "visible_columns": "Colonnes visibles"
   },
   "preview": {
     "chooseProtocol": "Choisir un procès-verbal",

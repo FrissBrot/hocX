@@ -288,7 +288,7 @@ def test_ensure_can_read_stored_file_denies_the_partner_before_acceptance(db):
 
     with pytest.raises(HTTPException) as exc_info:
         AccessService().ensure_can_read_stored_file(db, partner_user, owner_photo.id)
-    assert exc_info.value.status_code == 403
+    assert exc_info.value.status_code == 404
 
 
 def test_ensure_can_read_stored_file_allows_the_partner_once_accepted(db):
@@ -315,7 +315,7 @@ def test_ensure_can_read_stored_file_still_denies_photos_outside_any_shared_albu
 
     with pytest.raises(HTTPException) as exc_info:
         AccessService().ensure_can_read_stored_file(db, partner_user, unrelated_photo.id)
-    assert exc_info.value.status_code == 403
+    assert exc_info.value.status_code == 404
 
 
 def _trusted_pair(db):
