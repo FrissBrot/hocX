@@ -801,7 +801,7 @@ def list_images(
     block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    access_service.ensure_can_read_protocol_block(db, user, block.id)
+    _ensure_readable_block_or_404(db, user, block.id, "Protocol element block not found")
     return service.list_protocol_images(db, block.id)
 
 
@@ -819,7 +819,9 @@ def list_protocol_block_images(
     protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
-    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    if not access_service.can_read_protocol(db, user, protocol.id):
+        # Wie die Einzelroute: Entwurf ohne Leserecht = unbekannt (SECURITY-RULES 1.6)
+        raise HTTPException(status_code=404, detail="Protocol not found")
     blocks = db.execute(
         select(ProtocolElementBlock.id, ProtocolElementBlock.public_id)
         .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
@@ -855,6 +857,16 @@ def list_protocol_block_images(
             )
         )
     return result
+
+
+def _ensure_readable_block_or_404(db: Session, user: CurrentUser, protocol_element_block_id: int, detail: str) -> None:
+    """Wie access_service.ensure_can_read_protocol_block, aber 404 statt 403: fremde Blöcke und
+    Entwürfe ohne Leserecht antworten wie unbekannte IDs (SECURITY-RULES 1.6, vgl.
+    protocol_elements._ensure_readable_protocol_or_404). Mandant, Entwurfsrecht und
+    Teilnehmer-Zuordnung prüft can_read_protocol."""
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    if protocol_id is None or not access_service.can_read_protocol(db, user, protocol_id):
+        raise HTTPException(status_code=404, detail=detail)
 
 
 def _ensure_block_protocol_not_frozen(db: Session, protocol_element_block_id: int) -> None:
@@ -896,7 +908,7 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
     protocol_element_block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block.id)
+    _ensure_readable_block_or_404(db, user, protocol_element_block.id, "Protocol element block not found")
     _ensure_block_protocol_not_frozen(db, protocol_element_block.id)
     try:
         return await service.save_protocol_image(
@@ -923,7 +935,7 @@ def delete_image(
     protocol_image = public_id_service.get_by_public_id(db, ProtocolImage, image_id)
     if protocol_image is None:
         raise HTTPException(status_code=404, detail="Image not found")
-    access_service.ensure_can_read_protocol_block(db, user, protocol_image.protocol_element_block_id)
+    _ensure_readable_block_or_404(db, user, protocol_image.protocol_element_block_id, "Image not found")
     _ensure_block_protocol_not_frozen(db, protocol_image.protocol_element_block_id)
     try:
         deleted = service.delete_protocol_image(db, protocol_image.id)
