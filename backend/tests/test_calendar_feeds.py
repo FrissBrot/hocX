@@ -80,6 +80,13 @@ def test_escape_handles_rfc5545_special_characters():
     assert calendar_feed_service._escape("a,b;c\\d\nzeile\r\nzwei\x07") == "a\\,b\\;c\\\\d\\nzeile\\nzwei"
 
 
+def test_escape_drops_unicode_line_separators_and_del():
+    # splitlines() bricht auch an U+0085/U+2028/U+2029 um (Review 2026-11-19)
+    escaped = calendar_feed_service._escape("a\u0085b\u2028c\u2029d\x7fe")
+    assert escaped == "abcde"
+    assert escaped.splitlines() == [escaped]
+
+
 def test_fold_keeps_lines_within_75_octets_without_splitting_utf8():
     line = "SUMMARY:" + "ä" * 100
     folded = calendar_feed_service._fold(line)

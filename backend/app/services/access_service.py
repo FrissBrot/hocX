@@ -94,21 +94,24 @@ class AccessService:
         if not self.can_read_template(db, user, template_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Template not assigned to current reader")
 
-    def ensure_can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int) -> None:
+    def ensure_can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int, *, detail: str = "Protocol not found") -> None:
+        """404 statt 403: Wer ein Protokoll (z. B. einen Entwurf oder ein nicht zugeordnetes)
+        nicht lesen darf, erfährt auch nicht, dass es existiert (SECURITY-RULES 1.6). ``detail``
+        ist dieselbe Meldung wie bei einer unbekannten ID der aufrufenden Route."""
         if not self.can_read_protocol(db, user, protocol_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Protocol not assigned to current reader")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
     def ensure_can_read_protocol_element(self, db: Session, user: CurrentUser, protocol_element_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
         if protocol_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Protocol element not found")
-        self.ensure_can_read_protocol(db, user, protocol_id)
+        self.ensure_can_read_protocol(db, user, protocol_id, detail="Protocol element not found")
 
     def ensure_can_read_protocol_block(self, db: Session, user: CurrentUser, protocol_element_block_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
         if protocol_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Protocol block not found")
-        self.ensure_can_read_protocol(db, user, protocol_id)
+        self.ensure_can_read_protocol(db, user, protocol_id, detail="Protocol block not found")
 
     def ensure_can_read_todo(self, db: Session, user: CurrentUser, todo_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_todo(db, todo_id=todo_id)
@@ -123,7 +126,8 @@ class AccessService:
                 not self._is_restricted_reader(db, user) or user.user_id in self._todo_assignee_user_ids(db, todo)
             ):
                 return
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Protocol not assigned to current reader")
+            # 404 wie bei einer unbekannten ID (kein Existenz-Orakel für Entwürfe, SECURITY-RULES 1.6)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
         # Standalone-Todo (POST /todos, an keinem Protokollblock): Zugriff ueber den eigenen
         # Mandanten statt ueber ein Protokoll. Vorher endete hier jedes Standalone-Todo in 404,
         # obwohl patch_todo/delete_todo sie ausdruecklich als bearbeitbar behandeln - Abhaken,
@@ -175,7 +179,7 @@ class AccessService:
                 and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id)
             ):
                 return
-            self.ensure_can_read_protocol(db, user, protocol_id)
+            self.ensure_can_read_protocol(db, user, protocol_id, detail="Stored file not found")
             return
         # Not linked to a protocol (export/image) or an imported Word-Import document (e.g. a
         # still-queued, not-yet-imported one) - fall back to a plain same-tenant check plus

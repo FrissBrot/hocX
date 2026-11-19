@@ -41,3 +41,24 @@ def test_invalid_migration_options_are_rejected_as_migration_error(options):
 def test_valid_fallback_days_are_kept():
     assert sms.merged_options({"fallback_days": "30"})["fallback_days"] == 30
     assert sms.merged_options({})["fallback_days"] is None
+
+
+def test_public_error_message_hides_object_keys_and_paths():
+    """last_error/Ereignisse lesen auch Support-Admins: Schlüssel, Pfade und SQL-Parameter nie
+    im Text, kuratierte Meldungen bleiben (Review 2026-11-19)."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.core.objstore_client import ObjectNotFound, StorageUnavailable
+
+    key = "tenant-geheim/vorstand.pdf"
+    hidden = [
+        ObjectNotFound(key),
+        FileNotFoundError(2, "No such file or directory", f"/data/{key}"),
+        OperationalError("SELECT :k", {"k": key}, Exception("boom")),
+        KeyError(key),
+    ]
+    for exc in hidden:
+        message = storage_worker.public_error_message(exc)
+        assert "geheim" not in message and type(exc).__name__ in message, message
+    assert storage_worker.public_error_message(sms.MigrationError("Profil fehlt")) == "MigrationError: Profil fehlt"
+    assert storage_worker.public_error_message(StorageUnavailable("503")) == "StorageUnavailable: 503"

@@ -286,7 +286,8 @@ def test_plain_readers_cannot_export_protocol_drafts_at_all(db, setup):
     PDF (vorher blendete nur die Protokollliste sie aus)."""
     with pytest.raises(HTTPException) as excinfo:
         render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["reader"])
-    assert excinfo.value.status_code == 403
+    # Wie ein unbekanntes Protokoll (404), der Entwurf verrät seine Existenz nicht
+    assert excinfo.value.status_code == 404
 
 
 def test_overridden_protocol_title_is_noted_in_the_registry(db, setup):

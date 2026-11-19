@@ -278,7 +278,9 @@ class BuildContext:
         from app.services.access_service import AccessService
 
         if not AccessService().can_read_protocol(self.db, self.user, protocol_id):
-            raise DocumentPermissionError("protocol")
+            # Wie ein unbekanntes Protokoll (404/referenceNotFound statt 403): ein Entwurf ohne
+            # Leserecht verrät sonst seine Existenz (SECURITY-RULES 1.6).
+            raise DocumentNotFoundError("Protocol")
 
     # Referenzen --------------------------------------------------------------
 

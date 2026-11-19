@@ -466,7 +466,8 @@ def test_restricted_readers_only_see_their_protocols_in_subroutes_and_todo_block
 
     with pytest.raises(HTTPException) as exc_info:
         protocol_routes.get_protocol_period(foreign.public_id, db=db, user=reader)
-    assert exc_info.value.status_code == 403
+    # Nicht zugeordnet = wie unbekannt (404, kein Existenz-Orakel)
+    assert exc_info.value.status_code == 404
     with pytest.raises(HTTPException):
         protocol_routes.get_pending_todos(foreign.public_id, db=db, user=reader)
     blocks = todo_routes.list_todo_blocks(db=db, user=reader)

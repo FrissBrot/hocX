@@ -18,6 +18,12 @@ Installationen aktualisieren können.
   Steuerzeichen; Bildrouten antworten bei fremden Protokollen mit 404; Termin- und
   Listeneintrag-Löschen lassen bei gleichzeitigem Upload keine Datei zurück.
 - pydantic-Update mit Sicherheitsfix (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29).
+- Härtungen aus dem Nachtlauf-Review: Protokolle (Entwürfe, nicht zugeordnete), die man nicht
+  lesen darf, antworten überall wie unbekannte (404 statt 403, auch Aufgaben, Dateien,
+  Dokumente und Document-Studio-Referenzen); Hilfsabfragen der Live-Zusammenarbeit laufen an den
+  Mandanten gebunden (RLS); Kalender-Abo und ICS-Export entfernen auch U+0085/U+2028/U+2029 und
+  DEL; Fehlertexte einer Speicher-Migration (auch für Support-Admins sichtbar) enthalten keine
+  Objektschlüssel, Pfade oder SQL-Parameter mehr.
 
 ### Behoben
 
@@ -28,6 +34,8 @@ Installationen aktualisieren können.
   und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
   Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
   Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
+- ICS-Export im Document Studio übersteht Termine mit Enddatum 9999-12-31 (wie das Kalender-Abo);
+  der Katalog-Import vermerkt den importierenden Admin bei neu gebuchten Modulen.
 
 ### Geändert
 
