@@ -89,6 +89,14 @@ Installationen aktualisieren können.
   Termine grün mit Uhrzeit). Die rechte Spalte mit «Überfällig», «Ohne festes Datum», Legende und
   Abo-Link scrollt eigenständig; auf schmalen Bildschirmen steht sie unter dem Raster.
 
+### Abhängigkeiten
+
+- Frontend und Abgabebox-Frontend laufen auf Node.js 26 (`node:26-bookworm` bzw.
+  `node:26-bookworm-slim`, per Digest gepinnt; CI-Jobs mit `setup-node` ebenfalls auf 26).
+- TypeScript 7.0.2 (nativer Compiler) und `@types/node` 26.6.6 in beiden Frontends; Typprüfung,
+  Tests und `next build` (Next.js 16.4.5) laufen ohne Codeänderungen.
+- `msoffcrypto-tool` 6.0.0 (Excel-Verschlüsselung der Document-Studio-Exporte), API unverändert.
+
 ## [1.4.0] - 2026-11-18
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
