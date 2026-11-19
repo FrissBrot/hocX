@@ -124,6 +124,18 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
         allowed = [row for row in rows if preference_enabled(db, recipient_id, KINDS[row.kind].category)]
         _skip([row for row in rows if row not in allowed], "preference_off")
         rows = allowed
+        # Mails an die Verwaltung (Kategorie mit Berechtigung): nur, wer das Recht beim Versand
+        # noch hat - Rollen können sich zwischen Ereignis und (verzögertem) Versand ändern.
+        needed = {CATEGORIES[KINDS[row.kind].category].permission for row in rows} - {None}
+        if needed:
+            from app.core.security import load_role_permissions
+
+            held = load_role_permissions(db, recipient_id)[0]
+            permitted = [row for row in rows if CATEGORIES[KINDS[row.kind].category].permission in (None, *held)]
+            _skip([row for row in rows if row not in permitted], "permission_missing")
+            rows = permitted
+            if not rows:
+                return "skipped"
     else:
         _skip(rows, reason)
         return "skipped"

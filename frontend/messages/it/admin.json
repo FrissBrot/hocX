@@ -1429,6 +1429,7 @@
       "no_email": "nessun indirizzo e-mail",
       "no_login": "senza accesso, e-mail non consentite",
       "preference_off": "disattivato dalla persona",
+      "permission_missing": "autorizzazione non più presente all'invio",
       "obsolete": "superato (concluso, modificato o testo non più valido)",
       "email_disabled": "l'invio era disattivato"
     }
