@@ -241,7 +241,12 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
         emptyMessage={t("todoFines.noRules")}
       >
         {rules.map((rule) => (
-          <tr key={rule.id} className={rule.is_active ? "" : "table-row-done"}>
+          // Ganze Zeile öffnet «Bearbeiten» (wie die übrigen Tabellen); Tastatur über den Knopf «Bearbeiten»
+          <tr
+            key={rule.id}
+            className={[rule.is_active ? "" : "table-row-done", canManage ? "table-row-clickable" : ""].filter(Boolean).join(" ") || undefined}
+            onClick={canManage ? () => open(rule) : undefined}
+          >
             <td>
               <strong>{rule.name}</strong> {rule.is_active ? null : <Badge variant="neutral">{t("todoFines.inactive")}</Badge>}
               <div className="muted">{t("todoFines.appliesFromShort", { date: formatDate(rule.applies_from) })}</div>
@@ -258,8 +263,8 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
             {canManage ? (
               <td>
                 <div className="table-actions table-actions-start">
-                  <button type="button" className="row-text-action" onClick={() => open(rule)}>{tCommon("edit")}</button>
-                  <button type="button" className="row-text-action row-text-action-danger" onClick={() => void remove(rule)}>{tCommon("delete")}</button>
+                  <button type="button" className="row-text-action" onClick={(event) => { event.stopPropagation(); open(rule); }}>{tCommon("edit")}</button>
+                  <button type="button" className="row-text-action row-text-action-danger" onClick={(event) => { event.stopPropagation(); void remove(rule); }}>{tCommon("delete")}</button>
                 </div>
               </td>
             ) : null}
