@@ -194,7 +194,12 @@ class EventService:
         return created
 
     def update_event(self, db: Session, event_id: int, payload: EventUpdate) -> Event | None:
-        event = self.repository.get(db, event_id)
+        # Zeile sperren: zwei gleichzeitige Änderungen ersetzten sonst beide die Zyklus-Zuordnungen
+        # (DELETE + INSERT, der zweite scheiterte an pk_event_cycle), und ein PATCH während des
+        # Löschens lief auf eine verschwundene Zeile (StaleDataError statt 404).
+        event = db.scalar(
+            select(Event).where(Event.id == event_id).with_for_update().execution_options(populate_existing=True)
+        )
         if event is None:
             return None
         values = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k != "cycle_assignments"}
