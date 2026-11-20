@@ -78,6 +78,12 @@ Installationen aktualisieren können.
   steht in der Tastenkürzel-Hilfe). Enter legt an, Escape legt eine angefangene Pendenz an und
   schliesst das Menü.
 
+- **Bausteine-Liste und Element-Dialog** (Vorlagen › Elemente) nach Design: Liste der
+  Elementdefinitionen, eigener Dialog mit nummerierten Bausteinen (Ziehen oder Alt+Pfeil),
+  Löschen mit Rückfrage in der Zeile. Termin- und Pendenzzeilen im Tabellen-Baustein sind
+  sortierbar. Im Element abgewählte Terminfelder erscheinen nicht mehr im Protokoll-PDF.
+  Aktionsmenüs können Einträge mit einer Trennlinie absetzen.
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt
@@ -98,6 +104,9 @@ Installationen aktualisieren können.
   Deadlock ab. Das Löschen wartet jetzt auf den Worker.
 
 ### Update
+
+- **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue
+  Dokumentversion (das PDF lässt die Felder jetzt weg). Keine Migration.
 
 - `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
   `maintenance-page` (Image `nginxinc/nginx-unprivileged`, wird beim Pull geholt) vor den

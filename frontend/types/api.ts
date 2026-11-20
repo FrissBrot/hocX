@@ -1707,6 +1707,8 @@ export type ElementDefinition = {
   is_library?: boolean;
   // In wie vielen Traktanden von Sitzungsvorlagen verwendet
   usage_count?: number;
+  // In wie vielen verschiedenen Sitzungsvorlagen (Bausteinliste «Verwendet»)
+  template_count?: number;
   blocks: ElementDefinitionBlock[];
   created_at: string;
   updated_at: string;

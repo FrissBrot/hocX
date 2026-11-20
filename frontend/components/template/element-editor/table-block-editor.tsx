@@ -60,9 +60,34 @@ export const EVENT_TOKENS = ["{title}", "{description}", "{event_date}", "{event
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
+/** Felder in gespeicherter Reihenfolge (sortierbar), nicht gespeicherte danach in Standardreihenfolge.
+ * Unbekannte und doppelte Einträge fallen weg. */
+export function orderedFields(saved: unknown, all: readonly string[]): EventFieldConfig[] {
+  const entries = Array.isArray(saved) ? (saved as EventFieldConfig[]) : [];
+  const result: EventFieldConfig[] = [];
+  for (const entry of entries) {
+    if (entry && all.includes(entry.field) && !result.some((item) => item.field === entry.field)) {
+      result.push({ field: entry.field, label: entry.label ?? "", enabled: Boolean(entry.enabled) });
+    }
+  }
+  for (const field of all) {
+    if (!result.some((item) => item.field === field)) result.push({ field, label: "", enabled: false });
+  }
+  return result;
+}
+
+/** Aktiviertes Feld `field` innerhalb der aktivierten Felder an die Position von `target` (bzw. um
+ * `offset`) schieben; deaktivierte Felder folgen danach in ihrer bisherigen Reihenfolge. */
+export function moveEnabledField(fields: EventFieldConfig[], field: string, to: { target: string } | { offset: number }): EventFieldConfig[] {
+  const enabled = fields.filter((entry) => entry.enabled);
+  const from = enabled.findIndex((entry) => entry.field === field);
+  const toIndex = "target" in to ? enabled.findIndex((entry) => entry.field === to.target) : from + to.offset;
+  if (from < 0 || toIndex < 0 || toIndex >= enabled.length || from === toIndex) return fields;
+  return [...moveItem(enabled, from, toIndex), ...fields.filter((entry) => !entry.enabled)];
+}
+
 function fieldsOf(form: BlockForm, key: "event_fields" | "todo_fields", all: readonly string[]): EventFieldConfig[] {
-  const saved = Array.isArray(form.config[key]) ? (form.config[key] as EventFieldConfig[]) : [];
-  return all.map((field) => saved.find((entry) => entry.field === field) ?? { field, label: "", enabled: false });
+  return orderedFields(form.config[key], all);
 }
 
 export function eventFieldsOf(form: BlockForm): EventFieldConfig[] {
@@ -349,6 +374,7 @@ export function TableBlockSection({
   const eventFieldConfig = useEventFieldConfig();
   const { sourceFieldValue, rowPreview } = useValueTexts(data);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [draggedField, setDraggedField] = useState<string | null>(null);
   const setConfig = (next: Record<string, unknown>) => onChange({ ...form, config: { ...form.config, ...next } });
   const rows = (form.config.rows ?? []) as TableRow[];
   const setRows = (next: TableRow[]) => setConfig({ rows: next });
@@ -380,6 +406,15 @@ export function TableBlockSection({
   const toggleOpen = (key: string) => onOpenKey(openKey === key ? null : key);
   const setField = (field: string, next: Partial<EventFieldConfig>) =>
     setConfig({ [fieldsKey]: fields.map((entry) => (entry.field === field ? { ...entry, ...next } : entry)) });
+  const moveField = (field: string, to: { target: string } | { offset: number }) => {
+    const next = moveEnabledField(fields, field, to);
+    if (next !== fields) setConfig({ [fieldsKey]: next });
+  };
+  const dropOnField = (event: DragEvent, target: string) => {
+    event.preventDefault();
+    if (draggedField && draggedField !== target) moveField(draggedField, { target });
+    setDraggedField(null);
+  };
   const updateRow = (next: TableRow) => setRows(rows.map((row) => (row.id === next.id ? next : row)));
   const moveRow = (index: number, offset: number) => setRows(moveItem(rows, index, index + offset));
   const addRow = () => {
@@ -456,13 +491,21 @@ export function TableBlockSection({
             {enabledFields.length === 0 ? (
               <div className="table-block-note table-block-note-event">{isTodo ? t("tableBlock.todoRowsEmpty") : t("tableBlock.eventRowsEmpty")}</div>
             ) : (
-              enabledFields.map((field) => {
+              enabledFields.map((field, index) => {
                 const key = `e:${field.field}`;
                 const open = openKey === key;
                 const value = sourceFieldValue(previewItem, field.field);
                 const name = fieldName(field.field);
                 return (
-                  <div key={key} className={`table-block-row table-block-row-event${open ? " table-block-row-open" : ""}`}>
+                  <div
+                    key={key}
+                    draggable
+                    onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedField(field.field); }}
+                    onDragOver={(event) => { if (draggedField) event.preventDefault(); }}
+                    onDrop={(event) => dropOnField(event, field.field)}
+                    onDragEnd={() => setDraggedField(null)}
+                    className={`table-block-row table-block-row-event${open ? " table-block-row-open" : ""}${draggedField === field.field ? " table-block-row-dragging" : ""}`}
+                  >
                     <button type="button" className="table-block-row-head" aria-expanded={open} onClick={() => toggleOpen(key)}>
                       <span className="table-block-row-lead table-block-row-lead-event"><LinkIcon size={15} /></span>
                       <span className="table-block-row-text">
@@ -486,9 +529,13 @@ export function TableBlockSection({
                           {isTodo ? t("tableBlock.todoFieldNote") : t("tableBlock.eventFieldNote")}
                         </p>
                         <div className="table-block-row-actions table-block-row-actions-end">
-                          <button type="button" className="button-ghost button-danger" onClick={() => { setField(field.field, { enabled: false }); onOpenKey(null); }}>
-                            {t("tableBlock.removeField")}
-                          </button>
+                          <div className="table-block-row-buttons">
+                            <button type="button" className="button-icon-soft" aria-label={t("tableBlock.moveUp")} disabled={index === 0} onClick={() => moveField(field.field, { offset: -1 })}>↑</button>
+                            <button type="button" className="button-icon-soft" aria-label={t("tableBlock.moveDown")} disabled={index === enabledFields.length - 1} onClick={() => moveField(field.field, { offset: 1 })}>↓</button>
+                            <button type="button" className="button-ghost button-danger" onClick={() => { setField(field.field, { enabled: false }); onOpenKey(null); }}>
+                              {t("tableBlock.removeField")}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -521,7 +568,7 @@ export function TableBlockSection({
                   key={key}
                   draggable
                   onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedId(row.id); }}
-                  onDragOver={(event) => event.preventDefault()}
+                  onDragOver={(event) => { if (draggedId) event.preventDefault(); }}
                   onDrop={(event) => dropOn(event, row.id)}
                   onDragEnd={() => setDraggedId(null)}
                   className={`table-block-row${open ? " table-block-row-open" : ""}${draggedId === row.id ? " table-block-row-dragging" : ""}`}

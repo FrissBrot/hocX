@@ -50,6 +50,71 @@ def test_library_and_usage_counts(db, world):
     assert read.definition_is_library is True and read.definition_usage_count == 2
 
 
+def test_library_list_counts_distinct_templates(db, world):
+    # Zweites Traktandum mit demselben Baustein in derselben Vorlage: zwei Traktanden, aber
+    # weiterhin nur zwei verschiedene Vorlagen («Verwendet» in der Bausteinliste).
+    make_template_element(db, world["first"].id, world["shared"].id, 20, "Begrüssung")
+    make_element_definition(db, world["tenant"].id, "Unbenutzt", [_text_block()])
+    user = make_current_user(world["tenant"].id, role="writer")
+    rows = template_routes.list_element_definitions(library=True, db=db, user=user)
+    by_title = {row.title: row for row in rows}
+    assert by_title["Begrüssung"].usage_count == 3
+    assert by_title["Begrüssung"].template_count == 2
+    assert by_title["Unbenutzt"].usage_count == 0 and by_title["Unbenutzt"].template_count == 0
+    single = template_routes.get_element_definition(world["shared"].public_id, db=db, user=user)
+    assert single.template_count == 2
+
+
+def test_library_list_of_a_foreign_tenant_neither_shows_nor_counts(db, world):
+    other = make_tenant(db, "Fremd")
+    foreign_template = make_template(db, other.id, name="Fremde Vorlage")
+    foreign = make_element_definition(db, other.id, "Fremder Baustein", [_text_block()])
+    make_template_element(db, foreign_template.id, foreign.id, 10, "Fremd")
+    user = make_current_user(world["tenant"].id, role="writer")
+    rows = template_routes.list_element_definitions(library=True, db=db, user=user)
+    assert [row.title for row in rows] == ["Begrüssung"]
+    assert rows[0].template_count == 2
+    foreign_user = make_current_user(other.id, role="writer")
+    foreign_rows = template_routes.list_element_definitions(library=True, db=db, user=foreign_user)
+    assert [(row.title, row.template_count) for row in foreign_rows] == [("Fremder Baustein", 1)]
+    with pytest.raises(HTTPException) as excinfo:
+        template_routes.get_element_definition(world["shared"].public_id, db=db, user=foreign_user)
+    assert excinfo.value.status_code == 404
+    # Inkonsistenter Altbestand: ein fremdes Traktandum, das auf unseren Baustein zeigt, zählt nicht
+    make_template_element(db, foreign_template.id, world["shared"].id, 20, "Fremd")
+    rows = template_routes.list_element_definitions(library=True, db=db, user=user)
+    assert (rows[0].usage_count, rows[0].template_count) == (2, 2)
+
+
+def test_saving_keeps_the_sorted_event_and_todo_field_order(db, world):
+    # Sortierte Termin-/Pendenzfelder: Speichern ordnet nicht nach der Standardliste um.
+    from app.schemas.template import ElementDefinitionCreate, ElementDefinitionUpdate
+    from app.services import public_id_service
+
+    event_fields = [
+        {"field": "location", "label": "Wo", "enabled": True},
+        {"field": "title", "label": "", "enabled": True},
+        {"field": "tag", "label": "", "enabled": False},
+    ]
+    todo_fields = [
+        {"field": "status", "label": "", "enabled": True},
+        {"field": "task", "label": "", "enabled": True},
+    ]
+    block = {
+        "id": 1, "title": "Anlass", "sort_index": 10, "element_type_id": 6, "render_type_id": 5,
+        "configuration_json": {"rows": [], "event_fields": event_fields, "todo_fields": todo_fields},
+    }
+    service = ElementDefinitionService()
+    created = service.create_element_definition(db, ElementDefinitionCreate(title="Sortiert", blocks=[block]), tenant_id=world["tenant"].id)
+    config = created.blocks[0].configuration_json
+    assert [item["field"] for item in config["event_fields"]] == ["location", "title", "tag"]
+    assert [item["field"] for item in config["todo_fields"]] == ["status", "task"]
+    entity = public_id_service.get_by_public_id(db, ElementDefinition, created.id, tenant_id=world["tenant"].id)
+    reordered = {**block, "configuration_json": {**block["configuration_json"], "event_fields": [event_fields[1], event_fields[0], event_fields[2]]}}
+    updated = service.update_element_definition(db, entity.id, ElementDefinitionUpdate(blocks=[reordered]))
+    assert [item["field"] for item in updated.blocks[0].configuration_json["event_fields"]] == ["title", "location", "tag"]
+
+
 def test_detach_gives_the_agenda_item_its_own_content(db, world):
     service = TemplateElementService()
     detached = service.detach_definition(db, world["first_element"].id)

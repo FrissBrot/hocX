@@ -1,7 +1,7 @@
-from sqlalchemy import func, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Event, Participant, TemplateElement, Tenant
+from app.models import ElementDefinition, Event, Participant, Template, TemplateElement, Tenant
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -164,7 +164,37 @@ class ElementDefinitionService:
         )
         return {definition_id: count for definition_id, count in rows}
 
-    def _read_model(self, db: Session, entity: ElementDefinition, usage_count: int | None = None) -> ElementDefinitionRead:
+    @staticmethod
+    def usage_stats(db: Session, definition_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Je Elementdefinition (Anzahl Traktanden, Anzahl verschiedener Sitzungsvorlagen).
+
+        Die Bausteinliste zeigt «Verwendet in N Vorlagen»; ein Baustein, der zweimal in derselben
+        Vorlage steckt, zählt dort einmal. ``definition_ids`` stammen immer aus einer bereits auf
+        den Mandanten gefilterten Liste, die Traktanden gehören über die Definition demselben
+        Mandanten (Anlegen löst die Definition mandantengescoped auf) - RLS gilt zusätzlich."""
+        if not definition_ids:
+            return {}
+        rows = db.execute(
+            select(
+                TemplateElement.element_definition_id,
+                func.count(),
+                func.count(distinct(TemplateElement.template_id)),
+            )
+            # Nur Traktanden aus Vorlagen desselben Mandanten wie die Definition zählen - unabhängig
+            # von der Schreib-Invariante und RLS (Security-Review, Härtung).
+            .join(Template, Template.id == TemplateElement.template_id)
+            .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+            .where(TemplateElement.element_definition_id.in_(definition_ids))
+            .where(Template.tenant_id == ElementDefinition.tenant_id)
+            .group_by(TemplateElement.element_definition_id)
+        )
+        return {definition_id: (usages, templates) for definition_id, usages, templates in rows}
+
+    def _read_model(
+        self, db: Session, entity: ElementDefinition, usage: tuple[int, int] | None = None
+    ) -> ElementDefinitionRead:
+        if usage is None:
+            usage = self.usage_stats(db, [entity.id]).get(entity.id, (0, 0))
         config = entity.configuration_json or {}
         # Each block's own configuration_json is stored with internal ints embedded
         # (linked_list_id, ...) - encode to public ids for this API response, see
@@ -180,7 +210,8 @@ class ElementDefinitionService:
             description=entity.description,
             is_active=entity.is_active,
             is_library=entity.is_library,
-            usage_count=usage_count if usage_count is not None else self.usage_counts(db, [entity.id]).get(entity.id, 0),
+            usage_count=usage[0],
+            template_count=usage[1],
             blocks=blocks,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
@@ -188,8 +219,8 @@ class ElementDefinitionService:
 
     def list_element_definitions(self, db: Session, *, tenant_id: int, library_only: bool = False):
         entities = [entity for entity in self.repository.list(db, tenant_id=tenant_id) if entity.is_library or not library_only]
-        counts = self.usage_counts(db, [entity.id for entity in entities])
-        return [self._read_model(db, entity, counts.get(entity.id, 0)) for entity in entities]
+        stats = self.usage_stats(db, [entity.id for entity in entities])
+        return [self._read_model(db, entity, stats.get(entity.id, (0, 0))) for entity in entities]
 
     def get_element_definition(self, db: Session, element_definition_id: int):
         entity = self.repository.get(db, element_definition_id)

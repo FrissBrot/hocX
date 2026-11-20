@@ -1856,6 +1856,12 @@ a.button-secondary:hover { border-color: var(--border-strong); }
   outline-offset: -2px;
 }
 
+.action-menu-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--border);
+}
+
 @keyframes tenant-import-progress-sweep {
   to { left: 100%; }
 }

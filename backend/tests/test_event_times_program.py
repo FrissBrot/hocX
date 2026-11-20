@@ -65,6 +65,24 @@ def test_table_block_renders_times_and_markdown_fields(db):
     assert "**" not in str(dumped[1]) and "Ablauf" in str(dumped[1])
 
 
+def test_table_block_keeps_saved_field_order_and_skips_disabled_fields(db):
+    # Terminfelder sind im Editor sortierbar: das PDF folgt der gespeicherten Reihenfolge, auch
+    # wenn sie von der Standardreihenfolge abweicht; abgewählte Felder erscheinen nicht.
+    tenant = make_tenant(db, "Termin Reihenfolge")
+    event = _create(db, tenant.id, start_time="18:30", location="Pfadiheim")
+    ctx = BuildContext(db=db, tenant_id=tenant.id, language="de")
+    config = {
+        "repeat_source_type": "event",
+        "repeat_source_id": str(event.id),
+        "event_fields": [
+            {"field": "location", "label": "Wo", "enabled": True},
+            {"field": "start_time", "label": "", "enabled": True},
+            {"field": "title", "label": "", "enabled": False},
+        ],
+    }
+    assert [row.label for row in _event_field_rows(ctx, config)] == ["Wo", "Beginn"]
+
+
 def test_calendar_entry_uses_end_time_on_the_same_day():
     entry = calendar_feed_service._Entry(
         uid="event-x@hocx",

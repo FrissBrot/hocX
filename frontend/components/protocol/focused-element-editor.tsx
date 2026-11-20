@@ -2333,8 +2333,8 @@ function FocusedElementEditorImpl({
                   // Ausgeblendete Spezialfelder fehlen; ohne eigenes Label im Block gilt der
                   // Name aus den Mandant-Einstellungen (Alias), sonst der Standardname
                   const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
-                    ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
-                        .filter((ef) => !eventFieldConfig.hidden(ef.field))
+                    ? (blockConfig.event_fields as Array<{ field: string; label: string; enabled?: boolean }>)
+                        .filter((ef) => ef.enabled !== false && !eventFieldConfig.hidden(ef.field))
                         .map((ef) => ({ ...ef, label: ef.label?.trim() || eventFieldConfig.label(ef.field, tTemplates(`eventField.${ef.field}`)) }))
                     : [];
                   // «Pro Pendenz»: Felder der Pendenz zuoberst, nur lesend (bearbeitet wird die Pendenz)

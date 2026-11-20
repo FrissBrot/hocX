@@ -168,7 +168,12 @@ def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
     if linked_todo_id(config) is not None:
         return _todo_field_rows(ctx, config)
     event = _linked_event(ctx, config)
-    event_fields = [item for item in config.get("event_fields") or [] if isinstance(item, dict) and item.get("field")]
+    # Gespeicherte Reihenfolge (im Editor sortierbar); abgewählte Felder (enabled: false) fehlen,
+    # ältere Snapshots ohne «enabled» gelten als gewählt.
+    event_fields = [
+        item for item in config.get("event_fields") or []
+        if isinstance(item, dict) and item.get("field") and item.get("enabled", True) is not False
+    ]
     if event is None or not event_fields:
         return []
     special = ctx.memo(("event_field_config", ctx.tenant_id), lambda: EventFieldConfig.from_stored(
@@ -208,7 +213,10 @@ def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
 
 def _todo_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
     """«Pro Pendenz»: Felder der Pendenz («aus Pendenz» im Editor) zuoberst, leere fallen weg."""
-    todo_fields = [item for item in config.get("todo_fields") or [] if isinstance(item, dict) and item.get("field") in TODO_FIELDS]
+    todo_fields = [
+        item for item in config.get("todo_fields") or []
+        if isinstance(item, dict) and item.get("field") in TODO_FIELDS and item.get("enabled", True) is not False
+    ]
     todo = load_linked_todo(ctx.db, config, ctx.tenant_id) if todo_fields else None
     if todo is None:
         return []

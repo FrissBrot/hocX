@@ -41,7 +41,7 @@
       "clickable-no-keyboard": 3
     },
     "frontend/components/template/element-definition-manager.tsx": {
-      "clickable-no-keyboard": 2
+      "clickable-no-keyboard": 1
     },
     "frontend/components/template/session-template-studio.tsx": {
       "clickable-no-keyboard": 1
