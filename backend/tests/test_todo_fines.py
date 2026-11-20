@@ -540,6 +540,23 @@ def test_split_fixed_amount_keeps_every_cent(db, setup):
     assert [line.amount for line in result.lines] == [Decimal("3.34"), Decimal("3.33"), Decimal("3.33")]
 
 
+@pytest.mark.parametrize(("days_late", "expected"), [
+    # Lernende (Standardtarif): 2.- + 1.- je Tag. 5.- / 3 ergab 3 x 1.67 = 5.01 (ein Rappen zu viel),
+    # 4.- / 3 ergab 3 x 1.33 = 3.99 (ein Rappen zu wenig).
+    (3, [Decimal("1.67"), Decimal("1.67"), Decimal("1.66")]),
+    (2, [Decimal("1.34"), Decimal("1.33"), Decimal("1.33")]),
+])
+def test_split_rule_amount_keeps_every_cent(db, setup, days_late, expected):
+    s = setup
+    _rule(db, s, split="split")
+    s["carl"] = make_participant(db, s["tenant"].id, "Carl")
+    s["dora"] = make_participant(db, s["tenant"].id, "Dora")
+    todo = _todo(db, s, days_late=days_late, people=("anna", "carl", "dora"))
+    result = route.get_todo_fine(todo.public_id, db=db, user=s["manager"])
+    assert [line.amount for line in result.lines] == expected
+    assert result.total == fines.rule_amount(Decimal("2"), Decimal("1"), 1, days_late)
+
+
 def test_rule_assigned_by_hand_cannot_be_deleted(db, setup):
     s = setup
     rule = _rule(db, s)
