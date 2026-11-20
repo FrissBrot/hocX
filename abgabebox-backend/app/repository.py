@@ -151,7 +151,10 @@ def list_events_by_tag(
                 )
             )
         )
-    rows = db.execute(statement).mappings()
+    # Grundreihenfolge wie SubmissionRepository.list_events_by_tag im Hauptbackend: die sort_order
+    # der Abgabe sortiert danach stabil, Gleichstände (gleicher Titel, gleicher Abstand) bleiben so
+    # in derselben Reihenfolge wie in der Verwaltung statt in Heap-Reihenfolge.
+    rows = db.execute(statement.order_by(event_table.c.event_date.asc(), event_table.c.id.asc())).mappings()
     return [dict(row) for row in rows]
 
 
