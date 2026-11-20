@@ -95,3 +95,37 @@ def test_sync_photos_for_event_unlinks_auto_linked_photos_pushed_out_of_a_shrunk
     db.refresh(gallery_image)
     assert gallery_image.event_id is None
     assert gallery_image.event_auto_linked is False
+
+
+def test_cancelling_a_termin_releases_its_automatic_photo_links(db):
+    """Ein abgesagter Termin bekommt keine Fotos automatisch zugeordnet (wie find_matching_event).
+    Wird ein Termin abgesagt (PATCH is_cancelled, ruft sync_photos_for_event), lösen sich seine
+    automatischen Verknüpfungen; neue Fotos im Zeitraum werden ihm nicht zugeordnet. Eine von Hand
+    gewählte Verknüpfung bleibt. Wird die Absage zurückgenommen, gilt wieder die Datumsregel
+    (Nachtlauf 2026-11-20)."""
+    tenant = make_tenant(db)
+    event = make_event(db, tenant.id, title="Sommerfest", event_date=date(2026, 7, 10))
+    _f1, auto_photo = _make_gallery_photo(db, tenant.id, exif_taken_at=datetime(2026, 7, 10, 18, 0, tzinfo=UTC))
+    _f2, manual_photo = _make_gallery_photo(
+        db, tenant.id, exif_taken_at=datetime(2026, 7, 10, 19, 0, tzinfo=UTC), event_id=event.id, event_auto_linked=False,
+    )
+    svc.sync_photos_for_event(db, event)
+    db.refresh(auto_photo)
+    assert auto_photo.event_id == event.id and auto_photo.event_auto_linked is True
+
+    event.is_cancelled = True
+    db.flush()
+    _f3, late_photo = _make_gallery_photo(db, tenant.id, exif_taken_at=datetime(2026, 7, 10, 21, 0, tzinfo=UTC))
+    svc.sync_photos_for_event(db, event)
+    for row in (auto_photo, manual_photo, late_photo):
+        db.refresh(row)
+    assert auto_photo.event_id is None and auto_photo.event_auto_linked is False
+    assert late_photo.event_id is None
+    assert manual_photo.event_id == event.id
+
+    event.is_cancelled = False
+    db.flush()
+    svc.sync_photos_for_event(db, event)
+    for row in (auto_photo, late_photo):
+        db.refresh(row)
+    assert auto_photo.event_id == event.id and late_photo.event_id == event.id
