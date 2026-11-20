@@ -2944,6 +2944,18 @@ export type PublicLinkItem = {
   manage_href: string | null;
 };
 
+/** GET /api/public-links/partner-history: Verlauf der Partner-Organisationen (nur eigene Alben). */
+export type PartnerHistoryEntry = {
+  at: string;
+  event: "invited" | "accepted" | "declined" | "public_link_created";
+  actor: "partner" | "own";
+  partner: string;
+  person: string | null;
+  album: string;
+  link_name: string | null;
+  expires_at: string | null;
+};
+
 /** POST /api/public/submission-access/view: eigene Abgabe über den persönlichen Link. */
 export type SubmissionAccessView = {
   tenant_name: string;

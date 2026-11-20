@@ -339,7 +339,6 @@
   },
   "publicLinks": {
     "intro": "Tutti i link tramite i quali qualcuno accede ai dati della tua organizzazione senza login – con motivo, scadenza e il luogo in cui li gestisci. I link scaduti, revocati o usati non vengono mostrati.",
-    "neverExpiringHint": "{count, plural, one {# link non scade} other {# link non scadono}} da {count, plural, one {solo} other {soli}}. Verifica se {count, plural, one {serve} other {servono}} ancora.",
     "group": {
       "all": "Tutti",
       "files": "File e album",
@@ -349,24 +348,16 @@
       "partners": "Organizzazioni partner",
       "other": "Altri"
     },
-    "col": {
-      "kind": "Tipo",
-      "link": "Link e motivo",
-      "created": "Creato",
-      "expiry": "Validità",
-      "lastUsed": "Ultimo uso",
-      "manage": "Gestisci"
-    },
     "kind": {
       "share_files": "File",
       "share_album": "Album",
-      "share_album_partner": "Album · link partner",
+      "share_album_partner": "Link partner",
       "submission_link": "Casella di consegna",
       "calendar_events": "Calendario",
       "calendar_todos": "Calendario",
       "account_invite": "Invito",
       "account_password_reset": "Password",
-      "album_partner": "Organizzazione partner",
+      "album_partner": "Album condiviso",
       "submission_access": "Consegna personale"
     },
     "reason": {
@@ -390,22 +381,46 @@
       "window": "finché le consegne sono aperte"
     },
     "createdBy": "di {name}",
-    "notTracked": "—",
-    "manage": "Gestisci",
-    "manageElsewhere": {
-      "files": "presso l'organizzazione partner",
-      "submissions": "—",
-      "calendar": "solo la persona",
-      "accounts": "—",
-      "partners": "—",
-      "other": "—"
-    },
+    "manage": "Gestisci →",
     "empty": "Al momento non ci sono link pubblici.",
     "emptyFilter": "Nessun link in questa selezione.",
     "revoke": "Revoca",
-    "revokeConfirm": "Revocare il link «{name}»? Chi lo possiede non potrà più accedere ai contenuti.",
-    "revoked": "Link revocato",
-    "revokeFailed": "Impossibile revocare il link"
+    "revoked": "«{name}» revocato",
+    "revokeFailed": "Impossibile revocare il link",
+    "eyebrow": "Organizzazione",
+    "neverExpiring": {
+      "title": "{count, plural, one {# link non scade} other {# link non scadono}} da {count, plural, one {solo} other {soli}}.",
+      "body": "Verifica se {count, plural, one {serve} other {servono}} ancora.",
+      "showOnly": "Mostra solo questi",
+      "showAll": "Mostra tutti"
+    },
+    "createdAt": "Creato il {date}",
+    "createdAtBy": "Creato il {date} da {name}",
+    "lastUsed": "usato il {date}",
+    "hint": {
+      "calendar": "solo la persona stessa",
+      "partner": "presso l’organizzazione partner"
+    },
+    "showHistory": "Cronologia",
+    "cancel": "Annulla",
+    "revokeInline": "Revocare «{name}»? Chi ha il link non potrà più accedere ai contenuti.",
+    "history": {
+      "title": "Cronologia delle organizzazioni partner",
+      "description": "Cosa hanno fatto i partner con i vostri album condivisi – e cosa avete condiviso voi.",
+      "filterLabel": "Filtra per partner",
+      "allPartners": "Tutti i partner",
+      "ownPerson": "{name} (voi)",
+      "ownOrganisation": "La vostra organizzazione (voi)",
+      "empty": "Ancora nessuna voce.",
+      "footer": "Senza indirizzi IP ed e-mail. La cronologia completa si trova in <link>Organizzazione › Cronologia</link>.",
+      "event": {
+        "invited": "Album condiviso con {partner} – invito inviato",
+        "accepted": "Condivisione accettata",
+        "declined": "Condivisione rifiutata",
+        "publicLinkCreated": "Link pubblico «{name}» creato",
+        "publicLinkCreatedUntil": "Link pubblico «{name}» creato, valido fino al {date}"
+      }
+    }
   },
   "abo": {
     "tabs": {

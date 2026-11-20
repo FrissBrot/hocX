@@ -792,3 +792,304 @@
   background: var(--accent-soft);
   transition: background var(--dur-slow) var(--ease-out);
 }
+
+/* Zugangslinks (components/settings/public-links-overview.tsx): Hinweis, Zeilenliste, Partner-Verlauf */
+.public-links-lead {
+  max-width: 680px;
+}
+
+.public-links-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.public-links-hint-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.public-links-hint-text strong {
+  font-weight: 600;
+}
+
+.public-links-hint .muted {
+  color: var(--warning-fg);
+  opacity: 0.85;
+}
+
+.public-links-hint-toggle {
+  margin-left: auto;
+}
+
+/* Viele Reiter: auf schmalen Bildschirmen seitlich scrollen statt umbrechen */
+.public-links-overview .tabs-list {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.public-links-overview .tabs-trigger {
+  white-space: nowrap;
+}
+
+.public-links-overview .tabs-trigger-active .tabs-count {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.public-links-dot {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.public-links-dot-warning {
+  background: var(--warning);
+}
+
+.public-links-dot-partner {
+  background: var(--danger);
+}
+
+.public-links-dot-own {
+  background: var(--accent);
+}
+
+.public-links-list,
+.public-links-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.public-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.public-links-row:first-child {
+  border-top: none;
+}
+
+.public-links-row:hover {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.public-links-row-main {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.public-links-row-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-links-row-meta {
+  display: flex;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.public-links-row-reason {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.public-links-kind {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.public-links-kind-files { color: var(--info-fg); }
+.public-links-kind-submissions { color: var(--violet); }
+.public-links-kind-calendar { color: var(--success-fg); }
+.public-links-kind-accounts { color: var(--warning-fg); }
+.public-links-kind-partners { color: var(--danger-fg); }
+.public-links-kind-other { color: var(--muted); }
+
+.public-links-row-validity {
+  flex: 0 0 170px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.public-links-row-actions {
+  flex: 0 0 190px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.public-links-row-hint {
+  font-size: var(--text-sm);
+}
+
+.public-links-overview .public-links-action {
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.public-links-overview .public-links-action-revoke:hover:not(:disabled) {
+  color: var(--danger-fg);
+}
+
+.public-links-overview .public-links-action-manage {
+  color: var(--accent);
+}
+
+.public-links-overview .public-links-action-manage:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.public-links-row-confirm {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border-strong);
+}
+
+.public-links-row-confirm-text {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.public-links-row-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.public-links-empty {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.public-links-history {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.public-links-history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.public-links-history-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.public-links-history-lead {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+}
+
+.public-links-history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.public-links-history-chips .button-pill {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.public-links-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.public-links-history-row:first-child {
+  border-top: none;
+}
+
+.public-links-history-time {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.public-links-history-actor {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.public-links-history-what {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.public-links-history-foot {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 640px) {
+  .public-links-row-validity,
+  .public-links-row-actions {
+    flex-basis: 100%;
+  }
+
+  .public-links-row-actions {
+    justify-content: flex-start;
+  }
+
+  .public-links-hint-toggle {
+    margin-left: 0;
+  }
+}

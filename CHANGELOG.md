@@ -47,6 +47,20 @@ Installationen aktualisieren können.
 - Die Wartungsseite läuft in einem eigenen internen Netz nur mit Traefik und antwortet auch auf
   grosse Uploads mit 503 (statt 413).
 
+- **Zugangslinks neu gestaltet** (Mandanten-Einstellungen › Zugangslinks, Design «hocX Zugangslinks»):
+  ein einziger Lead-Text statt der doppelten Beschreibung, gelber Hinweis «n Links laufen nicht von
+  selbst ab» mit Filter «Nur diese zeigen», Unterstrich-Reiter mit Zählern und eine kompakte
+  Zeilenliste statt der Tabelle (Name, farbige Art · Grund, Gültigkeit mit «genutzt TT.MM.»,
+  Aktionen «Verlauf», «Widerrufen», «Verwalten →»). Erstellt/von steht als Tooltip am Namen.
+  Widerrufen bestätigt man direkt unter der Zeile statt im Dialog; der Knopf erscheint nur mit
+  dem Recht «Öffentlich teilen». Partner-Links auf eigene Alben stehen jetzt im Reiter
+  Partner-Organisationen und lassen sich dort vom Album-Besitzer ebenfalls widerrufen.
+- **Verlauf der Partner-Organisationen** im Reiter Partner-Organisationen, filterbar je Partner:
+  Album-Einladungen, angenommene/abgelehnte Freigaben und öffentliche Links, die Partner auf eigene
+  Alben erstellt haben. Neue Lese-Route `GET /api/public-links/partner-history`
+  (`settings.manage`, nur Alben des eigenen Mandanten, Partner nur als Organisationsname, ohne IP-
+  und E-Mail-Adressen). Keine Migration.
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt

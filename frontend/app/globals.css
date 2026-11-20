@@ -15294,51 +15294,6 @@ a.export-step-meta {
   }
 }
 
-/* Zugangslinks (components/settings/public-links-overview.tsx) */
-.public-links-label {
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.public-links-reason {
-  margin-top: 2px;
-  font-size: var(--text-sm);
-  overflow-wrap: anywhere;
-}
-
-.public-links-cards {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.public-links-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3);
-  min-width: 0;
-}
-
-.public-links-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.public-links-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.public-links-card-action {
-  align-self: flex-start;
-  margin-top: var(--space-1);
-}
-
 /* «Meine Abgabe» (components/submission-access/submission-access-page.tsx): persönlicher Link ohne Login */
 .submission-access-panel {
   gap: var(--space-4);
