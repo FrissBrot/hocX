@@ -61,6 +61,10 @@ PURGE_BATCH = 200
 
 _audit = AuditService()
 
+# Fehlertexte je Datei (Teil-Erfolg), bewusst ohne Dateinamen.
+NOT_FOUND = "Datei nicht gefunden"
+NOT_DELETABLE_HERE = "Datei kann von hier aus nicht gelöscht werden"
+
 
 def is_media(mime_type: str | None) -> bool:
     mime = mime_type or ""
@@ -124,9 +128,15 @@ def _is_gallery_main(db: Session, stored_file_id: int) -> bool:
 # ── In den Papierkorb ────────────────────────────────────────────────────────────────────────
 
 
-def trash_files(db: Session, user: CurrentUser, file_ids: list[uuid.UUID]) -> tuple[list[uuid.UUID], list[str]]:
+def trash_files(
+    db: Session, user: CurrentUser, file_ids: list[uuid.UUID], *, hidden_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset()
+) -> tuple[list[uuid.UUID], list[str]]:
     """Legt Dateien des eigenen Mandanten in den Papierkorb. Teil-Erfolg wie bisher beim Löschen:
-    (verschobene IDs, Fehlertexte je abgelehnter Datei). Committet."""
+    (verschobene IDs, Fehlertexte je abgelehnter Datei). Committet.
+
+    ``hidden_ids``: IDs, die das Konto nicht sehen darf (Reichweite «nur zugewiesene»); sie und
+    Dateien ohne Löschrecht ergeben denselben Text wie eine unbekannte ID, ohne Dateinamen (kein
+    Existenz-Orakel, keine Namen nicht verwalteter Dateien)."""
     tenant_id = user.current_tenant_id
     if tenant_id is None:
         raise ValueError("No active tenant")
@@ -139,15 +149,12 @@ def trash_files(db: Session, user: CurrentUser, file_ids: list[uuid.UUID]) -> tu
     }
     for file_id in file_ids:
         stored_file = rows.get(file_id)
-        if stored_file is None:
-            errors.append("Datei nicht gefunden")
-            continue
-        if not may_manage(user, stored_file.mime_type):
-            # Kein Existenz-Orakel nötig: die Datei liegt im eigenen Mandanten, nur das Recht fehlt.
-            errors.append(f"{stored_file.original_name}: keine Berechtigung zum Löschen")
+        if stored_file is None or file_id in hidden_ids or not may_manage(user, stored_file.mime_type):
+            errors.append(NOT_FOUND)
             continue
         if not _is_gallery_main(db, stored_file.id) or _other_owner(db, stored_file.id):
-            errors.append(f"{stored_file.original_name}: kann von hier aus nicht gelöscht werden")
+            # Ohne Namen: die Datei kann zu einem Protokoll o. Ä. gehören, das das Konto nicht liest.
+            errors.append(NOT_DELETABLE_HERE)
             continue
         group = _group_ids(db, stored_file.id)
         db.execute(
@@ -358,26 +365,42 @@ def purge_expired(db: Session, *, now: datetime | None = None, limit: int = PURG
                     details={"name": name, "automatic": True}, commit=False,
                 )
                 db.commit()
-                eraser.after_commit(db)
-                result["purged"] += 1
             except Exception as exc:  # noqa: BLE001 - einzelne Datei; Fehlerprotokoll, Rest läuft weiter
                 db.rollback()
                 _logger.exception("Papierkorb: Datei %s konnte nicht endgültig gelöscht werden", stored_file_id)
                 record_system_error(db, exc=exc, tenant_id=tenant_id)
                 result["failed"] += 1
+                continue
+            # Die Löschung ist committet, die Datei also weg: ein Fehler beim Nacharbeiten zählt
+            # nicht als «failed», er wird nur protokolliert.
+            result["purged"] += 1
+            _after_commit_logged(db, eraser, stored_file_id, tenant_id)
         # Mitgelöschte Dateien (Live-Clip, erzeugte Dokumentdateien), deren Hauptdatei auf einem
         # anderen Weg endgültig verschwand: sonst blieben sie unsichtbar und unbegrenzt liegen.
         result["orphans"] = _purge_expired_orphans(db, cutoff, limit=limit)
     return result
 
 
+def _after_commit_logged(db: Session, eraser, stored_file_id: int, tenant_id: int | None) -> None:
+    """Nacharbeiten nach committeter Löschung (Vorschaubild, «beste» neu bestimmen): Fehler nur ins
+    Fehlerprotokoll, die Datei bleibt gelöscht."""
+    from app.core.error_log import record_system_error
+
+    try:
+        eraser.after_commit(db)
+    except Exception as exc:  # noqa: BLE001 - Datei ist gelöscht; Fehlerprotokoll, Rest läuft weiter
+        db.rollback()
+        _logger.exception("Papierkorb: Nacharbeiten nach dem Löschen von Datei %s fehlgeschlagen", stored_file_id)
+        record_system_error(db, exc=exc, tenant_id=tenant_id)
+
+
 def _purge_expired_orphans(db: Session, cutoff: datetime, *, limit: int) -> int:
     from app.core.error_log import record_system_error
     from app.services.file_eraser import is_referenced
 
-    orphan_ids = list(
-        db.scalars(
-            select(StoredFile.id)
+    orphans = list(
+        db.execute(
+            select(StoredFile.id, StoredFile.tenant_id)
             .where(
                 StoredFile.deleted_at.is_not(None),
                 StoredFile.deleted_at <= cutoff,
@@ -386,11 +409,11 @@ def _purge_expired_orphans(db: Session, cutoff: datetime, *, limit: int) -> int:
             )
             .order_by(StoredFile.id)
             .limit(limit)
-        )
+        ).all()
     )
     db.commit()
     purged = 0
-    for stored_file_id in orphan_ids:
+    for stored_file_id, tenant_id in orphans:
         eraser = _eraser()
         try:
             stored_file = db.get(StoredFile, stored_file_id)
@@ -398,10 +421,11 @@ def _purge_expired_orphans(db: Session, cutoff: datetime, *, limit: int) -> int:
                 continue
             eraser.erase(db, stored_file)
             db.commit()
-            eraser.after_commit(db)
-            purged += 1
         except Exception as exc:  # noqa: BLE001 - einzelne Datei; Fehlerprotokoll, Rest läuft weiter
             db.rollback()
             _logger.exception("Papierkorb: verwaiste Datei %s konnte nicht gelöscht werden", stored_file_id)
-            record_system_error(db, exc=exc)
+            record_system_error(db, exc=exc, tenant_id=tenant_id)
+            continue
+        purged += 1
+        _after_commit_logged(db, eraser, stored_file_id, tenant_id)
     return purged
