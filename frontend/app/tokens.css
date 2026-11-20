@@ -3,7 +3,8 @@
  * Diese Datei wird per `scripts/sync-design-tokens.sh` nach
  *   frontend/app/tokens.css
  *   abgabebox-frontend/app/tokens.css
- * kopiert, weil beide Apps eigene Docker-Build-Kontexte ohne gemeinsames Paket haben.
+ *   infra/maintenance/tokens.css (Wartungsseite im Traefik-Stack)
+ * kopiert, weil die Apps eigene Docker-Build-Kontexte ohne gemeinsames Paket haben.
  * Nur HIER aendern, danach `./scripts/sync-design-tokens.sh` ausfuehren.
  * `./scripts/sync-design-tokens.sh --check` schlaegt fehl, wenn eine Kopie abweicht (CI).
  *

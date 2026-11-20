@@ -50,6 +50,11 @@ SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
 # Verwaiste Dateien erst nach einem Tag melden (Uploads committen Zeile und Bezug nicht immer zusammen).
 ORPHAN_MIN_AGE = timedelta(hours=24)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
+# Wartungsfenster eines Updates (deploy.sh, app/maintenance_cli.py): ein normales Update braucht
+# wenige Minuten. Bleibt das Fenster offen (end-deploy und SQL-Rückfall gescheitert, Deploy
+# abgebrochen), ist die App für alle Nutzer gesperrt.
+DEPLOY_MAINTENANCE_WARNING_AGE = timedelta(minutes=30)
+DEPLOY_MAINTENANCE_CRITICAL_AGE = timedelta(hours=2)
 # Dokumentverarbeitung (document-worker): fällige Aufträge, die so lange warten, bzw. Aufträge,
 # die in diesem Zeitraum endgültig gescheitert sind (nach max_attempts, «Erneut verarbeiten»).
 DOCUMENT_QUEUE_WARNING_AGE = timedelta(minutes=30)
@@ -551,6 +556,21 @@ def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
     )
 
 
+def _check_deploy_maintenance(db: Session, now: datetime) -> HealthCheckRead:
+    from app.models import MaintenanceWindow
+    from app.services.maintenance_service import BLOCKING_STATES, DEPLOY_JOB_TYPE
+
+    started = db.scalar(
+        select(func.min(func.coalesce(MaintenanceWindow.started_at, MaintenanceWindow.created_at)))
+        .where(MaintenanceWindow.source_job_type == DEPLOY_JOB_TYPE, MaintenanceWindow.state.in_(BLOCKING_STATES))
+    )
+    if started is None:
+        return HealthCheckRead(key="deploy_maintenance", status="ok", params={"state": "none", "minutes": 0})
+    age = now - started
+    status: HealthStatus = "critical" if age > DEPLOY_MAINTENANCE_CRITICAL_AGE else ("warning" if age > DEPLOY_MAINTENANCE_WARNING_AGE else "ok")
+    return HealthCheckRead(key="deploy_maintenance", status=status, params={"state": "active", "minutes": max(0, round(age.total_seconds() / 60))})
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -792,6 +812,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("overload", lambda: _check_overload(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
+    checks += _run_check("deploy_maintenance", lambda: _check_deploy_maintenance(db, now), failure_status="unknown", db=db)
     checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks

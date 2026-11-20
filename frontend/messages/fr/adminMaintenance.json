@@ -79,7 +79,8 @@
     "storage_initial_migration": "Migration initiale du stockage",
     "storage_cutover": "Basculement du stockage",
     "other": "Tâche système",
-    "backup_restore": "Restauration depuis la sauvegarde"
+    "backup_restore": "Restauration depuis la sauvegarde",
+    "deploy": "Mise à jour"
   },
   "state": {
     "scheduled": "Planifiée",

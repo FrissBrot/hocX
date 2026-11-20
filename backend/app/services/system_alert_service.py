@@ -74,6 +74,7 @@ _CHECK_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
+    "deploy_maintenance": "Wartungsmodus des Updates",
     "local_s3": "Lokales S3 (Garage)",
     "backup": "Backup",
     "backup_repository": "Backup-Repository (Storage Box)",
@@ -99,6 +100,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
+    "deploy_maintenance": "Wartungsmodus eines Updates ist noch aktiv",
     "local_s3": "Lokales S3 (Garage) nicht auswertbar",
     "backup": "Backup überfällig oder nicht eingerichtet",
     "backup_repository": "Backup-Repository gestört oder voll",
@@ -219,6 +221,12 @@ def _check_message(check) -> str:
             return "Integritätsprüfung oder Restore-Test des Backups sind überfällig - siehe Adminportal, Backups."
         case "storage_migration":
             return f"{params.get('verified')} von {params.get('total')} Objekten geprüft, {params.get('dead')} dauerhaft fehlgeschlagen - siehe Adminportal, Storage."
+        case "deploy_maintenance":
+            return (
+                f"Das Wartungsfenster des Updates ist seit {params.get('minutes')} Minuten aktiv - hocX ist für alle Nutzer gesperrt. "
+                "Deploy-Log prüfen; beenden: Adminportal → System → Wartung (Fenster «Update» freigeben) "
+                "oder python -m app.maintenance_cli end-deploy (RUNBOOK Abschnitt 20)."
+            )
         case "local_s3":
             return f"{params.get('objects')} Objekte, {params.get('gb')} GB - siehe Adminportal, Storage."
     return "Siehe Systemstatus."

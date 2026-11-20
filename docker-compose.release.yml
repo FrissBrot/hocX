@@ -308,8 +308,13 @@ services:
       # Das Backend hängt zusätzlich im internen Netz docker-api - ohne diese Angabe wählt Traefik
       # je nach Reihenfolge die dort unerreichbare IP.
       - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
+      # maintenance-errors*@file (infra/traefik/dynamic/maintenance.yml, Wartungsseite ab 1.4.3)
+      # steht an jedem App-Router zuerst: erreicht Traefik den Container nicht (502/504), antwortet
+      # die Wartungsseite mit 503 + Retry-After (API: JSON). Ein 503 des Backends selbst
+      # (Wartungsmodus, Überlast) bleibt unverändert. scripts/tests/test_maintenance_page.sh prüft
+      # das für alle Router ausser Docs und Website.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
@@ -318,6 +323,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.amount=100"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.middlewares=maintenance-errors-api@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.priority=100"
@@ -328,7 +334,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.service=${ROUTER_PREFIX:-hocx}-auth"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-auth-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-auth.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
@@ -338,7 +344,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-auth-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
       # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
       # previously fell through to the generic backend router with no Traefik-level rate
@@ -351,7 +357,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.service=${ROUTER_PREFIX:-hocx}-mfa-totp-verify"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.middlewares=${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.burst=10"
@@ -363,7 +369,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.service=${ROUTER_PREFIX:-hocx}-tenant-by-domain"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.middlewares=${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-by-domain.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.burst=15"
@@ -376,7 +382,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.service=${ROUTER_PREFIX:-hocx}-tenant-import"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-import.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
@@ -384,7 +390,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.service=${ROUTER_PREFIX:-hocx}-word-import"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.middlewares=${ROUTER_PREFIX:-hocx}-word-import-ratelimit,${ROUTER_PREFIX:-hocx}-word-import-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-word-import-ratelimit,${ROUTER_PREFIX:-hocx}-word-import-body-limit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-word-import.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.burst=10"
@@ -398,7 +404,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.service=${ROUTER_PREFIX:-hocx}-gallery-upload"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=${ROUTER_PREFIX:-hocx}-gallery-upload-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-gallery-upload-inflight"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-gallery-upload.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-inflight.inflightreq.amount=2"
 
@@ -496,12 +502,13 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.amount=200"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.middlewares=maintenance-errors@file,${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.middlewares=maintenance-errors-admin@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
@@ -952,7 +959,7 @@ services:
       # Abgabebox live ausgefallen nach dem Update auf 1.4.0, interne Prüfungen blieben grün).
       - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.priority=100"
@@ -963,7 +970,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.period=1m"
@@ -986,7 +993,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
       # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router, eigenes
       # Rate-Limit und 4 KiB Body-Limit (nur Hash plus optionale Dokument-ID).
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
@@ -994,7 +1001,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.priority=300"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.period=1m"
@@ -1037,7 +1044,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=maintenance-errors-abgabebox@file,${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"

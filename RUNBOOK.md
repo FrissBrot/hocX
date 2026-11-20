@@ -908,3 +908,109 @@ wenn er gerade anderswo läuft.
   erlassene bleiben.
 - **Fehler beim Abgleich**: Auf der Mandantenseite werden dann die bisherigen Forderungen gezeigt
   und der Fehler landet im Fehlerprotokoll; im Adminportal antwortet die Übersicht mit 500.
+
+## 20. Wartungsseite bei Updates und Ausfällen
+
+Ab 1.4.3 sehen Nutzer während eines Updates oder wenn ein App-Container nicht erreichbar ist statt
+einer nackten Traefik-Fehlerseite (502/503/504, bzw. 404, wenn die Container ganz fehlen) eine
+Wartungsseite. API-Aufrufe bekommen ein JSON-503.
+
+**Aufbau**
+
+- Dienst `maintenance-page` in `docker-compose.traefik.yml`: nginx-unprivileged (dasselbe, per
+  Digest gepinnte Image wie `docs-site`), read-only, ohne Capabilities, 64 MB / 0.25 CPU, ohne
+  Ports, ohne Secrets, nur im internen Netz `maintenance` (das ausser ihm nur Traefik nutzt). Er gehört zum Traefik-Teil des Stacks; ein App-Update erstellt ihn nicht neu.
+  `deploy.sh` startet ihn vor den Migrationen und erstellt ihn nur neu, wenn sich
+  `infra/maintenance/nginx.conf` ändert (`sync_maintenance_page_config`, Hash unter
+  `.releases/maintenance-nginx.sha256`).
+- Inhalte in `infra/maintenance/` (read-only gemountet; `deploy.sh` setzt Gruppe 5001 nur lesend,
+  `prepare_maintenance_dir`):
+  `maintenance.html` (eine Seite für alle Varianten, nginx setzt per SSI Variante, Prüfadresse und
+  `tokens.css` ein), `api-503.json`, `tokens.css` (Kopie von `design/tokens.css`, nur über
+  `./scripts/sync-design-tokens.sh`), `nginx.conf`.
+- Traefik (`infra/traefik/dynamic/maintenance.yml`, Dateiprovider): errors-Middlewares
+  `maintenance-errors` (Hauptdomain), `-admin`, `-abgabebox` (HTML, Status 502–504) und
+  `maintenance-errors-api` (JSON, nur 502 und 504) stehen an allen App-Routern zuerst (nicht an
+  Docs und Website). Sie liegen bewusst im Dateiprovider: fehlt der Container, bleibt die
+  Konfiguration gültig und die App läuft unverändert weiter.
+- Ausweich-Router (Labels am Dienst): `Host(<Domain>)` mit Priorität 1 je Domain (Hauptdomain,
+  Abgabebox, Admin-Zugang) und ein API-Router mit Priorität 50 (über den Frontend-Routern 10, unter
+  allen Backend-Routern 100–300). Sie gewinnen nur, wenn die App-Router fehlen.
+
+**Verhalten**
+
+| Fall | Antwort |
+|---|---|
+| App-Container gestoppt, entfernt oder noch nicht `healthy` (Update, Neustart) | Ausweich-Router: Wartungsseite bzw. JSON, **503**, `Retry-After: 30`, `Cache-Control: no-store` |
+| Container läuft, Traefik erreicht ihn nicht (502/504) | errors-Middleware: dieselbe Antwort, Status auf 503 umgeschrieben |
+| Backend antwortet selbst mit 503 (Wartungsmodus `maintenance`, Überlast `overloaded`, `db_busy`) | unverändert durchgereicht (das Frontend wertet den Code aus) |
+| API während des Ausfalls | `{"detail": "...", "code": "service_unavailable", "retry_after": 30}`; das Frontend zeigt seinen normalen Fehler, die Abgabebox wiederholt Uploads nach `Retry-After` |
+| `/api/health`, `/api/system-status/summary` (Uptime Kuma) während des Ausfalls | JSON-503, nie 200 |
+| `deploy.sh`/`verify_release.sh` (`traefik_checks.sh`) | `curl --fail`: die Wartungsseite zählt nie als erreichbar |
+
+Die Seite wählt die Sprache nach `navigator.languages` (alle Sprachen aus `i18n/locales.json`,
+sonst Deutsch), folgt Hell/Dunkel des Systems, prüft alle 10 s `/api/health` (Admin-Zugang:
+`/api/admin/auth/oidc/public-config`) ohne Cookies und lädt neu, sobald dort 200 kommt und die
+Seite selbst nicht mehr von der Wartungsseite stammt (Kopfzeile `X-Hocx-Maintenance-Page`). Ohne
+JavaScript lädt sie alle 30 s neu.
+
+**Testen**
+
+- Statisch (auch in der CI): `bash scripts/tests/test_maintenance_page.sh`.
+- Echt mit Traefik in Docker (Wegwerf-Projekt, zufällige Ports, berührt keine Instanz):
+  `flock /docker/.hocx-heavy.lock bash scripts/tests/test_maintenance_page.sh --live`.
+- Auf dem Test-Host: `docker compose -p hocx-test … stop frontend` → `https://<Domain>/login`
+  zeigt die Wartungsseite (503), `curl -sI https://<Domain>/api/health` nach `stop backend` liefert
+  503 mit JSON; danach `… start frontend backend`. Nur auf dem Test-Host, nie auf Prod.
+
+**Anpassen**
+
+- Texte: `infra/maintenance/maintenance.html` (Objekt `TEXTS`, alle Sprachen vollständig). Danach
+  `bash scripts/tests/test_maintenance_page.sh` – er nennt den neuen CSP-Hash des Skripts, der in
+  `infra/maintenance/nginx.conf` (`script-src 'sha256-…'`) eingetragen werden muss. Änderungen an
+  HTML/JSON wirken sofort nach dem Deploy-Code-Update, eine geänderte `nginx.conf` erstellt
+  `deploy.sh` den Dienst neu.
+- Farben/Abstände nur über `design/tokens.css` und `./scripts/sync-design-tokens.sh`.
+
+**Eigene Domains der Mandanten** (Abschnitt 18): `traefik_config_service.regenerate()` hängt an
+jeden generierten Router dieselbe errors-Middleware (App-Domain: hocX-Seite, Abgabebox- und
+Prüf-Domain: Abgabebox-Seite, API: JSON) und schreibt je Domain die Router `…-fallback`
+(Priorität 1) und `…-fallback-api` (50) mit genau den Pfaden der Domain (Prüf-Domain: nur
+Prüfseite und ihre API). Sie zeigen auf `maintenance-page@file`. Fehlt
+`infra/traefik/dynamic/maintenance.yml` im Verzeichnis, lässt `regenerate()` all das weg.
+
+**Wartungsmodus während des Updates** (`deploy.sh`, `backend/app/maintenance_cli.py`):
+
+1. Vor `alembic upgrade`: `python -m app.maintenance_cli begin-deploy --version <v>` (per
+   `docker compose run --rm --no-deps backend`, mit dem Backend-Image des neuen Releases) legt ein
+   volles Wartungsfenster an (`reason_code=deploy`, `source_job_type=deploy`) und setzt es sofort
+   aktiv. Die noch laufenden alten Container sperren damit die API (503 `maintenance`); das
+   Frontend leitet angemeldete Nutzer auf seine Wartungsansicht, die Anmeldeseite zeigt den
+   Hinweis, die Abgabebox ihr Banner. Offen bleiben Admin-API, `/api/health`,
+   `/api/system-status/summary` und der Wartungsstatus. Idempotent: ein offenes Deploy-Fenster wird
+   wiederverwendet. Erste Installation (Tabelle fehlt): übersprungen.
+2. Nach den Smoke-Checks, **vor** den Prüfungen über Traefik: `end-deploy --outcome success`. Vorher
+   ginge nicht: in voller Wartung sperrt die Abgabebox auch die Prüfseite, deren Prüfung sonst ein
+   Rollback auslöste. Lässt sich die Wartung nicht beenden (CLI und SQL scheitern), bricht
+   `deploy.sh` hier ab **ohne Rollback** (das neue Release läuft) und nennt den Befehl zum Beenden;
+   danach `verify_release.sh` und erneut `deploy.sh`. Die Prüfseiten-Prüfung meldet eine 503 mit
+   Code `maintenance` ausdrücklich als «Wartung noch aktiv».
+3. `rollback_apps` beendet die Wartung immer (`--outcome rollback`), ebenso eine fehlgeschlagene
+   Migration und jeder andere Abbruch (EXIT-Trap, `--outcome aborted`).
+4. `end-deploy` beendet nur Fenster mit `source_job_type=deploy` (auch verwaiste aus einem
+   abgebrochenen Lauf), nie von Admins geplante oder Speicher-Fenster, und ohne die
+   Freigabebedingungen (ein offener Speicher-Cutover hat sein eigenes Fenster). Scheitert die CLI,
+   beendet `deploy.sh` das Fenster direkt per SQL im `db`-Container (mit Verlauf und Audit-Eintrag
+   `outcome: sql-fallback`); scheitert auch das, steht im
+   Log «Wartungsmodus des Updates ist NOCH AKTIV» mit dem Befehl. Von Hand:
+   `docker compose -p <projekt> <compose-dateien> run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome aborted`
+   oder Admin-Portal → System → Wartung → Fenster «Update» freigeben. `status` zeigt offene
+   Deploy-Fenster.
+5. Begin-Fehler sind nur Warnungen. Abschalten: `HOCX_DEPLOY_MAINTENANCE=0
+   ./scripts/deploy.sh <test|prod>`.
+6. Systemmonitoring: die Prüfung `deploy_maintenance` (Adminportal → System, ntfy) warnt, wenn ein
+   Deploy-Fenster länger als 30 Minuten aktiv ist, kritisch ab 2 Stunden.
+
+Tests: `tests/test_maintenance_cli.py`, `tests/test_traefik_config_service.py` (Backend),
+Reihenfolge in `deploy.sh` in `scripts/tests/test_maintenance_page.sh`; der Live-Test prüft mit
+`MTEST_TENANT_FILE=<datei>` zusätzlich eine generierte `tenant-domains.yml`.

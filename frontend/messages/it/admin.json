@@ -195,6 +195,11 @@
         "detail": "{verified, number} di {total, number} oggetti verificati · {dead, number} non riusciti definitivamente",
         "problem": "La migrazione dell'archivio richiede attenzione"
       },
+      "deploy_maintenance": {
+        "title": "Modalità manutenzione dell'aggiornamento",
+        "detail": "{state, select, active {Attiva da {minutes, number} minuti} other {Nessun aggiornamento in corso}}",
+        "problem": "La modalità manutenzione di un aggiornamento è ancora attiva"
+      },
       "backup": {
         "title": "Backup",
         "detail": "{state, select, disabled {Non configurato} never {Nessun backup riuscito} other {Ultimo backup riuscito {hours, number} h fa}} · {points, number} punti di ripristino",

@@ -195,6 +195,11 @@
         "detail": "{verified, number} objets vérifiés sur {total, number} · {dead, number} en échec définitif",
         "problem": "La migration du stockage requiert de l'attention"
       },
+      "deploy_maintenance": {
+        "title": "Mode maintenance de la mise à jour",
+        "detail": "{state, select, active {Actif depuis {minutes, number} minutes} other {Aucune mise à jour en cours}}",
+        "problem": "Le mode maintenance d'une mise à jour est toujours actif"
+      },
       "backup": {
         "title": "Sauvegarde",
         "detail": "{state, select, disabled {Non configurée} never {Aucune sauvegarde réussie} other {Dernière sauvegarde réussie il y a {hours, number} h}} · {points, number} points de restauration",

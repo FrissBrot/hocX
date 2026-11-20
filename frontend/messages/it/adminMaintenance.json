@@ -79,7 +79,8 @@
     "storage_initial_migration": "Migrazione iniziale dell'archivio",
     "storage_cutover": "Passaggio dell'archivio",
     "other": "Processo di sistema",
-    "backup_restore": "Ripristino dal backup"
+    "backup_restore": "Ripristino dal backup",
+    "deploy": "Aggiornamento"
   },
   "state": {
     "scheduled": "Pianificata",

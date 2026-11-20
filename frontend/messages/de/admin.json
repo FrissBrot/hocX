@@ -195,6 +195,11 @@
         "detail": "{verified, number} von {total, number} Objekten geprüft · {dead, number} dauerhaft fehlgeschlagen",
         "problem": "Storage-Migration braucht Aufmerksamkeit"
       },
+      "deploy_maintenance": {
+        "title": "Wartungsmodus des Updates",
+        "detail": "{state, select, active {Seit {minutes, number} Minuten aktiv} other {Kein Update aktiv}}",
+        "problem": "Wartungsmodus eines Updates ist noch aktiv"
+      },
       "backup": {
         "title": "Backup",
         "detail": "{state, select, disabled {Nicht eingerichtet} never {Noch keine erfolgreiche Sicherung} other {Letzte erfolgreiche Sicherung vor {hours, number} h}} · {points, number} Sicherungspunkte",

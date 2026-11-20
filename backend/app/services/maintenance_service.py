@@ -437,6 +437,72 @@ def update_message(db: Session, window_id: uuid.UUID, *, public_message: dict[st
     return window
 
 
+# --- Wartung während eines Updates (deploy.sh, app/maintenance_cli.py) -------------------------
+
+# Kennzeichen des Deploy-Fensters: source_job_type="deploy". Admin-Fenster haben keinen
+# source_job_type, Speicher-Fenster einen anderen - end_deploy_windows fasst nur diese an.
+DEPLOY_JOB_TYPE = "deploy"
+DEPLOY_REASON_CODE = "deploy"
+DEPLOY_ACTOR = "system:deploy"
+# Schätzung für die Wartungsansicht (Migration + Neustart); ein längeres Update erscheint dort
+# als «dauert länger», beendet wird das Fenster nur von end_deploy_windows.
+DEPLOY_ESTIMATE_SECONDS = 600
+
+
+def open_deploy_windows(db: Session) -> list[MaintenanceWindow]:
+    return list(db.scalars(
+        select(MaintenanceWindow)
+        .where(MaintenanceWindow.source_job_type == DEPLOY_JOB_TYPE, MaintenanceWindow.state.not_in(TERMINAL_STATES))
+        .order_by(MaintenanceWindow.created_at)
+        .with_for_update()
+    ).all())
+
+
+def begin_deploy_window(db: Session, *, version: str | None) -> tuple[MaintenanceWindow, bool]:
+    """Volle Wartung für die Dauer eines Updates, sofort aktiv (ohne Vorbereitungszeit - das
+    Update startet die Container ohnehin neu). Idempotent: läuft schon ein Deploy-Fenster, wird
+    es wiederverwendet. Gibt (Fenster, neu_angelegt) zurück. Der Aufrufer committet."""
+    existing = open_deploy_windows(db)
+    if existing:
+        window = existing[0]
+        if window.state == "preparing":
+            transition(db, window, "active", actor_email=DEPLOY_ACTOR, details={"source": "deploy"})
+        return window, False
+    window = create_window(
+        db,
+        kind="full",
+        reason_code=DEPLOY_REASON_CODE,
+        state="preparing",
+        source_job_type=DEPLOY_JOB_TYPE,
+        source_job_id=(version or "")[:200] or None,
+        internal_note="Automatisch von deploy.sh während des Updates (Migration und Neustart).",
+        actor_email=DEPLOY_ACTOR,
+        estimate={
+            "scope": "deploy", "remaining_low_seconds": DEPLOY_ESTIMATE_SECONDS // 3,
+            "remaining_high_seconds": DEPLOY_ESTIMATE_SECONDS, "safety_margin_seconds": 0,
+            "confidence": "planned", "rate_basis": "deploy", "reserve_basis": "deploy",
+        },
+    )
+    transition(db, window, "active", actor_email=DEPLOY_ACTOR, details={"source": "deploy"})
+    return window, True
+
+
+def end_deploy_windows(db: Session, *, outcome: str) -> list[MaintenanceWindow]:
+    """Beendet alle offenen Deploy-Fenster (auch ein verwaistes aus einem abgebrochenen Lauf),
+    nie ein anderes. Bewusst ohne release(): das Deploy-Fenster schützt nur das Update selbst;
+    ein offener Speicher-Cutover hat sein eigenes, weiter blockierendes Fenster. outcome steht
+    im Verlauf ("success", "rollback", "aborted"). Idempotent, der Aufrufer committet."""
+    windows = open_deploy_windows(db)
+    for window in windows:
+        if window.state == "scheduled":
+            transition(db, window, "cancelled", actor_email=DEPLOY_ACTOR, details={"source": "deploy", "outcome": outcome})
+            continue
+        if window.state == "preparing":
+            transition(db, window, "active", actor_email=DEPLOY_ACTOR, details={"source": "deploy"})
+        transition(db, window, "completed", actor_email=DEPLOY_ACTOR, details={"source": "deploy", "outcome": outcome})
+    return windows
+
+
 # --- Überwachung (Hintergrundloop maintenance_supervisor) --------------------------------------
 
 
