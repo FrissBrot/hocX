@@ -1,7 +1,8 @@
 """Export von Bildern mit dem geschätzten Aufnahmedatum in den Bildmetadaten.
 
-Gespeicherte Originale werden nie verändert - diese Funktionen erzeugen nur Bytes für eine
-temporäre Kopie (Download, ZIP, Freigabe-Link).
+Diese Funktionen verändern gespeicherte Dateien nie - sie erzeugen nur Bytes für eine temporäre
+Kopie (Download, ZIP, Freigabe-Link). Einzige Stelle, die eine gespeicherte Datei umschreibt, ist
+der Job capture_date_file_sync (korrigiertes Aufnahmedatum, Migration 0203).
 
 Fälle (siehe backend/UPLOAD_DUPLICATES.md, Abschnitt Export):
 
@@ -22,7 +23,10 @@ C. Weder echtes noch geschätztes Datum: es wird kein Datum geschrieben, insbeso
 D. Korrigiertes Aufnahmedatum (StoredFile.capture_corrected_at, Migration 0200): hat Vorrang vor
    allem anderen und ersetzt in der Exportkopie DateTimeOriginal/DateTimeDigitized, auch wenn die
    Datei schon ein (falsches) Datum trägt; OffsetTime* entfällt (die Korrektur kennt keine
-   Zeitzone). Ohne Uhrzeit gilt dieselbe Mittag-Konvention wie bei B. XMP bekommt
+   Zeitzone). Ohne Uhrzeit bleibt die Uhrzeit des EXIF-Originals, sonst gilt dieselbe
+   Mittag-Konvention wie bei B (capture_date.corrected_exif_stamp, gleich wie in der Datei). Hat
+   der Job capture_date_file_sync die Korrektur schon in die Datei geschrieben
+   (capture_file_state "written", Migration 0203), bleibt die Datei für das Datum unverändert. XMP bekommt
    photoshop:DateCreated nur, wenn das XMP noch kein Datum hat (sonst bleibt es unverändert -
    Einschränkung, dokumentiert). Keine hocX-Schätz-Markierung: ein Re-Import übernimmt das
    Datum als echtes Aufnahmedatum.
@@ -50,6 +54,7 @@ from typing import Any
 from PIL import Image
 from PIL.TiffImagePlugin import IFDRational
 
+from app.services.capture_date import corrected_exif_stamp
 from app.services.image_metadata_service import HOCX_XMP_NAMESPACE, parse_exif_datetime
 
 logger = logging.getLogger(__name__)
@@ -83,11 +88,16 @@ class _DateTarget:
 def _wants_date(stored_file: Any) -> _DateTarget | None:
     corrected = getattr(stored_file, "capture_corrected_at", None)
     if corrected is not None:
+        if getattr(stored_file, "capture_file_state", None) == "written":
+            # Die Datei selbst trägt die aktuelle Korrektur schon (Migration 0203) - der Download
+            # ist dann genau die gespeicherte Datei.
+            return None
         naive = corrected.replace(tzinfo=None)
+        stamp = corrected_exif_stamp(stored_file) or f"{naive.date():%Y:%m:%d} {ESTIMATED_TIME_CONVENTION}"
         if getattr(stored_file, "capture_corrected_has_time", False):
-            return _DateTarget(naive.date(), f"{naive:%Y:%m:%d %H:%M:%S}", f"{naive:%Y-%m-%dT%H:%M:%S}", True)
+            return _DateTarget(naive.date(), stamp, f"{naive:%Y-%m-%dT%H:%M:%S}", True)
         day = naive.date()
-        return _DateTarget(day, f"{day:%Y:%m:%d} {ESTIMATED_TIME_CONVENTION}", day.isoformat(), True)
+        return _DateTarget(day, stamp, day.isoformat(), True)
     if stored_file.exif_taken_at is not None:
         return None
     estimated = stored_file.estimated_taken_on

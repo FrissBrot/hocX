@@ -1065,9 +1065,11 @@ def get_stored_file_content(
         filename=stored_file.original_name,
         attachment=not is_inline_safe,
         not_found_detail="File missing on filesystem",
-        # A stored file's bytes never change after upload (a re-upload creates a new id), so the
+        # A stored file's pixels never change after upload (a re-upload creates a new id), so the
         # browser cache can keep this for a long time - saves refetching originals opened again
-        # from the Fotos viewer/lightbox within the same session.
+        # from the Fotos viewer/lightbox within the same session. Einzige Ausnahme sind die
+        # EXIF-Datumsfelder (korrigiertes Aufnahmedatum, Migration 0203): die Anzeige ist davon
+        # nicht betroffen, Downloads laufen über eigene Endpunkte bzw. die Exportkopie.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     ))
 
@@ -1185,8 +1187,9 @@ def update_stored_file_capture_correction(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Korrigiertes Aufnahmedatum eines Bildes setzen (Datum, optional Uhrzeit) oder mit
-    corrected_date null entfernen. Vorrang vor EXIF und Schätzung; das EXIF-Datum und die
-    Datei bleiben unverändert. Gleiche Regel wie das Schätzdatum: photos.manage, nur Bilder des
+    corrected_date null entfernen. Vorrang vor EXIF und Schätzung; das EXIF-Datum bleibt als
+    Original gespeichert. Die Anzeige gilt sofort, die Datei zieht der Job
+    capture_date_file_sync nach (Migration 0203). Gleiche Regel wie das Schätzdatum: photos.manage, nur Bilder des
     eigenen Mandanten, nie Partner-Fotos aus geteilten Alben."""
     require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:

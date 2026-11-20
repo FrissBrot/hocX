@@ -555,6 +555,10 @@
       "file_trash_purge": {
         "title": "Vider la corbeille (délai)",
         "description": "Supprime définitivement les fichiers et photos placés dans la corbeille depuis 30 jours - objet stocké, miniature et journal de suppression compris."
+      },
+      "capture_date_file_sync": {
+        "title": "Écrire les dates de prise de vue dans les fichiers",
+        "description": "Écrit les dates de prise de vue corrigées dans les fichiers image et y réécrit la date d’origine lors du rétablissement."
       }
     }
   },

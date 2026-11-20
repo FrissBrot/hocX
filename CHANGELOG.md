@@ -18,7 +18,7 @@ Mehrfachauswahl), die Seite «Kasse» mit Konten und Bussen nach Design «Kasse 
 Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
 Behebung des 504 auf Prüfseite und Abgabebox. Dazu alle Funde des Nachtlaufs vom 20.11.2026
 (Abgabebox, Bussen und Pendenzen, Fotos und Freigaben, Termine und Zyklen, Rechte im Protokoll).
-Fünf Migrationen (0198 bis 0202), keine neuen Secrets oder Umgebungsvariablen, keine
+Sieben Migrationen (0198 bis 0204), keine neuen Secrets oder Umgebungsvariablen, keine
 Breaking Changes.
 
 ### Update
@@ -55,6 +55,15 @@ Breaking Changes.
 - **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
   (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv, keine Datenänderung; die Abgabebox
   liest sie nicht. Downgrade entfernt die Spalten (Tags auf bestehenden Pendenzen bleiben).
+- **Migration `0203_capture_date_in_file`** (korrigiertes Aufnahmedatum in der Datei): neue Spalten
+  `stored_file.capture_exif_original` (JSONB, Rückweg zu den ursprünglichen Datumsfeldern der
+  Datei) und `stored_file.capture_file_state` (`pending`/`written`/`unsupported`/`failed`, mit
+  CHECK und Teilindex), dazu `SELECT` auf `stored_file.source_checksum_sha256` für `hocx_abgabebox`
+  (Duplikatprüfung). Bestehende Korrekturen werden auf `pending` gesetzt, der neue Job
+  `capture_date_file_sync` im job-worker (jede Minute, unter `/admin/jobs`) schreibt sie danach in
+  die Dateien. Abgabebox-Backend und Backend gemeinsam ausrollen (das Deploy-Skript tut das).
+  Downgrade möglich, aber bereits geschriebene Dateien behalten das korrigierte Datum und verlieren
+  den Rückweg - vorher Korrekturen zurücksetzen und den Job laufen lassen, wenn nötig.
 
 ### Geändert
 
@@ -113,9 +122,22 @@ Breaking Changes.
   oder das Original wiederherstellen. Jede Änderung braucht eine Bestätigung, die erklärt, was sie
   bewirkt. Das korrigierte Datum gilt überall vor EXIF und Schätzung (Zeitstrahl, Sortierung,
   Monatsgruppen, Datumsfilter, Termin-Zuordnung, Metadaten, Teilen-Seite, Downloads/Exporte); das
-  EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, die Datei selbst wird nicht
-  verändert. Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
+  EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, das korrigierte Datum kommt
+  auch in die Datei (siehe nächster Punkt). Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
   Migration `0200_photo_capture_override` (neue Spalten in `stored_file`).
+- **Fotos: korrigiertes Aufnahmedatum auch in der Datei:** Korrigieren, Verschieben und «Original
+  wiederherstellen» schreiben das Datum jetzt auch in die Bilddatei (EXIF `DateTimeOriginal`,
+  `DateTimeDigitized`, `DateTime`), Downloads und Originale enthalten also das neue Datum. Das
+  ursprüngliche Datum bleibt in hocX gespeichert; «Original wiederherstellen» schreibt es zurück
+  (die Datumsfelder sind danach byte-genau wie vorher). Die Anzeige in hocX ändert sich wie bisher
+  sofort, die Datei folgt im Hintergrund (Job `capture_date_file_sync`, ohne Neukodierung, Pixel
+  unverändert). JPEG, HEIC/HEIF, PNG, WebP und TIFF mit Aufnahmedatum werden an Ort und Stelle
+  geändert; ein JPEG ohne Aufnahmedatum bekommt eines (beim Wiederherstellen wieder entfernt); andere
+  Formate ohne Aufnahmedatum bleiben unverändert, die Korrektur gilt dort nur in hocX. Der
+  Foto-Viewer zeigt dezent, ob die Datei schon aktualisiert ist. Die neue Prüfsumme der Datei
+  ändert nichts an der Duplikaterkennung: die ursprünglich hochgeladene Datei wird weiterhin als
+  Duplikat erkannt (Galerie, Vorab-Abgleich, Abgabebox). Papierkorb-Dateien und Dateien mit
+  offenem oder positivem Virenbefund werden nicht angefasst. Migration `0203_capture_date_in_file`.
 - **Einzelabgaben mit mehreren Abgabeelementen:** Im Assistenten legt man bei «Einzelabgabe» in
   Schritt 2 («Elemente») beliebig viele Elemente an («+ Element», Entfernen per Icon), je mit Name,
   optionalem Start und Stichtag; in Schritt 3 wählt man je Element eine oder mehrere verantwortliche

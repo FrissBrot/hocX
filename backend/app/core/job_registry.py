@@ -92,6 +92,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("log_cleanup", "cleanup", settings.log_cleanup_interval_minutes, service="job-worker"),
     # Löscht Papierkorb-Dateien endgültig, deren Frist (30 Tage) abgelaufen ist.
     _loop("file_trash_purge", "cleanup", 60, service="job-worker"),
+    # Schreibt korrigierte Aufnahmedaten in die Bilddateien bzw. stellt das Original wieder her.
+    _loop("capture_date_file_sync", "uploads", 1, service="job-worker"),
     # Sammelt den Systemstatus und verschickt ntfy-Alarme. Hängt er, fällt das nicht hier auf
     # (er wertet sich selbst aus), sondern über den veralteten Snapshot: Seite und der
     # Summary-Endpoint für Uptime Kuma melden dann "veraltet".

@@ -222,6 +222,9 @@ stored_file_table = Table(
     Column("storage_path", Text),
     Column("file_size_bytes", BigInteger),
     Column("checksum_sha256", Text),
+    # Ursprünglicher Hash, wenn hocX die Datei später umgeschrieben hat (korrigiertes
+    # Aufnahmedatum, Backend-Migration 0203) - nur gelesen (Duplikatprüfung).
+    Column("source_checksum_sha256", Text),
     Column("perceptual_hash", Text),
     Column("scan_status", Text),
     # Bild-Metadaten (Migration 0113, siehe app/image_metadata.py) - nur beim INSERT gesetzt.

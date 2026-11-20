@@ -60,7 +60,8 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     expect(message).toContain("Das Aufnahmedatum von 3 Bildern wird auf 01.08.2024, 14:30 gesetzt.");
     expect(message).toContain("Reihenfolge im Zeitstrahl");
     expect(message).toContain("Zuordnung zu Terminen");
-    expect(message).toContain("ursprüngliche Aufnahmedatum (EXIF) bleibt erhalten");
+    expect(message).toContain("Das neue Datum wird auch in die Bilddateien geschrieben, Downloads und Originale enthalten es also.");
+    expect(message).toContain("Das ursprüngliche Aufnahmedatum bleibt in hocX gespeichert und lässt sich jederzeit wiederherstellen.");
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(lastPost()).toEqual({ file_ids: ["a", "b", "c"], mode: "set", corrected_date: "2024-08-01", corrected_time: "14:30" });
@@ -92,6 +93,7 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     await waitFor(() => expect(lastPost()).toEqual({ file_ids: ["a", "b", "c"], mode: "shift", shift_days: -1, shift_hours: -2 }));
     expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 3 Bildern wird um 1 Tag und 2 Stunden nach früher verschoben.");
     expect(confirmMock.mock.calls[0][0].message).toContain("Bilder ohne Aufnahmedatum werden übersprungen.");
+    expect(confirmMock.mock.calls[0][0].message).toContain("auch in die Bilddateien geschrieben");
     expect(showToastMock).toHaveBeenCalledWith("1 Bild ohne Aufnahmedatum übersprungen.", "info");
   });
 
@@ -111,6 +113,7 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
     await waitFor(() => expect(lastPost()).toEqual({ file_ids: ["a", "b"], mode: "reset" }));
     expect(confirmMock.mock.calls[0][0].message).toContain("Bei 2 Bildern wird die Korrektur entfernt");
+    expect(confirmMock.mock.calls[0][0].message).toContain("Auch die Bilddateien bekommen ihr ursprüngliches Datum zurück.");
   });
 
   it("sperrt mehr als 500 Bilder", () => {

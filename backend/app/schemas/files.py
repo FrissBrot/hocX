@@ -363,6 +363,9 @@ class StoredFileMetadata(BaseModel):
     capture_corrected_has_time: bool = False
     capture_corrected_set_at: datetime | None = None
     capture_corrected_set_by_name: str | None = None
+    # Stand der Datei (Migration 0203): pending/written/unsupported/failed oder None. Nur ein
+    # Hinweis im Foto-Viewer - Datum und Sortierung kommen immer aus den Spalten oben.
+    capture_file_state: Literal["pending", "written", "unsupported", "failed"] | None = None
     effective_date: date | None = None
     date_source: DateSource = "upload"
     camera_make: str | None = None

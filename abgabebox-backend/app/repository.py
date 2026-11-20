@@ -252,7 +252,10 @@ def list_checksums_for_element(
     damit ein zufaelliger Hash-Treffer zwischen zwei verschiedenen Personen keine legitime
     Abgabe blockiert."""
     rows = db.execute(
-        select(stored_file_table.c.checksum_sha256)
+        # source_checksum_sha256: schreibt hocX ein korrigiertes Aufnahmedatum in die Datei
+        # (Backend-Migration 0203), ändert sich checksum_sha256 - die ursprünglich abgegebene
+        # Datei bleibt trotzdem ein Duplikat (Spaltenrecht ebenfalls aus 0203).
+        select(stored_file_table.c.checksum_sha256, stored_file_table.c.source_checksum_sha256)
         .select_from(
             submission_upload_file_table.join(
                 submission_upload_table,
@@ -274,7 +277,7 @@ def list_checksums_for_element(
             func.coalesce(stored_file_table.c.scan_status, "clean").not_in(("error", "infected")),
         )
     )
-    return {row[0] for row in rows}
+    return {value for row in rows for value in row if value}
 
 
 def list_assignment_image_hashes(db: Session, *, assignment_id: int) -> list[tuple[int, str]]:

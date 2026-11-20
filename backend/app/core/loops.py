@@ -287,6 +287,14 @@ async def file_trash_purge_loop() -> None:
     await run_advisory_locked_loop(name="file_trash_purge", interval_seconds=60 * 60, task=file_trash_service.purge_expired)
 
 
+async def capture_date_file_sync_loop() -> None:
+    """Korrigiertes Aufnahmedatum in die Bilddateien schreiben bzw. das Original zurückschreiben
+    (services/capture_date_file_sync.py, Migration 0203). Die Anzeige gilt schon vorher."""
+    from app.services import capture_date_file_sync
+
+    await run_advisory_locked_loop(name="capture_date_file_sync", interval_seconds=60, task=capture_date_file_sync.process_pending)
+
+
 async def retention_proposals_loop() -> None:
     """Aufbewahrungsfristen der Vereine: Vorschläge anlegen, bei auto_apply umsetzen
     (services/tenant_retention_service.py)."""
@@ -382,4 +390,5 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     notification_dispatch_loop,
     todo_reminders_loop,
     file_trash_purge_loop,
+    capture_date_file_sync_loop,
 )

@@ -555,6 +555,10 @@
       "file_trash_purge": {
         "title": "Empty trash (retention)",
         "description": "Permanently deletes files and photos that have been in the trash for 30 days - including the stored object, thumbnail and erasure journal."
+      },
+      "capture_date_file_sync": {
+        "title": "Write capture dates to files",
+        "description": "Writes corrected capture dates into the image files and writes the original date back when it is restored."
       }
     }
   },
