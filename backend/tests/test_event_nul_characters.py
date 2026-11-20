@@ -59,3 +59,18 @@ def test_csv_with_nul_is_an_input_error_in_preview_and_import(db):
         EventService().preview_csv(db, csv_text)
     with pytest.raises(ValueError, match="NUL"):
         EventService().import_csv(db, csv_text, tenant_id=tenant.id)
+
+
+def test_event_search_with_nul_does_not_reach_the_database(db):
+    """GET /protocols/{id}/cycle-events?search=… (Terminsuche im Protokoll-Popup): NUL im
+    Suchtext liess die Abfrage mit DataError (500) abbrechen."""
+    from app.repositories.event_repository import EventRepository
+    from tests.factories import make_event
+
+    tenant = make_tenant(db)
+    make_event(db, tenant.id, title="Hock", event_date=date(2026, 5, 1))
+
+    items, total = EventRepository().list_filtered(db, tenant_id=tenant.id, search="Ho\x00ck")
+
+    assert total == 1
+    assert [event.title for event in items] == ["Hock"]

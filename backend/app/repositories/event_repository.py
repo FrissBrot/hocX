@@ -44,6 +44,8 @@ class EventRepository:
         statement = select(Event).where(Event.tenant_id == tenant_id)
         if event_ids is not None:
             statement = statement.where(Event.id.in_(event_ids))
+        # NUL kann in keinem Textfeld stehen; ungefiltert brach die Abfrage mit DataError (500) ab.
+        search = search.replace("\x00", "")
         if search:
             # % und _ aus der Eingabe sind Text, keine Platzhalter (wie routes/search.py)
             pattern = contains_pattern(search)
