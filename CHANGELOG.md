@@ -67,6 +67,12 @@ Installationen aktualisieren können.
   «Tags für die Pendenzen» schlägt die vorhandenen Pendenz-Tags vor (neue Lese-Route
   `GET /api/todos/tags`, `meetings.read`); ein Komma trennt Tags. Höchstens 999 Dateien je Element.
 
+- **Pendenz «Abgabe einsammeln»:** Im Pendenz-Dialog (auch mobil) lässt sich zu einer Pendenz
+  direkt eine Abgabe mit Datei einsammeln; Stand und Link stehen in der Pendenz, das Einsammeln
+  lässt sich wieder beenden. Neue Routen `GET /api/protocol-todos/{id}/submission` und
+  `POST /api/protocol-todos/{id}/stop-submission` (Rechte wie beim Anlegen einer Abgabe aus einer
+  Pendenz).
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt

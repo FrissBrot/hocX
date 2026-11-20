@@ -492,6 +492,7 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
         tagSuggestions={allTagSuggestions}
         showFine={finesEnabled}
         canCollectSubmission={canEdit && can(session, "submissions.manage")}
+        canReadSubmission={can(session, "submissions.read")}
         onUpdated={(updated) => {
           setTodos((prev) => ({
             all: prev.all.map((t) => t.id === updated.id ? { ...t, ...updated } : t),

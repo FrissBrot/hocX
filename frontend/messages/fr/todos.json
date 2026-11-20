@@ -7,7 +7,7 @@
   "appliedOnSaveHint": "Sera appliqué lors de l'enregistrement.",
   "assignedToLabel": "Assignée à",
   "autoClosedBySubmission": "Fermée automatiquement par une remise",
-  "autoClosedHint": "Fermée automatiquement par la remise.",
+  "autoClosedHint": "Terminée automatiquement dès que le fichier est remis.",
   "chooseEventOption": "Choisir un événement…",
   "clipboardUnavailable": "Presse-papiers indisponible",
   "colAssigned": "Assignée",
@@ -207,7 +207,6 @@
   "createEyebrow": "Nouvelle tâche",
   "toSubmission": {
     "button": "Collecter comme remise",
-    "hint": "Crée une remise individuelle avec cette tâche. Elle est terminée dès que le fichier est remis.",
     "created": "Remise « {title} » créée",
     "copyLink": "Copier le lien",
     "customize": "Adapter",
@@ -224,6 +223,42 @@
       "submission_no_default_link": "Il n’y a pas de lien standard pour les remises. Veuillez d’abord créer un lien sous Dépôts.",
       "protocol_closed": "Le procès-verbal est clôturé.",
       "submission_conflict": "La remise n’a pas pu être créée. Veuillez réessayer."
+    }
+  },
+  "filesCount": "{count, plural, one {# fichier} other {# fichiers}}",
+  "collect": {
+    "offerTitle": "Il manque encore un fichier ?",
+    "offerText": "Le collecter comme remise. La tâche se termine dès que le fichier est là.",
+    "collect": "Collecter",
+    "badgeOpen": "Remise ouverte",
+    "badgeClosed": "Remise fermée",
+    "since": "depuis le {date}",
+    "noFileYet": "pas encore de fichier",
+    "filesSubmitted": "{count, plural, one {# fichier remis} other {# fichiers remis}}",
+    "open": "Ouvrir",
+    "cardTitle": "Remise individuelle · {title}",
+    "responsibleSubmits": "{count, plural, one {{names} remet sans connexion} other {{names} remettent sans connexion}}",
+    "anyoneSubmits": "Remise sans connexion",
+    "dueUntil": "jusqu'au {due}",
+    "linkLabel": "Lien vers la remise",
+    "copyLink": "Copier le lien",
+    "copied": "Copié ✓",
+    "copyFailed": "Le lien n'a pas pu être copié",
+    "stop": "Arrêter",
+    "stopConfirmTitle": "Arrêter la collecte ?",
+    "stopConfirm": "La remise individuelle sera supprimée et son lien ne fonctionnera plus. La tâche conserve son statut, ses notes et ses fichiers.",
+    "stopped": "Collecte arrêtée",
+    "stopFailed": "La collecte n'a pas pu être arrêtée",
+    "submittedBy": "Remis par {name}",
+    "submittedViaBox": "Remis via la boîte de remise",
+    "openFile": "Ouvrir {name}",
+    "scanPending": "Analyse antivirus en cours …",
+    "doneBanner": "Remis via la boîte de remise. Tâche terminée automatiquement.",
+    "submittedBanner": "Remis via la boîte de remise.",
+    "errors": {
+      "submission_not_stoppable": "Cette remise ne peut pas être arrêtée ici (déjà remise ou plusieurs éléments). Veuillez la modifier sous Remises.",
+      "protocol_closed": "Le procès-verbal est clôturé.",
+      "todo_not_submission": "Cette tâche n'appartient à aucune remise."
     }
   }
 }

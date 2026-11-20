@@ -1822,6 +1822,21 @@ export type TodoDetails = {
   files: TodoDetailFile[];
 };
 
+/** GET /api/protocol-todos/{id}/submission: laufende Abgabe einer Pendenz (Abschnitt «Dateien»). */
+export type TodoSubmissionFile = TodoDetailFile & { scan_status: string };
+
+export type TodoSubmissionStatus = {
+  assignment_id: string;
+  title: string;
+  created_at: string;
+  element_status: "open" | "submitted" | "closed";
+  submitted_at: string | null;
+  /** Öffentliche Abgabebox-URL des Elements (ohne Login nutzbar) */
+  element_url: string | null;
+  files: TodoSubmissionFile[];
+  can_stop: boolean;
+};
+
 export type TodoListItem = ProtocolTodo & {
   protocol_id: string | null;
   protocol_number: string | null;

@@ -9,7 +9,7 @@ const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", () => ({
   ApiError: class ApiError extends Error { constructor(message: string, public kind?: string, public status?: number, public detail?: unknown) { super(message); } },
   browserApiFetch: (url: string, init?: { method?: string }) =>
-    (url.endsWith('/details') && !init?.method) || url.startsWith('/api/files') ? sideApi(url, init) : api(url, init),
+    ((url.endsWith('/details') || url.endsWith('/submission')) && !init?.method) || url.startsWith('/api/files') ? sideApi(url, init) : api(url, init),
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 const push = vi.hoisted(() => vi.fn());
@@ -153,41 +153,91 @@ it('links an uploaded file and saves it with the todo', async () => {
   expect(JSON.parse(api.mock.calls[1][1].body)).toEqual({ file_ids: ['file-2'] });
 });
 
-describe('«Als Abgabe einsammeln»', () => {
-  const linked = { ...todo, submission_assignment_id: 'sa-1', element_ref: 'manual', reference_link: 'https://abgabe.example/tok/bankvollmacht/manual', resolved_due_date: null };
-  it('is offered only with the right and for a todo that is no submission yet', () => {
+describe('«Datei einsammeln» im Abschnitt Dateien', () => {
+  const linked = { ...todo, submission_assignment_id: 'sa-1', element_ref: 'manual', reference_link: 'https://abgabe.example/tok/bankvollmacht/manual', resolved_due_date: '2026-11-30', assigned_participant_names: ['Anna Muster'] } as TodoListItem;
+  const openStatus = { assignment_id: 'sa-1', title: 'Bankvollmacht einreichen', created_at: '2026-11-20T08:00:00Z', element_status: 'open', submitted_at: null, element_url: 'https://abgabe.example/tok/bankvollmacht/manual', files: [], can_stop: true };
+  function withStatus(status: unknown) {
+    sideApi.mockImplementation((url: string) => Promise.resolve(url.endsWith('/submission') ? status : url.startsWith('/api/files') ? files : { notes: '', files: [] }));
+  }
+  it('offers collecting only with the right and for a todo that is no submission yet', async () => {
     mount();
-    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
-    cleanup();
-    render(<TodoEditModal todo={{ ...todo, submission_assignment_id: 'sa-1' }} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Einsammeln' })).not.toBeInTheDocument();
     cleanup();
     render(<TodoEditModal todo={{ ...todo, todo_status_code: 'done', todo_status_id: 3 }} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Einsammeln' })).not.toBeInTheDocument();
     cleanup();
     render(<TodoEditModal todo={todo} canEdit={false} canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Einsammeln' })).not.toBeInTheDocument();
+    cleanup();
+    render(<TodoEditModal todo={todo} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(screen.getByText('Datei fehlt noch?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Einsammeln' })).toBeEnabled();
   });
-  it('creates the submission with one click, keeps the dialog open and offers copy/customize', async () => {
+  it('creates the submission with one click and switches to the status card', async () => {
     const updated = vi.fn();
+    withStatus(openStatus);
     api.mockResolvedValueOnce({ assignment_id: 'sa-1', title: 'Bankvollmacht einreichen', public_slug: 'bankvollmacht-einreichen', element_url: linked.reference_link, todo: linked });
-    render(<TodoEditModal todo={todo} canEdit canCollectSubmission onUpdated={updated} participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Als Abgabe einsammeln' }));
+    render(<TodoEditModal todo={{ ...todo, assigned_participant_names: ['Anna Muster'] }} canEdit canCollectSubmission onUpdated={updated} participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Einsammeln' }));
     await waitFor(() => expect(updated).toHaveBeenCalledOnce());
     expect(api).toHaveBeenCalledWith('/api/protocol-todos/todo-1/create-submission', { method: 'POST' });
     expect(updated.mock.calls[0][0]).toMatchObject({ id: 'todo-1', submission_assignment_id: 'sa-1' });
     expect(closed).not.toHaveBeenCalled();
-    const [message, type, opts] = toast.mock.calls[0];
+    expect(await screen.findByText('Abgabe offen')).toBeInTheDocument();
+    expect(screen.getByText('Einzelabgabe · Bankvollmacht einreichen')).toBeInTheDocument();
+    expect(screen.getByLabelText('Link zur Abgabe')).toHaveValue(openStatus.element_url);
+    expect(screen.getByText(/seit 20\.11\.2026 · noch keine Datei/)).toBeInTheDocument();
+    expect(screen.getByText(/Anna Muster reicht ein, ohne Login/)).toBeInTheDocument();
+    expect(screen.getByText('Wird automatisch erledigt, sobald die Datei eingereicht ist.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Öffnen/ })).toHaveAttribute('href', '/submission-assignments?assignment=sa-1');
+    const [message, type] = toast.mock.calls[0];
     expect([message, type]).toEqual(['Abgabe «Bankvollmacht einreichen» erstellt', 'success']);
-    expect(opts.actions.map((action: { label: string }) => action.label)).toEqual(['Link kopieren', 'Anpassen']);
-    opts.actions[1].onClick();
-    expect(push).toHaveBeenCalledWith('/submission-assignments?assignment=sa-1&edit=1');
+  });
+  it('copies the link and stops collecting after confirmation', async () => {
+    const updated = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    withStatus(openStatus);
+    api.mockResolvedValueOnce({ ...todo, submission_assignment_id: null, reference_link: null });
+    render(<TodoEditModal todo={linked} canEdit canCollectSubmission onUpdated={updated} participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Link kopieren' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Kopiert ✓' })).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith(openStatus.element_url);
+    fireEvent.click(screen.getByRole('button', { name: 'Beenden' }));
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce());
+    expect(api).toHaveBeenCalledWith('/api/protocol-todos/todo-1/stop-submission', { method: 'POST' });
+    expect(updated.mock.calls[0][0]).toMatchObject({ submission_assignment_id: null });
+    expect(await screen.findByText('Datei fehlt noch?')).toBeInTheDocument();
+  });
+  it('hides «Beenden» when the backend does not allow it', async () => {
+    withStatus({ ...openStatus, can_stop: false });
+    render(<TodoEditModal todo={linked} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(await screen.findByText('Abgabe offen')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Beenden' })).not.toBeInTheDocument();
+  });
+  it('lists the submitted file and shows the success banner once done', async () => {
+    withStatus({ ...openStatus, element_status: 'submitted', submitted_at: '2026-11-18T20:14:00Z', can_stop: false,
+      files: [{ id: 'f-9', original_name: 'Vollmacht-signiert.pdf', mime_type: 'application/pdf', file_size_bytes: 188416, content_url: '/api/submission-uploads/u-1/files/f-9/content', scan_status: 'clean' }] });
+    render(<TodoEditModal todo={{ ...linked, todo_status_code: 'done', todo_status_id: 3 }} canEdit canReadSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(await screen.findByText('Vollmacht-signiert.pdf')).toBeInTheDocument();
+    expect(screen.getByText(/Eingereicht von Anna Muster/)).toBeInTheDocument();
+    expect(screen.getByText('1 Datei')).toBeInTheDocument();
+    expect(screen.getByText('Über die Abgabe eingereicht. Pendenz automatisch erledigt.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Erledigt' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Abgabe offen')).not.toBeInTheDocument();
+  });
+  it('does not load the submission without the right to read it', async () => {
+    withStatus(openStatus);
+    render(<TodoEditModal todo={linked} canEdit participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    await waitFor(() => expect(sideApi).toHaveBeenCalled());
+    expect(sideApi.mock.calls.some(([url]) => String(url).endsWith('/submission'))).toBe(false);
+    expect(screen.queryByText('Abgabe offen')).not.toBeInTheDocument();
   });
   it('shows the backend reason as error toast', async () => {
     const { ApiError } = await import("@/lib/api/client");
     api.mockRejectedValueOnce(new ApiError('x', 'validation', 400, { code: 'todo_without_assignee', message: 'x' }));
     render(<TodoEditModal todo={todo} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Als Abgabe einsammeln' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Einsammeln' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('verantwortliche Person'), 'error'));
   });
 });

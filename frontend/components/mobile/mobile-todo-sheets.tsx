@@ -18,9 +18,11 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
-import { featureAccess } from "@/lib/permissions";
+import { can, featureAccess } from "@/lib/permissions";
 import { canToggleTodo } from "@/lib/todo-permissions";
 import { TodoFineSection } from "@/components/finances/todo-fine-section";
+import { TodoAutoCloseHint, TodoCollectPanel, TodoSubmittedFileItems, useTodoSubmissionStatus } from "@/components/todos/todo-submission-collect";
+import { canCollectAsSubmission } from "@/components/todos/use-create-submission-from-todo";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
 
@@ -82,6 +84,10 @@ export function TodoDetailSheet({
   const dueLabel = todoDueLabel(todo, locale);
 
   const finesEnabled = featureAccess(session, "todo_fines") !== "none";
+  // «Datei einsammeln» wie im Desktop-Dialog (Abschnitt Dateien)
+  const canCollect = canEdit && can(session, "submissions.manage");
+  const submission = useTodoSubmissionStatus(todo.id, todo.submission_assignment_id, can(session, "submissions.read"));
+  const showFiles = (canCollect && canCollectAsSubmission(todo)) || !!submission;
 
   /** Eigene laufende Busse (409 todo_fine_running) verständlich melden. */
   function errorText(error: unknown, fallback: string): string {
@@ -218,7 +224,7 @@ export function TodoDetailSheet({
             { value: "done", label: tTodos("statusDoneLabel") },
           ]}
         />
-        {todo.submission_assignment_id ? <p className="mobile-muted-sm">{tTodos("autoClosedHint")}</p> : null}
+        <TodoAutoCloseHint todo={todo} />
 
         <div className="mobile-card mobile-group-card">
           <MobileListRow
@@ -266,6 +272,21 @@ export function TodoDetailSheet({
             ) : null}
           </div>
         </div>
+
+        {showFiles ? (
+          <div className="mobile-field-block todo-collect-mobile">
+            <div className="mobile-eyebrow">{tTodos("filesLabel")}</div>
+            {submission?.files.length ? <ul className="todo-collect-files"><TodoSubmittedFileItems todo={todo} status={submission} /></ul> : null}
+            <TodoCollectPanel
+              todo={todo}
+              status={submission}
+              canCollect={canCollect}
+              disabled={busy}
+              onBusyChange={setBusy}
+              onTodoChange={(updated) => onChange({ ...todo, ...updated })}
+            />
+          </div>
+        ) : null}
 
         {finesEnabled ? (
           <div className="mobile-field-block">

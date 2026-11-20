@@ -2154,6 +2154,27 @@
         "reports.personal"
       ]
     },
+    "POST /api/protocol-todos/{todo_id}/stop-submission": {
+      "handler": "todos.stop_submission_from_todo",
+      "requires": [
+        "meetings.edit",
+        "submissions.manage"
+      ],
+      "branches": [
+        "fines.manage"
+      ]
+    },
+    "GET /api/protocol-todos/{todo_id}/submission": {
+      "handler": "todos.get_todo_submission",
+      "requires": [
+        "meetings.read",
+        "submissions.read"
+      ],
+      "branches": [
+        "meetings.edit",
+        "submissions.manage"
+      ]
+    },
     "GET /api/protocols": {
       "handler": "protocols.list_protocols",
       "requires": [
