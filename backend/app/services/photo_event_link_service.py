@@ -67,7 +67,9 @@ def sync_photos_for_event(db: Session, event: Event) -> None:
     this."""
     end_date = event.event_end_date or event.event_date
 
-    to_link = db.execute(
+    # Ein abgesagter Termin bekommt wie in find_matching_event nie automatisch Fotos; wird er
+    # abgesagt, lösen sich alle seine automatischen Verknüpfungen (manuelle bleiben).
+    to_link = [] if event.is_cancelled else db.execute(
         select(GalleryImage)
         .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
         .where(
@@ -81,13 +83,14 @@ def sync_photos_for_event(db: Session, event: Event) -> None:
         gallery_image.event_id = event.id
         gallery_image.event_auto_linked = True
 
+    out_of_range = or_(_capture_date_expr.is_(None), _capture_date_expr < event.event_date, _capture_date_expr > end_date)
     to_unlink = db.execute(
         select(GalleryImage)
         .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
         .where(
             GalleryImage.event_id == event.id,
             GalleryImage.event_auto_linked.is_(True),
-            or_(_capture_date_expr.is_(None), _capture_date_expr < event.event_date, _capture_date_expr > end_date),
+            *(() if event.is_cancelled else (out_of_range,)),
         )
     ).scalars().all()
     for gallery_image in to_unlink:
