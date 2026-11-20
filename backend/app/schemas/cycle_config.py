@@ -35,6 +35,16 @@ class CycleConfigUpdate(BaseModel):
     def _no_nul_characters(cls, value: Any) -> Any:
         return reject_nul_characters(value)
 
+    @field_validator("name", "reset_month", "reset_day")
+    @classmethod
+    def _reject_explicit_null(cls, value: Any) -> Any:
+        # Weglassen ist erlaubt (Teil-Update), ausdrückliches null nicht: die Spalten sind NOT NULL,
+        # das UPDATE scheiterte sonst mit IntegrityError (400 plus Eintrag im Fehlerprotokoll).
+        # name_pattern darf null sein (Standardname «JJJJ/JJJJ+1»).
+        if value is None:
+            raise ValueError("must not be null")
+        return value
+
 
 class CycleConfigRead(PublicIdModel, CycleConfigBase):
     _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
