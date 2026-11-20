@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime, time
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from app.schemas.documents import DocumentSummary
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
@@ -578,6 +580,10 @@ class FileBulkTagsUpdate(BaseModel):
     remove_tags: list[str] = []
 
 
+_DATE_ONLY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_SHARE_EXPIRY_TZ = ZoneInfo("Europe/Zurich")
+
+
 class ShareLinkCreate(BaseModel):
     """Exactly one of file_ids/album_id must be set (files.py validates this) - a fixed
     selection vs. a "live" link that always shows an album's current contents."""
@@ -591,6 +597,19 @@ class ShareLinkCreate(BaseModel):
     share_location: bool = False
     share_capture_date: bool = True
     share_camera: bool = False
+
+    @field_validator("expires_at", mode="before")
+    @classmethod
+    def _date_means_end_of_swiss_day(cls, value: object) -> object:
+        """Das Freigabe-Modal schickt das Ablaufdatum aus dem DateInput als reines Datum; die
+        öffentliche Seite zeigt «gültig bis <Datum>». Ein reines Datum gilt deshalb bis zum Ende
+        dieses Tages in Schweizer Zeit (sonst liefe der Link schon um 00:00 UTC desselben Tages
+        ab). Vollständige Zeitpunkte bleiben unverändert."""
+        if isinstance(value, str) and _DATE_ONLY_RE.fullmatch(value.strip()):
+            value = date.fromisoformat(value.strip())
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return datetime.combine(value, time(23, 59, 59), tzinfo=_SHARE_EXPIRY_TZ)
+        return value
 
 
 class ShareLinkRead(BaseModel):
