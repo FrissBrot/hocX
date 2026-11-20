@@ -87,3 +87,13 @@ export function validateUploadFiles(
   }
   return { ok: true };
 }
+
+// Ob die Erfolgsseite «Weitere Datei hochladen» anbietet: nicht, wenn das Element voll ist oder
+// das Backend es nach dieser Abgabe automatisch geschlossen hat (auto_close, `element_closed`) -
+// ein weiterer Versuch scheiterte sonst an «Element ist nicht (mehr) offen».
+export function canUploadMoreAfterSuccess({ maxFiles, uploadedSoFar, elementClosed }: { maxFiles: number | null; uploadedSoFar: number; elementClosed: boolean }): boolean {
+  if (elementClosed) {
+    return false;
+  }
+  return maxFiles === null || maxFiles - uploadedSoFar > 0;
+}

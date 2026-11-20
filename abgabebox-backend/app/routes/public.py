@@ -666,6 +666,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             _log("moved_to_storage", "Aus Quarantäne in die Abgabe verschoben")
 
         # Step 5: Single DB transaction.
+        close_after = _closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files))
         try:
             repository.insert_full_upload(
                 db,
@@ -673,7 +674,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 event_id=element["event_id"],
                 list_entry_id=element["list_entry_id"],
                 files=saved_files,
-                close_after=_closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files)),
+                close_after=close_after,
             )
         except Exception as exc:
             closed_meanwhile = isinstance(exc, repository.ElementClosedError)
@@ -704,7 +705,9 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         if any(status == "clean" for status in scan_results):
             _log("scan_clean")
         _log("submitted", "Freigegeben")
-        return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings)
+        return UploadResult(
+            ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings, element_closed=close_after
+        )
 
 
 @router.post(

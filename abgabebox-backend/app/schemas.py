@@ -37,6 +37,9 @@ class UploadResult(BaseModel):
     ok: bool
     files_received: int
     image_duplicate_warnings: list[str] = []
+    # Element nach dieser Abgabe automatisch geschlossen (auto_close): die Erfolgsseite bietet
+    # dann keinen weiteren Upload an, der nur an «Element ist nicht (mehr) offen» scheitern würde.
+    element_closed: bool = False
 
 
 class CaptchaVerifyResult(BaseModel):
