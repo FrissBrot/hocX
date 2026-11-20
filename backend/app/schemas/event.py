@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import object_session
 
 from app.models.entities import CycleConfig, Participant, Tenant
@@ -50,7 +50,10 @@ class CycleAssignment(BaseModel):
     # PK, out of the public_id migration's scope) - resolve cycle_config_id explicitly
     # via the same session the source row is attached to, same technique as PublicIdModel.
     cycle_config_id: uuid.UUID
-    cycle_year: int
+    # event_cycle.cycle_year ist SMALLINT: grössere Werte scheiterten erst beim INSERT (DataError,
+    # 400 plus Fehlerprotokoll). Bewusst nur der Spaltenbereich, keine fachliche Grenze - das
+    # Schema liest auch bestehende Zuordnungen (EventRead).
+    cycle_year: int = Field(ge=-32768, le=32767)
 
     model_config = ConfigDict(from_attributes=True)
 
