@@ -9,6 +9,8 @@ import { can } from "@/lib/permissions";
 export default async function ProtocolsPage() {
   const session = await requireSession();
   const canWrite = can(session, "meetings.edit");
+  // Zurückstufen eines abgeschlossenen (= freigegebenen) Protokolls verlangt meetings.approve.
+  const canApprove = can(session, "meetings.approve");
 
   const [items, templates, preference] = await Promise.all([
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),
@@ -19,13 +21,14 @@ export default async function ProtocolsPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileProtocols initialProtocols={items ?? []} templates={templates ?? []} preferredTemplateId={preference?.template_id} readOnly={!canWrite} />}
+        mobile={<MobileProtocols initialProtocols={items ?? []} templates={templates ?? []} preferredTemplateId={preference?.template_id} readOnly={!canWrite} canApprove={canApprove} />}
         desktop={
           <section className="panel">
             <ProtocolBuilder
               initialProtocols={items ?? []}
               templates={templates ?? []} preferredTemplateId={preference?.template_id}
               readOnly={!canWrite}
+              canApprove={canApprove}
             />
           </section>
         }

@@ -413,7 +413,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/{protocol_id}/pending-todos` | meetings.read |
 | `GET /api/protocols/{protocol_id}/period` | meetings.read |
 | `POST /api/protocols/{protocol_id}/quick-todos` | meetings.edit |
-| `POST /api/protocols/{protocol_id}/revert-status` | meetings.edit |
+| `POST /api/protocols/{protocol_id}/revert-status` | meetings.approve, meetings.edit |
 | `GET /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `PUT /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `POST /api/protocols/{protocol_id}/sync-template` | meetings.edit |

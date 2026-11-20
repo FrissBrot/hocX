@@ -78,6 +78,8 @@ type ProtocolBuilderProps = {
   initialProtocols: ProtocolSummary[];
   templates: TemplateSummary[];
   readOnly?: boolean;
+  /** meetings.approve: abgeschlossen = freigegeben, Zurückstufen hebt die Freigabe auf. */
+  canApprove?: boolean;
   preferredTemplateId?: string | null;
 };
 
@@ -88,7 +90,7 @@ type ProtocolFormState = {
   title: string;
 };
 
-export function ProtocolBuilder({ initialProtocols, templates, readOnly = false, preferredTemplateId }: ProtocolBuilderProps) {
+export function ProtocolBuilder({ initialProtocols, templates, readOnly = false, canApprove = true, preferredTemplateId }: ProtocolBuilderProps) {
   const t = useTranslations("protocols.builder");
   const tRoot = useTranslations("protocols");
   const locale = useLocale();
@@ -390,7 +392,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
         onClick: () => void syncWithTemplate(protocol.id),
       });
     }
-    if (previousStatus) {
+    if (previousStatus && (!isFinal || canApprove)) {
       actions.push({
         label: t("revertTo", { status: protocolStatusLabel(previousStatus, tRoot) }),
         onClick: () => void revertStatus(protocol.id),

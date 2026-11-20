@@ -2284,6 +2284,7 @@
     "POST /api/protocols/{protocol_id}/revert-status": {
       "handler": "protocols.revert_protocol_status",
       "requires": [
+        "meetings.approve",
         "meetings.edit"
       ]
     },

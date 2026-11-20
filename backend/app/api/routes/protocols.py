@@ -437,6 +437,11 @@ def revert_protocol_status(
     prev = _PREVIOUS_STATUS.get(current_status)
     if prev is None:
         raise HTTPException(status_code=400, detail="Protocol is already at the initial status")
+    if current_status == "abgeschlossen":
+        # Abgeschlossen = freigegeben: die Freigabe aufheben darf nur, wer freigeben darf -
+        # sonst stuft ein Konto ohne meetings.approve (z. B. «Aktuar» mit Vier-Augen) ein
+        # freigegebenes Protokoll zurück, ändert es und verbirgt es vor Lesern ohne Entwurfsrecht.
+        require_permission(user, P.MEETINGS_APPROVE)
     try:
         protocol = service.update_protocol(db, existing.id, ProtocolUpdate(status=prev))
     except SQLAlchemyError as exc:
