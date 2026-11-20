@@ -131,6 +131,24 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "middlewares": [f"{settings.traefik_middleware_prefix}auth-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
+        # SEC-AUTH-007: dieselben Ratelimits wie auf der Hauptdomain (hocx-mfa-totp-verify,
+        # hocx-tenant-by-domain) - sonst wäre die TOTP-Prüfung über eine Mandanten-Domain ungebremst.
+        f"{base}-mfa-totp-verify": {
+            "rule": f"Host(`{domain}`) && Path(`/api/auth/mfa/totp/verify`) && Method(`POST`)",
+            "entryPoints": ["websecure"],
+            "service": f"{settings.router_prefix}-mfa-totp-verify@docker",
+            "priority": 200,
+            "middlewares": [f"{settings.traefik_middleware_prefix}mfa-totp-verify-ratelimit@docker"],
+            "tls": {"certResolver": "letsencrypt"},
+        },
+        f"{base}-tenant-by-domain": {
+            "rule": f"Host(`{domain}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)",
+            "entryPoints": ["websecure"],
+            "service": f"{settings.router_prefix}-tenant-by-domain@docker",
+            "priority": 200,
+            "middlewares": [f"{settings.traefik_middleware_prefix}tenant-by-domain-ratelimit@docker"],
+            "tls": {"certResolver": "letsencrypt"},
+        },
         f"{base}-gallery-upload": {
             "rule": f"Host(`{domain}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)",
             "entryPoints": ["websecure"],

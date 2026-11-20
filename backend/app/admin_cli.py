@@ -21,6 +21,7 @@ import secrets
 import sys
 from datetime import UTC, datetime
 
+from app.auth_security import events as auth_events
 from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models import PlatformAdmin
@@ -49,6 +50,7 @@ def reset_passkeys(email: str) -> int:
         )
         db.commit()
         clear_admin_lockouts(admin)
+        auth_events.record(event_type="admin.mfa.remove", outcome="success", platform_admin_id=admin.id, details={"factor": "passkey", "reason": "cli_reset", "count": removed})
         print(f"{removed} Passkey(s) von {admin.email} entfernt, Sessions beendet. "
               "Beim nächsten Login wird ein neuer Passkey eingerichtet - sofort selbst anmelden.")
         return 0

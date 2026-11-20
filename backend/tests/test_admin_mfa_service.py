@@ -191,11 +191,14 @@ def test_passkey_without_user_verification_is_rejected(db):
 
 
 def test_account_lockout_after_repeated_failures(db, monkeypatch):
+    # Anmeldeschutz L6 (consume_factor_attempt, Admin-Zähler): bis zur Grenze plus ein Versuch per
+    # Drip wird geprüft, danach 429
+    monkeypatch.setattr(mfa_module.settings, "auth_passkey_account_limit", 5)
     admin = _make_admin(db, "lockout@example.com")
     _enroll_via_login(db, admin, SoftPasskey())
     service = AdminAuthService()
     stranger = SoftPasskey()
-    for _ in range(mfa_module._ACCOUNT_ATTEMPT_LIMIT):
+    for _ in range(5 + 1):
         pending = _login(db, admin.email)
         start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
         with pytest.raises(HTTPException):

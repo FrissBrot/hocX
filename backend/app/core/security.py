@@ -208,6 +208,8 @@ def create_session_token(
         "iat": int(now.timestamp()),
         # Millisekunden: Widerruf und Neuausstellung in derselben Sekunde (Audit-Test H1)
         "iat_ms": int(now.timestamp() * 1000),
+        # Mikrosekunden wie session_revoke_at (token_predates_revoke)
+        "iat_us": epoch_microseconds(now),
         "exp": int(exp.timestamp()),
         "kid": _key_id(settings.auth_secret),
     }
@@ -289,17 +291,28 @@ def parse_session_token(token: str | None) -> dict | None:
     return data
 
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def epoch_microseconds(moment: datetime) -> int:
+    """Ganzzahlige Mikrosekunden seit 1970 (ohne Gleitkomma-Rundung) - Auflösung von
+    ``session_revoke_at`` (timestamptz) und vom Claim ``iat_us``."""
+    return (moment - _EPOCH) // timedelta(microseconds=1)
+
+
 def token_predates_revoke(revoke_at: datetime | None, session_data: dict) -> bool:
-    """Gemeinsame Regel für Konten und Plattform-Admins (session_revoke_at): wurde das Token vor dem
-    Widerruf ausgestellt? Mit ``iat_ms`` strikt (eine in derselben Millisekunde nach dem Widerruf neu
-    ausgestellte Session bleibt gültig), ältere Tokens nur mit Sekunden-``iat``: ein Widerruf in
-    derselben Sekunde trifft sie sicher (>=)."""
+    """Gemeinsame Regel für Konten und Plattform-Admins (session_revoke_at): wurde das Token vor
+    (oder gleichzeitig mit) dem Widerruf ausgestellt? Neue Tokens tragen ``iat_us`` in derselben
+    Auflösung wie der Widerruf - damit sind beide Fälle eindeutig: ein vor dem Widerruf in derselben
+    Millisekunde ausgestelltes Token ist ungültig, eine direkt danach neu ausgestellte Session gilt.
+    Ältere Tokens (nur ``iat_ms``/``iat``) werden im Zweifel als widerrufen behandelt (>=)."""
     if revoke_at is None:
         return False
-    revoke_ms = int(revoke_at.timestamp() * 1000)
+    if "iat_us" in session_data:
+        return epoch_microseconds(revoke_at) >= int(session_data["iat_us"])
     if "iat_ms" in session_data:
-        return revoke_ms > int(session_data["iat_ms"])
-    return revoke_ms >= int(session_data.get("iat", 0)) * 1000
+        return epoch_microseconds(revoke_at) // 1000 >= int(session_data["iat_ms"])
+    return epoch_microseconds(revoke_at) // 1_000_000 >= int(session_data.get("iat", 0))
 
 
 def _token_predates_revoke(user: AppUser, session_data: dict) -> bool:

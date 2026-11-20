@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin
 from app.core.config import settings
-from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
+from app.auth_security import events
+from app.auth_security.guard import consume_factor_attempt, refund_factor_attempt
+from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import get_redis_sync
 from app.core.webauthn import (
     SignCountError,
@@ -36,6 +38,7 @@ from app.schemas.mfa import (
     PasskeyRegistrationStartRead,
     UserMfaRead,
 )
+from app.services.audit_service import AuditService
 
 """MFA für Plattform-Admins: ausschliesslich Passkeys (WebAuthn), erzwungen.
 
@@ -58,6 +61,7 @@ Verwendung findet ihn nicht mehr.
 """
 
 
+_audit = AuditService()
 logger = logging.getLogger(__name__)
 
 _PASSKEY_INVALID = {"code": "passkey_invalid", "message": "Der Passkey konnte nicht geprüft werden"}
@@ -69,8 +73,6 @@ _PASSKEY_LABEL = "Passkey"
 
 # Konto-Sperre für fehlgeschlagene Passkey-Prüfungen (wie bisher für TOTP): ein neues Ticket gibt es
 # nach jedem richtigen Passwort, deshalb zählt das Konto, nicht das Ticket.
-_ACCOUNT_ATTEMPT_LIMIT = 10
-_ACCOUNT_WINDOW_SECONDS = 15 * 60
 
 
 def _flow_error(code: str = "mfa_flow_expired", message: str = "MFA-Vorgang ist abgelaufen") -> HTTPException:
@@ -203,9 +205,26 @@ class AdminMfaService:
         db.refresh(factor)
         return factor
 
-    def _assertion(self, db: Session, admin_id: int, flow: dict[str, Any], credential: dict[str, Any], *, lockout_key: str) -> UserMfaFactor:
-        """Prüft eine Passkey-Assertion gegen einen bereits verbrauchten Vorgang. Fehlschläge zählen
-        für die Konto-Sperre."""
+    def _assertion(
+        self, db: Session, admin_id: int, flow: dict[str, Any], credential: dict[str, Any], *, event_type: str, purpose: str | None = None
+    ) -> UserMfaFactor:
+        """Prüft eine Passkey-Assertion gegen einen bereits verbrauchten Vorgang. Jeder Versuch wird
+        VOR der Prüfung gezählt (Anmeldeschutz L6, eigener Admin-Zähler, danach 1/min Drip) und bei
+        Erfolg zurückgegeben; Fehlschläge werden als Sicherheitsereignis (``event_type``: Login
+        ``admin.login.mfa``, Bestätigung ``admin.stepup`` - Alarmregel admin_mfa) und im Audit
+        (``admin.mfa_failed``) festgehalten."""
+        counter = consume_factor_attempt(admin_id, kind="passkey", principal="admin")
+        extra = {"purpose": purpose} if purpose else {}
+
+        def failed(reason: str) -> None:
+            events.record(event_type=event_type, outcome="failure", platform_admin_id=admin_id, details={"reason": reason, "factor": "passkey", **extra})
+            admin = db.get(PlatformAdmin, admin_id)
+            _audit.log(
+                db, action="admin.mfa_failed", outcome="failure", actor_email=admin.email if admin is not None else None,
+                entity_type="platform_admin", entity_id=admin_id,
+                details={"reason": reason, "context": "step_up" if event_type == "admin.stepup" else "login", **extra},
+            )
+
         credential_id = credential.get("rawId") or credential.get("id")
         factor = None
         if isinstance(credential_id, str) and credential_id:
@@ -220,7 +239,7 @@ class AdminMfaService:
                 .with_for_update()
             )
         if factor is None or not factor.webauthn_public_key_pem or factor.locked_at is not None:
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_WINDOW_SECONDS)
+            failed("passkey_locked" if factor is not None and factor.locked_at is not None else "passkey_unknown")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_unknown", "message": "Unbekannte Passkey-Anmeldung"})
         try:
             result = verify_assertion(
@@ -240,14 +259,14 @@ class AdminMfaService:
             factor.locked_at = datetime.now(UTC)
             db.add(factor)
             db.commit()
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_WINDOW_SECONDS)
+            failed("sign_count")
             logger.error("Admin-Passkey %s gesperrt: Zähler nicht gestiegen", factor.id)
             from app.core.error_log import record_system_error
 
             record_system_error(db, exc=RuntimeError(f"Admin-Passkey (Faktor {factor.id}) gesperrt: Zähler nicht gestiegen, möglicher Klon"))
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_PASSKEY_INVALID) from exc
         except WebauthnError as exc:
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_WINDOW_SECONDS)
+            failed("passkey_invalid")
             logger.info("Admin-Passkey-Prüfung abgelehnt: %s", exc)
             # Generische Meldung (Review, Info): Details nur im Log
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_PASSKEY_INVALID) from exc
@@ -255,6 +274,8 @@ class AdminMfaService:
         factor.last_used_at = datetime.now(UTC)
         db.add(factor)
         db.commit()
+        refund_factor_attempt(counter)
+        events.record(event_type=event_type, outcome="success", platform_admin_id=admin_id, details={"factor": "passkey", **extra})
         return factor
 
     # ── Selbstverwaltung (mit Session) ─────────────────────────────────────────────────────
@@ -373,9 +394,7 @@ class AdminMfaService:
         context = self._load_login_ticket(db, ticket)
         if context.admin.id != int(flow["admin_id"]):
             raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang")
-        lockout_key = f"admin-mfa-account:{context.admin.id}"
-        check_account_lockout(lockout_key, limit=_ACCOUNT_ATTEMPT_LIMIT)
-        self._assertion(db, context.admin.id, flow, credential, lockout_key=lockout_key)
+        self._assertion(db, context.admin.id, flow, credential, event_type="admin.login.mfa")
         return self._consume_login_ticket(db, ticket)
 
     def start_login_passkey_setup(
@@ -449,8 +468,6 @@ class AdminMfaService:
     def verify_step_up(
         self, db: Session, *, admin_id: int, purpose: str, flow_token: str, credential: dict[str, Any], binding: str
     ) -> None:
-        lockout_key = f"admin-mfa-account:{admin_id}"
-        check_account_lockout(lockout_key, limit=_ACCOUNT_ATTEMPT_LIMIT)
         flow = self._take_flow(flow_token, expected_kind="admin_step_up")
         if (
             int(flow["admin_id"]) != admin_id
@@ -458,7 +475,7 @@ class AdminMfaService:
             or not hmac.compare_digest(str(flow.get("binding", "")).encode("utf-8"), binding.encode("utf-8"))
         ):
             raise _flow_error("step_up_mismatch", "Die Bestätigung gehört zu einer anderen Aktion")
-        self._assertion(db, admin_id, flow, credential, lockout_key=lockout_key)
+        self._assertion(db, admin_id, flow, credential, event_type="admin.stepup", purpose=purpose)
 
     # ── Notausgang (admin_cli) ─────────────────────────────────────────────────────────────
 
@@ -479,10 +496,18 @@ class AdminMfaService:
 
 
 def clear_admin_lockouts(admin: PlatformAdmin) -> int:
-    """Sperrzähler eines Admin-Kontos löschen (Login je Konto/IP, Passkey-Prüfung) - für den
-    Notausgang, damit ein zurückgesetztes Konto sich sofort wieder anmelden kann."""
-    redis = get_redis_sync()
-    email = admin.email.strip().lower()
-    keys = [f"ratelimit:admin-mfa-account:{admin.id}", f"ratelimit:login-admin:{email}"]
-    keys += list(redis.scan_iter(match=f"ratelimit:login-admin:{email}:ip:*"))
-    return int(redis.delete(*keys) or 0)
+    """Sperrzähler eines Admin-Kontos löschen - für den Notausgang (admin_cli), damit ein
+    zurückgesetztes Konto sich sofort wieder anmelden kann: Passwortphase (LoginGuard, Scope
+    login-admin), Passkey-Versuche (L6, Admin-Zähler) und der Drip danach. Die Zähler je Konto und
+    Quelle (login-admin-ip) sind über Konto+Adresse gehasht und nicht einzeln auffindbar: es werden
+    die Quell-Zähler aller Admin-Konten gelöscht (nur der Admin-Login, nie Mandanten)."""
+    from app.core.auth_pseudonym import counter_subject, subject_hash
+    from app.core.rate_limit import PREFIX, redis_key
+    from app.core.redis_client import get_ratelimit_redis_sync
+
+    counters = get_ratelimit_redis_sync()
+    keys = [redis_key("login-admin", subject_hash(admin.email)), redis_key("admin-passkey-account", str(admin.id))]
+    keys += list(counters.scan_iter(match=f"{PREFIX}login-admin-ip:*", count=500))
+    deleted = int(counters.delete(*keys) or 0)
+    deleted += int(get_redis_sync().delete(f"authsec:drip:admin:passkey:{counter_subject('drip', str(admin.id))}") or 0)
+    return deleted

@@ -191,8 +191,21 @@ Installationen aktualisieren können.
   Adresse und Quelle getrennt; Session- und Geräte-Cookies mit `__Host-`-Präfix; Bridge-Tokens werden
   je Session wiederverwendet; WebAuthn prüft Algorithmus, Kurve und RSA-Länge.
 
+- **Plattform-Admins im Anmeldeschutz:** Die Passwortphase des Admin-Logins läuft über denselben
+  Anmeldeschutz wie bei Konten (Zählen vor dem Prüfen, Scope `login-admin`), ohne IP-Sperren der
+  Stufen 4/5 (Ziti-Notzugang). Passkey-Versuche werden vor der Prüfung gezählt (danach 1/min).
+  Admin-Logins, Passkey-Bestätigungen, Passkey einrichten/entfernen und Abmelden erscheinen als
+  Sicherheitsereignisse; die Alarme «Fehlgeschlagene Admin-MFA» und «Plattform-Anmeldung von neuem
+  Gerät» greifen. Der Notausgang (`admin_cli`) setzt die Zähler jetzt wirklich zurück.
+- **Mandanten-Domains:** TOTP-Prüfung und Domain-Auflösung haben dort dieselben Ratelimits wie auf
+  der Hauptdomain (SEC-AUTH-007). Widerruf von Sessions (Konten und Admins) mit Mikrosekunden-
+  Auflösung: ein vor dem Widerruf ausgestelltes Token ist sicher ungültig, eine direkt danach neu
+  ausgestellte Session gilt.
+
 ### Update
 
+- Nach dem Update meldet der erste Admin-Login je Gerät einmal «Plattform-Anmeldung von neuem
+  Gerät» (Warnung) - das Gerät wird erst ab dann wiedererkannt.
 - **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue
   Dokumentversion (das PDF lässt die Felder jetzt weg). Keine Migration.
 

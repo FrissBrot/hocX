@@ -14,6 +14,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from app.schemas.base import MAX_QUERY_OFFSET
+from app.auth_security import events as auth_events
 from app.core.admin_origin import admin_request_hostname, expected_admin_origin
 from app.core.admin_step_up import normalize_step_up_path, require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
@@ -1191,6 +1192,7 @@ def complete_my_admin_passkey_registration(
         credential=payload.credential,
     )
     audit.log(db, action="admin.passkey_enrolled", actor_email=current_admin.email, entity_type="user_mfa_factor", entity_id=factor.id)
+    auth_events.record(event_type="admin.mfa.enroll", outcome="success", platform_admin_id=current_admin.admin_id, details={"factor": "passkey", "stage": "account"})
     return admin_mfa_service.get_self_overview(db, current_admin)
 
 
@@ -1203,6 +1205,7 @@ def delete_my_admin_mfa_factor(
     internal_factor_id = _resolve_factor_id(db, factor_id)
     result = admin_mfa_service.delete_self_factor(db, current_admin, internal_factor_id)
     audit.log(db, action="admin.passkey_removed", actor_email=current_admin.email, entity_type="user_mfa_factor", entity_id=internal_factor_id)
+    auth_events.record(event_type="admin.mfa.remove", outcome="success", platform_admin_id=current_admin.admin_id, details={"factor": "passkey"})
     return result
 
 

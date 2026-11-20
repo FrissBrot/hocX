@@ -35,7 +35,7 @@ def health() -> dict[str, str]:
 
 @router.post("/login", response_model=AdminSessionRead)
 def login(payload: AdminLoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
-    return service.login(db, response, payload, client_address=client_ip(request))
+    return service.login(db, response, payload, client_address=client_ip(request), request=request)
 
 
 @router.post("/mfa/passkey/start", response_model=PasskeyAssertionStartRead)
@@ -46,8 +46,8 @@ def start_login_passkey(payload: MfaTicketRequest, request: Request, db: Session
 
 
 @router.post("/mfa/passkey/verify", response_model=AdminSessionRead)
-def verify_login_passkey(payload: PasskeyAssertionVerifyRequest, response: Response, db: Session = Depends(get_db)):
-    return service.verify_login_passkey(db, response, flow_token=payload.flow_token, credential=payload.credential)
+def verify_login_passkey(payload: PasskeyAssertionVerifyRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    return service.verify_login_passkey(db, response, flow_token=payload.flow_token, credential=payload.credential, request=request)
 
 
 @router.post("/mfa/passkey/setup/start", response_model=PasskeyRegistrationStartRead)
@@ -58,9 +58,9 @@ def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: S
 
 
 @router.post("/mfa/passkey/setup/complete", response_model=AdminSessionRead)
-def complete_login_passkey_setup(payload: PasskeyRegistrationComplete, response: Response, db: Session = Depends(get_db)):
+def complete_login_passkey_setup(payload: PasskeyRegistrationComplete, response: Response, request: Request, db: Session = Depends(get_db)):
     return service.complete_login_passkey_setup(
-        db, response, flow_token=payload.flow_token, label=payload.label, credential=payload.credential
+        db, response, flow_token=payload.flow_token, label=payload.label, credential=payload.credential, request=request
     )
 
 

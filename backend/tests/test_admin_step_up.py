@@ -148,6 +148,9 @@ _LOGIN = "Anmeldung selbst (führt erst zur Session)"
 _OPERATIONAL = "betrieblich und umkehrbar, kein Zugang zu Daten oder Konten; Audit-Log"
 _COMMERCIAL = "kaufmännisch (Abo, Preise, Forderungen), kein Zugang zu Daten oder Konten; Audit-Log"
 EXEMPT = {
+    # Anmeldeschutz (feat/auth-hardening): IP-/Subjekt-Sperren setzen bzw. aufheben, nur API
+    ("POST", "/api/admin/auth-security/blocks"): _OPERATIONAL + " (Sperren laufen von selbst ab)",
+    ("DELETE", "/api/admin/auth-security/blocks/{subject}"): _OPERATIONAL,
     ("POST", "/api/admin/auth/login"): _LOGIN,
     ("POST", "/api/admin/auth/logout"): "beendet nur die eigene Session",
     ("POST", "/api/admin/auth/mfa/passkey/start"): _LOGIN,

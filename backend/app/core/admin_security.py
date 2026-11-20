@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.security import token_predates_revoke
+from app.core.security import epoch_microseconds, token_predates_revoke
 from app.core.security import verify_password  # noqa: F401  (re-exported for convenience)
 from app.models import PlatformAdmin
 
@@ -52,6 +52,8 @@ def create_admin_session_token(admin_id: int) -> str:
             # Millisekunden (Review L5): ein Widerruf in derselben Sekunde wie die Ausstellung
             # entscheidet sonst je nach Rundung falsch.
             "iat_ms": int(now.timestamp() * 1000),
+            # Mikrosekunden wie session_revoke_at (app/core/security.py::token_predates_revoke)
+            "iat_us": epoch_microseconds(now),
             "exp": int((now + timedelta(hours=settings.admin_session_ttl_hours)).timestamp()),
         },
         separators=(",", ":"),

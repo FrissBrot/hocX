@@ -19,6 +19,31 @@ def _forget_auth_events():
         connection.execute(text("DELETE FROM auth_event"))
 
 
+def _flush_auth_counters() -> None:
+    try:
+        from app.core import rate_limit
+        from app.core.redis_client import get_ratelimit_redis_sync, get_redis_sync
+
+        for client in {id(c): c for c in (get_redis_sync(), get_ratelimit_redis_sync())}.values():
+            for pattern in ("ratelimit:*", "authsec:*", "authblock:*"):
+                keys = list(client.scan_iter(pattern, count=1000))
+                if keys:
+                    client.delete(*keys)
+        rate_limit.local_window.clear()
+    except Exception:  # noqa: BLE001 - ohne Redis (reine Unit-Tests) gibt es nichts zu leeren
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _fresh_auth_counters():
+    """Anmeldeschutz (app/auth_security/guard.py): Zähler je Quelle, Netz und Konto liegen in Redis
+    und überdauern den Test. Testaufrufe kommen alle von derselben Quelle (meist ohne IP) - ohne
+    Leeren griffe die Quellgrenze nach einigen Tests mit Logins (Konten wie Plattform-Admins) in
+    fremden Tests. Vor jedem Test leeren."""
+    _flush_auth_counters()
+    yield
+
+
 @pytest.fixture
 def db():
     """A session bound to a connection wrapped in an outer transaction that's always

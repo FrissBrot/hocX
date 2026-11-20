@@ -1,7 +1,8 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { authFiles } from "./auth";
+import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { uniquePng } from "./unique-fixture";
 
 // Storage-quota enforcement (audit fix, 2026-09-17): Tenant.storage_quota_bytes has been
@@ -82,7 +83,19 @@ test("rejects a gallery upload once the tenant's plan storage quota is exceeded"
     if (tenantId && originalSubscription) {
       await adminApi.patch(`/api/admin/tenants/${tenantId}/subscription`, { data: originalSubscription }).catch(() => {});
     }
-    await adminApi.delete(`/api/admin/plans/${planCode}`).catch(() => {});
+    // Plan löschen braucht seit der Admin-Abschottung eine Passkey-Bestätigung (Zweck
+    // catalog-change, backend app/core/admin_step_up.py) - wie in auth.setup.ts mit dem
+    // Software-Passkey des Plattform-Admins (Zähler danach speichern).
+    const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
+    if (adminPasskey) {
+      const path = `/api/admin/plans/${planCode}`;
+      const origin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
+      const removed = await adminApi
+        .delete(path, { headers: await stepUpHeaders(adminApi, adminPasskey, origin, "catalog-change", "DELETE", path) })
+        .catch(() => null);
+      await adminPasskey.save(platformAdminPasskeyFile);
+      expect.soft(removed?.status(), "Temporärer Plan wurde nicht gelöscht").toBe(204);
+    }
     await writerApi.dispose();
     await adminApi.dispose();
   }

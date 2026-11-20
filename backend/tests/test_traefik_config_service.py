@@ -149,6 +149,8 @@ def test_regenerate_malicious_domain_string_stays_a_single_contained_value(db, m
         f"tenant-app-{domain_row.id}-auth",
         f"tenant-app-{domain_row.id}-word-import",
         f"tenant-app-{domain_row.id}-gallery-upload",
+        f"tenant-app-{domain_row.id}-mfa-totp-verify",
+        f"tenant-app-{domain_row.id}-tenant-by-domain",
     }
     # The malicious string is preserved verbatim as one opaque value inside the rule -
     # it did not fragment into separate YAML structure.
@@ -391,3 +393,23 @@ def test_regenerate_skips_reserved_domains_from_old_data(db, monkeypatch, tmp_pa
 
     rules = " ".join(r["rule"] for r in (config.get("http") or {}).get("routers", {}).values())
     assert "admin.hocx.example" not in rules
+
+
+def test_custom_app_domain_has_auth_ratelimit_routers(db, monkeypatch, tmp_path):
+    """SEC-AUTH-007: TOTP-Prüfung und tenant-by-domain auf Mandanten-Domains mit denselben
+    Ratelimits wie auf der Hauptdomain (vorher nur das allgemeine api-inflight)."""
+    tenant = make_tenant(db, "Ratelimit Verein")
+    grant_tenant_feature(db, tenant.id)
+    row = _make_domain(db, tenant.id, "app.ratelimit.example", purpose="app")
+
+    routers = _regenerate_into_tmp(monkeypatch, tmp_path, db)["http"]["routers"]
+
+    prefix = traefik_config_service.settings.traefik_middleware_prefix
+    service_prefix = traefik_config_service.settings.router_prefix
+    for name, path, method in (("mfa-totp-verify", "/api/auth/mfa/totp/verify", "POST"), ("tenant-by-domain", "/api/auth/tenant-by-domain", "GET")):
+        router = routers[f"tenant-app-{row.id}-{name}"]
+        assert router["rule"] == f"Host(`app.ratelimit.example`) && Path(`{path}`) && Method(`{method}`)"
+        assert router["middlewares"] == [f"{prefix}{name}-ratelimit@docker"]
+        assert router["service"] == f"{service_prefix}-{name}@docker"
+        # über dem allgemeinen Backend-Router der Domain
+        assert router["priority"] > routers[f"tenant-app-{row.id}-backend"]["priority"]
