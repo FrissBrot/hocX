@@ -278,6 +278,27 @@
         6,
         7
       ]
+    },
+    {
+      "name": "fenster_ueber_kalendergrenze",
+      "filter": {
+        "range": {
+          "mode": "window",
+          "start_days": -1000000000,
+          "end_days": 1000000000
+        }
+      },
+      "column": null,
+      "expected": [
+        1,
+        2,
+        3,
+        4,
+        8,
+        5,
+        6,
+        7
+      ]
     }
   ]
 }
