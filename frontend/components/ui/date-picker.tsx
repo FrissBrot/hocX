@@ -10,7 +10,7 @@ import { KeyboardEvent, RefObject, useEffect, useMemo, useRef, useState } from "
 import { useLocale, useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 
-import { usePopoverDismiss, usePopoverPosition } from "./popover";
+import { usePopoverDismiss, usePopoverFocus, usePopoverPosition } from "./popover";
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -69,6 +69,8 @@ export function DatePicker({ anchorRef, value, min, max, onSelect, onClose, retu
     if (hadFocus) returnFocusRef?.current?.focus();
   };
   usePopoverDismiss(true, close, [anchorRef, panelRef]);
+  // Tab am Ende/Anfang verlässt den Kalender hinter bzw. auf dem Kalender-Button
+  const focus = usePopoverFocus({ open: true, panelRef, anchorRef, returnFocusRef, onClose: close, mode: "dialog", initialFocus: "none" });
 
   const selected = parseIso(value);
   const minDate = parseIso(min);
@@ -125,7 +127,7 @@ export function DatePicker({ anchorRef, value, min, max, onSelect, onClose, retu
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div ref={panelRef} className="popover-panel date-picker" style={style} role="dialog" aria-label={t("dateField.calendar")}>
+    <div ref={panelRef} className="popover-panel date-picker" style={style} role="dialog" aria-label={t("dateField.calendar")} onKeyDown={focus.onKeyDown}>
       <div className="date-picker-header">
         <button type="button" className="button-icon-soft" aria-label={t("dateField.previousMonth")} onClick={() => setFocused(addMonths(focused, -1))}>
           ‹

@@ -11,6 +11,8 @@ import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { fileExtension } from "@/lib/files/display";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { useModalFocus } from "@/lib/a11y/use-focus-trap";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { formatFileSize, formatLongDateRange, formatShortMonthDate } from "@/lib/utils/format";
 import { PublicShare, PublicShareFile } from "@/types/api";
 
@@ -422,14 +424,10 @@ function PublicShareViewer({
     [files.length, index, onIndexChange]
   );
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "ArrowLeft") go(-1);
-      if (event.key === "ArrowRight") go(1);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [go]);
+  // Blättern mit den Pfeilen (Registry `media.previous`/`media.next`), nicht beim Tippen
+  useShortcut("media.previous", () => (hasPrev ? go(-1) : false), { scopeRef: rootRef });
+  useShortcut("media.next", () => (hasNext ? go(1) : false), { scopeRef: rootRef });
+  useModalFocus(true, rootRef);
 
   useEffect(() => {
     const active = stripRef.current?.querySelector<HTMLElement>("[aria-current='true']");
@@ -439,7 +437,7 @@ function PublicShareViewer({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div ref={rootRef} className="public-share-viewer" role="dialog" aria-modal="true" aria-label={file.original_name} onClick={onClose}>
+    <div ref={rootRef} /* a11y-ok: Hintergrund-Klick schliesst, Tastatur: Escape/Schliessen-Knopf */ className="public-share-viewer" role="dialog" aria-modal="true" aria-label={file.original_name} tabIndex={-1} onClick={onClose}>
       <div className="public-share-viewer-bar" onClick={(event) => event.stopPropagation()}>
         <div className="public-share-viewer-info">
           <ExtensionBadge file={file} />

@@ -246,10 +246,23 @@
     "bulletList": "Elenco puntato",
     "italic": "Corsivo ({shortcut})",
     "openLink": "{modifier} + clic apre il link",
-    "orderedList": "Elenco numerato"
+    "orderedList": "Elenco numerato",
+    "toolbar": "Formattazione"
   },
   "keys": {
-    "ctrl": "Ctrl"
+    "ctrl": "Ctrl",
+    "alt": "Alt",
+    "shift": "Maiusc",
+    "enter": "Invio",
+    "escape": "Esc",
+    "space": "Spazio",
+    "tab": "Tab",
+    "delete": "Canc",
+    "backspace": "Backspace",
+    "home": "Inizio",
+    "end": "Fine",
+    "pageUp": "Pag su",
+    "pageDown": "Pag giù"
   },
   "columnFilter": {
     "label": "Filtra {column}",
@@ -257,5 +270,55 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Il file CSV ha troppe righe (al massimo {max, number} righe di dati). Dividilo e importalo in più passaggi."
+  },
+  "keyboard": {
+    "skipToContent": "Vai al contenuto",
+    "helpTitle": "Scorciatoie da tastiera",
+    "helpDescription": "Cosa si può fare con la tastiera in questa pagina.",
+    "inputsHint": "Mentre si scrive in un campo, le scorciatoie senza {modifier} non fanno nulla; le scorciatoie del browser e dell’editor restano attive.",
+    "moveUp": "Sposta «{name}» in alto",
+    "moveDown": "Sposta «{name}» in basso",
+    "moveLeft": "Sposta «{name}» a sinistra",
+    "moveRight": "Sposta «{name}» a destra",
+    "moved": "«{name}» è ora in posizione {position} di {total}.",
+    "groups": {
+      "global": "Ovunque",
+      "lists": "Elenchi, menu e schede",
+      "dialogs": "Finestre e moduli",
+      "reorder": "Cambiare l’ordine",
+      "protocol": "Verbale",
+      "designer": "Document Studio",
+      "media": "Foto e file"
+    },
+    "shortcuts": {
+      "global_search": "Aprire o chiudere la ricerca globale",
+      "global_listSearch": "Passare alla ricerca dell’elenco (seconda volta: ricerca del browser)",
+      "global_quickSearch": "Ricerca dell’elenco, altrimenti ricerca globale",
+      "global_help": "Aprire questa panoramica",
+      "search_toListSearch": "Nella ricerca: usare il termine per la ricerca dell’elenco",
+      "standard_nextField": "Elemento successivo o precedente",
+      "standard_activate": "Attivare pulsante, link o voce",
+      "standard_close": "Chiudere finestra, menu o elenco",
+      "standard_listNavigate": "Spostarsi in elenchi e menu",
+      "standard_tabsNavigate": "Passare tra schede e filtri",
+      "standard_reorder": "Spostare la voce attiva nell’ordine",
+      "protocol_find": "Ricerca per capitolo e testo nel verbale",
+      "protocol_nextElement": "Sezione successiva (alla fine: chiudere il verbale)",
+      "protocol_previousElement": "Sezione precedente",
+      "protocol_elementDown": "Cambiare sezione (fuori dai campi)",
+      "protocol_elementUp": "Sezione precedente (fuori dai campi)",
+      "protocol_openTodo": "Nuovo compito nel pannello della seduta",
+      "protocol_openNotes": "Note del pannello della seduta",
+      "protocol_attendanceStatus": "Presenza: presente, in ritardo, giustificato, assente",
+      "designer_save": "Salvare il modello",
+      "designer_undo": "Annulla",
+      "designer_redo": "Ripeti",
+      "designer_duplicate": "Duplicare l’elemento selezionato",
+      "designer_delete": "Eliminare l’elemento selezionato",
+      "designer_move": "Spostare l’elemento selezionato",
+      "designer_deselect": "Annullare la selezione",
+      "media_previous": "Foto o file precedente",
+      "media_next": "Foto o file successivo"
+    }
   }
 }

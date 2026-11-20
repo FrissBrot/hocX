@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import Link from "next/link";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -84,7 +85,7 @@ export function AccessOverview({ users, invites, roles, tenantRequiresMfa }: Pro
           <tr
             key={user.id}
             className={`table-row-clickable${status === "inactive" ? " participant-row-inactive" : ""}`}
-            onClick={() => router.push(`/participants/${user.id}` as Route)}
+            onClick={() => router.push(`/participants/${user.id}` as Route)} // a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Name)
           >
             <td>
               <div className="participant-name-cell">
@@ -92,7 +93,10 @@ export function AccessOverview({ users, invites, roles, tenantRequiresMfa }: Pro
                   {participantInitials(user)}
                 </span>
                 <div className="participant-name-text">
-                  <strong>{user.display_name}</strong>
+                  {/* Tastatur: Name als Link zur Person, die Zeile bleibt für die Maus klickbar */}
+                  <Link href={`/participants/${user.id}` as Route} className="table-row-link" onClick={(event) => event.stopPropagation()}>
+                    {user.display_name}
+                  </Link>
                   <span className="participant-name-sub">{user.email ?? t("access.noEmail")}</span>
                 </div>
               </div>

@@ -10,7 +10,7 @@ Vor dem Commit: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok`
 1. **Erst wiederverwenden, dann bauen.** Gibt es einen Baustein in Abschnitt 4, wird er benutzt. Ein Nachbau mit Inline-Styles ist ein Fehler, auch wenn er "schneller" geht.
 2. **Nur Tokens, keine Literale.** Farben, Radien, Schriftgrößen, Abstände, Schatten, z-index und Dauern kommen aus `design/tokens.css`.
 3. **Beide Themes.** Jede Änderung muss in Light **und** Dark stimmen. Keine festen Farben, die nur in einem Theme funktionieren.
-4. **Tastatur first.** Alles Klickbare ist per Tab erreichbar und zeigt Fokus (Abschnitt 9).
+4. **Tastatur first.** Alles Klickbare ist per Tab erreichbar, per Tastatur auslösbar und zeigt Fokus (Abschnitt 9, Details und Bausteinverträge: `design/KEYBOARD_ACCESSIBILITY.md`).
 5. **Klasse vor Inline-Style.** `style={{ ... }}` ist nur für dynamische Werte erlaubt (Breite in %, berechnete Position, Laufzeitfarbe), nie für wiederkehrende Optik.
 
 ## 2. Tokens
@@ -79,6 +79,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Umschalten von Ansichten | `Tabs` (Inhalt) oder `RouteTabs` (eigene Route) | |
 | Tabelle | `DataTable` + `DataToolbar` | Spalten als `columns`, Zeilen als Kinder, `emptyMessage` setzen |
 | Paginierung | `Pagination` (`offset`, `limit`, `total`) | |
+| Reihenfolge ändern | `ReorderButtons` (`itemKey`, `name`, `index`, `count`, `onMove`) | Pflicht-Alternative zu Drag-and-Drop; kompakt: Alt+Pfeil via `reorderKeyDown` (`lib/a11y/reorder.ts`) |
 | Kopierbarer Wert | `CopyField` | |
 | Datei ablegen | `file-drop-overlay` | |
 
@@ -221,13 +222,14 @@ Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon
 - Icon-Buttons haben `aria-label`, Modals einen Titel, Tabellen echte `<th>`.
 - Kontrast: Text auf `--x-bg` immer `--x-fg`, Text auf Vollfarbe immer `--on-solid`.
 - Interaktive Flächen mindestens 28 px hoch (`button-icon-soft`), Standard 36–48 px.
-- **Tastenkürzel** nie fest als «Ctrl+K» oder «Strg+Z» beschriften: auf Mac, iPhone und iPad heisst die Taste ⌘. Texte bekommen einen Platzhalter (`"Rückgängig ({shortcut})"`), die Komponente füllt ihn mit `useShortcutLabel()("Z")` aus `@/lib/search/shortcuts` (Apple `⌘Z`, sonst `Strg+Z`/`Ctrl+Z` je Sprache); nur der Tastenname allein: `useModifierLabel()`. Tastendrücke immer mit `event.ctrlKey || event.metaKey` prüfen. Der Checker meldet feste Kürzel in Übersetzungen (`kuerzel`).
+- **Tastenkürzel** nie fest als «Ctrl+K» oder «Strg+Z» beschriften: auf Mac, iPhone und iPad heisst die Taste ⌘. Texte bekommen einen Platzhalter (`"Rückgängig ({shortcut})"`), die Komponente füllt ihn mit `useShortcutLabel()("Z")` aus `@/lib/search/shortcuts` (Apple `⌘Z`, sonst `Strg+Z`/`Ctrl+Z` je Sprache); nur der Tastenname allein: `useModifierLabel()`. Der Checker meldet feste Kürzel in Übersetzungen (`kuerzel`). Neue Kürzel nur über die Registry `lib/keyboard/registry.ts` + `useShortcut` (erkennt Strg und ⌘, Layouts, Eingabefelder, Dialoge; erscheint in der Hilfe «?»).
+- **Tastaturvertrag:** Jeder Baustein in Abschnitt 4 hat einen (Tabelle in `design/KEYBOARD_ACCESSIBILITY.md` Abschnitt 2); ein neuer gemeinsamer Baustein braucht einen, mit Test. Klickbare Zeilen behalten einen Knopf/Link in der Zeile (`button.table-row-link`), Drag-and-Drop hat eine Tastatur-Alternative (`ReorderButtons`), Hover-Aktionen erscheinen auch bei `:focus-within`. `python3 scripts/check-keyboard-a11y.py` prüft das mit.
 
 ## 10. Arbeitsablauf bei UI-Änderungen
 
 1. Bestehenden Baustein (Abschnitt 4) oder eine ähnliche Seite suchen und **deren Struktur übernehmen**.
 2. Neue Optik als Klasse (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`): bereichsübergreifende Bausteine in `frontend/app/globals.css`, alles, was nur eine Route oder wenige Routen brauchen, in `frontend/app/styles/<bereich>.css`. Diese Dateien importiert nur das Layout der jeweiligen Route, damit nicht jede Seite das ganze CSS lädt. Wird eine Klasse aus einem Bereich neu auch anderswo verwendet: Regel nach `globals.css` verschieben oder das Bundle dort importieren. `python3 scripts/check-css-scopes.py` prüft das über den Importgraphen (läuft mit `check-design-rules.py`).
-3. `python3 scripts/check-design-rules.py` ausführen und alle Meldungen beheben.
+3. `python3 scripts/check-design-rules.py` und `python3 scripts/check-keyboard-a11y.py` ausführen und alle Meldungen beheben; Bedienung einmal nur mit Tastatur durchgehen (Checkliste `design/KEYBOARD_ACCESSIBILITY.md` Abschnitt 8).
 4. Typecheck und Tests: auf dem Host gibt es kein Node, daher im Container: `docker compose exec frontend node_modules/.bin/tsc --noEmit` und `docker compose exec frontend node_modules/.bin/vitest run`.
 5. Bei sichtbaren Änderungen Light **und** Dark bei 1440 und 390 px ansehen (Playwright-Screenshot gegen den E2E-Stack, `scripts/e2e.sh up`).
 6. Token geändert → `./scripts/sync-design-tokens.sh`.

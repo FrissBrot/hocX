@@ -368,12 +368,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
           const usageRatio = tenant.storage_quota_bytes ? tenant.storage_used_bytes / tenant.storage_quota_bytes : 0;
           const storageState = usageRatio > 1 ? "over" : usageRatio >= STORAGE_WARNING_RATIO ? "warning" : "ok";
           return (
-            <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)}>
+            <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Name) */>
               <td>
                 <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} />
               </td>
               <td>
-                <strong>{tenant.name}</strong>
+                {/* Tastatur: Name als Knopf, die Zeile bleibt für die Maus klickbar */}
+                <button type="button" className="table-row-link" onClick={(event) => { event.stopPropagation(); openSettings(tenant); }}>
+                  {tenant.name}
+                </button>
               </td>
               <td>
                 {tenant.plan_code ? (

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Popover } from "./popover";
+import { menuButtonKeyDown, Popover } from "./popover";
 
 export type ActionMenuItem = {
   label: string;
@@ -18,10 +18,19 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
 
   return (
     <div className="action-menu-wrap" ref={wrapRef} onClick={(event) => event.stopPropagation()}>
-      <button type="button" className="button-ghost button-icon" title={resolvedAriaLabel} aria-label={resolvedAriaLabel} onClick={() => setOpen((v) => !v)}>
-        ⋮
+      <button
+        type="button"
+        className="button-ghost button-icon"
+        title={resolvedAriaLabel}
+        aria-label={resolvedAriaLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={menuButtonKeyDown(open, setOpen)}
+      >
+        <span aria-hidden="true">⋮</span>
       </button>
-      <Popover open={open} onOpenChange={setOpen} anchorRef={wrapRef} align="end" className="action-menu">
+      <Popover open={open} onOpenChange={setOpen} anchorRef={wrapRef} align="end" className="action-menu" label={resolvedAriaLabel}>
         <>
           {items.map((item) => (
             <button

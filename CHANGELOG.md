@@ -55,6 +55,14 @@ Breaking Changes.
 
 ### Geändert
 
+- **Tastaturbedienung:** «?» öffnet eine Übersicht aller gerade gültigen Tastenkürzel (auch im
+  Benutzermenü › Tastenkürzel), erster Tab-Halt jeder Seite ist «Zum Inhalt springen». Kürzel laufen
+  zentral über eine Registry (keine Auslösung beim Tippen oder in offenen Dialogen, Strg und ⌘,
+  CH/DE-Layouts); Tabs und Filter wechseln mit den Pfeiltasten, Reihenfolgen (Protokoll-Schnellnavigation,
+  Elementdefinitionen, Tabellen-/Matrix-Designer) lassen sich ohne Ziehen ändern. Details:
+  `KEYBOARD_AUDIT.md`, Regeln: `design/KEYBOARD_ACCESSIBILITY.md`, neue Prüfung
+  `scripts/check-keyboard-a11y.py` (CI, Pre-Commit).
+
 - **Papierkorb für Dateien und Fotos:** Löschen auf der Dateien-Seite, in der Foto-Ansicht, in der
   Mehrfachauswahl und bei «Nur beste behalten» legt Direkt-Uploads in den Papierkorb, statt sie
   sofort zu entfernen. Gelöschte Dateien verschwinden überall (Listen, Galerie, Zeitstrahl, Suche,
@@ -118,6 +126,14 @@ Breaking Changes.
   Datenauskunft listet die Elemente, für die eine Person verantwortlich ist.
 
 ### Behoben
+
+- **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt
+  jetzt ins Menü, Pfeiltasten, Fokus zurück zum Auslöser), Tag-Vorschläge und Tag-Farben, Werkzeugleiste
+  des Texteditors, Pendenz aus der Liste öffnen, Mandanten und Protokolldetails im Plattform-Admin.
+  Rückfragen und Vollbild-Ansichten halten den Fokus, nach dem Schliessen landet er wieder am
+  Auslöser (bzw. im Inhalt, wenn der Auslöser gelöscht wurde). Strg+Enter und Pfeiltasten im
+  Protokoll lösen in Dialogen und Listen nicht mehr den Editor aus; Strg+Alt+T/N funktionieren auf
+  dem Mac. Die eingeklappte Seitenleiste ist kein unsichtbares Tab-Ziel mehr.
 
 - **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
   ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.

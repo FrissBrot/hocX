@@ -31,7 +31,7 @@ export function ColumnFilter({
         ref={triggerRef}
         type="button"
         className={`column-filter-trigger${active ? " column-filter-trigger-active" : ""}`}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={active ? t("activeLabel", { column: label }) : t("label", { column: label })}
         onClick={() => setOpen((current) => !current)}
@@ -41,7 +41,7 @@ export function ColumnFilter({
           <path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" />
         </svg>
       </button>
-      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} align={align} className="column-filter-panel">
+      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} align={align} className="column-filter-panel" role="dialog" label={t("label", { column: label })}>
         {children(() => setOpen(false))}
       </Popover>
     </>
@@ -73,7 +73,7 @@ export function ColumnFilterOptions({
       {searchable ? <SearchInput value={search} onChange={setSearch} placeholder={tCommon("searchPlaceholder")} /> : null}
       <div className="column-filter-list">
         {needle ? null : (
-          <button type="button" className={`mini-menu-option${value === "" ? " mini-menu-option-active" : ""}`} onClick={() => onChange("")}>
+          <button type="button" aria-pressed={value === ""} className={`mini-menu-option${value === "" ? " mini-menu-option-active" : ""}`} onClick={() => onChange("")}>
             <span>{allLabel}</span>
           </button>
         )}
@@ -82,6 +82,7 @@ export function ColumnFilterOptions({
           <button
             key={option.value}
             type="button"
+            aria-pressed={value === option.value}
             className={`mini-menu-option${value === option.value ? " mini-menu-option-active" : ""}`}
             onClick={() => onChange(option.value)}
           >

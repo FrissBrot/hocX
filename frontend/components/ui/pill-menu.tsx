@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-import { Menu, MenuItem, Popover } from "@/components/ui/popover";
+import { Menu, MenuItem, menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import type { BadgeVariant } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 
@@ -30,8 +30,9 @@ export function PillMenu<T extends string>({ value, options, onChange }: Props<T
         className={`pill-menu-trigger${open ? " pill-menu-trigger-open" : ""}`}
         data-variant={current.variant}
         onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
+        onKeyDown={menuButtonKeyDown(open, setOpen)}
       >
         <span>{current.label}</span>
         <span className="pill-menu-trigger-icon" aria-hidden="true">
@@ -40,7 +41,7 @@ export function PillMenu<T extends string>({ value, options, onChange }: Props<T
           </svg>
         </span>
       </button>
-      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef}>
+      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} label={current.label}>
         <Menu>
           {options.map((option) => (
             <MenuItem

@@ -7,6 +7,8 @@ Vor dem Abschluss: `python3 scripts/check-security-rules.py <geänderte Dateien>
 `Sicherheitsregeln: ok` melden. Bei Routen oder Berechtigungen zusätzlich
 `python3 scripts/sync-route-permissions.py` (Rechte-Übersicht) und
 `python3 scripts/sync-permission-catalog.py --check` (siehe CLAUDE.md, Berechtigungen / RBAC).
+Bei UI-Änderungen zusätzlich `python3 scripts/check-keyboard-a11y.py` (`Tastatur-Regeln: ok`, siehe
+CLAUDE.md, Tastaturbedienung).
 
 ## Context Engine (CCE)
 

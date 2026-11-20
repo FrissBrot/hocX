@@ -257,8 +257,17 @@ function RunRows({ run, expanded, onToggle }: { run: JobRunPage["items"][number]
   const clickable = run.error !== null;
   return (
     <>
-      <tr className={clickable ? "table-row-clickable" : undefined} onClick={clickable ? onToggle : undefined}>
-        <td className="muted">{formatDateTime(run.finished_at, locale)}</td>
+      <tr className={clickable ? "table-row-clickable" : undefined} onClick={clickable ? onToggle : undefined} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Zeitpunkt) */>
+        <td className="muted">
+          {clickable ? (
+            // Tastatur: Aufklappen über den Zeitpunkt-Knopf, Zeile bleibt klickbar
+            <button type="button" className="table-row-link table-row-toggle" aria-expanded={expanded} onClick={(event) => { event.stopPropagation(); onToggle(); }}>
+              {formatDateTime(run.finished_at, locale)}
+            </button>
+          ) : (
+            formatDateTime(run.finished_at, locale)
+          )}
+        </td>
         <td className="muted">{formatDuration(run.duration_ms)}</td>
         <td>
           <Badge variant={run.status === "success" ? "success" : "danger"}>{t(`history.status.${run.status}`)}</Badge>

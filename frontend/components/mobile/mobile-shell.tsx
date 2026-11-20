@@ -18,6 +18,7 @@ import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
 import { can } from "@/lib/permissions";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
+import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
 
 type ThemePreference = "light" | "dark" | "auto";
 
@@ -156,10 +157,10 @@ export function MobileShell({
       <div className="mobile-shell">
         <ConnectivityStatus userId={session?.user?.id ?? null} />
         {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
-        <div className="mobile-shell-content" hidden={moreOpen}>
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mobile-shell-content" hidden={moreOpen}>
           <InstallAppPrompt />
           {children}
-        </div>
+        </main>
         {moreOpen ? (
           <MobileMorePanel
             session={session}

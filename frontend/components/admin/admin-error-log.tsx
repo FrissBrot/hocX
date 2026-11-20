@@ -131,8 +131,13 @@ function ErrorRow({ entry, expanded, onToggle }: { entry: SystemErrorLogEntry; e
   const locale = useLocale();
   return (
     <>
-      <tr className="table-row-clickable" onClick={onToggle}>
-        <td className="muted">{new Date(entry.created_at).toLocaleString(locale)}</td>
+      <tr className="table-row-clickable" onClick={onToggle} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Zeitstempel) */>
+        <td className="muted">
+          {/* Tastatur: Aufklappen über den Zeitstempel-Knopf (aria-expanded), Zeile bleibt klickbar */}
+          <button type="button" className="table-row-link table-row-toggle" aria-expanded={expanded} onClick={(event) => { event.stopPropagation(); onToggle(); }}>
+            {new Date(entry.created_at).toLocaleString(locale)}
+          </button>
+        </td>
         <td>{entry.tenant_name ?? <span className="muted">—</span>}</td>
         <td>{SOURCE_LABELS[entry.source] ?? entry.source}</td>
         <td>

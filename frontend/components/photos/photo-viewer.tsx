@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { useModalFocus } from "@/lib/a11y/use-focus-trap";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { DateInput } from "@/components/ui/date-input";
 import { TimeInput } from "@/components/ui/time-input";
@@ -105,6 +107,7 @@ export function PhotoViewer({
   usePopupEscape(true, saveAndClose, rootRef);
   usePopupEscape(downloadOpen, () => setDownloadOpen(false), downloadRef);
   usePopupScrollLock(true);
+  useModalFocus(true, rootRef);
 
   const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
@@ -133,27 +136,10 @@ export function PhotoViewer({
     };
   }, [fileUrl, thumbnailUrl]);
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      // j/l nur ohne Modifier und nicht beim Tippen in Eingabefeldern
-      const target = event.target as HTMLElement | null;
-      const typing =
-        !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      // Beim Tippen (z. B. im Tag-Feld) bewegen die Pfeiltasten den Cursor, nicht das Foto
-      // (Audit MAIN-FE-006).
-      if (typing) return;
-      const plainLetter = !event.ctrlKey && !event.metaKey && !event.altKey;
-      const key = event.key.toLowerCase();
-      const prev = event.key === "ArrowLeft" || (plainLetter && key === "j");
-      const next = event.key === "ArrowRight" || (plainLetter && key === "l");
-      if (prev && hasPrev) onIndexChange(index - 1);
-      if (next && hasNext) onIndexChange(index + 1);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [hasPrev, hasNext, index, onClose, onIndexChange]);
+  // Blättern: Pfeile oder J/L (Registry `media.previous`/`media.next`). Der Dispatcher lässt
+  // die Tasten beim Tippen (Tag-Feld) und in Widgets aus (Audit MAIN-FE-006).
+  useShortcut("media.previous", () => (hasPrev ? onIndexChange(index - 1) : false), { scopeRef: rootRef });
+  useShortcut("media.next", () => (hasNext ? onIndexChange(index + 1) : false), { scopeRef: rootRef });
 
   // Wischgeste (Touch/Stift) zum Blättern - mobil sind die Pfeil-Buttons klein (Audit Dateien/Fotos).
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -238,7 +224,7 @@ export function PhotoViewer({
   }
 
   return createPortal(
-    <div ref={rootRef} className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name}>
+    <div ref={rootRef} className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name} tabIndex={-1}>
       {saveError && <p role="alert">{saveError}</p>}
       <div className="photo-viewer-header">
         <div className="photo-viewer-header-left">

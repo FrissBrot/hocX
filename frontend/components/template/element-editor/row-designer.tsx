@@ -14,6 +14,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { announce } from "@/lib/a11y/announce";
+import { reorderKeyDown } from "@/lib/a11y/reorder";
 import { applyEventFilter, columnFilterTags, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import type { CycleConfigSummary, StructuredListEntry } from "@/types/api";
 
@@ -46,6 +48,7 @@ export function RowDesigner({
 }) {
   const t = useTranslations("templates.elementEditor");
   const tTypes = useTranslations("templates");
+  const tKeyboard = useTranslations("common.keyboard");
   const showToast = useToast();
   const isParticipantSelectable = useParticipantSelectable();
   // Eigener Entwurf: «Abbrechen» verwirft ihn, ohne das Formular anzufassen (vorher hatte nur
@@ -303,6 +306,21 @@ export function RowDesigner({
                             onClick={() => setSelection({ kind: "column", id: column.id })}
                             onDragStart={() => setDragged({ kind: "column", id: column.id })}
                             onDragEnd={() => setDragged(null)}
+                            // Tastatur-Alternative zum Ziehen: Alt+Pfeil links/rechts
+                            data-reorder-key={`reorder:column:${column.id}`}
+                            aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                            onKeyDown={(event) =>
+                              reorderKeyDown(event, {
+                                index,
+                                count: columns.length,
+                                orientation: "horizontal",
+                                focusKey: `reorder:column:${column.id}`,
+                                move: (from, to) => {
+                                  setColumns(moveItem(columns, from, to));
+                                  announce(tKeyboard("moved", { name: column.title || t("matrix.newColumn"), position: to + 1, total: columns.length }));
+                                },
+                              })
+                            }
                             onDragOver={(event) => event.preventDefault()}
                             onDrop={(event) => { event.preventDefault(); drop({ kind: "column", id: column.id }); }}
                           >
@@ -343,6 +361,20 @@ export function RowDesigner({
                         onClick={() => setSelection({ kind: "row", id: row.id })}
                         onDragStart={() => setDragged({ kind: "row", id: row.id })}
                         onDragEnd={() => setDragged(null)}
+                        // Tastatur-Alternative zum Ziehen: Alt+Pfeil hoch/runter
+                        data-reorder-key={`reorder:row:${row.id}`}
+                        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                        onKeyDown={(event) =>
+                          reorderKeyDown(event, {
+                            index: rowIndex,
+                            count: rows.length,
+                            focusKey: `reorder:row:${row.id}`,
+                            move: (from, to) => {
+                              setRows(moveItem(rows, from, to));
+                              announce(tKeyboard("moved", { name: row.label || t("row.unnamed"), position: to + 1, total: rows.length }));
+                            },
+                          })
+                        }
                       >
                         <span className="matrix-designer-row-num">{rowIndex + 1}</span>
                         <span className="matrix-designer-row-text">

@@ -532,8 +532,8 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
                         key={p.id}
                         type="button"
                         className={`session-panel-assignee-option${index === assigneeHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
                           setAssigneeId(p.id);
                           setAssigneeSearch(p.display_name);
                           setAssigneeConfirmed(true);
@@ -572,8 +572,8 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
                         key={index}
                         type="button"
                         className={`session-panel-assignee-option${index === dueHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
                           setNewDue(opt.draft);
                           setDueSearch(dueDraftLabel(opt.draft));
                           setDueConfirmed(true);

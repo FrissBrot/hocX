@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import type { Route } from "next";
+
+import { rovingKeyDown } from "@/lib/a11y/roving";
 
 export type RouteTab = { href: string; label: string; /** Zählerabzeichen hinter dem Titel (0/leer = ohne), wie `Tabs`. */ count?: number | null };
 
@@ -20,8 +24,14 @@ export function RouteTabs({
     return null;
   }
   const isPill = variant === "pill";
+  const focusHref = tabs.some((tab) => tab.href === activeHref) ? activeHref : tabs[0]?.href;
   return (
-    <div className={isPill ? "filter-tabs" : "tabs-list route-tabs"} role="tablist">
+    // Tabs als Links (manuelle Aktivierung): Pfeile verschieben nur den Fokus, Enter öffnet die Route
+    <div
+      className={isPill ? "filter-tabs" : "tabs-list route-tabs"}
+      role="tablist"
+      onKeyDown={(event) => rovingKeyDown(event, { itemSelector: '[role="tab"]' })}
+    >
       {tabs.map((tab) => {
         const isActive = tab.href === activeHref;
         const activeClass = isPill ? "filter-tabs-option-active" : "tabs-trigger-active";
@@ -32,6 +42,8 @@ export function RouteTabs({
             href={tab.href as Route}
             role="tab"
             aria-selected={isActive}
+            aria-current={isActive ? "page" : undefined}
+            tabIndex={tab.href === focusHref ? 0 : -1}
             className={isActive ? `${baseClass} ${activeClass}` : baseClass}
           >
             {tab.label}

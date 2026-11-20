@@ -100,7 +100,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     }
 
     // useCapture=true so we run before Tiptap's own listener
-    el.addEventListener("keydown", onKeyDown, true);
+    el.addEventListener("keydown", onKeyDown, true); // a11y-ok: Editor-interne Enter-Taste (leeren Listenpunkt verlassen), kein Shortcut
     return () => el.removeEventListener("keydown", onKeyDown, true);
   }, [editor]);
 
@@ -133,11 +133,14 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
   return (
     <div className={`rich-text-editor${readOnly ? " rich-text-editor-readonly" : ""}`}>
       {!readOnly && (
-        <div className="rich-text-toolbar">
+        <div className="rich-text-toolbar" role="toolbar" aria-label={t("toolbar")}>
           <button
             type="button"
             className={`rich-text-btn${editor?.isActive("bold") ? " active" : ""}`}
-            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
+            aria-pressed={editor?.isActive("bold") ?? false}
+            // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().toggleBold().run()}
             title={t("bold", { shortcut: shortcut("B") })}
           >
             <strong>B</strong>
@@ -145,7 +148,10 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
           <button
             type="button"
             className={`rich-text-btn${editor?.isActive("italic") ? " active" : ""}`}
-            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
+            aria-pressed={editor?.isActive("italic") ?? false}
+            // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
             title={t("italic", { shortcut: shortcut("I") })}
           >
             <em>I</em>
@@ -154,16 +160,24 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
           <button
             type="button"
             className={`rich-text-btn${editor?.isActive("bulletList") ? " active" : ""}`}
-            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
+            aria-pressed={editor?.isActive("bulletList") ?? false}
+            // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().toggleBulletList().run()}
             title={t("bulletList")}
+            aria-label={t("bulletList")}
           >
             ≡
           </button>
           <button
             type="button"
             className={`rich-text-btn${editor?.isActive("orderedList") ? " active" : ""}`}
-            onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }}
+            aria-pressed={editor?.isActive("orderedList") ?? false}
+            // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().toggleOrderedList().run()}
             title={t("orderedList")}
+            aria-label={t("orderedList")}
           >
             1≡
           </button>

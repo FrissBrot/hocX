@@ -246,10 +246,23 @@
     "bulletList": "Liste à puces",
     "italic": "Italique ({shortcut})",
     "openLink": "{modifier} + clic ouvre le lien",
-    "orderedList": "Liste numérotée"
+    "orderedList": "Liste numérotée",
+    "toolbar": "Mise en forme"
   },
   "keys": {
-    "ctrl": "Ctrl"
+    "ctrl": "Ctrl",
+    "alt": "Alt",
+    "shift": "Maj",
+    "enter": "Entrée",
+    "escape": "Échap",
+    "space": "Espace",
+    "tab": "Tab",
+    "delete": "Suppr",
+    "backspace": "Retour arrière",
+    "home": "Début",
+    "end": "Fin",
+    "pageUp": "Page préc.",
+    "pageDown": "Page suiv."
   },
   "columnFilter": {
     "label": "Filtrer {column}",
@@ -257,5 +270,55 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Le fichier CSV contient trop de lignes ({max, number} lignes de données au maximum). Veuillez le diviser et l’importer en plusieurs étapes."
+  },
+  "keyboard": {
+    "skipToContent": "Aller au contenu",
+    "helpTitle": "Raccourcis clavier",
+    "helpDescription": "Ce que vous pouvez faire au clavier sur cette page.",
+    "inputsHint": "Pendant la saisie dans un champ, les raccourcis sans {modifier} ne font rien ; les raccourcis du navigateur et de l’éditeur restent actifs.",
+    "moveUp": "Déplacer « {name} » vers le haut",
+    "moveDown": "Déplacer « {name} » vers le bas",
+    "moveLeft": "Déplacer « {name} » vers la gauche",
+    "moveRight": "Déplacer « {name} » vers la droite",
+    "moved": "« {name} » est maintenant en position {position} sur {total}.",
+    "groups": {
+      "global": "Partout",
+      "lists": "Listes, menus et onglets",
+      "dialogs": "Dialogues et formulaires",
+      "reorder": "Modifier l’ordre",
+      "protocol": "Procès-verbal",
+      "designer": "Document Studio",
+      "media": "Photos et fichiers"
+    },
+    "shortcuts": {
+      "global_search": "Ouvrir ou fermer la recherche globale",
+      "global_listSearch": "Aller à la recherche de la liste (deuxième fois : recherche du navigateur)",
+      "global_quickSearch": "Recherche de la liste, sinon recherche globale",
+      "global_help": "Ouvrir cet aperçu",
+      "search_toListSearch": "Dans la recherche : reprendre le terme dans la recherche de la liste",
+      "standard_nextField": "Élément suivant ou précédent",
+      "standard_activate": "Activer un bouton, un lien ou une entrée",
+      "standard_close": "Fermer le dialogue, le menu ou la liste",
+      "standard_listNavigate": "Parcourir les listes et menus",
+      "standard_tabsNavigate": "Passer d’un onglet ou filtre à l’autre",
+      "standard_reorder": "Déplacer l’entrée active dans l’ordre",
+      "protocol_find": "Recherche par chapitre et plein texte dans le procès-verbal",
+      "protocol_nextElement": "Section suivante (à la fin : fermer le procès-verbal)",
+      "protocol_previousElement": "Section précédente",
+      "protocol_elementDown": "Changer de section (hors des champs)",
+      "protocol_elementUp": "Section précédente (hors des champs)",
+      "protocol_openTodo": "Nouvelle tâche dans le panneau de séance",
+      "protocol_openNotes": "Notes du panneau de séance",
+      "protocol_attendanceStatus": "Présence : présent, en retard, excusé, absent",
+      "designer_save": "Enregistrer le modèle",
+      "designer_undo": "Annuler",
+      "designer_redo": "Rétablir",
+      "designer_duplicate": "Dupliquer l’élément sélectionné",
+      "designer_delete": "Supprimer l’élément sélectionné",
+      "designer_move": "Déplacer l’élément sélectionné",
+      "designer_deselect": "Annuler la sélection",
+      "media_previous": "Photo ou fichier précédent",
+      "media_next": "Photo ou fichier suivant"
+    }
   }
 }

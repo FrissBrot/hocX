@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
 import { DocsPage, docsUrl } from "@/lib/docs";
-import { usePopoverDismiss, usePopoverPosition } from "./popover";
+import { usePopoverDismiss, usePopoverFocus, usePopoverPosition } from "./popover";
 
 const noSubscribe = () => () => {};
 
@@ -39,6 +39,9 @@ export function HelpPopover({ topic, children, docs }: HelpPopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const style = usePopoverPosition(open, anchorRef, "start", 6, { minWidth: 260, estimatedHeight: 180 });
   usePopoverDismiss(open, () => setOpen(false), [anchorRef, panelRef]);
+  // Nicht-modaler Dialog: Fokus aufs Panel (Screenreader liest die Erklärung), Tab erreicht den
+  // Doku-Link und führt danach hinter dem «?» weiter, Escape zurück auf das «?».
+  const focus = usePopoverFocus({ open, panelRef, anchorRef, onClose: () => setOpen(false), mode: "dialog", initialFocus: "panel" });
   const panelId = useId();
   const href = useDocsUrl(docs?.page, docs?.anchor);
 
@@ -49,6 +52,7 @@ export function HelpPopover({ topic, children, docs }: HelpPopoverProps) {
         type="button"
         className="help-popover-trigger"
         aria-label={t("about", { topic })}
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
@@ -57,7 +61,17 @@ export function HelpPopover({ topic, children, docs }: HelpPopoverProps) {
       </button>
       {open && typeof document !== "undefined"
         ? createPortal(
-            <div ref={panelRef} id={panelId} role="dialog" aria-label={t("about", { topic })} className="popover-panel help-popover-panel" style={style}>
+            <div
+              ref={panelRef}
+              id={panelId}
+              role="dialog"
+              aria-label={t("about", { topic })}
+              className="popover-panel help-popover-panel"
+              style={style}
+              tabIndex={-1}
+              onKeyDown={focus.onKeyDown}
+              onFocus={focus.onFocus}
+            >
               <div className="help-popover-text">{children}</div>
               {href ? (
                 <a className="help-popover-link" href={href} target="_blank" rel="noopener noreferrer">

@@ -42,6 +42,13 @@ user-visible UI string directly into a component — add a translation key for e
 locale instead, and run `python3 scripts/check-i18n-completeness.py` and
 `python3 scripts/check-i18n-hardcoded-text.py` before finishing any UI change.
 
+## Keyboard accessibility
+
+Interactive UI must be fully keyboard-operable (see `CLAUDE.md`, section "Tastaturbedienung", and
+`design/KEYBOARD_ACCESSIBILITY.md`). New shortcuts only via `frontend/lib/keyboard/registry.ts` +
+`useShortcut`; before finishing a UI change, `python3 scripts/check-keyboard-a11y.py` must report
+`Tastatur-Regeln: ok`.
+
 ## Working method
 
 For non-trivial changes:

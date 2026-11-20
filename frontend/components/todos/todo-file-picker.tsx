@@ -76,8 +76,10 @@ export function TodoFilePicker({ excludeIds, onPick }: { excludeIds: string[]; o
             tabIndex={-1}
             aria-selected={index === active}
             className={`dropdown-option todo-file-option${index === active ? " dropdown-option-active" : ""}`}
-            // mousedown statt click: sonst schliesst das blur des Suchfelds die Liste vorher
-            onMouseDown={(event) => { event.preventDefault(); pick(file); }}
+            // mousedown hält den Fokus im Suchfeld (sonst schliesst dessen blur die Liste vorher),
+            // ausgelöst wird per click - so auch per Tastatur
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => pick(file)}
           >
             <FileTypeIcon name={file.original_name} />
             <span className="todo-file-name">{file.original_name}</span>

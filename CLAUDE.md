@@ -31,11 +31,31 @@ Kurzfassung, falls die Datei nicht geladen wurde:
 - Bei jeder UI-Änderung zuerst `design/DESIGN.md` lesen. Standardbausteine (`Modal`, `useConfirm`, `useToast`, `SearchableSelect`, `ActionMenu`, `DataTable`, `Badge`, …) statt Nachbauten. Dropdown-Entscheidungsbaum steht in Abschnitt 5, Datumsfelder (`DateInput`) und Uhrzeiten in Abschnitt 6.
 - Jede Uhrzeit-Eingabe ist `TimeInput` (`@/components/ui/time-input`); Formate/Korrektur (1130 → 11:30, 230 → 02:30, 14 Uhr …) nur in `parseTimeInputValue` (`frontend/lib/utils/time.ts`), Anzeige gespeicherter Zeiten mit `formatTimeValue`. Kein eigenes Zeitfeld, keine eigene Zeit-Regex.
 - Buttons: Höhe und Farbe nur aus der Variante (`button-primary|secondary|danger|ghost`, Token `--button-height`). Bereichs-CSS ändert keine Höhe/kein vertikales Padding einer Variante oder einer Klasse, die im TSX neben einer Variante steht und setzt andere Farben über `--button-bg`/`--button-hover-bg`, nie `background` direkt. Kacheln/Karten als `<button>` bekommen eine eigene Klasse ohne `button-`-Präfix (DESIGN.md Abschnitt 7; Checker `button-hoehe`/`button-hintergrund`, E2E `button-consistency`).
-- Tastenkürzel nie fest als «Ctrl+…»/«Strg+…» beschriften (Mac: ⌘): Platzhalter `{shortcut}` im Text, gefüllt mit `useShortcutLabel()` aus `@/lib/search/shortcuts`; Tastendrücke mit `ctrlKey || metaKey`.
+- Tastenkürzel nie fest als «Ctrl+…»/«Strg+…» beschriften (Mac: ⌘): Platzhalter `{shortcut}` im Text, gefüllt mit `useShortcutLabel()` aus `@/lib/search/shortcuts`; Tastendrücke über die Registry (`matchesCombo`/`useShortcut`, Strg und ⌘ gleichwertig), siehe Abschnitt «Tastaturbedienung».
 - Nur Tokens aus `design/tokens.css` (Farben, `--radius-*`, `--text-*`, `--space-*`, `--shadow-*`, `--z-*`, `--dur-*`). Keine Hex-Farben, keine Radius-/Schrift-/z-index-Literale, keine `var(--x, #hex)`-Fallbacks.
 - Neue Optik als Klasse in `frontend/app/globals.css` oder, wenn sie nur bestimmte Routen brauchen, in `frontend/app/styles/<bereich>.css` (Prüfung: `python3 scripts/check-css-scopes.py`), nicht als Inline-Style. Light **und** Dark prüfen.
 - Tokens nur in `design/tokens.css` ändern, danach `./scripts/sync-design-tokens.sh` (die Kopien in `frontend/app/tokens.css` und `abgabebox-frontend/app/tokens.css` nie von Hand bearbeiten).
 - Vor jedem Commit mit UI-Änderung: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok` melden. Ausnahmen nur mit `design-ok`-Kommentar in derselben Zeile und kurzer Begründung.
+
+## Tastaturbedienung (verbindlich)
+
+Details, Bausteinverträge und Checkliste: `design/KEYBOARD_ACCESSIBILITY.md`, Befunde: `KEYBOARD_AUDIT.md`.
+Bei **jeder** neuen oder geänderten interaktiven Oberfläche ohne ausdrückliche Nachfrage prüfen und
+im selben Change sicherstellen:
+
+- Alles ohne Maus bedienbar: Tab-Reihenfolge logisch, Enter/Leertaste/Escape/Pfeile wie im
+  Bausteinvertrag, sichtbarer Fokus, nichts Unsichtbares im Tab-Fluss, keine Falle. Aktionen auf
+  `onClick` (nie nur `onPointerDown`/`onMouseDown`), klickbare Fläche = `<button>`/`<a>`,
+  Drag-and-Drop nur mit Tastatur-Alternative (`ReorderButtons` bzw. Alt+Pfeil).
+- Gemeinsame Bausteine statt Nachbau (`Modal`, `useConfirm`, `Popover`/`ActionMenu`,
+  `SearchableSelect`, `Tabs` …); eigene Overlays nur mit `lib/a11y`-Hilfen.
+- Neue Tastenkürzel nur über die Registry `frontend/lib/keyboard/registry.ts` + `useShortcut`
+  (Übersetzung in allen Sprachen, erscheint automatisch in der Hilfe «?»); kein eigener
+  `keydown`-Listener auf `window`/`document`.
+- Tests: Tastaturvertrag in Vitest (Verhalten, nicht Handler), neuer Workflow mit Tastaturschritt
+  in Playwright. `python3 scripts/check-keyboard-a11y.py` muss `Tastatur-Regeln: ok` melden
+  (Hook, Pre-Commit, CI; Altbestand in `scripts/keyboard-a11y-baseline.json` nur verkleinern).
+  Ausnahme nur begründet mit `a11y-ok: <Begründung>` in derselben Zeile.
 
 ## Internationalisierung / i18n – VERBINDLICH
 

@@ -407,14 +407,28 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
                 <tr
                   key={todo.id}
                   className={`todo-v2-row${isDone ? " table-row-done" : ""}${canEdit ? " table-row-clickable" : ""}`}
-                  onClick={() => canEdit && setEditTodoId(todo.id)}
+                  onClick={() => canEdit && setEditTodoId(todo.id)} // a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Titel)
                 >
                   <td className="todo-v2-check-cell">
                     <TodoCheckbox todo={todo} allowed={canToggle(todo)} busy={busy[todo.id]} onToggle={(item) => void cycleStatus(item)} />
                   </td>
                   <td className="todo-v2-task-cell">
                     <div className="todo-v2-task-line">
-                      <span className="todo-v2-task">{todo.task}</span>
+                      {canEdit ? (
+                        // Tastatur: der Titel ist der Knopf zum Bearbeiten (die ganze Zeile bleibt für die Maus klickbar)
+                        <button
+                          type="button"
+                          className="table-row-link todo-v2-task"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setEditTodoId(todo.id);
+                          }}
+                        >
+                          {todo.task}
+                        </button>
+                      ) : (
+                        <span className="todo-v2-task">{todo.task}</span>
+                      )}
                       <TodoTagChips tags={todo.tags ?? []} tagConfig={tagConfig} />
                       {!isDone && runningFines.has(todo.id) ? <Badge variant="danger">{t("fineRunningBadge")}</Badge> : null}
                     </div>

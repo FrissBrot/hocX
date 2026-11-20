@@ -7,13 +7,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 file="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("tool_input") or {}).get("file_path",""))' 2>/dev/null || true)"
 
 case "$file" in
-  "$ROOT"/frontend/*.tsx|"$ROOT"/frontend/*.css|"$ROOT"/abgabebox-frontend/*.tsx|"$ROOT"/abgabebox-frontend/*.css) ;;
+  "$ROOT"/frontend/*.tsx|"$ROOT"/frontend/*.ts|"$ROOT"/frontend/*.css|"$ROOT"/abgabebox-frontend/*.tsx|"$ROOT"/abgabebox-frontend/*.ts|"$ROOT"/abgabebox-frontend/*.css) ;;
   *) exit 0 ;;
 esac
 case "$file" in */node_modules/*|*/.next/*|*/tokens.css) exit 0 ;; esac
 
 if ! out="$(python3 "$ROOT/scripts/check-design-rules.py" "$file" 2>&1)"; then
   echo "Design-Regeln verletzt (siehe design/DESIGN.md):" >&2
+  echo "$out" >&2
+  exit 2
+fi
+
+# Tastatur-Regeln (design/KEYBOARD_ACCESSIBILITY.md) für dieselbe Datei
+if ! out="$(python3 "$ROOT/scripts/check-keyboard-a11y.py" "$file" 2>&1)"; then
   echo "$out" >&2
   exit 2
 fi

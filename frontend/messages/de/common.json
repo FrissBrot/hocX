@@ -246,10 +246,23 @@
     "bulletList": "Aufzählung",
     "italic": "Kursiv ({shortcut})",
     "openLink": "{modifier} + Klick öffnet den Link",
-    "orderedList": "Nummerierte Liste"
+    "orderedList": "Nummerierte Liste",
+    "toolbar": "Textformat"
   },
   "keys": {
-    "ctrl": "Strg"
+    "ctrl": "Strg",
+    "alt": "Alt",
+    "shift": "Umschalt",
+    "enter": "Enter",
+    "escape": "Esc",
+    "space": "Leertaste",
+    "tab": "Tab",
+    "delete": "Entf",
+    "backspace": "Rücktaste",
+    "home": "Pos1",
+    "end": "Ende",
+    "pageUp": "Bild auf",
+    "pageDown": "Bild ab"
   },
   "columnFilter": {
     "label": "{column} filtern",
@@ -257,5 +270,55 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Die CSV-Datei hat zu viele Zeilen (höchstens {max, number} Datenzeilen). Bitte aufteilen und in mehreren Schritten importieren."
+  },
+  "keyboard": {
+    "skipToContent": "Zum Inhalt springen",
+    "helpTitle": "Tastenkürzel",
+    "helpDescription": "Was auf dieser Seite gerade per Tastatur geht.",
+    "inputsHint": "Beim Tippen in einem Feld lösen Kürzel ohne {modifier} nichts aus; Browser- und Editor-Kürzel bleiben erhalten.",
+    "moveUp": "«{name}» nach oben verschieben",
+    "moveDown": "«{name}» nach unten verschieben",
+    "moveLeft": "«{name}» nach links verschieben",
+    "moveRight": "«{name}» nach rechts verschieben",
+    "moved": "«{name}» ist jetzt an Position {position} von {total}.",
+    "groups": {
+      "global": "Überall",
+      "lists": "Listen, Menüs und Tabs",
+      "dialogs": "Dialoge und Formulare",
+      "reorder": "Reihenfolge ändern",
+      "protocol": "Protokoll",
+      "designer": "Document Studio",
+      "media": "Fotos und Dateien"
+    },
+    "shortcuts": {
+      "global_search": "Globale Suche öffnen oder schliessen",
+      "global_listSearch": "In die Suche der Liste springen (zweites Mal: Browsersuche)",
+      "global_quickSearch": "Suche der Liste, sonst globale Suche",
+      "global_help": "Diese Übersicht öffnen",
+      "search_toListSearch": "Im Suchfenster: Begriff in die Listensuche der Seite übernehmen",
+      "standard_nextField": "Nächstes bzw. vorheriges Bedienelement",
+      "standard_activate": "Knopf, Link oder Eintrag auslösen",
+      "standard_close": "Dialog, Menü oder Liste schliessen",
+      "standard_listNavigate": "In Listen und Menüs wandern",
+      "standard_tabsNavigate": "Zwischen Tabs und Filtern wechseln",
+      "standard_reorder": "Markierten Eintrag in der Reihenfolge verschieben",
+      "protocol_find": "Kapitel- und Volltextsuche im Protokoll",
+      "protocol_nextElement": "Zum nächsten Abschnitt (am Ende: Protokoll schliessen)",
+      "protocol_previousElement": "Zum vorherigen Abschnitt",
+      "protocol_elementDown": "Abschnitt wechseln (ausserhalb von Feldern)",
+      "protocol_elementUp": "Vorheriger Abschnitt (ausserhalb von Feldern)",
+      "protocol_openTodo": "Neue Pendenz in der Sitzungsleiste",
+      "protocol_openNotes": "Notizen der Sitzungsleiste",
+      "protocol_attendanceStatus": "Anwesenheit setzen: anwesend, verspätet, entschuldigt, abwesend",
+      "designer_save": "Vorlage speichern",
+      "designer_undo": "Rückgängig",
+      "designer_redo": "Wiederholen",
+      "designer_duplicate": "Markiertes Element duplizieren",
+      "designer_delete": "Markiertes Element löschen",
+      "designer_move": "Markiertes Element verschieben",
+      "designer_deselect": "Auswahl aufheben",
+      "media_previous": "Vorheriges Foto bzw. vorherige Datei",
+      "media_next": "Nächstes Foto bzw. nächste Datei"
+    }
   }
 }

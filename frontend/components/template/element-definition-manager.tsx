@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { DataTable } from "@/components/ui/data-table";
+import { ReorderButtons } from "@/components/ui/reorder-buttons";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -398,7 +399,7 @@ export function ElementDefinitionManager({
               actions={<button type="button" className="button-secondary" onClick={startNewBlock}>{t("blockList.newBlock")}</button>}
             >
               <DataTable columns={[t("blockList.colBlock"), t("blockList.colType"), t("blockList.colHeading"), t("blockList.colOrder"), t("page.colActions")]}>
-                {sortedBlocks(selected.blocks).map((block) => (
+                {sortedBlocks(selected.blocks).map((block, blockIndex, allBlocks) => (
                   <tr
                     key={block.id}
                     draggable
@@ -417,7 +418,16 @@ export function ElementDefinitionManager({
                     <td><strong>{blockName(block)}</strong></td>
                     <td>{typeLabels[block.element_type_id] ?? t("blockList.unknownType")}</td>
                     <td>{block.block_title?.trim() || <span className="muted">{t("blockList.noHeading")}</span>}</td>
-                    <td><span className="pill">{t("blockList.drag")}</span></td>
+                    <td>
+                      {/* Ziehen oder per Knopf/Tastatur verschieben (Drag-and-Drop allein ist nicht tastaturbedienbar) */}
+                      <ReorderButtons
+                        itemKey={`reorder:block:${block.id}`}
+                        name={blockName(block)}
+                        index={blockIndex}
+                        count={allBlocks.length}
+                        onMove={(_from, to) => reorderBlocks(block.id, allBlocks[to].id)}
+                      />
+                    </td>
                     <td>
                       <div className="table-actions">
                         <button type="button" className="button-secondary button-ghost" onClick={(event) => { event.stopPropagation(); startEditBlock(block); }}>

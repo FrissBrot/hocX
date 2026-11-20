@@ -107,7 +107,7 @@ describe("AdminCashflow", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Forderungen" }));
     await screen.findByText("Turnverein Seedorf");
     fireEvent.click(screen.getByRole("button", { name: /Offen/ }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Bezahlt/ }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Bezahlt/ }));
     await waitFor(() =>
       expect(browserApiFetchMock).toHaveBeenCalledWith("/api/admin/cashflow/charges/ch1", { method: "PATCH", body: JSON.stringify({ status: "paid" }) })
     );
