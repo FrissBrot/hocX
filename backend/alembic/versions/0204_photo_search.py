@@ -77,7 +77,7 @@ CREATE OR REPLACE FUNCTION public.hocx_search_sorted(p text) RETURNS text
     AS $$ SELECT coalesce(string_agg(c, '' ORDER BY c), '') FROM regexp_split_to_table(p, '') AS c $$;
 
 CREATE OR REPLACE FUNCTION public.hocx_photo_search_refresh(p_ids bigint[]) RETURNS void
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
     AS $$
     BEGIN
         IF p_ids IS NULL OR cardinality(p_ids) = 0 THEN
@@ -111,7 +111,7 @@ CREATE OR REPLACE FUNCTION public.hocx_photo_search_refresh(p_ids bigint[]) RETU
                     LEFT JOIN submission_assignment sa
                            ON sa.id = gi.submission_assignment_id AND sa.tenant_id = gi.tenant_id
                     LEFT JOIN cycle_config cc ON cc.id = gi.cycle_config_id AND cc.tenant_id = gi.tenant_id
-                   WHERE gi.stored_file_id = sf.id
+                   WHERE gi.stored_file_id = sf.id AND gi.tenant_id = sf.tenant_id
                    LIMIT 1
               ) g ON true
               LEFT JOIN LATERAL (
@@ -131,7 +131,7 @@ CREATE OR REPLACE FUNCTION public.hocx_photo_search_refresh(p_ids bigint[]) RETU
                   SELECT w.display_name AS txt, concat('Word-Import: ', w.display_name) AS origin,
                          w.protocol_date AS d_from, w.protocol_date AS d_to
                     FROM word_import_document w
-                   WHERE w.stored_file_id = sf.id
+                   WHERE w.stored_file_id = sf.id AND w.tenant_id = sf.tenant_id
                    LIMIT 1
               ) wi ON true
               LEFT JOIN LATERAL (
@@ -337,7 +337,7 @@ def _trigger_function_sql(table: str, events: dict[str, str]) -> str:
     )
     return f"""
 CREATE OR REPLACE FUNCTION public.{_function_name(table)}() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
     AS $$
     BEGIN
 {branches}
@@ -394,8 +394,12 @@ def upgrade() -> None:
         op.execute(f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY")  # sql-ok: fester Tabellenname
 
     op.execute(FUNCTIONS_SQL)
+    # SECURITY DEFINER umgeht RLS: niemand ausser dem Eigentümer darf die Funktionen direkt aufrufen
+    # (Trigger brauchen kein EXECUTE). pg_temp steht im search_path zuletzt (Security-Review).
+    op.execute("REVOKE ALL ON FUNCTION public.hocx_photo_search_refresh(bigint[]) FROM PUBLIC")
     for table, events in TRIGGERS.items():
         op.execute(_trigger_function_sql(table, events))
+        op.execute(f"REVOKE ALL ON FUNCTION public.{_function_name(table)}() FROM PUBLIC")  # sql-ok: fester Funktionsname
         for event in events:
             op.execute(
                 f"CREATE TRIGGER {_trigger_name(table, event)} AFTER {event} ON public.{table} "  # sql-ok: feste Bezeichner

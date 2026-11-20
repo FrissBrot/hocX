@@ -234,7 +234,7 @@ _EXPANSION_SQL = text(
                 s.term = q.word
                 OR (length(q.word) >= 2 AND left(s.term, length(q.word)) = q.word)
                 OR (length(q.word) >= 3 AND strpos(s.term, q.word) > 0)
-                OR (length(q.word) >= 4 AND (
+                OR (length(q.word) >= 4 AND q.word !~ '^[0-9]+$' AND (
                         public.similarity(s.term, q.word) >= 0.3
                         OR (abs(length(s.term) - length(q.word)) <= 2
                             AND public.levenshtein_less_equal(s.term, q.word, 2) <= 2)))
@@ -245,6 +245,29 @@ _EXPANSION_SQL = text(
      WHERE x.quality >= :min_quality
     """
 )
+
+
+# Obergrenze für die unscharfe Wortsuche (Security-Review F3): sie rechnet Ähnlichkeit gegen den
+# ganzen Wortschatz des Mandanten. Läuft sie länger, gilt nur der exakte Treffer je Wort.
+EXPANSION_TIMEOUT_MS = 1500
+
+
+def _expand_terms(db: Session, tenant_id: int, idxs: list[int], words: list[str]) -> list:
+    from sqlalchemy.exc import OperationalError
+
+    params = {
+        "idxs": idxs, "words": words, "tenant_id": tenant_id,
+        "per_token": MAX_EXPANSIONS_PER_TOKEN, "min_quality": MIN_QUALITY,
+    }
+    try:
+        with db.begin_nested():
+            db.execute(text(f"SET LOCAL statement_timeout = {int(EXPANSION_TIMEOUT_MS)}"))  # sql-ok: feste Zahl aus dem Code
+            rows = db.execute(_EXPANSION_SQL, params).all()
+            db.execute(text("SET LOCAL statement_timeout = DEFAULT"))
+        return rows
+    except OperationalError:
+        # Abbruch durch den Timeout: Savepoint ist zurückgerollt (samt SET LOCAL); ohne Unschärfe weiter
+        return [type("Row", (), {"idx": idx, "term": word, "quality": 1.0}) for idx, word in zip(idxs, words)]
 
 
 def build_search_plan(db: Session, tenant_id: int, raw: str | None) -> SearchPlan | None:
@@ -278,16 +301,7 @@ def build_search_plan(db: Session, tenant_id: int, raw: str | None) -> SearchPla
     expansion_terms: list[str] = []
     expansion_quality: list[float] = []
     if lookup_words:
-        rows = db.execute(
-            _EXPANSION_SQL,
-            {
-                "idxs": idxs,
-                "words": lookup_words,
-                "tenant_id": tenant_id,
-                "per_token": MAX_EXPANSIONS_PER_TOKEN,
-                "min_quality": MIN_QUALITY,
-            },
-        ).all()
+        rows = _expand_terms(db, tenant_id, idxs, lookup_words)
         for row in rows:
             expansion_idx.append(int(row.idx))
             expansion_terms.append(row.term)

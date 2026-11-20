@@ -529,3 +529,26 @@ def test_pending_index_and_constraint_exist(db):
         with db.begin_nested():
             db.execute(text("UPDATE stored_file SET capture_file_state = 'bogus' WHERE id = :id"), {"id": photo.id})
     assert db.scalar(select(StoredFile.capture_file_state).where(StoredFile.id == photo.id)) is None
+
+
+def test_tenant_import_accepts_only_date_field_originals():
+    """Mandanten-Import (Security-Review F2): ein «replaced»-Original (ganzes EXIF-Segment) würde der
+    Job beim Wiederherstellen ungeprüft in die gescannte Datei schreiben - wird verworfen; der
+    Status kommt nie aus dem Archiv."""
+    from app.services.tenant_import_service import TenantImportService
+
+    service = TenantImportService.__new__(TenantImportService)
+    service.warnings = []
+    inplace = {"v": 1, "mode": "inplace", "slots": [{"b": 0, "t": 0x9003, "raw": ("2020:01:01 10:00:00" + "\x00").encode().hex()}]}
+    replaced = {"v": 1, "mode": "replaced", "segment": "ffe1" + "00" * 40}
+    assert service._capture_file_overrides({"capture_exif_original": inplace, "capture_file_state": "written"}) == {
+        "capture_exif_original": inplace, "capture_file_state": "pending",
+    }
+    assert service._capture_file_overrides({"capture_exif_original": replaced, "capture_file_state": "pending"}) == {
+        "capture_exif_original": None, "capture_file_state": None,
+    }
+    assert service.warnings
+    assert service._capture_file_overrides({"capture_corrected_at": "2024-05-02T00:00:00"}) == {
+        "capture_exif_original": None, "capture_file_state": "pending",
+    }
+    assert service._capture_file_overrides({}) == {"capture_exif_original": None, "capture_file_state": None}

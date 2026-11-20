@@ -69,7 +69,8 @@ done
 for gone in sha256:v1 sha256:v2 sha256:v3 sha256:old; do
   [[ " $images " != *" $gone "* ]] || { echo "Fall 1: $gone nicht entfernt ($images)" >&2; exit 1; }
 done
-grep -q pruned "$WORK/state/pruned" || { echo "Fall 1: dangling Images nicht bereinigt" >&2; exit 1; }
+# Kein globales prune: andere Projekte auf demselben Host bleiben unberührt
+[ ! -s "$WORK/state/pruned" ] || { echo "Fall 1: globales docker image prune aufgerufen" >&2; exit 1; }
 
 # 2. Ungültiges KEEP: nichts löschen, Fehler melden
 if cleanup_old_release_images "$WORK" "$NS" abc 2> /dev/null; then

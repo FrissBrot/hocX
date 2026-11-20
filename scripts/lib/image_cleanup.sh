@@ -8,8 +8,8 @@
 #   - die Images der letzten KEEP Release-Manifeste (.releases/<version>.env, neueste zuerst) -
 #     Ziele für ein manuelles Zurückgehen per HOCX_VERSION (RUNBOOK).
 # Entfernt werden nur Images aus ghcr.io/<namespace>/hocx-*, nie fremde (postgres, redis, traefik
-# …), plus dangling Images (ohne Tag, z. B. von einem überholten Pull). Ohne `-f`: ein Image, das
-# Docker noch braucht, bleibt einfach stehen. Build-Cache bleibt unberührt.
+# …) und kein globales `docker image prune` (der Host kann andere Projekte tragen). Ohne `-f`: ein
+# Image, das Docker noch braucht, bleibt einfach stehen. Build-Cache bleibt unberührt.
 
 # Image-Referenzen (Wert von HOCX_*_IMAGE) aus einem Manifest, ohne es auszuführen.
 _manifest_image_refs() {
@@ -73,6 +73,5 @@ cleanup_old_release_images() {
     fi
   done < <(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}')
 
-  docker image prune -f > /dev/null 2>&1 || true
   echo "    Alte hocX-Images entfernt: $removed (behalten: laufende, aktuelles Release und die letzten $keep Releases)."
 }

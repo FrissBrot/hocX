@@ -28,7 +28,7 @@ test("Aufnahmedatum per Mehrfachauswahl korrigieren und im Viewer wiederherstell
   try {
     await page.goto("/photos");
     // Gemeinsamer E2E-Mandant: auf das eigene Bild filtern (bleibt nach dem Neuladen bestehen)
-    await page.getByPlaceholder("Fotos durchsuchen").fill(name);
+    await page.getByPlaceholder(/^Suchen nach Name, Tag/).fill(name);
     const select = page.getByRole("checkbox", { name: `${name} auswählen` });
     await select.click();
     await page.locator(".photo-bulk-bar").getByRole("button", { name: "Aufnahmedatum" }).click();
@@ -65,7 +65,7 @@ test("Aufnahmedatum per Mehrfachauswahl korrigieren und im Viewer wiederherstell
     await page.locator(".photo-tile", { has: select }).locator(".photo-tile-preview").click();
     const viewer = page.getByRole("dialog", { name });
     await expect(viewer.getByText("Aufnahmedatum · korrigiert")).toBeVisible();
-    await expect(viewer.getByText("Die Datei enthält kein Aufnahmedatum.")).toBeVisible();
+    await expect(viewer.getByText("Das Bild hatte ursprünglich kein Aufnahmedatum.")).toBeVisible();
     await viewer.getByRole("button", { name: "Ändern" }).click();
     await viewer.getByRole("button", { name: "Original wiederherstellen" }).click();
     const resetConfirm = page.getByRole("alertdialog", { name: "Aufnahmedatum ändern?" });

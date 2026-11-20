@@ -1502,6 +1502,29 @@ class TenantImportService:
             }))
         self.db.commit()
 
+    def _capture_file_overrides(self, data: dict) -> dict:
+        """Aufnahmedatum in der Datei (Migration 0203) aus einem Archiv nur eingeschränkt übernehmen
+        (Security-Review): das Original nur, wenn es streng gültig ist und lediglich Datumsfelder
+        betrifft («inplace»/«inserted»). Ein «replaced»-Datensatz enthielte ein ganzes EXIF-Segment,
+        das der Job beim Wiederherstellen ungeprüft in die bereits gescannte Datei schriebe. Den
+        Status setzt der Import selbst: offen, sobald es etwas abzugleichen gibt."""
+        from app.services.exif_date_write import ExifDateError, parse_original
+
+        original = data.get("capture_exif_original")
+        if original is not None:
+            try:
+                original = parse_original(original)
+            except ExifDateError:
+                original = None
+            if original is not None and original.get("mode") not in ("inplace", "inserted"):
+                original = None
+            if original is None:
+                self.warnings.append(
+                    f"Datei '{data.get('original_name')}': ursprüngliches Aufnahmedatum der Datei nicht übernommen."
+                )
+        pending = original is not None or data.get("capture_corrected_at") is not None
+        return {"capture_exif_original": original, "capture_file_state": "pending" if pending else None}
+
     def _import_stored_files(self, new_tenant_id: int) -> dict[int, int]:
         abgabebox_ids = {row["stored_file_id"] for row in self._t("submission_upload_file")}
         id_map: dict[int, int] = {}
@@ -1546,10 +1569,14 @@ class TenantImportService:
             # die Vorschau beim ersten Abruf neu.
             if pdf_hash is not None:
                 self._imported_pdf_hashes.add(pdf_hash)
+            capture_overrides = self._capture_file_overrides(data)
             new_row = self._build(
                 StoredFile,
                 data,
-                {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status, "thumbnail_path": None},
+                {
+                    "tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status,
+                    "thumbnail_path": None, **capture_overrides,
+                },
             )
             self.db.add(new_row)
             if row.get("public_id"):

@@ -24,6 +24,8 @@ type Props = {
   onProtocolWheelChange: (enabled: boolean) => void;
   onSave: () => void | Promise<void>;
   onLogout: () => void;
+  /** Reiter beim Öffnen (Direktlink ?profile=notifications aus E-Mails), sonst «profil» */
+  initialTab?: string;
 };
 
 export function ProfileModal({
@@ -37,15 +39,16 @@ export function ProfileModal({
   onProtocolWheelChange,
   onSave,
   onLogout,
+  initialTab,
 }: Props) {
   const t = useTranslations("settings.profileModal");
-  const [activeTab, setActiveTab] = useState("profil");
+  const [activeTab, setActiveTab] = useState(initialTab ?? "profil");
 
   useEffect(() => {
     if (open) {
-      setActiveTab("profil");
+      setActiveTab(initialTab ?? "profil");
     }
-  }, [open]);
+  }, [open, initialTab]);
 
   return (
     <Modal

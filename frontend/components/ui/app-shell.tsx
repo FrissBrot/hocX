@@ -67,6 +67,13 @@ let browserSessionChecked = false;
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
+const PROFILE_LINK_KEY = "hocx.profileLink";
+
+/** Wert von ?profile= → Reiter-ID im Profil-Dialog (unbekannt: Profil). */
+export function profileTabFromLink(value: string): string {
+  return value === "notifications" ? "benachrichtigungen" : "profil";
+}
+
 function redirectToLogin(router: ReturnType<typeof useRouter>): void {
   const mainDomain = getRuntimeConfig().mainAppDomain;
   if (mainDomain && window.location.hostname !== mainDomain) {
@@ -120,6 +127,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  // Reiter beim Öffnen über einen Direktlink (?profile=notifications, z. B. aus E-Mails)
+  const [profileInitialTab, setProfileInitialTab] = useState<string | undefined>(undefined);
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
@@ -374,6 +383,30 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     else selectTheme(action === "theme-light" ? "light" : action === "theme-dark" ? "dark" : "auto");
   }
 
+  // Direktlink ?profile=notifications|profile öffnet das Profil im passenden Reiter (Link im Fuss
+  // jeder Benachrichtigungs-Mail); der Parameter verschwindet danach aus der Adresse.
+  // Ohne Anmeldung führt die Weiterleitung zum Login ohne Parameter zurück: das Ziel bleibt bis
+  // dahin im Tab gespeichert (sessionStorage) und öffnet sich, sobald eine Sitzung da ist.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("profile");
+    if (target) {
+      try { window.sessionStorage.setItem(PROFILE_LINK_KEY, target); } catch { /* ohne Speicher: nur jetzt */ }
+      params.delete("profile");
+      const query = params.toString();
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    }
+    if (!session) return;
+    let pending = target;
+    try {
+      pending = window.sessionStorage.getItem(PROFILE_LINK_KEY) ?? target;
+      window.sessionStorage.removeItem(PROFILE_LINK_KEY);
+    } catch { /* ohne Speicher: Wert aus der Adresse */ }
+    if (!pending) return;
+    setProfileInitialTab(profileTabFromLink(pending));
+    setProfileModalOpen(true);
+  }, [pathname, session]);
+
   const globalSearch = searchOpen ? (
     <GlobalSearch open onClose={() => setSearchOpen(false)} session={session} listInput={searchListInput} onAction={runSearchAction} pendingKeys={pendingSearchKeys} />
   ) : null;
@@ -381,7 +414,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const profileModal = profileModalOpen ? (
     <ProfileModal
       open
-      onClose={() => setProfileModalOpen(false)}
+      initialTab={profileInitialTab}
+      onClose={() => { setProfileModalOpen(false); setProfileInitialTab(undefined); }}
       language={language}
       onLanguageChange={setLanguage}
       protocolAccordionEnabled={protocolAccordionEnabled}

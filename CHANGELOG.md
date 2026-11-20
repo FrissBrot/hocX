@@ -8,6 +8,103 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-20
+
+Neue Fotosuche, die Tippfehler, andere Wortreihenfolge, Umlaute und Datumsangaben versteht und nach
+Relevanz sortiert, dazu der neue Kopf der Fotos-Seite (Design «Fotos Header 1a»). Ein korrigiertes
+Aufnahmedatum steht jetzt auch in der Bilddatei. Neu gestaltet sind das Datei-Detail (Design
+«Datei-Detail Popup v2», mit Umbenennen und Versionsverlauf) und der Termin-Dialog (Design «Termin
+Dialog v3», Anlegen und Bearbeiten gleich, automatisches Speichern). Aus einer Pendenz entsteht mit
+einem Klick eine Einzelabgabe, Abgaben vergeben Tags an ihre Pendenzen. Der Verlauf aktualisiert sich
+live und ist datensparsamer, das Update räumt alte Images auf. Drei Migrationen (0202, 0203, 0204),
+keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.4.1** (oder 1.4.0): `./scripts/deploy.sh <test|prod>`. Abgabebox-Backend und Backend
+  gemeinsam ausrollen (das Deploy-Skript tut das): die Abgabebox braucht das Spaltenrecht aus 0203.
+- **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
+  (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv; die Abgabebox liest sie nicht.
+- **Migration `0203_capture_date_in_file`:** neue Spalten `stored_file.capture_exif_original` (JSONB,
+  ursprüngliche Datumsfelder der Datei für «Original wiederherstellen») und
+  `stored_file.capture_file_state` (`pending`/`written`/`unsupported`/`failed`, CHECK und Teilindex),
+  dazu `SELECT` auf die Spalte `stored_file.source_checksum_sha256` für `hocx_abgabebox`
+  (Duplikatprüfung). Bestehende Korrekturen werden auf `pending` gesetzt; der neue Job
+  `capture_date_file_sync` (job-worker, jede Minute, unter `/admin/jobs`) schreibt sie danach in die
+  Dateien. Downgrade möglich, bereits geschriebene Dateien behalten dann aber das korrigierte Datum.
+- **Migration `0204_photo_search`:** Extensions `pg_trgm`, `unaccent`, `fuzzystrmatch` (in
+  `postgres:18` enthalten, «trusted», die Migration läuft wie immer mit `DATABASE_URL`), neue Tabellen
+  `photo_search_doc` und `photo_search_term` (je `tenant_id NOT NULL` und RLS), Trigger auf den
+  Quelltabellen halten sie aktuell (`SECURITY DEFINER` mit festem `search_path`, ohne `EXECUTE` für
+  andere Rollen). Die Migration indexiert alle bestehenden Dateien: rund 100 Sekunden je
+  100'000 Dateien.
+- Ab diesem Update entfernt `deploy.sh` nach Erfolg alte hocX-App-Images (siehe unten).
+
+### Geändert
+
+- **Fotosuche:** sucht in allem, was hocX zu einem Foto weiss – Dateiname, Tags, Album, Termin
+  (Titel, Tag, Datum), Abgabe und Element, Protokoll, Word-Import, hochgeladen von, Kamera,
+  Aufnahmedatum (inkl. Korrektur). Reihenfolge der Wörter egal, Tippfehler toleriert («somerlager»,
+  «zlet»), Umlaute/Akzente egal («braeteln» = «Brätel»), Wortanfänge reichen, Datumsangaben in allen
+  Sprachen («2026», «Mai 2026», «02.05.2026», «2.5.», «juin»). Bei aktiver Suche sortiert «Beste
+  Treffer» (alle Wörter vor einigen, Tags/Abgabe/Termin vor Dateiname). Auch die globale Suche nutzt
+  das Ranking. Nur Fotos des eigenen Vereins; Papierkorb und fremde Partnerfotos bleiben draussen
+  (Partnerfotos in geteilten Alben nur über den Dateinamen).
+- **Fotos-Seite (Design «Fotos Header 1a»):** Titel mit Anzahl, «Papierkorb» und «Bilder hochladen»
+  oben rechts, Werkzeugkasten mit Alle Fotos/Alben/Duplikate/Ähnliche, Suchfeld mit Leeren-Knopf,
+  Sortierung und Tag-Filter; bei Suche oder Filter eine Zeile «N von M Fotos» mit Filter-Chips und
+  «Filter zurücksetzen», eigener Leerzustand «Keine Fotos für „…“».
+- **Aufnahmedatum in der Datei:** Korrigieren, Verschieben und «Original wiederherstellen» schreiben
+  das Datum auch in die Bilddatei (EXIF), Downloads und Originale enthalten es. Das ursprüngliche
+  Datum bleibt in hocX; Wiederherstellen macht die Datumsfelder byte-genau wie vorher. Die Anzeige
+  in hocX ändert sich wie bisher sofort, die Datei folgt im Hintergrund (ohne Neukodierung, Pixel
+  unverändert). JPEG, HEIC/HEIF, PNG, WebP und TIFF mit Aufnahmedatum werden an Ort und Stelle
+  geändert, ein JPEG ohne Datum bekommt eines; andere Formate ohne Datum und Bilder über 50 MB
+  behalten die Korrektur nur in hocX. Die ursprünglich hochgeladene Datei gilt weiter als Duplikat.
+  Der Foto-Viewer zeigt dezent, ob die Datei schon aktualisiert ist; die Bestätigung erklärt es.
+- **Datei-Detail (Design «Datei-Detail Popup v2»):** Kopf mit Typ-Icon, Name (mit Recht per Klick
+  umbenennbar, die Endung bleibt), Quelle, Verarbeitungsstatus, «hochgeladen von» und Version;
+  links PDF-Ansicht oder extrahierter Text (kopierbar), ältere Versionen ansehbar; rechts «Details &
+  Tags» (Herkunft, Tags mit «neu erstellen» und häufigen Tags, Verarbeitungsschritte mit «Erneut
+  verarbeiten», Details mit MIME-Typ) und «Verlauf» mit allen Versionen; im Fuss «In den Papierkorb»
+  mit Bestätigung direkt im Fuss, danach «Wiederherstellen» oder «Nächste Datei →», sowie «Link
+  teilen», «In neuem Tab» und Herunterladen. Blättern mit ← / → bleibt.
+- **Termin-Dialog (Design «Termin Dialog v3»):** ein Dialog für Anlegen und Bearbeiten überall
+  (Terminliste, Kalender, Protokoll-Planung, Mobile): Kalenderblatt und Titel oben, Reiter
+  «Übersicht» (Beschreibung, Programm, Zeitraum, Standort, Tag, Zyklen), «Teilnehmer & Status»
+  (Absage, Teilnehmerzahl, Personen je Rolle) und «Weitere Felder» (Spezialfelder). Bearbeiten
+  speichert automatisch («✓ Alle Änderungen gespeichert»); beim Anlegen erst «Termin erstellen»,
+  danach ebenso. Löschen und Absagen im ⋮-Menü.
+- **Pendenz als Abgabe einsammeln:** Im Pendenz-Dialog («Quelle») und im ⋮-Menü der Pendenzen im
+  Protokoll legt «Als Abgabe einsammeln» mit einem Klick eine Einzelabgabe an: Titel = Aufgabe,
+  Stichtag = Fälligkeit, Verantwortliche = Zugewiesene. Die Pendenz selbst wird die Pendenz der
+  Abgabe (keine zweite) und schliesst sich nach dem Upload; Notizen, Dateien und Tags bleiben. Toast
+  mit «Link kopieren» und «Anpassen». Nur mit «Abgaben verwalten» und «Sitzungen bearbeiten».
+  Pendenzen aus Protokollen werden nie mit einer Abgabe gelöscht, sie verlieren nur den Bezug.
+- **Tags für Abgabe-Pendenzen:** Im Abgabe-Assistenten (Schritt «Verantwortlich») gewählte Tags
+  bekommt jede Pendenz der Abgabe; «Abgabe-Tag erstellen» (standardmässig aus) gibt zusätzlich ein
+  Tag mit dem Titel der Abgabe. Änderungen ziehen nach, von Hand gesetzte Tags bleiben.
+- **Verlauf:** Die erste Seite aktualisiert sich live (neue Einträge kurz hervorgehoben).
+  Datensparsamer: erfolgreiche Anmeldungen sind für den Verein nur 30 Tage sichtbar (Fehlversuche
+  und Änderungen länger, die Plattform-Administration sieht alles bis zur Aufbewahrungsfrist); wer
+  den Verlauf öffnet, steht selbst darin; ein Hinweis erinnert an die Datenschutzerklärung.
+- **E-Mail-Link zu den Benachrichtigungs-Einstellungen:** Der Link im Fuss jeder
+  Benachrichtigungs-Mail führt jetzt direkt in die persönlichen Einstellungen (Profil, Reiter
+  «Benachrichtigungen»; Direktlink `/?profile=notifications`, auch nach der Anmeldung) statt auf die
+  Organisations-Einstellungen. Linktext «Benachrichtigungs-Einstellungen».
+- **Strg+K:** Der Eintrag «In dieser Liste suchen» entfällt, der erste Treffer ist wieder die Seite.
+  Strg+F (⌘F) im Suchfenster übernimmt den Begriff in die Listensuche.
+- **Update räumt alte Images auf:** `deploy.sh` entfernt nach einem erfolgreichen Update alte
+  hocX-App-Images. Behalten werden laufende, das aktuelle Release und die letzten 3 Releases
+  (`HOCX_IMAGE_KEEP_RELEASES`, abschaltbar mit `HOCX_IMAGE_CLEANUP=0`); fremde Images und
+  andere Projekte auf dem Host bleiben unberührt.
+
+### Behoben
+
+- **Foto-Viewer:** Die Knöpfe oben hatten keinen Hover-Effekt, «Original öffnen» war beim Überfahren
+  unlesbar (weiss auf weiss) und «Best-of» nie hervorgehoben. Jetzt reagieren alle auf Hover und
+  Tastaturfokus, «Best-of» ist gelb, wenn das Foto markiert ist.
+
 ## [1.4.1] - 2026-11-20
 
 Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem Design «Abgaben v4»
@@ -18,7 +115,7 @@ Mehrfachauswahl), die Seite «Kasse» mit Konten und Bussen nach Design «Kasse 
 Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
 Behebung des 504 auf Prüfseite und Abgabebox. Dazu alle Funde des Nachtlaufs vom 20.11.2026
 (Abgabebox, Bussen und Pendenzen, Fotos und Freigaben, Termine und Zyklen, Rechte im Protokoll).
-Sieben Migrationen (0198 bis 0204), keine neuen Secrets oder Umgebungsvariablen, keine
+Vier Migrationen (0198, 0199, 0200, 0201), keine neuen Secrets oder Umgebungsvariablen, keine
 Breaking Changes.
 
 ### Update
@@ -52,25 +149,8 @@ Breaking Changes.
 - **Migration `0201_abgabebox_scan_status`:** die Rolle `hocx_abgabebox` darf zusätzlich die Spalte
   `stored_file.scan_status` lesen (nur `SELECT` auf diese eine Spalte, Zeilen weiter per RLS auf den
   Link-Mandanten begrenzt). Keine Datenänderung; Downgrade nimmt das Recht wieder weg.
-- **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
-  (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv, keine Datenänderung; die Abgabebox
-  liest sie nicht. Downgrade entfernt die Spalten (Tags auf bestehenden Pendenzen bleiben).
-- **Migration `0203_capture_date_in_file`** (korrigiertes Aufnahmedatum in der Datei): neue Spalten
-  `stored_file.capture_exif_original` (JSONB, Rückweg zu den ursprünglichen Datumsfeldern der
-  Datei) und `stored_file.capture_file_state` (`pending`/`written`/`unsupported`/`failed`, mit
-  CHECK und Teilindex), dazu `SELECT` auf `stored_file.source_checksum_sha256` für `hocx_abgabebox`
-  (Duplikatprüfung). Bestehende Korrekturen werden auf `pending` gesetzt, der neue Job
-  `capture_date_file_sync` im job-worker (jede Minute, unter `/admin/jobs`) schreibt sie danach in
-  die Dateien. Abgabebox-Backend und Backend gemeinsam ausrollen (das Deploy-Skript tut das).
-  Downgrade möglich, aber bereits geschriebene Dateien behalten das korrigierte Datum und verlieren
-  den Rückweg - vorher Korrekturen zurücksetzen und den Job laufen lassen, wenn nötig.
 
 ### Geändert
-
-- **Tags für Abgabe-Pendenzen:** Im Abgabe-Assistenten (Schritt «Verantwortlich») wählt man Tags,
-  die jede Pendenz der Abgabe bekommt. Der Schalter «Abgabe-Tag erstellen» (standardmässig aus)
-  gibt zusätzlich ein Tag mit dem Titel der Abgabe. Ändert man Tags, Schalter oder Titel, ziehen
-  die Pendenzen nach; von Hand gesetzte Tags bleiben.
 
 - **Papierkorb für Dateien und Fotos:** Löschen auf der Dateien-Seite, in der Foto-Ansicht, in der
   Mehrfachauswahl und bei «Nur beste behalten» legt Direkt-Uploads in den Papierkorb, statt sie
@@ -122,22 +202,9 @@ Breaking Changes.
   oder das Original wiederherstellen. Jede Änderung braucht eine Bestätigung, die erklärt, was sie
   bewirkt. Das korrigierte Datum gilt überall vor EXIF und Schätzung (Zeitstrahl, Sortierung,
   Monatsgruppen, Datumsfilter, Termin-Zuordnung, Metadaten, Teilen-Seite, Downloads/Exporte); das
-  EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, das korrigierte Datum kommt
-  auch in die Datei (siehe nächster Punkt). Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
+  EXIF-Datum bleibt gespeichert und wird als «ursprünglich» angezeigt, die Datei selbst wird nicht
+  verändert. Nur mit `photos.manage`, nur Bilder des eigenen Vereins, ein Audit-Eintrag pro Aktion.
   Migration `0200_photo_capture_override` (neue Spalten in `stored_file`).
-- **Fotos: korrigiertes Aufnahmedatum auch in der Datei:** Korrigieren, Verschieben und «Original
-  wiederherstellen» schreiben das Datum jetzt auch in die Bilddatei (EXIF `DateTimeOriginal`,
-  `DateTimeDigitized`, `DateTime`), Downloads und Originale enthalten also das neue Datum. Das
-  ursprüngliche Datum bleibt in hocX gespeichert; «Original wiederherstellen» schreibt es zurück
-  (die Datumsfelder sind danach byte-genau wie vorher). Die Anzeige in hocX ändert sich wie bisher
-  sofort, die Datei folgt im Hintergrund (Job `capture_date_file_sync`, ohne Neukodierung, Pixel
-  unverändert). JPEG, HEIC/HEIF, PNG, WebP und TIFF mit Aufnahmedatum werden an Ort und Stelle
-  geändert; ein JPEG ohne Aufnahmedatum bekommt eines (beim Wiederherstellen wieder entfernt); andere
-  Formate ohne Aufnahmedatum bleiben unverändert, die Korrektur gilt dort nur in hocX. Der
-  Foto-Viewer zeigt dezent, ob die Datei schon aktualisiert ist. Die neue Prüfsumme der Datei
-  ändert nichts an der Duplikaterkennung: die ursprünglich hochgeladene Datei wird weiterhin als
-  Duplikat erkannt (Galerie, Vorab-Abgleich, Abgabebox). Papierkorb-Dateien und Dateien mit
-  offenem oder positivem Virenbefund werden nicht angefasst. Migration `0203_capture_date_in_file`.
 - **Einzelabgaben mit mehreren Abgabeelementen:** Im Assistenten legt man bei «Einzelabgabe» in
   Schritt 2 («Elemente») beliebig viele Elemente an («+ Element», Entfernen per Icon), je mit Name,
   optionalem Start und Stichtag; in Schritt 3 wählt man je Element eine oder mehrere verantwortliche
@@ -152,10 +219,6 @@ Breaking Changes.
 - **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
   ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.
   Jetzt ist das Netz fest vorgegeben (wie beim Backend), ein Test prüft das für alle Dienste.
-- **Update räumt alte Images auf:** Nach einem erfolgreichen Update entfernt `deploy.sh` alte
-  hocX-App-Images; die Platte lief sonst mit jedem Update weiter voll. Behalten werden die von
-  Containern verwendeten Images, das aktuelle Release und die letzten 3 Releases
-  (`HOCX_IMAGE_KEEP_RELEASES`, abschaltbar mit `HOCX_IMAGE_CLEANUP=0`), fremde Images bleiben.
 - **Update prüft alle Dienste von aussen:** `deploy.sh` ruft nach dem Start jeden Traefik-Router über
   die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
   Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release

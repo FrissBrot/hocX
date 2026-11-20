@@ -301,3 +301,25 @@ def test_list_files_route_searches_by_relevance(db):
         date_from=None, date_to=None, db=db, user=reader,
     )
     assert [item.original_name for item in items] == ["b.jpg", "a.jpg"]
+
+
+def test_definer_functions_are_not_callable_by_runtime_roles(db):
+    """SECURITY DEFINER umgeht RLS: kein EXECUTE für PUBLIC/Laufzeitrollen, pg_temp zuletzt im
+    search_path (Security-Review F1 - sonst liessen sich fremde Mandantendaten in eine eigene
+    Temp-Tabelle umlenken)."""
+    from sqlalchemy import text as sql_text
+
+    rows = db.execute(sql_text(
+        "SELECT p.proname, p.proconfig, has_function_privilege('public', p.oid, 'EXECUTE') AS public_exec"
+        " FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
+        " WHERE n.nspname = 'public' AND p.prosecdef AND p.proname LIKE 'hocx_photo_search_%'"
+    )).all()
+    assert rows, "keine SECURITY-DEFINER-Funktionen gefunden"
+    for row in rows:
+        assert not row.public_exec, row.proname
+        assert any(setting.startswith("search_path=") and setting.endswith("pg_temp") for setting in row.proconfig or []), row.proname
+    for role in ("hocx_app", "hocx_abgabebox", "hocx_photo_worker"):
+        if db.execute(sql_text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}).first():
+            assert not db.execute(sql_text(
+                "SELECT has_function_privilege(:r, 'public.hocx_photo_search_refresh(bigint[])', 'EXECUTE')"
+            ), {"r": role}).scalar(), role

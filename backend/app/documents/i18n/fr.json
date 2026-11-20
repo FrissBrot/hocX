@@ -433,9 +433,9 @@
       "passwordChangedByAdmin": "Mot de passe redéfini par l’administration de ton organisation ({at})",
       "subject": "{tenant} : avis de sécurité concernant ton compte"
     },
-    "settingsHint": "Choisis les e-mails que tu reçois dans tes paramètres : {url}",
+    "settingsHint": "Choisis les e-mails que tu reçois dans tes réglages de notifications : {url}",
     "settingsHintHtml": "Tu choisis les e-mails que tu reçois dans tes {link}.",
-    "settingsLink": "réglages",
+    "settingsLink": "réglages de notifications",
     "submission": {
       "filesOne": "1 fichier",
       "filesOther": "{count} fichiers",

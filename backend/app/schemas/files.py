@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from datetime import date, datetime, time
 from typing import Literal
@@ -167,7 +168,11 @@ class StoredFileRename(BaseModel):
             raise ValueError("Name darf nicht leer sein")
         # Steuerzeichen (inkl. NUL) und Pfadtrenner: der Name landet im Content-Disposition-Header
         # und in ZIP-Exporten.
-        if _FILE_NAME_FORBIDDEN.search(value):
+        # Auch Unicode-Steuer- und Formatzeichen (C1, Bidi-Override wie U+202E, Zeilen-/Absatz-
+        # trenner): sonst liesse sich die Anzeige fälschen («rechnung\u202efdp.jpg»).
+        if _FILE_NAME_FORBIDDEN.search(value) or any(
+            unicodedata.category(char) in ("Cc", "Cf", "Zl", "Zp") for char in value
+        ):
             raise ValueError("Name enthält ungültige Zeichen")
         return value
 

@@ -433,9 +433,9 @@
       "passwordChangedByAdmin": "Password reimpostata dall’amministrazione della tua organizzazione ({at})",
       "subject": "{tenant}: avviso di sicurezza sul tuo account"
     },
-    "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
+    "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni delle notifiche: {url}",
     "settingsHintHtml": "Scegli quali e-mail ricevere nelle tue {link}.",
-    "settingsLink": "impostazioni",
+    "settingsLink": "impostazioni delle notifiche",
     "submission": {
       "filesOne": "1 file",
       "filesOther": "{count} file",

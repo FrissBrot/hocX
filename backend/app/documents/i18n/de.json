@@ -433,9 +433,9 @@
       "passwordChangedByAdmin": "Passwort durch die Verwaltung deiner Organisation neu gesetzt ({at})",
       "subject": "{tenant}: Sicherheitshinweis zu deinem Konto"
     },
-    "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Einstellungen ein: {url}",
+    "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Benachrichtigungs-Einstellungen ein: {url}",
     "settingsHintHtml": "Welche E-Mails du bekommst, stellst du in deinen {link} ein.",
-    "settingsLink": "Einstellungen",
+    "settingsLink": "Benachrichtigungs-Einstellungen",
     "submission": {
       "filesOne": "1 Datei",
       "filesOther": "{count} Dateien",

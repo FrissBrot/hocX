@@ -433,9 +433,9 @@
       "passwordChangedByAdmin": "Password reset by your organization's administration ({at})",
       "subject": "{tenant}: Security notice for your account"
     },
-    "settingsHint": "Choose which emails you receive in your settings: {url}",
+    "settingsHint": "Choose which emails you receive in your notification settings: {url}",
     "settingsHintHtml": "You choose which emails you receive in your {link}.",
-    "settingsLink": "settings",
+    "settingsLink": "notification settings",
     "submission": {
       "filesOne": "1 file",
       "filesOther": "{count} files",

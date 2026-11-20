@@ -95,7 +95,11 @@ def test_rename_of_other_tenants_file_is_not_found(db, document_storage):
     assert foreign.original_name == "sample.docx"
 
 
-@pytest.mark.parametrize("name", ["", "   ", "a/b", "a\\b", "zeile\numbruch", "nul\x00", ".", "x" * 201])
+@pytest.mark.parametrize("name", [
+    "", "   ", "a/b", "a\\b", "zeile\numbruch", "nul\x00", ".", "x" * 201,
+    # Unicode-Steuer-/Formatzeichen: Anzeige-Fälschung («rechnung‮fdp.jpg»), Security-Review F5
+    "rechnung\u202efdp", "c1\x85zeichen", "trenner\u2028zeile", "unsichtbar\u200bnull",
+])
 def test_rename_rejects_invalid_names(name):
     with pytest.raises(ValidationError):
         StoredFileRename(name=name)

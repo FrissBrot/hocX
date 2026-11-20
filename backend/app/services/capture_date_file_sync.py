@@ -71,7 +71,9 @@ STATE_FAILED = "failed"
 BATCH = 100
 TIME_BUDGET_SECONDS = 50.0
 # Grössere Dateien werden nicht in den Speicher geladen (Galerie-Bilder sind viel kleiner).
-MAX_FILE_BYTES = 200 * 1024 * 1024
+# Bilder kommen höchstens als Galerie-Upload (deutlich unter 50 MB); ganze Datei im Speicher, mehrere
+# Kopien gleichzeitig - die Grenze hält die Spitze im job-worker klein (Security-Review F6).
+MAX_FILE_BYTES = 50 * 1024 * 1024
 
 
 def _claim_next(db: Session) -> StoredFile | None:

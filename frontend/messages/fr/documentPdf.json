@@ -598,7 +598,7 @@
   "email": {
     "greeting": "Bonjour {name}",
     "footer": "Ce message vient de {tenant} via hocX.",
-    "settingsHint": "Choisis les e-mails que tu reçois dans tes paramètres : {url}",
+    "settingsHint": "Choisis les e-mails que tu reçois dans tes réglages de notifications : {url}",
     "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
     "todo": {
       "subjectNew": "{tenant} : nouvelles tâches pour toi",
@@ -670,7 +670,7 @@
     },
     "via": "via hocX",
     "system": "Système",
-    "settingsLink": "réglages",
+    "settingsLink": "réglages de notifications",
     "settingsHintHtml": "Tu choisis les e-mails que tu reçois dans tes {link}.",
     "kicker": {
       "todos": "Tâches",

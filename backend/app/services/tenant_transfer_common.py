@@ -150,6 +150,10 @@ FORCED_SECURE_DEFAULTS: dict[str, Any] = {
     "identity_verification_note": None,
     "identity_verification_revoked_at": None,
     "identity_verification_revoked_reason": None,
+    # Aufnahmedatum in der Datei (0203): nie ungeprüft aus dem Archiv; der Import setzt beides
+    # selbst (TenantImportService._capture_file_overrides), sonst bleiben sie leer.
+    "capture_exif_original": None,
+    "capture_file_state": None,
 }
 """Columns that must never be taken from an imported manifest, even though they're ordinary
 non-computed model columns build_row() would otherwise happily copy 1:1. StoredFile.scan_status

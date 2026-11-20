@@ -256,7 +256,9 @@ def _footer(lang: str, tenant_name: str, *, base_url: str | None, can_login: boo
     lines_text = [text(lang, "email.footer", tenant=tenant_name)]
     if settings:
         if base_url and can_login:
-            url = f"{base_url}/settings"
+            # Direkt in die persönlichen Benachrichtigungs-Einstellungen (Profil, Reiter
+            # «Benachrichtigungen»; app-shell.tsx öffnet ihn über ?profile=notifications)
+            url = f"{base_url}/?profile=notifications"
             link = f'<a href="{escape(url, quote=True)}" style="color:{MUTED}">{escape(text(lang, "email.settingsLink"))}</a>'
             lines_html.append(escape(text(lang, "email.settingsHintHtml", link="\x00")).replace("\x00", link))
             lines_text.append(text(lang, "email.settingsHint", url=url))

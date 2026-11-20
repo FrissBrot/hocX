@@ -40,7 +40,7 @@ def test_frame_has_brand_card_and_one_action_for_people_with_login():
     assert "Neue Aufgaben für dich" in mail.html and "über hocX" in mail.html
     assert "Neue Aufgaben · 1" in mail.html and "fällig 21.11.2026" in mail.html
     assert mail.html.count('href="https://app.example.com/todos"') == 1
-    assert 'href="https://app.example.com/settings"' in mail.html
+    assert 'href="https://app.example.com/?profile=notifications"' in mail.html
     # Werte aus Daten escaped, kein Flexbox, keine nachgeladenen Ressourcen
     assert "Zelt &lt;flicken&gt;" in mail.html and "<flicken>" not in mail.html
     assert "display:flex" not in mail.html and "fonts.googleapis" not in mail.html
@@ -52,7 +52,7 @@ def test_frame_has_brand_card_and_one_action_for_people_with_login():
 
 def test_no_links_into_the_app_without_login():
     mail = _render(can_login=False)
-    assert "/todos" not in mail.html and "/settings" not in mail.html and "/todos" not in mail.text
+    assert "/todos" not in mail.html and "?profile=notifications" not in mail.html and "/todos" not in mail.text
     assert "Fragen zu dieser Nachricht? Wende dich an Musterverein Seeland." in mail.html
 
 
