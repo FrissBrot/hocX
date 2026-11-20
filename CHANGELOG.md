@@ -29,9 +29,9 @@ und Sicherheitsmails an die Person. Admin-Isolation, Admin-SSO und Admin-Passkey
   derselbe Code gilt nie zweimal.
 - **SEC-AUTH-006:** bekannte Geräte (signiertes Cookie, serverseitig widerrufbar) sind von der
   kontoweiten Sperre ausgenommen - Lockout-DoS gegen fremde Konten wirkt nicht mehr auf die Inhaberin.
-- **SEC-AUTH-007:** App-seitige Schichten je Quelle (IPv4 /32, IPv6 /64), Netz (/24, /64, /48 als
-  Alarm), Konto+Quelle, Konto, global (Angriffsmodus) und je Mandant (Alarm); Versuchsrate je Quelle
-  auch auf Mandanten-Domains.
+- **SEC-AUTH-007:** App-seitige Schichten je Quelle (IPv4 /32, IPv6 /64), Netz (IPv4 /24, IPv6 /48,
+  IPv6 /32 für Versuchsrate und Alarm), Konto+Quelle, Konto, Gerät, global (Angriffsmodus) und je
+  Mandant (Alarm); Versuchsrate je Quelle auch auf Mandanten-Domains; IP-Sperren für IPv6 je /48.
 - **SEC-AUTH-010:** Step-up (frische Bestätigung mit Faktor bzw. Passwort) für Faktor-Änderungen,
   Passwortwechsel mit Faktor, Rollen/Rechte, Passwort/Login anderer Konten, fremde MFA-Resets,
   Einladung von Admin-Konten, MFA-Pflicht abschalten, Vier-Augen-Einstellung, eigene Domains,
@@ -70,9 +70,11 @@ und Sicherheitsmails an die Person. Admin-Isolation, Admin-SSO und Admin-Passkey
 
 - «Abmelden» beendet nur noch die Session dieses Geräts (bisher alle); «Alle anderen Geräte abmelden»
   im Profil bzw. `POST /api/auth/logout-all`.
-- Kontoweite Sperre (100 Fehlversuche/15 min) gilt nur noch für unbekannte Geräte; ab 30 Fehlversuchen
-  brauchen unbekannte Geräte eine zusätzliche Prüfung (zweiter Faktor oder E-Mail-Code). Ohne
-  eingerichteten E-Mail-Versand werden sie in diesem Fall abgewiesen.
+- Kontoweite Sperre: ab 30 Fehlversuchen/15 min brauchen unbekannte Geräte nach korrektem Passwort eine
+  zusätzliche Prüfung (zweiter Faktor oder E-Mail-Code); bekannte Geräte sind ausgenommen. Ohne
+  E-Mail-Versand werden Konten ohne Faktor auf unbekannten Geräten nur bei auffälliger Quelle oder über
+  100 Fehlversuchen abgewiesen; Konten mit Faktor nie.
+- «Passwort vergessen»: höchstens 3 Mails je Adresse und Stunde, weitere Anfragen ohne Versand (202).
 - TOTP: nach 10 Fehlversuchen in 15 min noch ein Versuch je Minute.
 - `SECURITY_ALERT_ADMIN_LOGINS` ist neu standardmässig `true`.
 
@@ -83,7 +85,9 @@ und Sicherheitsmails an die Person. Admin-Isolation, Admin-SSO und Admin-Passkey
   Rein additiv. `down_revision` ist `0204_photo_search`; `0205` ist für `fix/admin-isolation`
   reserviert - beim Zusammenführen wird die Kette auf `0205` umgebogen.
 - **Niemand muss sich neu anmelden:** bestehende Session-Cookies (ohne Session-ID, alter Cookie-Name
-  `hocx_session`) gelten bis zu ihrem Ablauf (höchstens 72 h) weiter; neue Anmeldungen bekommen
+  `hocx_session`) gelten bis zu ihrem Ablauf (höchstens 72 h; der alte Name wird bis
+  `AUTH_LEGACY_COOKIE_UNTIL`, sonst Start + 72 h, gelesen) weiter; auf eine Mandanten-Domain werden sie
+  nicht mehr weitergereicht; neue Anmeldungen bekommen
   `__Host-hocx_session` mit Session-ID. Alte Sessions erscheinen nicht in «Angemeldete Geräte»;
   «Alle anderen Geräte abmelden» beendet sie trotzdem. Laufende Bridge-Tokens (v3, 120 s) werden
   weiter eingelöst. Alte Redis-Zähler laufen nach höchstens 15 min aus.

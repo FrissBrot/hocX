@@ -308,7 +308,13 @@ app.add_middleware(
     max_bytes=settings.max_request_body_bytes,
     skip_prefixes=("/api/files/gallery-uploads",),
     # SEC-AUTH-002: Anmeldung (Mandant und Plattform) mit kleinem Body-Limit
-    path_limits=(("/api/auth/", settings.auth_max_request_body_bytes), ("/api/admin/auth/", settings.auth_max_request_body_bytes)),
+    # Passkey-Registrierung: Attestation mit Zertifikatskette (x5c) braucht mehr Platz
+    path_limits=(
+        ("/api/auth/mfa/passkeys/setup/", settings.auth_passkey_max_request_body_bytes),
+        ("/api/admin/auth/mfa/passkeys/", settings.auth_passkey_max_request_body_bytes),
+        ("/api/auth/", settings.auth_max_request_body_bytes),
+        ("/api/admin/auth/", settings.auth_max_request_body_bytes),
+    ),
 )
 
 # Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last) und bei

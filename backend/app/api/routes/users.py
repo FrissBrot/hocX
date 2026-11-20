@@ -1,6 +1,7 @@
 import uuid
 from urllib.parse import urlparse
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -15,7 +16,7 @@ from app.auth_security.step_up import ADMIN, MFA, require_recent_auth
 from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie, require_permission
 from app.models import AuthSession
 from app.models.entities import AppUser, Tenant, UserMfaFactor
-from app.schemas.step_up import SessionDeviceRead, SessionListRead
+from app.schemas.step_up import KnownDeviceRead, SessionDeviceRead, SessionListRead
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
@@ -309,6 +310,7 @@ def delete_my_mfa_factor(
 @router.post("/me/password", response_model=UserRead)
 def change_my_password(
     payload: UserPasswordChange,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -325,21 +327,33 @@ def change_my_password(
     events.record(event_type="password.change", outcome="success", user_id=user.user_id, tenant_id=user.current_tenant_id, session_id=user.session_id)
     # session_revoke_at beendet alle anderen Sessions; die eigene bleibt (gleiche Session-ID, neues
     # Cookie), sonst flöge die Person sofort nach dem Wechsel raus (Bereichs-Audit 05).
+    # Andere bekannte Geräte vergessen (Security-Review M4), das aktuelle bleibt
+    from app.auth_security import devices
+
+    devices.revoke_others(db, user.user_id, devices.device_id_from_request(request))
     _keep_current_session(db, response, user, reason="password_change")
     return current
 
 
-def _keep_current_session(db: Session, response: Response, user: CurrentUser, *, reason: str, mfa: bool | None = None) -> None:
-    """Alle anderen Sessions beenden (Audit 9.3), die aktuelle mit neuem Cookie behalten."""
+def _keep_current_session(db: Session, response: Response, user: CurrentUser, *, reason: str, mfa: bool | None = None) -> AuthSession:
+    """Alle anderen Sessions beenden (Audit 9.3), die aktuelle mit neuem Cookie behalten.
+
+    Nie ein Token ohne sid ausstellen (Security-Review M1): eine Session von vor dem Update wird ins
+    Register übernommen - mit ihrer alten Ausstellung als auth_time und ihrem alten Ablauf, also
+    weder verlängert noch für Step-up frischer."""
     session_register.revoke_all(db, user.user_id, reason=reason, except_id=user.session_id)
     record = db.get(AuthSession, user.session_id) if user.session_id else None
-    if record is not None and mfa:
+    if record is None:
+        record = session_register.adopt_legacy(
+            db, user_id=user.user_id, tenant_id=user.current_tenant_id, mfa=user.mfa_verified,
+            issued_at=user.token_issued_at, expires_at=user.token_expires_at,
+        )
+        user.session_id = record.id
+    if mfa:
         record.mfa = True
     db.commit()
-    if record is not None:
-        issue_session_cookie(response, user.user_id, mfa_verified=record.mfa, sid=str(record.id), expires_at=record.expires_at)
-    else:
-        issue_session_cookie(response, user.user_id, mfa_verified=bool(mfa) or user.mfa_verified)
+    issue_session_cookie(response, user.user_id, mfa_verified=record.mfa, sid=str(record.id), expires_at=record.expires_at)
+    return record
 
 
 def _after_factor_change(db: Session, response: Response, user: CurrentUser, *, method: str | None) -> None:
@@ -350,10 +364,11 @@ def _after_factor_change(db: Session, response: Response, user: CurrentUser, *, 
         from datetime import UTC, datetime
 
         db_user.session_revoke_at = datetime.now(UTC)
-    record = db.get(AuthSession, user.session_id) if user.session_id else None
-    if record is not None and method:
+    record = _keep_current_session(db, response, user, reason="mfa_change", mfa=method is not None or user.mfa_verified)
+    if method:
+        # Faktor gerade erfolgreich bestätigt: starke Anmeldung für diese Session
         session_register.mark_strong_auth(db, record, method)
-    _keep_current_session(db, response, user, reason="mfa_change", mfa=method is not None or user.mfa_verified)
+        db.commit()
 
 
 # ── Angemeldete Geräte (SEC-AUTH-011) ──────────────────────────────────
@@ -373,6 +388,38 @@ def list_my_sessions(db: Session = Depends(get_db), user: CurrentUser = Depends(
         ],
         legacy_session=user.session_id is None,
     )
+
+
+@router.get("/me/devices", response_model=list[KnownDeviceRead])
+def list_my_devices(request: Request, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Eigene bekannte Geräte (von Sperren ausgenommen, Security-Review M4) - nur eigene Daten."""
+    from app.auth_security import devices
+
+    current = devices.device_id_from_request(request)
+    current_hashes = set(devices._hash_candidates(current)) if current else set()
+    return [
+        KnownDeviceRead(id=row.public_id, user_agent_family=row.user_agent_family, created_at=row.created_at,
+                        last_seen_at=row.last_seen_at, current=row.device_hash in current_hashes)
+        for row in devices.list_active(db, user.user_id)
+    ]
+
+
+@router.delete("/me/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_my_device(device_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Bekanntes Gerät vergessen; seine Sessions enden mit. Fremde/unbekannte: 404."""
+    from datetime import UTC, datetime
+
+    from app.models import AuthKnownDevice
+
+    row = db.query(AuthKnownDevice).filter(AuthKnownDevice.public_id == device_id, AuthKnownDevice.user_id == user.user_id).one_or_none()
+    if row is None or row.revoked_at is not None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    row.revoked_at = datetime.now(UTC)
+    session_ids = list(db.scalars(select(AuthSession.id).where(AuthSession.device_id == row.id, AuthSession.revoked_at.is_(None))))
+    session_register.revoke(db, session_ids, reason="device_revoked")
+    db.commit()
+    events.record(event_type="device.revoke", outcome="success", user_id=user.user_id, tenant_id=user.current_tenant_id, session_id=user.session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/me/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

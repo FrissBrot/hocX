@@ -48,3 +48,12 @@ class SessionListRead(BaseModel):
 
 class EmailChallengeResendRequest(BaseModel):
     ticket: str = Field(min_length=1, max_length=128)
+
+
+class KnownDeviceRead(BaseModel):
+    """Bekanntes Gerät (von Konto- und Quellsperren ausgenommen), ohne Geräte-ID."""
+    id: uuid.UUID
+    user_agent_family: str | None = None
+    created_at: datetime
+    last_seen_at: datetime
+    current: bool = False

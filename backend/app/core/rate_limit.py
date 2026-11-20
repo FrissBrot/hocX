@@ -28,7 +28,8 @@ import redis as redis_sync
 from fastapi import HTTPException, status
 
 from app.core.auth_pseudonym import counter_subject, normalize_email
-from app.core.redis_client import get_redis_sync
+# Zähler optional in einem eigenen Redis (RATELIMIT_REDIS_URL, Security-Review M5)
+from app.core.redis_client import get_ratelimit_redis_sync as get_redis_sync
 
 _logger = logging.getLogger(__name__)
 
@@ -227,6 +228,15 @@ def enforce_rate_limit(key: str, *, limit: int, period_seconds: int, fail_open: 
         return
     if count > limit:
         raise _too_many("rate_limited", "Too many requests, please try again later")
+
+
+def within_limit(key: str, *, limit: int, period_seconds: int) -> bool:
+    """Wie enforce_rate_limit, wirft aber nicht: True, solange ``key`` höchstens ``limit``-mal im
+    Fenster gezählt wurde. Redis weg: False (nichts tun ist hier die sichere Seite)."""
+    try:
+        return int(_run("fixed", _FIXED_LUA, [_legacy_key(key)], [period_seconds])[0]) <= limit
+    except LimiterUnavailable:
+        return False
 
 
 # ── Gleitende Fenster: zählen vor prüfen ────────────────────────────────

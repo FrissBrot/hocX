@@ -93,6 +93,15 @@ def pop_locked(user_id: int) -> bool:
         return False
 
 
+def net_limits(address: SourceAddress) -> tuple[int, int]:
+    """Weiche (15 min) und harte (1 h) Grenze für L2. IPv6 zählt je /48 (Security-Review M5) -
+    ein Anschluss hat dort oft viele /64, darum mit Faktor ``auth_net6_factor``."""
+    if address.version == 6:
+        factor = max(1, settings.auth_net6_factor)
+        return settings.auth_net_failures_soft * factor, settings.auth_net_failures_hard_hour * factor
+    return settings.auth_net_failures_soft, settings.auth_net_failures_hard_hour
+
+
 def attack_mode(global_failures: int) -> bool:
     """L7: Fehlversuche aller Konten (15 min) über Mindestwert und Faktor × gewohnte Rate. Die
     gewohnte Rate (EWMA) pflegt der Systemmonitor (threats.update_baseline)."""
@@ -121,6 +130,11 @@ class PasswordCheck:
     signals: risk.Signals = field(default_factory=risk.Signals)
     pre: risk.Assessment | None = None
     force_verification: bool = False
+    # Quell-/Netzsignal über der weichen Schwelle (L1/L2): einzige Grundlage für eine Abweisung
+    # ohne E-Mail-Versand (Security-Review M2)
+    source_soft: bool = False
+    # Konto über L5 (Security-Review M3): unbekannte Geräte nur noch mit Faktor/E-Mail-Code
+    account_locked: bool = False
     degraded: bool = False   # Redis weg, Notbetrieb
 
     @property
@@ -170,6 +184,7 @@ class LoginGuard:
                 for scope, value, per_minute, burst in (
                     ("auth-rate-src", address.exact, settings.auth_ip_attempts_per_minute, settings.auth_ip_attempts_burst),
                     ("auth-rate-net", address.net, settings.auth_net_attempts_per_minute, settings.auth_net_attempts_burst),
+                    *((("auth-rate-wide", address.wide, settings.auth_wide_attempts_per_minute, settings.auth_wide_attempts_burst),) if address.wide else ()),
                 ):
                     allowed, wait = gcra_allow(scope, value, per_minute=per_minute, burst=burst)
                     if not allowed:
@@ -194,19 +209,24 @@ class LoginGuard:
         if counts["account_ip"] > settings.auth_account_ip_failures:
             self._locked_event(result, "account_source", tenant_id)
             raise _too_many("login_locked", "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen")
+        net_soft, net_hard = net_limits(address)
         if not known_device:
-            if counts["account"] > settings.auth_account_failures_known_only:
-                self._locked_event(result, "account", tenant_id)
-                raise _too_many("login_locked", "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen")
-            if counts["source"] > settings.auth_ip_failures_hard or counts["net_hour"] > settings.auth_net_failures_hard_hour:
+            if counts["source"] > settings.auth_ip_failures_hard or counts["net_hour"] > net_hard:
                 self._locked_event(result, "source", tenant_id)
                 blocks.strike(ip, reason="source_hard", tenant_id=tenant_id)
                 raise _too_many("login_locked", "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen")
-            if (
-                counts["account"] >= settings.auth_account_failures_challenge
-                or counts["source"] >= settings.auth_ip_failures_soft
-                or counts["net"] >= settings.auth_net_failures_soft
-            ):
+            if counts["account"] > settings.auth_account_failures_known_only:
+                # Keine 429 mehr (Security-Review M3): das Gerät muss nach korrektem Passwort einen
+                # Faktor bzw. E-Mail-Code bestehen; ohne Faktor und ohne E-Mail-Versand weist der
+                # Login einheitlich ab. Gezählt wird weiter vor der Prüfung.
+                self._locked_event(result, "account", tenant_id)
+                result.account_locked = True
+                result.force_verification = True
+            if counts["account"] >= settings.auth_account_failures_challenge:
+                result.force_verification = True
+            if counts["source"] >= settings.auth_ip_failures_soft or counts["net"] >= net_soft:
+                # Quellsignal: ohne E-Mail-Versand für Konten ohne Faktor abgewiesen
+                result.source_soft = True
                 result.force_verification = True
 
         # Spraying-/Stuffing-Signale (HLL) - Ausfall hier ist harmlos
@@ -227,12 +247,22 @@ class LoginGuard:
             attack_mode=attack_mode(max(0, counts["global"] - 1)),
         )
         if result.signals.attack_mode and not known_device:
-            # L7 Angriffsmodus: unbekannte Geräte werden immer zusätzlich geprüft (Abschnitt 6.3)
+            # L7 Angriffsmodus: unbekannte Geräte werden zusätzlich geprüft (Faktor bzw. E-Mail-
+            # Code). Ohne E-Mail-Versand nur Alarm, keine Abweisung (Security-Review M2). Der Modus
+            # endet von selbst, sobald die Fehlversuche im gleitenden 15-min-Fenster abklingen.
             result.force_verification = True
         # Vorab-Risiko ohne kontoabhängige Signale: gleiches Ergebnis für existierende und nicht
         # existierende Konten.
         result.pre = risk.assess(result.signals)
-        if result.pre.level == risk.CRITICAL and not known_device and risk.enforcing():
+        # Harte Abweisung nur aus Quellsignalen (Security-Review M2): Fehlversuche der Quelle bzw.
+        # des Netzes, Spraying aus dem Netz, ungültige Tickets - nicht Konto- oder globale Zähler.
+        source_only = risk.assess(risk.Signals(
+            source_failures=result.signals.source_failures, net_failures_hour=result.signals.net_failures_hour,
+            accounts_from_net=result.signals.accounts_from_net, invalid_tokens_from_source=result.signals.invalid_tokens_from_source,
+            known_device=True,
+        ))
+        if source_only.score >= settings.auth_risk_high and not known_device and risk.enforcing():
+            result.pre = source_only
             self._deny_critical(result, tenant_id)
         return result
 
@@ -266,7 +296,7 @@ class LoginGuard:
     def _locked_event(self, result: PasswordCheck, layer: str, tenant_id: int | None) -> None:
         # Gesperrte Versuche werden sichtbar (SEC-AUTH-012), aber nur einmal je Schicht, Subjekt
         # und Fenster - sonst wäre die Ereignistabelle selbst ein DoS-Ziel.
-        if _sample_once(f"locked:{layer}:{result.subject}:{result.address.exact}", WINDOW):
+        if _sample_once(f"locked:{layer}:{counter_subject('sample', result.subject + '|' + result.address.exact)}", WINDOW):
             events.record(
                 ctx=request_context.current(result.ip),
                 event_type="login.locked", outcome="blocked", tenant_id=tenant_id, subject_hash=result.subject,
@@ -317,6 +347,25 @@ def baseline_signals(db: Session, *, user_id: int, net_hash: str | None) -> tupl
         hours = {row.hour for row in rows}
         unusual = not any(((hour + delta) % 24) in hours for delta in (-1, 0, 1))
     return new_network, unusual
+
+
+def device_failures(device_hash: str | None) -> int:
+    """Fehlversuche von diesem Gerät (alle Konten, 15 min) - Security-Review M4."""
+    if not device_hash:
+        return 0
+    try:
+        return sliding_peek([SlidingCounter("auth-device", device_hash, WINDOW)])[0]
+    except LimiterUnavailable:
+        return 0
+
+
+def count_device_failure(device_hash: str | None) -> None:
+    if not device_hash:
+        return
+    try:
+        sliding_consume([SlidingCounter("auth-device", device_hash, WINDOW)])
+    except LimiterUnavailable:
+        pass
 
 
 def count_invalid_token(ip: str | None) -> None:

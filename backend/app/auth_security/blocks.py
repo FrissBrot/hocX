@@ -45,7 +45,8 @@ class Block:
 def _subjects(ip: str | None) -> list[tuple[str, str]]:
     address = source_address(ip)
     subjects = [("source", counter_subject("block-source", address.exact))]
-    if address.version == 4:
+    if address.version is not None:
+        # IPv4 /24, IPv6 /48 (Security-Review M5)
         subjects.append(("net", counter_subject("block-net", address.net)))
     return subjects
 
@@ -94,7 +95,9 @@ def strike(ip: str | None, *, reason: str, tenant_id: int | None = None) -> Bloc
         if count < settings.auth_block_strikes:
             return None
         client = get_redis_sync()
-        subject = subject_for(ip)
+        # IPv6: das /48 sperren, sonst wechselt ein Angreifer einfach das /64
+        scope = "net" if address.version == 6 else "source"
+        subject = subject_for(ip, scope)
         if client.exists(f"{_PREFIX}{subject}"):
             return None
         history_key = f"{_HISTORY}{subject}"
@@ -104,13 +107,13 @@ def strike(ip: str | None, *, reason: str, tenant_id: int | None = None) -> Bloc
         return None
     durations = _durations()
     minutes = durations[min(repeat - 1, len(durations) - 1)]
-    block = Block(subject=subject, scope="source", until=int(time.time()) + minutes * 60, reason=reason, manual=False, stage=4)
+    block = Block(subject=subject, scope=scope, until=int(time.time()) + minutes * 60, reason=reason, manual=False, stage=4)
     try:
         _store(block)
     except redis_sync.RedisError as exc:
         note_backend_error(exc)
         return None
-    events.record(event_type="block.set", outcome="info", tenant_id=tenant_id, details={"reason": reason, "minutes": minutes, "stage": 4, "scope": "source"})
+    events.record(event_type="block.set", outcome="info", tenant_id=tenant_id, details={"reason": reason, "minutes": minutes, "stage": 4, "scope": scope})
     return block
 
 

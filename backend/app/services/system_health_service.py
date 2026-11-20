@@ -535,9 +535,13 @@ def _check_auth_protection(db: Session) -> HealthCheckRead:
     memory_percent = 0
     active_blocks = 0
     try:
-        memory = get_redis_sync().info("memory")
-        used, maximum = memory.get("used_memory", 0), memory.get("maxmemory", 0)
-        memory_percent = round(used * 100 / maximum) if maximum else 0
+        from app.core.redis_client import get_ratelimit_redis_sync
+
+        # Haupt-Redis und - falls getrennt (RATELIMIT_REDIS_URL) - das Zähler-Redis
+        for client in {id(c): c for c in (get_redis_sync(), get_ratelimit_redis_sync())}.values():
+            memory = client.info("memory")
+            used, maximum = memory.get("used_memory", 0), memory.get("maxmemory", 0)
+            memory_percent = max(memory_percent, round(used * 100 / maximum) if maximum else 0)
         active_blocks = len(blocks.active_blocks(limit=1000))
     except Exception:  # noqa: BLE001 - Redis weg: zählt der Limiter selbst (ratelimit.backend_error)
         limiter_errors = max(limiter_errors, 1)

@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.client_ip import client_ip
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
-from app.core.rate_limit import enforce_rate_limit
+from app.core.rate_limit import enforce_rate_limit, within_limit
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
 from app.schemas.mfa import (
     EmailChallengeVerifyRequest,
@@ -64,8 +64,8 @@ def _expected_origin(request: Request) -> str:
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
-    return service.login(db, response, payload, request_host=request.url.hostname, client_address=client_ip(request), request=request)
+def login(payload: LoginRequest, response: Response, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    return service.login(db, response, payload, request_host=request.url.hostname, client_address=client_ip(request), request=request, background=background)
 
 
 @router.post("/mfa/totp/verify", response_model=LoginResponse)
@@ -229,13 +229,17 @@ def session(request: Request, response: Response, db: Session = Depends(get_db),
     # frontend/lib/bridge-redirect.ts) so a stale cookie / flapping DNS can't turn this into a
     # redirect loop the way an earlier, unconditional version of this did.
     bridge_redirect_url = None
-    if user is not None:
+    # Nur Sessions im Register dürfen eine Kind-Session auf der Mandanten-Domain erzeugen: sie
+    # erbt deren Frische und Ende und endet mit ihr (Security-Review H1). Sessions von vor dem
+    # Update (ohne sid) bleiben bis zu ihrem Ablauf auf der aktuellen Domain.
+    if user is not None and user.session_id is not None:
         bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(
             db,
             request.url.hostname,
             user.user_id,
             user.current_tenant_id,
             mfa_verified=user.mfa_verified,
+            parent_sid=str(user.session_id),
         )
     result = service.session(user, response, bridge_redirect_url)
     if user is not None and user.current_tenant_id is not None and user.can(P.MEETINGS_READ):
@@ -309,15 +313,17 @@ def _issue_password_reset(email: str) -> None:
 
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED, response_model=dict[str, str])
 def request_password_reset(payload: PasswordResetRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
-    """Antwortet immer gleich, ob es das Konto gibt oder nicht (kein Orakel). Je Adresse und Quelle
-    höchstens drei Links pro Stunde, je Adresse insgesamt zehn (SEC-AUTH-017: wer für eine fremde
-    Adresse anfragt, verbraucht nur sein eigenes Kontingent, nicht das der Inhaberin)."""
+    """Antwortet immer gleich (202), ob es das Konto gibt oder nicht (kein Orakel). Je Quelle höchstens
+    10 Anfragen in 15 Minuten (429 trifft nur die anfragende Quelle). Je Adresse werden höchstens
+    drei Mails pro Stunde tatsächlich verschickt, und je Adresse und Quelle höchstens drei - darüber
+    antwortet die Route weiter mit 202, ohne zu senden (Security-Review M6: kein Mail-Bombing, und
+    die Inhaberin bekommt nie 429 wegen fremder Anfragen)."""
     source = source_address(client_ip(request)).exact
     enforce_rate_limit(f"password-reset-ip:{source}", limit=10, period_seconds=15 * 60)
     email = normalize_email(payload.email)
-    enforce_rate_limit(f"password-reset-email-src:{email}|{source}", limit=3, period_seconds=60 * 60)
-    enforce_rate_limit(f"password-reset-email:{email}", limit=10, period_seconds=60 * 60)
-    if _email_sending_enabled(db):
+    send = within_limit(f"password-reset-email-src:{email}|{source}", limit=3, period_seconds=60 * 60)
+    send = send and within_limit(f"password-reset-email:{email}", limit=3, period_seconds=60 * 60)
+    if send and _email_sending_enabled(db):
         background.add_task(_issue_password_reset, payload.email)
     return {"status": "accepted"}
 
@@ -332,7 +338,7 @@ def account_link_preview(payload: AccountLinkToken, request: Request, db: Sessio
 
 
 @router.post("/account-link/complete", response_model=AccountLinkCompleteRead)
-def account_link_complete(payload: AccountLinkComplete, request: Request, db: Session = Depends(get_db)):
+def account_link_complete(payload: AccountLinkComplete, request: Request, response: Response, db: Session = Depends(get_db)):
     """Passwort über den Einmal-Link setzen. Einladung (Erstlogin): danach folgt ohne zweites
     Login der zweite Faktor - die Antwort trägt das Login-Ticket (``mfa``, nur im Body) und
     ``mfa_required`` aus ``account_requires_mfa``. Eine Session entsteht hier nie, erst nach
@@ -340,6 +346,16 @@ def account_link_complete(payload: AccountLinkComplete, request: Request, db: Se
     enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
     purpose, user = account_links.complete_for_user(db, payload.token, payload.password)
     if purpose != "invite":
+        # Das Gerät, auf dem das Passwort zurückgesetzt wurde, gilt als bekannt (Security-Review M3):
+        # sonst bliebe die Inhaberin nach dem Reset (der alle Geräte vergisst) unter einem laufenden
+        # Angriff ausgesperrt.
+        from app.auth_security import devices
+        from app.auth_security.context import current as current_context
+
+        device_id = devices.new_device_id()
+        devices.remember(db, user_id=user.id, tenant_id=user.tenant_id, device_id=device_id, user_agent_family=current_context().user_agent_family)
+        db.commit()
+        devices.set_cookie(response, device_id)
         return AccountLinkCompleteRead(purpose=purpose)
     pending = service.mfa_service.start_invite_setup(db, user=user, request_host=request.url.hostname)
     return AccountLinkCompleteRead(purpose=purpose, mfa=pending, mfa_required=pending.required if pending else None)

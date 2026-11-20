@@ -201,10 +201,14 @@ class Settings(BaseSettings):
     # Geräte-Cookies, die damit signiert sind, gelten bis zu ihrem Ablauf weiter; neue werden nur
     # mit AUTH_SECRET signiert. Leer = keine Rotation im Gang.
     auth_secret_previous: str = ""
+    # Übergang auf den Cookie-Namen mit __Host- (SEC-AUTH-018): bis wann der bisherige Name noch
+    # gelesen wird (ISO-Datum). Leer = Prozessstart + auth_session_ttl_hours (≈ Deploy + 72 h).
+    auth_legacy_cookie_until: str = ""
 
     # --- Login-Härtung (Auth-Audit 2026-11-20, docs: RUNBOOK «Anmeldeschutz») ----------------
     # Body-Limit für /api/auth/* und /api/admin/auth/* (SEC-AUTH-002); Rest: max_request_body_bytes.
     auth_max_request_body_bytes: int = 16 * 1024
+    auth_passkey_max_request_body_bytes: int = 64 * 1024
     # Session-Register (SEC-AUTH-011): Inaktivität und absolute Lebensdauer einer Session;
     # last_seen_at wird höchstens alle auth_session_touch_seconds geschrieben.
     auth_session_idle_minutes: int = 8 * 60
@@ -233,6 +237,14 @@ class Settings(BaseSettings):
     auth_ip_attempts_burst: int = 15
     auth_net_attempts_per_minute: int = 120
     auth_net_attempts_burst: int = 60
+    # IPv6: L2 zählt je /48 (mit Faktor auf die Grenzen), Versuchsrate zusätzlich je /32
+    auth_net6_factor: int = 4
+    auth_wide_attempts_per_minute: int = 600
+    auth_wide_attempts_burst: int = 300
+    # Optional eigenes Redis nur für Zähler (z. B. mit maxmemory-policy volatile-lru): unter einem
+    # Angriff werden dort Zähler verdrängt statt dass das Haupt-Redis (Tickets, noeviction) volläuft.
+    # Leer = Haupt-Redis (REDIS_URL).
+    ratelimit_redis_url: str = ""
     # Temporäre IP-Sperre (Stufe 4): nach so vielen Prüfstufen in 24 h, Dauer je Wiederholung.
     auth_block_strikes: int = 3
     auth_block_minutes: str = "60,360,1440"

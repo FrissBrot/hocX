@@ -77,7 +77,9 @@ def parse_cookie(value: str | None) -> str | None:
 def device_id_from_request(request: Request | None) -> str | None:
     if request is None:
         return None
-    return parse_cookie(request.cookies.get(cookie_name()) or request.cookies.get(settings.auth_device_cookie))
+    # Im Secure-Modus nur das __Host--Cookie (Security-Review M4): ein Cookie ohne Präfix könnte
+    # eine Geschwister-Subdomain unterschieben.
+    return parse_cookie(request.cookies.get(cookie_name()))
 
 
 def new_device_id() -> str:
@@ -140,3 +142,19 @@ def revoke_all(db: Session, user_id: int) -> int:
     return db.execute(
         update(AuthKnownDevice).where(AuthKnownDevice.user_id == user_id, AuthKnownDevice.revoked_at.is_(None)).values(revoked_at=datetime.now(UTC))
     ).rowcount or 0
+
+
+def list_active(db: Session, user_id: int) -> list[AuthKnownDevice]:
+    return list(db.scalars(
+        select(AuthKnownDevice)
+        .where(AuthKnownDevice.user_id == user_id, AuthKnownDevice.revoked_at.is_(None), AuthKnownDevice.last_seen_at >= _cutoff())
+        .order_by(AuthKnownDevice.last_seen_at.desc())
+    ))
+
+
+def revoke_others(db: Session, user_id: int, keep_device_id: str | None) -> int:
+    """Alle bekannten Geräte ausser dem aktuellen vergessen (ohne Commit), z. B. beim Passwortwechsel."""
+    statement = update(AuthKnownDevice).where(AuthKnownDevice.user_id == user_id, AuthKnownDevice.revoked_at.is_(None))
+    if keep_device_id:
+        statement = statement.where(AuthKnownDevice.device_hash.not_in(_hash_candidates(keep_device_id)))
+    return db.execute(statement.values(revoked_at=datetime.now(UTC))).rowcount or 0

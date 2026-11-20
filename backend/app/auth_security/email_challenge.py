@@ -72,7 +72,7 @@ def start(db: Session, *, user: AppUser, request_host: str | None, context: dict
     ticket = secrets.token_urlsafe(32)
     code = f"{secrets.randbelow(1_000_000):06d}"
     data = {
-        "kind": KIND, "user_id": user.id, "request_host": request_host, "issued_at": int(datetime.now(UTC).timestamp()),
+        "kind": KIND, "user_id": user.id, "request_host": request_host, "issued_at_ms": int(datetime.now(UTC).timestamp() * 1000),
         "code_hash": _code_hash(ticket, code), "attempts": 0, "sends": 1, "context": context,
     }
     _send(db, user, code)
@@ -123,7 +123,8 @@ def verify(db: Session, *, ticket: str, code: str) -> tuple[AppUser, dict]:
     user = db.get(AppUser, int(data["user_id"]))
     if user is None or not user.is_active or not user.login_enabled or user.has_left:
         raise _invalid()
-    if user.session_revoke_at is not None and int(user.session_revoke_at.timestamp()) > int(data.get("issued_at", 0)):
+    # Millisekunden wie beim Session-Token (Security-Review N4)
+    if user.session_revoke_at is not None and int(user.session_revoke_at.timestamp() * 1000) > int(data.get("issued_at_ms", 0)):
         raise _invalid()
     client = get_redis_sync()
     if not hmac.compare_digest(_code_hash(ticket, (code or "").strip()), str(data.get("code_hash"))):

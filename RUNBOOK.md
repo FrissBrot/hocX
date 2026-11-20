@@ -918,22 +918,28 @@ Ereignisse `events.py`), gemeinsame Zähler-Primitive `backend/app/core/rate_lim
 ### Was passiert bei einer Anmeldung
 
 1. Quelle gesperrt (automatisch/manuell)? → 429 `source_blocked` (bekannte Geräte ausgenommen).
-2. Versuchsrate je Quelle (GCRA, IPv4 /32 bzw. IPv6 /64 und Netz) → 429 `rate_limited`.
+2. Versuchsrate je Quelle (GCRA: IPv4 /32 und /24, IPv6 /64, /48 und /32) → 429 `rate_limited`.
 3. Zähler **vor** der Passwortprüfung (Lua, atomar): Konto+Quelle (`AUTH_ACCOUNT_IP_FAILURES`, 10/15 min,
    hart), Konto (`AUTH_ACCOUNT_FAILURES_CHALLENGE` 30 → zusätzliche Prüfung,
-   `AUTH_ACCOUNT_FAILURES_KNOWN_ONLY` 100 → nur noch bekannte Geräte), Quelle
-   (`AUTH_IP_FAILURES_SOFT/HARD` 20/60), Netz (`AUTH_NET_FAILURES_SOFT` 60/15 min,
-   `AUTH_NET_FAILURES_HARD_HOUR` 300/h), global (Angriffsmodus ab `AUTH_GLOBAL_ATTACK_MIN` 100/15 min
-   und 5 × gewohnte Rate).
+   `AUTH_ACCOUNT_FAILURES_KNOWN_ONLY` 100 → unbekannte Geräte nur noch mit Faktor/E-Mail-Code), Quelle
+   (`AUTH_IP_FAILURES_SOFT/HARD` 20/60), Netz (IPv4 /24, IPv6 /48 mit Faktor `AUTH_NET6_FACTOR` 4;
+   `AUTH_NET_FAILURES_SOFT` 60/15 min, `AUTH_NET_FAILURES_HARD_HOUR` 300/h), je Gerät (10/15 min,
+   danach verliert ein bekanntes Gerät seine Ausnahme), global (Angriffsmodus ab
+   `AUTH_GLOBAL_ATTACK_MIN` 100/15 min und 5 × gewohnte Rate; endet von selbst, sobald die
+   Fehlversuche im gleitenden 15-min-Fenster abklingen).
 4. Risk Engine (Score 0-100, Gründe im Ereignis): normal → wie bisher; moderat/hoch → zweiter Faktor,
    ohne Faktor ein **Code per E-Mail**; kritisch → diese Verbindung 30 min abgewiesen.
 5. Erfolg: Gerät wird als bekannt gespeichert (Cookie `__Host-hocx_device`, 90 Tage), Session im Register
    (`auth_session`), Ereignis `login.success`, ggf. Mail an die Person.
 
 **Bekannte Geräte** sind von der Kontosperre und den Quellgrenzen ausgenommen: ein Angreifer kann die
-Inhaberin nicht mehr aussperren. Ohne eingerichteten E-Mail-Versand werden unbekannte Geräte, die eine
-zusätzliche Prüfung bräuchten, abgewiesen (429 `login_denied`) - **E-Mail-Versand einrichten**
-(Adminportal → Benachrichtigungen).
+Inhaberin nicht mehr aussperren. Eine Geräte-ID wird nur an ein Konto gebunden, wenn sie bei diesem Konto
+neu ausgestellt wurde; das Gerät, auf dem «Passwort vergessen» abgeschlossen wird, gilt danach als bekannt.
+
+**Ohne E-Mail-Versand** gilt: Konten mit zweitem Faktor werden nie abgewiesen (der Faktor ist die Prüfung).
+Konten ohne Faktor auf unbekanntem Gerät werden nur bei Quellsignalen (L1/L2) oder über L5 abgewiesen
+(429 `login_denied`, gleich für falsches und richtiges Passwort); der Angriffsmodus allein weist nie ab.
+**E-Mail-Versand einrichten** (Adminportal → Benachrichtigungen), dann bekommen diese Fälle einen Code.
 
 ### Einstellungen (`.env`, Startwerte aus dem Audit)
 
@@ -949,6 +955,8 @@ zusätzliche Prüfung bräuchten, abgewiesen (429 `login_denied`) - **E-Mail-Ver
 | `AUTH_BLOCK_STRIKES`, `AUTH_BLOCK_MINUTES` | 3, `60,360,1440` | Automatische Sperre nach Strikes in 24 h, Dauer je Wiederholung (max. 24 h) |
 | `AUTH_DEVICE_TTL_DAYS` | 90 | Lebensdauer «bekanntes Gerät» |
 | `AUTH_SECRET_PREVIOUS` | leer | Schlüsselrotation (unten) |
+| `AUTH_LEGACY_COOKIE_UNTIL` | leer (= Start + 72 h) | bis wann der bisherige Cookie-Name `hocx_session` noch gelesen wird |
+| `AUTH_NET6_FACTOR` | 4 | IPv6: L2-Grenzen je /48 = Netz-Grenzen × Faktor |
 | `SECURITY_ALERT_ADMIN_LOGINS` | `true` (neu) | jede Plattform-Anmeldung meldet sich im Check «security» |
 
 Weitere Werte (Body-Limit 16 KiB für `/api/auth/*`, GCRA-Raten, Alarmschwellen `AUTH_ALERT_*`) stehen in
@@ -973,6 +981,12 @@ Ereignis `block.set`/`block.clear` und einen Audit-Eintrag. Der Plattform-Login 
 ausgenommen (Ziti ist der stärkere Nachweis). Wer nicht mehr hineinkommt, obwohl das Konto in Ordnung
 ist: vom gewohnten Gerät anmelden (bekannte Geräte sind ausgenommen) oder `reset-account`.
 
+**Redis voll (noeviction):** Die Zählerschlüssel sind kurz und laufen nach höchstens 2 h ab; der Check
+`auth_protection` warnt ab 70 %. Optional kann ein eigenes Redis nur für die Zähler betrieben werden
+(`RATELIMIT_REDIS_URL` in `backend/app/core/config.py`, z. B. mit `maxmemory-policy volatile-lru`):
+unter einem Angriff werden dort Zähler verdrängt, statt dass das Haupt-Redis (Login-Tickets) volläuft.
+Der Release-Compose bringt diesen Dienst noch nicht mit (offen, Entscheid Betrieb).
+
 **Redis weg/voll:** bekannte Geräte melden sich weiter an (lokale Notgrenze je Prozess, 5/min/IP,
 20/min/Konto); unbekannte Geräte bekommen 503 `auth_temporarily_unavailable`; Konten mit zweitem Faktor
 brauchen Redis für das Login-Ticket. Bestehende Sessions laufen ohne Redis weiter. Der Check
@@ -994,14 +1008,21 @@ Code/Faktor); betroffene Konten mit Erfolg aus neuem Netz → Sessions der Perso
 
 - Profil › Sicherheit › «Angemeldete Geräte»: einzelne Sessions oder alle anderen abmelden. «Abmelden»
   beendet nur die eigene Session, `/api/auth/logout-all` alle.
-- Passwort- oder Faktor-Änderung beendet alle **anderen** Sessions; «Passwort vergessen» beendet alle
-  Sessions und vergisst die bekannten Geräte.
+- Passwort- oder Faktor-Änderung beendet alle **anderen** Sessions, ein Passwortwechsel vergisst zudem die
+  anderen bekannten Geräte; «Passwort vergessen» beendet alle Sessions und vergisst alle Geräte ausser dem,
+  auf dem der Reset abgeschlossen wird. Bekannte Geräte lassen sich im Profil einzeln vergessen.
+- Sessions auf einer Mandanten-Domain (Domain-Bridge) erben Frische und Ende der Ausgangs-Session und
+  enden mit ihr. Sessions von vor dem Update werden bei Passwort-/Faktorwechsel, «Alle anderen
+  abmelden» oder Step-up ins Register übernommen, ohne verlängert zu werden.
 - **Rotation von `AUTH_SECRET`:** alten Wert in `AUTH_SECRET_PREVIOUS`, neuen in `AUTH_SECRET`,
   `./scripts/deploy.sh`. Sessions und Geräte-Cookies gelten weiter; nach `AUTH_SESSION_ABSOLUTE_HOURS`
   (14 Tage) `AUTH_SECRET_PREVIOUS` leeren und erneut deployen. Pseudonyme (Zähler, Netz-Baselines)
   beginnen nach der Rotation neu - kurz mehr «neues Netz»-Signale, keine Mails dadurch.
 
 ### Wartungsjob
+
+«Passwort vergessen»: je Adresse gehen höchstens 3 Mails pro Stunde raus (auch je Quelle 3); weitere
+Anfragen bekommen 202 ohne Versand, 429 nur die anfragende Quelle (10 in 15 min).
 
 `auth_security_maintenance` (stündlich, `/admin/jobs`): löscht `auth_event` nach 90 Tagen, beendete
 Sessions nach 30 Tagen, Geräte nach 120 Tagen ohne Nutzung und repariert Zähler ohne Ablauf

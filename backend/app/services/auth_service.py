@@ -1,15 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, Request, Response, status
+from fastapi import BackgroundTasks, HTTPException, Request, Response, status
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.auth_security import devices, email_challenge, events, notify, risk
 from app.auth_security import context as request_context
 from app.auth_security import sessions as session_register
-from app.auth_security.guard import LoginGuard, count_invalid_token, mark_locked, pop_locked, tenant_accounts_observe, unavailable
+from app.auth_security.guard import (
+    LoginGuard,
+    count_device_failure,
+    count_invalid_token,
+    device_failures,
+    mark_locked,
+    pop_locked,
+    tenant_accounts_observe,
+    unavailable,
+)
 from app.core.auth_pseudonym import normalize_email
 from app.core.config import settings
 from app.core.permissions import requires_mfa
@@ -48,6 +57,30 @@ from app.services.tenant_service import build_tenant_profile_image_url
 _audit = AuditService()
 
 
+def _login_denied() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={"code": "login_denied", "message": "Anmeldung von dieser Verbindung vorübergehend nicht möglich"},
+        headers={"Retry-After": "900"},
+    )
+
+
+def _notify_failed_attempts(user_id: int, count: int) -> None:
+    """Hinweis-Mail «viele Fehlversuche» in eigener Session (nach der Antwort)."""
+    from app.core.db import SessionLocal
+    from app.core.error_log import record_system_error
+
+    with SessionLocal() as session:
+        try:
+            user = session.get(AppUser, user_id)
+            if user is not None:
+                notify.failed_attempts(session, user, count=count)
+                session.commit()
+        except Exception as exc:  # noqa: BLE001 - ausserhalb des Requests: selbst ins Fehlerprotokoll
+            session.rollback()
+            record_system_error(session, exc=exc)
+
+
 
 class AuthService:
     def __init__(self) -> None:
@@ -61,28 +94,34 @@ class AuthService:
         request_host: str | None = None,
         client_address: str | None = None,
         request: Request | None = None,
+        background: BackgroundTasks | None = None,
     ) -> LoginResponse:
         """Passwortphase mit Anmeldeschutz (app/auth_security/guard.py): Sperren und Zähler
         werden VOR der Passwortprüfung gezählt (SEC-AUTH-003), bekannte Geräte sind von der
         Kontosperre ausgenommen (SEC-AUTH-006), die Risk Engine entscheidet über eine zusätzliche
-        Prüfung (zweiter Faktor oder E-Mail-Code)."""
+        Prüfung (zweiter Faktor oder E-Mail-Code).
+
+        Ohne E-Mail-Versand wird nur bei Quellsignalen (L1/L2) oder über L5 abgewiesen, und zwar
+        einheitlich für falsches Passwort und für korrektes Passwort ohne Faktor (kein Orakel);
+        Konten mit Faktor werden nie abgewiesen, der Faktor ist die Prüfung (Security-Review M2/M3).
+        Existierende und unbekannte Konten durchlaufen dieselben Redis-/DB-Schritte (N3)."""
         email = normalize_email(payload.email)
         guard = LoginGuard()
         ctx = request_context.current(client_address)
         user = db.query(AppUser).filter(AppUser.email == email, AppUser.login_enabled.is_(True)).one_or_none()
         device_id = devices.device_id_from_request(request)
-        known = devices.known_device(db, user.id, device_id) if user is not None else None
+        # Gleiche Abfrage auch für unbekannte Konten (Zeitverhalten, Security-Review N3)
+        known = devices.known_device(db, user.id if user is not None else -1, device_id)
         device_hash = devices.device_hash(device_id) if device_id else None
+        if known is not None and device_failures(device_hash) >= settings.auth_account_ip_failures:
+            # Fehlversuche je Gerät (Security-Review M4): ein bekanntes Gerät, von dem aus geraten
+            # wird, verliert seine Ausnahme von den Sperren.
+            known = None
         check = guard.check(email=email, ip=client_address, known_device=known is not None, device_hash=device_hash, tenant_id=user.tenant_id if user is not None else None)
-        # Vor der Passwortprüfung und damit für alle Konten gleich (kein Orakel): ist eine
-        # zusätzliche Prüfung nötig, aber kein E-Mail-Versand eingerichtet, werden unbekannte
-        # Geräte bei harten Signalen abgewiesen.
-        pre_needs = known is None and risk.enforcing() and (check.force_verification or (check.pre is not None and check.pre.level == risk.HIGH))
-        if pre_needs and not email_challenge.available(db):
-            events.record(ctx=ctx, event_type="login.password", outcome="blocked", tenant_id=user.tenant_id if user else None, subject_hash=check.subject,
-                          device_hash=device_hash, risk_score=check.pre.score if check.pre else None, risk_reasons=check.pre.reasons if check.pre else (),
-                          enforcement="deny", details={"reason": "verification_unavailable"})
-            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail={"code": "login_denied", "message": "Anmeldung von dieser Verbindung vorübergehend nicht möglich"}, headers={"Retry-After": "900"})
+        smtp = email_challenge.available(db)
+        deny_without_smtp = (
+            known is None and risk.enforcing() and not smtp and (check.source_soft or check.account_locked or (check.pre is not None and check.pre.level == risk.HIGH))
+        )
 
         # Always run verify_password's full PBKDF2 work, even for a nonexistent account
         # (against DUMMY_PASSWORD_HASH) - short-circuiting past it was a timing side
@@ -92,12 +131,14 @@ class AuthService:
         # Passwort, ein Passwort-Orakel für ehemalige Mitglieder).
         if user is None or not user.is_active or user.has_left or not password_ok:
             guard.failed(check)
+            count_device_failure(device_hash)
             reason = "unknown_account" if user is None else ("inactive" if not user.is_active else ("left" if user.has_left else "password"))
             events.record(
                 ctx=ctx,
-                event_type="login.password", outcome="failure", user_id=user.id if user else None, tenant_id=user.tenant_id if user else None,
-                subject_hash=check.subject, device_hash=device_hash, risk_score=check.pre.score if check.pre else None,
-                risk_reasons=check.pre.reasons if check.pre else (), enforcement="none", details={"reason": reason, "known_device": known is not None},
+                event_type="login.password", outcome="blocked" if deny_without_smtp else "failure", user_id=user.id if user else None,
+                tenant_id=user.tenant_id if user else None, subject_hash=check.subject, device_hash=device_hash,
+                risk_score=check.pre.score if check.pre else None, risk_reasons=check.pre.reasons if check.pre else (),
+                enforcement="deny" if deny_without_smtp else "none", details={"reason": reason, "known_device": known is not None},
             )
             # Sicherheitsereignis (PRIV-013): die eingegebene E-Mail wird nicht gespeichert, nur das
             # Konto, falls es existiert, und die gehashte Quelle (audit_context).
@@ -107,14 +148,19 @@ class AuthService:
                 actor_user_id=user.id if user is not None else None,
                 details={"reason": reason},
             )
-            if user is not None:
-                tenant_accounts_observe(user.tenant_id, check.subject)
-                failures = check.account_failures
-                if failures >= settings.auth_account_failures_challenge:
+            tenant_accounts_observe(user.tenant_id if user is not None else 0, check.subject)
+            failures = check.account_failures
+            if failures >= settings.auth_account_failures_known_only:
+                mark_locked(user.id if user is not None else -1)
+            if user is not None and failures >= settings.auth_account_failures_challenge:
+                # Nach der Antwort verschickt (Zeitverhalten, Security-Review N3)
+                if background is not None:
+                    background.add_task(_notify_failed_attempts, user.id, failures)
+                else:
                     notify.failed_attempts(db, user, count=failures)
                     db.commit()
-                if failures >= settings.auth_account_failures_known_only:
-                    mark_locked(user.id)
+            if deny_without_smtp:
+                raise _login_denied()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "invalid_credentials", "message": "E-Mail oder Passwort ist ungültig."})
         guard.succeeded(check)
 
@@ -130,7 +176,15 @@ class AuthService:
         )
         current_user = build_current_user(db, user)
         has_factor = self.mfa_service.has_factor(db, user.id)
-        if needs_verification and not has_factor and email_challenge.available(db):
+        if deny_without_smtp and not has_factor:
+            events.record(
+                ctx=ctx,
+                event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
+                device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="deny",
+                details={"reason": "verification_unavailable"},
+            )
+            raise _login_denied()
+        if needs_verification and not has_factor and smtp:
             try:
                 ticket = email_challenge.start(db, user=user, request_host=request_host, context=risk_context)
             except email_challenge.ChallengeUnavailable as exc:
@@ -248,14 +302,19 @@ class AuthService:
             parent = session_register.validate(db, bridge.parent_sid, user.id)
             if parent is None:
                 return False
+        elif not bridge.legacy:
+            # Ohne Eltern-Session keine neue Session (Security-Review H1); nur v3-Tokens von vor
+            # dem Update (Ablauf 120 s) werden noch eingelöst.
+            return False
         ctx = request_context.current()
         record = session_register.create(
             db, user_id=user.id, tenant_id=user.tenant_id, mfa=bridge.mfa_verified, amr=["bridge"], parent_id=parent.id if parent else None,
             device_id=parent.device_id if parent else None, host=request_host, ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family,
-            expires_at=parent.expires_at if parent else None,
+            # Ende der Eltern-Session, nie verlängert; v3-Altlast: wie die bisherigen Tokens
+            expires_at=parent.expires_at if parent else datetime.now(timezone.utc) + timedelta(hours=settings.auth_session_ttl_hours),
         )
-        if parent is not None:
-            record.auth_time = parent.auth_time
+        # Frische der Eltern-Session übernehmen; v3-Altlast gilt nie als frisch (Step-up nötig)
+        record.auth_time = parent.auth_time if parent is not None else datetime.now(timezone.utc) - timedelta(days=1)
         db.commit()
         issue_session_cookie(response, bridge.user_id, mfa_verified=bridge.mfa_verified, sid=str(record.id), expires_at=record.expires_at)
         issue_locale_cookie(response, user.preferred_language)
@@ -457,8 +516,11 @@ class AuthService:
             db.add(user)
         ctx = request_context.current()
         risk_context = risk_context or {}
-        device_id = devices.device_id_from_request(request) or devices.new_device_id()
-        known_before = devices.known_device(db, user.id, device_id) is not None
+        presented = devices.device_id_from_request(request)
+        known_before = devices.known_device(db, user.id, presented) is not None
+        # Gerät dem Konto unbekannt: immer eine neue Geräte-ID (Security-Review M4) - eine
+        # mitgebrachte (z. B. untergeschobene) ID wird nie an ein weiteres Konto gebunden.
+        device_id = presented if known_before and presented else devices.new_device_id()
         had_other_devices = bool(db.scalar(select(exists().where(
             AuthKnownDevice.user_id == user.id, AuthKnownDevice.revoked_at.is_(None),
             AuthKnownDevice.device_hash != devices.device_hash(device_id),

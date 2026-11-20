@@ -7,8 +7,8 @@ Weder E-Mail-Adressen noch IP-Adressen landen im Klartext in Redis-Schlüsseln o
 Stufen der Quelladresse (Audit Abschnitt 6.3):
 - ``exact``: IPv4 /32, IPv6 /64 - für IPv6 ist ein /64 das, was ein Anschluss bekommt; einzelne
   /128 zu zählen hiesse, dass ein Angreifer 2^64 Quellen hat (SEC-AUTH-007).
-- ``net``: IPv4 /24, IPv6 /64 - Schicht L2 der Zähler.
-- ``wide``: IPv6 /48 (nur Monitoring, L3); IPv4: None.
+- ``net``: IPv4 /24, IPv6 /48 - Schicht L2 der Zähler und Sperren.
+- ``wide``: IPv6 /32 (Versuchsrate und Monitoring, L3); IPv4: None.
 - ``baseline``: IPv4 /24, IPv6 /48 - «bekanntes Netz» eines Kontos (90 Tage) und identisch mit
   ``audit_log.ip_hash`` (app/core/audit_context.ip_fingerprint), damit beide korrelierbar sind.
 
@@ -85,7 +85,10 @@ def source_address(address: str | None) -> SourceAddress:
         return SourceAddress(raw=address, version=4, exact=exact, net=net, wide=None, baseline=net, private=ip.is_private or ip.is_loopback)
     net64 = str(ipaddress.ip_network(f"{ip}/64", strict=False))
     net48 = str(ipaddress.ip_network(f"{ip}/48", strict=False))
-    return SourceAddress(raw=address, version=6, exact=net64, net=net64, wide=net48, baseline=net48, private=ip.is_private or ip.is_loopback)
+    net32 = str(ipaddress.ip_network(f"{ip}/32", strict=False))
+    # L2 je /48 (Security-Review M5: mit /64 auf beiden Stufen genügte ein /48, um alles zu umgehen),
+    # /32 als grobe Stufe für Versuchsrate und Alarm.
+    return SourceAddress(raw=address, version=6, exact=net64, net=net48, wide=net32, baseline=net48, private=ip.is_private or ip.is_loopback)
 
 
 def net_hash(address: str | None) -> str | None:

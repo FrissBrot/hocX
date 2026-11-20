@@ -693,18 +693,27 @@ def test_password_rule_applies_to_self_service_change(db):
     assert exc.value.detail["code"] == "password_weak"
 
 
-def test_password_reset_quota_per_address_and_source_is_separate(db):
+def test_password_reset_sends_at_most_three_mails_per_hour_and_never_429s_the_owner(db, monkeypatch):
+    """Security-Review M6: je Adresse höchstens 3 Mails/h tatsächlich, darüber 202 ohne Versand;
+    429 nur für die anfragende Quelle (> 10 in 15 min)."""
+    from app.api.routes import auth as auth_route
     from app.main import app
 
+    issued: list[str] = []
+    monkeypatch.setattr(auth_route, "_email_sending_enabled", lambda _db: True)
+    monkeypatch.setattr(auth_route, "_issue_password_reset", lambda email: issued.append(email))
     app.dependency_overrides[get_db] = lambda: db
     try:
-        attacker = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=("198.51.100.5", 40000))
+        sources = [TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=(f"198.51.100.{n}", 40000)) for n in range(1, 5)]
         owner = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=("203.0.113.9", 40000))
-        for _ in range(3):
-            assert attacker.post("/api/auth/password-reset/request", json={"email": "opfer@example.com"}).status_code == 202
-        assert attacker.post("/api/auth/password-reset/request", json={"email": "opfer@example.com"}).status_code == 429
-        # Die Inhaberin aus ihrem Netz hat ihr eigenes Kontingent (SEC-AUTH-017)
+        for client in sources:
+            for _ in range(4):
+                assert client.post("/api/auth/password-reset/request", json={"email": "opfer@example.com"}).status_code == 202
         assert owner.post("/api/auth/password-reset/request", json={"email": "opfer@example.com"}).status_code == 202
+        assert len(issued) == 3
+        for _ in range(7):
+            sources[0].post("/api/auth/password-reset/request", json={"email": "andere@example.com"})
+        assert sources[0].post("/api/auth/password-reset/request", json={"email": "x@example.com"}).status_code == 429
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -794,13 +803,26 @@ def test_T15_redis_down_known_device_logs_in_unknown_device_gets_503(db, monkeyp
 # ── T9 Single-Use-Races ─────────────────────────────────────────────────
 
 
+def _committed_parent_session(user_id: int, *, auth_age_hours: float = 0) -> AuthSession:
+    with SessionLocal() as session:
+        user = session.get(AppUser, user_id)
+        record = sessions.create(session, user_id=user_id, tenant_id=user.tenant_id, mfa=False, amr=["pwd"],
+                                 expires_at=datetime.now(UTC) + timedelta(hours=5))
+        record.auth_time = datetime.now(UTC) - timedelta(hours=auth_age_hours)
+        session.commit()
+        session.refresh(record)
+        session.expunge(record)
+        return record
+
+
 def test_T9_bridge_token_redeems_exactly_once_in_parallel():
     from app.services import domain_bridge_service
 
     user_id = _committed_user(f"bridge-race-{uuid.uuid4().hex[:8]}@example.com")
-    token = domain_bridge_service.create_bridge_token(user_id, "verein.example", mfa_verified=False)
+    parent = _committed_parent_session(user_id)
+    token = domain_bridge_service.create_bridge_token(user_id, "verein.example", mfa_verified=False, parent_sid=str(parent.id))
     # SEC-AUTH-020: dasselbe Token für dieselbe Session statt eines neuen je Abruf
-    assert domain_bridge_service.create_bridge_token(user_id, "verein.example", mfa_verified=False) == token
+    assert domain_bridge_service.create_bridge_token(user_id, "verein.example", mfa_verified=False, parent_sid=str(parent.id)) == token
     barrier = threading.Barrier(8)
 
     def redeem(_index: int) -> bool:
@@ -821,3 +843,187 @@ def test_admin_principal_uses_its_own_factor_counter():
     for _ in range(settings.auth_totp_account_limit):
         consume_factor_attempt(1, kind="totp", principal="admin")
     consume_factor_attempt(1, kind="totp")  # Konto 1 unberührt
+
+
+# ── Security-Review (Folgerunde) ────────────────────────────────────────
+
+
+def test_H1_bridge_child_inherits_parent_and_ends_with_it(db):
+    from app.services import domain_bridge_service
+
+    user = make_app_user(db, email="bridge-child@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    parent = sessions.create(db, user_id=user.id, tenant_id=user.tenant_id, mfa=False, amr=["pwd"], expires_at=datetime.now(UTC) + timedelta(hours=5))
+    parent.auth_time = datetime.now(UTC) - timedelta(hours=3)
+    db.flush()
+    # Ohne Eltern-Session keine Kind-Session
+    orphan = domain_bridge_service.create_bridge_token(user.id, "verein.example")
+    assert AuthService().redeem_bridge_token(db, Response(), orphan, "verein.example") is False
+    token = domain_bridge_service.create_bridge_token(user.id, "verein.example", parent_sid=str(parent.id))
+    response = Response()
+    assert AuthService().redeem_bridge_token(db, response, token, "verein.example")
+    child_token = _session_token(response)
+    child = db.get(AuthSession, uuid.UUID(parse_session_token(child_token)["sid"]))
+    assert child.parent_id == parent.id and child.expires_at == parent.expires_at and child.auth_time == parent.auth_time
+    # Step-up gilt nicht als frisch, nur weil die Domain gewechselt wurde
+    current = get_optional_current_user(request=None, db=db, session_cookie=child_token)
+    from app.auth_security.step_up import is_recent
+
+    assert not is_recent(current, settings.auth_step_up_admin_minutes)
+    sessions.revoke(db, [parent.id], reason="test")
+    db.commit()
+    db.expire_all()
+    assert validate_session_token(db, child_token) is None
+
+
+def test_H1_session_poll_bridges_only_registered_sessions(db, monkeypatch):
+    from app.services import domain_bridge_service
+
+    calls = []
+    monkeypatch.setattr(domain_bridge_service, "resolve_bridge_redirect", lambda *args, **kwargs: calls.append(kwargs) or None)
+    from app.api.routes import auth as auth_route
+
+    user = make_app_user(db, email="poll@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    legacy = get_optional_current_user(request=None, db=db, session_cookie=create_session_token(user.id))
+    auth_route.session(_req(), Response(), db=db, user=legacy)
+    assert calls == []
+    _r, response = _login(db, user.email)
+    registered = get_optional_current_user(request=None, db=db, session_cookie=_session_token(response))
+    auth_route.session(_req(), Response(), db=db, user=registered)
+    assert calls and calls[-1]["parent_sid"] == str(registered.session_id)
+
+
+def test_M1_legacy_session_is_adopted_without_getting_fresher_or_longer(db):
+    from app.api.routes import users as users_route
+
+    user = make_app_user(db, email="legacy-adopt@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    now = int(time.time())
+    payload = json.dumps({"user_id": user.id, "mfa": False, "iat": now - 7200, "exp": now + 3600}, separators=(",", ":")).encode()
+    import hashlib
+    import hmac as hmac_module
+
+    signature = hmac_module.new(settings.auth_secret.encode(), payload, hashlib.sha256).digest()
+    legacy = base64.urlsafe_b64encode(payload).decode() + "." + base64.urlsafe_b64encode(signature).decode()
+    current = get_optional_current_user(request=None, db=db, session_cookie=legacy)
+    response = Response()
+    users_route.revoke_my_other_sessions(response, db=db, user=current)
+    new_token = _session_token(response)
+    data = parse_session_token(new_token)
+    assert data["sid"] and data["exp"] <= now + 3600 + 1
+    record = db.get(AuthSession, uuid.UUID(data["sid"]))
+    assert record.auth_time <= datetime.now(UTC) - timedelta(minutes=100)
+
+
+def test_M2_attack_mode_without_smtp_does_not_lock_out_unknown_devices(db, monkeypatch):
+    from app.auth_security import guard
+
+    monkeypatch.setattr(guard, "attack_mode", lambda _count: True)
+    tenant = make_tenant(db)
+    plain = make_app_user(db, email="attack-plain@example.com", tenant_id=tenant.id, role_code="writer")
+    result, _ = _login(db, plain.email, ip="203.0.113.70")
+    assert result.authenticated
+    with_factor, _secret = make_mfa_enrolled_user(db, email="attack-mfa@example.com", tenant_id=tenant.id, role_code="writer")
+    result, _ = _login(db, with_factor.email, ip="203.0.113.71")
+    assert result.mfa is not None and result.mfa.status == "verification_required"
+
+
+def test_M3_over_the_account_limit_unknown_devices_need_a_code_not_a_429(db, mail, monkeypatch):
+    monkeypatch.setattr(settings, "auth_account_failures_known_only", 3)
+    monkeypatch.setattr(settings, "auth_account_failures_challenge", 3)
+    user = make_app_user(db, email="over-limit@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    for index in range(5):
+        with pytest.raises(HTTPException):
+            _login(db, user.email, "falsch", ip=f"198.51.{index}.1")
+    result, _ = _login(db, user.email, ip="203.0.113.80")
+    assert result.mfa is not None and result.mfa.status == "email_verification_required"
+
+
+def test_M3_without_smtp_over_limit_answers_uniformly(db, monkeypatch):
+    monkeypatch.setattr(settings, "auth_account_failures_known_only", 3)
+    user = make_app_user(db, email="over-limit-nosmtp@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    for index in range(4):
+        with pytest.raises(HTTPException):
+            _login(db, user.email, "falsch", ip=f"198.51.{index}.2")
+    codes = []
+    for password in ("falsch", PASSWORD):
+        with pytest.raises(HTTPException) as exc:
+            _login(db, user.email, password, ip="203.0.113.81")
+        codes.append((exc.value.status_code, exc.value.detail["code"]))
+    assert codes[0] == codes[1] == (429, "login_denied")
+
+
+def test_M3_password_reset_marks_the_device_as_known(db):
+    from app.api.routes import auth as auth_route
+    from app.notifications import account
+    from app.schemas.notifications import AccountLinkComplete
+
+    user = make_app_user(db, email="reset-device@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    token_row = account._issue(db, user, "password_reset", created_by_user_id=None)
+    raw = "reset-" + uuid.uuid4().hex + uuid.uuid4().hex
+    token_row.token_hash = account.hash_token(raw)
+    token_row.expires_at = datetime.now(UTC) + timedelta(minutes=30)
+    db.flush()
+    response = Response()
+    auth_route.account_link_complete(AccountLinkComplete(token=raw, password="Fluss Ufer Möwe 42 x"), _req(), response, db=db)
+    cookie = {name: value for name, value in _set_cookies(response).items() if "device" in name}
+    assert devices.known_device(db, user.id, devices.parse_cookie(next(iter(cookie.values())))) is not None
+
+
+def test_M4_foreign_device_id_is_never_bound_to_another_account(db):
+    tenant = make_tenant(db)
+    first = make_app_user(db, email="device-a@example.com", tenant_id=tenant.id, role_code="writer")
+    second = make_app_user(db, email="device-b@example.com", tenant_id=tenant.id, role_code="writer")
+    cookies = _known_device(db, first)
+    _result, response = _login(db, second.email, cookies=cookies)
+    issued = {name: value for name, value in _set_cookies(response).items() if "device" in name}
+    assert issued and list(issued.values())[0] != list(cookies.values())[0]
+    # Ohne Präfix wird das Cookie im Secure-Modus nicht gelesen
+    unprefixed = {settings.auth_device_cookie: list(cookies.values())[0]}
+    assert devices.device_id_from_request(_req(unprefixed)) is None
+
+
+def test_M4_known_device_loses_its_exemption_after_failures(db):
+    from app.auth_security.guard import count_device_failure
+
+    user = make_app_user(db, email="device-guess@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    cookies = _known_device(db, user)
+    device_hash = devices.device_hash(devices.parse_cookie(list(cookies.values())[0]))
+    for _ in range(settings.auth_account_ip_failures):
+        count_device_failure(device_hash)
+    events_before = len(_events(db, actor_user_id=user.id))
+    _login(db, user.email, cookies=cookies)
+    phase = [row for row in _events(db, actor_user_id=user.id)[events_before:] if row.event_type == "login.password" and row.outcome == "success"]
+    assert phase and "new_device" in phase[-1].risk_reasons
+
+
+def test_M5_ipv6_counts_and_blocks_per_48():
+    a, b = source_address("2001:db8:7:1::1"), source_address("2001:db8:7:ffff::1")
+    assert a.exact != b.exact and a.net == b.net == "2001:db8:7::/48" and a.wide == "2001:db8::/32"
+    assert blocks.subject_for("2001:db8:7:1::1", "net") == blocks.subject_for("2001:db8:7:ffff::1", "net")
+
+
+def test_N1_no_clear_ip_in_any_redis_key(db):
+    with pytest.raises(HTTPException):
+        _login(db, "jemand@example.com", "x", ip="198.51.100.123")
+    for key in get_redis_sync().scan_iter("*"):
+        assert "198.51.100" not in key and "jemand" not in key
+
+
+def test_N2_legacy_cookie_name_only_during_transition(monkeypatch):
+    from app.core import security
+
+    monkeypatch.setattr(settings, "auth_legacy_cookie_until", "2000-01-01T00:00:00+00:00")
+    assert settings.auth_session_cookie not in security.session_cookie_names()
+    monkeypatch.setattr(settings, "auth_legacy_cookie_until", "2999-01-01T00:00:00+00:00")
+    assert settings.auth_session_cookie in security.session_cookie_names()
+
+
+def test_N5_step_up_does_not_extend_a_legacy_session(db):
+    from app.schemas.step_up import StepUpRequest
+    from app.services.step_up_service import StepUpService
+
+    user = make_app_user(db, email="stepup-legacy@example.com", tenant_id=make_tenant(db).id, role_code="writer")
+    token = create_session_token(user.id)
+    current = get_optional_current_user(request=None, db=db, session_cookie=token)
+    response = Response()
+    StepUpService().verify(db, response, current, StepUpRequest(method="password", password=PASSWORD), request_host=None)
+    assert parse_session_token(_session_token(response))["exp"] <= parse_session_token(token)["exp"] + 1

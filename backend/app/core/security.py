@@ -76,6 +76,10 @@ class CurrentUser:
     # Zeitpunkt der letzten starken Anmeldung (Step-up, SEC-AUTH-010).
     session_id: uuid.UUID | None = None
     auth_time: datetime | None = None
+    # Ausstellung/Ablauf des Tokens: nötig, um eine Session von vor dem Update (ohne sid) ins
+    # Register zu übernehmen, ohne sie zu verlängern oder frischer zu machen (Security-Review M1/N5).
+    token_issued_at: datetime | None = None
+    token_expires_at: datetime | None = None
 
     def can(self, permission: P) -> bool:
         """Funktionsberechtigung: Permission vorhanden und - falls an ein Modul gebunden - das
@@ -157,10 +161,32 @@ def session_cookie_name() -> str:
     return name
 
 
+# Start dieses Prozesses ≈ Deploy-Zeitpunkt: bis dahin + auth_session_ttl_hours kann es noch
+# Cookies unter dem bisherigen Namen geben (Security-Review N2).
+_PROCESS_STARTED = datetime.now(UTC)
+
+
+def legacy_cookie_accepted(now: datetime | None = None) -> bool:
+    """Bisheriger Cookie-Name (ohne ``__Host-``) wird nur noch im Übergang gelesen:
+    bis ``AUTH_LEGACY_COOKIE_UNTIL`` (ISO-Datum) bzw. ohne Angabe bis Prozessstart + Session-TTL."""
+    now = now or datetime.now(UTC)
+    if settings.auth_legacy_cookie_until:
+        try:
+            until = datetime.fromisoformat(settings.auth_legacy_cookie_until)
+        except ValueError:
+            return False
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=UTC)
+        return now < until
+    return now < _PROCESS_STARTED + timedelta(hours=settings.auth_session_ttl_hours)
+
+
 def session_cookie_names() -> tuple[str, ...]:
-    """Gelesen wird zuerst der neue, dann der bisherige Name (Übergang nach dem Update)."""
-    names = (session_cookie_name(), settings.auth_session_cookie)
-    return tuple(dict.fromkeys(names))
+    """Gelesen wird zuerst der neue, im Übergang auch der bisherige Name."""
+    names = [session_cookie_name()]
+    if names[0] != settings.auth_session_cookie and legacy_cookie_accepted():
+        names.append(settings.auth_session_cookie)
+    return tuple(names)
 
 
 def session_token_from_cookies(cookies) -> str | None:
@@ -215,7 +241,7 @@ def issue_session_cookie(
 
 
 def clear_session_cookies(response: Response) -> None:
-    for name in session_cookie_names():
+    for name in dict.fromkeys((session_cookie_name(), settings.auth_session_cookie)):
         response.delete_cookie(name, path="/", secure=settings.auth_secure_cookies, httponly=True, samesite="lax")
 
 
@@ -413,7 +439,9 @@ def get_optional_current_user(
     db: Session = Depends(get_db),
     session_cookie: str | None = Cookie(default=None, alias=settings.auth_session_cookie),
 ) -> CurrentUser | None:
-    token = (session_token_from_cookies(request.cookies) if request is not None else None) or session_cookie
+    token = session_token_from_cookies(request.cookies) if request is not None else None
+    if token is None and session_cookie and (session_cookie_name() == settings.auth_session_cookie or legacy_cookie_accepted()):
+        token = session_cookie
     validated = validate_session_token(db, token)
     if validated is None:
         return None
@@ -421,6 +449,8 @@ def get_optional_current_user(
     current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified)
     current_user.session_id = validated.record.id if validated.record is not None else None
     current_user.auth_time = validated.auth_time
+    current_user.token_issued_at = datetime.fromtimestamp(int(validated.data.get("iat", 0)), UTC)
+    current_user.token_expires_at = datetime.fromtimestamp(int(validated.data.get("exp", 0)), UTC)
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None

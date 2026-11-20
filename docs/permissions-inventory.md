@@ -6,9 +6,9 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 599 (Plattform-Admin: 132)
+- Routen gesamt: 601 (Plattform-Admin: 132)
 - Mandanten-Routen mit Rechteprüfung: 380
-- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 87
+- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
 
@@ -125,6 +125,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/users` | UserService (access.manage) |
 | `GET /api/users/me` | eigenes Konto |
 | `PATCH /api/users/me` | eigenes Konto |
+| `GET /api/users/me/devices` | eigene bekannte Geräte |
+| `DELETE /api/users/me/devices/{device_id}` | eigenes bekanntes Gerät vergessen, fremde ergeben 404 |
 | `GET /api/users/me/mfa` | eigene MFA |
 | `DELETE /api/users/me/mfa/factors/{factor_id}` | eigene MFA |
 | `POST /api/users/me/mfa/passkeys/complete` | eigene MFA |
@@ -591,6 +593,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/users` | UserService (access.manage) |
 | `GET /api/users/me` | eigenes Konto |
 | `PATCH /api/users/me` | eigenes Konto |
+| `GET /api/users/me/devices` | eigene bekannte Geräte |
+| `DELETE /api/users/me/devices/{device_id}` | eigenes bekanntes Gerät vergessen, fremde ergeben 404 |
 | `GET /api/users/me/mfa` | eigene MFA |
 | `DELETE /api/users/me/mfa/factors/{factor_id}` | eigene MFA |
 | `POST /api/users/me/mfa/passkeys/complete` | eigene MFA |

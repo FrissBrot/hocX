@@ -69,6 +69,13 @@ def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
     now = _now()
     if row is None or row.user_id != user_id or row.revoked_at is not None or row.expires_at <= now:
         return None
+    if row.parent_id is not None:
+        # Kind-Session (Domain-Bridge) lebt nie länger als ihre Eltern-Session (Security-Review H1)
+        parent = db.get(AuthSession, row.parent_id)
+        if parent is None or parent.revoked_at is not None or parent.expires_at <= now:
+            row.revoked_at, row.revoked_reason = now, "parent_ended"
+            db.commit()
+            return None
     if row.last_seen_at < now - timedelta(minutes=settings.auth_session_idle_minutes):
         row.revoked_at, row.revoked_reason = now, "idle"
         db.commit()
@@ -76,6 +83,24 @@ def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
     if row.last_seen_at < now - timedelta(seconds=settings.auth_session_touch_seconds):
         row.last_seen_at = now
         db.commit()
+    return row
+
+
+def adopt_legacy(
+    db: Session, *, user_id: int, tenant_id: int, mfa: bool, issued_at: datetime | None, expires_at: datetime | None,
+    host: str | None = None, ip_net_hash: str | None = None, user_agent_family: str | None = None,
+) -> AuthSession:
+    """Session von vor dem Update (Token ohne sid) ins Register übernehmen - ohne sie frischer
+    oder länger zu machen: auth_time = Ausstellung des alten Tokens, Ende = sein Ablauf
+    (Security-Review M1/N5). Ohne Commit."""
+    now = _now()
+    issued = issued_at or now
+    row = create(
+        db, user_id=user_id, tenant_id=tenant_id, mfa=mfa, amr=["legacy"], host=host, ip_net_hash=ip_net_hash,
+        user_agent_family=user_agent_family, expires_at=min(expires_at or now, now + timedelta(hours=settings.auth_session_absolute_hours)),
+    )
+    row.created_at = row.auth_time = min(issued, now)
+    db.flush()
     return row
 
 

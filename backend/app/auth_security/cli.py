@@ -22,7 +22,9 @@ from app.core.redis_client import get_redis_sync
 
 
 def _reset_account(email: str) -> int:
-    client = get_redis_sync()
+    from app.core.redis_client import get_ratelimit_redis_sync
+
+    client = get_ratelimit_redis_sync()
     deleted = 0
     for scope in ("login-account",):
         for key in client.scan_iter(f"{redis_key(scope, subject_hash(email))}*", count=200):

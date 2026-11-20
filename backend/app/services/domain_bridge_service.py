@@ -33,6 +33,8 @@ class BridgeToken:
     mfa_verified: bool
     target_host: str
     parent_sid: str | None = None
+    # v3-Token von vor dem Update (ohne Eltern-Session, höchstens 120 s alt)
+    legacy: bool = False
 
 
 def create_bridge_token(user_id: int, target_host: str, *, mfa_verified: bool = False, parent_sid: str | None = None) -> str:
@@ -58,7 +60,7 @@ def _parse(value: str | None, request_host: str | None, *, legacy: bool = False)
             sid = "-"
         else:
             user_id_str, mfa_str, sid, target_host = value.split(":", 3)
-        parsed = BridgeToken(int(user_id_str), mfa_str == "1", target_host, None if sid == "-" else sid)
+        parsed = BridgeToken(int(user_id_str), mfa_str == "1", target_host, None if sid == "-" else sid, legacy)
     except (TypeError, ValueError):
         return None
     # Nur auf der Domain einlösbar, für die das Token ausgestellt wurde.
@@ -109,7 +111,7 @@ def resolve_bridge_redirect(
     redirects when the current host actually differs from the target, so a stable session
     converges to zero further redirects instead of looping.
     """
-    if not settings.traefik_domain or request_host is None:
+    if not settings.traefik_domain or request_host is None or not parent_sid:
         return None
 
     domain_row = (

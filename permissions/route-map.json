@@ -3478,6 +3478,14 @@
       "handler": "users.patch_me",
       "note": "eigenes Konto"
     },
+    "GET /api/users/me/devices": {
+      "handler": "users.list_my_devices",
+      "note": "eigene bekannte Geräte"
+    },
+    "DELETE /api/users/me/devices/{device_id}": {
+      "handler": "users.revoke_my_device",
+      "note": "eigenes bekanntes Gerät vergessen, fremde ergeben 404"
+    },
     "GET /api/users/me/mfa": {
       "handler": "users.get_my_mfa",
       "note": "eigene MFA"

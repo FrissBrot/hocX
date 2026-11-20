@@ -130,9 +130,10 @@ class StepUpService:
         if record is None:
             # Session von vor dem Update (ohne sid): ins Register übernehmen, neues Cookie
             ctx = request_context.current()
-            record = session_register.create(
-                db, user_id=user.user_id, tenant_id=user.current_tenant_id, mfa=user.mfa_verified, amr=[], host=request_host,
-                ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family,
+            # Ende = Ablauf des alten Tokens, keine Verlängerung (Security-Review N5)
+            record = session_register.adopt_legacy(
+                db, user_id=user.user_id, tenant_id=user.current_tenant_id, mfa=user.mfa_verified, issued_at=user.token_issued_at,
+                expires_at=user.token_expires_at, host=request_host, ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family,
             )
         session_register.mark_strong_auth(db, record, payload.method)
         db.commit()
