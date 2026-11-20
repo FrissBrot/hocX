@@ -408,6 +408,41 @@
       "test": "L'envoi fonctionne",
       "todos": "Tâches"
     },
+    "login": {
+      "action": "Vérifier la sécurité",
+      "device": "Appareil : {device}",
+      "hint": "Ce n'était pas toi ? Change immédiatement ton mot de passe et déconnecte toutes les sessions sous « Appareils connectés ».",
+      "introAlert": "Nous avons remarqué ceci sur ton compte chez {tenant} :",
+      "introNotice": "Ton compte chez {tenant} a été utilisé sur un appareil que nous ne connaissions pas encore :",
+      "label": {
+        "afterLockout": "Connexion peu après un blocage dû à des tentatives échouées",
+        "failedAttempts": "Nombreuses tentatives de connexion échouées ({count})",
+        "newDevice": "Connexion depuis un nouvel appareil",
+        "suspicious": "Connexion à risque élevé"
+      },
+      "reason": {
+        "account_failures": "nombreuses tentatives échouées",
+        "attack_mode": "attaque en cours contre la plateforme",
+        "distributed_attempts": "tentatives depuis de nombreux réseaux",
+        "invalid_tokens": "liens de connexion invalides",
+        "mfa_failures": "codes erronés",
+        "new_device": "nouvel appareil",
+        "new_network": "nouveau réseau",
+        "privileged_account": "compte avec droits d'administration",
+        "reset_requests": "nombreuses demandes de mot de passe",
+        "source_failures": "connexion suspecte",
+        "spraying": "attaque contre de nombreux comptes",
+        "unusual_hour": "heure inhabituelle"
+      },
+      "subjectAlert": "{tenant} : avertissement de sécurité concernant ton compte",
+      "subjectNotice": "{tenant} : connexion depuis un nouvel appareil"
+    },
+    "loginCode": {
+      "ignore": "Tu n'essaies pas de te connecter ? Quelqu'un connaît alors ton mot de passe - change-le immédiatement.",
+      "intro": "Pour te connecter chez {tenant}, nous avons besoin d'une confirmation supplémentaire. Saisis ce code sur la page de connexion :",
+      "subject": "{tenant} : code de confirmation pour ta connexion",
+      "validity": "Le code est valable {minutes} minutes et une seule fois."
+    },
     "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
     "security": {
       "emailChanged": "E-mail de connexion modifié ({at})",
@@ -457,6 +492,9 @@
       "exportFailed": "L'export a échoué",
       "exportReady": "Ton export est prêt",
       "invite": "Bienvenue sur hocX",
+      "loginAlert": "Connexion inhabituelle à ton compte",
+      "loginCode": "Ton code de confirmation",
+      "loginNotice": "Nouvelle connexion à ton compte",
       "reminder": "Tes tâches",
       "security": "Modifications de ton compte",
       "submissionDone": "Dépôt reçu",

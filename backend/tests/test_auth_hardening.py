@@ -109,11 +109,32 @@ def mail(db):
     email_transport.override_transport(None)
 
 
+_COMMITTED_TENANTS: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def _remove_committed_tenants():
+    """Für die Nebenläufigkeitstests echt committete Konten wieder entfernen (sonst sähen andere
+    Tests Mandanten ohne die Standarddaten)."""
+    yield
+    if _COMMITTED_TENANTS:
+        with SessionLocal() as session:
+            session.execute(text("DELETE FROM auth_session WHERE tenant_id = ANY(:ids)"), {"ids": _COMMITTED_TENANTS})
+            session.execute(text("DELETE FROM auth_known_device WHERE tenant_id = ANY(:ids)"), {"ids": _COMMITTED_TENANTS})
+            session.execute(text("DELETE FROM user_mfa_factor WHERE user_id IN (SELECT id FROM app_user WHERE tenant_id = ANY(:ids))"), {"ids": _COMMITTED_TENANTS})
+            session.execute(text("DELETE FROM user_role WHERE user_id IN (SELECT id FROM app_user WHERE tenant_id = ANY(:ids))"), {"ids": _COMMITTED_TENANTS})
+            session.execute(text("DELETE FROM app_user WHERE tenant_id = ANY(:ids)"), {"ids": _COMMITTED_TENANTS})
+            session.execute(text("DELETE FROM tenant WHERE id = ANY(:ids)"), {"ids": _COMMITTED_TENANTS})
+            session.commit()
+        _COMMITTED_TENANTS.clear()
+
+
 def _committed_user(email: str, *, totp_secret: str | None = None) -> int:
     with SessionLocal() as session:
         tenant = Tenant(name=f"Härtung {uuid.uuid4().hex[:6]}")
         session.add(tenant)
         session.flush()
+        _COMMITTED_TENANTS.append(tenant.id)
         user = AppUser(tenant_id=tenant.id, email=email, password_hash=hash_password(PASSWORD), login_enabled=True,
                        first_name="A", last_name="B", display_name="A B", is_active=True)
         session.add(user)

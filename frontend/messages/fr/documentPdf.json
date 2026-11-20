@@ -695,7 +695,10 @@
       "exportReady": "Ton export est prêt",
       "exportFailed": "L'export a échoué",
       "test": "E-mail de test",
-      "submissionWithdrawn": "Remise retirée"
+      "submissionWithdrawn": "Remise retirée",
+      "loginAlert": "Connexion inhabituelle à ton compte",
+      "loginNotice": "Nouvelle connexion à ton compte",
+      "loginCode": "Ton code de confirmation"
     },
     "weekday": {
       "0": "lundi",
@@ -741,6 +744,41 @@
       "withdrawnSubjectOther": "{tenant} : {count} remises retirées",
       "filesOne": "1 fichier",
       "filesOther": "{count} fichiers"
+    },
+    "login": {
+      "subjectAlert": "{tenant} : avertissement de sécurité concernant ton compte",
+      "subjectNotice": "{tenant} : connexion depuis un nouvel appareil",
+      "introAlert": "Nous avons remarqué ceci sur ton compte chez {tenant} :",
+      "introNotice": "Ton compte chez {tenant} a été utilisé sur un appareil que nous ne connaissions pas encore :",
+      "hint": "Ce n'était pas toi ? Change immédiatement ton mot de passe et déconnecte toutes les sessions sous « Appareils connectés ».",
+      "action": "Vérifier la sécurité",
+      "device": "Appareil : {device}",
+      "label": {
+        "newDevice": "Connexion depuis un nouvel appareil",
+        "suspicious": "Connexion à risque élevé",
+        "failedAttempts": "Nombreuses tentatives de connexion échouées ({count})",
+        "afterLockout": "Connexion peu après un blocage dû à des tentatives échouées"
+      },
+      "reason": {
+        "new_device": "nouvel appareil",
+        "new_network": "nouveau réseau",
+        "unusual_hour": "heure inhabituelle",
+        "account_failures": "nombreuses tentatives échouées",
+        "source_failures": "connexion suspecte",
+        "spraying": "attaque contre de nombreux comptes",
+        "distributed_attempts": "tentatives depuis de nombreux réseaux",
+        "mfa_failures": "codes erronés",
+        "invalid_tokens": "liens de connexion invalides",
+        "reset_requests": "nombreuses demandes de mot de passe",
+        "privileged_account": "compte avec droits d'administration",
+        "attack_mode": "attaque en cours contre la plateforme"
+      }
+    },
+    "loginCode": {
+      "subject": "{tenant} : code de confirmation pour ta connexion",
+      "intro": "Pour te connecter chez {tenant}, nous avons besoin d'une confirmation supplémentaire. Saisis ce code sur la page de connexion :",
+      "validity": "Le code est valable {minutes} minutes et une seule fois.",
+      "ignore": "Tu n'essaies pas de te connecter ? Quelqu'un connaît alors ton mot de passe - change-le immédiatement."
     }
   },
   "eventField": {

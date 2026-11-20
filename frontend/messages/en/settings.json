@@ -52,9 +52,13 @@
         "exports": {
           "label": "Data export ready",
           "hint": "Only if you request an organization data export: an email once it is ready or has failed."
+        },
+        "security_logins": {
+          "label": "Sign-in from a new device",
+          "hint": "When someone signs in to your account on a device we don't know yet."
         }
       },
-      "securityNote": "Security notices (password or second factor changed) and password reset links are always sent."
+      "securityNote": "Security notices (password or second factor changed, suspicious sign-ins, many failed attempts) and password reset links are always sent."
     },
     "docs": {
       "notifications": "More about email notifications",

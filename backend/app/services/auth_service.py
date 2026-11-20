@@ -93,7 +93,8 @@ class AuthService:
         if user is None or not user.is_active or user.has_left or not password_ok:
             guard.failed(check)
             reason = "unknown_account" if user is None else ("inactive" if not user.is_active else ("left" if user.has_left else "password"))
-            events.record(ctx=ctx, 
+            events.record(
+                ctx=ctx,
                 event_type="login.password", outcome="failure", user_id=user.id if user else None, tenant_id=user.tenant_id if user else None,
                 subject_hash=check.subject, device_hash=device_hash, risk_score=check.pre.score if check.pre else None,
                 risk_reasons=check.pre.reasons if check.pre else (), enforcement="none", details={"reason": reason, "known_device": known is not None},
@@ -134,7 +135,8 @@ class AuthService:
                 ticket = email_challenge.start(db, user=user, request_host=request_host, context=risk_context)
             except email_challenge.ChallengeUnavailable as exc:
                 raise unavailable() from exc
-            events.record(ctx=ctx, 
+            events.record(
+                ctx=ctx,
                 event_type="login.password", outcome="challenged", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
                 device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
             )
@@ -143,7 +145,8 @@ class AuthService:
                 user_email=user.email, tenant_name=current_user.current_tenant_name, available_methods=[],
                 can_add_totp=False, can_add_passkey=False,
             ))
-        events.record(ctx=ctx, 
+        events.record(
+            ctx=ctx,
             event_type="login.password", outcome="success", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
             device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons,
             enforcement=("mfa" if has_factor else "none") if risk.enforcing() else "monitor",

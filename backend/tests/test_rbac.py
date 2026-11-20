@@ -167,7 +167,12 @@ def test_account_without_roles_has_no_permissions(db):
 
 
 def _actor(db, user: AppUser) -> CurrentUser:
-    return build_current_user(db, user, mfa_verified=True)
+    actor = build_current_user(db, user, mfa_verified=True)
+    # Frisch angemeldet: Rollenänderungen verlangen sonst Step-up (SEC-AUTH-010)
+    from datetime import UTC, datetime
+
+    actor.auth_time = datetime.now(UTC)
+    return actor
 
 
 def _tenant_with_admin(db, name: str):

@@ -28,7 +28,29 @@ export const SERVER_FETCH_TIMEOUT_MS = 30_000;
 export const DEFAULT_BROWSER_TIMEOUT_MS = 15_000;
 export const LONG_RUNNING_TIMEOUT_MS = 5 * 60_000;
 
-export type BrowserApiFetchInit = RequestInit & { timeoutMs?: number };
+export type BrowserApiFetchInit = RequestInit & {
+  timeoutMs?: number;
+  /** Bei 403 step_up_required nicht nach dem Faktor fragen (der Step-up-Dialog selbst). */
+  skipStepUp?: boolean;
+};
+
+// Step-up (Auth-Audit 2026-11-20, SEC-AUTH-010): verlangt das Backend für eine kritische Aktion
+// eine frische Anmeldung (403 step_up_required), fragt der registrierte Dialog den Faktor ab und
+// die Aktion wird einmal wiederholt. Registriert von StepUpProvider (contexts/step-up-context.tsx).
+type StepUpHandler = () => Promise<boolean>;
+let stepUpHandler: StepUpHandler | null = null;
+
+/** Faktor abfragen lassen (true = bestätigt). Für Aufrufe ausserhalb von browserApiFetch (Downloads). */
+export async function requestStepUp(): Promise<boolean> {
+  return stepUpHandler ? stepUpHandler() : false;
+}
+
+export function setStepUpHandler(handler: StepUpHandler | null): () => void {
+  stepUpHandler = handler;
+  return () => {
+    if (stepUpHandler === handler) stepUpHandler = null;
+  };
+}
 
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   // Not shared with abgabebox-frontend/lib/api.ts's fetchJson (see that file's comment,
@@ -69,7 +91,7 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
 }
 
 export async function browserApiFetch<T>(path: string, options?: BrowserApiFetchInit): Promise<T> {
-  const { timeoutMs, ...init } = options ?? {};
+  const { timeoutMs, skipStepUp, ...init } = options ?? {};
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError(clientMessage("offline"), "offline");
   let response: Response;
@@ -102,6 +124,9 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
     if (response.status === 403 && typeof window !== "undefined" && detailCode(body) === "mfa_setup_required"
       && window.location.pathname !== "/login") {
       window.location.assign("/login?reason=mfa_setup_required");
+    }
+    if (response.status === 403 && !skipStepUp && stepUpHandler && detailCode(body) === "step_up_required") {
+      if (await stepUpHandler()) return browserApiFetch<T>(path, { ...options, skipStepUp: true });
     }
     throw errorFromResponse(response.status, body);
   }

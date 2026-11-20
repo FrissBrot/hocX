@@ -7,4 +7,8 @@ describe("Direktlink ins Profil (Link im Fuss der Benachrichtigungs-Mails)", () 
     expect(profileTabFromLink("profile")).toBe("profil");
     expect(profileTabFromLink("<script>")).toBe("profil");
   });
+
+  it("öffnet aus den Sicherheitsmails den Reiter Sicherheit", () => {
+    expect(profileTabFromLink("security")).toBe("sicherheit");
+  });
 });

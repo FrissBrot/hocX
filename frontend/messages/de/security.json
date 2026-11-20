@@ -136,12 +136,63 @@
     "mfa_skip_not_allowed": "Der zweite Faktor ist für dieses Konto Pflicht und kann nicht übersprungen werden.",
     "password_weak": "Das Passwort ist zu schwach. Nimm mindestens 12 Zeichen ohne Name, E-Mail oder häufige Wörter.",
     "mfa_policy_own_mfa_missing": "Richte zuerst für dein eigenes Konto MFA ein.",
-    "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein."
+    "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein.",
+    "step_up_required": "Bitte bestätige zuerst deine Identität.",
+    "step_up_method_unavailable": "Diese Bestätigung ist für dein Konto nicht möglich.",
+    "email_code_invalid": "Der Code ist nicht gültig. Bitte prüfe die E-Mail und versuche es erneut.",
+    "verification_unavailable": "Der Code konnte nicht verschickt werden. Bitte später erneut versuchen.",
+    "login_denied": "Anmeldung von dieser Verbindung ist vorübergehend nicht möglich. Bitte versuche es später oder von deinem gewohnten Gerät.",
+    "source_blocked": "Von dieser Verbindung sind Anmeldungen vorübergehend gesperrt.",
+    "auth_temporarily_unavailable": "Anmeldung vorübergehend nicht möglich. Bitte in einigen Minuten erneut versuchen.",
+    "rate_limiter_unavailable": "Der Anmeldeschutz ist kurz nicht verfügbar. Bitte gleich nochmals versuchen.",
+    "mfa_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es erneut."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
     "message": "Deine Organisation verlangt für dein Konto einen zweiten Faktor. Richte ihn bis {until} ein – danach geht die Anmeldung nur noch damit.",
     "later": "Später",
     "setup": "Jetzt einrichten"
+  },
+  "stepUp": {
+    "title": "Identität bestätigen",
+    "description": "Diese Änderung ist sicherheitsrelevant. Bitte bestätige kurz, dass du es bist.",
+    "methods": {
+      "totp": "Code aus der App",
+      "passkey": "Passkey",
+      "password": "Passwort"
+    },
+    "codeLabel": "Code aus der Authenticator-App",
+    "passwordLabel": "Dein Passwort",
+    "passkeyHint": "Bestätige mit deinem Passkey (Fingerabdruck, Gesicht oder Geräte-PIN).",
+    "loading": "Wird geladen …",
+    "loadFailed": "Bestätigung konnte nicht vorbereitet werden.",
+    "failed": "Bestätigung fehlgeschlagen.",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "checking": "Wird geprüft …"
+  },
+  "sessions": {
+    "title": "Angemeldete Geräte",
+    "description": "Hier bist du gerade angemeldet. Erkennst du ein Gerät nicht, melde es ab und ändere dein Passwort.",
+    "columns": {
+      "device": "Gerät",
+      "lastSeen": "Zuletzt aktiv",
+      "since": "Angemeldet seit",
+      "actions": "Aktion"
+    },
+    "current": "Dieses Gerät",
+    "unknownDevice": "Unbekanntes Gerät",
+    "viaBridge": "über {host}",
+    "empty": "Keine aktiven Sitzungen.",
+    "loading": "Wird geladen …",
+    "loadFailed": "Sitzungen konnten nicht geladen werden.",
+    "revoke": "Abmelden",
+    "revokeConfirm": "Dieses Gerät abmelden?",
+    "revoked": "Gerät abgemeldet.",
+    "revokeFailed": "Abmelden fehlgeschlagen.",
+    "revokeOthers": "Alle anderen Geräte abmelden",
+    "revokeOthersConfirm": "Alle anderen Geräte abmelden? Dieses Gerät bleibt angemeldet.",
+    "revokedOthers": "{count, plural, =0 {Keine weiteren Geräte angemeldet.} one {Ein Gerät abgemeldet.} other {# Geräte abgemeldet.}}",
+    "legacyHint": "Anmeldungen von vor dem letzten Update erscheinen hier nicht; «Alle anderen Geräte abmelden» beendet auch sie."
   }
 }

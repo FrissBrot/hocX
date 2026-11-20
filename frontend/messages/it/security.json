@@ -136,12 +136,63 @@
     "mfa_skip_not_allowed": "Per questo account il secondo fattore è obbligatorio e non può essere saltato.",
     "password_weak": "La password è troppo debole. Usa almeno 12 caratteri senza nome, e-mail o parole comuni.",
     "mfa_policy_own_mfa_missing": "Configura prima l'MFA per il tuo account.",
-    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore."
+    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore.",
+    "step_up_required": "Conferma prima la tua identità.",
+    "step_up_method_unavailable": "Questa conferma non è possibile per il tuo account.",
+    "email_code_invalid": "Il codice non è valido. Controlla l'e-mail e riprova.",
+    "verification_unavailable": "Non è stato possibile inviare il codice. Riprova più tardi.",
+    "login_denied": "L'accesso da questa connessione non è momentaneamente possibile. Riprova più tardi o dal tuo dispositivo abituale.",
+    "source_blocked": "Gli accessi da questa connessione sono momentaneamente bloccati.",
+    "auth_temporarily_unavailable": "Accesso momentaneamente non possibile. Riprova tra qualche minuto.",
+    "rate_limiter_unavailable": "La protezione degli accessi non è disponibile per un attimo. Riprova subito.",
+    "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",
     "message": "La tua organizzazione richiede un secondo fattore per il tuo account. Configuralo entro il {until} – poi l’accesso sarà possibile solo con esso.",
     "later": "Più tardi",
     "setup": "Configura ora"
+  },
+  "stepUp": {
+    "title": "Conferma la tua identità",
+    "description": "Questa modifica riguarda la sicurezza. Conferma brevemente che sei tu.",
+    "methods": {
+      "totp": "Codice dell'app",
+      "passkey": "Passkey",
+      "password": "Password"
+    },
+    "codeLabel": "Codice dell'app di autenticazione",
+    "passwordLabel": "La tua password",
+    "passkeyHint": "Conferma con la tua passkey (impronta, volto o PIN del dispositivo).",
+    "loading": "Caricamento …",
+    "loadFailed": "Non è stato possibile preparare la conferma.",
+    "failed": "Conferma non riuscita.",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "checking": "Verifica …"
+  },
+  "sessions": {
+    "title": "Dispositivi connessi",
+    "description": "Qui sei attualmente connesso. Se non riconosci un dispositivo, disconnettilo e cambia la password.",
+    "columns": {
+      "device": "Dispositivo",
+      "lastSeen": "Ultima attività",
+      "since": "Connesso dal",
+      "actions": "Azione"
+    },
+    "current": "Questo dispositivo",
+    "unknownDevice": "Dispositivo sconosciuto",
+    "viaBridge": "tramite {host}",
+    "empty": "Nessuna sessione attiva.",
+    "loading": "Caricamento …",
+    "loadFailed": "Non è stato possibile caricare le sessioni.",
+    "revoke": "Disconnetti",
+    "revokeConfirm": "Disconnettere questo dispositivo?",
+    "revoked": "Dispositivo disconnesso.",
+    "revokeFailed": "Disconnessione non riuscita.",
+    "revokeOthers": "Disconnetti tutti gli altri dispositivi",
+    "revokeOthersConfirm": "Disconnettere tutti gli altri dispositivi? Questo dispositivo resta connesso.",
+    "revokedOthers": "{count, plural, =0 {Nessun altro dispositivo connesso.} one {Un dispositivo disconnesso.} other {# dispositivi disconnessi.}}",
+    "legacyHint": "Gli accessi precedenti all'ultimo aggiornamento non compaiono qui; «Disconnetti tutti gli altri dispositivi» termina anche quelli."
   }
 }

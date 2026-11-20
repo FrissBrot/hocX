@@ -14,6 +14,11 @@ from app.services.participant_service import ParticipantService
 from app.services.user_service import UserService
 from tests.factories import make_app_user, make_current_user, make_tenant, make_template, make_template_participant
 
+import secrets as _secrets
+
+# Zur Laufzeit erzeugt (SECURITY-RULES 5.1), stark genug für app/core/password_policy.py
+STRONG_PASSWORD = f"Kiesel-Tanne-Wolke-{_secrets.randbelow(90) + 10}x"
+
 
 def actor(tenant, role="admin"):
     result = make_current_user(tenant.id, role=role, user_id=999999)
@@ -48,7 +53,7 @@ def test_login_activation_preserves_identity_and_assignments(db):
     template = make_template(db, tenant.id)
     make_template_participant(db, template.id, person.id)
     original_id, original_public_id = person.id, person.public_id
-    result = UserService().update_user(db, person.id, UserUpdate(email=" Person@Example.com ", password="a-secure-password-123", login_enabled=True), actor(tenant))
+    result = UserService().update_user(db, person.id, UserUpdate(email=" Person@Example.com ", password=STRONG_PASSWORD, login_enabled=True), actor(tenant))
     assert result.id == original_public_id
     assert result.email == "person@example.com"
     assert result.login_enabled
@@ -56,11 +61,11 @@ def test_login_activation_preserves_identity_and_assignments(db):
     assert db.scalar(select(TemplateParticipant.participant_id).where(TemplateParticipant.template_id == template.id)) == original_id
     # Kontaktzeilen mit gleicher Adresse stören die Login-Suche nicht.
     ParticipantService().create_participant(db, ParticipantCreate(display_name="Andere Person", email=result.email), tenant_id=tenant.id)
-    response = AuthService().login(db, Response(), LoginRequest(email="PERSON@EXAMPLE.COM", password="a-secure-password-123"), request_host=None)
+    response = AuthService().login(db, Response(), LoginRequest(email="PERSON@EXAMPLE.COM", password=STRONG_PASSWORD), request_host=None)
     assert response.authenticated
 
 
-@pytest.mark.parametrize("email,password", [(None,"a-secure-password-123"),("person@example.com",None)])
+@pytest.mark.parametrize("email,password", [(None,STRONG_PASSWORD),("person@example.com",None)])
 def test_activation_requires_email_and_password(db, email, password):
     tenant = make_tenant(db)
     person = ParticipantService().create_participant(db, ParticipantCreate(display_name="Person"), tenant_id=tenant.id)
@@ -75,7 +80,7 @@ def test_activation_conflict_never_merges_or_changes_existing_login(db):
     password_hash = existing.password_hash
     person = ParticipantService().create_participant(db, ParticipantCreate(display_name="Person",email=existing.email),tenant_id=tenant.id)
     with pytest.raises(HTTPException) as exc:
-        UserService().update_user(db, person.id, UserUpdate(password="a-secure-password-123",login_enabled=True),actor(tenant))
+        UserService().update_user(db, person.id, UserUpdate(password=STRONG_PASSWORD,login_enabled=True),actor(tenant))
     assert exc.value.status_code == 409
     assert not person.login_enabled and existing.password_hash == password_hash
     assert db.get(AppUser, person.id) is person
@@ -86,7 +91,7 @@ def test_writer_cannot_activate_login(db):
     tenant = make_tenant(db)
     person = ParticipantService().create_participant(db,ParticipantCreate(display_name="Person"),tenant_id=tenant.id)
     with pytest.raises(HTTPException) as exc:
-        UserService().update_user(db,person.id,UserUpdate(email="person@example.com",password="a-secure-password-123",login_enabled=True),actor(tenant,"writer"))
+        UserService().update_user(db,person.id,UserUpdate(email="person@example.com",password=STRONG_PASSWORD,login_enabled=True),actor(tenant,"writer"))
     assert exc.value.status_code == 403
     assert not person.login_enabled
 

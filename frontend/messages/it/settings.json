@@ -52,9 +52,13 @@
         "exports": {
           "label": "Esportazione dati pronta",
           "hint": "Solo se richiedi un’esportazione dei dati dell’organizzazione: un’e-mail quando è pronta o non è riuscita."
+        },
+        "security_logins": {
+          "label": "Accesso da un nuovo dispositivo",
+          "hint": "Quando qualcuno accede al tuo account da un dispositivo che non conosciamo ancora."
         }
       },
-      "securityNote": "Gli avvisi di sicurezza (password o secondo fattore modificati) e i link per reimpostare la password vengono sempre inviati."
+      "securityNote": "Gli avvisi di sicurezza (password o secondo fattore modificati, accessi sospetti, molti tentativi falliti) e i link per reimpostare la password ti vengono sempre inviati."
     },
     "docs": {
       "notifications": "Ulteriori informazioni sulle notifiche e-mail",

@@ -43,6 +43,10 @@ CATEGORIES: dict[str, Category] = {
     # Verwaltung: Änderungen an Abgaben durch Verantwortliche (persönlicher Link, Teil 3)
     "submission_changes": Category("submission_changes", permission="submissions.manage"),
     "account": Category("account", configurable=False),
+    # Anmeldung von einem neuen Gerät (Auth-Audit 2026-11-20). Abschaltbar: bei Personen, die oft
+    # neue Browser nutzen, wäre es sonst Lärm. Verdächtige Anmeldungen, viele Fehlversuche und
+    # Anmeldung nach einer Sperre gehen als Pflichtmitteilung (Kategorie account) immer raus.
+    "security_logins": Category("security_logins"),
 }
 
 KINDS: dict[str, Kind] = {
@@ -60,6 +64,12 @@ KINDS: dict[str, Kind] = {
     "security.password_changed": Kind("security.password_changed", "account", "account.security"),
     "security.mfa_added": Kind("security.mfa_added", "account", "account.security"),
     "security.mfa_removed": Kind("security.mfa_removed", "account", "account.security"),
+    # Anmeldeschutz (app/auth_security/notify.py): Hinweis «neues Gerät» (abschaltbar) und
+    # Warnungen (Pflicht). Je Gruppe eine Mail; Dedupe-Schlüssel verhindern eine Mail je Fehlversuch.
+    "security.login_new_device": Kind("security.login_new_device", "security_logins", "account.login_notice"),
+    "security.login_suspicious": Kind("security.login_suspicious", "account", "account.login_alert"),
+    "security.failed_attempts": Kind("security.failed_attempts", "account", "account.login_alert"),
+    "security.login_after_lockout": Kind("security.login_after_lockout", "account", "account.login_alert"),
     # Login-E-Mail geändert: eigene Gruppe, geht an die ALTE Adresse (payload old_email, dispatch)
     "security.email_changed": Kind("security.email_changed", "account", "account.email_changed"),
     # Busse droht: 3 Tage vor der Fälligkeit einer offenen Aufgabe mit Pendenzen-Busse, ersetzt für
