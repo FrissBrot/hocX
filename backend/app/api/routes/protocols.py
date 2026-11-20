@@ -15,6 +15,7 @@ from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.db import get_db
 from app.core.redis_client import publish_best_effort
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service, todo_fine_service
@@ -530,7 +531,7 @@ def get_cycle_events(
     protocol_id: uuid.UUID,
     scope: str = Query("current", pattern="^(current|all)$"),
     search: str = Query(""),
-    skip: int = Query(0, ge=0),
+    skip: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(200, ge=1, le=500),
     cycle_config_id: uuid.UUID | None = Query(None),
     cycle_offset: int = Query(0, ge=-10, le=10),

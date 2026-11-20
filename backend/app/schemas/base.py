@@ -35,6 +35,10 @@ from sqlalchemy.orm import object_session
 
 from app.services import public_id_service
 
+# Obergrenze für skip/offset in Listen-Query-Parametern. Ohne sie wurde z. B. ?skip=10**19 als
+# OFFSET an PostgreSQL gereicht: «bigint out of range» (500 plus Fehlerprotokoll).
+MAX_QUERY_OFFSET = 2_147_483_647
+
 
 def reject_nul_characters(value: Any) -> Any:
     """Für `field_validator("*")`: PostgreSQL-Textfelder können kein NUL-Zeichen (U+0000)

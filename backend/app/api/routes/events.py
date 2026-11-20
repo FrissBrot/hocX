@@ -12,7 +12,7 @@ from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.schemas.base import reject_nul_characters
+from app.schemas.base import MAX_QUERY_OFFSET, reject_nul_characters
 from app.schemas.event import EVENT_TAG_MAX_LENGTH, EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
 from app.services.event_service import EventService
@@ -31,7 +31,7 @@ audit = AuditService()
 
 @router.get("/events", response_model=list[EventRead])
 def list_events(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
