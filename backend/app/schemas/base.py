@@ -36,6 +36,16 @@ from sqlalchemy.orm import object_session
 from app.services import public_id_service
 
 
+def reject_nul_characters(value: Any) -> Any:
+    """Für `field_validator("*")`: PostgreSQL-Textfelder können kein NUL-Zeichen (U+0000)
+    speichern. Ohne diese Prüfung scheiterte erst das INSERT/UPDATE mit psycopg.DataError -
+    je nach Route als 500 oder als 400 mit Eintrag im Fehlerprotokoll, obwohl nur die Eingabe
+    ungültig war. Andere Typen als str bleiben unverändert."""
+    if isinstance(value, str) and "\x00" in value:
+        raise ValueError("must not contain NUL characters")
+    return value
+
+
 class PublicIdModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     _fk_models: ClassVar[dict[str, type]] = {}

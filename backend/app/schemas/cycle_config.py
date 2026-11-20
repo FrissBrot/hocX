@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.entities import Tenant
-from app.schemas.base import PublicIdModel
+from app.schemas.base import PublicIdModel, reject_nul_characters
 
 
 class CycleConfigBase(BaseModel):
@@ -18,7 +18,10 @@ class CycleConfigBase(BaseModel):
 
 
 class CycleConfigCreate(CycleConfigBase):
-    pass
+    @field_validator("*")
+    @classmethod
+    def _no_nul_characters(cls, value: Any) -> Any:
+        return reject_nul_characters(value)
 
 
 class CycleConfigUpdate(BaseModel):
@@ -26,6 +29,11 @@ class CycleConfigUpdate(BaseModel):
     reset_month: int | None = Field(default=None, ge=1, le=12)
     reset_day: int | None = Field(default=None, ge=1, le=31)
     name_pattern: str | None = None
+
+    @field_validator("*")
+    @classmethod
+    def _no_nul_characters(cls, value: Any) -> Any:
+        return reject_nul_characters(value)
 
 
 class CycleConfigRead(PublicIdModel, CycleConfigBase):

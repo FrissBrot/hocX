@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+
+from app.schemas.base import reject_nul_characters
 
 # Nur diese Felder sind konfigurierbar; feste Felder (Titel, Datum, Leitung …) bleiben, wie sie sind.
 EVENT_SPECIAL_FIELDS = (
@@ -17,6 +19,12 @@ class EventFieldSetting(BaseModel):
     # Leer = Standardname der Sprache
     label: Annotated[str, StringConstraints(strip_whitespace=True, max_length=60)] = ""
     hidden: bool = False
+
+    @field_validator("label")
+    @classmethod
+    def _no_nul_characters(cls, value: str) -> str:
+        # Auch JSONB nimmt kein \u0000 an (psycopg.DataError beim Speichern -> 500).
+        return reject_nul_characters(value)
 
 
 class EventFieldConfig(BaseModel):
