@@ -79,7 +79,9 @@
     "rename": "Rinomina",
     "colorOrRename": "Colore / rinomina",
     "addNewTag": "+ Aggiungi \"{tag}\"",
-    "createTag": "Crea «{tag}»"
+    "createTag": "Crea «{tag}»",
+    "addSuggestion": "Aggiungi il tag {tag}",
+    "suggestionChip": "+ {tag}"
   },
   "connectivity": {
     "offlineWithPending": "{count, plural, one {Offline – # modifica salvata localmente} other {Offline – # modifiche salvate localmente}}",
@@ -259,5 +261,9 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Il file CSV ha troppe righe (al massimo {max, number} righe di dati). Dividilo e importalo in più passaggi."
+  },
+  "numberStepper": {
+    "decrease": "Diminuisci {label}",
+    "increase": "Aumenta {label}"
   }
 }

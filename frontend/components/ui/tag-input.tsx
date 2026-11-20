@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -22,6 +22,8 @@ export function TagInput({
   onTagColorChange,
   onTagRename,
   offerCreate = false,
+  quickSuggestions = 0,
+  extraChips,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -38,6 +40,11 @@ export function TagInput({
   onTagRename?: (oldTag: string, newTag: string) => Promise<void | boolean>;
   /** Zeigt beim Tippen eines unbekannten Tags den Eintrag «„x“ neu erstellen» in der Liste. */
   offerCreate?: boolean;
+  /** Zeigt bis zu so viele noch nicht gewählte Vorschläge als Zeile «+ tag» unter dem Feld; die
+   * Liste unter dem Feld erscheint dann erst beim Tippen. */
+  quickSuggestions?: number;
+  /** Zusätzliche, nicht entfernbare Chips nach den Tags (z. B. ein automatisch gesetztes Tag) */
+  extraChips?: ReactNode;
 }) {
   const t = useTranslations("common.tagInput");
   const tCommonClose = useTranslations("common")("close");
@@ -74,9 +81,12 @@ export function TagInput({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && inputVal.trim()) {
+    // Komma trennt Tags (der Wert ist kommagetrennt), daher fügt es wie Enter hinzu
+    if ((e.key === "Enter" || (e.key === "," && multi)) && inputVal.trim()) {
       e.preventDefault();
       addTag(inputVal);
+    } else if (e.key === "," && multi) {
+      e.preventDefault();
     } else if (e.key === "Backspace" && !inputVal && tags.length > 0) {
       removeTag(tags[tags.length - 1]);
 
@@ -116,10 +126,11 @@ export function TagInput({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  const quick = suggestions.filter((s) => !tags.includes(s)).slice(0, quickSuggestions);
   const showInput = !readOnly && (multi || tags.length === 0);
   const typed = inputVal.trim();
   const createOption = offerCreate && typed !== "" && !tags.includes(typed) && !suggestions.some((s) => s.toLowerCase() === typed.toLowerCase());
-  const showDropdown = open && (filtered.length > 0 || createOption || editingTag !== null || (onTagColorChange && suggestions.length > 0));
+  const showDropdown = open && (quickSuggestions === 0 || inputVal !== "") && (filtered.length > 0 || createOption || editingTag !== null || (onTagColorChange && suggestions.length > 0));
 
   usePopupEscape(Boolean(showDropdown), async () => {
     if (editingTag && renameVal.trim() !== editingTag) {
@@ -168,6 +179,7 @@ export function TagInput({
             </span>
           );
         })}
+        {extraChips}
         {showInput && (
           <input
             ref={inputRef}
@@ -180,6 +192,17 @@ export function TagInput({
           />
         )}
       </div>
+
+      {quickSuggestions > 0 && !readOnly && quick.length > 0 ? (
+        <div className="tag-input-quick">
+          {quick.map((tag) => (
+            <button key={tag} type="button" className="tag-input-quick-chip" aria-label={t("addSuggestion", { tag })} onClick={() => addTag(tag)}>
+              {tagDot(tag, 8)}
+              {t("suggestionChip", { tag })}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {showDropdown && (
         <div className="tag-input-dropdown">

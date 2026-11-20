@@ -211,6 +211,14 @@ export function formatLongDateRange(start: string | null | undefined, end: strin
 }
 
 // Kurzes Datum mit abgekürztem Monat ("31. Okt. 2026").
+/** Kurzer Wochentag mit Tag und Monat («Sa., 28.11.»), z. B. für die Termin-Marke im Zeitfenster. */
+export function formatShortWeekdayDate(input: string | null | undefined, locale?: string) {
+  if (!input) return "";
+  const [year, month, day] = input.split("T")[0].split("-").map(Number);
+  if (!year || !month || !day) return formatDate(input);
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 export function formatShortMonthDate(input: string | null | undefined, locale?: string) {
   const parsed = input ? new Date(input) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) return "";

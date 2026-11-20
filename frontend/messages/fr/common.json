@@ -79,7 +79,9 @@
     "rename": "Renommer",
     "colorOrRename": "Couleur / renommer",
     "addNewTag": "+ Ajouter « {tag} »",
-    "createTag": "Créer « {tag} »"
+    "createTag": "Créer « {tag} »",
+    "addSuggestion": "Ajouter le tag {tag}",
+    "suggestionChip": "+ {tag}"
   },
   "connectivity": {
     "offlineWithPending": "{count, plural, one {Hors ligne – # modification enregistrée localement} other {Hors ligne – # modifications enregistrées localement}}",
@@ -259,5 +261,9 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Le fichier CSV contient trop de lignes ({max, number} lignes de données au maximum). Veuillez le diviser et l’importer en plusieurs étapes."
+  },
+  "numberStepper": {
+    "decrease": "Diminuer {label}",
+    "increase": "Augmenter {label}"
   }
 }

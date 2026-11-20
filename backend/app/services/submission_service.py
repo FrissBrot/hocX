@@ -154,9 +154,16 @@ def upload_key_filter(key: ElementKey) -> list:
     return [column == value if value is not None else column.is_(None) for column, value in zip(columns, key)]
 
 
+# Personenfelder eines Termins, die eine Termin-Abgabe als «verantwortliche Person» nutzen darf.
+# Nur diese - der Wert kommt aus dem Formular und wurde früher ungeprüft per getattr gelesen.
+EVENT_RESPONSIBLE_FIELDS = (
+    "organizer_ids", "leadership_ids", "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids",
+)
+
+
 def _resolve_event_responsible(event: Event, source: str | None) -> list[int]:
     """Alle Personen im Verantwortlichen-Feld des Termins (mehrere = gemeinsam verantwortlich)."""
-    if not source:
+    if not source or source not in EVENT_RESPONSIBLE_FIELDS:
         return []
     return list(dict.fromkeys(int(pid) for pid in (getattr(event, source, None) or []) if pid))
 
@@ -479,6 +486,7 @@ class SubmissionService:
             "cycle_offsets": values.get("cycle_offsets") if values.get("cycle_offsets") is not None else assignment.cycle_offsets,
             "list_definition_id": values.get("list_definition_id", assignment.list_definition_id),
             "deadline": values.get("deadline", assignment.deadline),
+            "responsible_participant_source": values.get("responsible_participant_source", assignment.responsible_participant_source),
         }
         self._validate_source_fields_dict(merged)
         if sync_manual:
@@ -551,6 +559,9 @@ class SubmissionService:
         if values["source_type"] == "events":
             if not values.get("tag_filter"):
                 raise ValueError("tag_filter ist für Termin-Abgaben erforderlich")
+            source = values.get("responsible_participant_source")
+            if source and source not in EVENT_RESPONSIBLE_FIELDS:
+                raise ValueError("responsible_participant_source ist kein Personenfeld des Termins")
             if values.get("list_definition_id") is not None or values.get("deadline") is not None:
                 raise ValueError("list_definition_id/deadline duerfen bei Termin-Abgaben nicht gesetzt sein")
             # Zyklus-Filter: Konfiguration und Zyklen gehoeren zusammen (ohne beides = alle Termine).

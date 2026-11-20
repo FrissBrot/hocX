@@ -79,7 +79,9 @@
     "rename": "Umbenennen",
     "colorOrRename": "Farbe / Umbenennen",
     "addNewTag": "+ „{tag}\" hinzufügen",
-    "createTag": "«{tag}» neu erstellen"
+    "createTag": "«{tag}» neu erstellen",
+    "addSuggestion": "Tag {tag} hinzufügen",
+    "suggestionChip": "+ {tag}"
   },
   "connectivity": {
     "offlineWithPending": "{count, plural, one {Offline – # Änderung lokal vorgemerkt} other {Offline – # Änderungen lokal vorgemerkt}}",
@@ -259,5 +261,9 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "Die CSV-Datei hat zu viele Zeilen (höchstens {max, number} Datenzeilen). Bitte aufteilen und in mehreren Schritten importieren."
+  },
+  "numberStepper": {
+    "decrease": "{label} verringern",
+    "increase": "{label} erhöhen"
   }
 }
