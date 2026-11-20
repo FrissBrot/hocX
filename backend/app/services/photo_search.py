@@ -259,15 +259,21 @@ def _expand_terms(db: Session, tenant_id: int, idxs: list[int], words: list[str]
         "idxs": idxs, "words": words, "tenant_id": tenant_id,
         "per_token": MAX_EXPANSIONS_PER_TOKEN, "min_quality": MIN_QUALITY,
     }
+    # Schlichter SQL-Savepoint statt Session.begin_nested(): er greift nicht in die Transaktions-
+    # verwaltung der Session ein (Request-Transaktion, RLS-Bindung, Test-Savepoints bleiben, wie sie
+    # sind). Ein Timeout bricht nur bis zum Savepoint zurück - samt SET LOCAL.
+    db.execute(text("SAVEPOINT photo_search_expand"))
     try:
-        with db.begin_nested():
-            db.execute(text(f"SET LOCAL statement_timeout = {int(EXPANSION_TIMEOUT_MS)}"))  # sql-ok: feste Zahl aus dem Code
-            rows = db.execute(_EXPANSION_SQL, params).all()
-            db.execute(text("SET LOCAL statement_timeout = DEFAULT"))
-        return rows
+        db.execute(text(f"SET LOCAL statement_timeout = {int(EXPANSION_TIMEOUT_MS)}"))  # sql-ok: feste Zahl aus dem Code
+        rows = db.execute(_EXPANSION_SQL, params).all()
     except OperationalError:
-        # Abbruch durch den Timeout: Savepoint ist zurückgerollt (samt SET LOCAL); ohne Unschärfe weiter
+        db.execute(text("ROLLBACK TO SAVEPOINT photo_search_expand"))
+        db.execute(text("RELEASE SAVEPOINT photo_search_expand"))
+        # Abbruch durch den Timeout: ohne Unschärfe weiter (jedes Wort nur exakt)
         return [type("Row", (), {"idx": idx, "term": word, "quality": 1.0}) for idx, word in zip(idxs, words)]
+    db.execute(text("SET LOCAL statement_timeout = DEFAULT"))
+    db.execute(text("RELEASE SAVEPOINT photo_search_expand"))
+    return rows
 
 
 def build_search_plan(db: Session, tenant_id: int, raw: str | None) -> SearchPlan | None:

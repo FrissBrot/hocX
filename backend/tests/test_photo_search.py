@@ -323,3 +323,19 @@ def test_definer_functions_are_not_callable_by_runtime_roles(db):
             assert not db.execute(sql_text(
                 "SELECT has_function_privilege(:r, 'public.hocx_photo_search_refresh(bigint[])', 'EXECUTE')"
             ), {"r": role}).scalar(), role
+
+
+def test_expansion_timeout_falls_back_to_exact_words_without_breaking_the_session(db, monkeypatch):
+    """Security-Review F3: Läuft die unscharfe Wortsuche in den Timeout, sucht sie exakt weiter -
+    die Transaktion der Anfrage bleibt benutzbar (kein geschlossener Savepoint)."""
+    from sqlalchemy import text as sql_text
+
+    from app.services import photo_search
+
+    tenant = make_tenant(db, "Suche Timeout")
+    monkeypatch.setattr(photo_search, "EXPANSION_TIMEOUT_MS", 1)
+    monkeypatch.setattr(photo_search, "_EXPANSION_SQL", sql_text("SELECT 1 AS idx, 'x' AS term, 1.0 AS quality FROM pg_sleep(0.05)"))
+    rows = photo_search._expand_terms(db, tenant.id, [1, 2], ["sommer", "lager"])
+    assert [(row.idx, row.term, row.quality) for row in rows] == [(1, "sommer", 1.0), (2, "lager", 1.0)]
+    assert db.execute(sql_text("SELECT 1")).scalar() == 1
+    assert db.execute(sql_text("SHOW statement_timeout")).scalar() != "1ms"
