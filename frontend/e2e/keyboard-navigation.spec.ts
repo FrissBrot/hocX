@@ -49,9 +49,14 @@ test.describe("Tastatur: Grundlagen der App-Shell", () => {
 
   test("«?» öffnet die Shortcut-Hilfe aus der Registry, Tab bleibt im Dialog, Escape schliesst", async ({ page }) => {
     await openTodos(page);
-    await page.keyboard.press("?");
     const dialog = page.getByRole("dialog", { name: "Tastenkürzel" });
-    await expect(dialog).toBeVisible();
+    // Der Dev-Server des E2E-Stacks kompiliert die nachgeladene Hilfe erst beim ersten Öffnen, und
+    // ein Tastendruck vor der Hydration geht verloren: wiederholen, bis der Dialog da ist (ein
+    // zweites «?» bei offenem Dialog tut nichts).
+    await expect(async () => {
+      await page.keyboard.press("?");
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 45_000 });
     // Globale Kürzel plattformgerecht (Linux-Runner: Strg)
     await expect(dialog.getByText("Globale Suche öffnen oder schliessen")).toBeVisible();
     await expect(dialog.locator(".shortcut-help-kbd", { hasText: "Strg" }).first()).toBeVisible();

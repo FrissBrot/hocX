@@ -71,6 +71,10 @@ Installationen aktualisieren können.
   Protokoll lösen in Dialogen und Listen nicht mehr den Editor aus; Strg+Alt+T/N funktionieren auf
   dem Mac. Die eingeklappte Seitenleiste ist kein unsichtbares Tab-Ziel mehr.
 
+- **Abgabe-Assistent übersprang den letzten Schritt:** Ein Klick auf «Weiter» im vorletzten Schritt
+  (Dateien) legte die Abgabe sofort an, statt den Schritt «Zugriff» zu zeigen - der Knopf wurde noch
+  im selben Klick zum Erstellen-Knopf. Jetzt erstellt nur «Abgabe erstellen» im letzten Schritt.
+
 ### Update
 
 - `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst

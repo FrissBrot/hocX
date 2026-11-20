@@ -207,6 +207,24 @@ describe("SubmissionAssignmentFormModal – Anlegen in fünf Schritten", () => {
     expect(screen.queryByRole("button", { name: "Abgabe erstellen" })).not.toBeInTheDocument();
   });
 
+  it("«Weiter» im vorletzten Schritt erstellt nichts, erst der Knopf im letzten Schritt", () => {
+    // Regression: React machte aus demselben <button> beim Klick einen Submit-Knopf; ein echter
+    // Mausklick sendete das Formular dann noch im selben Klick ab (jsdom zeigt das nicht, weil ein
+    // synthetischer Klick React erst nach der Aktivierung rendern lässt). Daher hier: «Abgabe
+    // erstellen» ist ein neues Element, der geklickte «Weiter»-Knopf ist danach nicht mehr im DOM.
+    const onSubmit = vi.fn();
+    render(<Harness start={{ ...initialForm, title: "Vereinsfotos", public_slug: "vereinsfotos" }} onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Einzelabgabe/ }));
+    goTo(/4\. Dateien/);
+    const next = screen.getByRole("button", { name: "Weiter" });
+    fireEvent.click(next);
+    expect(screen.getByText("Schritt 5 von 5")).toBeInTheDocument();
+    expect(next.isConnected).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Abgabe erstellen" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it("wählt den Tag als Chip und erlaubt bei «Einzelabgabe» das Erstellen ohne Tag", () => {
     const onSubmit = vi.fn();
     render(<Harness start={{ ...initialForm, title: "Vereinsfotos", public_slug: "vereinsfotos" }} onSubmit={onSubmit} />);

@@ -1452,10 +1452,13 @@ export function SubmissionAssignmentFormModal({
               <span className="subm-edit-step-count">{t("wizard.stepOf", { step: step + 1, total: SECTION_KEYS.length })}</span>
               <div className="subm-edit-actions">
                 {step === lastStep && problem !== null ? <span className="subm-edit-problem" role="status">{t("saveBlockedHint", { problem })}</span> : null}
+                {/* Eigene keys: sonst macht React aus demselben Knopf beim Klick auf «Weiter» einen
+                    Submit-Knopf, und der Browser sendet das Formular noch im selben Klick ab
+                    (der letzte Schritt würde übersprungen). */}
                 {step < lastStep ? (
-                  <button type="button" className="button-primary" onClick={() => setStep(step + 1)}>{t("wizard.next")}</button>
+                  <button key="wizard-next" type="button" className="button-primary" onClick={() => setStep(step + 1)}>{t("wizard.next")}</button>
                 ) : (
-                  <button data-modal-save type="submit" className="button-primary" disabled={problem !== null}>{t("createAssignment")}</button>
+                  <button key="wizard-create" data-modal-save type="submit" className="button-primary" disabled={problem !== null}>{t("createAssignment")}</button>
                 )}
               </div>
             </>

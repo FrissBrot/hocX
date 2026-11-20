@@ -100,7 +100,8 @@ test.describe("Kasse", () => {
 
     // Reiterwechsel zu «Konten»
     await page.getByRole("tab", { name: "Konten" }).click();
-    await expect(page).toHaveURL(/\/finances$/);
+    // Erster Aufruf von /finances: der Dev-Server des E2E-Stacks kompiliert die Route erst (> 5 s möglich)
+    await expect(page).toHaveURL(/\/finances$/, { timeout: 30_000 });
     await page.getByRole("button", { name: new RegExp(accountName) }).click();
     await expect(page.getByRole("heading", { level: 2, name: accountName })).toBeVisible();
     await expect(page.getByText(/aus offenen Bussen, noch nicht kassiert/)).toBeVisible();
