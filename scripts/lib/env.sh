@@ -142,9 +142,12 @@ retire_local_compose_hotfixes() {
   grep -q 'abgabebox-backend' "$file" 2> /dev/null || return 0
   # Nur wenn das Release die Korrektur selbst mitbringt
   # (im Block des Dienstes abgabebox-backend - das Backend trägt dasselbe Label schon länger)
+  # Erst den Block lesen, dann suchen: «awk | grep -q» scheiterte unter pipefail sporadisch, wenn
+  # grep -q früh beendete und awk dabei SIGPIPE bekam (CI).
+  local block
+  block="$(awk '/^  abgabebox-backend:/{f=1;next} /^  [a-z0-9-]+:/{f=0} f' "$repo_dir/docker-compose.release.yml" 2> /dev/null || true)"
   # shellcheck disable=SC2016 # Literal aus der Compose-Datei, keine Shell-Variable
-  awk '/^  abgabebox-backend:/{f=1;next} /^  [a-z0-9-]+:/{f=0} f' "$repo_dir/docker-compose.release.yml" 2> /dev/null |
-    grep -qF 'traefik.docker.network=${COMPOSE_PROJECT_NAME}_default' || return 0
+  [[ "$block" == *'traefik.docker.network=${COMPOSE_PROJECT_NAME}_default'* ]] || return 0
   normalized="$(tr -d '[:space:]' < "$file")"
   for hotfix in "${HOCX_KNOWN_LOCAL_HOTFIXES[@]}"; do
     if [ "$normalized" = "$hotfix" ]; then

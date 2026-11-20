@@ -57,7 +57,7 @@ test("Pendenzen v2: Liste, Board und Kalender", async ({ request, page }) => {
       await setTheme(page, theme);
       await page.getByPlaceholder("Pendenzen durchsuchen").fill(`${suffix}`);
       await expect(table.locator(".todo-v2-group-overdue")).toBeVisible({ timeout: 30_000 });
-      await page.screenshot({ path: `test-results/todos-v2-list-${theme}-1440.png`, fullPage: true });
+      await page.screenshot({ path: `test-results/todos-v2-list-${theme}-1440.png` });
     }
     await setTheme(page, "light");
 
@@ -68,7 +68,7 @@ test("Pendenzen v2: Liste, Board und Kalender", async ({ request, page }) => {
     const benColumn = page.getByRole("region", { name: `Ben V2 ${suffix}` });
     const unassignedColumn = page.getByRole("region", { name: "Nicht zugewiesen" });
     await expect(annaColumn).toContainText(`V2 überfällig ${suffix}`);
-    await page.screenshot({ path: "test-results/todos-v2-board-light-1440.png", fullPage: true });
+    await page.screenshot({ path: "test-results/todos-v2-board-light-1440.png" });
 
     await annaColumn.getByRole("button", { name: `Zuweisen an … (V2 überfällig ${suffix})` }).click();
     await page.getByRole("menuitem", { name: `Zuweisen an Ben V2 ${suffix}` }).click();
@@ -84,7 +84,7 @@ test("Pendenzen v2: Liste, Board und Kalender", async ({ request, page }) => {
     await page.getByPlaceholder("Pendenzen durchsuchen").fill(`${suffix}`);
     await page.getByRole("tab", { name: "Board" }).click();
     await expect(unassignedColumn).toBeVisible();
-    await page.screenshot({ path: "test-results/todos-v2-board-dark-1440.png", fullPage: true });
+    await page.screenshot({ path: "test-results/todos-v2-board-dark-1440.png" });
 
     // Kalender-Dialog
     for (const theme of ["dark", "light"]) {
@@ -107,7 +107,7 @@ test("Pendenzen v2: Liste, Board und Kalender", async ({ request, page }) => {
     for (const theme of ["light", "dark"]) {
       await setTheme(page, theme);
       await expect(page.locator(".mobile-todo-row, .mobile-empty").first()).toBeVisible({ timeout: 30_000 });
-      await page.screenshot({ path: `test-results/todos-v2-mobile-${theme}-390.png`, fullPage: true });
+      await page.screenshot({ path: `test-results/todos-v2-mobile-${theme}-390.png` });
     }
   } finally {
     await page.evaluate(() => localStorage.setItem("hocx-theme", "light")).catch(() => undefined);
