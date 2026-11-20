@@ -389,3 +389,38 @@ def test_share_page_moment_prefers_correction():
     corrected = datetime(2023, 5, 6, 12, 0, tzinfo=UTC)
     assert effective_capture_moment(SimpleNamespace(exif_taken_at=exif, capture_corrected_at=corrected)) == corrected
     assert effective_capture_moment(SimpleNamespace(exif_taken_at=exif, capture_corrected_at=None)) == exif
+
+
+# --- Uploaddatum in Schweizer Zeit (Nachtlauf 2026-11-20) ---------------------------------
+
+
+def test_upload_date_fallback_uses_swiss_calendar_day(db):
+    """Ein Bild ohne Aufnahmedatum (z. B. aus WhatsApp, ohne EXIF) gilt am Tag des Uploads -
+    gemeint ist der Schweizer Kalendertag, nicht der UTC-Tag. Upload am 13.07.2024 um 00:30
+    Schweizer Zeit (= 12.07. 22:30 UTC) darf weder in der Galerie noch im Datumsfilter noch
+    bei der automatischen Termin-Zuordnung auf den 12.07. fallen."""
+    tenant = make_tenant(db)
+    vortag = make_event(db, tenant.id, title="Vortag", event_date=date(2024, 7, 12))
+    termin = make_event(db, tenant.id, title="Sommerfest", event_date=date(2024, 7, 13))
+    photo = _photo(db, tenant.id, name="whatsapp.jpg", created_at=datetime(2024, 7, 12, 22, 30, tzinfo=UTC))
+    db.expire(photo)  # wie aus der Datenbank geladen
+
+    assert effective_capture(photo) == (date(2024, 7, 13), "upload")
+    assert auto_link_date(photo) == date(2024, 7, 13)
+
+    repository = StoredFileRepository()
+    rows = repository.list_tenant_files(db, tenant.id, only_images=True, sort_by="group_date", sort_dir="asc")
+    assert [(row.original_name, row.group_date, row.date_source) for row in rows] == [("whatsapp.jpg", date(2024, 7, 13), "upload")]
+    assert [row.original_name for row in repository.list_tenant_files(db, tenant.id, only_images=True, date_from=date(2024, 7, 13))] == ["whatsapp.jpg"]
+    assert repository.list_tenant_files(db, tenant.id, only_images=True, date_to=date(2024, 7, 12)) == []
+    timeline = {row.day: row.count for row in repository.tenant_files_timeline(db, tenant.id, only_images=True)}
+    assert timeline == {date(2024, 7, 13): 1}
+
+    from app.services import photo_event_link_service
+
+    assert photo_event_link_service.find_matching_event(db, tenant.id, auto_link_date(photo)).id == termin.id
+    photo_event_link_service.sync_photos_for_event(db, vortag)
+    photo_event_link_service.sync_photos_for_event(db, termin)
+    gallery_image = db.query(GalleryImage).filter_by(stored_file_id=photo.id).one()
+    db.refresh(gallery_image)
+    assert gallery_image.event_id == termin.id

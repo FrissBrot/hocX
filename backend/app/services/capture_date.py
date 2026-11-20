@@ -25,17 +25,37 @@ Datum ist dagegen ausdrücklich bestätigt und zählt wie ein echtes Aufnahmedat
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date, case, cast, func, literal, null
 
 DateSource = Literal["corrected", "exif", "estimated", "upload"]
 
+# Das Uploaddatum ist ein Zeitpunkt (timestamptz, UTC); als Bilddatum zählt der Schweizer
+# Kalendertag - sonst fällt ein Upload zwischen Mitternacht und 01:00/02:00 auf den Vortag
+# (Galerie, Datumsfilter, Zeitstrahl, Termin-Zuordnung). Aufnahme- und Korrekturdatum sind
+# dagegen "floating" Kamerazeit und werden nicht umgerechnet.
+UPLOAD_DAY_TIMEZONE = "Europe/Zurich"
+_UPLOAD_DAY_TZ = ZoneInfo(UPLOAD_DAY_TIMEZONE)
+
 
 def _corrected(stored_file: Any) -> datetime | None:
     # getattr: leichte Traeger (_CaptureView, Testdoubles) muessen das Feld nicht kennen.
     return getattr(stored_file, "capture_corrected_at", None)
+
+
+def upload_day(created_at: datetime) -> date:
+    """Schweizer Kalendertag eines Upload-Zeitpunkts (naive Werte gelten als UTC)."""
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    return created_at.astimezone(_UPLOAD_DAY_TZ).date()
+
+
+def upload_day_sql(column: Any):
+    """SQL-Gegenstück zu upload_day (unabhängig von der TimeZone der DB-Session)."""
+    return cast(func.timezone(UPLOAD_DAY_TIMEZONE, column), Date)
 
 
 def effective_capture(stored_file: Any) -> tuple[date, DateSource]:
@@ -46,7 +66,7 @@ def effective_capture(stored_file: Any) -> tuple[date, DateSource]:
         return stored_file.exif_taken_at.date(), "exif"
     if stored_file.estimated_taken_on is not None:
         return stored_file.estimated_taken_on, "estimated"
-    return stored_file.created_at.date(), "upload"
+    return upload_day(stored_file.created_at), "upload"
 
 
 def effective_capture_date(stored_file: Any) -> date:
@@ -64,7 +84,7 @@ def effective_capture_date_sql(model: Any):
         cast(model.capture_corrected_at, Date),
         cast(model.exif_taken_at, Date),
         model.estimated_taken_on,
-        cast(model.created_at, Date),
+        upload_day_sql(model.created_at),
     )
 
 
@@ -86,7 +106,7 @@ def auto_link_date(stored_file: Any) -> date | None:
         return stored_file.exif_taken_at.date()
     if stored_file.estimated_taken_on is not None:
         return None
-    return stored_file.created_at.date()
+    return upload_day(stored_file.created_at)
 
 
 def auto_link_date_sql(model: Any):
@@ -94,5 +114,5 @@ def auto_link_date_sql(model: Any):
         (model.capture_corrected_at.is_not(None), cast(model.capture_corrected_at, Date)),
         (model.exif_taken_at.is_not(None), cast(model.exif_taken_at, Date)),
         (model.estimated_taken_on.is_not(None), cast(null(), Date)),
-        else_=cast(model.created_at, Date),
+        else_=upload_day_sql(model.created_at),
     )
