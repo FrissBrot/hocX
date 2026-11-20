@@ -18,6 +18,12 @@ Installationen aktualisieren können.
   nimmt `/api/admin` nur damit und auf der Admin-Domain an (sonst 404), das Frontend liefert `/admin`
   nur auf der Admin-Domain aus. Mandanten-Domains, die einer Systemdomain gleichen oder Subdomain der
   Admin-Domain sind, werden abgelehnt. Das Admin-Session-Cookie ist jetzt `SameSite=Strict`.
+- **Plattform-Admins nur noch mit Passwort + Passkey:** TOTP und das Admin-SSO (OIDC) sind
+  vollständig entfernt. Passkeys sind Pflicht (RP-ID = Admin-Domain, Nutzerverifikation, jede
+  Challenge einmalig), ein Konto ohne Passkey richtet nach dem Passwort zwingend einen ein und
+  erhält erst danach eine Session. Mehrere Passkeys je Admin, der letzte ist nicht entfernbar. Die
+  Backup-Wiederherstellung verlangt eine frische Passkey-Bestätigung statt eines TOTP-Codes.
+  Notausgang: `python -m app.admin_cli reset-passkeys --email …` im Backend-Container.
 - Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
   Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
   erreichbar sind; sonst Rollback.
@@ -30,6 +36,15 @@ Installationen aktualisieren können.
   geänderten `traefik.yml` automatisch neu erstellt. Keine Migration.
 - Wer das Admin-Panel über einen Link von einer anderen Seite (oder nach dem SSO) öffnet, sieht kurz
   die Login-Seite, die mit bestehender Sitzung sofort weiterleitet (`SameSite=Strict`).
+- **Beim Update werden Admin-TOTP und Admin-SSO entfernt; beim ersten Admin-Login wird ein Passkey
+  eingerichtet.** Migration `0205_admin_passkey_only`: löscht alle MFA-Faktoren der Plattform-Admins
+  (auch bisherige Admin-Passkeys, deren RP-ID die Hauptdomain war), beendet alle Admin-Sessions,
+  entfernt `platform_oidc_config` und `platform_admin.oidc_*`, neue CHECK-Constraint (Admin-Faktoren
+  nur `webauthn`). Downgrade möglich, ohne Daten zurück. Keine neuen Umgebungsvariablen ausser
+  dem Backend durchgereichten `TRAEFIK_ADMIN_PORT` (Compose).
+- Prüfadresse des Admin-Zugangs ist jetzt `GET /api/admin/auth/health` (statt
+  `/api/admin/auth/oidc/public-config`) - auch für die Wartungsseite.
+- `DEMO_TOTP_SEED` gilt nur noch für Mandanten-Demokonten, nicht mehr für Plattform-Admins.
 - Fehlerbilder und Ablauf: RUNBOOK Abschnitt 20.
 
 ## [1.4.2] - 2026-11-20

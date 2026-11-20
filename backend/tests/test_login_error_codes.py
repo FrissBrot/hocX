@@ -103,6 +103,6 @@ def test_admin_mfa_errors_have_stable_codes(db):
     from app.services.admin_mfa_service import AdminMfaService
 
     with pytest.raises(HTTPException) as exc_info:
-        AdminMfaService().verify_login_totp(db, ticket="gibt-es-nicht", code="000000")
+        AdminMfaService().verify_login_passkey(db, flow_token="gibt-es-nicht", credential={})
     assert exc_info.value.status_code == 401
     assert _code(exc_info.value) == "mfa_flow_expired"

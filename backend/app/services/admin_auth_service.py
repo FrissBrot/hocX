@@ -11,7 +11,7 @@ from app.core.rate_limit import check_login_lockout, record_failed_login
 from app.core.security import DUMMY_PASSWORD_HASH, verify_password
 from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSelfRead, AdminSessionRead
-from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete, TotpEnrollmentStartRead, TotpLoginVerifyRequest
+from app.schemas.mfa import PasskeyAssertionStartRead, PasskeyRegistrationStartRead
 from app.services.admin_mfa_service import AdminMfaService
 from app.services.audit_service import AuditService
 
@@ -43,32 +43,31 @@ class AdminAuthService:
             )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "invalid_credentials", "message": "E-Mail oder Passwort ist ungültig."})
 
-        # Audit finding, 2026-08-27: a correct password alone used to grant a full,
-        # unprotected session for the highest-privilege account tier in this system.
-        # AdminMfaService.prepare_login never returns None - it always hands back a pending
-        # ticket, either for TOTP verification (a factor already exists) or forced setup
-        # (none yet), mirroring the tenant-admin MFA gate in auth_service.py/mfa_service.py.
+        # Ein richtiges Passwort allein gibt nie eine Session: prepare_login liefert immer ein
+        # Ticket - Passkey bestätigen oder (ohne Passkey) zuerst einen einrichten.
         pending_mfa = self.mfa_service.prepare_login(db, admin)
         return AdminSessionRead(authenticated=False, mfa=pending_mfa)
 
-    def verify_login_totp(self, db: Session, response: Response, payload: TotpLoginVerifyRequest) -> AdminSessionRead:
-        context = self.mfa_service.verify_login_totp(db, ticket=payload.ticket, code=payload.code)
-        return self._finish_login(db, response, context.admin)
+    def start_login_passkey(self, db: Session, *, ticket: str, request_host: str | None, request_origin: str) -> PasskeyAssertionStartRead:
+        return self.mfa_service.start_login_passkey_assertion(db, ticket=ticket, request_host=request_host, request_origin=request_origin)
 
-    def start_login_totp_setup(self, db: Session, payload: MfaTicketRequest) -> TotpEnrollmentStartRead:
-        return self.mfa_service.start_login_totp_enrollment(db, payload.ticket)
+    def verify_login_passkey(self, db: Session, response: Response, *, flow_token: str, credential: dict) -> AdminSessionRead:
+        context = self.mfa_service.verify_login_passkey(db, flow_token=flow_token, credential=credential)
+        return self._finish_login(db, response, context.admin, method="password_passkey")
 
-    def complete_login_totp_setup(
-        self, db: Session, response: Response, payload: TotpEnrollmentComplete
+    def start_login_passkey_setup(self, db: Session, *, ticket: str, request_host: str | None, request_origin: str) -> PasskeyRegistrationStartRead:
+        return self.mfa_service.start_login_passkey_setup(db, ticket=ticket, request_host=request_host, request_origin=request_origin)
+
+    def complete_login_passkey_setup(
+        self, db: Session, response: Response, *, flow_token: str, label: str | None, credential: dict
     ) -> AdminSessionRead:
-        context = self.mfa_service.complete_login_totp_enrollment(
-            db, flow_token=payload.flow_token, code=payload.code, label=payload.label
-        )
-        return self._finish_login(db, response, context.admin)
+        context = self.mfa_service.complete_login_passkey_setup(db, flow_token=flow_token, label=label, credential=credential)
+        _audit.log(db, action="admin.passkey_enrolled", actor_email=context.admin.email, details={"during": "login"})
+        return self._finish_login(db, response, context.admin, method="password_passkey_setup")
 
-    def _finish_login(self, db: Session, response: Response, admin: PlatformAdmin) -> AdminSessionRead:
-        issue_admin_session_cookie(response, admin.id, mfa_verified=True)
-        _audit.log(db, action="admin.login", actor_email=admin.email, details={"method": "password_totp"})
+    def _finish_login(self, db: Session, response: Response, admin: PlatformAdmin, *, method: str) -> AdminSessionRead:
+        issue_admin_session_cookie(response, admin.id)
+        _audit.log(db, action="admin.login", actor_email=admin.email, details={"method": method})
         return self.session(
             CurrentAdmin(
                 admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email,

@@ -136,7 +136,9 @@
     "mfa_skip_not_allowed": "Le deuxième facteur est obligatoire pour ce compte et ne peut pas être ignoré.",
     "password_weak": "Le mot de passe est trop faible. Utilise au moins 12 caractères sans nom, e-mail ni mots courants.",
     "mfa_policy_own_mfa_missing": "Configurez d'abord la MFA pour votre propre compte.",
-    "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur."
+    "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur.",
+    "last_passkey": "La dernière clé d’accès ne peut pas être supprimée. Ajoutez-en d’abord une autre.",
+    "mfa_already_configured": "Un second facteur est déjà configuré pour ce compte. Veuillez vous connecter avec celui-ci."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",

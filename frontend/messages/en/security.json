@@ -136,7 +136,9 @@
     "mfa_skip_not_allowed": "A second factor is required for this account and cannot be skipped.",
     "password_weak": "The password is too weak. Use at least 12 characters without your name, email or common words.",
     "mfa_policy_own_mfa_missing": "Set up MFA for your own account first.",
-    "mfa_setup_required": "Your organisation requires MFA. Please sign in again and set up a second factor."
+    "mfa_setup_required": "Your organisation requires MFA. Please sign in again and set up a second factor.",
+    "last_passkey": "The last passkey cannot be removed. Add another one first.",
+    "mfa_already_configured": "A second factor is already set up for this account. Please sign in with it."
   },
   "grace": {
     "title": "Second factor becomes mandatory",

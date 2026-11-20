@@ -19,7 +19,7 @@ System → Backups → Wiederherstellung → «Mandant als Kopie»:
 2. Mandant aus diesem Punkt wählen (Name, Benutzerzahl und Datenmenge zum Zeitpunkt des Backups).
 3. Namen des neuen Mandanten eingeben.
 4. «Vorschau erstellen»: Schema-Kompatibilität, Datenmenge, Ablauf, Risiken.
-5. Bestätigungsphrase (`KOPIE <id>`) und aktuellen TOTP-Code eingeben, starten.
+5. Bestätigungsphrase (`KOPIE <id>`) eingeben, starten und mit dem eigenen Passkey bestätigen.
 6. Fortschritt und Ergebnis (inkl. Import-Hinweisen) bleiben auch nach einem Reload sichtbar.
 
 Technisch: der Dump des Punkts wird in eine isolierte Temp-Datenbank `hocx_tsrc_<id>`

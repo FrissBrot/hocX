@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -14,60 +15,59 @@ from app.core.admin_security import CurrentAdmin
 from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.redis_client import get_redis_sync
-from app.core.secret_crypto import decrypt_secret, encrypt_secret
-from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
 from app.core.webauthn import (
-    RegisteredCredential,
     WebauthnError,
+    build_assertion_options,
     build_registration_options,
     generate_challenge,
     passkey_factor_fields,
     register_credential,
+    verify_assertion,
 )
 from app.models import PlatformAdmin, UserMfaFactor
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
     MfaPendingLoginRead,
+    PasskeyAssertionStartRead,
     PasskeyRegistrationStartRead,
-    TotpEnrollmentStartRead,
     UserMfaRead,
 )
 
-"""MFA for PlatformAdmin - platform admins are the highest-privilege tier (full cross-tenant
-access, backup export, admin management) but previously had no MFA option at all (audit
-finding, 2026-08-27), unlike tenant admins (see mfa_service.py's user_requires_mfa /
-core.security's get_optional_current_user enforcement), who are forced to enroll TOTP/passkey
-MFA before getting a full session.
+"""MFA für Plattform-Admins: ausschliesslich Passkeys (WebAuthn), erzwungen.
 
-Also supports WebAuthn/passkeys (added 2026-09-02), self-service only (mirrors
-start_self_passkey_registration/complete_self_passkey_registration on MfaService). Unlike
-MfaService.rp_id_for_request_host / can_add_passkey_here, which gate on the tenant-facing
-traefik_domain because a tenant can be reached through several custom domains (TenantDomain),
-the admin panel has no equivalent multi-domain routing - it is only ever served from whatever
-host the request actually came in on - so passkeys are always allowed here and the RP ID is
-just that request host directly, no traefik_domain comparison needed. Login-time passkey
-enrollment (the ticket-based flow, for an admin with zero factors) is intentionally not
-included: unlike login-time TOTP setup, a first factor being a passkey would leave the account
-with no fallback if the authenticator is unavailable, so the first factor is always TOTP and
-passkeys can only be added afterwards as an additional factor via this self-service surface.
+Bis 1.4.x gab es für Admins TOTP und ein globales SSO (OIDC); beides ist entfernt (Migration
+0205). Ablauf:
 
-Reuses the same TOTP/crypto/WebAuthn primitives (core/totp.py, core/secret_crypto.py,
-core/webauthn.py) and rate-limit primitives (core/rate_limit.py) as MfaService/AuthService
-rather than re-implementing any of that - only the redis-backed "flow" bookkeeping and the
-PlatformAdmin-vs-AppUser wiring are duplicated, mirroring MfaService's own shape closely."""
+- Login: Passwort → Ticket (Redis, 10 min) → Passkey-Assertion → Session. Eine Session gibt es
+  nie ohne erfolgreichen Passkey (`issue_admin_session_cookie`, Claim `amr=passkey`).
+- Ohne Passkey (neues Konto, nach dem Update, nach `admin_cli reset-passkeys`): nach dem Passwort
+  muss ein Passkey registriert werden (Trust on first use) - erst danach gibt es eine Session. Bis
+  dahin erreicht das Konto keine andere Admin-API (es hat ja keine Session).
+- Weitere Passkeys über die Kontoeinstellungen (mit Session); der letzte ist nicht entfernbar.
+- Step-up (Backup-Wiederherstellung): frische Passkey-Bestätigung zusätzlich zur Session.
+
+WebAuthn: RP-ID = Admin-Domain (`TRAEFIK_ADMIN_DOMAIN`), erwarteter Origin = `https://<Admin-Domain>`
+(von der Route übergeben, nie aus dem Request übernommen, Security-Audit SEC-021). Nur lokal ohne
+Admin-Domain gelten Host/Origin der Anfrage. userVerification = required. Jede Challenge ist
+einmalig: der Vorgang wird vor der Prüfung atomar aus Redis genommen (GETDEL), eine zweite
+Verwendung findet ihn nicht mehr.
+"""
 
 
 _FLOW_PREFIX = "admin-mfa:flow:"
 _FLOW_TTL_SECONDS = 10 * 60
 _ISSUER = "hocX Admin"
+_PASSKEY_LABEL = "Passkey"
 
-# Same rationale as MfaService's login-TOTP account ceiling (audit finding, 2026-08-27, see
-# mfa_service.py) - built in from the start here rather than retrofitted, since platform
-# admins are the highest-privilege tier and a fresh login ticket is mintable on every
-# successful password check just like the tenant flow.
-_ACCOUNT_TOTP_ATTEMPT_LIMIT = 10
-_ACCOUNT_TOTP_WINDOW_SECONDS = 15 * 60
+# Konto-Sperre für fehlgeschlagene Passkey-Prüfungen (wie bisher für TOTP): ein neues Ticket gibt es
+# nach jedem richtigen Passwort, deshalb zählt das Konto, nicht das Ticket.
+_ACCOUNT_ATTEMPT_LIMIT = 10
+_ACCOUNT_WINDOW_SECONDS = 15 * 60
+
+
+def _flow_error(code: str = "mfa_flow_expired", message: str = "MFA-Vorgang ist abgelaufen") -> HTTPException:
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": code, "message": message})
 
 
 @dataclass
@@ -79,176 +79,97 @@ class AdminMfaService:
     def _redis(self):
         return get_redis_sync()
 
-    def _create_flow(self, kind: str, data: dict[str, Any], *, ttl_seconds: int = _FLOW_TTL_SECONDS) -> str:
+    # ── Redis-Vorgänge ─────────────────────────────────────────────────────────────────────
+
+    def _create_flow(self, kind: str, data: dict[str, Any]) -> str:
         token = secrets.token_urlsafe(32)
-        payload = json.dumps({"kind": kind, **data})
-        self._redis().set(f"{_FLOW_PREFIX}{token}", payload, nx=True, ex=ttl_seconds)
+        self._redis().set(f"{_FLOW_PREFIX}{token}", json.dumps({"kind": kind, **data}), nx=True, ex=_FLOW_TTL_SECONDS)
         return token
 
-    def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
-        raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
+    @staticmethod
+    def _decode_flow(raw: Any, expected_kind: str) -> dict[str, Any]:
         if raw is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
+            raise _flow_error()
         try:
             data = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"}) from exc
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang") from exc
         if data.get("kind") != expected_kind:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"})
+            raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang")
         return data
 
-    def _delete_flow(self, token: str) -> None:
-        self._redis().delete(f"{_FLOW_PREFIX}{token}")
+    def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
+        return self._decode_flow(self._redis().get(f"{_FLOW_PREFIX}{token}"), expected_kind)
 
-    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None, for_update: bool = False) -> list[UserMfaFactor]:
+    def _take_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
+        """Einmalig verbrauchen (GETDEL): eine Challenge lässt sich nie zweimal verwenden, auch nicht
+        bei gleichzeitigen Anfragen."""
+        return self._decode_flow(self._redis().getdel(f"{_FLOW_PREFIX}{token}"), expected_kind)
+
+    # ── Faktoren ───────────────────────────────────────────────────────────────────────────
+
+    def _list_passkeys(self, db: Session, admin_id: int, *, for_update: bool = False) -> list[UserMfaFactor]:
         statement = (
             select(UserMfaFactor)
-            .where(UserMfaFactor.platform_admin_id == admin_id)
+            .where(UserMfaFactor.platform_admin_id == admin_id, UserMfaFactor.factor_type == "webauthn")
             .order_by(UserMfaFactor.created_at.asc(), UserMfaFactor.id.asc())
         )
-        if factor_type is not None:
-            statement = statement.where(UserMfaFactor.factor_type == factor_type)
         if for_update:
             statement = statement.with_for_update()
         return list(db.scalars(statement))
 
-    def _get_factor(self, db: Session, *, factor_id: int, admin_id: int) -> UserMfaFactor | None:
-        return db.scalar(
-            select(UserMfaFactor).where(UserMfaFactor.id == factor_id, UserMfaFactor.platform_admin_id == admin_id)
-        )
+    def _usable_passkeys(self, db: Session, admin_id: int, rp_id: str) -> list[UserMfaFactor]:
+        return [
+            factor
+            for factor in self._list_passkeys(db, admin_id)
+            if factor.webauthn_rp_id == rp_id and factor.webauthn_credential_id and factor.webauthn_public_key_pem
+        ]
 
     def _factor_read(self, factor: UserMfaFactor) -> MfaFactorRead:
         return MfaFactorRead(
             id=factor.public_id,
-            factor_type=factor.factor_type,  # type: ignore[arg-type]
+            factor_type="webauthn",
             label=factor.label,
             created_at=factor.created_at,
             last_used_at=factor.last_used_at,
         )
 
-    def _default_totp_label(self, admin: PlatformAdmin) -> str:
-        return f"Authenticator App für {admin.email}"
-
-    def _default_passkey_label(self, admin: PlatformAdmin) -> str:
-        return f"Passkey für {admin.email}"
-
-    def _preferred_factor_type(self, factors: list[UserMfaFactor]) -> str | None:
-        if not factors:
-            return None
-        return "webauthn" if any(factor.factor_type == "webauthn" for factor in factors) else "totp"
-
-    def _preferred_factor_label(self, factors: list[UserMfaFactor]) -> str | None:
-        preferred = self._preferred_factor_type(factors)
-        if preferred is None:
-            return None
-        return "Passkey" if preferred == "webauthn" else "Authenticator-App"
-
     def get_self_overview(self, db: Session, actor: CurrentAdmin) -> UserMfaRead:
-        factors = self._list_factors(db, actor.admin_id)
+        factors = self._list_passkeys(db, actor.admin_id)
         return UserMfaRead(
             required=True,
             has_factors=bool(factors),
             can_add_passkey_here=True,
-            preferred_factor_type=self._preferred_factor_type(factors),  # type: ignore[arg-type]
-            preferred_factor_label=self._preferred_factor_label(factors),
+            preferred_factor_type="webauthn" if factors else None,
+            preferred_factor_label=_PASSKEY_LABEL if factors else None,
             factors=[self._factor_read(factor) for factor in factors],
         )
 
-    # ---- self-service enrollment (already-authenticated admin) ----
-
-    def start_self_totp_enrollment(self, db: Session, actor: CurrentAdmin) -> TotpEnrollmentStartRead:
-        admin = db.get(PlatformAdmin, actor.admin_id)
-        if admin is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
-        secret = generate_totp_secret()
-        flow_token = self._create_flow("admin_self_totp_enrollment", {"admin_id": admin.id, "secret": secret})
-        return TotpEnrollmentStartRead(
-            flow_token=flow_token,
-            secret=secret,
-            manual_entry_key=secret,
-            provisioning_uri=build_totp_uri(issuer=_ISSUER, account_name=admin.email, secret=secret),
-            issuer=_ISSUER,
-            account_name=admin.email,
-        )
-
-    def complete_self_totp_enrollment(
-        self, db: Session, actor: CurrentAdmin, *, flow_token: str, code: str, label: str | None
-    ) -> UserMfaFactor:
-        return self._complete_totp_enrollment(
-            db,
-            flow_token=flow_token,
-            code=code,
-            label=label,
-            expected_kind="admin_self_totp_enrollment",
-            expected_admin_id=actor.admin_id,
-        )
-
-    def _rp_id_for_request_host(self, request_host: str | None) -> str:
-        # Pinned to the fixed configured domain when there is one, same reasoning and same
-        # pattern as MfaService.rp_id_for_request_host (the tenant-user equivalent) already
-        # uses - independent of whatever this request's own derived host says, which is
-        # wrong whenever the request came in through the frontend's internal /api/* rewrite
-        # proxy (see admin.py's _request_hostname docstring). Only local dev/e2e (no
-        # traefik_domain configured) still falls through to request_host itself.
-        if settings.traefik_domain:
-            return settings.traefik_domain
+    @staticmethod
+    def rp_id(request_host: str | None) -> str:
+        """RP-ID der Admin-Passkeys: die Admin-Domain. Nur lokal (ohne Admin-Domain) der Host der
+        Anfrage - Entwicklung und E2E-Stack."""
+        if settings.traefik_admin_domain:
+            return settings.traefik_admin_domain.strip().lower().rstrip(".")
         if not request_host:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_host_invalid", "message": "Passkeys benötigen einen gültigen Hostnamen"})
         return request_host
 
-    def start_self_passkey_registration(
-        self,
-        db: Session,
-        actor: CurrentAdmin,
-        *,
-        request_host: str | None,
-        request_origin: str,
-    ) -> PasskeyRegistrationStartRead:
-        admin = db.get(PlatformAdmin, actor.admin_id)
-        if admin is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
-        rp_id = self._rp_id_for_request_host(request_host)
-        challenge = generate_challenge()
-        exclude_credentials = [
-            {
-                "id": factor.webauthn_credential_id,
-                "type": "public-key",
-                "transports": factor.webauthn_transports_json or [],
-            }
-            for factor in self._list_factors(db, admin.id, factor_type="webauthn")
-            if factor.webauthn_rp_id == rp_id and factor.webauthn_credential_id
-        ]
-        flow_token = self._create_flow(
-            "admin_self_passkey_registration",
-            {
-                "admin_id": admin.id,
-                "challenge": challenge,
-                "rp_id": rp_id,
-                "origin": request_origin,
-            },
-        )
-        return PasskeyRegistrationStartRead(
-            flow_token=flow_token,
-            public_key=build_registration_options(
-                rp_id=rp_id,
-                rp_name=_ISSUER,
-                user_id=admin.id,
-                user_name=admin.email,
-                display_name=admin.display_name,
-                challenge=challenge,
-                exclude_credentials=exclude_credentials,
-            ),
+    def _registration_options(self, db: Session, admin: PlatformAdmin, *, rp_id: str, challenge: str) -> dict[str, Any]:
+        return build_registration_options(
+            rp_id=rp_id,
+            rp_name=_ISSUER,
+            user_id=admin.id,
+            user_name=admin.email,
+            display_name=admin.display_name,
+            challenge=challenge,
+            exclude_credentials=[
+                {"id": f.webauthn_credential_id, "type": "public-key", "transports": f.webauthn_transports_json or []}
+                for f in self._usable_passkeys(db, admin.id, rp_id)
+            ],
         )
 
-    def complete_self_passkey_registration(
-        self, db: Session, actor: CurrentAdmin, *, flow_token: str, label: str | None, credential: dict[str, Any]
-    ) -> UserMfaFactor:
-        flow = self._load_flow(flow_token, expected_kind="admin_self_passkey_registration")
-        if int(flow["admin_id"]) != actor.admin_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Konto"})
-        admin = db.get(PlatformAdmin, actor.admin_id)
-        if admin is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+    def _register(self, db: Session, admin: PlatformAdmin, flow: dict[str, Any], *, label: str | None, credential: dict[str, Any]) -> UserMfaFactor:
         try:
             registered = register_credential(
                 credential,
@@ -257,96 +178,122 @@ class AdminMfaService:
                 expected_rp_id=str(flow["rp_id"]),
             )
         except WebauthnError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        existing = db.scalar(
-            select(UserMfaFactor).where(UserMfaFactor.webauthn_credential_id == registered.credential_id)
-        )
-        if existing is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_invalid", "message": str(exc)}) from exc
+        if db.scalar(select(UserMfaFactor.id).where(UserMfaFactor.webauthn_credential_id == registered.credential_id)) is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "passkey_already_registered", "message": "Diese Passkey-Anmeldung ist bereits hinterlegt"})
-        factor = self._create_passkey_factor(db, admin, registered, rp_id=str(flow["rp_id"]), label=label)
-        self._delete_flow(flow_token)
-        return factor
-
-    def _create_passkey_factor(
-        self, db: Session, admin: PlatformAdmin, registered: RegisteredCredential, *, rp_id: str, label: str | None
-    ) -> UserMfaFactor:
+        default_label = f"Passkey für {admin.email}"
         factor = UserMfaFactor(
             platform_admin_id=admin.id,
-            label=(label or self._default_passkey_label(admin)).strip() or self._default_passkey_label(admin),
-            **passkey_factor_fields(registered, rp_id=rp_id),
+            label=(label or default_label).strip()[:200] or default_label,
+            **passkey_factor_fields(registered, rp_id=str(flow["rp_id"])),
         )
         db.add(factor)
         db.commit()
         db.refresh(factor)
         return factor
 
+    def _assertion(self, db: Session, admin_id: int, flow: dict[str, Any], credential: dict[str, Any], *, lockout_key: str) -> UserMfaFactor:
+        """Prüft eine Passkey-Assertion gegen einen bereits verbrauchten Vorgang. Fehlschläge zählen
+        für die Konto-Sperre."""
+        credential_id = credential.get("rawId") or credential.get("id")
+        factor = None
+        if isinstance(credential_id, str) and credential_id:
+            factor = db.scalar(
+                select(UserMfaFactor)
+                .where(
+                    UserMfaFactor.platform_admin_id == admin_id,
+                    UserMfaFactor.factor_type == "webauthn",
+                    UserMfaFactor.webauthn_credential_id == credential_id,
+                    UserMfaFactor.webauthn_rp_id == str(flow["rp_id"]),
+                )
+                .with_for_update()
+            )
+        if factor is None or not factor.webauthn_public_key_pem:
+            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_WINDOW_SECONDS)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_unknown", "message": "Unbekannte Passkey-Anmeldung"})
+        try:
+            result = verify_assertion(
+                credential,
+                expected_challenge=str(flow["challenge"]),
+                expected_origin=str(flow["origin"]),
+                expected_rp_id=str(flow["rp_id"]),
+                public_key_pem=factor.webauthn_public_key_pem,
+                stored_sign_count=factor.webauthn_sign_count or 0,
+                expected_credential_id=str(credential_id),
+            )
+        except WebauthnError as exc:
+            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_WINDOW_SECONDS)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_invalid", "message": str(exc)}) from exc
+        factor.webauthn_sign_count = result.sign_count
+        factor.last_used_at = datetime.now(UTC)
+        db.add(factor)
+        db.commit()
+        return factor
+
+    # ── Selbstverwaltung (mit Session) ─────────────────────────────────────────────────────
+
+    def start_self_passkey_registration(
+        self, db: Session, actor: CurrentAdmin, *, request_host: str | None, request_origin: str
+    ) -> PasskeyRegistrationStartRead:
+        admin = db.get(PlatformAdmin, actor.admin_id)
+        if admin is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+        rp_id = self.rp_id(request_host)
+        challenge = generate_challenge()
+        flow_token = self._create_flow(
+            "admin_self_passkey_registration",
+            {"admin_id": admin.id, "challenge": challenge, "rp_id": rp_id, "origin": request_origin},
+        )
+        return PasskeyRegistrationStartRead(
+            flow_token=flow_token, public_key=self._registration_options(db, admin, rp_id=rp_id, challenge=challenge)
+        )
+
+    def complete_self_passkey_registration(
+        self, db: Session, actor: CurrentAdmin, *, flow_token: str, label: str | None, credential: dict[str, Any]
+    ) -> UserMfaFactor:
+        flow = self._take_flow(flow_token, expected_kind="admin_self_passkey_registration")
+        if int(flow["admin_id"]) != actor.admin_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Konto"})
+        admin = db.get(PlatformAdmin, actor.admin_id)
+        if admin is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+        return self._register(db, admin, flow, label=label, credential=credential)
+
     def delete_self_factor(self, db: Session, actor: CurrentAdmin, factor_id: int) -> UserMfaRead:
-        factor = self._get_factor(db, factor_id=factor_id, admin_id=actor.admin_id)
+        # FOR UPDATE über alle Passkeys des Kontos: zwei gleichzeitige Löschungen können nicht beide
+        # «es bleibt noch einer» sehen.
+        passkeys = self._list_passkeys(db, actor.admin_id, for_update=True)
+        factor = next((f for f in passkeys if f.id == factor_id), None)
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
-        remaining = len(self._list_factors(db, actor.admin_id)) - 1
-        if remaining == 0:
-            # Every platform admin requires MFA unconditionally (unlike tenant users, where
-            # this guard only applies to admin-role members) - see get_self_overview's
-            # required=True and admin_security.get_optional_current_admin's enforcement.
+        if len(passkeys) <= 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Platform-Administratoren müssen mindestens einen MFA-Faktor behalten",
+                detail={"code": "last_passkey", "message": "Der letzte Passkey kann nicht entfernt werden - zuerst einen weiteren hinzufügen"},
             )
-        if factor.factor_type == "totp":
-            # Admin login only ever verifies TOTP - _build_pending_login always offers
-            # factor_type="totp" and verify_login_totp is the only verification endpoint,
-            # unlike MfaService's tenant-user login flow, which also accepts a webauthn
-            # factor. A passkey can therefore never be a platform admin's ONLY usable
-            # login factor: the check above (any factor at all) would happily let an admin
-            # delete their last TOTP factor while a passkey survives, leaving
-            # has_factors=True (so setup looks "done") but login unable to ever complete -
-            # a silent, permanent self-lockout with no recovery path (audit fix,
-            # 2026-09-17). So TOTP specifically must never drop to zero while any factor
-            # remains, regardless of how many passkeys exist alongside it.
-            remaining_totp = len(self._list_factors(db, actor.admin_id, factor_type="totp")) - 1
-            if remaining_totp == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        "Platform-Administratoren müssen mindestens eine Authenticator-App (TOTP) behalten - "
-                        "der Admin-Login akzeptiert aktuell keine Passkeys, ein Passkey allein würde dich aussperren"
-                    ),
-                )
         db.delete(factor)
         db.commit()
         return self.get_self_overview(db, actor)
 
-    # ---- login-ticket flow (mirrors MfaService.prepare_login / verify_login_totp) ----
+    # ── Login (Ticket nach dem Passwort) ───────────────────────────────────────────────────
 
     def prepare_login(self, db: Session, admin: PlatformAdmin) -> MfaPendingLoginRead:
-        """Unlike MfaService.prepare_login for tenant users, this never returns None: every
-        platform admin requires MFA, so a correct password alone never grants a session -
-        it always returns a pending ticket, either for verification (a factor already
-        exists) or forced setup (none yet)."""
-        factors = self._list_factors(db, admin.id)
-        ticket = self._create_flow("admin_login_ticket", {"admin_id": admin.id})
-        if factors:
-            return self._build_pending_login(ticket=ticket, admin=admin, status_value="verification_required", has_factor=True)
-        return self._build_pending_login(ticket=ticket, admin=admin, status_value="setup_required", has_factor=False)
-
-    def _build_pending_login(
-        self, *, ticket: str, admin: PlatformAdmin, status_value: str, has_factor: bool
-    ) -> MfaPendingLoginRead:
-        methods = [MfaPendingLoginMethodRead(factor_type="totp", label="Authenticator-App")] if has_factor else []
+        """Nie eine Session: mit Passkey → Bestätigung, ohne → Pflicht-Einrichtung (TOFU)."""
+        has_passkey = bool(self._list_passkeys(db, admin.id))
+        ticket = self._create_flow("admin_login_ticket", {"admin_id": admin.id, "issued_at": int(time.time())})
         return MfaPendingLoginRead(
-            status=status_value,  # type: ignore[arg-type]
+            status="verification_required" if has_passkey else "setup_required",
             ticket=ticket,
             required=True,
             user_display_name=admin.display_name,
             user_email=admin.email,
             tenant_name=None,
-            available_methods=methods,
-            default_factor_type="totp" if has_factor else None,
-            default_factor_label="Authenticator-App" if has_factor else None,
-            # Im Login nur bei Ersteinrichtung neue Faktoren anbieten (MAIN-SEC-001).
-            can_add_totp=not has_factor,
-            can_add_passkey=False,
+            available_methods=[MfaPendingLoginMethodRead(factor_type="webauthn", label=_PASSKEY_LABEL)] if has_passkey else [],
+            default_factor_type="webauthn" if has_passkey else None,
+            default_factor_label=_PASSKEY_LABEL if has_passkey else None,
+            can_add_totp=False,
+            # Im Login nur bei Ersteinrichtung einen Passkey anbieten (MAIN-SEC-001)
+            can_add_passkey=not has_passkey,
         )
 
     def _load_login_ticket(self, db: Session, ticket: str) -> AdminPendingLoginContext:
@@ -354,142 +301,142 @@ class AdminMfaService:
         admin = db.get(PlatformAdmin, int(flow["admin_id"]))
         if admin is None or not admin.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "account_inactive", "message": "Admin-Konto ist nicht mehr aktiv"})
+        # Wer nach Ausstellung des Tickets alle Sessions beendet hat (Deaktivierung, Passkey-Reset
+        # über admin_cli), beendet auch das Ticket (SECURITY-RULES 3.3).
+        issued_at = int(flow.get("issued_at") or 0)
+        if admin.session_revoke_at is not None and int(admin.session_revoke_at.timestamp()) > issued_at:
+            raise _flow_error()
         return AdminPendingLoginContext(admin=admin)
 
     def _consume_login_ticket(self, db: Session, ticket: str) -> AdminPendingLoginContext:
         context = self._load_login_ticket(db, ticket)
-        self._delete_flow(ticket)
+        if self._redis().getdel(f"{_FLOW_PREFIX}{ticket}") is None:
+            raise _flow_error()
         return context
 
-    def _ensure_login_setup_allowed(self, db: Session, admin_id: int) -> None:
-        """Faktor-Einrichtung im Login-Flow nur ohne bestehenden Faktor (Audit MAIN-SEC-001).
+    def start_login_passkey_assertion(
+        self, db: Session, *, ticket: str, request_host: str | None, request_origin: str
+    ) -> PasskeyAssertionStartRead:
+        context = self._load_login_ticket(db, ticket)
+        enforce_rate_limit(f"admin-mfa-login-start:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
+        rp_id = self.rp_id(request_host)
+        factors = self._usable_passkeys(db, context.admin.id, rp_id)
+        if not factors:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_not_registered", "message": "Für dieses Konto ist kein Passkey hinterlegt"})
+        challenge = generate_challenge()
+        flow_token = self._create_flow(
+            "admin_login_passkey_assertion",
+            {"ticket": ticket, "admin_id": context.admin.id, "challenge": challenge, "rp_id": rp_id, "origin": request_origin},
+        )
+        return PasskeyAssertionStartRead(
+            flow_token=flow_token,
+            public_key=build_assertion_options(
+                challenge=challenge,
+                rp_id=rp_id,
+                allow_credentials=[
+                    {"id": f.webauthn_credential_id, "type": "public-key", "transports": f.webauthn_transports_json or []}
+                    for f in factors
+                ],
+            ),
+        )
 
-        Sonst genügte das Passwort, um einen eigenen TOTP-Faktor zu registrieren und eine
-        Admin-Session mit ``mfa=True`` zu erhalten.
-        """
-        if self._list_factors(db, admin_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Für dieses Konto ist bereits ein MFA-Faktor eingerichtet. Bitte mit diesem anmelden.",
-            )
+    def verify_login_passkey(self, db: Session, *, flow_token: str, credential: dict[str, Any]) -> AdminPendingLoginContext:
+        flow = self._take_flow(flow_token, expected_kind="admin_login_passkey_assertion")
+        ticket = str(flow["ticket"])
+        context = self._load_login_ticket(db, ticket)
+        if context.admin.id != int(flow["admin_id"]):
+            raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang")
+        lockout_key = f"admin-mfa-account:{context.admin.id}"
+        check_account_lockout(lockout_key, limit=_ACCOUNT_ATTEMPT_LIMIT)
+        self._assertion(db, context.admin.id, flow, credential, lockout_key=lockout_key)
+        return self._consume_login_ticket(db, ticket)
 
-    def start_login_totp_enrollment(self, db: Session, ticket: str) -> TotpEnrollmentStartRead:
+    def start_login_passkey_setup(
+        self, db: Session, *, ticket: str, request_host: str | None, request_origin: str
+    ) -> PasskeyRegistrationStartRead:
         context = self._load_login_ticket(db, ticket)
         self._ensure_login_setup_allowed(db, context.admin.id)
-        secret = generate_totp_secret()
+        enforce_rate_limit(f"admin-mfa-setup-start:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
+        rp_id = self.rp_id(request_host)
+        challenge = generate_challenge()
         flow_token = self._create_flow(
-            "admin_login_totp_enrollment",
-            {"admin_id": context.admin.id, "secret": secret, "ticket": ticket},
+            "admin_login_passkey_setup",
+            {"ticket": ticket, "admin_id": context.admin.id, "challenge": challenge, "rp_id": rp_id, "origin": request_origin},
         )
-        return TotpEnrollmentStartRead(
-            flow_token=flow_token,
-            secret=secret,
-            manual_entry_key=secret,
-            provisioning_uri=build_totp_uri(issuer=_ISSUER, account_name=context.admin.email, secret=secret),
-            issuer=_ISSUER,
-            account_name=context.admin.email,
+        return PasskeyRegistrationStartRead(
+            flow_token=flow_token, public_key=self._registration_options(db, context.admin, rp_id=rp_id, challenge=challenge)
         )
 
-    def complete_login_totp_enrollment(
-        self, db: Session, *, flow_token: str, code: str, label: str | None
+    def complete_login_passkey_setup(
+        self, db: Session, *, flow_token: str, label: str | None, credential: dict[str, Any]
     ) -> AdminPendingLoginContext:
-        flow = self._load_flow(flow_token, expected_kind="admin_login_totp_enrollment")
-        self._ensure_login_setup_allowed(db, int(flow["admin_id"]))
-        self._complete_totp_enrollment(
-            db,
-            flow_token=flow_token,
-            code=code,
-            label=label,
-            expected_kind="admin_login_totp_enrollment",
-            expected_admin_id=int(flow["admin_id"]),
-        )
-        return self._consume_login_ticket(db, str(flow["ticket"]))
-
-    def _complete_totp_enrollment(
-        self,
-        db: Session,
-        *,
-        flow_token: str,
-        code: str,
-        label: str | None,
-        expected_kind: str,
-        expected_admin_id: int,
-    ) -> UserMfaFactor:
-        flow = self._load_flow(flow_token, expected_kind=expected_kind)
-        if int(flow["admin_id"]) != expected_admin_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Konto"})
-        admin = db.get(PlatformAdmin, expected_admin_id)
-        if admin is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
-        secret = str(flow["secret"])
-        enforce_rate_limit(f"admin-mfa-enroll-totp:{flow_token}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
-        counter = verify_totp_code(secret, code)
-        if counter is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
-        factor = UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label=(label or self._default_totp_label(admin)).strip() or self._default_totp_label(admin),
-            secret_encrypted=encrypt_secret(secret),
-            totp_last_counter=counter,
-            last_used_at=datetime.now(UTC),
-        )
-        db.add(factor)
-        db.commit()
-        db.refresh(factor)
-        self._delete_flow(flow_token)
-        return factor
-
-    def verify_step_up_totp(self, db: Session, *, admin_id: int, code: str, purpose: str) -> None:
-        """Frische TOTP-Bestätigung für besonders kritische Aktionen (Restore aus dem Backup) -
-        zusätzlich zur bestehenden Sitzung. Gleiche Konto-Sperre wie beim Login; ein Code kann
-        nicht zweimal verwendet werden (totp_last_counter)."""
-        account_lockout_key = f"admin-mfa-account:{admin_id}"
-        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
-        enforce_rate_limit(f"admin-mfa-step-up:{purpose}:{admin_id}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
-        # FOR UPDATE: zwei parallele Anfragen mit demselben Code werden serialisiert; die zweite
-        # sieht den bereits erhöhten totp_last_counter (Replay-Schutz auch bei Nebenläufigkeit).
-        factors = [factor for factor in self._list_factors(db, admin_id, for_update=True) if factor.secret_encrypted]
-        if not factors:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Für diese Aktion ist ein TOTP-Faktor erforderlich (Konto -> MFA)")
-        for factor in factors:
-            counter = verify_totp_code(decrypt_secret(factor.secret_encrypted), (code or "").strip(), min_counter=factor.totp_last_counter)
-            if counter is None:
-                continue
-            factor.totp_last_counter = counter
-            factor.last_used_at = datetime.now(UTC)
-            db.add(factor)
-            db.commit()
-            return
-        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
-
-    def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> AdminPendingLoginContext:
+        flow = self._take_flow(flow_token, expected_kind="admin_login_passkey_setup")
+        ticket = str(flow["ticket"])
         context = self._load_login_ticket(db, ticket)
-        # Account-level ceiling first (see mfa_service.py's identical 2026-08-27 fix for the
-        # tenant-user equivalent) - this is what actually stops multi-ticket abuse; the
-        # per-ticket limit below is kept as defense in depth for a single ticket being
-        # hammered.
-        account_lockout_key = f"admin-mfa-account:{context.admin.id}"
-        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
-        enforce_rate_limit(f"admin-mfa-login-totp:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
-        factors = self._list_factors(db, context.admin.id)
-        if not factors:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_not_configured", "message": "Für dieses Konto ist kein TOTP-Faktor hinterlegt"})
-        for factor in factors:
-            if not factor.secret_encrypted:
-                continue
-            counter = verify_totp_code(
-                decrypt_secret(factor.secret_encrypted),
-                code,
-                min_counter=factor.totp_last_counter,
+        if context.admin.id != int(flow["admin_id"]):
+            raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang")
+        # Zeilensperre auf dem Konto: zwei gleichzeitige Ersteinrichtungen ergeben nicht zwei
+        # «erste» Passkeys ohne Bestätigung.
+        db.scalar(select(PlatformAdmin.id).where(PlatformAdmin.id == context.admin.id).with_for_update())
+        self._ensure_login_setup_allowed(db, context.admin.id)
+        self._register(db, context.admin, flow, label=label, credential=credential)
+        return self._consume_login_ticket(db, ticket)
+
+    def _ensure_login_setup_allowed(self, db: Session, admin_id: int) -> None:
+        """Einrichtung im Login nur ohne bestehenden Passkey (Audit MAIN-SEC-001) - sonst genügte
+        das Passwort, um einen eigenen Passkey hinzuzufügen und eine Session zu erhalten."""
+        if self._list_passkeys(db, admin_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "mfa_already_configured", "message": "Für dieses Konto ist bereits ein Passkey eingerichtet. Bitte mit diesem anmelden."},
             )
-            if counter is None:
-                continue
-            factor.totp_last_counter = counter
-            factor.last_used_at = datetime.now(UTC)
-            db.add(factor)
-            db.commit()
-            return self._consume_login_ticket(db, ticket)
-        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
+
+    # ── Step-up (frische Bestätigung für kritische Aktionen) ───────────────────────────────
+
+    def start_step_up(
+        self, db: Session, *, admin_id: int, purpose: str, request_host: str | None, request_origin: str
+    ) -> PasskeyAssertionStartRead:
+        enforce_rate_limit(f"admin-mfa-step-up-start:{purpose}:{admin_id}", limit=20, period_seconds=_FLOW_TTL_SECONDS)
+        rp_id = self.rp_id(request_host)
+        factors = self._usable_passkeys(db, admin_id, rp_id)
+        if not factors:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "passkey_not_registered", "message": "Für diese Aktion ist ein Passkey erforderlich"})
+        challenge = generate_challenge()
+        flow_token = self._create_flow(
+            "admin_step_up",
+            {"admin_id": admin_id, "purpose": purpose, "challenge": challenge, "rp_id": rp_id, "origin": request_origin},
+        )
+        return PasskeyAssertionStartRead(
+            flow_token=flow_token,
+            public_key=build_assertion_options(
+                challenge=challenge,
+                rp_id=rp_id,
+                allow_credentials=[
+                    {"id": f.webauthn_credential_id, "type": "public-key", "transports": f.webauthn_transports_json or []}
+                    for f in factors
+                ],
+            ),
+        )
+
+    def verify_step_up(self, db: Session, *, admin_id: int, purpose: str, flow_token: str, credential: dict[str, Any]) -> None:
+        lockout_key = f"admin-mfa-account:{admin_id}"
+        check_account_lockout(lockout_key, limit=_ACCOUNT_ATTEMPT_LIMIT)
+        flow = self._take_flow(flow_token, expected_kind="admin_step_up")
+        if int(flow["admin_id"]) != admin_id or flow.get("purpose") != purpose:
+            raise _flow_error("mfa_flow_invalid", "Ungültiger MFA-Vorgang")
+        self._assertion(db, admin_id, flow, credential, lockout_key=lockout_key)
+
+    # ── Notausgang (admin_cli) ─────────────────────────────────────────────────────────────
+
+    def reset_passkeys(self, db: Session, admin: PlatformAdmin) -> int:
+        """Löscht alle Passkeys eines Admins und beendet seine Sessions und offenen Login-Tickets
+        (session_revoke_at). Beim nächsten Login richtet er einen neuen Passkey ein."""
+        # Alle Faktoren des Kontos (nach 0205 nur noch Passkeys)
+        factors = list(db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id).with_for_update()))
+        for factor in factors:
+            db.delete(factor)
+        removed = len(factors)
+        admin.session_revoke_at = datetime.now(UTC)
+        db.add(admin)
+        db.commit()
+        return removed

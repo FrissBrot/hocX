@@ -25,7 +25,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 ADMIN_PATHS = ["/admin", "/admin/", "/admin/login", "/admin/tenants", "/api/admin", "/api/admin/auth/login",
-               "/api/admin/auth/oidc/public-config", "/api/admin/tenants/import"]
+               "/api/admin/auth/health", "/api/admin/tenants/import"]
 METHODS = ["GET", "POST"]
 
 

@@ -1,5 +1,5 @@
 """Admin-API der Backup-Verwaltung: Berechtigungen, Idempotenz, Validierung, frische
-TOTP-Bestätigung und Bestätigungsphrase für Restores, keine Secrets in Antworten."""
+Passkey-Bestätigung und Bestätigungsphrase für Restores, keine Secrets in Antworten."""
 
 from __future__ import annotations
 
@@ -14,10 +14,13 @@ from sqlalchemy import select
 from app.api.routes import admin_backups
 from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.core.db import get_db
-from app.core.secret_crypto import encrypt_secret
-from app.core.totp import current_totp_code, generate_totp_secret
-from app.models import BackupJob, BackupRestoreJob, BackupSet, BackupSettings, PlatformAdmin, UserMfaFactor
+from app.models import BackupJob, BackupRestoreJob, BackupSet, BackupSettings, PlatformAdmin
 from app.services import backup_admin_service
+from app.services.admin_mfa_service import AdminMfaService
+from tests.soft_passkey import SoftPasskey
+
+RP_ID = "admin.backup.example"
+ORIGIN = f"https://{RP_ID}"
 
 
 @pytest.fixture(autouse=True)
@@ -40,14 +43,26 @@ def _client(db, role: str = "owner", admin_id: int = 1) -> TestClient:
     return TestClient(app)
 
 
-def _owner_with_totp(db) -> tuple[PlatformAdmin, str]:
+def _actor(admin: PlatformAdmin) -> CurrentAdmin:
+    return CurrentAdmin(admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role)
+
+
+def _owner_with_passkey(db) -> tuple[PlatformAdmin, SoftPasskey]:
     admin = PlatformAdmin(email=f"owner-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="Owner", role="owner")
     db.add(admin)
     db.flush()
-    secret = generate_totp_secret()
-    db.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label="t", secret_encrypted=encrypt_secret(secret)))
-    db.flush()
-    return admin, secret
+    passkey = SoftPasskey()
+    service = AdminMfaService()
+    start = service.start_self_passkey_registration(db, _actor(admin), request_host=RP_ID, request_origin=ORIGIN)
+    service.complete_self_passkey_registration(
+        db, _actor(admin), flow_token=start.flow_token, label="p", credential=passkey.create(start.public_key, origin=ORIGIN)
+    )
+    return admin, passkey
+
+
+def _step_up(db, admin: PlatformAdmin, passkey: SoftPasskey) -> dict:
+    start = AdminMfaService().start_step_up(db, admin_id=admin.id, purpose="backup-restore", request_host=RP_ID, request_origin=ORIGIN)
+    return {"flow_token": start.flow_token, "credential": passkey.get(start.public_key, origin=ORIGIN)}
 
 
 def _set(db, **values) -> BackupSet:
@@ -134,102 +149,70 @@ def test_restore_preview_lists_risks_and_requires_tenant_in_backup(db):
     assert missing.status_code == 409
 
 
-def test_restore_requires_fresh_totp_and_confirmation(db):
+def test_restore_requires_fresh_passkey_and_confirmation(db):
     backup_set = _set(db)
-    admin, secret = _owner_with_totp(db)
+    admin, passkey = _owner_with_passkey(db)
     client = _client(db, admin_id=admin.id)
     phrase = backup_admin_service.confirmation_phrase("tenant_copy", backup_set)
-    payload = {"backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
-               "confirmation": phrase, "totp_code": "000000"}
-    assert client.post("/api/admin/restores", json=payload).status_code == 401
-    payload["totp_code"] = current_totp_code(secret)
-    wrong = client.post("/api/admin/restores", json={**payload, "confirmation": "ja"})
+    base = {"backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
+            "confirmation": phrase}
+    # Ohne Step-up kein Restore; eine Assertion eines fremden Schlüssels gilt nicht
+    assert client.post("/api/admin/restores", json=base).status_code == 422
+    foreign = _step_up(db, admin, SoftPasskey())
+    assert client.post("/api/admin/restores", json={**base, "step_up": foreign}).status_code == 401
+
+    step_up = _step_up(db, admin, passkey)
+    wrong = client.post("/api/admin/restores", json={**base, "step_up": step_up, "confirmation": "ja"})
     assert wrong.status_code == 422
-    # BORG-009: die falsche Phrase hat den Code NICHT verbraucht - derselbe Code gilt noch.
-    factor = db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).one()
-    assert factor.totp_last_counter is None
-    created = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})
+    # BORG-009: die falsche Phrase hat die Bestätigung NICHT verbraucht - sie gilt noch.
+    created = client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r1"})
     assert created.status_code == 202, created.text
     job = db.get(BackupRestoreJob, uuid.UUID(created.json()["id"]))
     assert job.options == {
         "source_tenant_id": 5, "new_name": "Verein (Kopie)", "replay_erasures": True, "replay_erasures_reason": None,
     } and job.mfa_verified_at is not None
-    assert "totp_code" not in created.text
-    # Wiederholung derselben Anfrage (Netzwerkfehler): derselbe Auftrag, obwohl der Code verbraucht ist.
-    again = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})
+    assert "step_up" not in created.text and "credential" not in created.text
+    # Wiederholung derselben Anfrage (Netzwerkfehler): derselbe Auftrag, obwohl die Bestätigung verbraucht ist.
+    again = client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r1"})
     assert again.status_code == 202 and again.json()["id"] == created.json()["id"]
-    # Neue Anfrage mit anderem Schlüssel: fachlich blockiert (ein Restore läuft), bevor TOTP geprüft wird.
-    assert client.post("/api/admin/restores", json={**payload, "idempotency_key": "r2"}).status_code == 409
+    # Neue Anfrage mit anderem Schlüssel: fachlich blockiert (ein Restore läuft), bevor der Passkey geprüft wird.
+    assert client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r2"}).status_code == 409
 
 
-def test_restore_without_totp_factor_is_forbidden(db):
-    backup_set = _set(db)
-    admin = PlatformAdmin(email=f"nototp-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="O", role="owner")
-    db.add(admin)
-    db.flush()
-    phrase = backup_admin_service.confirmation_phrase("tenant_copy", backup_set)
-    response = _client(db, admin_id=admin.id).post("/api/admin/restores", json={
-        "backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
-        "confirmation": phrase, "totp_code": "123456"})
-    assert response.status_code == 403
-
-
-def test_step_up_totp_replay_protection_holds_under_concurrency(monkeypatch):
-    """BORG-009: zwei gleichzeitige Bestätigungen mit demselben Code - genau eine gilt."""
-    import threading
-
+def test_restore_step_up_cannot_be_reused(db):
+    """Eine Step-up-Assertion ist einmalig: der Vorgang wird vor der Prüfung atomar verbraucht."""
     from fastapi import HTTPException
 
-    from app.core.db import SessionLocal
-    from app.services.admin_mfa_service import AdminMfaService
+    admin, passkey = _owner_with_passkey(db)
+    step_up = _step_up(db, admin, passkey)
+    service = AdminMfaService()
+    service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", **step_up)
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", **step_up)
+    assert exc_info.value.status_code == 401
 
-    secret = generate_totp_secret()
-    with SessionLocal() as setup:
-        admin = PlatformAdmin(email=f"race-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="O", role="owner")
-        setup.add(admin)
-        setup.flush()
-        setup.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label="t", secret_encrypted=encrypt_secret(secret)))
-        setup.commit()
-        admin_id = admin.id
-    code = current_totp_code(secret)
-    import time
 
-    import app.services.admin_mfa_service as mfa
+def test_restore_step_up_is_bound_to_purpose_and_admin(db):
+    from fastapi import HTTPException
 
-    real_verify = mfa.verify_totp_code
+    admin, passkey = _owner_with_passkey(db)
+    other, _ = _owner_with_passkey(db)
+    service = AdminMfaService()
+    with pytest.raises(HTTPException):
+        service.verify_step_up(db, admin_id=other.id, purpose="backup-restore", **_step_up(db, admin, passkey))
+    with pytest.raises(HTTPException):
+        service.verify_step_up(db, admin_id=admin.id, purpose="anderes", **_step_up(db, admin, passkey))
 
-    def slow_verify(*args, **kwargs):
-        # Zeitfenster zwischen Lesen und Commit vergrössern, damit sich beide Anfragen überlappen.
-        result = real_verify(*args, **kwargs)
-        time.sleep(0.5)
-        return result
 
-    monkeypatch.setattr(mfa, "verify_totp_code", slow_verify)
-    barrier = threading.Barrier(2)
-    results: list[object] = []
+def test_restore_without_passkey_is_forbidden(db):
+    admin = PlatformAdmin(email=f"nopasskey-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="O", role="owner")
+    db.add(admin)
+    db.flush()
+    from fastapi import HTTPException
 
-    def confirm() -> None:
-        with SessionLocal() as session:
-            barrier.wait()
-            try:
-                AdminMfaService().verify_step_up_totp(session, admin_id=admin_id, code=code, purpose="backup-restore")
-                results.append("ok")
-            except HTTPException as exc:
-                session.rollback()
-                results.append(exc.status_code)
-
-    threads = [threading.Thread(target=confirm) for _ in range(2)]
-    try:
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join(timeout=30)
-        assert sorted(map(str, results)) == ["401", "ok"]
-    finally:
-        with SessionLocal() as cleanup:
-            cleanup.execute(UserMfaFactor.__table__.delete().where(UserMfaFactor.platform_admin_id == admin_id))
-            cleanup.execute(PlatformAdmin.__table__.delete().where(PlatformAdmin.id == admin_id))
-            cleanup.commit()
+    with pytest.raises(HTTPException) as exc_info:
+        AdminMfaService().start_step_up(db, admin_id=admin.id, purpose="backup-restore", request_host=RP_ID, request_origin=ORIGIN)
+    assert exc_info.value.status_code == 403
 
 
 def test_evaluate_reports_overdue_and_failed_states(db):

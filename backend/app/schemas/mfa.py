@@ -133,3 +133,14 @@ class TenantMfaPolicyUpdate(BaseModel):
 class TenantProtocolPolicy(BaseModel):
     """Vier-Augen-Prinzip für Protokolle (tenant.four_eyes_protocols, Migration 0191)."""
     four_eyes_protocols: bool
+
+
+class AdminStepUpStart(BaseModel):
+    """Zweck der Bestätigung - die Assertion gilt nur dafür (AdminMfaService.verify_step_up)."""
+
+    purpose: Literal["backup-restore"]
+
+
+class AdminStepUpAssertion(BaseModel):
+    flow_token: str = Field(min_length=1, max_length=200)
+    credential: dict[str, Any]

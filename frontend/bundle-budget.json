@@ -91,11 +91,6 @@
       "css_gzip_kb": 55,
       "css_raw_kb": 345
     },
-    "/admin/sso": {
-      "js_gzip_kb": 235,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
     "/admin/storage": {
       "js_gzip_kb": 246,
       "css_gzip_kb": 55,

@@ -360,78 +360,22 @@ def test_tenant_by_domain_client_ip_prefers_x_forwarded_for(db):
 # --- AdminAuthService ----------------------------------------------------------------
 
 
-def test_admin_login_succeeds_with_correct_password_but_requires_mfa_setup(db):
-    """Audit finding, 2026-08-27: platform admins previously got a full session straight off
-    a correct password. Now login() always returns a pending MFA ticket - here, "setup_required"
-    since this admin has no TOTP factor yet - and only completing enrollment through the
-    ticket-based flow (mirroring the tenant-admin flow in mfa_service.py) actually grants a
-    session."""
-    from app.core.totp import current_totp_code
+def test_admin_login_succeeds_with_correct_password_but_requires_passkey_setup(db):
+    """Ein richtiges Passwort gibt nie eine Admin-Session: ohne Passkey kommt "setup_required"
+    (Passkey einrichten, erst dann Session). Ausführlich: tests/test_admin_mfa_service.py."""
     from app.models.entities import PlatformAdmin
-    from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete
 
-    admin = PlatformAdmin(
-        email="ops@example.com",
-        password_hash=hash_password("admin-password"),
-        display_name="Ops",
-    )
+    admin = PlatformAdmin(email="ops@example.com", password_hash=hash_password("admin-password"), display_name="Ops")
     db.add(admin)
     db.flush()
 
-    service = AdminAuthService()
-    pending = service.login(db, Response(), AdminLoginRequest(email="ops@example.com", password="admin-password"))
+    pending = AdminAuthService().login(db, Response(), AdminLoginRequest(email="ops@example.com", password="admin-password"))
     assert pending.authenticated is False
     assert pending.admin is None
     assert pending.mfa is not None
     assert pending.mfa.status == "setup_required"
     assert pending.mfa.required is True
-
-    enrollment = service.start_login_totp_setup(db, MfaTicketRequest(ticket=pending.mfa.ticket))
-    code = current_totp_code(enrollment.secret)
-    session = service.complete_login_totp_setup(
-        db, Response(), TotpEnrollmentComplete(flow_token=enrollment.flow_token, code=code)
-    )
-    assert session.authenticated is True
-    assert session.admin.email == "ops@example.com"
-    assert session.mfa is None
-
-
-def test_admin_login_with_existing_totp_factor_requires_verification(db):
-    """Once a factor exists, login() returns "verification_required" instead of
-    "setup_required" - the account-level TOTP lockout (see admin_mfa_service.py, mirroring
-    mfa_service.py's identical fix) is exercised in test_admin_mfa_service.py."""
-    from app.core.secret_crypto import encrypt_secret
-    from app.core.totp import current_totp_code, generate_totp_secret
-    from app.models.entities import PlatformAdmin, UserMfaFactor
-    from app.schemas.mfa import TotpLoginVerifyRequest
-
-    secret = generate_totp_secret()
-    admin = PlatformAdmin(
-        email="ops-with-totp@example.com",
-        password_hash=hash_password("admin-password"),
-        display_name="Ops",
-    )
-    db.add(admin)
-    db.flush()
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label="Auth App",
-            secret_encrypted=encrypt_secret(secret),
-        )
-    )
-    db.flush()
-
-    service = AdminAuthService()
-    pending = service.login(db, Response(), AdminLoginRequest(email="ops-with-totp@example.com", password="admin-password"))
-    assert pending.mfa.status == "verification_required"
-
-    session = service.verify_login_totp(
-        db, Response(), TotpLoginVerifyRequest(ticket=pending.mfa.ticket, code=current_totp_code(secret))
-    )
-    assert session.authenticated is True
-    assert session.admin.email == "ops-with-totp@example.com"
+    assert pending.mfa.can_add_totp is False
 
 
 def test_admin_login_fails_with_wrong_password(db):
@@ -472,7 +416,7 @@ def test_admin_logout_revokes_existing_session_tokens(db):
     # iat/revoke_at pair would flakily look "not yet revoked" regardless of the fix.
     past_iat = int((datetime.now(UTC) - timedelta(seconds=30)).timestamp())
     payload = json.dumps(
-        {"admin_id": admin.id, "mfa": True, "iat": past_iat, "exp": past_iat + 3600}, separators=(",", ":")
+        {"admin_id": admin.id, "mfa": True, "amr": "passkey", "iat": past_iat, "exp": past_iat + 3600}, separators=(",", ":")
     ).encode()
     token = _sign_payload(payload)
     assert get_optional_current_admin(request=None, db=db, session_cookie=token) is not None

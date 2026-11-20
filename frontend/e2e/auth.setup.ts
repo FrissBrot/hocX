@@ -1,6 +1,7 @@
 import { test as setup, expect, request } from "@playwright/test";
 import fs from "node:fs/promises";
-import { authFiles } from "./auth";
+import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { SoftPasskey } from "./soft-passkey";
 import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 
 // Any user with an admin role in any tenant must have MFA before being considered
@@ -48,32 +49,42 @@ async function authenticate(email: string, file: string) {
   return context;
 }
 
-// Platform-admin equivalent of authenticate() above - same setup_required/verification_required
-// dance, but against /api/admin/auth/* (AdminAuthService/AdminMfaService) rather than
-// /api/auth/* (AuthService/MfaService). Kept as its own function rather than a parameterized
-// version of authenticate(): the two response shapes (AdminSessionRead vs. the tenant login's
-// session/user shape) already differ enough that sharing one function would need as much
-// branching as just having two.
+// Plattform-Admin: Passwort + Passkey (kein TOTP mehr, backend admin_mfa_service.py). Ohne Passkey
+// kommt "setup_required" (Trust on first use), danach "verification_required". Der Software-Passkey
+// (soft-passkey.ts) wird neben den Sessions gespeichert, damit ein späterer Lauf gegen denselben
+// E2E-Stack sich wieder anmelden kann.
 async function authenticateAdmin(email: string, file: string) {
-  const context = await request.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL });
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000";
+  const origin = new URL(baseURL).origin;
+  // Origin wie im Browser: daraus leitet das Backend ohne Admin-Domain RP-ID und Origin ab.
+  const context = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: origin } });
   const response = await context.post("/api/admin/auth/login", { data: { email, password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!" } });
   expect(response.ok(), await response.text()).toBeTruthy();
   const body = await response.json();
 
   if (body.mfa?.status === "setup_required") {
-    const start = await context.post("/api/admin/auth/mfa/totp/setup/start", { data: { ticket: body.mfa.ticket } });
+    const passkey = SoftPasskey.create();
+    const start = await context.post("/api/admin/auth/mfa/passkey/setup/start", { data: { ticket: body.mfa.ticket } });
     expect(start.ok(), await start.text()).toBeTruthy();
-    const { flow_token, secret } = await start.json();
-    const complete = await context.post("/api/admin/auth/mfa/totp/setup/complete", {
-      data: { flow_token, code: currentTotpCode(secret, Date.now()) },
+    const { flow_token, public_key } = await start.json();
+    const complete = await context.post("/api/admin/auth/mfa/passkey/setup/complete", {
+      data: { flow_token, label: "E2E-Software-Passkey", credential: passkey.registration(public_key, origin) },
     });
     expect(complete.ok(), await complete.text()).toBeTruthy();
+    await passkey.save(platformAdminPasskeyFile);
+  } else if (body.mfa?.status === "verification_required") {
+    const passkey = await SoftPasskey.load(platformAdminPasskeyFile);
+    if (!passkey) throw new Error(`${email} hat schon einen Passkey, ${platformAdminPasskeyFile} fehlt (E2E-Stack neu aufsetzen)`);
+    const start = await context.post("/api/admin/auth/mfa/passkey/start", { data: { ticket: body.mfa.ticket } });
+    expect(start.ok(), await start.text()).toBeTruthy();
+    const { flow_token, public_key } = await start.json();
+    const verify = await context.post("/api/admin/auth/mfa/passkey/verify", {
+      data: { flow_token, credential: passkey.assertion(public_key, origin) },
+    });
+    expect(verify.ok(), await verify.text()).toBeTruthy();
+    await passkey.save(platformAdminPasskeyFile);
   } else if (body.mfa) {
-    // Unlike the tenant flow above, no spec re-authenticates this same platform-admin
-    // account a second time within one run, so there's no remembered secret to answer a
-    // later "verification_required" with - see admin-mfa-lockout.spec.ts, which relies on
-    // this storageState staying valid for the whole run instead of logging in again.
-    throw new Error(`Unexpected admin MFA state for ${email}: ${body.mfa.status} (no remembered TOTP secret to answer it)`);
+    throw new Error(`Unexpected admin MFA state for ${email}: ${body.mfa.status}`);
   }
 
   await context.storageState({ path: file });
@@ -81,8 +92,8 @@ async function authenticateAdmin(email: string, file: string) {
 }
 
 setup("creates reproducible role and tenant sessions", async () => {
-  // Default 45s (playwright.config.ts) can be too tight once the platform-admin login
-  // below has to wait out a TOTP anti-replay window (up to 30s, see totp.ts).
+  // Default 45s (playwright.config.ts) can be too tight when the tenant logins below have to wait
+  // out a TOTP anti-replay window (up to 30s, see totp.ts).
   setup.setTimeout(90_000);
   await fs.mkdir("e2e/.auth", { recursive: true });
   await (await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.admin)).dispose();

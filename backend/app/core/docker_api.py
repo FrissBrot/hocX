@@ -3,7 +3,7 @@
 bekommt bewusst nie den Docker-Socket selbst (Socket = root auf dem Host).
 
 urllib statt eines HTTP-Pakets: mehr als ein paar GET-Requests mit JSON-Antwort braucht es nicht
-(gleiches Vorgehen wie platform_oidc_service)."""
+(gleiches Vorgehen wie ntfy_client)."""
 
 from __future__ import annotations
 

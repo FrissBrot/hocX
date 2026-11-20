@@ -83,7 +83,7 @@ traefik_route_checks() {
   if [ -n "${TRAEFIK_ADMIN_DOMAIN:-}" ]; then
     local admin="https://${TRAEFIK_ADMIN_DOMAIN}:${TRAEFIK_ADMIN_PORT:-8443}"
     _traefik_check "Admin: Frontend" probe_domain "$admin/admin/login" || return 1
-    _traefik_check "Admin: API" probe_domain "$admin/api/admin/auth/oidc/public-config" || return 1
+    _traefik_check "Admin: API" probe_domain "$admin/api/admin/auth/health" || return 1
   fi
   admin_isolation_checks || return 1
   # Docs und Website sind keine Kernfunktion (oft eigene DNS/Zertifikate): ein Fehler dort ist
@@ -139,7 +139,7 @@ admin_isolation_checks() {
   tenant="$(admin_check_tenant_domain)"
   [ -z "$tenant" ] || hosts+=("$tenant")
   for host in "${hosts[@]}"; do
-    for path in /api/admin/auth/oidc/public-config /admin/login /admin; do
+    for path in /api/admin/auth/health /admin/login /admin; do
       _traefik_negative_check "Admin gesperrt: $host$path" probe_admin_blocked "https://$host$path" || return 1
     done
   done

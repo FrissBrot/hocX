@@ -1,266 +1,327 @@
-"""Regression tests for AdminMfaService (audit finding, 2026-08-27 - platform admins, the
-highest-privilege tier in this system, previously had no MFA option at all, unlike tenant
-admins - see mfa_service.py / test_mfa_service.py, which this file's structure mirrors).
-Covers: self-service enrollment/overview/deletion for an already-authenticated admin, the
-login-ticket flow (setup_required vs verification_required), and the account-level TOTP
-lockout that stops multi-ticket brute-force (built in from the start here, unlike the
-tenant-user equivalent this same audit round retrofitted - see test_mfa_service.py's
-test_verify_login_totp_locks_out_account_across_tickets)."""
+"""Plattform-Admins: nur Passwort + Passkey, erzwungen (AdminMfaService, Migration 0205).
+
+Abgedeckt: Login mit Passkey (inkl. falscher Origin, falscher RP-ID, Wiederverwendung der
+Challenge, fremder Schlüssel, Konto-Sperre), Pflicht-Einrichtung ohne Passkey (Trust on first use,
+keine Session davor), Selbstverwaltung (letzter Passkey nicht entfernbar), kein TOTP-Weg mehr,
+Session-Claim, Notausgang (admin_cli)."""
 from __future__ import annotations
 
-from fastapi import HTTPException
+import pytest
+from fastapi import HTTPException, Response
+from sqlalchemy import select, text
 
-from app.core.admin_security import CurrentAdmin
+from app.core.admin_security import CurrentAdmin, create_admin_session_token, parse_admin_session_token
 from app.core.secret_crypto import encrypt_secret
-from app.core.totp import current_totp_code, generate_totp_secret
+from app.core.totp import generate_totp_secret
 from app.models.entities import PlatformAdmin, UserMfaFactor
-from app.services.admin_mfa_service import _ACCOUNT_TOTP_ATTEMPT_LIMIT, AdminMfaService
+from app.schemas.admin import AdminLoginRequest
+from app.services import admin_mfa_service as mfa_module
+from app.services.admin_auth_service import AdminAuthService
+from app.services.admin_mfa_service import AdminMfaService
+from tests.soft_passkey import SoftPasskey
+
+RP_ID = "admin.hocx.example"
+ORIGIN = f"https://{RP_ID}"
+PASSWORD = "admin-password-lang"
+
+
+@pytest.fixture(autouse=True)
+def _admin_domain(monkeypatch):
+    monkeypatch.setattr(mfa_module.settings, "traefik_admin_domain", RP_ID)
 
 
 def _make_admin(db, email: str) -> PlatformAdmin:
     from app.core.security import hash_password
 
-    admin = PlatformAdmin(email=email, password_hash=hash_password("admin-password"), display_name="Ops")
+    admin = PlatformAdmin(email=email, password_hash=hash_password(PASSWORD), display_name="Ops")
     db.add(admin)
     db.flush()
     return admin
 
 
-def _actor_for(admin: PlatformAdmin) -> CurrentAdmin:
-    return CurrentAdmin(
-        admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name
+def _actor(admin: PlatformAdmin) -> CurrentAdmin:
+    return CurrentAdmin(admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name)
+
+
+def _login(db, email: str):
+    return AdminAuthService().login(db, Response(), AdminLoginRequest(email=email, password=PASSWORD))
+
+
+def _enroll_via_login(db, admin: PlatformAdmin, passkey: SoftPasskey) -> Response:
+    pending = _login(db, admin.email)
+    assert pending.mfa.status == "setup_required"
+    service = AdminAuthService()
+    start = service.start_login_passkey_setup(db, ticket=pending.mfa.ticket, request_host="ignored", request_origin=ORIGIN)
+    response = Response()
+    session = service.complete_login_passkey_setup(
+        db, response, flow_token=start.flow_token, label="YubiKey", credential=passkey.create(start.public_key, origin=ORIGIN)
     )
+    assert session.authenticated is True
+    return response
 
 
-def test_prepare_login_requires_setup_when_no_factor_exists(db):
-    admin = _make_admin(db, "admin-no-factor@example.com")
+def _session_cookie(response: Response) -> str:
+    header = response.headers["set-cookie"]
+    return header.split("=", 1)[1].split(";", 1)[0]
+
+
+def test_admin_without_passkey_must_enroll_one_before_any_session(db):
+    admin = _make_admin(db, "tofu@example.com")
+    pending = _login(db, admin.email)
+
+    assert pending.authenticated is False
+    assert pending.mfa.status == "setup_required"
+    assert pending.mfa.can_add_totp is False and pending.mfa.can_add_passkey is True
+    # Kein Passkey vorhanden -> eine Bestätigung ist unmöglich, nur die Einrichtung
+    with pytest.raises(HTTPException) as exc_info:
+        AdminAuthService().start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    assert exc_info.value.status_code == 400
+
+    response = _enroll_via_login(db, admin, SoftPasskey())
+    token = _session_cookie(response)
+    data = parse_admin_session_token(token)
+    assert data["amr"] == "passkey" and data["mfa"] is True
+    assert "samesite=strict" in response.headers["set-cookie"].lower()
+    factor = db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).one()
+    assert factor.factor_type == "webauthn" and factor.webauthn_rp_id == RP_ID and factor.label == "YubiKey"
+
+
+def test_login_with_registered_passkey(db):
+    admin = _make_admin(db, "login@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+
+    pending = _login(db, admin.email)
+    assert pending.mfa.status == "verification_required"
+    assert [m.factor_type for m in pending.mfa.available_methods] == ["webauthn"]
+    assert pending.mfa.can_add_passkey is False  # MAIN-SEC-001: im Login kein zweiter Passkey
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    assert start.public_key["rpId"] == RP_ID
+    assert start.public_key["userVerification"] == "required"
+    session = service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=passkey.get(start.public_key, origin=ORIGIN))
+    assert session.authenticated is True
+
+    # Setup im Login ist mit vorhandenem Passkey gesperrt (sonst genügte das Passwort für einen zweiten)
+    pending = _login(db, admin.email)
+    with pytest.raises(HTTPException) as exc_info:
+        service.start_login_passkey_setup(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        {"origin": "https://evil.example"},
+        {"origin": "https://admin.hocx.example:8443"},
+        {"rp_id": "hocx.example"},
+        {"rp_id": "evil.example"},
+    ],
+)
+def test_passkey_login_rejects_wrong_origin_or_rp_id(db, tamper):
+    admin = _make_admin(db, f"tamper-{len(str(tamper))}-{sorted(tamper)[0]}@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+    pending = _login(db, admin.email)
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    credential = passkey.get(start.public_key, origin=tamper.get("origin", ORIGIN), rp_id=tamper.get("rp_id"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=credential)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["code"] == "passkey_invalid"
+
+
+def test_passkey_challenge_cannot_be_reused(db):
+    admin = _make_admin(db, "replay@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+    pending = _login(db, admin.email)
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    credential = passkey.get(start.public_key, origin=ORIGIN)
+    service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=credential)
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=credential)
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["code"] == "mfa_flow_expired"
+
+
+def test_failed_challenge_is_consumed_too(db):
+    """Auch eine fehlgeschlagene Prüfung verbraucht die Challenge - kein zweiter Versuch damit."""
+    admin = _make_admin(db, "consumed@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+    pending = _login(db, admin.email)
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException):
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=SoftPasskey().get(start.public_key, origin=ORIGIN))
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=passkey.get(start.public_key, origin=ORIGIN))
+    assert exc_info.value.detail["code"] == "mfa_flow_expired"
+
+
+def test_foreign_admins_passkey_is_rejected(db):
+    victim = _make_admin(db, "victim@example.com")
+    attacker = _make_admin(db, "attacker@example.com")
+    attacker_key = SoftPasskey()
+    _enroll_via_login(db, victim, SoftPasskey())
+    _enroll_via_login(db, attacker, attacker_key)
+    pending = _login(db, victim.email)
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=attacker_key.get(start.public_key, origin=ORIGIN))
+    assert exc_info.value.detail["code"] == "passkey_unknown"
+
+
+def test_passkey_without_user_verification_is_rejected(db):
+    admin = _make_admin(db, "nouv@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+    passkey.user_verified = False
+    pending = _login(db, admin.email)
+    service = AdminAuthService()
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException):
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=passkey.get(start.public_key, origin=ORIGIN))
+
+
+def test_account_lockout_after_repeated_failures(db, monkeypatch):
+    admin = _make_admin(db, "lockout@example.com")
+    _enroll_via_login(db, admin, SoftPasskey())
+    service = AdminAuthService()
+    stranger = SoftPasskey()
+    for _ in range(mfa_module._ACCOUNT_ATTEMPT_LIMIT):
+        pending = _login(db, admin.email)
+        start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+        with pytest.raises(HTTPException):
+            service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=stranger.get(start.public_key, origin=ORIGIN))
+    pending = _login(db, admin.email)
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=stranger.get(start.public_key, origin=ORIGIN))
+    assert exc_info.value.status_code == 429
+
+
+def test_no_totp_path_for_admins(db):
+    """TOTP ist für Admins vollständig entfernt: kein Service-Weg, kein Login-Angebot, und die
+    Datenbank nimmt keinen Admin-TOTP-Faktor mehr an (0205)."""
     service = AdminMfaService()
+    for name in ("start_self_totp_enrollment", "complete_self_totp_enrollment", "verify_login_totp",
+                 "start_login_totp_enrollment", "complete_login_totp_enrollment", "verify_step_up_totp"):
+        assert not hasattr(service, name), name
+    admin = _make_admin(db, "legacy-totp@example.com")
+    from sqlalchemy.exc import IntegrityError
 
-    pending = service.prepare_login(db, admin)
+    with pytest.raises(IntegrityError):
+        with db.begin_nested():
+            db.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label="alt",
+                                 secret_encrypted=encrypt_secret(generate_totp_secret())))
+            db.flush()
 
-    assert pending.status == "setup_required"
-    assert pending.required is True
-    assert pending.can_add_passkey is False
+
+def test_session_without_passkey_claim_is_rejected(db):
+    """TOTP-/SSO-Sessions bis 1.4.x tragen keinen amr=passkey und gelten nicht mehr."""
+    import base64
+    import hashlib
+    import hmac
+    import json
+    from datetime import UTC, datetime
+
+    from app.core.admin_security import get_optional_current_admin
+    from app.core.config import settings
+    from starlette.requests import Request
+
+    admin = _make_admin(db, "oldsession@example.com")
+    now = int(datetime.now(UTC).timestamp())
+    payload = json.dumps({"admin_id": admin.id, "mfa": True, "iat": now, "exp": now + 3600}, separators=(",", ":")).encode()
+    signature = hmac.new(settings.admin_auth_secret.encode(), payload, hashlib.sha256).digest()
+    old_token = base64.urlsafe_b64encode(payload).decode() + "." + base64.urlsafe_b64encode(signature).decode()
+    request = Request({"type": "http", "headers": []})
+    assert get_optional_current_admin(request, db, old_token) is None
+    assert get_optional_current_admin(request, db, create_admin_session_token(admin.id)) is not None
 
 
-def test_prepare_login_requires_verification_when_factor_exists(db):
-    admin = _make_admin(db, "admin-with-factor@example.com")
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label="Auth App",
-            secret_encrypted=encrypt_secret(generate_totp_secret()),
-        )
-    )
-    db.flush()
+def test_self_service_last_passkey_cannot_be_removed(db):
+    admin = _make_admin(db, "self@example.com")
+    _enroll_via_login(db, admin, SoftPasskey())
     service = AdminMfaService()
+    actor = _actor(admin)
+    overview = service.get_self_overview(db, actor)
+    assert overview.required and len(overview.factors) == 1 and overview.factors[0].factor_type == "webauthn"
+    only = db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).one()
+    with pytest.raises(HTTPException) as exc_info:
+        service.delete_self_factor(db, actor, only.id)
+    assert exc_info.value.status_code == 409 and exc_info.value.detail["code"] == "last_passkey"
 
-    pending = service.prepare_login(db, admin)
-    assert pending.status == "verification_required"
-    assert pending.default_factor_type == "totp"
+    start = service.start_self_passkey_registration(db, actor, request_host=None, request_origin=ORIGIN)
+    assert start.public_key["rp"]["id"] == RP_ID
+    assert start.public_key["excludeCredentials"][0]["id"] == only.webauthn_credential_id
+    service.complete_self_passkey_registration(db, actor, flow_token=start.flow_token, label=None,
+                                               credential=SoftPasskey().create(start.public_key, origin=ORIGIN))
+    assert len(service.delete_self_factor(db, actor, only.id).factors) == 1
 
 
-def test_login_ticket_totp_enrollment_completes_and_grants_pending_login_context(db):
-    admin = _make_admin(db, "admin-enroll@example.com")
+def test_self_registration_flow_is_single_use_and_bound_to_admin(db):
+    admin = _make_admin(db, "bound@example.com")
+    other = _make_admin(db, "bound-other@example.com")
     service = AdminMfaService()
-
-    pending = service.prepare_login(db, admin)
-    assert pending.status == "setup_required"
-
-    enrollment = service.start_login_totp_enrollment(db, pending.ticket)
-    code = current_totp_code(enrollment.secret)
-    context = service.complete_login_totp_enrollment(db, flow_token=enrollment.flow_token, code=code, label=None)
-
-    assert context.admin.id == admin.id
-    factors = service._list_factors(db, admin.id)
-    assert len(factors) == 1
-    assert factors[0].factor_type == "totp"
-    assert factors[0].user_id is None
-    assert factors[0].platform_admin_id == admin.id
+    start = service.start_self_passkey_registration(db, _actor(admin), request_host=None, request_origin=ORIGIN)
+    credential = SoftPasskey().create(start.public_key, origin=ORIGIN)
+    with pytest.raises(HTTPException) as exc_info:
+        service.complete_self_passkey_registration(db, _actor(other), flow_token=start.flow_token, label=None, credential=credential)
+    assert exc_info.value.status_code == 403
+    # Vorgang ist durch den Fehlversuch verbraucht
+    with pytest.raises(HTTPException) as exc_info:
+        service.complete_self_passkey_registration(db, _actor(admin), flow_token=start.flow_token, label=None, credential=credential)
+    assert exc_info.value.status_code == 401
 
 
-def test_verify_login_totp_completes_pending_ticket(db):
-    admin = _make_admin(db, "admin-verify@example.com")
-    secret = generate_totp_secret()
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label="Auth App",
-            secret_encrypted=encrypt_secret(secret),
-        )
-    )
-    db.flush()
+def test_registration_with_wrong_origin_is_rejected(db):
+    admin = _make_admin(db, "regorigin@example.com")
     service = AdminMfaService()
-
-    pending = service.prepare_login(db, admin)
-    context = service.verify_login_totp(db, ticket=pending.ticket, code=current_totp_code(secret))
-    assert context.admin.id == admin.id
-
-
-def test_verify_login_totp_locks_out_account_across_tickets(db):
-    """Mirrors mfa_service.py's identical fix for tenant-user TOTP login: a fresh ticket is
-    mintable on every successful password login, so a per-ticket-only limit lets an attacker
-    who already has valid credentials mint unlimited tickets for more guesses each time. The
-    account-level ceiling here is keyed by admin id, not ticket."""
-    admin = _make_admin(db, "admin-lockout@example.com")
-    secret = generate_totp_secret()
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label="Auth App",
-            secret_encrypted=encrypt_secret(secret),
-        )
-    )
-    db.flush()
-    service = AdminMfaService()
-
-    for _ in range(_ACCOUNT_TOTP_ATTEMPT_LIMIT):
-        pending = service.prepare_login(db, admin)
-        try:
-            service.verify_login_totp(db, ticket=pending.ticket, code="000000")
-            assert False, "expected wrong TOTP code to fail"
-        except HTTPException as exc:
-            assert exc.status_code == 401
-
-    pending = service.prepare_login(db, admin)
-    try:
-        service.verify_login_totp(db, ticket=pending.ticket, code=current_totp_code(secret))
-        assert False, "expected account-level lockout to trigger"
-    except HTTPException as exc:
-        assert exc.status_code == 429
+    start = service.start_self_passkey_registration(db, _actor(admin), request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException) as exc_info:
+        service.complete_self_passkey_registration(db, _actor(admin), flow_token=start.flow_token, label=None,
+                                                   credential=SoftPasskey().create(start.public_key, origin="https://evil.example"))
+    assert exc_info.value.status_code == 400
 
 
-def test_self_service_totp_enrollment_and_overview(db):
-    admin = _make_admin(db, "admin-self-service@example.com")
-    actor = _actor_for(admin)
-    service = AdminMfaService()
+def test_admin_cli_reset_passkeys_revokes_sessions_and_forces_new_setup(db, monkeypatch, capsys):
+    from contextlib import contextmanager
 
-    overview_before = service.get_self_overview(db, actor)
-    assert overview_before.required is True
-    assert overview_before.has_factors is False
+    from app import admin_cli
 
-    enrollment = service.start_self_totp_enrollment(db, actor)
-    code = current_totp_code(enrollment.secret)
-    service.complete_self_totp_enrollment(db, actor, flow_token=enrollment.flow_token, code=code, label="My Phone")
+    admin = _make_admin(db, "cli@example.com")
+    token = _session_cookie(_enroll_via_login(db, admin, SoftPasskey()))
+    pending_before = _login(db, admin.email)
 
-    overview_after = service.get_self_overview(db, actor)
-    assert overview_after.has_factors is True
-    assert overview_after.factors[0].label == "My Phone"
+    @contextmanager
+    def same_session():
+        yield db
 
+    monkeypatch.setattr(admin_cli, "SessionLocal", same_session)
+    # Session aus derselben Sekunde wie das Zurücksetzen: Token muss älter sein
+    import time
 
-def test_delete_self_factor_blocks_removing_last_factor(db):
-    """Every platform admin requires MFA unconditionally - unlike tenant users, where this
-    guard only applies to admin-role members (see mfa_service.py's identical check)."""
-    admin = _make_admin(db, "admin-last-factor@example.com")
-    actor = _actor_for(admin)
-    factor = UserMfaFactor(
-        platform_admin_id=admin.id,
-        factor_type="totp",
-        label="Auth App",
-        secret_encrypted=encrypt_secret(generate_totp_secret()),
-    )
-    db.add(factor)
-    db.flush()
-    service = AdminMfaService()
+    time.sleep(1.1)
+    assert admin_cli.main(["reset-passkeys", "--email", admin.email]) == 0
+    assert "1 Passkey(s)" in capsys.readouterr().out
 
-    try:
-        service.delete_self_factor(db, actor, factor.id)
-        assert False, "expected delete_self_factor to block removing the last factor"
-    except HTTPException as exc:
-        assert exc.status_code == 409
+    assert db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).all() == []
+    from app.core.admin_security import get_optional_current_admin
+    from starlette.requests import Request
 
-
-def test_delete_self_factor_blocks_removing_last_totp_even_with_a_passkey_remaining(db):
-    """Regression test (2026-09-17 audit fix): the old guard only counted factors overall,
-    so deleting the last TOTP factor while a passkey survived was allowed - but admin
-    login only ever verifies TOTP (see verify_login_totp / _build_pending_login, which
-    always offers factor_type="totp" and never a webauthn option), so that left the admin
-    with has_factors=True (setup looks "done") yet no way to ever complete a login again."""
-    admin = _make_admin(db, "admin-totp-plus-passkey@example.com")
-    actor = _actor_for(admin)
-    totp_factor = UserMfaFactor(
-        platform_admin_id=admin.id, factor_type="totp", label="Auth App",
-        secret_encrypted=encrypt_secret(generate_totp_secret()),
-    )
-    passkey_factor = UserMfaFactor(
-        platform_admin_id=admin.id, factor_type="webauthn", label="Passkey",
-        webauthn_credential_id="cred-id", webauthn_public_key_pem="public-key",
-    )
-    db.add_all([totp_factor, passkey_factor])
-    db.flush()
-    service = AdminMfaService()
-
-    try:
-        service.delete_self_factor(db, actor, totp_factor.id)
-        assert False, "expected delete_self_factor to block removing the last TOTP factor"
-    except HTTPException as exc:
-        assert exc.status_code == 409
-
-    # Deleting the passkey instead (TOTP stays) must still work - login remains possible.
-    overview = service.delete_self_factor(db, actor, passkey_factor.id)
-    assert overview.has_factors is True
-    assert len(overview.factors) == 1
-    assert overview.factors[0].factor_type == "totp"
-
-
-def test_delete_self_factor_unknown_id_returns_404(db):
-    admin = _make_admin(db, "admin-unknown-factor@example.com")
-    actor = _actor_for(admin)
-    service = AdminMfaService()
-
-    try:
-        service.delete_self_factor(db, actor, 999999999)
-        assert False, "expected 404 for an unknown factor id"
-    except HTTPException as exc:
-        assert exc.status_code == 404
-
-
-def test_factor_scoped_to_owning_admin_not_visible_to_another_admin(db):
-    """UserMfaFactor rows are now shared between AppUser and PlatformAdmin owners (via the
-    new platform_admin_id column) - _list_factors/_get_factor must stay strictly scoped to
-    the requesting admin's own id."""
-    admin_one = _make_admin(db, "admin-scope-one@example.com")
-    admin_two = _make_admin(db, "admin-scope-two@example.com")
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin_one.id,
-            factor_type="totp",
-            label="Admin One's App",
-            secret_encrypted=encrypt_secret(generate_totp_secret()),
-        )
-    )
-    db.flush()
-    service = AdminMfaService()
-
-    assert service.get_self_overview(db, _actor_for(admin_two)).has_factors is False
-    assert service.get_self_overview(db, _actor_for(admin_one)).has_factors is True
-
-
-def test_login_ticket_totp_enrollment_rejected_when_factor_exists(db):
-    """MAIN-SEC-001: Mit Passwort allein darf kein zusätzlicher Faktor im Login entstehen."""
-    admin = _make_admin(db, "admin-sec001@example.com")
-    db.add(
-        UserMfaFactor(
-            platform_admin_id=admin.id,
-            factor_type="totp",
-            label="Auth App",
-            secret_encrypted=encrypt_secret(generate_totp_secret()),
-        )
-    )
-    db.flush()
-    service = AdminMfaService()
-
-    pending = service.prepare_login(db, admin)
-    assert pending.status == "verification_required"
-    assert pending.can_add_totp is False
-
-    try:
-        service.start_login_totp_enrollment(db, pending.ticket)
-    except HTTPException as exc:
-        assert exc.status_code == 403
-    else:
-        raise AssertionError("Einrichtung trotz bestehendem Faktor erlaubt")
-    assert len(service._list_factors(db, admin.id)) == 1
+    assert get_optional_current_admin(Request({"type": "http", "headers": []}), db, token) is None
+    # Ein vor dem Zurücksetzen ausgestelltes Login-Ticket gilt nicht mehr
+    with pytest.raises(HTTPException):
+        AdminAuthService().start_login_passkey_setup(db, ticket=pending_before.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    assert _login(db, admin.email).mfa.status == "setup_required"
+    assert db.execute(
+        text("SELECT 1 FROM audit_log WHERE action = 'admin.passkeys_reset' AND actor_email = :email"), {"email": admin.email}
+    ).first() is not None
+    assert admin_cli.main(["reset-passkeys", "--email", "gibt-es-nicht@example.com"]) == 1

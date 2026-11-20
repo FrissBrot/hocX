@@ -365,8 +365,8 @@ Prod-Promotion gesperrt.
    nach `.tools/` geladen und gegen die im Skript hinterlegte SHA-256-Pruefsumme geprueft;
    eine systemweite Installation ist nicht erforderlich.
 7. Bootstrap-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` aus `.env`
-   prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
-   ändern.
+   prüfen (beim ersten Login wird ein Passkey eingerichtet, Abschnitt 21), danach im
+   Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort ändern.
 
 ## 9. Deploy-Code kontrolliert aktualisieren
 
@@ -930,7 +930,8 @@ OpenZiti-Tunnel. Seit dem Auth-Audit (SEC-AUTH-001) ist das auf mehreren Ebenen 
    serverseitigen Admin-Aufrufen weiter (`frontend/lib/admin-gate.ts`), kennt das Secret aber nicht.
 5. **Frontend** (`frontend/proxy.ts`): `/admin*` nur auf der Admin-Domain, sonst 404. Das
    Admin-Session-Cookie ist host-only und `SameSite=Strict`.
-6. **Deploy/Verify** (`scripts/lib/traefik_checks.sh`): prüft über den öffentlichen Entrypoint, dass
+6. **Deploy/Verify** (`scripts/lib/traefik_checks.sh`): prüft über den Admin-Entrypoint
+   `GET /api/admin/auth/health` (öffentlich, ohne Session) und über den öffentlichen Entrypoint, dass
    `/api/admin/…` und `/admin/…` auf Haupt-, Abgabebox-, Admin-, Docs-, Website- und einer
    Mandanten-Domain (`HOCX_VERIFY_TENANT_DOMAIN` oder die erste aus `tenant-domains.yml`, falls
    lesbar) eine 4xx liefern. Sonst scheitert der Deploy mit Rollback.
@@ -960,3 +961,34 @@ Secret rotieren: Wert in `.env` ersetzen (`openssl rand -hex 32`), `./scripts/de
   den Release-Stack (`deploy.sh`).
 - **Tests:** `scripts/tests/test_admin_isolation.sh` (statisch, Labels, Secret-Verdrahtung) und
   `scripts/tests/test_admin_isolation_live.sh` (echter Traefik in Wegwerf-Containern).
+
+## 21. Admin-Anmeldung: Passwort + Passkey, Notausgang
+
+Seit Migration `0205_admin_passkey_only` melden sich Plattform-Admins **nur** mit Passwort und
+Passkey an (WebAuthn, `userVerification: required`). TOTP und das Admin-SSO (OIDC) gibt es nicht
+mehr. RP-ID ist die Admin-Domain (`TRAEFIK_ADMIN_DOMAIN`), erwarteter Origin
+`https://<Admin-Domain>` - bzw. `https://<Admin-Domain>:<TRAEFIK_ADMIN_PORT>`, wenn die Domain direkt
+über den Host-Port des Admin-Entrypoints aufgerufen wird. Einen Passkey, der auf der einen Adresse
+registriert wurde, akzeptiert der Browser auf der anderen nicht: immer dieselbe Adresse verwenden
+(über OpenZiti: ohne Port).
+
+- **Erster Login / nach dem Update / neues Konto:** Nach dem Passwort verlangt die Login-Seite
+  zwingend die Einrichtung eines Passkeys (Trust on first use). Erst danach gibt es eine Session;
+  vorher erreicht das Konto keine andere Admin-API.
+- **Weitere Passkeys** (empfohlen: zweites Gerät oder Sicherheitsschlüssel): Profil-Dialog
+  (`/admin/security`). Der letzte Passkey lässt sich nicht entfernen.
+- **Backup-Wiederherstellung** verlangt zusätzlich eine frische Passkey-Bestätigung.
+- **Prüfadresse** für Deploy, `verify_release.sh` und die Wartungsseite:
+  `GET https://<Admin-Domain>/api/admin/auth/health` → `{"status":"ok"}` (ohne Session, ohne DB).
+  `/api/admin/auth/oidc/public-config` gibt es nicht mehr.
+
+**Notausgang** (Passkey verloren, letzter Admin ausgesperrt) - nur auf dem Host:
+
+```bash
+docker compose -p <projekt> exec backend python -m app.admin_cli reset-passkeys --email <admin-email>
+```
+
+Löscht alle Passkeys des Kontos, beendet seine Sessions und offenen Login-Vorgänge und schreibt
+`admin.passkeys_reset` ins Audit-Log. Beim nächsten Login richtet das Konto nach dem Passwort einen
+neuen Passkey ein - wer in diesem Moment das Passwort kennt, kann das tun. Deshalb nach dem
+Zurücksetzen sofort selbst anmelden (oder vorher das Passwort ändern).

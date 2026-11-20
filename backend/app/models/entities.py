@@ -119,25 +119,6 @@ class Tenant(Base, TimestampMixin):
     billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
-class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
-    """Single global SSO provider config for the platform-admin panel only - tenants/customers
-    have no OIDC option at all (see security audit 2026-07-26 for why the old per-tenant
-    tenant_oidc_config was removed). There is always at most one meaningful row; the service
-    layer enforces that, not the schema."""
-
-    __tablename__ = "platform_oidc_config"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    issuer_url: Mapped[str] = mapped_column(Text, nullable=False)
-    client_id: Mapped[str] = mapped_column(Text, nullable=False)
-    client_secret: Mapped[str] = mapped_column(Text, nullable=False)
-    scopes: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'openid email profile'"))
-
-
 class TenantDomain(Base, TimestampMixin):
     __tablename__ = "tenant_domain"
     __table_args__ = (
@@ -409,6 +390,8 @@ class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_user_mfa_factor_platform_admin", "platform_admin_id", "factor_type"),
         UniqueConstraint("webauthn_credential_id", name="uq_user_mfa_factor_webauthn_credential_id"),
         CheckConstraint("factor_type IN ('totp', 'webauthn')", name="ck_user_mfa_factor_type"),
+        # Plattform-Admins nur mit Passkey (0205_admin_passkey_only)
+        CheckConstraint("platform_admin_id IS NULL OR factor_type = 'webauthn'", name="ck_user_mfa_factor_admin_passkey"),
         CheckConstraint(
             "(user_id IS NOT NULL AND platform_admin_id IS NULL) OR "
             "(user_id IS NULL AND platform_admin_id IS NOT NULL)",
@@ -445,7 +428,6 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "platform_admin"
     __table_args__ = (
         UniqueConstraint("email", name="uq_platform_admin_email"),
-        UniqueConstraint("oidc_issuer", "oidc_subject", name="uq_platform_admin_oidc"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -457,10 +439,8 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    oidc_subject: Mapped[str | None] = mapped_column(Text)
-    oidc_issuer: Mapped[str | None] = mapped_column(Text)
     # 'owner' = full read/write access, 'support' = read-only across the whole admin panel
-    # (no create/update/delete on tenants, users, admins, domains, OIDC config, ...).
+    # (no create/update/delete on tenants, users, admins, domains, ...).
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'owner'"))
 
 

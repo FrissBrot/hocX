@@ -136,7 +136,9 @@
     "mfa_skip_not_allowed": "Per questo account il secondo fattore è obbligatorio e non può essere saltato.",
     "password_weak": "La password è troppo debole. Usa almeno 12 caratteri senza nome, e-mail o parole comuni.",
     "mfa_policy_own_mfa_missing": "Configura prima l'MFA per il tuo account.",
-    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore."
+    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore.",
+    "last_passkey": "L’ultima passkey non può essere rimossa. Aggiungine prima un’altra.",
+    "mfa_already_configured": "Per questo account è già configurato un secondo fattore. Accedi con quello."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",

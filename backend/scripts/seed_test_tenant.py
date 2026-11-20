@@ -158,30 +158,6 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
 DEMO_TOTP_LABEL = "Dev-Seed (DEMO_TOTP_SEED)"
 
 
-def ensure_platform_admin_demo_totp(db) -> None:
-    """Gibt jedem Plattform-Admin einen TOTP-Faktor mit DEMO_TOTP_SEED (Admin-Seite).
-
-    Plattform-Admins überleben den Reseed (eigene Tabelle, kein Mandant). Ein vorhandener
-    Dev-Seed-Faktor bekommt den aktuellen Seed, selbst eingerichtete Faktoren bleiben unberührt.
-    """
-    if not DEMO_TOTP_SEED:
-        return
-    for admin in db.query(PlatformAdmin).filter(PlatformAdmin.is_active.is_(True)).all():
-        factor = (
-            db.query(UserMfaFactor)
-            .filter(UserMfaFactor.platform_admin_id == admin.id, UserMfaFactor.factor_type == "totp",
-                    UserMfaFactor.label == DEMO_TOTP_LABEL)
-            .one_or_none()
-        )
-        if factor is None:
-            db.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label=DEMO_TOTP_LABEL,
-                                 secret_encrypted=encrypt_secret(DEMO_TOTP_SEED)))
-        else:
-            factor.secret_encrypted = encrypt_secret(DEMO_TOTP_SEED)
-            factor.totp_last_counter = None
-    db.flush()
-
-
 def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Template:
     cycle_config = CycleConfig(tenant_id=tenant.id, name="Vereinsjahr", reset_month=7, reset_day=31)
     db.add(cycle_config)
@@ -516,14 +492,13 @@ def main() -> None:
         create_submission_assignment(db, tenant, list_definition)
         db.commit()
 
-        ensure_platform_admin_demo_totp(db)
         db.commit()
 
         log(f"Demo tenant '{DEMO_TENANT_NAME}' seeded successfully.")
         log(f"Login: admin@{DEMO_TENANT_SLUG}.hocx.local / writer@{DEMO_TENANT_SLUG}.hocx.local / "
             f"reader@{DEMO_TENANT_SLUG}.hocx.local / kassier@{DEMO_TENANT_SLUG}.hocx.local, password: {DEMO_PASSWORD}")
         if DEMO_TOTP_SEED:
-            log("TOTP: alle Demo-Konten und Plattform-Admins nutzen DEMO_TOTP_SEED aus der .env")
+            log("TOTP: alle Demo-Konten nutzen DEMO_TOTP_SEED aus der .env (Plattform-Admins: nur Passkey)")
     except Exception:
         db.rollback()
         raise

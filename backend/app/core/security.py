@@ -149,8 +149,7 @@ def create_session_token(user_id: int, *, mfa_verified: bool = False) -> str:
 
 def issue_session_cookie(response: Response, user_id: int, *, mfa_verified: bool = False) -> None:
     """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
-    login and the cross-domain login bridge so both stay consistent. (OIDC is admin-panel-only
-    now - see platform_oidc_service.py / issue_admin_session_cookie.) Sessions issued before
+    login and the cross-domain login bridge so both stay consistent. Sessions issued before
     the single-tenant switch carry an extra "tenant_id" claim, which parse_session_token simply
     ignores."""
     token = create_session_token(user_id, mfa_verified=mfa_verified)

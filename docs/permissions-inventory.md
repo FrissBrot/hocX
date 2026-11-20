@@ -6,9 +6,9 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 584 (Plattform-Admin: 127)
+- Routen gesamt: 580 (Plattform-Admin: 124)
 - Mandanten-Routen mit Rechteprüfung: 379
-- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
+- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 77
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
 
@@ -58,14 +58,13 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 
 | Route | Begründung |
 |---|---|
+| `GET /api/admin/auth/health` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/login` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/logout` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/setup/complete` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/setup/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/verify` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/authorize` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/callback` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/public-config` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/setup/complete` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/setup/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/verify` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `GET /api/admin/auth/session` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/auth/account-link/complete` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/account-link/preview` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
@@ -142,14 +141,13 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | Route | Prüfung |
 |---|---|
 | `GET /api/activity` | activity.read |
+| `GET /api/admin/auth/health` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/login` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/logout` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/setup/complete` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/setup/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `POST /api/admin/auth/mfa/totp/verify` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/authorize` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/callback` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
-| `GET /api/admin/auth/oidc/public-config` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/setup/complete` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/setup/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/start` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
+| `POST /api/admin/auth/mfa/passkey/verify` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `GET /api/admin/auth/session` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `GET /api/agenda-items` | meetings.read |
 | `POST /api/agenda-items` | meetings.edit |

@@ -13,7 +13,7 @@ from app.main import app
 pytestmark = pytest.mark.admin_gate
 
 ADMIN_DOMAIN = "admin.hocx.example"
-PUBLIC_CONFIG = "/api/admin/auth/oidc/public-config"
+PUBLIC_CONFIG = "/api/admin/auth/health"
 
 
 @pytest.fixture
@@ -129,18 +129,3 @@ def test_websocket_under_admin_api_is_rejected(gate_secret):
     with pytest.raises(WebSocketDisconnect):
         with _client().websocket_connect("/api/admin/ws-test"):
             pass
-
-
-def test_oidc_redirect_base_only_on_admin_domain(gate_secret):
-    from fastapi import HTTPException
-    from starlette.requests import Request
-
-    from app.api.routes.admin_auth import _oidc_redirect_base
-
-    def request(host: str) -> Request:
-        return Request({"type": "http", "scheme": "https", "server": (host, 443), "path": "/", "headers": [(b"host", host.encode())]})
-
-    assert _oidc_redirect_base(request(ADMIN_DOMAIN)) == f"https://{ADMIN_DOMAIN}"
-    with pytest.raises(HTTPException) as exc_info:
-        _oidc_redirect_base(request("verein.example.org"))
-    assert exc_info.value.status_code == 404

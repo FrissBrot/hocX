@@ -301,8 +301,6 @@
     "skipRescue": "Continuer sans point de secours de l'état actuel (déconseillé)",
     "skipRescueReason": "Justification",
     "confirmationLabel": "Saisir pour confirmer : {phrase}",
-    "totp": "Code TOTP actuel",
-    "totpHelp": "Confirmation récente avec l'authentificateur de votre compte administrateur.",
     "panelTitle": {
       "full": "Restauration complète",
       "tenant_copy": "Restauration du mandant en copie"
@@ -322,7 +320,8 @@
     "historyEmpty": "Aucune restauration pour l'instant.",
     "replayErasures": "Réappliquer les suppressions faites après le point de sauvegarde",
     "replayErasuresHint": "Les personnes, fichiers, procès-verbaux ou mandants supprimés après ce point de sauvegarde sont supprimés à nouveau après la restauration. À désactiver uniquement dans des exceptions justifiées.",
-    "replayErasuresReason": "Raison pour laquelle des données supprimées doivent revenir"
+    "replayErasuresReason": "Raison pour laquelle des données supprimées doivent revenir",
+    "passkeyHelp": "Au démarrage, vous confirmez en plus la restauration avec votre clé d’accès."
   },
   "preview": {
     "schema": "Schéma de base de données",

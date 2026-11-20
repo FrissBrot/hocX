@@ -301,8 +301,6 @@
     "skipRescue": "Continua senza punto di salvataggio dello stato attuale (sconsigliato)",
     "skipRescueReason": "Motivazione",
     "confirmationLabel": "Digita per confermare: {phrase}",
-    "totp": "Codice TOTP attuale",
-    "totpHelp": "Conferma recente con l'autenticatore del tuo account amministratore.",
     "panelTitle": {
       "full": "Ripristino completo",
       "tenant_copy": "Ripristino del mandante come copia"
@@ -322,7 +320,8 @@
     "historyEmpty": "Nessun ripristino finora.",
     "replayErasures": "Riapplicare le eliminazioni successive al punto di ripristino",
     "replayErasuresHint": "Persone, file, verbali o mandanti eliminati dopo questo punto di ripristino vengono eliminati di nuovo dopo il ripristino. Disattivare solo in eccezioni motivate.",
-    "replayErasuresReason": "Motivo per cui i dati eliminati devono tornare"
+    "replayErasuresReason": "Motivo per cui i dati eliminati devono tornare",
+    "passkeyHelp": "All’avvio confermi inoltre il ripristino con la tua passkey."
   },
   "preview": {
     "schema": "Schema del database",

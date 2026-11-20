@@ -80,7 +80,6 @@ EXEMPT_COLUMNS: dict[str, str] = {
     "platform_notification_settings.status_token_hash": "Plattform-Statusseite (hocX-Betrieb), kein Mandant",
     "platform_notification_settings.status_token_encrypted": "Plattform-Statusseite (hocX-Betrieb), kein Mandant",
     "platform_notification_settings.ntfy_token_encrypted": "Zugang zum ntfy-Server für Betriebsalarme, kein Link",
-    "platform_oidc_config.client_secret": "Zugangsdaten zum Identitätsanbieter (Login), kein Link",
     "user_mfa_factor.secret_encrypted": "TOTP-Schlüssel des zweiten Faktors, kein Link",
     "storage_profile.secret_key_enc": "Zugangsdaten zum Objektspeicher (Betrieb), kein Link",
     "storage_profile.restricted_secret_key_enc": "Zugangsdaten zum Objektspeicher (Betrieb), kein Link",

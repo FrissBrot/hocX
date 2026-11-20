@@ -1,48 +1,36 @@
-import hashlib
-import hmac
-import urllib.parse
+"""Anmeldung am Plattform-Admin-Panel: Passwort, danach ausschliesslich Passkey (WebAuthn).
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
+Seit Migration 0205 gibt es für Admins weder TOTP noch SSO (OIDC). Ein Konto ohne Passkey richtet
+nach dem Passwort zwingend einen ein (Trust on first use) und erhält erst danach eine Session.
+Alle Routen hier sind ohne Session erreichbar (sie führen zu ihr) - aber wie jede /api/admin-Route
+nur über den Admin-Entrypoint (app/core/admin_gate.py).
+"""
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core import admin_gate
-from app.core.admin_security import CurrentAdmin, get_optional_current_admin, issue_admin_session_cookie
-from app.core.config import settings
+from app.core.admin_origin import admin_request_hostname, expected_admin_origin
+from app.core.admin_security import CurrentAdmin, get_optional_current_admin
 from app.core.client_ip import client_ip
 from app.core.db import get_db
-from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSessionRead
-from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete, TotpEnrollmentStartRead, TotpLoginVerifyRequest
-from app.schemas.oidc import PlatformOidcConfigPublic
+from app.schemas.mfa import (
+    MfaTicketRequest,
+    PasskeyAssertionStartRead,
+    PasskeyAssertionVerifyRequest,
+    PasskeyRegistrationComplete,
+    PasskeyRegistrationStartRead,
+)
 from app.services.admin_auth_service import AdminAuthService
-from app.services.audit_service import AuditService
-from app.services.platform_oidc_service import PlatformOidcService, sanitize_redirect_to
 
 router = APIRouter()
 service = AdminAuthService()
-oidc_service = PlatformOidcService()
-
-_OIDC_STATE_COOKIE = "hocx_admin_oidc_state"
-_OIDC_STATE_COOKIE_PATH = "/api/admin/auth/oidc"
-_OIDC_STATE_COOKIE_MAX_AGE = 600
 
 
-def _oidc_redirect_base(request: Request) -> str:
-    """Basis-URL für redirect_uri/Callback des Admin-SSO: nur die Admin-Domain (SEC-AUTH-001).
-
-    Das Admin-Gate (app/core/admin_gate.py) lässt /api/admin ohnehin nur auf der Admin-Domain
-    durch; diese Prüfung hängt zusätzlich direkt an der Stelle, die aus dem Host eine
-    redirect_uri baut - ein Request mit fremdem Host bekommt nie einen Callback auf seiner Domain.
-    In der Entwicklung ohne Gate-Secret (kein Admin-Einstieg) bleibt es beim Host des Requests."""
-    admin_domain = (settings.traefik_admin_domain or "").strip().lower().rstrip(".")
-    if admin_domain and admin_gate.gate_mode() != admin_gate.MODE_OPEN and request.url.hostname != admin_domain:
-        raise HTTPException(status_code=404, detail="Not Found")
-    return str(request.base_url).rstrip("/")
-
-
-def _state_fingerprint(state: str) -> str:
-    return hashlib.sha256(state.encode("utf-8")).hexdigest()
+@router.get("/health")
+def health() -> dict[str, str]:
+    """Erreichbarkeit der Admin-API über den Admin-Entrypoint (deploy.sh/verify_release.sh,
+    traefik_checks.sh, Wartungsseite). Ohne Session, ohne Datenbank, gibt nichts preis."""
+    return {"status": "ok"}
 
 
 @router.post("/login", response_model=AdminSessionRead)
@@ -50,25 +38,30 @@ def login(payload: AdminLoginRequest, response: Response, request: Request, db: 
     return service.login(db, response, payload, client_address=client_ip(request))
 
 
-# ── MFA (audit finding, 2026-08-27 - platform admins previously had no MFA option at all) ──
-# Ticket-based, unauthenticated-by-session flow, mirroring app/api/routes/auth.py's
-# /mfa/totp/* endpoints for tenant users: the admin doesn't have a full session yet at this
-# point (login() above always returns a pending ticket, never a session directly), only
-# possession of the short-lived ticket from the login response.
-
-@router.post("/mfa/totp/verify", response_model=AdminSessionRead)
-def verify_login_totp(payload: TotpLoginVerifyRequest, response: Response, db: Session = Depends(get_db)):
-    return service.verify_login_totp(db, response, payload)
+@router.post("/mfa/passkey/start", response_model=PasskeyAssertionStartRead)
+def start_login_passkey(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    return service.start_login_passkey(
+        db, ticket=payload.ticket, request_host=admin_request_hostname(request), request_origin=expected_admin_origin(request)
+    )
 
 
-@router.post("/mfa/totp/setup/start", response_model=TotpEnrollmentStartRead)
-def start_login_totp_setup(payload: MfaTicketRequest, db: Session = Depends(get_db)):
-    return service.start_login_totp_setup(db, payload)
+@router.post("/mfa/passkey/verify", response_model=AdminSessionRead)
+def verify_login_passkey(payload: PasskeyAssertionVerifyRequest, response: Response, db: Session = Depends(get_db)):
+    return service.verify_login_passkey(db, response, flow_token=payload.flow_token, credential=payload.credential)
 
 
-@router.post("/mfa/totp/setup/complete", response_model=AdminSessionRead)
-def complete_login_totp_setup(payload: TotpEnrollmentComplete, response: Response, db: Session = Depends(get_db)):
-    return service.complete_login_totp_setup(db, response, payload)
+@router.post("/mfa/passkey/setup/start", response_model=PasskeyRegistrationStartRead)
+def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    return service.start_login_passkey_setup(
+        db, ticket=payload.ticket, request_host=admin_request_hostname(request), request_origin=expected_admin_origin(request)
+    )
+
+
+@router.post("/mfa/passkey/setup/complete", response_model=AdminSessionRead)
+def complete_login_passkey_setup(payload: PasskeyRegistrationComplete, response: Response, db: Session = Depends(get_db)):
+    return service.complete_login_passkey_setup(
+        db, response, flow_token=payload.flow_token, label=payload.label, credential=payload.credential
+    )
 
 
 @router.post("/logout", response_model=dict[str, str])
@@ -83,59 +76,3 @@ def logout(
 @router.get("/session", response_model=AdminSessionRead)
 def session(admin: CurrentAdmin | None = Depends(get_optional_current_admin)):
     return service.session(admin)
-
-
-# ── SSO (single globally configured provider, admin-panel login only) ───────────────────────
-
-@router.get("/oidc/public-config", response_model=PlatformOidcConfigPublic)
-def get_oidc_public_config(db: Session = Depends(get_db)):
-    """Unauthenticated - lets the admin login page decide whether to show an SSO button."""
-    return oidc_service.get_public_config(db)
-
-
-@router.get("/oidc/authorize")
-def oidc_authorize(request: Request, redirect_to: str = "/", db: Session = Depends(get_db)):
-    # Validated again inside build_authorize_url (defense in depth) - sanitizing here too since
-    # this route is the first point that ever sees the client-controlled query param.
-    base = _oidc_redirect_base(request)
-    url = oidc_service.build_authorize_url(db, base, sanitize_redirect_to(redirect_to))
-    response = RedirectResponse(url, status_code=302)
-    # Audit MAIN-SEC-006: state an diesen Browser binden - der Callback akzeptiert nur einen
-    # state, dessen Hash in diesem kurzlebigen httpOnly-Cookie steht (Login-CSRF).
-    state = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("state", [""])[0]
-    response.set_cookie(
-        key=_OIDC_STATE_COOKIE,
-        value=_state_fingerprint(state),
-        httponly=True,
-        secure=settings.auth_secure_cookies,
-        samesite="lax",
-        max_age=_OIDC_STATE_COOKIE_MAX_AGE,
-        path=_OIDC_STATE_COOKIE_PATH,
-    )
-    return response
-
-
-@router.get("/oidc/callback")
-def oidc_callback(code: str, state: str, request: Request, db: Session = Depends(get_db)):
-    expected = request.cookies.get(_OIDC_STATE_COOKIE)
-    if not expected or not hmac.compare_digest(expected, _state_fingerprint(state)):
-        raise HTTPException(status_code=400, detail="OIDC state does not belong to this browser")
-    base = _oidc_redirect_base(request)
-    redirect_to, admin_id = oidc_service.handle_callback(db, code, state, base)
-    admin = db.get(PlatformAdmin, admin_id)
-    if admin is None or not admin.is_active:
-        raise HTTPException(status_code=403, detail="Admin account not available")
-    # Cookie must be set directly on the returned Response - see issue_admin_session_cookie /
-    # the equivalent customer-facing note in core.security.issue_session_cookie for why.
-    # sanitize_redirect_to again here (defense in depth) right before the final redirect.
-    redirect = RedirectResponse(url=sanitize_redirect_to(redirect_to), status_code=302)
-    # mfa_verified=True: federated SSO through the platform's single configured OIDC
-    # provider is treated as already providing equivalent assurance to local TOTP (audit
-    # finding, 2026-08-27 only added the local-password-login MFA gate - see
-    # admin_security.get_optional_current_admin - not a second, redundant TOTP challenge on
-    # top of an org's own IdP-enforced MFA policy). Local password login has no such
-    # external factor to lean on, so it goes through AdminMfaService instead.
-    issue_admin_session_cookie(redirect, admin.id, mfa_verified=True)
-    AuditService().log(db, action="admin.login", actor_email=admin.email, details={"method": "oidc"})
-    redirect.delete_cookie(_OIDC_STATE_COOKIE, path=_OIDC_STATE_COOKIE_PATH)
-    return redirect

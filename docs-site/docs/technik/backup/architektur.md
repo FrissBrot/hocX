@@ -19,7 +19,7 @@ das Zielbild und die Entscheidungen; Betrieb, Einrichtung und Restore stehen in
 | `storage_worker.py` | Lease + Fencing-Token, Heartbeat-Thread, Backoff | Muster für den Backup-Worker übernommen |
 | `tenant_export_service` / `tenant_import_service` | Export als ZIP, Import aus ZIP (Grenze 2 GiB entpackt) | Export-Logik gegen eine **historische** Datenbank, Import über eine neue Dateiquelle ohne ZIP |
 | `system_health_service` / `system_alert_service` | Checks → Probleme → entprellte ntfy-Meldungen | drei neue Checks `backup`, `backup_repository`, `backup_verification` |
-| Plattform-Admin | `require_admin_write` (owner), Audit-Log, TOTP-Faktoren | Owner-only für Aktionen, frische TOTP-Bestätigung für Restores |
+| Plattform-Admin | `require_admin_write` (owner), Audit-Log, Passkeys | Owner-only für Aktionen, frische Passkey-Bestätigung (Step-up) für Restores |
 
 ## Zielbild
 

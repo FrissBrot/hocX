@@ -1,10 +1,7 @@
 """Regression tests for 4 HIGH findings from the 2026-08-12 full audit (agent A batch:
 H1-H4).
 
-H1: platform_oidc_service._verify_id_token() picked the JWT verification algorithm from the
-token's own (attacker-controlled) `alg` header instead of a server-fixed allowlist - the
-classic RS256->HS256 key-confusion vulnerability. Fix: hard-code `algorithms=["RS256"]`
-(backend/app/services/platform_oidc_service.py, _verify_id_token, ~line 247-260).
+H1 (OIDC-JWT-Algorithmus) entfällt: das Admin-SSO wurde mit Migration 0205 entfernt.
 
 H2: POST /protocols/{id}/attendance/{participant_id}/excuse (excuse_participant) never
 checked whether the protocol is frozen (status "abgeschlossen"), unlike every sibling
@@ -33,22 +30,16 @@ entirely), matching test_audit_2026_08_12_critical_fixes.py's convention.
 """
 from __future__ import annotations
 
-import base64
-import time
 from datetime import date
 
-import jwt
 import pytest
 from fastapi import HTTPException
-from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.routes import protocols as protocols_route
-from app.models import AttendanceFine, PlatformOidcConfig, Protocol, ProtocolElement, ProtocolTodo
+from app.models import AttendanceFine, Protocol, ProtocolElement, ProtocolTodo
 from app.schemas.protocol import AttendanceExcusePayload, ProtocolCreateFromTemplate, QuickTodoCreate
-import app.services.platform_oidc_service as platform_oidc_service_module
-from app.services.platform_oidc_service import PlatformOidcService
 from app.services import public_id_service
 from app.services.protocol_service import ProtocolService
 
@@ -62,85 +53,6 @@ from tests.factories import (
     make_tenant,
     make_template,
 )
-
-
-# --- H1: JWT alg-header confusion in OIDC verification --------------------------------------
-
-
-def _b64url_uint(n: int) -> str:
-    b = n.to_bytes((n.bit_length() + 7) // 8, "big")
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
-
-
-def _make_rsa_jwk() -> tuple[object, dict]:
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    numbers = private_key.public_key().public_numbers()
-    jwk = {"kty": "RSA", "kid": "test-key", "n": _b64url_uint(numbers.n), "e": _b64url_uint(numbers.e)}
-    return private_key, jwk
-
-
-def test_h1_verify_id_token_accepts_legit_rs256_token(monkeypatch):
-    private_key, jwk = _make_rsa_jwk()
-    monkeypatch.setattr(platform_oidc_service_module, "_fetch_json", lambda url, data=None, headers=None: {"keys": [jwk]})
-    discovery = {"jwks_uri": "https://idp.example.com/jwks", "issuer": "https://idp.example.com"}
-    cfg = PlatformOidcConfig(issuer_url="https://idp.example.com", client_id="hocx-admin", client_secret="s", enabled=True)
-
-    now = int(time.time())
-    claims = {"sub": "admin-1", "aud": "hocx-admin", "iss": "https://idp.example.com", "exp": now + 300, "iat": now}
-    good_token = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "test-key"})
-
-    result = PlatformOidcService()._verify_id_token(good_token, discovery, cfg)
-    assert result["sub"] == "admin-1"
-
-
-def test_h1_verify_id_token_rejects_hs256_key_confusion_forgery(monkeypatch):
-    """Classic RS256->HS256 key-confusion attack: the attacker forges a token whose header
-    claims alg=HS256 (signed with any secret the attacker controls - the point isn't the
-    secret, it's that the header alone must never steer verification). Before the fix,
-    `algorithms=[header.get("alg", "RS256")]` would have let this attacker-chosen algorithm
-    dictate how jwt.decode verifies the token; with the fix, algorithms is hard-coded to
-    ["RS256"] so the forged token is rejected purely because its header alg doesn't match the
-    server-side allowlist."""
-    private_key, jwk = _make_rsa_jwk()
-    monkeypatch.setattr(platform_oidc_service_module, "_fetch_json", lambda url, data=None, headers=None: {"keys": [jwk]})
-    discovery = {"jwks_uri": "https://idp.example.com/jwks", "issuer": "https://idp.example.com"}
-    cfg = PlatformOidcConfig(issuer_url="https://idp.example.com", client_id="hocx-admin", client_secret="s", enabled=True)
-
-    now = int(time.time())
-    claims = {"sub": "admin-1", "aud": "hocx-admin", "iss": "https://idp.example.com", "exp": now + 300, "iat": now}
-    forged_token = jwt.encode(claims, "attacker-guessable-secret", algorithm="HS256", headers={"kid": "test-key"})
-
-    with pytest.raises(HTTPException) as exc_info:
-        PlatformOidcService()._verify_id_token(forged_token, discovery, cfg)
-    assert exc_info.value.status_code == 401
-
-
-def test_h1_verify_id_token_never_derives_algorithm_from_untrusted_header(monkeypatch):
-    """Directly pins the fix at the jwt.decode call site: whatever algorithm the token's own
-    header claims (RS256 or the forged HS256), the `algorithms=` kwarg passed to jwt.decode
-    must always be the same hard-coded server-side allowlist, never read from `header`."""
-    private_key, jwk = _make_rsa_jwk()
-    monkeypatch.setattr(platform_oidc_service_module, "_fetch_json", lambda url, data=None, headers=None: {"keys": [jwk]})
-    discovery = {"jwks_uri": "https://idp.example.com/jwks", "issuer": "https://idp.example.com"}
-    cfg = PlatformOidcConfig(issuer_url="https://idp.example.com", client_id="hocx-admin", client_secret="s", enabled=True)
-
-    now = int(time.time())
-    claims = {"sub": "admin-1", "aud": "hocx-admin", "iss": "https://idp.example.com", "exp": now + 300, "iat": now}
-    forged_token = jwt.encode(claims, "attacker-guessable-secret", algorithm="HS256", headers={"kid": "test-key"})
-
-    original_decode = jwt.decode
-    captured_algorithms = []
-
-    def spy_decode(*args, **kwargs):
-        captured_algorithms.append(kwargs.get("algorithms"))
-        return original_decode(*args, **kwargs)
-
-    monkeypatch.setattr(platform_oidc_service_module.jwt, "decode", spy_decode)
-
-    with pytest.raises(HTTPException):
-        PlatformOidcService()._verify_id_token(forged_token, discovery, cfg)
-
-    assert captured_algorithms == [["RS256"]]
 
 
 # --- H2: Freeze-bypass at attendance/fines ---------------------------------------------------

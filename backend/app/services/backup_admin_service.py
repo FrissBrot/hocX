@@ -135,7 +135,7 @@ def job_detail(db: Session, job: BackupJob) -> BackupJobDetailRead:
 
 
 def _sanitize_options(options: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in (options or {}).items() if k not in ("totp_code",)}
+    return {k: v for k, v in (options or {}).items() if k not in ("totp_code", "step_up")}
 
 
 def restore_read(db: Session, job: BackupRestoreJob, *, with_events: bool = True) -> RestoreJobRead:
@@ -441,8 +441,8 @@ def find_existing_restore(db: Session, *, request: Any, actor_email: str) -> Bac
 
 
 def validate_restore(db: Session, request: Any) -> RestorePreviewRead:
-    """Alle fachlichen Prüfungen VOR der TOTP-Bestätigung (ein Tippfehler in der Phrase
-    verbraucht so keinen TOTP-Code)."""
+    """Alle fachlichen Prüfungen VOR der Passkey-Bestätigung (ein Tippfehler in der Phrase
+    verbraucht so keine Bestätigung)."""
     plan = preview(db, request)
     if plan.blockers:
         raise BackupAdminError(plan.blockers[0], "Wiederherstellung derzeit nicht möglich")

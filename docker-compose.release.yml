@@ -184,6 +184,8 @@ services:
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       # Erwarteter WebAuthn-Origin der Plattform-Admin-Passkeys (Security-Audit SEC-021).
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      # Passkey-Origin, wenn die Admin-Domain direkt mit dem Host-Port aufgerufen wird (admin_origin.py)
+      TRAEFIK_ADMIN_PORT: ${TRAEFIK_ADMIN_PORT:-8443}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
       # Nur als gesperrte Mandanten-Domains (SEC-AUTH-001, traefik_config_service.is_reserved_domain).
       TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}

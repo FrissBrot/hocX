@@ -136,7 +136,9 @@
     "mfa_skip_not_allowed": "Der zweite Faktor ist für dieses Konto Pflicht und kann nicht übersprungen werden.",
     "password_weak": "Das Passwort ist zu schwach. Nimm mindestens 12 Zeichen ohne Name, E-Mail oder häufige Wörter.",
     "mfa_policy_own_mfa_missing": "Richte zuerst für dein eigenes Konto MFA ein.",
-    "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein."
+    "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein.",
+    "last_passkey": "Der letzte Passkey kann nicht entfernt werden. Füge zuerst einen weiteren hinzu.",
+    "mfa_already_configured": "Für dieses Konto ist bereits ein zweiter Faktor eingerichtet. Bitte melde dich damit an."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",

@@ -35,12 +35,18 @@ def _sign_payload(payload: bytes) -> str:
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def create_admin_session_token(admin_id: int, *, mfa_verified: bool = False) -> str:
+# Einzige Anmeldeart seit 0205: Passwort + Passkey. Tokens ohne diesen Claim (TOTP- und SSO-Sessions
+# bis 1.4.x) gelten nicht mehr.
+SESSION_AMR = "passkey"
+
+
+def create_admin_session_token(admin_id: int) -> str:
     now = datetime.now(UTC)
     payload = json.dumps(
         {
             "admin_id": admin_id,
-            "mfa": bool(mfa_verified),
+            "mfa": True,
+            "amr": SESSION_AMR,
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=settings.admin_session_ttl_hours)).timestamp()),
         },
@@ -49,22 +55,18 @@ def create_admin_session_token(admin_id: int, *, mfa_verified: bool = False) -> 
     return _sign_payload(payload)
 
 
-def issue_admin_session_cookie(response: Response, admin_id: int, *, mfa_verified: bool = False) -> None:
-    """Mints a fresh admin session token and sets it as a host-only cookie - shared by password
-    login and the SSO callback so both stay consistent. mfa_verified=False is only ever a
-    valid final state for a call site that isn't actually granting a full session (there
-    currently is none - see AdminAuthService.login, which now always routes a non-MFA'd
-    password check through the MFA-pending ticket flow instead of calling this directly)."""
-    token = create_admin_session_token(admin_id, mfa_verified=mfa_verified)
+def issue_admin_session_cookie(response: Response, admin_id: int) -> None:
+    """Session als host-only Cookie - nur nach Passwort UND erfolgreichem Passkey
+    (AdminAuthService._finish_login). Einen anderen Weg zu einer Admin-Session gibt es nicht."""
+    token = create_admin_session_token(admin_id)
     response.set_cookie(
         key=settings.admin_session_cookie,
         value=token,
         httponly=True,
         secure=settings.auth_secure_cookies,
         # Strict (SEC-AUTH-001): das Admin-Panel braucht keine Cross-Site-Navigation mit Session.
-        # Nach dem SSO-Callback (Redirect vom IdP, also Cross-Site) kommt das Cookie beim ersten
-        # Aufruf von /admin noch nicht mit - die Login-Seite erkennt die Session dann per
-        # Same-Site-Fetch und leitet weiter. Host-only (kein domain=): gilt nur für die Admin-Domain.
+        # Kommt man über einen Link von einer anderen Seite, fehlt das Cookie beim ersten Aufruf
+        # von /admin - die Login-Seite erkennt die Session dann per Same-Site-Fetch und leitet weiter. Host-only (kein domain=): gilt nur für die Admin-Domain.
         samesite="strict",
         max_age=settings.admin_session_ttl_hours * 3600,
         path="/",
@@ -113,13 +115,12 @@ def get_optional_current_admin(
     # cross-tenant access, backup export, admin management) but previously had no MFA
     # option at all - password-only login granted a full, unprotected session. Every
     # session token minted since this fix carries an explicit "mfa" claim, set True only
-    # after a completed TOTP verification/enrollment (AdminAuthService/AdminMfaService) or
-    # for an OIDC-authenticated admin (platform SSO is treated as already providing
-    # equivalent assurance - see admin_auth.py's oidc_callback). A token with no such claim
+    # after a completed second factor (since 0205: passkey only, claim amr=passkey - TOTP and
+    # SSO were removed, their tokens no longer count). A token with no such claim
     # (including every token minted before this fix) is rejected outright, forcing
     # re-authentication through the new MFA-aware login flow rather than silently granting
     # the old, weaker session shape.
-    if not bool(session_data.get("mfa")):
+    if not bool(session_data.get("mfa")) or session_data.get("amr") != SESSION_AMR:
         return None
     return CurrentAdmin(
         admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role

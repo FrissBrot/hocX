@@ -145,7 +145,7 @@ $ready || fail "Traefik/Echo nicht bereit"
 
 # 1. Öffentlicher Entrypoint: Admin-Pfade auf jeder Domain 404, nie beim Dienst
 for host in "$MAIN" "$ABGABEBOX" "$DOCS" "$ADMIN" verein.example.org unbekannt.example; do
-  for path in /admin /admin/ /admin/login /api/admin /api/admin/auth/oidc/public-config /api/admin/auth/login \
+  for path in /admin /admin/ /admin/login /api/admin /api/admin/auth/health /api/admin/auth/login \
     //api/admin/auth/session /api/./admin/auth/session /%61pi/admin/auth/session /api/%61dmin/x /admin/../admin/login; do
     response="$(request "$host" "$HTTPS_PORT" "$path" -H "X-Hocx-Admin-Gate: $ADMIN_GATE_SECRET")"
     [ "$(status_of "$response")" = 404 ] || fail "websecure $host$path: $(status_of "$response") statt 404 ($response)"
