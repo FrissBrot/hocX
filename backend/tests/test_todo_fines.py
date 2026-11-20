@@ -463,6 +463,25 @@ def test_status_change_between_done_and_open_sets_and_clears_completed_at(db, se
     assert db.get(ProtocolTodo, todo.id).completed_at is None
 
 
+def test_done_after_cancelled_counts_from_completion_not_from_cancellation(db, setup):
+    """Vor der Fälligkeit abgebrochen, nach der Fälligkeit doch erledigt: das Erledigungsdatum ist
+    heute, nicht der Tag des Abbruchs - sonst gilt die Pendenz als pünktlich und die Busse fällt weg."""
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=5)
+    service = ProtocolTodoService()
+    service.update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "cancelled")))
+    cancelled_on = TODAY - timedelta(days=10)
+    todo.completed_at = datetime(cancelled_on.year, cancelled_on.month, cancelled_on.day, 12, tzinfo=timezone.utc)
+    db.commit()
+    service.update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "done")))
+    todo = db.get(ProtocolTodo, todo.id)
+    assert fines.local_date(todo.completed_at) == TODAY
+    stored = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()
+    # Anna (Standardtarif Lernende): 2.- + 5 x 1.-
+    assert [(fine.days_late, fine.amount) for fine in stored] == [(5, Decimal("7.00"))]
+
+
 def test_todo_created_as_done_gets_completed_at(db, setup):
     from app.schemas.protocol import ProtocolTodoCreate
 
