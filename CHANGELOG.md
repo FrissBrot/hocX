@@ -6,7 +6,31 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [Unreleased]
+## [Unveröffentlicht]
+
+### Sicherheit
+
+- **Plattform-Admin nur noch über die Admin-Domain (Auth-Audit SEC-AUTH-001):** Die Admin-API war über
+  jede aktive Mandanten-Domain aus dem Internet erreichbar. Jetzt mehrfach abgesichert: Mandanten-
+  und alle öffentlichen Router schliessen `/admin` und `/api/admin` aus, ein Sperr-Router mit höchster
+  Priorität beantwortet diese Pfade auf dem öffentlichen Entrypoint für jede Domain mit 404, die
+  Admin-Router setzen einen geheimen Gate-Header (öffentliche Entrypoints entfernen ihn), das Backend
+  nimmt `/api/admin` nur damit und auf der Admin-Domain an (sonst 404), das Frontend liefert `/admin`
+  nur auf der Admin-Domain aus. Mandanten-Domains, die einer Systemdomain gleichen oder Subdomain der
+  Admin-Domain sind, werden abgelehnt. Das Admin-Session-Cookie ist jetzt `SameSite=Strict`.
+- Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
+  Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
+  erreichbar sind; sonst Rollback.
+
+### Update
+
+- `./scripts/deploy.sh <test|prod>` genügt. **Neues Secret `ADMIN_GATE_SECRET`** wird beim Update
+  automatisch in der `.env` erzeugt; `deploy.sh` schreibt daraus `.secrets/admin_gate_secret` und die
+  Traefik-Datei `infra/traefik/dynamic/admin-gate.yml` (nicht im Repo). Traefik wird wegen der
+  geänderten `traefik.yml` automatisch neu erstellt. Keine Migration.
+- Wer das Admin-Panel über einen Link von einer anderen Seite (oder nach dem SSO) öffnet, sieht kurz
+  die Login-Seite, die mit bestehender Sitzung sofort weiterleitet (`SameSite=Strict`).
+- Fehlerbilder und Ablauf: RUNBOOK Abschnitt 20.
 
 ## [1.4.2] - 2026-11-20
 

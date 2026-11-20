@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import TenantDomain, TenantFeature
+
+logger = logging.getLogger(__name__)
 
 _DYNAMIC_FILE_NAME = "tenant-domains.yml"
 
@@ -54,11 +57,54 @@ def target_host_for_purpose(purpose: str) -> str | None:
     return settings.traefik_domain if purpose == "app" else settings.traefik_abgabebox_domain
 
 
+def _normalized(domain: str | None) -> str:
+    return (domain or "").strip().lower().rstrip(".")
+
+
+def reserved_system_domains() -> set[str]:
+    """Domains der Installation selbst - nie als Mandanten-Domain (SEC-AUTH-001)."""
+    return {
+        d
+        for d in map(
+            _normalized,
+            (
+                settings.traefik_domain,
+                settings.traefik_abgabebox_domain,
+                settings.traefik_admin_domain,
+                settings.traefik_docs_domain,
+                settings.traefik_website_domain,
+            ),
+        )
+        if d
+    }
+
+
+def is_reserved_domain(domain: str) -> bool:
+    """True für eine Systemdomain und für jede Subdomain der Admin-Domain.
+
+    Ein Mandanten-Router für die Admin-Domain (oder eine Subdomain davon) würde Traefik-Router
+    neben den Admin-Routern erzeugen; zusammen mit SEC-AUTH-001 war das der Weg, das Admin-Panel
+    auf einem öffentlichen Entrypoint erscheinen zu lassen."""
+    domain = _normalized(domain)
+    if not domain:
+        return False
+    if domain in reserved_system_domains():
+        return True
+    admin_domain = _normalized(settings.traefik_admin_domain)
+    return bool(admin_domain) and domain.endswith("." + admin_domain)
+
+
+# Plattform-Admin (Frontend /admin, API /api/admin) läuft nur über den Admin-Entrypoint
+# (SEC-AUTH-001). Kein Mandanten-Router darf diese Pfade matchen - zusätzlich zum Sperr-Router in
+# infra/traefik/dynamic/admin-isolation.yml und dem Gate im Backend.
+_NOT_ADMIN = "!PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
+
+
 def _app_routers(domain: str, domain_id: int) -> dict:
     base = f"tenant-app-{domain_id}"
     return {
         f"{base}-frontend": {
-            "rule": f"Host(`{domain}`)",
+            "rule": f"Host(`{domain}`) && {_NOT_ADMIN}",
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-frontend@docker",
             "priority": 10,
@@ -67,7 +113,7 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
-            "rule": f"Host(`{domain}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))",
+            "rule": f"Host(`{domain}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`)) && {_NOT_ADMIN}",
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-backend@docker",
             "priority": 100,
@@ -110,7 +156,7 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
     base = f"tenant-abgabebox-{domain_id}"
     return {
         f"{base}-frontend": {
-            "rule": f"Host(`{domain}`)",
+            "rule": f"Host(`{domain}`) && {_NOT_ADMIN}",
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-abgabebox-frontend@docker",
             "priority": 10,
@@ -118,7 +164,7 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
-            "rule": f"Host(`{domain}`) && PathPrefix(`/api`)",
+            "rule": f"Host(`{domain}`) && PathPrefix(`/api`) && {_NOT_ADMIN}",
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 100,
@@ -236,6 +282,10 @@ def regenerate(db: Session) -> None:
     routers: dict = {}
     has_verify = False
     for row in rows:
+        if is_reserved_domain(row.domain):
+            # Alt-Daten oder Import vor dieser Prüfung: nie neben den Systemroutern routen.
+            logger.error("Mandanten-Domain %s ist eine Systemdomain und wird nicht geroutet.", row.domain)
+            continue
         if row.purpose == "app":
             routers.update(_app_routers(row.domain, row.id))
         elif row.purpose == "abgabebox":

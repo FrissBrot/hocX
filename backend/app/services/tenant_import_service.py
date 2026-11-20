@@ -825,7 +825,6 @@ class TenantImportService:
         exists here - is skipped with a warning rather than failing the whole import.
         Mirrors TenantService.create_domain's reserved-domain check and its
         traefik_config_service.regenerate() call after any active domain changes."""
-        reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
         needs_traefik_regenerate = False
         for row in self._t("tenant_domain"):
             data = self._resolve_row("tenant_domain", row)
@@ -833,7 +832,8 @@ class TenantImportService:
             if not domain or not domain_verification_service.is_valid_domain_format(domain):
                 self.warnings.append(f"Domain '{domain}' hat ein ungültiges Format und wurde nicht importiert.")
                 continue
-            if domain in reserved:
+            # Systemdomains und Subdomains der Admin-Domain (SEC-AUTH-001)
+            if traefik_config_service.is_reserved_domain(domain):
                 self.warnings.append(f"Domain '{domain}' ist durch die Installation selbst belegt, wurde nicht importiert.")
                 continue
             if self.db.query(TenantDomain).filter(TenantDomain.domain == domain, TenantDomain.status == "active").first() is not None:

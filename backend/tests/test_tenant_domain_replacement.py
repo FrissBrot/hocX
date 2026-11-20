@@ -89,3 +89,36 @@ def test_health_check_marks_domains_outside_the_subscription_unhealthy(db, monke
     domain_health_check_service.run_health_check(db)
     db.refresh(row)
     assert row.is_healthy is False
+
+
+@pytest.mark.parametrize(
+    "domain",
+    ["admin.hocx.example", "ADMIN.hocx.example", "x.admin.hocx.example", "app.hocx.example", "docs.hocx.example", "www.hocx.example"],
+)
+def test_system_domains_cannot_become_tenant_domains(db, setup, monkeypatch, domain):
+    """SEC-AUTH-001: Haupt-, Admin-, Docs-, Website-Domain und Subdomains der Admin-Domain."""
+    tenant, actor, _live, _regenerated = setup
+    settings = traefik_config_service.settings
+    monkeypatch.setattr(settings, "traefik_domain", "app.hocx.example")
+    monkeypatch.setattr(settings, "traefik_admin_domain", "admin.hocx.example")
+    monkeypatch.setattr(settings, "traefik_docs_domain", "docs.hocx.example")
+    monkeypatch.setattr(settings, "traefik_website_domain", "www.hocx.example")
+
+    with pytest.raises(HTTPException) as exc_info:
+        TenantService().create_domain(db, tenant.id, actor, TenantDomainCreate(purpose="app", domain=domain))
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["code"] == "domain_reserved"
+
+
+def test_pending_system_domain_from_old_data_is_never_verified(db, setup, monkeypatch):
+    tenant, actor, _live, regenerated = setup
+    monkeypatch.setattr(traefik_config_service.settings, "traefik_admin_domain", "admin.hocx.example")
+    pending = TenantDomain(tenant_id=tenant.id, purpose="app", domain="admin.hocx.example", verification_token="tok-old", status="pending")
+    db.add(pending)
+    db.flush()
+    monkeypatch.setattr(domain_verification_service, "verify_domain", lambda *_args: (True, "ok"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        TenantService().verify_domain(db, tenant.id, actor, pending.id)
+    assert exc_info.value.status_code == 400
+    assert regenerated == []

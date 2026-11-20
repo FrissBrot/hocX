@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { adminAllowedOnHost, adminGateForwardHeaders, isAdminPagePath } from "@/lib/admin-gate";
 import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
 
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
@@ -51,10 +52,15 @@ const WEBSITE_PATH = "/website";
 // undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
 export const SESSION_CHECK_TIMEOUT_MS = 5_000;
 
-async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | "overloaded" | null> {
+async function isAuthenticated(
+  cookie: string,
+  sessionPath: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<boolean | "overloaded" | null> {
   try {
+    const headers = { ...extraHeaders, ...(cookie ? { Cookie: cookie } : {}) };
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
-      headers: cookie ? { Cookie: cookie } : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS)
     });
@@ -104,11 +110,17 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     ? pathname.startsWith(WEBSITE_PATH)
       ? pathname
       : `${WEBSITE_PATH}${pathname === "/" ? "" : pathname}`
-    : adminDomain && requestHost === adminDomain && !pathname.startsWith("/admin")
+    : adminDomain && requestHost === adminDomain && !isAdminPagePath(pathname)
       ? `/admin${pathname === "/" ? "" : pathname}`
       : pathname;
 
-  const isAdmin = rewrittenPathname.startsWith("/admin");
+  const isAdmin = isAdminPagePath(rewrittenPathname);
+  // SEC-AUTH-001: das Admin-Panel gibt es nur auf der Admin-Domain (Traefik routet /admin ohnehin
+  // nur dort hin; das hier greift, falls ein anderer Router es doch einmal durchlässt). Ohne
+  // konfigurierte Admin-Domain (Entwicklung, E2E) bleibt es überall erreichbar.
+  if (isAdmin && !adminAllowedOnHost(requestHost, adminDomain)) {
+    return new NextResponse(null, { status: 404 });
+  }
   const sessionPath = isAdmin ? "/api/admin/auth/session" : "/api/auth/session";
   const loginPath = isAdmin ? "/admin/login" : "/login";
 
@@ -145,7 +157,7 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     rewrittenPathname.startsWith(`${WEBSITE_PATH}/`);
   if (rewrittenPathname !== loginPath && !isPublicPath) {
     const cookie = request.headers.get("cookie") ?? "";
-    const authenticated = await isAuthenticated(cookie, sessionPath);
+    const authenticated = await isAuthenticated(cookie, sessionPath, isAdmin ? adminGateForwardHeaders(request.headers) : {});
     if (authenticated === false) {
       return NextResponse.redirect(new URL(loginPath, request.url));
     }

@@ -35,6 +35,23 @@ def db():
         connection.close()
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "admin_gate: Test prüft das Admin-Gate selbst (kein automatisches Öffnen)")
+
+
+@pytest.fixture(autouse=True)
+def _admin_gate_open(request, monkeypatch):
+    """Das Admin-Gate (app/core/admin_gate.py) ist ausserhalb der Entwicklung ohne Secret
+    geschlossen - die Testsuite läuft mit dem Default HOCX_ENVIRONMENT=production. Die
+    bestehenden Admin-Tests prüfen die Routen selbst, nicht den Einstieg; für sie ist das Gate
+    offen wie in der Entwicklung. Tests mit `@pytest.mark.admin_gate` prüfen das Gate selbst
+    (tests/test_admin_gate.py)."""
+    if request.node.get_closest_marker("admin_gate") is None:
+        from app.core import admin_gate
+
+        monkeypatch.setattr(admin_gate, "gate_mode", lambda: admin_gate.MODE_OPEN)
+
+
 # --- RLS-Testmodus -------------------------------------------------------------------------
 # HOCX_TEST_RLS=1 (zusammen mit APP_DATABASE_URL auf die Rolle hocx_app, sonst umgeht der
 # Superuser jede Policy): jeder direkte Aufruf einer Routenfunktion aus app.api.routes läuft unter

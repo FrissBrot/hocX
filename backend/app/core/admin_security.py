@@ -61,7 +61,11 @@ def issue_admin_session_cookie(response: Response, admin_id: int, *, mfa_verifie
         value=token,
         httponly=True,
         secure=settings.auth_secure_cookies,
-        samesite="lax",
+        # Strict (SEC-AUTH-001): das Admin-Panel braucht keine Cross-Site-Navigation mit Session.
+        # Nach dem SSO-Callback (Redirect vom IdP, also Cross-Site) kommt das Cookie beim ersten
+        # Aufruf von /admin noch nicht mit - die Login-Seite erkennt die Session dann per
+        # Same-Site-Fetch und leitet weiter. Host-only (kein domain=): gilt nur für die Admin-Domain.
+        samesite="strict",
         max_age=settings.admin_session_ttl_hours * 3600,
         path="/",
     )

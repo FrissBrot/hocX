@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.core import admin_gate
 from app.core.admin_security import CurrentAdmin, get_optional_current_admin, issue_admin_session_cookie
 from app.core.config import settings
 from app.core.client_ip import client_ip
@@ -25,6 +26,19 @@ oidc_service = PlatformOidcService()
 _OIDC_STATE_COOKIE = "hocx_admin_oidc_state"
 _OIDC_STATE_COOKIE_PATH = "/api/admin/auth/oidc"
 _OIDC_STATE_COOKIE_MAX_AGE = 600
+
+
+def _oidc_redirect_base(request: Request) -> str:
+    """Basis-URL für redirect_uri/Callback des Admin-SSO: nur die Admin-Domain (SEC-AUTH-001).
+
+    Das Admin-Gate (app/core/admin_gate.py) lässt /api/admin ohnehin nur auf der Admin-Domain
+    durch; diese Prüfung hängt zusätzlich direkt an der Stelle, die aus dem Host eine
+    redirect_uri baut - ein Request mit fremdem Host bekommt nie einen Callback auf seiner Domain.
+    In der Entwicklung ohne Gate-Secret (kein Admin-Einstieg) bleibt es beim Host des Requests."""
+    admin_domain = (settings.traefik_admin_domain or "").strip().lower().rstrip(".")
+    if admin_domain and admin_gate.gate_mode() != admin_gate.MODE_OPEN and request.url.hostname != admin_domain:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return str(request.base_url).rstrip("/")
 
 
 def _state_fingerprint(state: str) -> str:
@@ -83,7 +97,7 @@ def get_oidc_public_config(db: Session = Depends(get_db)):
 def oidc_authorize(request: Request, redirect_to: str = "/", db: Session = Depends(get_db)):
     # Validated again inside build_authorize_url (defense in depth) - sanitizing here too since
     # this route is the first point that ever sees the client-controlled query param.
-    base = str(request.base_url).rstrip("/")
+    base = _oidc_redirect_base(request)
     url = oidc_service.build_authorize_url(db, base, sanitize_redirect_to(redirect_to))
     response = RedirectResponse(url, status_code=302)
     # Audit MAIN-SEC-006: state an diesen Browser binden - der Callback akzeptiert nur einen
@@ -106,7 +120,7 @@ def oidc_callback(code: str, state: str, request: Request, db: Session = Depends
     expected = request.cookies.get(_OIDC_STATE_COOKIE)
     if not expected or not hmac.compare_digest(expected, _state_fingerprint(state)):
         raise HTTPException(status_code=400, detail="OIDC state does not belong to this browser")
-    base = str(request.base_url).rstrip("/")
+    base = _oidc_redirect_base(request)
     redirect_to, admin_id = oidc_service.handle_callback(db, code, state, base)
     admin = db.get(PlatformAdmin, admin_id)
     if admin is None or not admin.is_active:

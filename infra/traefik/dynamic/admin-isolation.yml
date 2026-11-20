@@ -1,0 +1,51 @@
+# Plattform-Admin nur über den Admin-Entrypoint (Auth-Audit SEC-AUTH-001, Defense in Depth).
+#
+# Versioniert und statisch wie security.yml; traefik_config_service.py schreibt nur
+# tenant-domains.yml. Das Secret für den Gate-Header steht NICHT hier, sondern in admin-gate.yml
+# (von scripts/deploy.sh aus ADMIN_GATE_SECRET erzeugt, nicht im Repo).
+#
+# Ebenen:
+# 1. admin-gate-strip: entfernt X-Hocx-Admin-Gate auf websecure und adminsecure (infra/traefik/traefik.yml,
+#    Entrypoint-Middleware; web leitet nur auf HTTPS um). Ein leerer Wert in customRequestHeaders löscht den Header.
+# 2. admin-block: Router mit höchster Priorität auf dem öffentlichen Entrypoint websecure, für JEDEN
+#    Host (Haupt-, Abgabebox-, Docs-, Website- und Mandanten-Domains): /api/admin und /admin
+#    antworten mit 404, ohne dass ein Backend erreicht wird. noop@internal ist Traefiks eingebauter
+#    Leerdienst (antwortet 418); admin-block-deny weist zusätzlich jede Quelle ab (403), und
+#    admin-block-404 macht aus beidem ein 404 - auch wenn sich das Verhalten von noop@internal
+#    ändert, bleibt es mindestens ein 403. ACME (/.well-known/acme-challenge) läuft auf dem
+#    Entrypoint web und ist davon nicht betroffen.
+# 3. Die Admin-Router (nur Entrypoint adminsecure, an 127.0.0.1 gebunden, davor OpenZiti) setzen den
+#    Gate-Header über admin-gate@file; das Backend nimmt /api/admin nur damit an
+#    (backend/app/core/admin_gate.py). Statisch geprüft in scripts/tests/test_admin_isolation.sh.
+http:
+  routers:
+    admin-block:
+      rule: "PathPrefix(`/api/admin`) || PathPrefix(`/admin`)"
+      entryPoints:
+        - websecure
+      # Höher als jeder andere Router (höchste sonst: 300).
+      priority: 1000000
+      service: noop@internal
+      middlewares:
+        - admin-block-404
+        - admin-block-deny
+      # Ohne tls passt ein Router auf websecure (nur TLS) nie. Kein certResolver: das Zertifikat wählt
+      # Traefik per SNI aus den vorhandenen (die übrigen Router beantragen sie).
+      tls: {}
+  middlewares:
+    admin-gate-strip:
+      headers:
+        customRequestHeaders:
+          X-Hocx-Admin-Gate: ""
+    admin-block-deny:
+      ipAllowList:
+        sourceRange:
+          - "255.255.255.255/32"
+    admin-block-404:
+      errors:
+        status:
+          - "400-599"
+        statusRewrites:
+          "400-599": 404
+        service: noop@internal
+        query: "/"

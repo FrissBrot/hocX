@@ -270,6 +270,7 @@ create_env_file() {
   POSTGRES_PASSWORD="$(generate_secret)"
   AUTH_SECRET="$(generate_secret)"
   ADMIN_AUTH_SECRET="$(generate_secret)"
+  ADMIN_GATE_SECRET="$(generate_secret)"
   INITIAL_ADMIN_PASSWORD="$(generate_secret)"
   APP_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
@@ -310,6 +311,7 @@ create_env_file() {
   write_env_value TRAEFIK_DOCS_DOMAIN "$TRAEFIK_DOCS_DOMAIN"
   write_env_value AUTH_SECRET "$AUTH_SECRET"
   write_env_value ADMIN_AUTH_SECRET "$ADMIN_AUTH_SECRET"
+  write_env_value ADMIN_GATE_SECRET "$ADMIN_GATE_SECRET"
   write_env_value INITIAL_ADMIN_EMAIL "$INITIAL_ADMIN_EMAIL"
   write_env_value INITIAL_ADMIN_PASSWORD "$INITIAL_ADMIN_PASSWORD"
   write_env_value TRAEFIK_ABGABEBOX_DOMAIN "$TRAEFIK_ABGABEBOX_DOMAIN"
@@ -413,7 +415,7 @@ run_preflight() {
       ;;
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
-    "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
+    "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
@@ -487,6 +489,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" app_db_password "$APP_DB_PASSWORD"
   write_secret_file "$secrets_dir" auth_secret "$AUTH_SECRET"
   write_secret_file "$secrets_dir" admin_auth_secret "$ADMIN_AUTH_SECRET"
+  write_secret_file "$secrets_dir" admin_gate_secret "$ADMIN_GATE_SECRET"
   write_secret_file "$secrets_dir" initial_admin_password "$INITIAL_ADMIN_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
@@ -562,6 +565,37 @@ run_pre_deploy_backup() {
     echo "Details: Admin-Portal -> System -> Backups. Bewusst ohne Backup: HOCX_PRE_DEPLOY_BACKUP=skip." >&2
     return 1
   fi
+}
+
+# Auth-Audit SEC-AUTH-001: Traefik setzt an jedem Admin-Router (Entrypoint adminsecure) den Header
+# X-Hocx-Admin-Gate auf ADMIN_GATE_SECRET; das Backend nimmt /api/admin nur damit an
+# (backend/app/core/admin_gate.py). Der Wert steht in einer Dateiprovider-Datei statt in einem
+# Docker-Label (Labels zeigt jedes `docker inspect`). Rechte wie tenant-domains.yml: 0660, Gruppe
+# 5001 über das setgid-Verzeichnis (prepare_thumbnail_dir), nicht world-readable, nicht im Repo
+# (.gitignore). Traefik lädt die Datei per watch nach, ein Neustart ist nicht nötig.
+write_admin_gate_traefik_config() {
+  local dir="$PROJECT_DIR/infra/traefik/dynamic" file temp_file
+  file="$dir/admin-gate.yml"
+  # Nur unkritische Zeichen: der Wert landet in YAML (in einfachen Anführungszeichen).
+  if ! [[ "${ADMIN_GATE_SECRET:-}" =~ ^[A-Za-z0-9._~+/=-]{32,}$ ]]; then
+    echo "ADMIN_GATE_SECRET fehlt oder ist ungueltig (mindestens 32 Zeichen, nur A-Z a-z 0-9 . _ ~ + / = -)." >&2
+    return 1
+  fi
+  if [ -L "$dir" ] || [ -L "$file" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $file" >&2
+    return 1
+  fi
+  # Endung ohne .yml: Traefik ignoriert die halb geschriebene Datei.
+  temp_file="$(mktemp "$dir/.admin-gate.tmp.XXXXXX")"
+  {
+    printf '# Automatisch durch scripts/deploy.sh erzeugt (ADMIN_GATE_SECRET). Nicht bearbeiten, nicht committen.\n'
+    printf '# Verwendet von den Admin-Routern in docker-compose.release.yml (admin-gate@file).\n'
+    printf 'http:\n  middlewares:\n    admin-gate:\n      headers:\n        customRequestHeaders:\n'
+    printf "          X-Hocx-Admin-Gate: '%s'\n" "$ADMIN_GATE_SECRET"
+  } > "$temp_file"
+  chmod 660 "$temp_file"
+  mv "$temp_file" "$file"
+  echo "    Traefik-Admin-Gate: $file"
 }
 
 prepare_runtime_permissions() {
@@ -1022,6 +1056,7 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 verify_release_images
 create_release_manifest
 prepare_thumbnail_dir
+write_admin_gate_traefik_config
 
 # 1.2.0: PostgreSQL 16 -> 18 in ein neues Volume (scripts/lib/pg_upgrade.sh). Läuft nach dem
 # Pre-Deploy-Backup und vor dem ersten Start des neuen db-Dienstes; ohne altes Volume ein No-op.

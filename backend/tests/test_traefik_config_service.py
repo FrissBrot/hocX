@@ -27,6 +27,8 @@ from app.services import traefik_config_service
 from app.services.admin_tenant_service import AdminTenantService
 from tests.factories import grant_tenant_feature, make_tenant
 
+NOT_ADMIN = " && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
+
 
 def _make_domain(db, tenant_id: int, domain: str, purpose: str = "app", status: str = "active") -> TenantDomain:
     row = TenantDomain(
@@ -59,7 +61,7 @@ def test_regenerate_writes_valid_config_for_active_app_domain(db, monkeypatch, t
     routers = config["http"]["routers"]
     frontend_key = f"tenant-app-{domain_row.id}-frontend"
     assert frontend_key in routers
-    assert routers[frontend_key]["rule"] == "Host(`verein.example.com`)"
+    assert routers[frontend_key]["rule"] == "Host(`verein.example.com`)" + NOT_ADMIN
     assert routers[frontend_key]["service"] == "hocx-frontend@docker"
 
 
@@ -115,7 +117,7 @@ def test_regenerate_abgabebox_purpose_produces_abgabebox_routers(db, monkeypatch
 
     routers = config["http"]["routers"]
     frontend_key = f"tenant-abgabebox-{domain_row.id}-frontend"
-    assert routers[frontend_key]["rule"] == "Host(`box.example.com`)"
+    assert routers[frontend_key]["rule"] == "Host(`box.example.com`)" + NOT_ADMIN
     assert routers[frontend_key]["service"] == "hocx-abgabebox-frontend@docker"
     # Echtheitsprüfung: eigener Router vor dem Upload-Router (sonst 151-MiB-Body, In-Flight 2)
     verify = routers[f"tenant-abgabebox-{domain_row.id}-verify"]
@@ -149,7 +151,7 @@ def test_regenerate_malicious_domain_string_stays_a_single_contained_value(db, m
     }
     # The malicious string is preserved verbatim as one opaque value inside the rule -
     # it did not fragment into separate YAML structure.
-    assert routers[frontend_key]["rule"] == f"Host(`{malicious}`)"
+    assert routers[frontend_key]["rule"] == f"Host(`{malicious}`)" + NOT_ADMIN
 
 
 def test_regenerate_newline_in_domain_does_not_produce_extra_yaml_keys(db, monkeypatch, tmp_path):
@@ -166,7 +168,7 @@ def test_regenerate_newline_in_domain_does_not_produce_extra_yaml_keys(db, monke
 
     routers = config["http"]["routers"]
     frontend_key = f"tenant-app-{domain_row.id}-frontend"
-    assert routers[frontend_key]["rule"] == f"Host(`{malicious}`)"
+    assert routers[frontend_key]["rule"] == f"Host(`{malicious}`)" + NOT_ADMIN
     # No stray "fake-key" ever appears as a real top-level router or config key.
     assert "fake-key" not in config
     assert "fake-key" not in config.get("http", {})
@@ -196,7 +198,7 @@ def test_regenerate_reincludes_domain_once_feature_is_granted(db, monkeypatch, t
     grant_tenant_feature(db, tenant.id)
     after = _regenerate_into_tmp(monkeypatch, tmp_path, db)
     routers = after["http"]["routers"]
-    assert routers[f"tenant-app-{domain_row.id}-frontend"]["rule"] == "Host(`regranted.example.com`)"
+    assert routers[f"tenant-app-{domain_row.id}-frontend"]["rule"] == "Host(`regranted.example.com`)" + NOT_ADMIN
 
 
 def test_revoking_custom_domain_feature_immediately_drops_the_domain_from_traefik_config(db, monkeypatch, tmp_path):
@@ -251,3 +253,67 @@ def test_public_routers_limit_concurrent_requests_per_ip(db, monkeypatch, tmp_pa
     assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-backend"]["middlewares"]
     assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-public-get"]["middlewares"]
 
+
+
+# ── SEC-AUTH-001: Plattform-Admin nie über Mandanten-Domains ───────────────────────────────
+
+
+def _admin_matching_rule(rule: str) -> bool:
+    """Grobe Auswertung: matcht eine Regel einen Pfad unter /api/admin oder /admin? Jede Regel,
+    die eine Mandanten-Domain auf das Frontend oder ein /api-Backend leitet, muss die Admin-Pfade
+    ausdrücklich ausschliessen (oder auf einen anderen, festen Pfad beschränkt sein)."""
+    narrow = ("Path(`/", "PathPrefix(`/api/public", "PathPrefix(`/api/tools", "PathPrefix(`/verify")
+    if any(marker in rule for marker in narrow) and "PathPrefix(`/api`)" not in rule:
+        return False
+    return not ("!PathPrefix(`/api/admin`)" in rule and "!PathPrefix(`/admin`)" in rule)
+
+
+def test_no_tenant_router_matches_admin_paths(db, monkeypatch, tmp_path):
+    tenant = make_tenant(db, "Admin-Isolation Verein")
+    grant_tenant_feature(db, tenant.id)
+    grant_tenant_feature(db, tenant.id, "verify_domain")
+    _make_domain(db, tenant.id, "app.isolation.example", purpose="app")
+    _make_domain(db, tenant.id, "box.isolation.example", purpose="abgabebox")
+    _make_domain(db, tenant.id, "verify.isolation.example", purpose="verify")
+
+    routers = _regenerate_into_tmp(monkeypatch, tmp_path, db)["http"]["routers"]
+
+    ours = {name: r for name, r in routers.items() if "isolation.example" in r["rule"]}
+    assert len(ours) >= 10
+    leaking = sorted(name for name, r in ours.items() if _admin_matching_rule(r["rule"]))
+    assert leaking == []
+    for router in ours.values():
+        assert router["entryPoints"] == ["websecure"]
+
+
+def test_reserved_system_domains(monkeypatch):
+    for key, value in {
+        "traefik_domain": "app.hocx.example",
+        "traefik_abgabebox_domain": "upload.hocx.example",
+        "traefik_admin_domain": "admin.hocx.example",
+        "traefik_docs_domain": "docs.hocx.example",
+        "traefik_website_domain": "www.hocx.example",
+    }.items():
+        monkeypatch.setattr(traefik_config_service.settings, key, value)
+
+    for domain in (
+        "app.hocx.example", "UPLOAD.hocx.example", "admin.hocx.example.", "docs.hocx.example",
+        "www.hocx.example", "x.admin.hocx.example", "a.b.admin.hocx.example",
+    ):
+        assert traefik_config_service.is_reserved_domain(domain), domain
+    for domain in ("verein.example", "admin.verein.example", "badadmin.hocx.example", "hocx.example", ""):
+        assert not traefik_config_service.is_reserved_domain(domain), domain
+
+
+def test_regenerate_skips_reserved_domains_from_old_data(db, monkeypatch, tmp_path):
+    """Vor SEC-AUTH-001 angelegte oder importierte Zeilen: nie neben den Systemroutern routen."""
+    monkeypatch.setattr(traefik_config_service.settings, "traefik_admin_domain", "admin.hocx.example")
+    tenant = make_tenant(db, "Reserviert Verein")
+    grant_tenant_feature(db, tenant.id)
+    _make_domain(db, tenant.id, "admin.hocx.example", purpose="app")
+    _make_domain(db, tenant.id, "panel.admin.hocx.example", purpose="abgabebox")
+
+    config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
+
+    rules = " ".join(r["rule"] for r in (config.get("http") or {}).get("routers", {}).values())
+    assert "admin.hocx.example" not in rules

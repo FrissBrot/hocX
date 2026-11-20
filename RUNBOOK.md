@@ -908,3 +908,55 @@ wenn er gerade anderswo läuft.
   erlassene bleiben.
 - **Fehler beim Abgleich**: Auf der Mandantenseite werden dann die bisherigen Forderungen gezeigt
   und der Fehler landet im Fehlerprotokoll; im Adminportal antwortet die Übersicht mit 500.
+
+## 20. Plattform-Admin-Zugang (OpenZiti, Admin-Gate)
+
+Das Plattform-Admin-Panel (`/admin…`, API `/api/admin…`) ist **ausschliesslich** über
+`https://<TRAEFIK_ADMIN_DOMAIN>` auf Traefiks Entrypoint `adminsecure` erreichbar. Dessen Host-Port
+(`TRAEFIK_ADMIN_PORT`, Default 8443) ist nur an `127.0.0.1` gebunden; erreichbar ist er nur über den
+OpenZiti-Tunnel. Seit dem Auth-Audit (SEC-AUTH-001) ist das auf mehreren Ebenen abgesichert:
+
+1. **Router:** Kein öffentlicher Router (Haupt-, Abgabebox-, Docs-, Website-, Mandanten-Domains)
+   matcht `/admin` oder `/api/admin` (`!PathPrefix` in den Labels und in `tenant-domains.yml`).
+   Mandanten-Domains, die einer Systemdomain gleichen oder Subdomain der Admin-Domain sind, werden
+   bei Anlage, Prüfung und Import abgelehnt und beim Generieren übersprungen.
+2. **Sperr-Router** `admin-block` (`infra/traefik/dynamic/admin-isolation.yml`, versioniert): auf
+   `websecure` mit höchster Priorität für jeden Host, antwortet mit 404 ohne Backend.
+3. **Gate-Header:** Die Admin-Router setzen `X-Hocx-Admin-Gate` auf `ADMIN_GATE_SECRET`
+   (Middleware `admin-gate@file` in `infra/traefik/dynamic/admin-gate.yml`). `websecure` und
+   `adminsecure` entfernen einen von aussen mitgeschickten Header zuerst (`admin-gate-strip@file`).
+4. **Backend** (`app/core/admin_gate.py`, äusserste Middleware): `/api/admin/*` nur mit korrektem
+   Gate-Header und Host = Admin-Domain, sonst 404. Der Next.js-Server reicht Gate-Header und Host bei
+   serverseitigen Admin-Aufrufen weiter (`frontend/lib/admin-gate.ts`), kennt das Secret aber nicht.
+5. **Frontend** (`frontend/proxy.ts`): `/admin*` nur auf der Admin-Domain, sonst 404. Das
+   Admin-Session-Cookie ist host-only und `SameSite=Strict`.
+6. **Deploy/Verify** (`scripts/lib/traefik_checks.sh`): prüft über den öffentlichen Entrypoint, dass
+   `/api/admin/…` und `/admin/…` auf Haupt-, Abgabebox-, Admin-, Docs-, Website- und einer
+   Mandanten-Domain (`HOCX_VERIFY_TENANT_DOMAIN` oder die erste aus `tenant-domains.yml`, falls
+   lesbar) eine 4xx liefern. Sonst scheitert der Deploy mit Rollback.
+
+**Secret:** `ADMIN_GATE_SECRET` (64 Hex) erzeugt `scripts/lib/env_migrate.sh` beim ersten Deploy
+einmalig in der `.env`. `deploy.sh` schreibt bei jedem Deploy `.secrets/admin_gate_secret` (nur für
+das Backend) und `infra/traefik/dynamic/admin-gate.yml` (0660, Gruppe 5001, nicht im Repo, kein
+Docker-Label - sonst sähe man den Wert per `docker inspect`). Traefik lädt die Datei per `watch`
+selbst; die geänderte `infra/traefik/traefik.yml` (Strip-Middleware an den Entrypoints) übernimmt
+`deploy.sh` mit einem automatischen Traefik-Neustart (`sync_traefik_static_config`).
+Secret rotieren: Wert in `.env` ersetzen (`openssl rand -hex 32`), `./scripts/deploy.sh <env>`.
+
+**Fehlerbilder:**
+
+- *Admin-Panel/-API überall 404, Fehlerprotokoll «ADMIN_GATE_SECRET fehlt»*: Backend läuft in
+  production/test ohne Secret (fail closed). `.env` prüfen, neu deployen.
+- *Admin-API 404, Admin-Seiten laden aber*: `admin-gate.yml` fehlt oder enthält einen anderen Wert
+  als `.secrets/admin_gate_secret` (z. B. nach einer Rotation ohne Deploy). `deploy.sh` erneut
+  laufen lassen. Traefik-Log: `middleware "admin-gate@file" does not exist` → Datei fehlt oder ist
+  für Gruppe 5001 nicht lesbar.
+- *Admin über die Hauptdomain erreichbar*: darf nie sein - `traefik_checks.sh` schlägt dann Alarm.
+  `infra/traefik/dynamic/admin-isolation.yml` vorhanden? `docker logs <traefik>` auf Fehler im
+  Dateiprovider prüfen (ein YAML-Fehler in einer Datei dort legt alle Datei-Middlewares lahm).
+- **Entwicklung:** ohne `ADMIN_GATE_SECRET` und mit `HOCX_ENVIRONMENT=development` ist das Gate offen
+  (kein OpenZiti-Einstieg, Next-Rewrite statt Traefik). Die Quellcode-Instanz (`docker-compose.yml`)
+  mit `HOCX_ENVIRONMENT=production` hat kein Gate-Secret → Admin-API gesperrt; Produktion läuft über
+  den Release-Stack (`deploy.sh`).
+- **Tests:** `scripts/tests/test_admin_isolation.sh` (statisch, Labels, Secret-Verdrahtung) und
+  `scripts/tests/test_admin_isolation_live.sh` (echter Traefik in Wegwerf-Containern).

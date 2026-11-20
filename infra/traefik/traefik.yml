@@ -17,6 +17,8 @@ entryPoints:
   web:
     address: ":80"
     http:
+      # Bewusst ohne admin-gate-strip@file (SEC-AUTH-001): hier wird nichts weitergeleitet, nur auf
+      # HTTPS umgeleitet, und eine fehlende Datei-Middleware legte sonst auch die ACME-HTTP-Challenge lahm.
       redirections:
         entryPoint:
           to: websecure
@@ -39,6 +41,9 @@ entryPoints:
       # version/cipher suite policy lives in that same file as the `default` tls.options
       # profile, which Traefik applies automatically without listing it here.
       middlewares:
+        # SEC-AUTH-001: X-Hocx-Admin-Gate von aussen immer entfernen - nur die Admin-Router auf
+        # adminsecure setzen ihn (admin-gate@file). Steht vor allen anderen Middlewares.
+        - admin-gate-strip@file
         - security-headers@file
         - compress@file
   # Private Admin-Einstieg. Der Host-Port wird in Compose ausschliesslich an
@@ -55,6 +60,10 @@ entryPoints:
         writeTimeout: 1h
     http:
       middlewares:
+        # Auch hier zuerst entfernen: ein Router auf adminsecure ohne admin-gate@file (Fehler in
+        # den Labels) reicht so nie einen vom Client mitgeschickten Gate-Header durch. Die
+        # Admin-Router setzen ihn danach selbst (Router-Middlewares laufen nach denen des Entrypoints).
+        - admin-gate-strip@file
         - security-headers@file
         - compress@file
 

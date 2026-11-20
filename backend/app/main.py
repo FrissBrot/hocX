@@ -17,6 +17,7 @@ from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
+from app.core.admin_gate import AdminGateMiddleware, log_gate_configuration
 from app.core.admin_security import parse_admin_session_token
 from app.core.audit_context import AuditContextMiddleware
 from app.core.db_admission import (
@@ -226,6 +227,7 @@ async def lifespan(_: FastAPI):
         ensure_startup_seed_data()
         ensure_document_studio()
         ensure_traefik_dynamic_config()
+        log_gate_configuration()
         ensure_local_storage_profile()
         # Leichte Loops im Backend; die schweren laufen im job-worker (core/loops.py, Paket 10).
         loop_tasks = [asyncio.create_task(factory()) for factory in BACKEND_LOOPS]
@@ -351,6 +353,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization", "X-Submission-Access-Token"],
 )
+
+# Äusserste Schicht (SEC-AUTH-001): /api/admin nur mit Gate-Header von Traefiks Admin-Entrypoint
+# und auf der Admin-Domain, sonst 404 - vor CORS, Wartung, Rate-Limits und Datenbank.
+app.add_middleware(AdminGateMiddleware)
 
 
 @app.exception_handler(Exception)
