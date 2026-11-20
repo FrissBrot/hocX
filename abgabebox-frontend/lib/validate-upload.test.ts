@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getExtension, isImageFile, validateUploadFiles } from "./validate-upload";
+import { canUploadMoreAfterSuccess, getExtension, isImageFile, validateUploadFiles } from "./validate-upload";
 
 function fakeFile(name: string, sizeBytes: number): File {
   return new File([new Uint8Array(sizeBytes)], name);
@@ -128,5 +128,18 @@ describe("isImageFile", () => {
     expect(isImageFile(new File(["x"], "IMG_0001.HEIC", { type: "" }))).toBe(true);
     expect(isImageFile(new File(["x"], "bericht.pdf", { type: "application/pdf" }))).toBe(false);
     expect(isImageFile(new File(["x"], "tabelle.xlsx", { type: "" }))).toBe(false);
+  });
+});
+
+describe("canUploadMoreAfterSuccess", () => {
+  it("bietet keinen weiteren Upload an, wenn das Element automatisch geschlossen wurde", () => {
+    expect(canUploadMoreAfterSuccess({ maxFiles: null, uploadedSoFar: 1, elementClosed: true })).toBe(false);
+    expect(canUploadMoreAfterSuccess({ maxFiles: 5, uploadedSoFar: 1, elementClosed: true })).toBe(false);
+  });
+
+  it("richtet sich sonst nach dem verbleibenden Kontingent", () => {
+    expect(canUploadMoreAfterSuccess({ maxFiles: null, uploadedSoFar: 3, elementClosed: false })).toBe(true);
+    expect(canUploadMoreAfterSuccess({ maxFiles: 3, uploadedSoFar: 2, elementClosed: false })).toBe(true);
+    expect(canUploadMoreAfterSuccess({ maxFiles: 3, uploadedSoFar: 3, elementClosed: false })).toBe(false);
   });
 });

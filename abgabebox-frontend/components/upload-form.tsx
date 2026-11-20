@@ -8,7 +8,7 @@ import { CaptchaWidget } from "@/components/captcha-widget";
 import { clearCaptchaSession, readCaptchaSession, storeCaptchaSession } from "@/lib/captcha-session";
 import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
-import { isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { canUploadMoreAfterSuccess, isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 import { sendUpload, type UploadPhase } from "@/lib/upload-request";
 import { UploadProgress } from "@/components/upload-progress";
@@ -58,6 +58,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [receipt, setReceipt] = useState<{ files: number; at: Date } | null>(null);
   const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
+  const [elementClosed, setElementClosed] = useState(false);
   // «GPS-Daten des Bildes mitsenden» (Paket 9.3): standardmässig an, aus = Server entfernt den Standort
   const [includeGps, setIncludeGps] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -229,6 +230,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       }
       const result = await response.json().catch(() => null);
       setWarnings(result?.image_duplicate_warnings ?? []);
+      setElementClosed(result?.element_closed === true);
       setUploadedSoFar((prev) => prev + files.length);
       setReceipt({ files: files.length, at: new Date() });
       setFiles([]);
@@ -250,8 +252,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     }
   }
 
-  const remainingAfterSuccess = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
-  const canUploadMore = remainingAfterSuccess === null || remainingAfterSuccess > 0;
+  const canUploadMore = canUploadMoreAfterSuccess({ maxFiles, uploadedSoFar, elementClosed });
 
   if (done) {
     const receivedAt = receipt
