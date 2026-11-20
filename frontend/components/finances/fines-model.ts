@@ -1,6 +1,7 @@
 // Reine Hilfsfunktionen für den Reiter «Bussen» der Kasse (Design «Kasse und Bussen v2»):
 // gemeinsame Zeilen aus Präsenz- und Pendenzen-Bussen, Filter, Kennzahlen und Gruppierung nach
 // Person. Ohne React, damit Filter/Gruppierung direkt getestet werden können.
+import { swissYear } from "@/lib/utils/format";
 import type { AttendanceFineListItem, TodoFineListItem } from "@/types/api";
 
 /** Seitengrösse der Präsenz-Bussen (Backend erlaubt bis 500). Die Gruppierung nach Person und die
@@ -62,10 +63,9 @@ export function rowAmount(row: FineRow): number {
   return row.fine.status === "conflict" ? 0 : Number(row.fine.amount) || 0;
 }
 
+/** Jahr eines Zeitstempels (z. B. collected_at, UTC) in Schweizer Zeit, wie das Buchungsdatum. */
 export function rowYear(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const year = Number(value.slice(0, 4));
-  return Number.isFinite(year) ? year : null;
+  return value ? swissYear(value) : null;
 }
 
 export type FineFilter = {
