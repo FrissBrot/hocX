@@ -204,7 +204,9 @@ def test_h2_excuse_participant_still_works_when_not_frozen(db):
     tenant, protocol, participant, block, fine = _make_frozen_protocol_with_attendance_and_fine(db)
     protocol.status = "geplant"
     db.flush()
-    user = make_current_user(tenant.id)
+    # Mit fines.manage (admin): nur dann entfernt «Entschuldigen» die offene Busse mit
+    # (test_attendance_excuse_fine_rights.py deckt den Fall ohne das Recht ab).
+    user = make_current_user(tenant.id, role="admin")
 
     result = protocols_route.excuse_participant(
         protocol.public_id, participant.public_id, payload=AttendanceExcusePayload(excused=True), db=db, user=user,
