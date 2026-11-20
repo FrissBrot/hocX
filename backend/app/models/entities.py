@@ -1425,6 +1425,11 @@ class StoredFile(Base, TimestampMixin):
             "capture_corrected_at IS NOT NULL OR capture_corrected_has_time = false",
             name="ck_stored_file_capture_corrected_time",
         ),
+        CheckConstraint(
+            "capture_file_state IS NULL OR capture_file_state IN ('pending', 'written', 'unsupported', 'failed')",
+            name="ck_stored_file_capture_file_state",
+        ),
+        Index("idx_stored_file_capture_file_pending", "id", postgresql_where=text("capture_file_state = 'pending'")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1502,6 +1507,13 @@ class StoredFile(Base, TimestampMixin):
     )
     capture_corrected_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     capture_corrected_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Korrektur auch in der Datei (Migration 0203, services/capture_date_file_sync.py): Rueckweg zu
+    # den urspruenglichen Datumsfeldern der Datei (nur beim ersten Schreiben gesetzt, nach dem
+    # Wiederherstellen NULL) und Stand des Abgleichs (pending/written/unsupported/failed, NULL =
+    # nichts zu tun). Gesetztes capture_exif_original heisst: die Datumsfelder der Datei stammen von
+    # hocX und gelten nie als EXIF-Original. Die Anzeige liest nie capture_file_state.
+    capture_exif_original: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    capture_file_state: Mapped[str | None] = mapped_column(Text)
     # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Als Wert nur ueber
     # berechtigte, mandantengebundene Endpunkte lesbar (/metadata). Exportierte Dateikopien
     # (Download, auch fuer Partner-Mandanten geteilter Alben, und oeffentliche Freigaben, die

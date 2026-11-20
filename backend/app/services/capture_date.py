@@ -10,8 +10,10 @@ chronologische Ansichten, Datumsfilter, Termin-Zuordnung, Freigabe-Seite, Export
 
 Die Korrektur (Migration 0200) setzt ein Benutzer mit photos.manage bewusst und nach einer
 Bestätigung, wenn das EXIF-Datum falsch ist (z. B. falsch gestellte Kamera). Das EXIF-Datum
-bleibt dabei gespeichert und wird als «ursprünglich» angezeigt; die Datei selbst wird nie
-umgeschrieben. Wird die Korrektur entfernt, gilt wieder EXIF bzw. die Schätzung.
+bleibt dabei gespeichert und wird als «ursprünglich» angezeigt. Seit 0203 schreibt der Job
+capture_date_file_sync die Korrektur zusätzlich in die Datei (Original der Datumsfelder in
+stored_file.capture_exif_original); diese Rangfolge liest davon nichts - sie gilt sofort, die Datei
+folgt im Hintergrund. Wird die Korrektur entfernt, gilt wieder EXIF bzw. die Schätzung.
 
 Das geschätzte Datum bleibt gespeichert, auch wenn später ein echtes Datum hinzukommt - es
 verliert dann nur den Vorrang.
@@ -116,3 +118,24 @@ def auto_link_date_sql(model: Any):
         (model.estimated_taken_on.is_not(None), cast(null(), Date)),
         else_=upload_day_sql(model.created_at),
     )
+
+
+# Ohne Uhrzeit gilt technisch Mittag (wie image_metadata_service.CORRECTED_DATE_ONLY_TIME und die
+# Exportkopie eines geschätzten Datums), damit keine Zeitzonenumrechnung den Tag kippt.
+_DATE_ONLY_STAMP_TIME = "12:00:00"
+
+
+def corrected_exif_stamp(stored_file: Any) -> str | None:
+    """EXIF-Zeitstempel "JJJJ:MM:TT HH:MM:SS" der Korrektur für Datei und Exportkopie, None ohne
+    Korrektur. Ohne korrigierte Uhrzeit bleibt die Uhrzeit des Originals (exif_taken_at)
+    erhalten, sonst 12:00:00 - so verschiebt eine reine Datumskorrektur nicht nebenbei die
+    Reihenfolge der Bilder eines Tages in anderen Programmen."""
+    corrected = _corrected(stored_file)
+    if corrected is None:
+        return None
+    naive = corrected.replace(tzinfo=None)
+    if getattr(stored_file, "capture_corrected_has_time", False):
+        return f"{naive:%Y:%m:%d %H:%M:%S}"
+    original = getattr(stored_file, "exif_taken_at", None)
+    clock = f"{original.replace(tzinfo=None):%H:%M:%S}" if original is not None else _DATE_ONLY_STAMP_TIME
+    return f"{naive:%Y:%m:%d} {clock}"

@@ -46,7 +46,7 @@ test("Aufnahmedatum per Mehrfachauswahl korrigieren und im Viewer wiederherstell
     const confirm = page.getByRole("alertdialog", { name: "Aufnahmedatum ändern?" });
     await expect(confirm).toContainText("Das Aufnahmedatum von 1 Bild wird auf 05.06.2001, 14:30 gesetzt.");
     await expect(confirm).toContainText("Reihenfolge im Zeitstrahl");
-    await expect(confirm).toContainText("bleibt erhalten");
+    await expect(confirm).toContainText("bleibt in hocX gespeichert");
     const saved = page.waitForResponse((r) => r.url().endsWith("/api/files/bulk-capture-date") && r.request().method() === "POST");
     await confirm.getByRole("button", { name: "Datum ändern" }).click();
     const response = await saved;

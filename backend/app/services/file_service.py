@@ -1162,7 +1162,8 @@ class FileService:
             if content is not None:
                 live = image_metadata_service.extract_image_metadata(content)
                 width, height = width or live.width, height or live.height
-                if exif_taken_at is None and live.taken_at is not None:
+                # Von hocX geschriebene Datumsfelder (Migration 0203) sind nie das Original.
+                if exif_taken_at is None and live.taken_at is not None and stored_file.capture_exif_original is None:
                     exif_taken_at = live.taken_at.replace(tzinfo=UTC)
                 camera_make, camera_model = camera_make or live.camera_make, camera_model or live.camera_model
         camera = image_metadata_service.ImageMetadata(camera_make=camera_make, camera_model=camera_model).camera_label
@@ -1228,6 +1229,7 @@ class FileService:
             capture_corrected_has_time=bool(stored_file.capture_corrected_has_time) if stored_file.capture_corrected_at else False,
             capture_corrected_set_at=stored_file.capture_corrected_set_at,
             capture_corrected_set_by_name=corrected_by_name,
+            capture_file_state=stored_file.capture_file_state if is_image else None,
             effective_date=effective_date,
             date_source=date_source,
             camera_make=camera_make,
@@ -1265,7 +1267,8 @@ class FileService:
         oder entfernen ("reset") - Einzelbearbeitung im Foto-Viewer und Mehrfachauswahl der
         Galerie. Nur Bilder des eigenen Mandanten (tenant_id gebunden): unbekannte IDs, Fotos
         anderer Mandanten (auch Partner-Fotos geteilter Alben) und Nicht-Bilder landen
-        gleichermassen in not_found. EXIF-Datum und Datei-Bytes bleiben unverändert. Danach
+        gleichermassen in not_found. Das EXIF-Datum bleibt als Original gespeichert; die Datei
+        selbst zieht der Job capture_date_file_sync nach (capture_file_state, Migration 0203). Danach
         werden automatische Termin-Verknüpfungen neu bewertet. Committet NICHT - der Aufrufer
         schreibt den Audit-Eintrag in dieselbe Transaktion."""
         outcome = CaptureCorrectionOutcome()

@@ -24,3 +24,21 @@ def test_failed_or_infected_files_do_not_count_as_already_submitted():
     assert repository.list_checksums_for_element(db, assignment_id=1, event_id=2, list_entry_id=None) == set()
     where = db.sql.split("WHERE", 1)[1]
     assert "coalesce(stored_file.scan_status, 'clean') NOT IN ('error', 'infected')" in where
+
+
+class _RowsDb(_FakeDb):
+    def __init__(self, rows) -> None:
+        super().__init__()
+        self.rows = rows
+
+    def execute(self, statement):
+        super().execute(statement)
+        return self.rows
+
+
+def test_original_checksum_counts_after_hocx_rewrote_the_file():
+    """Schreibt hocX ein korrigiertes Aufnahmedatum in die Datei (Backend-Migration 0203), ändert
+    sich checksum_sha256 - die ursprünglich abgegebene Datei bleibt trotzdem ein Duplikat."""
+    db = _RowsDb([("neu", "original"), ("nur", None)])
+    assert repository.list_checksums_for_element(db, assignment_id=1, event_id=2, list_entry_id=None) == {"neu", "original", "nur"}
+    assert "stored_file.source_checksum_sha256" in db.sql.split("FROM", 1)[0]

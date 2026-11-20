@@ -146,7 +146,7 @@ describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
     browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
       if (init?.method === "PATCH") {
         const { corrected_date, corrected_time } = JSON.parse(init.body ?? "{}");
-        return Promise.resolve(metadata({ ...exif, capture_corrected_at: `${corrected_date}T${corrected_time}:00Z`, capture_corrected_has_time: true, date_source: "corrected", effective_date: corrected_date }));
+        return Promise.resolve(metadata({ ...exif, capture_corrected_at: `${corrected_date}T${corrected_time}:00Z`, capture_corrected_has_time: true, date_source: "corrected", effective_date: corrected_date, capture_file_state: "pending" }));
       }
       return Promise.resolve(metadata(exif));
     });
@@ -163,12 +163,29 @@ describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
 
     await waitFor(() => expect(onCaptureDateSaved).toHaveBeenCalledWith("x", expect.objectContaining({ date_source: "corrected" })));
     expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 1 Bild wird auf 14.07.2023, 10:30 gesetzt.");
+    // Die Bestätigung sagt, dass das Datum auch in die Datei kommt und das Original in hocX bleibt.
+    expect(confirmMock.mock.calls[0][0].message).toContain("Das neue Datum wird auch in die Bilddateien geschrieben");
+    expect(confirmMock.mock.calls[0][0].message).toContain("bleibt in hocX gespeichert und lässt sich jederzeit wiederherstellen");
     const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
     expect(patch[0]).toBe("/api/stored-files/x/capture-correction");
     expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: "2023-07-14", corrected_time: "10:30" });
     expect(await screen.findByText("Aufnahmedatum · korrigiert")).toBeInTheDocument();
     expect(screen.getByText("14.07.2023, 10:30")).toBeInTheDocument();
     expect(screen.getByText("Ursprünglich (EXIF): 01.01.2001, 00:05")).toBeInTheDocument();
+    // Die Anzeige gilt sofort; die Datei folgt im Hintergrund (nur ein Hinweis).
+    expect(screen.getByText("Die Bilddatei wird im Hintergrund aktualisiert.")).toBeInTheDocument();
+  });
+
+  it("zeigt, ob die Datei das korrigierte Datum schon enthält oder das Format es nicht kann", async () => {
+    const corrected = { exif_taken_at: null, capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false, date_source: "corrected" as const };
+    browserApiFetchMock.mockResolvedValueOnce(metadata({ ...corrected, capture_file_state: "written" }));
+    const { unmount } = render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(await screen.findByText("Das Datum ist auch in der Bilddatei gespeichert.")).toBeInTheDocument();
+    expect(screen.getByText("Das Bild hatte ursprünglich kein Aufnahmedatum.")).toBeInTheDocument();
+    unmount();
+    browserApiFetchMock.mockResolvedValueOnce(metadata({ ...corrected, capture_file_state: "unsupported" }));
+    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(await screen.findByText("Dieses Dateiformat kann das Datum nicht aufnehmen. Die Korrektur gilt nur in hocX.")).toBeInTheDocument();
   });
 
   it("stellt das Original nach Bestätigung wieder her, ohne Bestätigung nicht", async () => {
@@ -189,6 +206,7 @@ describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
     fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
     await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
     expect(confirmMock.mock.calls[1][0].message).toContain("Bei 1 Bild wird die Korrektur entfernt");
+    expect(confirmMock.mock.calls[1][0].message).toContain("Auch die Bilddateien bekommen ihr ursprüngliches Datum zurück.");
     const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
     expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: null });
     expect(await screen.findByText("Aufgenommen · aus EXIF")).toBeInTheDocument();

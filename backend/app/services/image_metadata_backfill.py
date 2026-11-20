@@ -122,7 +122,7 @@ def run_backfill(
 
 _COPIED_ATTRIBUTES = (
     "id", "exif_taken_at", "exif_taken_offset", "exif_taken_source", "estimated_taken_on", "estimated_taken_set_at",
-    "estimated_taken_set_by", "capture_corrected_at", "capture_corrected_has_time", "gps_latitude", "gps_longitude", "gps_altitude_m", "gps_direction_deg", "gps_accuracy_m",
+    "estimated_taken_set_by", "capture_corrected_at", "capture_corrected_has_time", "capture_exif_original", "gps_latitude", "gps_longitude", "gps_altitude_m", "gps_direction_deg", "gps_accuracy_m",
     "gps_timestamp", "gps_source", "camera_make", "camera_model", "width", "height", "orientation",
     "metadata_scanned_at", "metadata_scan_status", "checksum_sha256", "source_checksum_sha256",
 )

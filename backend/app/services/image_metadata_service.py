@@ -515,7 +515,12 @@ def merge_missing_metadata(
     Das geschätzte Datum behandelt apply_estimated_date separat."""
     outcome = MergeOutcome()
 
-    if incoming.taken_at is not None:
+    # Hat hocX das korrigierte Datum in die Datei geschrieben (Migration 0203), stammen deren
+    # Datumsfelder von hocX: eine erneute Analyse der Datei darf sie nie als EXIF-Original
+    # übernehmen (exif_taken_at ist und bleibt das Original). Client-Werte zu einer
+    # konvertierten Quelle betreffen dagegen das unveränderte Original und gelten weiter.
+    file_dates_from_hocx = source != "client" and getattr(stored_file, "capture_exif_original", None) is not None
+    if incoming.taken_at is not None and not file_dates_from_hocx:
         if stored_file.exif_taken_at is None:
             stored_file.exif_taken_at = incoming.taken_at.replace(tzinfo=UTC)
             stored_file.exif_taken_offset = incoming.taken_offset
@@ -646,8 +651,13 @@ def set_capture_correction(
     stored_file: Any, corrected: datetime | None, *, has_time: bool, user_id: int | None
 ) -> bool:
     """Setzt, ändert oder entfernt (None) das korrigierte Aufnahmedatum. EXIF-Datum, Schätzung
-    und Uploaddatum bleiben unberührt, die Datei wird nie umgeschrieben. ValueError bei einem
-    unplausiblen Datum (vor 1826 oder in der Zukunft). True, wenn sich etwas geändert hat."""
+    und Uploaddatum bleiben unberührt. ValueError bei einem unplausiblen Datum (vor 1826 oder in
+    der Zukunft). True, wenn sich etwas geändert hat.
+
+    Die Anzeige gilt sofort (sie liest nur diese Spalten). Die Datei selbst zieht der Job
+    capture_date_file_sync im Hintergrund nach (Migration 0203): jede Änderung setzt dafür
+    capture_file_state auf "pending"; der Job berechnet das Ziel beim Verarbeiten neu aus dem
+    dann aktuellen Stand (Korrektur schreiben bzw. Original zurückschreiben)."""
     if corrected is None:
         if stored_file.capture_corrected_at is None:
             return False
@@ -655,6 +665,7 @@ def set_capture_correction(
         stored_file.capture_corrected_has_time = False
         stored_file.capture_corrected_set_at = None
         stored_file.capture_corrected_set_by = None
+        stored_file.capture_file_state = "pending"
         return True
     naive = valid_capture_datetime(corrected)
     if naive is None:
@@ -666,6 +677,7 @@ def set_capture_correction(
     stored_file.capture_corrected_has_time = has_time
     stored_file.capture_corrected_set_at = datetime.now(UTC)
     stored_file.capture_corrected_set_by = user_id
+    stored_file.capture_file_state = "pending"
     return True
 
 

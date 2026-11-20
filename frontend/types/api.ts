@@ -794,6 +794,8 @@ export type StoredFileMetadata = {
   capture_corrected_has_time?: boolean;
   capture_corrected_set_at?: string | null;
   capture_corrected_set_by_name?: string | null;
+  // Stand der Bilddatei (Migration 0203): nur Hinweis, die Anzeige liest immer die Datumsfelder oben.
+  capture_file_state?: "pending" | "written" | "unsupported" | "failed" | null;
   effective_date?: string | null;
   date_source?: PhotoDateSource;
   camera_make?: string | null;

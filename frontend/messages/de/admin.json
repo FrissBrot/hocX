@@ -555,6 +555,10 @@
       "file_trash_purge": {
         "title": "Papierkorb leeren (Frist)",
         "description": "Löscht Dateien und Fotos endgültig, die seit 30 Tagen im Papierkorb liegen - mit Speicherobjekt, Vorschaubild und Löschjournal."
+      },
+      "capture_date_file_sync": {
+        "title": "Aufnahmedatum in Dateien schreiben",
+        "description": "Schreibt korrigierte Aufnahmedaten in die Bilddateien und stellt beim Wiederherstellen das ursprüngliche Datum in der Datei wieder her."
       }
     }
   },

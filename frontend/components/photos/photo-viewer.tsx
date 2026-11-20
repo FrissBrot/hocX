@@ -516,6 +516,13 @@ function CaptureDateBox({ fileId, metadata, locale, onChange, onCorrectionSaved 
     else if (metadata.exif_taken_at) originalNote = tc("originalExif", { value: formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale) });
     else if (metadata.estimated_taken_on) originalNote = tc("originalEstimated", { value: formatDate(metadata.estimated_taken_on) });
     else originalNote = tc("originalNone");
+    // Stand der Bilddatei (Migration 0203) - nur ein Hinweis, das angezeigte Datum gilt sofort.
+    const fileState = metadata.capture_file_state;
+    let fileStateNote: string | null = null;
+    if (fileState === "pending") fileStateNote = tc("fileStatePending");
+    else if (corrected && fileState === "written") fileStateNote = tc("fileStateWritten");
+    else if (corrected && fileState === "unsupported") fileStateNote = tc("fileStateUnsupported");
+    else if (corrected && fileState === "failed") fileStateNote = tc("fileStateFailed");
     return (
       <div className={`photo-date-box${corrected ? " photo-date-box-corrected" : ""}`}>
         <div className="photo-date-box-head">
@@ -541,6 +548,7 @@ function CaptureDateBox({ fileId, metadata, locale, onChange, onCorrectionSaved 
           </strong>
         )}
         <span className="photo-date-box-note">{originalNote}</span>
+        {fileStateNote ? <span className="photo-date-box-note">{fileStateNote}</span> : null}
       </div>
     );
   }

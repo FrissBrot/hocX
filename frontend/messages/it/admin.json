@@ -555,6 +555,10 @@
       "file_trash_purge": {
         "title": "Svuotare il cestino (termine)",
         "description": "Elimina definitivamente file e foto che si trovano nel cestino da 30 giorni, compresi oggetto archiviato, anteprima e registro delle cancellazioni."
+      },
+      "capture_date_file_sync": {
+        "title": "Scrivere le date di scatto nei file",
+        "description": "Scrive le date di scatto corrette nei file immagine e, al ripristino, riscrive nel file la data originale."
       }
     }
   },
