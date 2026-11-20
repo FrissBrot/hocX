@@ -456,7 +456,10 @@ class ProtocolTodoService:
                 old_status_code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == todo.todo_status_id)) if todo.todo_status_id else None
                 if new_status_code not in _COMPLETED_STATUS_CODES:
                     values["completed_at"] = None
-                elif old_status_code not in _COMPLETED_STATUS_CODES or todo.completed_at is None:
+                elif old_status_code not in _COMPLETED_STATUS_CODES or todo.completed_at is None or new_status_code == "done":
+                    # Erledigt nach «abgebrochen»: erledigt ist sie erst jetzt. Der Zeitpunkt des
+                    # Abbruchs liesse eine verspätete Pendenz als pünktlich gelten (keine Busse).
+                    # erledigt -> abgebrochen behält den Erledigungszeitpunkt.
                     values["completed_at"] = datetime.now(timezone.utc)
         changed_fine_fields = self._changed_fine_fields(db, todo, values, assignee_ids, new_status_code)
         if changed_fine_fields:
