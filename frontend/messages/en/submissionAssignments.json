@@ -280,6 +280,11 @@
   "openBox": "Open submission box",
   "done": "Done",
   "ownerAccessLabel": "Personal link for responsible people",
+  "todoTagsLabel": "Tags for the to-dos",
+  "todoTagsHelp": "Every to-do of this submission gets these tags. Tags added by hand are kept.",
+  "todoOwnTagLabel": "Create a submission tag",
+  "todoOwnTagHelp": "All to-dos of this submission also get the tag “{tag}”.",
+  "todoOwnTagUntitled": "submission title",
   "helpOwnerAccess": "Responsible people get their own link in the emails about their submission to-do, even without a login. With it they see their submission and, depending on the setting, can withdraw it and resubmit – for example if someone submitted something wrong for them via the shared drop box link.",
   "ownerAccess": {
     "manage": "View, withdraw and resubmit",

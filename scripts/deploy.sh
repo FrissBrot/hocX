@@ -58,6 +58,8 @@ source "$REPO_DIR/scripts/lib/cosign.sh"
 source "$REPO_DIR/scripts/lib/traefik_checks.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
+# shellcheck source=scripts/lib/image_cleanup.sh
+source "$REPO_DIR/scripts/lib/image_cleanup.sh"
 # shellcheck source=scripts/lib/dump_crypto.sh
 source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 # shellcheck source=scripts/lib/pg_upgrade.sh
@@ -1126,6 +1128,15 @@ if [ "$ENVIRONMENT" = test ]; then
   echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"
   "${DC[@]}" exec -T backend python scripts/seed_test_tenant.py ||
     echo "    WARNUNG: Demo-Mandant konnte nicht neu befuellt werden (siehe oben); das Release laeuft."
+fi
+
+# Alte App-Images aufräumen (erst jetzt: das neue Release läuft, current.env zeigt darauf).
+# HOCX_IMAGE_KEEP_RELEASES (Default 3) weitere Releases bleiben für ein manuelles Zurückgehen;
+# HOCX_IMAGE_CLEANUP=0 schaltet die Bereinigung ab. Ein Fehler hier bricht das Update nicht ab.
+if [ "${HOCX_IMAGE_CLEANUP:-1}" != 0 ]; then
+  echo "==> [$ENVIRONMENT] Alte Images aufräumen"
+  cleanup_old_release_images "$PROJECT_DIR" "$GHCR_NAMESPACE" "${HOCX_IMAGE_KEEP_RELEASES:-3}" ||
+    echo "    WARNUNG: Image-Bereinigung fehlgeschlagen (siehe oben); das Release läuft."
 fi
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"

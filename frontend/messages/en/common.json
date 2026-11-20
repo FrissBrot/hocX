@@ -160,7 +160,8 @@
       "user": "Account",
       "role": "Role",
       "public_link": "Public link",
-      "context_visibility": "File visibility"
+      "context_visibility": "File visibility",
+      "activity": "Activity log"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

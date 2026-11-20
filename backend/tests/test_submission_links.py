@@ -315,7 +315,7 @@ def test_unexpected_sync_error_is_logged_and_does_not_block_the_change(db, monke
     link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
     logged: list[tuple[str, int | None]] = []
 
-    def broken(self, db, assignment):
+    def broken(self, db, assignment, **_kwargs):
         raise RuntimeError("sync kaputt")
 
     # record_system_error schreibt über eine eigene Verbindung, die den Testmandanten der

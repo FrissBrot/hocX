@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useOpenMore } from "@/components/mobile/mobile-shell";
@@ -97,6 +98,8 @@ export function MobileSubmissions({
 }) {
   const t = useTranslations("submissionAssignments");
   const tMobile = useTranslations("mobile");
+  // Vorschläge für die Pendenzen-Tags einer Abgabe (Migration 0202)
+  const { tagConfig: todoTagConfig } = useTagConfig();
   const locale = useLocale();
   const openMore = useOpenMore();
   const confirm = useConfirm();
@@ -258,6 +261,7 @@ export function MobileSubmissions({
         availableEvents={availableEvents}
         availableReviewers={availableReviewers}
         availableParticipants={availableParticipants}
+        todoTagConfig={todoTagConfig}
         confirmRemoveElement={(name) =>
           confirm({ message: t("wizard.manual.removeConfirm", { name }), tone: "danger", confirmLabel: t("wizard.manual.removeConfirmLabel") })
         }

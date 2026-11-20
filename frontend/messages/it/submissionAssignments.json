@@ -280,6 +280,11 @@
   "openBox": "Apri la casella di consegna",
   "done": "Fatto",
   "ownerAccessLabel": "Link personale per i responsabili",
+  "todoTagsLabel": "Tag per i compiti",
+  "todoTagsHelp": "Ogni compito di questa consegna riceve questi tag. I tag aggiunti a mano restano.",
+  "todoOwnTagLabel": "Crea un tag per la consegna",
+  "todoOwnTagHelp": "Tutti i compiti di questa consegna ricevono anche il tag «{tag}».",
+  "todoOwnTagUntitled": "titolo della consegna",
   "helpOwnerAccess": "I responsabili ricevono nelle e-mail sulla loro attività di consegna un link personale, anche senza login. Con esso vedono la loro consegna e, a seconda dell'impostazione, possono ritirarla e riconsegnare – ad esempio se qualcuno ha consegnato qualcosa di sbagliato per loro tramite il link comune.",
   "ownerAccess": {
     "manage": "Vedere, ritirare e riconsegnare",

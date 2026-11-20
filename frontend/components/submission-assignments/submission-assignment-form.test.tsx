@@ -451,3 +451,35 @@ describe("Vorlagen und Link", () => {
     expect(assignmentPublicUrl({ link_ids: [], public_slug: "fotos" }, links)).toBeNull();
   });
 });
+
+describe("Tags für die Pendenzen (Migration 0202)", () => {
+  const withPerson: FormState = {
+    ...initialForm, title: "Sommerlager", public_slug: "sommerlager", source_type: "manual",
+    manual_elements: [newManualElement("Bericht", { responsible_participant_ids: ["p-anna"] })],
+  };
+
+  it("zeigt Tags und den Schalter «Abgabe-Tag erstellen» (Standard aus) und sendet beides", () => {
+    let latest: FormState = withPerson;
+    render(<Harness start={withPerson} onChange={(form) => (latest = form)} />);
+    goTo(/3\. Verantwortlich/);
+    expect(screen.getByText("Tags für die Pendenzen")).toBeInTheDocument();
+    const own = screen.getByRole("checkbox", { name: /Abgabe-Tag erstellen/ });
+    expect(own).not.toBeChecked();
+    expect(screen.getByText(/zusätzlich das Tag «Sommerlager»/)).toBeInTheDocument();
+    fireEvent.click(own);
+    expect(latest.todo_own_tag).toBe(true);
+    expect(assignmentPayload({ ...latest, todo_tags: ["Lager"] })).toMatchObject({ todo_tags: ["Lager"], todo_own_tag: true });
+  });
+
+  it("übernimmt die Tags aus der API, ohne Angabe leer und aus", () => {
+    const base = { ...formFromAssignment({
+      id: "a-1", tenant_id: "t-1", title: "Lager", description: null, public_slug: "lager", source_type: "events",
+      tag_filter: "Hock", offset_days_before: null, offset_days_after: null, cycle_config_id: null, cycle_offsets: [],
+      list_definition_id: null, deadline: null, allowed_file_types: [], max_files_per_element: 5, max_file_size_mb: 20,
+      sort_order: "date", auto_close: "never", responsible_participant_source: null, link_ids: [],
+      created_at: "2026-11-19T10:00:00Z", updated_at: "2026-11-19T10:00:00Z",
+    } as SubmissionAssignment) };
+    expect(base.todo_tags).toEqual([]);
+    expect(base.todo_own_tag).toBe(false);
+  });
+});

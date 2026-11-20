@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,26 @@ type Filters = {
 };
 
 const NO_FILTERS: Filters = { category: "", action: "", actor: "", outcome: "", dateFrom: "", dateTo: "" };
+/** Live: die erste Seite lädt in diesem Takt still nach (nur sichtbarer Tab). */
+export const LIVE_REFRESH_MS = 10_000;
+const FRESH_HIGHLIGHT_MS = 4_000;
+
+function activityParams(filters: Filters, offset: number, withOptions: boolean): string {
+  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+  if (filters.category) params.set("category", filters.category);
+  if (filters.action) params.set("action", filters.action);
+  if (filters.actor) params.set("actor", filters.actor);
+  if (filters.outcome) params.set("outcome", filters.outcome);
+  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters.dateTo) params.set("date_to", filters.dateTo);
+  if (!withOptions) params.set("with_options", "false");
+  return params.toString();
+}
+
+/** Schlüssel eines Eintrags (die API liefert keine ID): zum Erkennen neuer Zeilen. */
+function entryKey(entry: ActivityEntry): string {
+  return [entry.created_at, entry.action, entry.actor_kind, entry.actor_name ?? "", entry.outcome, entry.entity_type ?? ""].join("|");
+}
 
 // Mandanten-Einstellungen → Verlauf: Änderungen, Anmeldungen und Zugriffe der Plattform auf Daten
 // dieses Vereins (Datenschutz-Audit PRIV-013). Keine IP-Adressen, keine E-Mail-Adressen.
@@ -41,21 +61,17 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Neu per Live-Aktualisierung hinzugekommene Zeilen (kurz hervorgehoben)
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-        if (filters.category) params.set("category", filters.category);
-        if (filters.action) params.set("action", filters.action);
-        if (filters.actor) params.set("actor", filters.actor);
-        if (filters.outcome) params.set("outcome", filters.outcome);
-        if (filters.dateFrom) params.set("date_from", filters.dateFrom);
-        if (filters.dateTo) params.set("date_to", filters.dateTo);
-        if (offset > 0) params.set("with_options", "false");
-        const result = await browserApiFetch<ActivityPage>(`/api/activity?${params.toString()}`);
+        const result = await browserApiFetch<ActivityPage>(`/api/activity?${activityParams(filters, offset, offset === 0)}`);
         if (cancelled) return;
         setPage(result);
         if (offset === 0) setOptions({ categories: result.categories, actions: result.actions ?? [], actors: result.actors ?? [] });
@@ -68,6 +84,35 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
     void load();
     return () => {
       cancelled = true;
+    };
+  }, [filters, offset]);
+
+  // Live: erste Seite still nachladen, solange der Tab sichtbar ist; beim Blättern pausiert.
+  useEffect(() => {
+    if (offset !== 0) return;
+    let cancelled = false;
+    let clearTimer: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      try {
+        const result = await browserApiFetch<ActivityPage>(`/api/activity?${activityParams(filters, 0, false)}`);
+        if (cancelled) return;
+        const known = new Set(pageRef.current.items.map(entryKey));
+        const added = result.items.map(entryKey).filter((key) => !known.has(key));
+        setPage(result);
+        if (added.length > 0) {
+          setFresh(new Set(added));
+          clearTimeout(clearTimer);
+          clearTimer = setTimeout(() => setFresh(new Set()), FRESH_HIGHLIGHT_MS);
+        }
+      } catch {
+        // nächster Takt versucht es wieder
+      }
+    }, LIVE_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      clearTimeout(clearTimer);
     };
   }, [filters, offset]);
 
@@ -198,6 +243,11 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
   return (
     <div className="grid">
       <p className="muted">{t("intro")}</p>
+      <p className="field-help">{t("privacyHint")}</p>
+      <p className={offset === 0 ? "activity-live" : "activity-live activity-live-paused"} role="status">
+        <span className="activity-live-dot" aria-hidden="true" />
+        {offset === 0 ? t("live") : t("livePaused")}
+      </p>
       <div className="list-filter-row activity-filter-row">
         <label className="field-stack activity-category-field">
           <span className="field-label">{t("category")}</span>
@@ -228,7 +278,7 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
       </div>
       <DataTable columns={columns} emptyMessage={loading ? t("loading") : anyActive ? t("emptyFiltered") : t("empty")}>
         {page.items.map((entry, index) => (
-          <tr key={`${entry.created_at}-${index}`}>
+          <tr key={`${entry.created_at}-${index}`} className={fresh.has(entryKey(entry)) ? "activity-row-fresh" : undefined}>
             <td className="muted">{formatDateTime(entry.created_at, locale)}</td>
             <td>{describeAuditAction(entry.action, tActions)}</td>
             <td>{actorLabel(entry)}</td>

@@ -236,7 +236,10 @@
     "chipDate": "{from} – {to}",
     "removeFilter": "Retirer le filtre « {filter} »",
     "clearAll": "Retirer tous les filtres",
-    "emptyFiltered": "Aucune entrée pour ces filtres"
+    "emptyFiltered": "Aucune entrée pour ces filtres",
+    "live": "En direct – les nouvelles entrées s’affichent automatiquement",
+    "livePaused": "Direct en pause – seulement sur la première page",
+    "privacyHint": "Les connexions réussies restent visibles ici 30 jours, les échecs et les modifications plus longtemps. Toute personne qui ouvre cet historique y apparaît aussi. Mentionne cette journalisation dans la déclaration de protection des données de ton association."
   },
   "retention": {
     "intro": "Définissez combien de temps l’organisation conserve certaines données. Toutes les règles sont désactivées jusqu’à ce que vous les activiez. hocX propose chaque jour les éléments concernés ; vous les confirmez ou les rejetez. Les anciens membres sont bloqués automatiquement dès le lendemain de leur départ ; leurs données sont conservées.",

@@ -236,7 +236,10 @@
     "chipDate": "{from} – {to}",
     "removeFilter": "Filter «{filter}» entfernen",
     "clearAll": "Alle Filter entfernen",
-    "emptyFiltered": "Keine Einträge für diese Filter"
+    "emptyFiltered": "Keine Einträge für diese Filter",
+    "live": "Live – neue Einträge erscheinen automatisch",
+    "livePaused": "Live pausiert – nur auf der ersten Seite",
+    "privacyHint": "Erfolgreiche Anmeldungen bleiben hier 30 Tage sichtbar, Fehlversuche und Änderungen länger. Wer diesen Verlauf öffnet, erscheint selbst darin. Bitte erwähnt die Protokollierung in der Datenschutzerklärung eures Vereins."
   },
   "retention": {
     "intro": "Lege fest, wie lange die Organisation bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ausgetretene Mitglieder sind ab dem Tag nach dem Austritt automatisch gesperrt; ihre Daten bleiben erhalten.",

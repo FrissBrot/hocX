@@ -20,8 +20,10 @@ from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
+from app.services.audit_service import AuditService
 
 router = APIRouter()
+_audit = AuditService()
 
 # Optionale Filter als gebundene Parameter (NULL = kein Filter). Tage in Schweizer Zeit.
 # Wer: eine Person (public_id) oder eine Art ohne Person (Plattform, System, gelöschte Person) -
@@ -38,10 +40,23 @@ _FILTERS = """
                    OR (:actor_kind = 'platform' AND l.actor_user_id IS NULL AND (l.action LIKE 'admin.%' OR l.actor_email IS NOT NULL))
                    OR (:actor_kind = 'system' AND l.actor_user_id IS NULL AND l.action NOT LIKE 'admin.%' AND l.actor_email IS NULL))"""
 
+# Datensparsamkeit: erfolgreiche Anmeldungen (wer wann online war) sieht der Verein nur
+# LOGIN_VISIBLE_DAYS Tage lang - für die Nachvollziehbarkeit von Änderungen braucht es sie nicht
+# länger. Fehlversuche bleiben (Sicherheit); die Plattform-Administration sieht alles bis zur
+# allgemeinen Aufbewahrungsfrist (audit_log_retention_days).
+LOGIN_VISIBLE_DAYS = 30
 _FROM = """
             FROM audit_log l
             LEFT JOIN app_user u ON u.id = l.actor_user_id AND u.tenant_id = l.tenant_id
-            WHERE l.tenant_id = :tenant_id"""
+            WHERE l.tenant_id = :tenant_id
+              AND NOT (l.action = 'user.login' AND l.outcome = 'success'
+                       AND l.created_at < now() - make_interval(days => 30))"""
+# Muss zu LOGIN_VISIBLE_DAYS passen (fester Wert im SQL statt Parameter: _FROM läuft auch in
+# Abfragen, die nur :tenant_id binden).
+assert "make_interval(days => %d)" % LOGIN_VISIBLE_DAYS in _FROM
+# Wer den Verlauf öffnet, steht selbst im Verlauf - höchstens einmal je Person in diesem Abstand
+# (Filterwechsel und Live-Aktualisierung zählen nicht als neues Öffnen).
+VIEW_AUDIT_INTERVAL_MINUTES = 30
 
 
 class ActivityEntry(BaseModel):
@@ -160,7 +175,26 @@ def list_activity(
             {"tenant_id": user.current_tenant_id},
         )
     )
-    return ActivityPage(items=_items(rows), total=total, categories=categories, actions=actions, actors=actors)
+    page = ActivityPage(items=_items(rows), total=total, categories=categories, actions=actions, actors=actors)
+    # Erst ganz am Ende: _audit_view committet, danach ist die Mandanten-Bindung (RLS) der Sitzung
+    # weg - spätere Abfragen in derselben Anfrage sähen sonst nichts mehr.
+    if offset == 0:
+        _audit_view(db, user)
+    return page
+
+
+def _audit_view(db: Session, user: CurrentUser) -> None:
+    """Öffnen des Verlaufs protokollieren (activity.viewed), damit niemand Mitglieder unbemerkt
+    über ihre Anmeldungen und Änderungen beobachtet. Doppel innerhalb kurzer Zeit nicht."""
+    recent = db.scalar(
+        text(
+            "SELECT 1 FROM audit_log WHERE tenant_id = :tenant_id AND actor_user_id = :user_id"
+            " AND action = 'activity.viewed' AND created_at > now() - make_interval(mins => :minutes) LIMIT 1"
+        ),
+        {"tenant_id": user.current_tenant_id, "user_id": user.user_id, "minutes": VIEW_AUDIT_INTERVAL_MINUTES},
+    )
+    if recent is None:
+        _audit.log(db, action="activity.viewed", actor=user, entity_type="audit_log")
 
 
 def _items(rows) -> list[ActivityEntry]:

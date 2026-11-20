@@ -160,7 +160,8 @@
       "user": "Konto",
       "role": "Rolle",
       "public_link": "Öffentlicher Link",
-      "context_visibility": "Sichtbarkeit von Dateien"
+      "context_visibility": "Sichtbarkeit von Dateien",
+      "activity": "Verlauf"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",

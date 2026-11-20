@@ -766,3 +766,29 @@
 .file-visibility-module .two-col {
   margin-top: var(--space-2);
 }
+
+/* Verlauf live (activity-log.tsx): Hinweis und kurz hervorgehobene neue Zeilen */
+.activity-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.activity-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.activity-live-paused .activity-live-dot {
+  background: var(--border-strong);
+}
+
+.activity-row-fresh td {
+  background: var(--accent-soft);
+  transition: background var(--dur-slow) var(--ease-out);
+}

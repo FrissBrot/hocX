@@ -280,6 +280,11 @@
   "openBox": "Ouvrir la boîte de dépôt",
   "done": "Terminé",
   "ownerAccessLabel": "Lien personnel pour les responsables",
+  "todoTagsLabel": "Tags des tâches",
+  "todoTagsHelp": "Chaque tâche de ce dépôt reçoit ces tags. Les tags ajoutés à la main sont conservés.",
+  "todoOwnTagLabel": "Créer un tag pour ce dépôt",
+  "todoOwnTagHelp": "Toutes les tâches de ce dépôt reçoivent en plus le tag « {tag} ».",
+  "todoOwnTagUntitled": "titre du dépôt",
   "helpOwnerAccess": "Les responsables reçoivent dans les e-mails concernant leur tâche de dépôt un lien personnel, même sans connexion. Ils y voient leur dépôt et peuvent, selon le réglage, le retirer et redéposer – par exemple si quelqu'un a déposé quelque chose de faux pour eux via le lien commun.",
   "ownerAccess": {
     "manage": "Consulter, retirer et redéposer",

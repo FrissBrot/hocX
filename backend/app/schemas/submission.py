@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app.models.entities import CycleConfig, ListDefinition, Tenant
 from app.schemas.base import PublicIdModel
@@ -30,6 +30,21 @@ ManualElementName = Annotated[str, StringConstraints(strip_whitespace=True, min_
 # Obergrenzen gegen übergrosse Anfragen (Formular: von Hand angelegte Elemente)
 MAX_MANUAL_ELEMENTS = 200
 MAX_ELEMENT_RESPONSIBLE = 50
+# Tags für die Pendenzen einer Abgabe (Migration 0202)
+MAX_TODO_TAGS = 20
+TODO_TAG_MAX_LENGTH = 80
+
+
+def clean_todo_tags(tags: list[str]) -> list[str]:
+    """Getrimmt, ohne leere und ohne Doppel (Gross-/Kleinschreibung egal), Reihenfolge bleibt."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        value = str(tag).strip()[:TODO_TAG_MAX_LENGTH].strip()
+        if value and value.lower() not in seen:
+            seen.add(value.lower())
+            cleaned.append(value)
+    return cleaned
 
 
 class SubmissionManualElementWrite(BaseModel):
@@ -84,6 +99,15 @@ class SubmissionAssignmentBase(BaseModel):
     owner_access: Literal["off", "view", "manage"] = "off"
     owner_access_days: int = Field(default=30, ge=1, le=90)
     owner_resubmit_only_personal: bool = False
+    # Tags für jede Pendenz der Abgabe (Migration 0202); todo_own_tag = zusätzlich ein Tag mit dem
+    # Titel der Abgabe
+    todo_tags: list[str] = Field(default_factory=list, max_length=MAX_TODO_TAGS)
+    todo_own_tag: bool = False
+
+    @field_validator("todo_tags")
+    @classmethod
+    def _clean_todo_tags(cls, value: list[str]) -> list[str]:
+        return clean_todo_tags(value)
 
 
 class SubmissionFileVisibility(BaseModel):
@@ -134,6 +158,13 @@ class SubmissionAssignmentUpdate(BaseModel):
     owner_access: Literal["off", "view", "manage"] | None = None
     owner_access_days: int | None = Field(default=None, ge=1, le=90)
     owner_resubmit_only_personal: bool | None = None
+    todo_tags: list[str] | None = Field(default=None, max_length=MAX_TODO_TAGS)
+    todo_own_tag: bool | None = None
+
+    @field_validator("todo_tags")
+    @classmethod
+    def _clean_todo_tags(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else clean_todo_tags(value)
     # None = Link-Zuordnung unveraendert lassen.
     link_ids: list[uuid.UUID] | None = None
     # None = Prüfer unverändert lassen; [] = alle entfernen (Migration 0195)

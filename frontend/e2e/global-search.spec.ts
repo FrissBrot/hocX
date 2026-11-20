@@ -97,11 +97,14 @@ test("Ctrl+F springt auf Listenseiten ins Suchfeld der Liste", async ({ page }) 
   await page.keyboard.press("Control+f");
   await expect(listSearch).toBeFocused();
 
-  // Aus dem Suchfenster heraus in der Liste suchen
+  // Aus dem Suchfenster heraus in der Liste suchen: Strg+F übernimmt den Begriff. Einen eigenen
+  // Eintrag «In dieser Liste suchen» gibt es nicht mehr (Seitenwechsel bleibt ein Enter).
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "Suchen" });
   await dialog.getByRole("combobox").fill("anna");
-  await dialog.getByRole("option", { name: /In dieser Liste/ }).click();
+  await expect(dialog.getByRole("option", { name: /In dieser Liste/ })).toHaveCount(0);
+  await page.keyboard.press("Control+f");
+  await expect(dialog).toBeHidden();
   await expect(listSearch).toHaveValue("anna");
   await expect(listSearch).toBeFocused();
 });

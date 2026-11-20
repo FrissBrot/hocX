@@ -2193,6 +2193,10 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     # Nach dem Ende des Fensters/Stichtag offen halten, bis auto_close oder Schliessen von Hand
     # greift (Migration 0173); die Pendenz bleibt am Enddatum fällig.
     keep_open_after_end: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Tags für jede Pendenz der Abgabe; todo_own_tag = zusätzlich ein Tag mit dem Titel der Abgabe
+    # (Migration 0202, Abgleich in submission_service.sync_submission_todos)
+    todo_tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    todo_own_tag: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
     # Persönlicher Link für Verantwortliche (Migration 0181): off · view · manage
     owner_access: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'off'"), default="off")

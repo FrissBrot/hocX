@@ -94,7 +94,12 @@ def test_matrix_has_routes_and_roles():
     assert any(entry.get("serves_files") for entry in MATRIX["routes"].values())
 
 
-def test_get_routes_reject_exactly_the_roles_outside_the_matrix(app_for, db):
+def test_get_routes_reject_exactly_the_roles_outside_the_matrix(app_for, db, monkeypatch):
+    # GET /activity protokolliert das Öffnen mit eigenem Commit; der wirft hier die Savepoint-Kette
+    # um (db.rollback() nach jeder Route nähme dann den Mandanten mit). Geprüft werden nur Rechte.
+    from app.api.routes import activity as activity_routes
+
+    monkeypatch.setattr(activity_routes, "_audit_view", lambda *_args, **_kwargs: None)
     findings: list[str] = []
     for role in ROLES:
         client = app_for(role)

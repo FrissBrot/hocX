@@ -160,7 +160,8 @@
       "user": "Compte",
       "role": "Rôle",
       "public_link": "Lien public",
-      "context_visibility": "Visibilité des fichiers"
+      "context_visibility": "Visibilité des fichiers",
+      "activity": "Historique"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",

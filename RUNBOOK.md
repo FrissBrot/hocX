@@ -214,6 +214,14 @@ letzte erfolgreiche Image-Set aus `.releases/current.env`. Das Manifest enthaelt
 unveraenderliche Image-Digests, nicht nur Tags. Eine bereits erfolgreiche
 Datenbankmigration wird dabei bewusst nicht automatisch zurueckgerollt.
 
+**Alte Images:** Nach einem erfolgreichen Update entfernt `deploy.sh` alte App-Images
+(`ghcr.io/<namespace>/hocx-*`, `scripts/lib/image_cleanup.sh`). Es bleiben alle Images, die ein
+Container verwendet, das aktuelle Release und die Images der letzten `HOCX_IMAGE_KEEP_RELEASES`
+Release-Manifeste in `.releases/` (Default 3, als Shell-Variable beim Aufruf von `deploy.sh`);
+`HOCX_IMAGE_CLEANUP=0` schaltet das ab. Fremde Images (postgres, redis, traefik …) werden nicht
+angefasst, nur ungetaggte (dangling) Images. Ein Zurückgehen auf ein älteres Release zieht dessen
+Images einfach neu.
+
 Falls ein Problem erst spaeter auffaellt:
 
 ```bash

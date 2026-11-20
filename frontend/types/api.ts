@@ -240,6 +240,9 @@ export type SubmissionAssignment = {
   auto_close: SubmissionAutoClose;
   /** Nach dem Enddatum offen halten (Migration 0173) */
   keep_open_after_end?: boolean;
+  /** Tags für jede Pendenz der Abgabe; todo_own_tag = zusätzlich ein Tag mit dem Titel (Migration 0202) */
+  todo_tags?: string[];
+  todo_own_tag?: boolean;
   responsible_participant_source: string | null;
   /** Persönlicher Link für Verantwortliche (Migration 0181) */
   owner_access?: "off" | "view" | "manage";

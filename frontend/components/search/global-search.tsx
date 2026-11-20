@@ -174,10 +174,9 @@ export function GlobalSearch({
     if (!trimmed) {
       return recent.map((item) => ({ ...item, group: "recent" as const }));
     }
+    // Kein Eintrag «In dieser Liste suchen» mehr (Wunsch: Seitenwechsel per Strg+K bleibt ein Enter
+    // ohne Pfeiltaste); die Listensuche hat ihr eigenes Kürzel (Hinweis unten im Fuss).
     const result: SearchEntry[] = [];
-    if (listInput) {
-      result.push({ id: "list", group: "list", label: t("inList", { query: trimmed }), action: "list" });
-    }
     const ranked = rankEntries(staticEntries, trimmed, 10);
     result.push(...ranked.filter((entry) => entry.group === "pages"), ...ranked.filter((entry) => entry.group === "settings"));
     const roleEntries: SearchEntry[] = (roles ?? []).map((role) => ({
@@ -244,10 +243,6 @@ export function GlobalSearch({
 
   function select(entry: SearchEntry) {
     onClose();
-    if (entry.action === "list") {
-      if (listInput) focusListSearch(listInput, trimmed);
-      return;
-    }
     if (entry.action) {
       onAction(entry.action);
       return;
@@ -259,6 +254,13 @@ export function GlobalSearch({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    // Strg+F / ⌘F im Suchfenster: den getippten Begriff in die Listensuche der Seite übernehmen
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f" && listInput) {
+      event.preventDefault();
+      onClose();
+      focusListSearch(listInput, trimmed);
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((current) => Math.min(entries.length - 1, current + 1));

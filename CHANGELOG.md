@@ -18,7 +18,7 @@ Mehrfachauswahl), die Seite «Kasse» mit Konten und Bussen nach Design «Kasse 
 Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
 Behebung des 504 auf Prüfseite und Abgabebox. Dazu alle Funde des Nachtlaufs vom 20.11.2026
 (Abgabebox, Bussen und Pendenzen, Fotos und Freigaben, Termine und Zyklen, Rechte im Protokoll).
-Vier Migrationen (0198, 0199, 0200, 0201), keine neuen Secrets oder Umgebungsvariablen, keine
+Fünf Migrationen (0198 bis 0202), keine neuen Secrets oder Umgebungsvariablen, keine
 Breaking Changes.
 
 ### Update
@@ -52,8 +52,16 @@ Breaking Changes.
 - **Migration `0201_abgabebox_scan_status`:** die Rolle `hocx_abgabebox` darf zusätzlich die Spalte
   `stored_file.scan_status` lesen (nur `SELECT` auf diese eine Spalte, Zeilen weiter per RLS auf den
   Link-Mandanten begrenzt). Keine Datenänderung; Downgrade nimmt das Recht wieder weg.
+- **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
+  (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv, keine Datenänderung; die Abgabebox
+  liest sie nicht. Downgrade entfernt die Spalten (Tags auf bestehenden Pendenzen bleiben).
 
 ### Geändert
+
+- **Tags für Abgabe-Pendenzen:** Im Abgabe-Assistenten (Schritt «Verantwortlich») wählt man Tags,
+  die jede Pendenz der Abgabe bekommt. Der Schalter «Abgabe-Tag erstellen» (standardmässig aus)
+  gibt zusätzlich ein Tag mit dem Titel der Abgabe. Ändert man Tags, Schalter oder Titel, ziehen
+  die Pendenzen nach; von Hand gesetzte Tags bleiben.
 
 - **Papierkorb für Dateien und Fotos:** Löschen auf der Dateien-Seite, in der Foto-Ansicht, in der
   Mehrfachauswahl und bei «Nur beste behalten» legt Direkt-Uploads in den Papierkorb, statt sie
@@ -122,6 +130,10 @@ Breaking Changes.
 - **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
   ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.
   Jetzt ist das Netz fest vorgegeben (wie beim Backend), ein Test prüft das für alle Dienste.
+- **Update räumt alte Images auf:** Nach einem erfolgreichen Update entfernt `deploy.sh` alte
+  hocX-App-Images; die Platte lief sonst mit jedem Update weiter voll. Behalten werden die von
+  Containern verwendeten Images, das aktuelle Release und die letzten 3 Releases
+  (`HOCX_IMAGE_KEEP_RELEASES`, abschaltbar mit `HOCX_IMAGE_CLEANUP=0`), fremde Images bleiben.
 - **Update prüft alle Dienste von aussen:** `deploy.sh` ruft nach dem Start jeden Traefik-Router über
   die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
   Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release

@@ -236,7 +236,10 @@
     "chipDate": "{from} – {to}",
     "removeFilter": "Remove filter “{filter}”",
     "clearAll": "Remove all filters",
-    "emptyFiltered": "No entries for these filters"
+    "emptyFiltered": "No entries for these filters",
+    "live": "Live – new entries appear automatically",
+    "livePaused": "Live paused – only on the first page",
+    "privacyHint": "Successful sign-ins stay visible here for 30 days, failed attempts and changes longer. Anyone who opens this log appears in it too. Please mention this logging in your organisation's privacy notice."
   },
   "retention": {
     "intro": "Decide how long the organization keeps certain data. All rules are off until you switch them on. hocX suggests matching entries every day; you confirm or dismiss them. Former members are locked automatically from the day after they leave; their data is kept.",

@@ -10,6 +10,8 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
+import { TagInput } from "@/components/ui/tag-input";
+import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import { formatDate, formatDateInputValue } from "@/lib/utils/format";
 import {
   CycleConfigSummary,
@@ -92,6 +94,10 @@ export type FormState = {
   file_visibility_filter: SubmissionFileVisibility["file_filter"];
   /** Elemente einer Einzelabgabe (Migration 0198), bei anderen Quellen ungenutzt */
   manual_elements: ManualElementForm[];
+  /** Tags für jede Pendenz der Abgabe (Migration 0202) */
+  todo_tags: string[];
+  /** «Abgabe-Tag erstellen»: zusätzlich ein Tag mit dem Titel der Abgabe (Standard aus) */
+  todo_own_tag: boolean;
 };
 
 export const initialForm: FormState = {
@@ -122,6 +128,8 @@ export const initialForm: FormState = {
   file_visibility: "default",
   file_visibility_filter: "images",
   manual_elements: [],
+  todo_tags: [],
+  todo_own_tag: false,
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -216,6 +224,8 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
         : assignment.manual_elements && assignment.manual_elements.length > 0
           ? assignment.manual_elements.map(manualElementFromApi)
           : [newManualElement(assignment.title, { window_end: assignment.deadline ?? "" })],
+    todo_tags: assignment.todo_tags ?? [],
+    todo_own_tag: assignment.todo_own_tag ?? false,
   };
 }
 
@@ -250,6 +260,8 @@ export function assignmentPayload(form: FormState) {
     owner_resubmit_only_personal: form.owner_access === "manage" && form.owner_resubmit_only_personal,
     link_ids: form.link_ids,
     reviewer_ids: form.reviewer_ids,
+    todo_tags: form.todo_tags,
+    todo_own_tag: form.todo_own_tag,
     file_visibility: form.file_visibility === "default"
       ? { mode: "default" as const }
       : { mode: "custom" as const, audience: form.file_visibility, file_filter: form.file_visibility_filter },
@@ -589,6 +601,8 @@ type Props = {
   availableReviewers?: SubmissionReviewerCandidate[];
   /** Personen des Mandanten für die Verantwortlichen der Elemente einer Einzelabgabe (0198) */
   availableParticipants?: ResponsibleCandidate[];
+  /** Tags des Vereins (Farben aus /api/tag-config) als Vorschläge für die Pendenzen-Tags */
+  todoTagConfig?: TagConfig;
   /** Rückfrage vor dem Entfernen eines gespeicherten Elements (seine Dateien werden gelöscht). Ohne: sofort */
   confirmRemoveElement?: (name: string) => Promise<boolean>;
   onSubmit: () => void | Promise<void>;
@@ -609,6 +623,7 @@ export function SubmissionAssignmentFormModal({
   availableEvents = [],
   availableReviewers = [],
   availableParticipants = [],
+  todoTagConfig = {},
   confirmRemoveElement,
   onSubmit,
   onClose,
@@ -1067,6 +1082,27 @@ export function SubmissionAssignmentFormModal({
               </div>
             </div>
             )}
+            {(isManual ? manualResponsibleCount(form) > 0 : form.responsible_participant_source) ? (
+              <div className="field-stack">
+                <span className="field-label">
+                  <span id="subm-todo-tags-label">{t("todoTagsLabel")}</span>
+                </span>
+                <span className="field-help">{t("todoTagsHelp")}</span>
+                <TagInput
+                  value={form.todo_tags.join(",")}
+                  onChange={(value) => setForm((c) => ({ ...c, todo_tags: value.split(",").map((tag) => tag.trim()).filter(Boolean) }))}
+                  suggestions={Object.keys(todoTagConfig)}
+                  tagConfig={todoTagConfig}
+                />
+                <label className="checkbox-row">
+                  <input type="checkbox" checked={form.todo_own_tag} onChange={(event) => setForm((c) => ({ ...c, todo_own_tag: event.target.checked }))} />
+                  <span>
+                    {t("todoOwnTagLabel")}
+                    <span className="field-help"> {t("todoOwnTagHelp", { tag: form.title.trim() || t("todoOwnTagUntitled") })}</span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
             {(isManual ? manualResponsibleCount(form) > 0 : form.responsible_participant_source) ? (
               <div className="field-stack">
                 <span className="field-label">

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { StatusBanner } from "@/components/ui/status-banner";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
@@ -287,6 +288,8 @@ function VerifiedIcon() {
 
 export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null, availableReviewers = [], canManage = true, canReview = true }: Props) {
   const t = useTranslations("submissionAssignments");
+  // Vorschläge für die Pendenzen-Tags einer Abgabe (Migration 0202)
+  const { tagConfig: todoTagConfig } = useTagConfig();
   const locale = useLocale();
   const tHelp = useTranslations("common.help");
   const showToast = useToast();
@@ -1066,6 +1069,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         availableEvents={availableEvents}
         availableReviewers={availableReviewers}
         availableParticipants={availableParticipants}
+        todoTagConfig={todoTagConfig}
         confirmRemoveElement={(name) =>
           confirm({ message: t("wizard.manual.removeConfirm", { name }), tone: "danger", confirmLabel: t("wizard.manual.removeConfirmLabel") })
         }

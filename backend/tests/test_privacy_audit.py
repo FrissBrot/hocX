@@ -109,12 +109,51 @@ def test_activity_filters_every_column(db):
     assert actions(actor=str(other.public_id)) == ["user.login", "user.login"]
     assert actions(actor="platform") == ["admin.tenant_users_viewed"]
     assert actions(date_to=date.today() - timedelta(days=5)) == ["protocol.deleted"]
-    assert actions(date_from=date.today() - timedelta(days=1)) == ["admin.tenant_users_viewed", "user.login", "user.login"]
+    # «activity.viewed»: das Öffnen des Verlaufs (erster Aufruf oben) steht selbst darin
+    assert actions(date_from=date.today() - timedelta(days=1)) == ["activity.viewed", "admin.tenant_users_viewed", "user.login", "user.login"]
     assert actions(actor="kein-uuid") == []
 
     page = _activity(db, viewer)
     assert set(page.actions) >= {"protocol.deleted", "user.login", "admin.tenant_users_viewed"}
     assert {actor.key for actor in page.actors} == {str(admin.public_id), str(other.public_id), "platform"}
+
+
+def test_activity_hides_successful_logins_after_30_days(db):
+    """Datensparsamkeit: wer wann angemeldet war, sieht der Verein nur 30 Tage; Fehlversuche und
+    Änderungen bleiben länger sichtbar."""
+    tenant = make_tenant(db, "Verlauf Anmeldungen")
+    admin = make_app_user(db, email="login-admin@example.com", tenant_id=tenant.id, role_code="admin")
+    audit = AuditService()
+    for action, outcome in (("user.login", "success"), ("user.login", "failure"), ("protocol.deleted", "success")):
+        audit.log(db, action=action, tenant_id=tenant.id, actor_user_id=admin.id, outcome=outcome)
+    db.execute(text("UPDATE audit_log SET created_at = now() - interval '31 days' WHERE tenant_id = :t"), {"t": tenant.id})
+    audit.log(db, action="user.login", tenant_id=tenant.id, actor_user_id=admin.id)
+    db.flush()
+
+    page = _activity(db, make_current_user(tenant.id, role="admin", user_id=admin.id), with_options=False)
+
+    assert sorted((item.action, item.outcome) for item in page.items) == [
+        ("protocol.deleted", "success"), ("user.login", "failure"), ("user.login", "success"),
+    ]
+    assert page.total == 3
+    # In der Datenbank (Plattform-Administration) bleibt die alte Anmeldung
+    assert db.scalar(text("SELECT count(*) FROM audit_log WHERE tenant_id = :t AND action = 'user.login' AND outcome = 'success'"), {"t": tenant.id}) == 2
+
+
+def test_opening_the_activity_log_is_itself_logged_once(db):
+    tenant = make_tenant(db, "Verlauf geöffnet")
+    admin = make_app_user(db, email="viewer-admin@example.com", tenant_id=tenant.id, role_code="admin")
+    viewer = make_current_user(tenant.id, role="admin", user_id=admin.id)
+
+    _activity(db, viewer)
+    _activity(db, viewer, category="protocol")  # Filterwechsel: kein zweiter Eintrag
+    _activity(db, viewer, with_options=False)  # Live-Aktualisierung/Blättern: auch nicht
+
+    viewed = db.execute(
+        text("SELECT actor_user_id FROM audit_log WHERE tenant_id = :t AND action = 'activity.viewed'"), {"t": tenant.id}
+    ).all()
+    assert [row.actor_user_id for row in viewed] == [admin.id]
+    assert any(item.action == "activity.viewed" for item in _activity(db, viewer, with_options=False).items)
 
 
 def test_deleting_a_person_removes_their_email_from_the_audit_log(db):

@@ -280,20 +280,42 @@
   position: relative;
 }
 
-.photo-viewer-pill-accent {
+/* Knöpfe oben im Foto-Viewer. Die Varianten brauchen den Präfix .photo-viewer-actions: sonst
+   gewinnt «.photo-viewer-actions .pill» (globals.css, spezifischer) und nur der Hover-Hintergrund
+   der vollen Variante griff - weisser Text auf weissem Grund. */
+.photo-viewer-actions .pill {
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.photo-viewer-actions .pill:hover,
+.photo-viewer-actions .pill:focus-visible {
+  background: color-mix(in srgb, var(--on-solid) 20%, transparent);
+  border-color: color-mix(in srgb, var(--on-solid) 32%, transparent);
+}
+
+.photo-viewer-actions .photo-viewer-pill-accent {
   background: color-mix(in srgb, var(--warning-fg) 32%, transparent);
   border-color: color-mix(in srgb, var(--warning-fg) 55%, transparent);
   color: var(--warning-fg);
 }
 
-.photo-viewer-pill-solid {
+.photo-viewer-actions .photo-viewer-pill-accent:hover,
+.photo-viewer-actions .photo-viewer-pill-accent:focus-visible {
+  background: color-mix(in srgb, var(--warning-fg) 44%, transparent);
+  border-color: var(--warning-fg);
+}
+
+.photo-viewer-actions .photo-viewer-pill-solid {
   background: var(--on-solid);
   border-color: var(--on-solid);
   color: var(--pv-bg);
 }
 
-.photo-viewer-pill-solid:hover {
-  background: color-mix(in srgb, var(--on-solid) 88%, transparent);
+.photo-viewer-actions .photo-viewer-pill-solid:hover,
+.photo-viewer-actions .photo-viewer-pill-solid:focus-visible {
+  background: color-mix(in srgb, var(--on-solid) 82%, transparent);
+  border-color: color-mix(in srgb, var(--on-solid) 82%, transparent);
+  color: var(--pv-bg);
 }
 
 @media (max-width: 900px) {

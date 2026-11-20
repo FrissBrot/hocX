@@ -63,6 +63,28 @@ def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
 SUBMISSION_ELEMENT_LOCK_NAMESPACE = 909100002
 
 
+def submission_todo_tags(assignment: SubmissionAssignment) -> list[str]:
+    """Tags, die jede Pendenz der Abgabe bekommt (Migration 0202): die gewählten Tags und, mit
+    «Abgabe-Tag erstellen», ein eigenes Tag mit dem Titel der Abgabe."""
+    from app.schemas.submission import clean_todo_tags
+
+    tags = list(assignment.todo_tags or [])
+    if assignment.todo_own_tag and (assignment.title or "").strip():
+        tags.append(assignment.title)
+    return clean_todo_tags(tags)
+
+
+def merge_submission_todo_tags(current: list[str], *, previous: list[str], wanted: list[str]) -> list[str]:
+    """Tags einer Pendenz nach dem Abgleich: vorher von der Abgabe vorgegebene, nicht mehr gewollte
+    Tags fallen weg, gewollte kommen dazu; von Hand gesetzte bleiben, Reihenfolge bleibt."""
+    wanted_lower = {tag.lower() for tag in wanted}
+    dropped = {tag.lower() for tag in previous} - wanted_lower
+    result = [tag for tag in (current or []) if str(tag).lower() not in dropped]
+    present = {str(tag).lower() for tag in result}
+    result += [tag for tag in wanted if tag.lower() not in present]
+    return result
+
+
 def window_expired(element: SubmissionElementRead, assignment: SubmissionAssignment, today: date) -> bool:
     """Element automatisch zu: Fenster bzw. Stichtag vorbei und die Abgabe hält es danach nicht
     offen (``keep_open_after_end``, Migration 0173). Gleiche Regel wie die Abgabebox
@@ -389,9 +411,12 @@ class SubmissionService:
         values = payload.model_dump(exclude_unset=True)
         if values.get("keep_open_after_end", False) is None:
             values.pop("keep_open_after_end")  # null = unverändert (Spalte ist NOT NULL)
-        for key in ("owner_access", "owner_access_days", "owner_resubmit_only_personal"):
+        for key in ("owner_access", "owner_access_days", "owner_resubmit_only_personal", "todo_tags", "todo_own_tag"):
             if key in values and values[key] is None:
                 values.pop(key)  # null = unverändert (Spalten sind NOT NULL)
+        # Vor der Änderung: welche Tags die Pendenzen bisher von der Abgabe bekamen (Titel, Tags,
+        # Schalter können sich ändern) - der Abgleich nimmt nur diese wieder weg.
+        previous_todo_tags = submission_todo_tags(assignment)
         values.pop("reviewer_ids", None)  # Prüfer setzt die Route (submission_reviewer_service)
         values.pop("file_visibility", None)  # Kontext-Freigabe setzt die Route (context_visibility_service)
         values.pop("manual_elements", None)
@@ -452,7 +477,7 @@ class SubmissionService:
         eraser.after_commit(db)
         if link_ids is not None:
             self.refresh_todo_links(db, updated)
-        self.sync_todos_if_tracked(db, updated)
+        self.sync_todos_if_tracked(db, updated, previous_todo_tags=previous_todo_tags)
         return self._assignment_read(updated, db)
 
     def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
@@ -1018,7 +1043,9 @@ class SubmissionService:
             raise RuntimeError(f"{failed} Abgabe(n) konnten nicht abgeglichen werden")
         return {"assignments": synced}
 
-    def sync_todos_if_tracked(self, db: Session, assignment: SubmissionAssignment) -> bool:
+    def sync_todos_if_tracked(
+        self, db: Session, assignment: SubmissionAssignment, *, previous_todo_tags: list[str] | None = None
+    ) -> bool:
         """Automatischer Todo-Abgleich (FAR-010): nach Anlegen/Ändern einer Abgabe, eines
         Termins oder eines Listeneintrags und periodisch im Job submission_todo_sync.
 
@@ -1032,7 +1059,7 @@ class SubmissionService:
                 if self.refresh_completion(db, assignment):
                     db.commit()
                 return True
-            self.sync_submission_todos(db, assignment)
+            self.sync_submission_todos(db, assignment, previous_todo_tags=previous_todo_tags)
         except Exception as exc:
             # Nur ein Datenbankfehler hinterlässt eine abgebrochene Transaktion; alles andere
             # lässt die bereits committete auslösende Änderung unberührt.
@@ -1042,7 +1069,9 @@ class SubmissionService:
             return False
         return True
 
-    def sync_submission_todos(self, db: Session, assignment: SubmissionAssignment) -> dict:
+    def sync_submission_todos(
+        self, db: Session, assignment: SubmissionAssignment, *, previous_todo_tags: list[str] | None = None
+    ) -> dict:
         """Eine Pendenz je Element mit Verantwortlicher Person; Titel, Person, Frist und Link
         folgen dem Element. Hat das Element schon Dateien, ist die Pendenz erledigt (auch bei
         direkt verknüpften Dateien, die den Datenbank-Trigger nicht auslösen).
@@ -1074,6 +1103,9 @@ class SubmissionService:
 
         created = updated = removed = 0
         today = local_today()
+        # Tags der Abgabe (0202); previous_todo_tags = Vorgabe vor einer Änderung der Abgabe
+        wanted_tags = submission_todo_tags(assignment)
+        previous_tags = wanted_tags if previous_todo_tags is None else previous_todo_tags
         base_url = submission_link_service.abgabebox_base_url(db, assignment.tenant_id)
         current_refs: set[str] = set()
 
@@ -1104,7 +1136,7 @@ class SubmissionService:
                     todo_status_id=open_id,
                     due_date=due_date,
                     reference_link=url,
-                    tags=[],
+                    tags=list(wanted_tags),
                     submission_assignment_id=assignment.id,
                     element_ref=element_ref,
                 )
@@ -1114,6 +1146,9 @@ class SubmissionService:
             else:
                 updated += 1
             previous_due = todo.due_date
+            merged_tags = merge_submission_todo_tags(list(todo.tags or []), previous=previous_tags, wanted=wanted_tags)
+            if merged_tags != list(todo.tags or []):
+                todo.tags = merged_tags
             todo.task = task
             todo.due_date = due_date
             todo.reference_link = url

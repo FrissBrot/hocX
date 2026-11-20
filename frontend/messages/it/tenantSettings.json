@@ -236,7 +236,10 @@
     "chipDate": "{from} – {to}",
     "removeFilter": "Rimuovi filtro «{filter}»",
     "clearAll": "Rimuovi tutti i filtri",
-    "emptyFiltered": "Nessuna voce per questi filtri"
+    "emptyFiltered": "Nessuna voce per questi filtri",
+    "live": "In diretta – le nuove voci compaiono automaticamente",
+    "livePaused": "Diretta in pausa – solo sulla prima pagina",
+    "privacyHint": "Gli accessi riusciti restano visibili qui per 30 giorni, i tentativi falliti e le modifiche più a lungo. Chi apre questa cronologia vi compare a sua volta. Menziona questa registrazione nell'informativa sulla privacy della tua associazione."
   },
   "retention": {
     "intro": "Stabilisci per quanto tempo l’organizzazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono bloccati automaticamente dal giorno dopo l’uscita; i loro dati restano conservati.",

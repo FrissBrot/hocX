@@ -280,6 +280,11 @@
   "openBox": "Abgabebox öffnen",
   "done": "Fertig",
   "ownerAccessLabel": "Persönlicher Link für Verantwortliche",
+  "todoTagsLabel": "Tags für die Pendenzen",
+  "todoTagsHelp": "Jede Pendenz dieser Abgabe bekommt diese Tags. Von Hand ergänzte Tags bleiben erhalten.",
+  "todoOwnTagLabel": "Abgabe-Tag erstellen",
+  "todoOwnTagHelp": "Alle Pendenzen dieser Abgabe bekommen zusätzlich das Tag «{tag}».",
+  "todoOwnTagUntitled": "Titel der Abgabe",
   "helpOwnerAccess": "Verantwortliche bekommen in den Mails zu ihrer Abgabe-Pendenz einen eigenen Link, auch ohne Login. Darüber sehen sie ihre Abgabe und können sie je nach Einstellung zurückziehen und neu abgeben – zum Beispiel, wenn jemand über den gemeinsamen Abgabebox-Link etwas Falsches für sie abgegeben hat.",
   "ownerAccess": {
     "manage": "Ansehen, zurückziehen und neu abgeben",

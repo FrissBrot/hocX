@@ -26,7 +26,7 @@ export type SearchEntry = {
   icon?: NavIconKey;
   href?: string;
   /** Aktion statt Link (Profil, Darstellung) */
-  action?: "profile" | "theme-light" | "theme-dark" | "theme-auto" | "list";
+  action?: "profile" | "theme-light" | "theme-dark" | "theme-auto";
 };
 
 type TFunc = (key: string) => string;

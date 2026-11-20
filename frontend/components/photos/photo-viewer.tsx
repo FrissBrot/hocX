@@ -257,7 +257,7 @@ export function PhotoViewer({
         </div>
         <div className="photo-viewer-actions">
           <button type="button" className="pill" onClick={() => void saveAndClose()}>{t("galleryPill")}</button>
-          <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
+          <button type="button" className={item.is_best ? "pill photo-viewer-pill-accent" : "pill"} aria-pressed={Boolean(item.is_best)} onClick={() => onToggleBest(item)}>
             {item.is_best ? t("bestOn") : t("bestOff")}
           </button>
           <HelpPopover topic={t("bestHelpTopic")} docs={{ page: "fotos", anchor: "best-of" }}>{t("bestHelp")}</HelpPopover>
