@@ -31,6 +31,7 @@ from app.models.document_entities import Document, DocumentFile, DocumentVersion
 from app.services import public_id_service
 from app.services.capture_date import date_source_sql, effective_capture_date_sql
 from app.core.sql_like import LIKE_ESCAPE, contains_pattern
+from app.services.photo_search import SearchPlan, build_search_plan, search_scores_subquery
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
 # per-tenant scout/school data (hundreds to low thousands of files), not enterprise scale,
@@ -414,6 +415,7 @@ class StoredFileRepository:
         self,
         tenant_id: int | None,
         *,
+        search_plan: "SearchPlan | None" = None,
         source: str | None = None,
         only_images: bool = False,
         exclude_images: bool = False,
@@ -461,10 +463,29 @@ class StoredFileRepository:
             query = query.where(
                 or_(union_query.c.mime_type.is_(None), union_query.c.mime_type.notlike("image/%"))
             )
-        if search:
-            # Name, Tag oder Termin: besides the file name also the linked protocol/abgabe/
-            # Termin (ref_label/context_label), the computed origin_tag and the user tags
-            # (jsonb array matched as its text form - good enough for a substring search).
+        scores = None
+        search_tenant_id = tenant_id if tenant_id is not None else viewer_tenant_id
+        if search and search_plan is not None and search_tenant_id is not None:
+            # Tolerante, gerankte Suche (services/photo_search.py): Bewertung aus dem Suchdokument
+            # des eigenen Mandanten; Papierkorb, Reichweite und Albumfilter bleiben hier.
+            scores = search_scores_subquery(search_plan, search_tenant_id)
+            if tenant_id is None:
+                # Geteiltes Album: Fotos des Partners nur über den Dateinamen (dessen Tags, Titel und
+                # Herkunft sieht der Betrachter nicht, also darf er sie auch nicht abfragen).
+                query = query.outerjoin(scores, scores.c.stored_file_id == union_query.c.id).where(
+                    or_(
+                        and_(union_query.c.tenant_id == search_tenant_id, scores.c.stored_file_id.is_not(None)),
+                        and_(
+                            union_query.c.tenant_id != search_tenant_id,
+                            union_query.c.original_name.ilike(contains_pattern(search.strip()), escape=LIKE_ESCAPE),
+                        ),
+                    )
+                )
+            else:
+                query = query.join(scores, scores.c.stored_file_id == union_query.c.id)
+        elif search:
+            # Ohne Mandantenbezug (nur interne Aufrufe): bisherige Teilstring-Suche über Name, Bezug,
+            # Herkunft und Tags.
             pattern = contains_pattern(search)
             context_match = or_(
                 cast(union_query.c.ref_label, String).ilike(pattern, escape=LIKE_ESCAPE),
@@ -509,7 +530,13 @@ class StoredFileRepository:
             from app.services.context_visibility_service import abgabe_scope_clause
 
             query = query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
-        return query, union_query
+        return query, union_query, scores
+
+    def _search_plan(self, db: Session, tenant_id: int | None, search: str | None, viewer_tenant_id: int | None):
+        search_tenant_id = tenant_id if tenant_id is not None else viewer_tenant_id
+        if not search or not search.strip() or search_tenant_id is None:
+            return None
+        return build_search_plan(db, search_tenant_id, search)
 
     def tenant_files_timeline(
         self,
@@ -521,7 +548,8 @@ class StoredFileRepository:
     ) -> list[Row]:
         """Anzahl Einträge je group_date (Tag) mit denselben Filtern wie list_tenant_files. Damit
         kennt die Fotogalerie Höhe und Zeitstrahl des ganzen Bestands, bevor ein Bild geladen ist."""
-        query, _union = self._overview_query(tenant_id, **filters)
+        plan = self._search_plan(db, tenant_id, filters.get("search"), filters.get("viewer_tenant_id"))
+        query, _union, _scores = self._overview_query(tenant_id, search_plan=plan, **filters)
         filtered = query.subquery("timeline_source")
         day = filtered.c.group_date
         statement = (
@@ -583,8 +611,9 @@ class StoredFileRepository:
         False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese.
         date_from/date_to (inklusive) begrenzen auf group_date - die Zeitleiste der Fotos lädt
         damit gezielt die sichtbaren Tage statt seitenweise von oben."""
-        query, union_query = self._overview_query(
-            tenant_id, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
+        plan = self._search_plan(db, tenant_id, search, viewer_tenant_id)
+        query, union_query, scores = self._overview_query(
+            tenant_id, search_plan=plan, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
             date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
             readable_assignment_ids=readable_assignment_ids,
@@ -598,10 +627,19 @@ class StoredFileRepository:
             "exposure_score": union_query.c.exposure_score,
             "face_quality_score": union_query.c.face_quality_score,
             "group_date": union_query.c.group_date,
+            "relevance": union_query.c.group_date,
         }.get(sort_by, union_query.c.created_at)
-        order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
-        orderings = [order]
-        if sort_by == "group_date":
+        orderings = []
+        if sort_by == "relevance" and scores is not None:
+            # Beste Treffer zuerst: getroffene Wörter, dann Qualität; bei Gleichstand neueste zuerst.
+            # Partnerfotos im geteilten Album (nur Dateiname) wie ein einzelner Treffer.
+            orderings += [
+                func.coalesce(scores.c.matched, 1).desc(),
+                func.coalesce(scores.c.score, 0.5).desc(),
+            ]
+            sort_column, sort_dir = union_query.c.group_date, "desc"
+        orderings.append(sort_column.asc() if sort_dir == "asc" else sort_column.desc())
+        if sort_by in ("group_date", "relevance"):
             # Innerhalb eines Tages nach Aufnahmezeit, korrigierte vor EXIF (capture_date.py; ein
             # geschaetztes Datum hat keine Uhrzeit, dort entscheidet die Uploadzeit) - gleiche
             # Richtung wie der Tag selbst.

@@ -324,7 +324,7 @@
     "bestError": "Impossibile modificare lo stato best-of.",
     "bestUnscopedError": "Questa foto non appartiene a nessun album - il best-of è possibile solo all’interno di un album.",
     "createAssignmentButton": "Crea cassetta di consegna",
-    "description": "Tutte le foto della tua organizzazione – da verbali, consegne e immagini caricate direttamente nella galleria.",
+    "description": "Tutte le foto della tua organizzazione – da verbali, consegne e caricamenti nella galleria.",
     "dropOverlayHint": "Immagini o file ZIP - imposterai il caricamento in seguito.",
     "dropOverlayTitle": "Rilascia per caricare",
     "emptyDescription": "Non appena vengono inserite immagini nei verbali, consegnate tramite una cassetta di consegna o caricate qui, compaiono in questa galleria.",
@@ -351,14 +351,15 @@
     "reloadError": "Impossibile ricaricare le foto.",
     "retry": "Riprova",
     "reviewLink": "Verifica",
-    "searchPlaceholder": "Cerca foto",
+    "searchPlaceholder": "Cerca per nome, tag, consegna, evento, data …",
     "singleAlbumNotice": "{count, plural, one {1 foto nell’album condiviso «{albumName}» è ancora in attesa della tua approvazione.} other {# foto nell’album condiviso «{albumName}» sono ancora in attesa della tua approvazione.}}",
     "sortOptions": {
       "exposure": "Esposizione (migliori prima)",
       "faceQuality": "Qualità del volto (migliori prima)",
       "newest": "Più recenti prima",
       "oldest": "Più vecchie prima",
-      "sharpness": "Nitidezza (più nitide prima)"
+      "sharpness": "Nitidezza (più nitide prima)",
+      "relevance": "Risultati migliori"
     },
     "tabs": {
       "albums": "Album",
@@ -368,7 +369,7 @@
     },
     "tagPlaceholder": "Filtra per tag",
     "uploadAlbumAssignError": "Immagini caricate, ma l’assegnazione all’album non è riuscita.",
-    "uploadButton": "+ Carica immagini",
+    "uploadButton": "Carica immagini",
     "uploadPillNoTotal": "Caricamento galleria in corso · {processed} immagini",
     "uploadPillTotal": "Caricamento galleria in corso · {processed} di {total} immagini",
     "uploadQueuedToast": "Caricamento in corso, elaborazione in background…",
@@ -380,7 +381,26 @@
     "removeFromAlbumError": "Non è stato possibile togliere le foto dall’album. In un album condiviso puoi togliere solo le foto della tua organizzazione.",
     "galleryJobFailed": "Il caricamento non è stato completato a causa di un errore tecnico. Le foto già salvate restano – carica di nuovo le altre.",
     "analysisHelpTopic": "Analisi delle foto",
-    "analysisHelp": "Nitidezza, esposizione e volti vengono valutati in background. Da qui derivano l’ordinamento per qualità e i suggerimenti «Best-of». L’analisi non modifica nessuna foto."
+    "analysisHelp": "Nitidezza, esposizione e volti vengono valutati in background. Da qui derivano l’ordinamento per qualità e i suggerimenti «Best-of». L’analisi non modifica nessuna foto.",
+    "noResultsFor": "Nessuna foto per «{query}»",
+    "noResultsFiltered": "Nessuna foto corrisponde a questi filtri",
+    "noResultsHint": "Prova un altro termine o <reset>reimposta i filtri</reset>.",
+    "header": {
+      "countLabel": "{count, plural, one {# foto} other {# foto}}"
+    },
+    "toolbar": {
+      "searchLabel": "Cerca foto",
+      "clearSearch": "Cancella ricerca",
+      "sortLabel": "Ordinamento: {current}",
+      "tagsButton": "Tag",
+      "tagsButtonCount": "{count, plural, one {Tag · #} other {Tag · #}}",
+      "searching": "Ricerca in corso …",
+      "resultCount": "{count} di {total} foto",
+      "resultCountOnly": "{count} foto",
+      "searchChip": "«{query}»",
+      "removeTag": "Rimuovi tag «{tag}»",
+      "reset": "Reimposta filtri"
+    }
   },
   "viewer": {
     "analysisPending": "Analisi in sospeso",

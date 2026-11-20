@@ -128,8 +128,10 @@ def list_files(
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
+    # relevance: beste Treffer der Suche zuerst (services/photo_search.py), ohne Suche wie group_date
     sort_by: Literal[
-        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score", "group_date"
+        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score", "group_date",
+        "relevance",
     ] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     # Nur Einträge dieser Tage (group_date, inklusive) - die Zeitleiste der Fotos lädt die sichtbaren Tage.

@@ -324,7 +324,7 @@
     "bestError": "Impossible de modifier le statut best-of.",
     "bestUnscopedError": "Cette photo n’appartient à aucun album - le best-of n’est possible qu’au sein d’un album.",
     "createAssignmentButton": "Créer une boîte de dépôt",
-    "description": "Toutes les photos de votre organisation – issues de procès-verbaux, de dépôts et d’images importées directement dans la galerie.",
+    "description": "Toutes les photos de votre organisation – issues de procès-verbaux, de dépôts et d’imports dans la galerie.",
     "dropOverlayHint": "Images ou fichiers ZIP - vous configurerez l’import ensuite.",
     "dropOverlayTitle": "Relâchez pour importer",
     "emptyDescription": "Dès que des images sont insérées dans des procès-verbaux, soumises via une boîte de dépôt ou importées ici, elles apparaissent dans cette galerie.",
@@ -351,14 +351,15 @@
     "reloadError": "Impossible de recharger les photos.",
     "retry": "Réessayer",
     "reviewLink": "Vérifier",
-    "searchPlaceholder": "Rechercher des photos",
+    "searchPlaceholder": "Rechercher par nom, tag, dépôt, événement, date …",
     "singleAlbumNotice": "{count, plural, one {1 photo de l’album partagé « {albumName} » attend encore votre validation.} other {# photos de l’album partagé « {albumName} » attendent encore votre validation.}}",
     "sortOptions": {
       "exposure": "Exposition (les meilleures d’abord)",
       "faceQuality": "Qualité du visage (les meilleures d’abord)",
       "newest": "Plus récentes d’abord",
       "oldest": "Plus anciennes d’abord",
-      "sharpness": "Netteté (les plus nettes d’abord)"
+      "sharpness": "Netteté (les plus nettes d’abord)",
+      "relevance": "Meilleurs résultats"
     },
     "tabs": {
       "albums": "Albums",
@@ -368,7 +369,7 @@
     },
     "tagPlaceholder": "Filtrer par tag",
     "uploadAlbumAssignError": "Images importées, mais l’association à l’album a échoué.",
-    "uploadButton": "+ Importer des images",
+    "uploadButton": "Importer des images",
     "uploadPillNoTotal": "Import de galerie en cours · {processed} images",
     "uploadPillTotal": "Import de galerie en cours · {processed} sur {total} images",
     "uploadQueuedToast": "Importation en cours, traitement en arrière-plan…",
@@ -380,7 +381,26 @@
     "removeFromAlbumError": "Les photos n’ont pas pu être retirées de l’album. Dans un album partagé, vous ne pouvez retirer que les photos de votre propre organisation.",
     "galleryJobFailed": "Le téléversement n’a pas pu être terminé en raison d’une erreur technique. Les photos déjà enregistrées sont conservées – veuillez téléverser à nouveau les autres.",
     "analysisHelpTopic": "Analyse des photos",
-    "analysisHelp": "La netteté, l’exposition et les visages sont évalués en arrière-plan. Cela sert au tri par qualité et aux suggestions « Best-of ». L’analyse ne modifie aucune photo."
+    "analysisHelp": "La netteté, l’exposition et les visages sont évalués en arrière-plan. Cela sert au tri par qualité et aux suggestions « Best-of ». L’analyse ne modifie aucune photo.",
+    "noResultsFor": "Aucune photo pour « {query} »",
+    "noResultsFiltered": "Aucune photo ne correspond à ces filtres",
+    "noResultsHint": "Essayez un autre terme ou <reset>réinitialisez les filtres</reset>.",
+    "header": {
+      "countLabel": "{count, plural, one {# photo} other {# photos}}"
+    },
+    "toolbar": {
+      "searchLabel": "Rechercher des photos",
+      "clearSearch": "Effacer la recherche",
+      "sortLabel": "Tri : {current}",
+      "tagsButton": "Tags",
+      "tagsButtonCount": "{count, plural, one {Tags · #} other {Tags · #}}",
+      "searching": "Recherche en cours …",
+      "resultCount": "{count} sur {total} {totalValue, plural, one {photo} other {photos}}",
+      "resultCountOnly": "{count} {countValue, plural, one {photo} other {photos}}",
+      "searchChip": "« {query} »",
+      "removeTag": "Retirer le tag « {tag} »",
+      "reset": "Réinitialiser les filtres"
+    }
   },
   "viewer": {
     "analysisPending": "Analyse en attente",

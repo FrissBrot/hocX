@@ -1348,3 +1348,93 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+/* Kopf und Werkzeugkasten nach Design «hocX Fotos Header 1a» (components/photos/photos-header.tsx) */
+.photos-page-header { align-items: flex-end; flex-wrap: wrap; gap: var(--space-4); }
+.photos-title-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.photos-count-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.photos-lead { max-width: 620px; margin-top: var(--space-1); }
+.photos-header-actions .photos-header-button,
+.photos-header-actions .photos-upload-button { display: inline-flex; align-items: center; gap: var(--space-2); width: auto; padding-inline: var(--space-4); }
+
+.photos-toolbar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.photos-toolbar-main { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2); }
+.photos-toolbar-main .filter-tabs { background: var(--neutral-bg); border-color: transparent; }
+.photos-toolbar-search { flex: 1 1 200px; min-width: 200px; }
+.photos-toolbar-search .search-input input { background: var(--panel-solid); border: 1px solid var(--border-strong); }
+.photos-toolbar-search .search-input input:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.photos-toolbar-button { display: inline-flex; align-items: center; gap: var(--space-2); width: auto; padding-inline: var(--space-3); white-space: nowrap; }
+.photos-toolbar-button-active { --button-bg: var(--accent-soft); --button-hover-bg: var(--accent-soft); color: var(--accent-strong); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.photos-toolbar-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.photos-sort-panel { display: grid; gap: 2px; min-width: 220px; }
+.photos-tags-panel { width: min(360px, calc(100vw - 32px)); }
+
+.photos-toolbar-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.photos-toolbar-count { font-variant-numeric: tabular-nums; }
+.photos-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1) 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+.photos-filter-chip-remove {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+}
+.photos-filter-chip-remove:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.photos-filter-reset {
+  width: auto;
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: inherit;
+  font-weight: 600;
+}
+.photos-filter-reset:hover { text-decoration: underline; }
+.photos-filter-reset-inline { margin-left: 0; }
+
+.photos-no-results { display: grid; justify-items: center; gap: var(--space-1); padding: 48px var(--space-4); text-align: center; }
+
+@media (max-width: 640px) {
+  .photos-toolbar-search { flex-basis: 100%; min-width: 0; }
+  .photos-toolbar-main .mobile-segmented { flex-basis: 100%; }
+}

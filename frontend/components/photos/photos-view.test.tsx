@@ -43,6 +43,9 @@ class FakeIntersectionObserver implements IntersectionObserver {
 
 import { PhotosView } from "./photos-view";
 
+// Tausendertrennung wie in der App (de-CH), je nach ICU-Version ' oder ’
+const N1553 = new Intl.NumberFormat("de-CH").format(1553);
+
 function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   const id = overrides.id ?? `file-${Math.random().toString(36).slice(2)}`;
   return {
@@ -125,6 +128,33 @@ describe("PhotosView", () => {
     mockFilesAndProgress([], NO_PROGRESS);
     render(<PhotosView />);
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate", "Ähnliche"]);
+  });
+
+  it("sucht entprellt nach Relevanz, zeigt Anzahl und Leerzustand und setzt zurück", async () => {
+    mockFilesAndProgress([makeItem({ id: "a" })], { ...NO_PROGRESS, total_images: 1553 });
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/files/analysis-progress") return Promise.resolve({ ...NO_PROGRESS, total_images: 1553 });
+      if (url.startsWith("/api/files/timeline?")) return Promise.resolve(url.includes("search=") ? [] : timelineFor([makeItem({ id: "a" })]));
+      if (url.startsWith("/api/files?")) return Promise.resolve(url.includes("search=") ? [] : [makeItem({ id: "a" })]);
+      return Promise.resolve([]);
+    });
+    render(<PhotosView />);
+    const input = screen.getByRole("textbox", { name: "Fotos durchsuchen" });
+    fireEvent.change(input, { target: { value: "stadt" } });
+    fireEvent.change(input, { target: { value: "stadt game" } });
+
+    expect(await screen.findByText("Keine Fotos für „stadt game“")).toBeInTheDocument();
+    const searches = browserApiFetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith("/api/files?") && url.includes("search="));
+    // Nur die fertige Eingabe geht ans Backend, sortiert nach besten Treffern
+    expect(searches).toHaveLength(1);
+    expect(searches[0]).toContain("search=stadt+game");
+    expect(searches[0]).toContain("sort_by=relevance");
+    expect(await screen.findByText(`0 von ${N1553} Fotos`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sortierung: Beste Treffer" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Filter zurücksetzen" }));
+    await waitFor(() => expect(screen.queryByText("Keine Fotos für „stadt game“")).not.toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Fotos durchsuchen" })).toHaveValue("");
   });
 
   it("has no manual analysis button - analysis runs automatically", async () => {

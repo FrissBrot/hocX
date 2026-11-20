@@ -324,7 +324,7 @@
     "bestError": "The best-of status could not be changed.",
     "bestUnscopedError": "This photo doesn't belong to an album - best-of is only possible within an album.",
     "createAssignmentButton": "Create submission box",
-    "description": "All photos of your organization – from protocols, submissions and directly uploaded gallery images.",
+    "description": "All photos of your organization – from protocols, submissions and gallery uploads.",
     "dropOverlayHint": "Images or ZIP files - you'll set up the upload afterwards.",
     "dropOverlayTitle": "Release to upload",
     "emptyDescription": "As soon as images are inserted into protocols, submitted via a submission box, or uploaded here, they appear in this gallery.",
@@ -351,14 +351,15 @@
     "reloadError": "Photos could not be reloaded.",
     "retry": "Try again",
     "reviewLink": "Review",
-    "searchPlaceholder": "Search photos",
+    "searchPlaceholder": "Search by name, tag, submission, event, date …",
     "singleAlbumNotice": "{count, plural, one {1 photo in the shared album “{albumName}” is still waiting for your release.} other {# photos in the shared album “{albumName}” are still waiting for your release.}}",
     "sortOptions": {
       "exposure": "Exposure (best first)",
       "faceQuality": "Face quality (best first)",
       "newest": "Newest first",
       "oldest": "Oldest first",
-      "sharpness": "Sharpness (sharpest first)"
+      "sharpness": "Sharpness (sharpest first)",
+      "relevance": "Best matches"
     },
     "tabs": {
       "albums": "Albums",
@@ -368,7 +369,7 @@
     },
     "tagPlaceholder": "Filter by tag",
     "uploadAlbumAssignError": "Images uploaded, but assigning them to the album failed.",
-    "uploadButton": "+ Upload images",
+    "uploadButton": "Upload images",
     "uploadPillNoTotal": "Gallery upload running · {processed} images",
     "uploadPillTotal": "Gallery upload running · {processed} of {total} images",
     "uploadQueuedToast": "Uploading and processing in the background…",
@@ -380,7 +381,26 @@
     "removeFromAlbumError": "The photos could not be removed from the album. In a shared album you can only remove photos of your own organization.",
     "galleryJobFailed": "The upload could not be completed due to a technical error. Photos already saved are kept – please upload the remaining ones again.",
     "analysisHelpTopic": "Photo analysis",
-    "analysisHelp": "Sharpness, exposure and faces are rated in the background. This drives sorting by quality and the «Best-of» suggestions. The analysis does not change any photos."
+    "analysisHelp": "Sharpness, exposure and faces are rated in the background. This drives sorting by quality and the «Best-of» suggestions. The analysis does not change any photos.",
+    "noResultsFor": "No photos for “{query}”",
+    "noResultsFiltered": "No photos match these filters",
+    "noResultsHint": "Try a different term or <reset>reset the filters</reset>.",
+    "header": {
+      "countLabel": "{count, plural, one {# photo} other {# photos}}"
+    },
+    "toolbar": {
+      "searchLabel": "Search photos",
+      "clearSearch": "Clear search",
+      "sortLabel": "Sort: {current}",
+      "tagsButton": "Tags",
+      "tagsButtonCount": "{count, plural, one {Tags · #} other {Tags · #}}",
+      "searching": "Searching …",
+      "resultCount": "{count} of {total} {totalValue, plural, one {photo} other {photos}}",
+      "resultCountOnly": "{count} {countValue, plural, one {photo} other {photos}}",
+      "searchChip": "“{query}”",
+      "removeTag": "Remove tag “{tag}”",
+      "reset": "Reset filters"
+    }
   },
   "viewer": {
     "analysisPending": "Analysis pending",

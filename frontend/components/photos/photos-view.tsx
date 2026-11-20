@@ -17,11 +17,11 @@ import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { PhotosNoResults, PhotosPageHeader, PhotosToolbar } from "./photos-header";
 import { TrashModal } from "@/components/files/trash-modal";
 import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
-import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { useOpenRequest } from "@/lib/search/handoff";
@@ -29,7 +29,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { useToast } from "@/contexts/toast-context";
-import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
+import { MobileFab } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -47,17 +47,24 @@ import {
 
 const PAGE_SIZE = 60;
 const SYNC_INTERVAL_MS = 15000;
+// Suche erst nach einer kurzen Tipppause an das Backend schicken.
+const SEARCH_DEBOUNCE_MS = 250;
+// «Automatisch»: mit Suche beste Treffer zuerst, sonst neueste zuerst.
+const AUTO_SORT = "auto";
 
-type SortKey = "group_date" | "created_at" | "sharpness_score" | "exposure_score" | "face_quality_score";
+type SortKey = "group_date" | "created_at" | "sharpness_score" | "exposure_score" | "face_quality_score" | "relevance";
 type Tab = "all" | "albums" | "duplicates" | "series";
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-function sortOptions(t: TFunc): SortOption[] {
+function sortOptions(t: TFunc, searching: boolean): SortOption[] {
   return [
-    { id: "group_date:desc", label: t("sortOptions.newest"), key: "group_date", dir: "desc" },
+    searching
+      ? { id: AUTO_SORT, label: t("sortOptions.relevance"), key: "relevance", dir: "desc" }
+      : { id: AUTO_SORT, label: t("sortOptions.newest"), key: "group_date", dir: "desc" },
+    ...(searching ? [{ id: "group_date:desc", label: t("sortOptions.newest"), key: "group_date" as const, dir: "desc" as const }] : []),
     { id: "group_date:asc", label: t("sortOptions.oldest"), key: "group_date", dir: "asc" },
     { id: "sharpness_score:desc", label: t("sortOptions.sharpness"), key: "sharpness_score", dir: "desc" },
     { id: "exposure_score:desc", label: t("sortOptions.exposure"), key: "exposure_score", dir: "desc" },
@@ -93,17 +100,32 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
-  const SORT_OPTIONS = sortOptions(t);
-
   const [tab, setTab] = useState<Tab>("all");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   // Files dropped onto the page - they open the upload dialog with these already queued.
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  // searchInput folgt dem Feld sofort, search (entprellt) geht an das Backend.
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    if (searchInput === search) return;
+    const timer = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
+  const setSearchNow = useCallback((value: string) => {
+    setSearchInput(value);
+    setSearch(value);
+  }, []);
+  const searching = search.trim() !== "";
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
-  const [sortKey, setSortKey] = useState<SortKey>("group_date");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortId, setSortId] = useState<string>(AUTO_SORT);
+  const SORT_OPTIONS = sortOptions(t, searching);
+  const activeSort = SORT_OPTIONS.find((option) => option.id === sortId) ?? SORT_OPTIONS[0];
+  const sortKey: SortKey = activeSort.key;
+  const sortDir = activeSort.dir;
+  // Treffer der Suche/Filter (Zeitleiste zählt selbst, sonst eigene Zählung über /files/timeline)
+  const [filteredTotal, setFilteredTotal] = useState<number | null>(null);
   const [items, setItems] = useState<FileOverviewItem[]>([]);
   // Nach Datum sortierte Hauptgalerie: Zeitleiste mit festen Höhen und Zeitstrahl (photo-timeline.tsx)
   // statt seitenweisem Nachladen. Alben (eigene Reihenfolge, Beste zuerst) und die anderen
@@ -132,7 +154,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   // Treffer aus der globalen Suche (?open=<id>): Suche mit dem Dateinamen vorbelegen und das Foto
   // im Viewer öffnen, sobald es in der geladenen Liste steht.
-  useOpenRequest(items, (_item, index) => setViewerIndex(index), setSearch);
+  useOpenRequest(items, (_item, index) => setViewerIndex(index), setSearchNow);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
   const [queuedUploadId, setQueuedUploadId] = useState<string | undefined>();
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
@@ -199,10 +221,31 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
-    }, firstLoad ? 0 : 250);
+    }, firstLoad ? 0 : 50);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly]);
+
+  // Anzahl Treffer bei aktiver Suche/Filter ausserhalb der Zeitleiste (dieselben Filter wie die Liste).
+  useEffect(() => {
+    setFilteredTotal(null);
+    if (embedded || timelineMode || tab !== "all" || (!searching && tagFilter.length === 0)) return;
+    let cancelled = false;
+    browserApiFetch<{ date: string; count: number }[]>(`/api/files/timeline?${timelineFilterQuery}`)
+      .then((days) => {
+        if (!cancelled) setFilteredTotal((days ?? []).reduce((sum, day) => sum + day.count, 0));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineFilterQuery, timelineMode, tab, embedded]);
+
+  function resetFilters() {
+    setSearchNow("");
+    setTagFilter([]);
+  }
 
   function loadPendingReleases() {
     if (embedded) return;
@@ -558,44 +601,34 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
       {!embedded && (
         <>
           {!mobile ? (
-          <div className="page-header photos-page-header">
-            <div>
-              <h1 className="page-title">{t("pageTitle")}</h1>
-              <p className="muted">
-                {t("description")}
-                {tab === "all" && ` ${analysisProgress?.total_images ? t("loadedOfTotal", { count: items.length, total: analysisProgress.total_images }) : t("loadedSuffix", { count: items.length })}`}
-              </p>
-            </div>
-            <div className="table-toolbar-actions photos-header-actions">
-              {analysisProgress && analysisProgress.pending_images > 0 && (
-                <>
-                  <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
-                  <HelpPopover topic={t("analysisHelpTopic")} docs={{ page: "fotos", anchor: "foto-analyse" }}>{t("analysisHelp")}</HelpPopover>
-                </>
-              )}
-              {galleryUploadJobs.length > 0 && (
-                <span className="pill">
-                  {galleryUploadJobs.every((job) => job.total_files !== null)
-                    ? t("uploadPillTotal", {
-                        processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0),
-                        total: galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0),
-                      })
-                    : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
-                </span>
-              )}
-              {canOpenTrash ? (
-                <button type="button" className="button-secondary" onClick={() => setTrashOpen(true)}>
-                  {tFiles("trash.open")}
-                </button>
-              ) : null}
-              <button type="button" className="button-primary photos-upload-button" onClick={() => {
+            <PhotosPageHeader
+              total={analysisProgress?.total_images ?? null}
+              onOpenTrash={canOpenTrash ? () => setTrashOpen(true) : undefined}
+              onUpload={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
-              }}>
-                {t("uploadButton")}
-              </button>
-            </div>
-          </div>
+              }}
+              pills={
+                <>
+                  {analysisProgress && analysisProgress.pending_images > 0 && (
+                    <>
+                      <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
+                      <HelpPopover topic={t("analysisHelpTopic")} docs={{ page: "fotos", anchor: "foto-analyse" }}>{t("analysisHelp")}</HelpPopover>
+                    </>
+                  )}
+                  {galleryUploadJobs.length > 0 && (
+                    <span className="pill">
+                      {galleryUploadJobs.every((job) => job.total_files !== null)
+                        ? t("uploadPillTotal", {
+                            processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0),
+                            total: galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0),
+                          })
+                        : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
+                    </span>
+                  )}
+                </>
+              }
+            />
           ) : (
             <>
               {analysisProgress && analysisProgress.pending_images > 0 ? (
@@ -638,56 +671,25 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
               )}
             </AlbumReleaseNotice>
           )}
-          <div className="list-filter-row list-filter-row-compact photos-filter-row">
-            {mobile ? (
-              <MobileSegmented<Tab>
-                ariaLabel={t("pageTitle")}
-                value={tab}
-                onChange={setTab}
-                options={[
-                  { value: "all", label: t("tabs.all") },
-                  { value: "albums", label: t("tabs.albums") },
-                  { value: "duplicates", label: t("tabs.duplicates") },
-                  { value: "series", label: t("tabs.series") },
-                ]}
-              />
-            ) : (
-              <FilterTabs
-                options={[
-                  { value: "all", label: t("tabs.all") },
-                  { value: "albums", label: t("tabs.albums") },
-                  { value: "duplicates", label: t("tabs.duplicates") },
-                  { value: "series", label: t("tabs.series") },
-                ]}
-                value={tab}
-                onChange={setTab}
-              />
-            )}
-            {tab !== "albums" && (
-              <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
-              </div>
-            )}
-            {tab === "all" && !mobile && (
-              <SearchableSelect
-                className="files-sort-select"
-                options={SORT_OPTIONS}
-                getId={(option) => option.id}
-                getLabel={(option) => option.label}
-                value={`${sortKey}:${sortDir}`}
-                onChange={(option) => {
-                  if (!option) return;
-                  setSortKey(option.key);
-                  setSortDir(option.dir);
-                }}
-              />
-            )}
-            {tab !== "albums" && !mobile && (
-              <div className="list-filter-tags">
-                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
-              </div>
-            )}
-          </div>
+          <PhotosToolbar
+            mobile={mobile}
+            tab={tab}
+            onTabChange={setTab}
+            search={searchInput}
+            onSearchChange={(value) => (value === "" ? setSearchNow("") : setSearchInput(value))}
+            showSort={tab === "all" && !mobile}
+            sortOptions={SORT_OPTIONS}
+            sortId={activeSort.id}
+            onSortChange={setSortId}
+            showTags={!mobile}
+            tags={tagFilter}
+            onTagsChange={setTagFilter}
+            tagSuggestions={tagSuggestions}
+            resultCount={timelineMode ? timelineTotal : filteredTotal}
+            total={analysisProgress?.total_images ?? null}
+            activeSearch={search}
+            onReset={resetFilters}
+          />
         </>
       )}
 
@@ -708,18 +710,17 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           {embedded && (
             <div className="list-filter-row list-filter-row-compact photos-filter-row">
               <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
+                <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t("searchPlaceholder")} clearLabel={t("toolbar.clearSearch")} />
               </div>
               <SearchableSelect
                 className="files-sort-select"
                 options={SORT_OPTIONS}
                 getId={(option) => option.id}
                 getLabel={(option) => option.label}
-                value={`${sortKey}:${sortDir}`}
+                value={activeSort.id}
                 onChange={(option) => {
                   if (!option) return;
-                  setSortKey(option.key);
-                  setSortDir(option.dir);
+                  setSortId(option.id);
                 }}
               />
               <div className="list-filter-tags">
@@ -805,6 +806,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
                 </div>
               }
             />
+          ) : items.length === 0 && !embedded ? (
+            <PhotosNoResults query={search} onReset={resetFilters} />
           ) : items.length === 0 ? (
             <p className="muted">{t("noResults")}</p>
           ) : (
