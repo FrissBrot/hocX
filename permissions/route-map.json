@@ -2355,6 +2355,12 @@
         "settings.manage"
       ]
     },
+    "GET /api/public-links/partner-history": {
+      "handler": "public_links.list_partner_history",
+      "requires": [
+        "settings.manage"
+      ]
+    },
     "GET /api/public/calendar/{token}.ics": {
       "handler": "calendar_feeds.get_calendar_feed",
       "note": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve",

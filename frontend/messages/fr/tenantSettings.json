@@ -339,7 +339,6 @@
   },
   "publicLinks": {
     "intro": "Tous les liens par lesquels quelqu'un accède aux données de ton organisation sans connexion – avec le motif, l'échéance et l'endroit où tu les gères. Les liens expirés, révoqués ou utilisés n'apparaissent pas.",
-    "neverExpiringHint": "{count, plural, one {# lien n'expire} other {# liens n'expirent}} pas d'eux-mêmes. Vérifie s'{count, plural, one {il est} other {ils sont}} encore nécessaire{count, plural, one {} other {s}}.",
     "group": {
       "all": "Tous",
       "files": "Fichiers & albums",
@@ -349,24 +348,16 @@
       "partners": "Organisations partenaires",
       "other": "Autres"
     },
-    "col": {
-      "kind": "Type",
-      "link": "Lien et motif",
-      "created": "Créé",
-      "expiry": "Validité",
-      "lastUsed": "Dernière utilisation",
-      "manage": "Gérer"
-    },
     "kind": {
       "share_files": "Fichiers",
       "share_album": "Album",
-      "share_album_partner": "Album · lien partenaire",
+      "share_album_partner": "Lien partenaire",
       "submission_link": "Boîte de dépôt",
       "calendar_events": "Calendrier",
       "calendar_todos": "Calendrier",
       "account_invite": "Invitation",
       "account_password_reset": "Mot de passe",
-      "album_partner": "Organisation partenaire",
+      "album_partner": "Album partagé",
       "submission_access": "Dépôt personnel"
     },
     "reason": {
@@ -390,22 +381,46 @@
       "window": "tant que les dépôts sont ouverts"
     },
     "createdBy": "par {name}",
-    "notTracked": "—",
-    "manage": "Gérer",
-    "manageElsewhere": {
-      "files": "chez l'organisation partenaire",
-      "submissions": "—",
-      "calendar": "seulement la personne",
-      "accounts": "—",
-      "partners": "—",
-      "other": "—"
-    },
+    "manage": "Gérer →",
     "empty": "Il n'y a actuellement aucun lien public.",
     "emptyFilter": "Aucun lien dans cette sélection.",
     "revoke": "Révoquer",
-    "revokeConfirm": "Révoquer le lien « {name} » ? Les personnes qui l’ont n’auront plus accès au contenu.",
-    "revoked": "Lien révoqué",
-    "revokeFailed": "Le lien n’a pas pu être révoqué"
+    "revoked": "« {name} » révoqué",
+    "revokeFailed": "Le lien n’a pas pu être révoqué",
+    "eyebrow": "Organisation",
+    "neverExpiring": {
+      "title": "{count, plural, one {# lien n’expire} other {# liens n’expirent}} pas d’eux-mêmes.",
+      "body": "Vérifie s’{count, plural, one {il est} other {ils sont}} encore nécessaire{count, plural, one {} other {s}}.",
+      "showOnly": "Afficher seulement ceux-ci",
+      "showAll": "Tout afficher"
+    },
+    "createdAt": "Créé le {date}",
+    "createdAtBy": "Créé le {date} par {name}",
+    "lastUsed": "utilisé le {date}",
+    "hint": {
+      "calendar": "seulement la personne elle-même",
+      "partner": "chez l’organisation partenaire"
+    },
+    "showHistory": "Historique",
+    "cancel": "Annuler",
+    "revokeInline": "Révoquer « {name} » ? Les personnes qui ont le lien n’accéderont plus au contenu.",
+    "history": {
+      "title": "Historique des organisations partenaires",
+      "description": "Ce que les partenaires ont fait avec vos albums partagés – et ce que vous avez partagé.",
+      "filterLabel": "Filtrer par partenaire",
+      "allPartners": "Tous les partenaires",
+      "ownPerson": "{name} (vous)",
+      "ownOrganisation": "Votre organisation (vous)",
+      "empty": "Aucune entrée pour l’instant.",
+      "footer": "Sans adresses IP ni e-mail. L’historique complet se trouve sous <link>Organisation › Historique</link>.",
+      "event": {
+        "invited": "Album partagé avec {partner} – invitation envoyée",
+        "accepted": "Partage accepté",
+        "declined": "Partage refusé",
+        "publicLinkCreated": "Lien public « {name} » créé",
+        "publicLinkCreatedUntil": "Lien public « {name} » créé, valable jusqu’au {date}"
+      }
+    }
   },
   "abo": {
     "tabs": {

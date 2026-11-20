@@ -1845,6 +1845,12 @@
         "admin"
       ]
     },
+    "GET /api/public-links/partner-history": {
+      "handler": "public_links.list_partner_history",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/retention/policy": {
       "handler": "retention.get_retention_policy",
       "allowed": [

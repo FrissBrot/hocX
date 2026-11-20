@@ -339,7 +339,6 @@
   },
   "publicLinks": {
     "intro": "All links through which someone can reach your organization's data without logging in – with the reason, expiry and where you manage them. Expired, revoked and used links are not shown.",
-    "neverExpiringHint": "{count, plural, one {# link does} other {# links do}} not expire on {count, plural, one {its} other {their}} own. Check whether {count, plural, one {it is} other {they are}} still needed.",
     "group": {
       "all": "All",
       "files": "Files & albums",
@@ -349,24 +348,16 @@
       "partners": "Partner organizations",
       "other": "Other"
     },
-    "col": {
-      "kind": "Type",
-      "link": "Link and reason",
-      "created": "Created",
-      "expiry": "Valid",
-      "lastUsed": "Last used",
-      "manage": "Manage"
-    },
     "kind": {
       "share_files": "Files",
       "share_album": "Album",
-      "share_album_partner": "Album · partner link",
+      "share_album_partner": "Partner link",
       "submission_link": "Drop box",
       "calendar_events": "Calendar",
       "calendar_todos": "Calendar",
       "account_invite": "Invitation",
       "account_password_reset": "Password",
-      "album_partner": "Partner organization",
+      "album_partner": "Shared album",
       "submission_access": "Personal submission"
     },
     "reason": {
@@ -390,22 +381,46 @@
       "window": "while the submissions are open"
     },
     "createdBy": "by {name}",
-    "notTracked": "—",
-    "manage": "Manage",
-    "manageElsewhere": {
-      "files": "at the partner organization",
-      "submissions": "—",
-      "calendar": "only the person",
-      "accounts": "—",
-      "partners": "—",
-      "other": "—"
-    },
+    "manage": "Manage →",
     "empty": "There are currently no public links.",
     "emptyFilter": "No links in this selection.",
     "revoke": "Revoke",
-    "revokeConfirm": "Revoke link “{name}”? Anyone who has it can no longer access the content.",
-    "revoked": "Link revoked",
-    "revokeFailed": "Link could not be revoked"
+    "revoked": "“{name}” revoked",
+    "revokeFailed": "Link could not be revoked",
+    "eyebrow": "Organization",
+    "neverExpiring": {
+      "title": "{count, plural, one {# link does} other {# links do}} not expire on {count, plural, one {its} other {their}} own.",
+      "body": "Check whether {count, plural, one {it is} other {they are}} still needed.",
+      "showOnly": "Show only these",
+      "showAll": "Show all"
+    },
+    "createdAt": "Created {date}",
+    "createdAtBy": "Created {date} by {name}",
+    "lastUsed": "used {date}",
+    "hint": {
+      "calendar": "only the person themselves",
+      "partner": "at the partner organization"
+    },
+    "showHistory": "History",
+    "cancel": "Cancel",
+    "revokeInline": "Revoke “{name}”? Anyone with the link will no longer be able to reach the content.",
+    "history": {
+      "title": "Partner organization history",
+      "description": "What partners did with your shared albums – and what you shared.",
+      "filterLabel": "Filter by partner",
+      "allPartners": "All partners",
+      "ownPerson": "{name} (you)",
+      "ownOrganisation": "Your organization (you)",
+      "empty": "No entries yet.",
+      "footer": "Without IP and email addresses. The full history is under <link>Organization › History</link>.",
+      "event": {
+        "invited": "Shared album with {partner} – invitation sent",
+        "accepted": "Share accepted",
+        "declined": "Share declined",
+        "publicLinkCreated": "Created public link “{name}”",
+        "publicLinkCreatedUntil": "Created public link “{name}”, valid until {date}"
+      }
+    }
   },
   "abo": {
     "tabs": {
