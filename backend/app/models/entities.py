@@ -2925,6 +2925,42 @@ class PhotoSimilarityResult(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
+class PhotoSearchDoc(Base):
+    """Suchdokument je Datei für die Fotosuche (Migration 0204, app/services/photo_search.py).
+    Schreiben nur die Datenbank-Trigger (hocx_photo_search_refresh), nie die Anwendung."""
+
+    __tablename__ = "photo_search_doc"
+    __table_args__ = (
+        Index("idx_photo_search_doc_tenant", "tenant_id"),
+        Index("idx_photo_search_doc_terms", "terms", postgresql_using="gin"),
+        Index("idx_photo_search_doc_capture", "tenant_id", "capture_on"),
+        Index("idx_photo_search_doc_context", "tenant_id", "context_from", "context_to"),
+    )
+
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    terms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    strong_terms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    name_terms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    meta_terms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    haystack: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    capture_on: Mapped[date | None] = mapped_column(Date)
+    context_from: Mapped[date | None] = mapped_column(Date)
+    context_to: Mapped[date | None] = mapped_column(Date)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class PhotoSearchTerm(Base):
+    """Wortschatz je Mandant für die unscharfe Fotosuche (Migration 0204): Begriff und seine
+    sortierten Buchstaben (Buchstabendreher). Schreiben nur die Datenbank-Trigger."""
+
+    __tablename__ = "photo_search_term"
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    term: Mapped[str] = mapped_column(Text(collation="C"), primary_key=True)
+    sorted: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class GalleryUploadJob(Base, TimestampMixin):
     """Backs the "Bilder hochladen" gallery upload window's async ingestion (see
     app/main.py's gallery_upload_ingest_loop and FileService.process_pending_gallery_upload_jobs) -

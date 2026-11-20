@@ -6,3 +6,6 @@
 @media (max-width: 640px) {
   .photos-page { padding: var(--space-4); }
 }
+
+/* Fotoseite: Inhalt höchstens 1160 px breit (Design «hocX Fotos Header 1a») */
+.photos-page .photos-overview { max-width: 1160px; margin-inline: auto; }

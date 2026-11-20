@@ -84,7 +84,8 @@ def search_files(
     """Dokumente nur mit files.read, Fotos nur mit photos.read (getrennte Rechte, Phase 3);
     Abgabe-Dateien nur aus lesbaren Aufträgen (Reichweite «nur zugewiesene», Phase 4/5)."""
     service = FileService()
-    scope = {"readable_assignment_ids": readable_assignment_ids}
+    # Beste Treffer zuerst (tolerante Fotosuche, services/photo_search.py)
+    scope = {"readable_assignment_ids": readable_assignment_ids, "sort_by": "relevance"}
     document_items = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query, **scope) if documents else []
     image_items = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query, **scope) if images else []
     return [

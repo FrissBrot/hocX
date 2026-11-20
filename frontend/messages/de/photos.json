@@ -324,7 +324,7 @@
     "bestError": "Best-of-Status konnte nicht geändert werden.",
     "bestUnscopedError": "Dieses Foto gehört zu keinem Album - Best-of ist nur innerhalb eines Albums möglich.",
     "createAssignmentButton": "Abgabebox erstellen",
-    "description": "Alle Fotos deiner Organisation – aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern.",
+    "description": "Alle Fotos deiner Organisation – aus Protokollen, Abgaben und Galerie-Uploads.",
     "dropOverlayHint": "Bilder oder ZIP-Dateien - danach stellst du den Upload ein.",
     "dropOverlayTitle": "Zum Hochladen loslassen",
     "emptyDescription": "Sobald Bilder in Protokollen eingefügt, über eine Abgabebox eingereicht oder hier hochgeladen werden, erscheinen sie in dieser Galerie.",
@@ -351,14 +351,15 @@
     "reloadError": "Fotos konnten nicht neu geladen werden.",
     "retry": "Erneut versuchen",
     "reviewLink": "Prüfen",
-    "searchPlaceholder": "Fotos durchsuchen",
+    "searchPlaceholder": "Suchen nach Name, Tag, Abgabe, Termin, Datum …",
     "singleAlbumNotice": "{count, plural, one {1 Foto im geteilten Album „{albumName}“ wartet noch auf deine Freigabe.} other {# Fotos im geteilten Album „{albumName}“ warten noch auf deine Freigabe.}}",
     "sortOptions": {
       "exposure": "Belichtung (am besten zuerst)",
       "faceQuality": "Gesichtsqualität (am besten zuerst)",
       "newest": "Neueste zuerst",
       "oldest": "Älteste zuerst",
-      "sharpness": "Schärfe (am schärfsten zuerst)"
+      "sharpness": "Schärfe (am schärfsten zuerst)",
+      "relevance": "Beste Treffer"
     },
     "tabs": {
       "albums": "Alben",
@@ -368,7 +369,7 @@
     },
     "tagPlaceholder": "Nach Tag filtern",
     "uploadAlbumAssignError": "Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.",
-    "uploadButton": "+ Bilder hochladen",
+    "uploadButton": "Bilder hochladen",
     "uploadPillNoTotal": "Galerie-Upload läuft · {processed} Bildern",
     "uploadPillTotal": "Galerie-Upload läuft · {processed} von {total} Bildern",
     "uploadQueuedToast": "Wird hochgeladen und im Hintergrund verarbeitet…",
@@ -380,7 +381,26 @@
     "removeFromAlbumError": "Die Fotos konnten nicht aus dem Album genommen werden. In einem geteilten Album kannst du nur Fotos deiner eigenen Organisation entfernen.",
     "galleryJobFailed": "Der Upload konnte wegen eines technischen Fehlers nicht abgeschlossen werden. Bereits gespeicherte Fotos bleiben erhalten – bitte die übrigen erneut hochladen.",
     "analysisHelpTopic": "Foto-Analyse",
-    "analysisHelp": "Im Hintergrund werden Schärfe, Belichtung und Gesichter bewertet. Daraus entstehen die Sortierung nach Qualität und die Vorschläge für «Best-of». Die Analyse verändert keine Fotos."
+    "analysisHelp": "Im Hintergrund werden Schärfe, Belichtung und Gesichter bewertet. Daraus entstehen die Sortierung nach Qualität und die Vorschläge für «Best-of». Die Analyse verändert keine Fotos.",
+    "noResultsFor": "Keine Fotos für „{query}“",
+    "noResultsFiltered": "Keine Fotos mit diesen Filtern",
+    "noResultsHint": "Versuche einen anderen Begriff oder <reset>setze die Filter zurück</reset>.",
+    "header": {
+      "countLabel": "{count, plural, one {# Foto} other {# Fotos}}"
+    },
+    "toolbar": {
+      "searchLabel": "Fotos durchsuchen",
+      "clearSearch": "Suche leeren",
+      "sortLabel": "Sortierung: {current}",
+      "tagsButton": "Tags",
+      "tagsButtonCount": "{count, plural, one {Tags · #} other {Tags · #}}",
+      "searching": "Suche läuft …",
+      "resultCount": "{count} von {total} {totalValue, plural, one {Foto} other {Fotos}}",
+      "resultCountOnly": "{count} {countValue, plural, one {Foto} other {Fotos}}",
+      "searchChip": "„{query}“",
+      "removeTag": "Tag «{tag}» entfernen",
+      "reset": "Filter zurücksetzen"
+    }
   },
   "viewer": {
     "analysisPending": "Analyse ausstehend",
