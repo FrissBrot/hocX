@@ -96,6 +96,7 @@
     "syncTemplateFailed": "Elemente konnten nicht neu geladen werden",
     "alreadyFinalizedError": "Das Protokoll ist bereits abgeschlossen und eingefroren. Zuerst über das Menü «Zurück auf …» zurückstufen.",
     "deleteHasFinesError": "Das Protokoll hat Anwesenheitsbussen. Löschen kann es nur, wer Bussen verwalten darf – oder die Bussen zuerst in den Finanzen entfernen lassen.",
+    "deleteHasCollectedFinesError": "Das Protokoll hat einkassierte Anwesenheitsbussen. Zuerst in der Kasse wieder öffnen oder löschen, dann lässt sich das Protokoll löschen.",
     "deleteFinalizedHint": "Abgeschlossene Protokolle lassen sich nicht löschen. Zuerst über «Zurück auf …» zurückstufen, dann löschen.",
     "searchFailed": "Suche fehlgeschlagen",
     "searching": "Suche läuft …",

@@ -347,7 +347,7 @@ class ProtocolService:
 
     def set_attendance_excused(
         self, db: Session, protocol_id: int, participant_id: int, excused: bool, *,
-        clear_pending_fine: bool = True, removed_fine_ids: list[int] | None = None,
+        clear_pending_fine: bool = True, removed_fine_ids: list[int] | None = None, commit: bool = True,
     ) -> bool:
         """Toggles a participant between excused and unentschuldigt (absent) in every attendance
         block of this protocol. Marking someone excused also clears any pending fine for them
@@ -357,7 +357,8 @@ class ProtocolService:
 
         clear_pending_fine=False lässt die Busse stehen: Bussen löschen ist fines.manage plus
         Modul «finance» (wie DELETE /fines/{id}), das entscheidet die Route. removed_fine_ids
-        nimmt die IDs entfernter Bussen auf (Audit in der Route)."""
+        nimmt die IDs entfernter Bussen auf (Audit in der Route). commit=False: die Route schreibt
+        das Audit in derselben Transaktion und committet selbst (keine gelöschte Busse ohne Audit)."""
         attendance_type_id = self._attendance_type_id(db)
         if attendance_type_id is None:
             return False
@@ -395,18 +396,23 @@ class ProtocolService:
             return False
 
         if excused and clear_pending_fine:
-            pending_fine = db.scalar(
+            # Alle offenen Bussen der Person (je fine_type eine: «late» und «absent» können
+            # gleichzeitig offen sein), nicht nur die erste.
+            pending_fines = db.scalars(
                 select(AttendanceFine).where(
                     AttendanceFine.protocol_id == protocol_id,
                     AttendanceFine.participant_id == participant_id,
                     AttendanceFine.status == "pending",
                 )
-            )
-            if pending_fine is not None:
+            ).all()
+            for pending_fine in pending_fines:
                 if removed_fine_ids is not None:
                     removed_fine_ids.append(pending_fine.id)
                 db.delete(pending_fine)
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return True
 
     def _cycle_bounds(self, protocol_date: date, *, reset_month: int, reset_day: int) -> tuple[date, date]:

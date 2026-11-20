@@ -166,4 +166,9 @@ describe("protocolActionError", () => {
     const error = new ApiError("Protocol has attendance fines", "conflict", 409, { code: "protocol_has_fines", message: "Protocol has attendance fines" });
     expect(protocolActionError(error, t, "deleteFailed")).toBe("deleteHasFinesError");
   });
+
+  it("übersetzt die Ablehnung beim Löschen eines Protokolls mit einkassierten Bussen", () => {
+    const error = new ApiError("Protocol has collected attendance fines", "conflict", 409, { code: "protocol_has_collected_fines", message: "x" });
+    expect(protocolActionError(error, t, "deleteFailed")).toBe("deleteHasCollectedFinesError");
+  });
 });

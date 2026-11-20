@@ -316,7 +316,8 @@ def excuse_participant(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    # Wie die übrigen Schreibrouten: wer das Protokoll nicht lesen darf, bekommt 404.
+    protocol = _get_writable_protocol_or_404(db, protocol_id, user)
     participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
     if participant_internal_id is None:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -329,16 +330,19 @@ def excuse_participant(
     try:
         updated = service.set_attendance_excused(
             db, protocol.id, participant_internal_id, payload.excused,
-            clear_pending_fine=user.can(P.FINES_MANAGE), removed_fine_ids=removed_fine_ids,
+            clear_pending_fine=user.can(P.FINES_MANAGE), removed_fine_ids=removed_fine_ids, commit=False,
         )
+        if not updated:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="No attendance entry found for this participant")
+        # Audit in derselben Transaktion wie das Löschen der Bussen
+        for fine_id in removed_fine_ids:
+            audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id,
+                      details={"reason": "attendance_excused"}, commit=False)
+        db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
-    if not updated:
-        raise HTTPException(status_code=404, detail="No attendance entry found for this participant")
-    for fine_id in removed_fine_ids:
-        audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id,
-                  details={"reason": "attendance_excused"})
     return {"message": "Participant excused" if payload.excused else "Participant marked unentschuldigt"}
 
 
@@ -600,11 +604,21 @@ def _delete_protocol_with_files(db: Session, existing: Protocol, user: CurrentUs
     # attendance_fine hängt per ON DELETE CASCADE am Protokoll: Löschen entfernte die Bussen
     # (auch einkassierte) mit. Bussen löschen ist fines.manage (+ Modul «finance»), nicht
     # meetings.edit - ohne das Recht zuerst die Kasse die Bussen entfernen lassen.
-    if not user.can(P.FINES_MANAGE) and db.scalar(
-        select(AttendanceFine.id).where(AttendanceFine.protocol_id == existing.id).limit(1)
-    ) is not None:
+    fine_rows = db.execute(
+        select(AttendanceFine.id, AttendanceFine.status).where(AttendanceFine.protocol_id == existing.id)
+    ).all()
+    # Einkassierte Bussen haben eine Buchung in der Kasse: mitlöschen liesse sie verwaist zurück.
+    # Unabhängig vom Recht zuerst in der Kasse wieder öffnen.
+    if any(row.status == "collected" for row in fine_rows):
+        raise HTTPException(
+            status_code=409, detail={"code": "protocol_has_collected_fines", "message": "Protocol has collected attendance fines"}
+        )
+    if fine_rows and not user.can(P.FINES_MANAGE):
         raise HTTPException(status_code=409, detail={"code": "protocol_has_fines", "message": "Protocol has attendance fines"})
     audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
+    if fine_rows:
+        # Die Bussen verschwinden per ON DELETE CASCADE mit dem Protokoll - nachvollziehbar im Audit
+        audit_details["deleted_fines"] = [{"id": row.id, "status": row.status} for row in fine_rows]
     protocol_internal_id = existing.id
     try:
         result = deletion_service.delete_protocol(db, existing, delete_file_ids=delete_file_ids, actor_user_id=user.user_id, file_service=FileService())

@@ -96,6 +96,7 @@
     "syncTemplateFailed": "Elements could not be reloaded",
     "alreadyFinalizedError": "These minutes are already finished and frozen. Revert them first via the menu (“Revert to …”).",
     "deleteHasFinesError": "These minutes have attendance fines. Only someone who may manage fines can delete them – or have the fines removed in Finances first.",
+    "deleteHasCollectedFinesError": "These minutes have collected attendance fines. Reopen or delete them in the cash book first, then the minutes can be deleted.",
     "deleteFinalizedHint": "Finished minutes cannot be deleted. Revert them first via “Revert to …”, then delete.",
     "searchFailed": "Search failed",
     "searching": "Searching …",

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.api.routes import protocols as protocol_routes
 from app.models import AttendanceFine, Protocol
@@ -73,3 +73,29 @@ def test_writer_can_delete_protocol_without_fines(db):
     protocol_routes.delete_protocol(protocol.public_id, db=db, user=make_current_user(tenant.id, role="writer"))
 
     assert db.scalar(select(Protocol.id).where(Protocol.id == protocol_id)) is None
+
+
+def test_nobody_deletes_protocol_with_collected_fines(db):
+    # Einkassierte Bussen haben eine Kassenbuchung: auch mit fines.manage zuerst in der Kasse öffnen
+    tenant, protocol, fine = _protocol_with_fine(db, "Löschen mit kassierter Busse", collected=True)
+    fine_id = fine.id
+    admin = make_current_user(tenant.id, role="admin")
+
+    with pytest.raises(HTTPException) as denied:
+        protocol_routes.delete_protocol(protocol.public_id, db=db, user=admin)
+    assert denied.value.status_code == 409
+    assert denied.value.detail["code"] == "protocol_has_collected_fines"
+    assert db.scalar(select(AttendanceFine.id).where(AttendanceFine.id == fine_id)) == fine_id
+
+
+def test_deleted_fines_are_listed_in_the_protocol_audit(db):
+    tenant, protocol, fine = _protocol_with_fine(db, "Löschen mit Audit der Bussen")
+    protocol_id, fine_id = protocol.id, fine.id
+    admin = make_current_user(tenant.id, role="admin")
+
+    protocol_routes.delete_protocol(protocol.public_id, db=db, user=admin)
+
+    details = db.scalar(
+        text("SELECT details_json FROM audit_log WHERE action = 'protocol.deleted' AND entity_id = :id"), {"id": protocol_id}
+    )
+    assert details["deleted_fines"] == [{"id": fine_id, "status": "pending"}]

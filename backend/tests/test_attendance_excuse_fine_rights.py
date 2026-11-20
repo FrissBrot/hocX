@@ -79,3 +79,20 @@ def test_excuse_with_fines_manage_removes_and_audits_the_fine(db):
     assert db.scalar(
         text("SELECT count(*) FROM audit_log WHERE action = 'fine.deleted' AND entity_id = :id"), {"id": fine_id}
     ) == 1
+
+
+def test_excuse_removes_every_pending_fine_of_the_person(db):
+    # «late» und «absent» können gleichzeitig offen sein (Index je fine_type)
+    tenant, protocol, person, fine = _setup(db, "Entschuldigen zwei Bussen")
+    late = make_fine(db, protocol.id, fine.account_id, fine_type="late", participant_name_snapshot="Abwesend")
+    late.participant_id = person.id
+    db.flush()
+    ids = [fine.id, late.id]
+    admin = make_current_user(tenant.id, role="admin")
+
+    protocol_routes.excuse_participant(protocol.public_id, person.public_id, AttendanceExcusePayload(), db=db, user=admin)
+
+    assert not any(_fine_exists(db, fine_id) for fine_id in ids)
+    assert db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = 'fine.deleted' AND entity_id = ANY(:ids)"), {"ids": ids}
+    ) == 2

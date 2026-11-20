@@ -16,8 +16,10 @@ beliebig viele, von Hand angelegte Abgabeelemente mit eigenem Stichtag und eigen
 Dazu ein Papierkorb für Dateien und Fotos, ein korrigierbares Aufnahmedatum (einzeln und als
 Mehrfachauswahl), die Seite «Kasse» mit Konten und Bussen nach Design «Kasse und Bussen v2»,
 Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
-Behebung des 504 auf Prüfseite und Abgabebox. Drei Migrationen (0198, 0199, 0200), keine neuen
-Secrets oder Umgebungsvariablen, keine Breaking Changes.
+Behebung des 504 auf Prüfseite und Abgabebox. Dazu alle Funde des Nachtlaufs vom 20.11.2026
+(Abgabebox, Bussen und Pendenzen, Fotos und Freigaben, Termine und Zyklen, Rechte im Protokoll).
+Vier Migrationen (0198, 0199, 0200, 0201), keine neuen Secrets oder Umgebungsvariablen, keine
+Breaking Changes.
 
 ### Update
 
@@ -47,6 +49,10 @@ Secrets oder Umgebungsvariablen, keine Breaking Changes.
   `stored_file` (`capture_corrected_at`, `capture_corrected_has_time`, `capture_corrected_set_at`,
   `capture_corrected_set_by`). Rein additiv, EXIF-Datum und Dateien bleiben unverändert; Rücknahme
   mit `alembic downgrade` entfernt die Korrekturen.
+- **Migration `0201_abgabebox_scan_status`:** die Rolle `hocx_abgabebox` darf zusätzlich die Spalte
+  `stored_file.scan_status` lesen (nur `SELECT` auf diese eine Spalte, Zeilen weiter per RLS auf den
+  Link-Mandanten begrenzt). Keine Datenänderung; Downgrade nimmt das Recht wieder weg.
+
 ### Geändert
 
 - **Papierkorb für Dateien und Fotos:** Löschen auf der Dateien-Seite, in der Foto-Ansicht, in der
@@ -122,11 +128,60 @@ Secrets oder Umgebungsvariablen, keine Breaking Changes.
   zurück. `verify_release.sh` nutzt dieselben Prüfungen.
 - **Fotos, Zeitstrahl rechts:** Ganz oben lag die Monatsangabe («Okt. 2026») über der Jahreszahl
   und ragte aus der Leiste. Sie steht dort jetzt unter der Linie, die Jahreszahl am Cursor entfällt.
+- **Pendenzen und Bussen (Nachtlauf):**
+  - Geteilte Regel-Bussen gehen auf den Rappen auf (5.– für 3 Personen: 1.67 + 1.67 + 1.66 statt
+    3 × 1.67 = 5.01).
+  - Eine Pendenz, die von «abgebrochen» auf «erledigt» wechselt, bekommt das Erledigungsdatum neu;
+    bisher galt der Abbruchzeitpunkt, und eine verspätete Pendenz blieb ohne Busse.
+  - Keine Mail «Busse droht» mehr an Personen, die für die Pendenz schon gebüsst sind.
+  - Kasse: «kassiert im Jahr» zählt nach Schweizer Zeit (eine Busse vom 31.12. abends zählte ins
+    neue Jahr).
+  - Anwesenheit: erneut «Verspätet» nach einer bereits kassierten Busse legt keine zweite an (bisher
+    409, der Status sprang zurück). Wer keine Bussen verwalten darf (z. B. «Schreiber»), kann in
+    Blöcken mit Bussen trotzdem Abwesenheit erfassen; die Bussen bleiben dann Sache der Kasse.
+- **Abgabebox (Nachtlauf):**
+  - Ein Zeitfenster am Rand des Kalenders (Altbestand mit riesigem Abstand) brachte die öffentliche
+    Abgabe mit 500 zum Absturz.
+  - Der Dateiname einer Abgabe trägt das Schweizer Datum (kurz nach Mitternacht stand der Vortag).
+  - Nach dem automatischen Schliessen eines Elements bietet die Erfolgsseite keinen weiteren Upload
+    mehr an, der sonst scheiterte.
+  - Termine und Abgaben stehen in derselben Reihenfolge wie in der Verwaltung.
+  - Eine Datei, deren frühere Abgabe einen Scanfehler oder Schadware-Befund hatte, gilt nicht mehr
+    als Duplikat und wird nicht still verworfen, sondern normal geprüft.
+- **Fotos und Freigaben (Nachtlauf):**
+  - Bilder ohne Aufnahmedatum zählen mit dem Schweizer Upload-Tag (Uploads zwischen 00:00 und
+    01:00/02:00 fielen auf den Vortag).
+  - Das Ablaufdatum eines öffentlichen Links gilt bis zum Ende dieses Tages in Schweizer Zeit (bisher
+    lief er schon um 00:00 UTC ab).
+  - Der Aufnahmezeitraum auf der Teilen-Seite springt nicht mehr um einen Tag.
+  - Die Linkübersicht zählt bei Album-Links nur, was der Link wirklich zeigt (ohne ausgeblendete
+    Partnerfotos).
+  - Ein abgesagter Termin bekommt keine Fotos mehr automatisch zugeordnet, beim Absagen lösen sich
+    die automatischen Zuordnungen (manuelle bleiben).
+- **Termine und Zyklen (Nachtlauf):** Eingaben, die bisher mit 500 oder einem Eintrag im
+  Fehlerprotokoll scheiterten, werden jetzt als Eingabefehler abgelehnt bzw. abgefangen:
+  NUL-Zeichen in Terminen, Zyklen, Kalender-Abo und CSV-Import; ausdrückliches `null` beim Ändern
+  eines Zyklus; Protokolldatum ausserhalb 1900–2999 (Altbestand legt die Zyklenliste nicht mehr
+  lahm); zu grosse Teilnehmerzahl (auch im CSV-Import, mit eigener Meldung); Terminfilter-Fenster
+  über ±100 Jahre; derselbe Zyklus doppelt in einem Termin; zu grosses `skip` in Terminlisten.
 - **Bussen-Regeln › Pendenzen-Regeln:** Ein Klick irgendwo in die Zeile öffnet «Bearbeiten».
 - **Personenseite:** Texte genau nach Design «Mitglied Profil» (Kartenbeschreibungen, Hinweis bei «Aktives Mitglied» je nach Zustand, einziger Tarif).
 - **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
   über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
   PDF mit derselben Dokument-ID zurückkam.
+
+### Sicherheit
+
+- **Protokoll zurückstufen:** Aus «abgeschlossen» zurück (auch per `PATCH` des Status) verlangt
+  jetzt `meetings.approve`, wie das Abschliessen selbst.
+- **«Entschuldigen» (Dashboard):** entfernt offene Anwesenheitsbussen nur noch mit `fines.manage`
+  (und schreibendem Modul «Finanzen»), alle offenen Bussen der Person und mit Audit-Eintrag
+  `fine.deleted` in derselben Transaktion. Protokolle, die die Person nicht lesen darf, antworten
+  mit 404.
+- **Protokoll löschen:** Hat das Protokoll Anwesenheitsbussen, braucht Löschen `fines.manage`
+  (sonst Meldung «zuerst in der Kasse entfernen»). Einkassierte Bussen sperren das Löschen für alle,
+  bis sie in der Kasse wieder geöffnet oder gelöscht sind (sonst bliebe die Buchung ohne Busse). Das
+  Audit `protocol.deleted` listet die mitgelöschten Bussen.
 
 ## [1.4.0] - 2026-11-19
 

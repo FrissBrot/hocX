@@ -77,8 +77,12 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, canAppr
       setProtocols((list) => list.filter((item) => item.id !== protocol.id));
       showToast(t("deleted", { name: protocol.title ?? protocol.protocol_number }), "success");
     } catch (error) {
-      const hasFines = error instanceof ApiError && (error.detail as { code?: string } | undefined)?.code === "protocol_has_fines";
-      showToast(hasFines ? t("deleteHasFinesError") : error instanceof Error ? error.message : t("deleteFailed"), "error");
+      const code = error instanceof ApiError ? (error.detail as { code?: string } | undefined)?.code : undefined;
+      const message =
+        code === "protocol_has_fines" ? t("deleteHasFinesError")
+        : code === "protocol_has_collected_fines" ? t("deleteHasCollectedFinesError")
+        : error instanceof Error ? error.message : t("deleteFailed");
+      showToast(message, "error");
     }
   }
 

@@ -32,7 +32,7 @@ def _upload(monkeypatch, *, auto_close: str, max_files: int | None, already: int
     monkeypatch.setattr(public.repository, "get_tenant_storage_usage_bytes", lambda *a, **k: 0)
     monkeypatch.setattr(public.repository, "list_assignment_image_hashes", lambda *a, **k: [])
     monkeypatch.setattr(public.repository, "latest_status_by_element", lambda *a, **k: {})
-    monkeypatch.setattr(public.repository, "count_files_by_element", lambda *a, **k: {(1, None): already})
+    monkeypatch.setattr(public.repository, "count_files_by_element", lambda *a, **k: {public.repository.element_key({"event_id": 1, "list_entry_id": None}): already})
     monkeypatch.setattr(public, "save_to_quarantine", lambda db, content, **k: ("quarantine/x.pdf", hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, "move_from_quarantine", lambda *a: "x.pdf")
 

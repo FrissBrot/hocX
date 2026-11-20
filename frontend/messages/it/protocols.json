@@ -96,6 +96,7 @@
     "syncTemplateFailed": "Impossibile ricaricare gli elementi",
     "alreadyFinalizedError": "Il verbale è già finalizzato e congelato. Riportalo prima indietro dal menu («Torna a …»).",
     "deleteHasFinesError": "Il verbale contiene multe di presenza. Può eliminarlo solo chi può gestire le multe – oppure fai prima rimuovere le multe nelle finanze.",
+    "deleteHasCollectedFinesError": "Il verbale contiene multe di presenza già incassate. Riaprile o eliminale prima nella cassa, poi il verbale potrà essere eliminato.",
     "deleteFinalizedHint": "I verbali finalizzati non possono essere eliminati. Riportali prima indietro con «Torna a …», poi eliminali.",
     "searchFailed": "Ricerca non riuscita",
     "searching": "Ricerca in corso …",
