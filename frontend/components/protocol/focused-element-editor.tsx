@@ -15,6 +15,8 @@ import { useToast } from "@/contexts/toast-context";
 import { Badge } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { canCollectAsSubmission } from "@/components/todos/use-create-submission-from-todo";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
@@ -159,6 +161,7 @@ function FocusedElementEditorImpl({
   addTodo,
   updateTodo,
   deleteTodo,
+  collectTodoAsSubmission,
   acceptTodoTrackedChange,
   acceptTrackedListEntry,
   acceptTrackedRow,
@@ -248,6 +251,8 @@ function FocusedElementEditorImpl({
   addTodo: (protocolElementBlockId: string) => Promise<void>;
   updateTodo: (protocolElementBlockId: string, todoId: string, patch: Partial<ProtocolTodo>) => Promise<void>;
   deleteTodo: (protocolElementBlockId: string, todoId: string) => Promise<void>;
+  /** «Als Abgabe einsammeln» (Menü der Pendenz); undefined = nicht erlaubt */
+  collectTodoAsSubmission?: (protocolElementBlockId: string, todoId: string) => Promise<void>;
   acceptTodoTrackedChange: (protocolElementBlockId: string, todoId: string) => Promise<void>;
   acceptTrackedListEntry: (blockId: string, entryId: string) => Promise<void>;
   acceptTrackedRow: (blockId: string, rowId: string) => Promise<void>;
@@ -2058,6 +2063,12 @@ function FocusedElementEditorImpl({
                                 <span key={tag} className="tag-chip tag-chip-sm">{tag}</span>
                               ))}
                             </div>
+                          )}
+                          {todoEditable && collectTodoAsSubmission && canCollectAsSubmission(todo) && (
+                            <ActionMenu
+                              ariaLabel={t("todoActions")}
+                              items={[{ label: tTodos("toSubmission.button"), onClick: () => void collectTodoAsSubmission(block.id, todo.id) }]}
+                            />
                           )}
                           {todoEditable && (
                             <button

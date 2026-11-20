@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { canToggleTodo, type TodoToggleSession } from "@/lib/todo-permissions";
+import { can } from "@/lib/permissions";
 import { Badge } from "@/components/ui/badge";
 import { useRunningTodoFines } from "@/components/todos/use-running-todo-fines";
 import { TodoBoard } from "@/components/todos/todo-board";
@@ -476,6 +477,13 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
         participants={participants}
         tagSuggestions={allTagSuggestions}
         showFine={finesEnabled}
+        canCollectSubmission={canEdit && can(session, "submissions.manage")}
+        onUpdated={(updated) => {
+          setTodos((prev) => ({
+            all: prev.all.map((t) => t.id === updated.id ? { ...t, ...updated } : t),
+            my: prev.my.map((t) => t.id === updated.id ? { ...t, ...updated } : t),
+          }));
+        }}
         onClose={() => setEditTodoId(null)}
         onSaved={(updated) => {
           setTodos((prev) => ({

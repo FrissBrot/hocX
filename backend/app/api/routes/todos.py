@@ -2,7 +2,7 @@ import uuid
 from types import SimpleNamespace
 
 from sqlalchemy import case, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,13 +19,14 @@ from app.schemas.protocol import (
     TodoDetails,
     TodoDetailsUpdate,
     TodoListItem,
+    TodoSubmissionCreated,
 )
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.services import todo_fine_service
+from app.services import todo_fine_service, todo_submission_service
 from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 router = APIRouter()
@@ -371,6 +372,62 @@ def patch_todo(
         return service._row_to_todo_read(db, row)
     todos = service.list_todos(db, todo.protocol_element_block_id)
     return next(item for item in todos if item.id == todo_id)
+
+
+@router.post("/protocol-todos/{todo_id}/create-submission", response_model=TodoSubmissionCreated, status_code=status.HTTP_201_CREATED)
+def create_submission_from_todo(
+    todo_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """«Als Abgabe einsammeln»: Einzelabgabe aus der Pendenz anlegen, die Pendenz wird die Pendenz
+    ihres Elements (todo_submission_service). Braucht Abgaben verwalten (inkl. Modul Abgabebox)
+    und Pendenzen bearbeiten wie PATCH /protocol-todos/{id}."""
+    require_permission(user, P.SUBMISSIONS_MANAGE)  # bindet das Modul abgabebox (require_feature, write)
+    require_permission(user, P.MEETINGS_EDIT)
+    existing = _todo_or_404(db, user, todo_id)
+    protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
+    if protocol_id:
+        protocol = _get_protocol_or_404(db, protocol_id)
+        if protocol.status == "abgeschlossen":
+            # Abgeschlossene Protokolle sind eingefroren (Momentaufnahme der Pendenzen)
+            raise HTTPException(status_code=409, detail={"code": "protocol_closed", "message": "Das Protokoll ist abgeschlossen."})
+    try:
+        # Gebüsste Person selbst: Fälligkeit/Status liefen danach über die Abgabe (wie PATCH)
+        todo_fine_service.ensure_may_change(db, existing, actor_user_id=user.user_id, can_manage=user.can(P.FINES_MANAGE))
+        result = todo_submission_service.create_from_todo(db, existing, tenant_id=user.current_tenant_id)
+    except todo_fine_service.TodoFineError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+    except todo_submission_service.TodoSubmissionError as exc:
+        # Alle Prüfungen laufen vor dem ersten Schreiben (create_from_todo) - nichts zurückzurollen
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "submission_invalid", "message": str(exc)}) from exc
+    except IntegrityError as exc:
+        # Gleichzeitig derselbe Slug angelegt (uq_submission_assignment_tenant_slug) oder die
+        # Pendenz eben verknüpft (uix_protocol_todo_submission_element)
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": "submission_conflict", "message": "Die Abgabe konnte nicht erstellt werden. Bitte erneut versuchen."}) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Abgabe konnte nicht erstellt werden") from exc
+    assignment = result.assignment
+    audit.log(
+        db, action="submission_assignment.created", actor=user, entity_type="submission_assignment", entity_id=assignment.id,
+        details={"origin": "todo", "todo_id": str(existing.public_id), "title": assignment.title},
+    )
+    row = service.repository.get_row(db, existing.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    service._prime_public_ids(db, [row])
+    return TodoSubmissionCreated(
+        assignment_id=assignment.public_id,
+        title=assignment.title,
+        public_slug=assignment.public_slug,
+        element_url=result.element_url,
+        todo=service._row_to_list_item(db, row),
+    )
 
 
 @router.get("/protocol-todos/{todo_id}/details", response_model=TodoDetails)

@@ -628,5 +628,6 @@
   },
   "elementPointNumber": "Punkt {number}",
   "participantPickerSelected": "{count} ausgewählt",
-  "participantPickerVisible": "{count} sichtbar"
+  "participantPickerVisible": "{count} sichtbar",
+  "todoActions": "Aktionen zur Pendenz"
 }

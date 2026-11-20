@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 582 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 377
+- Routen gesamt: 583 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 378
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
@@ -382,6 +382,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/protocol-todos/{todo_id}` | meetings.edit |
 | `PATCH /api/protocol-todos/{todo_id}` | meetings.edit oder todos.complete_own |
 | `POST /api/protocol-todos/{todo_id}/accept-tracked-change` | meetings.edit |
+| `POST /api/protocol-todos/{todo_id}/create-submission` | meetings.edit, submissions.manage |
 | `GET /api/protocol-todos/{todo_id}/details` | meetings.read |
 | `PUT /api/protocol-todos/{todo_id}/details` | meetings.edit |
 | `GET /api/protocol-todos/{todo_id}/due-events` | meetings.read |

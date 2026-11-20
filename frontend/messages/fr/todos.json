@@ -204,5 +204,26 @@
     "calendarSubscribe": "S’abonner dans Apple ou Google Agenda",
     "boardDueToday": "échéance aujourd’hui"
   },
-  "createEyebrow": "Nouvelle tâche"
+  "createEyebrow": "Nouvelle tâche",
+  "toSubmission": {
+    "button": "Collecter comme remise",
+    "hint": "Crée une remise individuelle avec cette tâche. Elle est terminée dès que le fichier est remis.",
+    "created": "Remise « {title} » créée",
+    "copyLink": "Copier le lien",
+    "customize": "Adapter",
+    "linkCopied": "Lien copié",
+    "copyFailed": "Le lien n’a pas pu être copié",
+    "failed": "La remise n’a pas pu être créée",
+    "errors": {
+      "todo_already_submission": "Cette tâche appartient déjà à une remise.",
+      "todo_pending_delete": "Cette tâche est marquée pour suppression.",
+      "todo_from_task_package": "Les tâches d’un paquet de tâches ne peuvent pas être collectées comme remise.",
+      "todo_closed": "Les tâches terminées ou annulées ne peuvent pas être collectées comme remise.",
+      "todo_without_assignee": "La tâche a besoin d’une personne responsable pour être collectée comme remise.",
+      "todo_too_many_assignees": "Une remise a au maximum 50 responsables par élément.",
+      "submission_no_default_link": "Il n’y a pas de lien standard pour les remises. Veuillez d’abord créer un lien sous Dépôts.",
+      "protocol_closed": "Le procès-verbal est clôturé.",
+      "submission_conflict": "La remise n’a pas pu être créée. Veuillez réessayer."
+    }
+  }
 }

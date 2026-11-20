@@ -2089,6 +2089,16 @@
         "meetings.edit"
       ]
     },
+    "POST /api/protocol-todos/{todo_id}/create-submission": {
+      "handler": "todos.create_submission_from_todo",
+      "requires": [
+        "meetings.edit",
+        "submissions.manage"
+      ],
+      "branches": [
+        "fines.manage"
+      ]
+    },
     "GET /api/protocol-todos/{todo_id}/details": {
       "handler": "todos.get_todo_details",
       "requires": [

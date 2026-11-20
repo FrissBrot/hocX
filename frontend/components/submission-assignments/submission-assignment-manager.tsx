@@ -103,6 +103,8 @@ type Props = {
   tenantName?: string | null;
   /** Öffnet diese Abgabe beim Laden (``?assignment=`` aus der Dateiübersicht). */
   initialSelectedId?: string | null;
+  /** Mit ``initialSelectedId``: gleich im Assistenten bearbeiten (``&edit=1``, «Anpassen» nach «Als Abgabe einsammeln») */
+  initialEdit?: boolean;
   /** Wählbare Prüfer (Konten mit Login, nur mit submissions.manage geladen) */
   availableReviewers?: SubmissionReviewerCandidate[];
   /** submissions.manage: Aufträge, Links, Dateien verwalten. Ohne: nur lesen (Prüfer, Phase 4) */
@@ -285,7 +287,7 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null, availableReviewers = [], canManage = true, canReview = true }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null, initialEdit = false, availableReviewers = [], canManage = true, canReview = true }: Props) {
   const t = useTranslations("submissionAssignments");
   const locale = useLocale();
   const tHelp = useTranslations("common.help");
@@ -456,8 +458,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
   // Direkt geöffnete Abgabe (?assignment=), nur beim ersten Laden
   useEffect(() => {
-    if (initialSelectedId && initialAssignments.some((assignment) => assignment.id === initialSelectedId)) {
-      void loadElements(initialSelectedId);
+    const initial = initialSelectedId ? initialAssignments.find((assignment) => assignment.id === initialSelectedId) : undefined;
+    if (initial) {
+      void loadElements(initial.id);
+      if (initialEdit && canManage) openEdit(initial);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

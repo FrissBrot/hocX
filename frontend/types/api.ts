@@ -1796,6 +1796,8 @@ export type ProtocolTodo = {
   task_package_name?: string | null;
   cycle_year?: number | null;
   overridden_fields?: string[];
+  /** Abgabe, die die Pendenz führt (Abgabebox, auch «Als Abgabe einsammeln»). */
+  submission_assignment_id?: string | null;
 };
 
 // Notizen und verknüpfte Dateien eines Todos - nur im Todo-Popup (GET/PUT

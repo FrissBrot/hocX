@@ -628,5 +628,6 @@
   },
   "elementPointNumber": "Item {number}",
   "participantPickerSelected": "{count} selected",
-  "participantPickerVisible": "{count} visible"
+  "participantPickerVisible": "{count} visible",
+  "todoActions": "Todo actions"
 }

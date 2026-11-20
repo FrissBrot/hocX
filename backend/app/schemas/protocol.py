@@ -342,8 +342,21 @@ class ProtocolTodoRead(BaseModel):
     task_package_name: str | None = None
     cycle_year: int | None = None
     overridden_fields: list[str] = []
+    # Abgabe, die die Pendenz führt (Abgabebox, auch «Als Abgabe einsammeln» im Protokoll)
+    submission_assignment_id: uuid.UUID | None = None
 
     _validate_reference_link_read = field_validator("reference_link")(_validate_reference_link)
+
+
+class TodoSubmissionCreated(BaseModel):
+    """Antwort von POST /protocol-todos/{id}/create-submission («Als Abgabe einsammeln»)."""
+
+    assignment_id: uuid.UUID
+    title: str
+    public_slug: str
+    # Öffentliche Abgabebox-URL des Elements (None, falls die Abgabe über keinen Link erreichbar ist)
+    element_url: str | None = None
+    todo: "TodoListItem"
 
 
 class TodoListItem(ProtocolTodoRead):
@@ -353,7 +366,6 @@ class TodoListItem(ProtocolTodoRead):
     protocol_title: str | None = None
     protocol_status: str | None = None
     block_title: str | None = None
-    submission_assignment_id: uuid.UUID | None = None
     element_ref: str | None = None
     # Pendenzen-Übersicht v2: Namen zu assigned_participant_ids (gleiche Reihenfolge), Titel der
     # nächsten Sitzung bei Fälligkeit «nächste Sitzung» und Titel der Abgabe, die die Pendenz schliesst
@@ -416,3 +428,6 @@ class ProtocolExportRead(BaseModel):
 
 class MarkdownExportRead(BaseModel):
     content: str
+
+
+TodoSubmissionCreated.model_rebuild()
