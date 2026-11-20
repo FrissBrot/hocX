@@ -2201,6 +2201,9 @@
       "handler": "protocols.excuse_participant",
       "requires": [
         "meetings.edit"
+      ],
+      "branches": [
+        "fines.manage"
       ]
     },
     "GET /api/protocols/{protocol_id}/block-images": {

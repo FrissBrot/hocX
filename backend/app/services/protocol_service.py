@@ -345,12 +345,19 @@ class ProtocolService:
         attendance_block_public_id = public_id_service.resolve_public_id(db, ProtocolElementBlock, block.id) if block else None
         return NextSessionRead(protocol=protocol, attendance_block_id=attendance_block_public_id, entries=entries)
 
-    def set_attendance_excused(self, db: Session, protocol_id: int, participant_id: int, excused: bool) -> bool:
+    def set_attendance_excused(
+        self, db: Session, protocol_id: int, participant_id: int, excused: bool, *,
+        clear_pending_fine: bool = True, removed_fine_ids: list[int] | None = None,
+    ) -> bool:
         """Toggles a participant between excused and unentschuldigt (absent) in every attendance
         block of this protocol. Marking someone excused also clears any pending fine for them
         there - mirrors the protocol editor's attendance behavior (excused never carries a fine).
         Toggling back to unentschuldigt does not recreate a fine; that still requires the
-        protocol editor's attendance block, which knows the configured fine amounts."""
+        protocol editor's attendance block, which knows the configured fine amounts.
+
+        clear_pending_fine=False lässt die Busse stehen: Bussen löschen ist fines.manage plus
+        Modul «finance» (wie DELETE /fines/{id}), das entscheidet die Route. removed_fine_ids
+        nimmt die IDs entfernter Bussen auf (Audit in der Route)."""
         attendance_type_id = self._attendance_type_id(db)
         if attendance_type_id is None:
             return False
@@ -387,7 +394,7 @@ class ProtocolService:
         if not found:
             return False
 
-        if excused:
+        if excused and clear_pending_fine:
             pending_fine = db.scalar(
                 select(AttendanceFine).where(
                     AttendanceFine.protocol_id == protocol_id,
@@ -396,6 +403,8 @@ class ProtocolService:
                 )
             )
             if pending_fine is not None:
+                if removed_fine_ids is not None:
+                    removed_fine_ids.append(pending_fine.id)
                 db.delete(pending_fine)
         db.commit()
         return True

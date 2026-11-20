@@ -322,13 +322,22 @@ def excuse_participant(
     # Frozen (abgeschlossen) protocols must never have their attendance/fines touched after
     # the fact - matches the guard every other write path on a protocol's content goes through.
     service.get_protocol_or_404_not_frozen(db, protocol.id)
+    # Offene Busse nur mitentfernen, wer Bussen löschen darf (wie DELETE /fines/{id}: fines.manage
+    # inkl. schreibendem Modul «finance»); sonst bleibt sie stehen und die Kasse entscheidet.
+    removed_fine_ids: list[int] = []
     try:
-        updated = service.set_attendance_excused(db, protocol.id, participant_internal_id, payload.excused)
+        updated = service.set_attendance_excused(
+            db, protocol.id, participant_internal_id, payload.excused,
+            clear_pending_fine=user.can(P.FINES_MANAGE), removed_fine_ids=removed_fine_ids,
+        )
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
     if not updated:
         raise HTTPException(status_code=404, detail="No attendance entry found for this participant")
+    for fine_id in removed_fine_ids:
+        audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id,
+                  details={"reason": "attendance_excused"})
     return {"message": "Participant excused" if payload.excused else "Participant marked unentschuldigt"}
 
 
