@@ -88,6 +88,8 @@ export const SHORTCUTS = [
   { id: "protocol.elementUp", keys: ["ArrowUp"], scope: "page", group: "protocol" },
   { id: "protocol.openTodo", keys: ["Mod+Alt+T"], scope: "page", group: "protocol", inInputs: true },
   { id: "protocol.openNotes", keys: ["Mod+Alt+N"], scope: "page", group: "protocol", inInputs: true },
+  // Schnelle Pendenz (session-panel.tsx): Abgabe ein-/ausschalten, auch im Titelfeld
+  { id: "protocol.quickTodoCollect", keys: ["Alt+A"], scope: "component", group: "protocol", inInputs: true },
   { id: "protocol.attendanceStatus", keys: ["1", "2", "3", "4"], displayKeys: ["1", "2", "3", "4"], scope: "component", group: "protocol" },
 
   // ── Document Studio (Designer) ───────────────────────────────────────────

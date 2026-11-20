@@ -73,6 +73,11 @@ Installationen aktualisieren können.
   `POST /api/protocol-todos/{id}/stop-submission` (Rechte wie beim Anlegen einer Abgabe aus einer
   Pendenz).
 
+- **Schnelle Pendenz im Protokoll:** Fälligkeit mit Smart-Daten-Vorschlägen («morgen», «nächste
+  Sitzung» …), Personen mit Profil-Badge, optional direkt «Als Abgabe einsammeln» (Alt+A, Mac ⌥A,
+  steht in der Tastenkürzel-Hilfe). Enter legt an, Escape legt eine angefangene Pendenz an und
+  schliesst das Menü.
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt

@@ -313,6 +313,7 @@
       "protocol_elementUp": "Previous section (outside of fields)",
       "protocol_openTodo": "New task in the session panel",
       "protocol_openNotes": "Notes in the session panel",
+      "protocol_quickTodoCollect": "Quick to-do: turn «Collect as submission» on or off",
       "protocol_attendanceStatus": "Set attendance: present, late, excused, absent",
       "designer_save": "Save template",
       "designer_undo": "Undo",

@@ -313,6 +313,7 @@
       "protocol_elementUp": "Sezione precedente (fuori dai campi)",
       "protocol_openTodo": "Nuovo compito nel pannello della seduta",
       "protocol_openNotes": "Note del pannello della seduta",
+      "protocol_quickTodoCollect": "Attività rapida: attivare o disattivare «Raccogli come consegna»",
       "protocol_attendanceStatus": "Presenza: presente, in ritardo, giustificato, assente",
       "designer_save": "Salvare il modello",
       "designer_undo": "Annulla",

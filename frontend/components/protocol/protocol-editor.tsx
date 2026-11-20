@@ -2488,6 +2488,7 @@ export function ProtocolEditor({
           onSessionNotesChange={setSessionNotes}
           onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
           todoFines={todoFines}
+          canCollectSubmissions={canCollectSubmissions}
         />
       )}
 

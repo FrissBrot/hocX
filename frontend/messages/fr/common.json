@@ -313,6 +313,7 @@
       "protocol_elementUp": "Section précédente (hors des champs)",
       "protocol_openTodo": "Nouvelle tâche dans le panneau de séance",
       "protocol_openNotes": "Notes du panneau de séance",
+      "protocol_quickTodoCollect": "Tâche rapide : activer ou désactiver « Collecter comme remise »",
       "protocol_attendanceStatus": "Présence : présent, en retard, excusé, absent",
       "designer_save": "Enregistrer le modèle",
       "designer_undo": "Annuler",

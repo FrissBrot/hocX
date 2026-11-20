@@ -2057,11 +2057,12 @@ function FocusedElementEditorImpl({
                             ) : null}
                           </div>
                           )}
-                          {(todo.tags ?? []).length > 0 && (
+                          {((todo.tags ?? []).length > 0 || todo.submission_assignment_id) && (
                             <div className="todo-tags-row">
                               {(todo.tags ?? []).map((tag) => (
                                 <span key={tag} className="tag-chip tag-chip-sm">{tag}</span>
                               ))}
+                              {todo.submission_assignment_id ? <Badge variant="info">{t("sessionPanel.collect.badge")}</Badge> : null}
                             </div>
                           )}
                           {todoEditable && collectTodoAsSubmission && canCollectAsSubmission(todo) && (

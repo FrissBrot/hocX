@@ -454,7 +454,25 @@
     "saving": "Speichert…",
     "tagPlaceholder": "Kategorie / Tag",
     "taskPlaceholder": "Aufgabe…",
-    "taskPlaceholderWithTab": "Aufgabe… (Tab: Person)"
+    "taskPlaceholderWithTab": "Aufgabe… (Tab: Person)",
+    "collect": {
+      "label": "Datei als Abgabe einsammeln",
+      "hint": "{name} reicht ohne Login ein, dann ist die Pendenz erledigt.",
+      "hintNoPerson": "Die Person reicht ohne Login ein, dann ist die Pendenz erledigt.",
+      "needsPerson": "Zuerst eine Person zuweisen.",
+      "badge": "Abgabe"
+    },
+    "createWithSubmissionButton": "Pendenz + Abgabe erstellen",
+    "created": "Erstellt: {title}",
+    "createdWithSubmission": "Erstellt: {title} · mit Abgabe",
+    "keyHint": "{enter} erstellt · {escape} erstellt und schliesst",
+    "keyHintCollect": "{enter} erstellt · {collect} Abgabe · {escape} erstellt und schliesst",
+    "clearFields": "Felder leeren",
+    "taskLabel": "Aufgabe",
+    "assigneeLabel": "Person",
+    "dueLabel": "Fällig",
+    "tagLabel": "Kategorie / Tag",
+    "dueEmpty": "Keine Treffer"
   },
   "settledLater": "Später beglichen",
   "showAction": "Einblenden",

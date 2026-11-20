@@ -313,6 +313,7 @@
       "protocol_elementUp": "Vorheriger Abschnitt (ausserhalb von Feldern)",
       "protocol_openTodo": "Neue Pendenz in der Sitzungsleiste",
       "protocol_openNotes": "Notizen der Sitzungsleiste",
+      "protocol_quickTodoCollect": "Schnelle Pendenz: «Als Abgabe einsammeln» ein- oder ausschalten",
       "protocol_attendanceStatus": "Anwesenheit setzen: anwesend, verspätet, entschuldigt, abwesend",
       "designer_save": "Vorlage speichern",
       "designer_undo": "Rückgängig",
