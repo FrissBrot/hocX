@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import protocols as protocol_routes
+from app.schemas.protocol import ProtocolUpdate
 from tests.factories import make_current_user, make_protocol, make_template, make_tenant
 
 
@@ -34,6 +35,21 @@ def test_revert_of_closed_protocol_requires_approve(db):
     approver = make_current_user(tenant.id, role="writer")
     reverted = protocol_routes.revert_protocol_status(protocol.public_id, db=db, user=approver)
     assert reverted.status == "durchgeführt"
+
+
+def test_patch_status_back_from_closed_requires_approve(db):
+    """PATCH erlaubt einen Schritt rückwärts - derselbe Weg wie revert-status, dieselbe Prüfung."""
+    tenant = make_tenant(db, "Rückstufen per PATCH")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id, status="abgeschlossen")
+
+    with pytest.raises(HTTPException) as denied:
+        protocol_routes.patch_protocol(
+            protocol.public_id, ProtocolUpdate(status="durchgeführt"), db=db, user=_editor_without_approve(tenant.id)
+        )
+    assert denied.value.status_code == 403
+    db.refresh(protocol)
+    assert protocol.status == "abgeschlossen"
 
 
 def test_revert_of_open_stages_keeps_working_with_edit_only(db):
