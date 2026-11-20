@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -115,7 +116,7 @@ def delete_account(
 @router.get("/finance/accounts/{account_id}/transactions", response_model=list[FinanceTransactionRead])
 def list_transactions(
     account_id: uuid.UUID,
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=50, ge=1, le=200),
     year: Annotated[int | None, Query(ge=1900, le=2999)] = None,
     db: Session = Depends(get_db),

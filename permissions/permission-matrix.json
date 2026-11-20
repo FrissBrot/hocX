@@ -1295,7 +1295,8 @@
     "DELETE /api/participants": {
       "handler": "participants.bulk_delete_participants",
       "allowed": [
-        "admin"
+        "admin",
+        "writer"
       ]
     },
     "GET /api/participants": {
@@ -1340,7 +1341,8 @@
     "DELETE /api/participants/{participant_id}": {
       "handler": "participants.delete_participant",
       "allowed": [
-        "admin"
+        "admin",
+        "writer"
       ]
     },
     "GET /api/participants/{participant_id}": {
@@ -1353,7 +1355,8 @@
     "PATCH /api/participants/{participant_id}": {
       "handler": "participants.patch_participant",
       "allowed": [
-        "admin"
+        "admin",
+        "writer"
       ]
     },
     "DELETE /api/participants/{participant_id}/invite": {

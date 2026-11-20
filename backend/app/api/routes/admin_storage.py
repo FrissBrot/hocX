@@ -16,6 +16,7 @@ from fastapi.responses import Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
@@ -246,7 +247,7 @@ def get_migration(migration_id: uuid.UUID, db: Session = Depends(get_db)):
 def list_migration_objects(
     migration_id: uuid.UUID, db: Session = Depends(get_db),
     status: str | None = Query(None, pattern="^(pending|copying|copied|verified|failed|dead|deleted)$"),
-    offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET), limit: int = Query(50, ge=1, le=500),
     admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     """Objekt-Schlüssel sind Dateipfade (wie im Prüfbericht) - nur Owner, nicht Support."""

@@ -27,10 +27,15 @@ export function useSessionAttendance(initialSessions: NextSessionInfo[], canExcu
     setBusy((current) => ({ ...current, [key]: true }));
     setStatus(nextExcused ? "excused" : "absent");
     try {
-      await browserApiFetch(`/api/protocols/${protocol.id}/attendance/${entry.participant_id}/excuse`, {
+      const result = await browserApiFetch<{ fines_kept?: number }>(`/api/protocols/${protocol.id}/attendance/${entry.participant_id}/excuse`, {
         method: "POST",
         body: JSON.stringify({ excused: nextExcused }),
       });
+      // Ohne Bussenrecht bleiben offene Bussen stehen (die Kasse entscheidet) - das sagen statt still.
+      const finesKept = Number(result?.fines_kept ?? 0);
+      if (nextExcused && finesKept > 0) {
+        showToast(t("excusedFinesKept", { name: entry.participant_name, count: finesKept }), "info");
+      }
     } catch (error) {
       setStatus(entry.status);
       showToast(error instanceof Error ? error.message : t("statusChangeFailed"), "error");

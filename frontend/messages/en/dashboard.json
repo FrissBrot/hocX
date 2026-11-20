@@ -37,6 +37,7 @@
   "statsFines": "Fines total",
   "statsTodosOpen": "Open to-dos",
   "statusChangeFailed": "Status could not be changed",
+  "excusedFinesKept": "{name} is excused. {count, plural, one {The open fine stays} other {The # open fines stay}} – only someone who may manage fines can remove {count, plural, one {it} other {them}}.",
   "today": "Today",
   "tomorrow": "Tomorrow",
   "unexcuseTitle": "Mark as unexcused again",

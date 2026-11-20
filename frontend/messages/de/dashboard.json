@@ -37,6 +37,7 @@
   "statsFines": "Bussen total",
   "statsTodosOpen": "Pendenzen offen",
   "statusChangeFailed": "Status konnte nicht geändert werden",
+  "excusedFinesKept": "{name} ist entschuldigt. {count, plural, one {Die offene Busse bleibt} other {Die # offenen Bussen bleiben}} stehen – entfernen kann sie, wer Bussen verwalten darf.",
   "today": "Heute",
   "tomorrow": "Morgen",
   "unexcuseTitle": "Wieder auf unentschuldigt setzen",

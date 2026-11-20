@@ -164,6 +164,17 @@ Breaking Changes.
   eines Zyklus; Protokolldatum ausserhalb 1900–2999 (Altbestand legt die Zyklenliste nicht mehr
   lahm); zu grosse Teilnehmerzahl (auch im CSV-Import, mit eigener Meldung); Terminfilter-Fenster
   über ±100 Jahre; derselbe Zyklus doppelt in einem Termin; zu grosses `skip` in Terminlisten.
+- **NUL-Zeichen und Seiten-Offset in allen Routen:** Eine neue Middleware lehnt NUL-Zeichen in
+  Pfad, Query und JSON-Body zentral mit 422 ab, bevor eine Route sie sieht (bisher je nach Route
+  500 oder 400 mit Eintrag im Fehlerprotokoll). `skip`/`offset` sind in allen Listen begrenzt
+  (bisher «bigint out of range»); ein Test hält das für neue Routen fest.
+- **Entschuldigen ohne Bussenrecht:** Das Dashboard sagt jetzt, dass offene Bussen der
+  entschuldigten Person stehen bleiben und nur entfernen kann, wer Bussen verwalten darf.
+- **Rechte-Übersicht:** Prüfungen, die nur in einem Zweig laufen, stehen als «je nach Fall»
+  (`requires_if`) statt als Pflicht, z. B. `meetings.approve` beim Ändern des Protokollstatus (nur
+  beim Zurückholen aus «abgeschlossen») oder `access.manage` bei Personen (nur mit Login). Muster
+  «`user.can(A)` sonst `require_permission(B)`» erscheint als «A oder B». Die Rollen-Matrix zeigt
+  dadurch korrekt, dass «Schreiber» Personen ohne Login ändern und löschen darf.
 - **Bussen-Regeln › Pendenzen-Regeln:** Ein Klick irgendwo in die Zeile öffnet «Bearbeiten».
 - **Personenseite:** Texte genau nach Design «Mitglied Profil» (Kartenbeschreibungen, Hinweis bei «Aktives Mitglied» je nach Zustand, einziger Tarif).
 - **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen

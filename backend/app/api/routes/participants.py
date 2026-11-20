@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
@@ -152,7 +153,7 @@ def list_participants(
     # ausgewählt wird. Nur die Mitgliederverwaltung und Seiten mit Geschichte (Protokolle,
     # Importe, Listen mit Personenspalten) fragen sie ausdrücklich mit ab.
     include_former: bool = Query(default=False),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     # Ceiling raised from 500 to 2000 (audit finding, 2026-08-25) - the templates/{id} and
     # elements admin pages fetch the full participant list for their picker UI with a
     # hardcoded limit=500 and no truncation warning, so a tenant with more than 500

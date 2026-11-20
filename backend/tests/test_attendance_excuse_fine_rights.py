@@ -54,9 +54,11 @@ def test_excuse_without_fines_manage_keeps_the_fine(db):
     writer = make_current_user(tenant.id, role="writer")
     assert "fines.manage" not in writer.permissions
 
-    protocol_routes.excuse_participant(protocol.public_id, person.public_id, AttendanceExcusePayload(), db=db, user=writer)
+    result = protocol_routes.excuse_participant(protocol.public_id, person.public_id, AttendanceExcusePayload(), db=db, user=writer)
 
     assert _fine_exists(db, fine.id)
+    # Die Oberfläche sagt, dass die Busse stehen bleibt
+    assert result["fines_kept"] == 1
 
 
 def test_excuse_without_finance_write_access_keeps_the_fine(db):

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -111,7 +112,7 @@ def put_context_visibility(
 
 @router.get("/context-files/submission-photos", response_model=ContextPhotoPage)
 def list_shared_submission_photos(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=60, ge=1, le=200),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),

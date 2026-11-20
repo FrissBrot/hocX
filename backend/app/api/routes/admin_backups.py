@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
@@ -101,7 +102,7 @@ def backup_set_tenants(set_id: uuid.UUID, db: Session = Depends(get_db)) -> list
 @router.get("/backups", response_model=BackupJobPage)
 def backup_jobs(
     kind: str | None = Query(None), state: str | None = Query(None), trigger: str | None = Query(None),
-    offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=200), db: Session = Depends(get_db),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET), limit: int = Query(25, ge=1, le=200), db: Session = Depends(get_db),
 ) -> BackupJobPage:
     if (kind and kind not in _KINDS) or (state and state not in _STATES) or (trigger and trigger not in _TRIGGERS):
         raise HTTPException(status_code=422, detail="Ungültiger Filter")

@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
 from sqlalchemy.orm import Session
@@ -115,7 +116,7 @@ MAX_DOCUMENT_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
 
 @router.get("/files", response_model=list[FileOverviewItem])
 def list_files(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=60, ge=1, le=200),
     source: FileOverviewSource | None = Query(default=None),
     album_id: Annotated[uuid.UUID | None, Query()] = None,

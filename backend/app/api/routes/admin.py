@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db, release_for_stream
@@ -182,7 +183,7 @@ def _request_hostname(request: Request) -> str | None:
 @router.get("/tenants", response_model=AdminTenantPage)
 def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     q: str | None = Query(None),
     plan: Annotated[str | None, Query()] = None,
     needs_rebooking: Annotated[bool, Query()] = False,
@@ -194,7 +195,7 @@ def list_tenants(
 @router.get("/domains", response_model=AdminDomainPage)
 def list_domains(
     limit: int | None = Query(None, gt=0, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -225,7 +226,7 @@ def list_error_logs(
     error_type: str | None = None,
     source: str | None = None,
     limit: int = Query(50, gt=0),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
@@ -244,7 +245,7 @@ def list_audit_log(
     action: str | None = Query(default=None, max_length=100),
     outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
     limit: int = Query(50, gt=0, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
@@ -313,7 +314,7 @@ def get_job_status(
 def list_job_runs(
     job_name: Annotated[str, PathParam(pattern=r"^[a-z0-9][a-z0-9_.-]{0,99}$")],
     limit: int = Query(50, gt=0),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
@@ -438,7 +439,7 @@ def list_notification_log(
     status: str | None = Query(default=None, pattern="^(pending|sent|skipped|failed)$"),
     search: str | None = Query(default=None, max_length=100),
     limit: int = Query(50, gt=0, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
@@ -466,7 +467,7 @@ def get_upload_pipeline_status(
     source: str | None = None,
     scan_status: str | None = None,
     limit: int = Query(50, gt=0),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
@@ -1113,7 +1114,7 @@ def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = D
 @router.get("/users", response_model=AdminUserPage)
 def list_users(
     limit: int | None = Query(None, gt=0, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     q: str | None = Query(None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.db import get_db
 from app.schemas.cashflow import (
@@ -52,7 +53,7 @@ def list_charges(
     status: Literal["open", "paid", "waived", "overdue"] | None = None,
     q: str | None = Query(None, max_length=200),
     year: int | None = Query(None, ge=2000, le=2100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(50, ge=1, le=200),
 ):
     _sync(db)

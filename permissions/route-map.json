@@ -1184,7 +1184,6 @@
       "handler": "documents.list_source_options",
       "requires": [
         "finances.read",
-        "meetings.edit",
         "meetings.read"
       ],
       "requires_any": [
@@ -1196,6 +1195,9 @@
           "meetings.read_drafts",
           "photos.read"
         ]
+      ],
+      "requires_if": [
+        "meetings.edit"
       ]
     },
     "GET /api/documents/{document_id}": {
@@ -1324,17 +1326,18 @@
     },
     "GET /api/files": {
       "handler": "files.list_files",
-      "requires": [
-        "photos.read"
-      ],
       "requires_any": [
         [
           "files.read",
           "photos.read"
         ]
       ],
+      "requires_if": [
+        "photos.read"
+      ],
       "branches": [
-        "files.read"
+        "files.read",
+        "photos.read"
       ]
     },
     "GET /api/files/album-pending-releases": {
@@ -1460,14 +1463,18 @@
     "POST /api/files/bulk-tags": {
       "handler": "files.bulk_update_file_tags",
       "requires": [
-        "files.manage",
         "photos.manage"
+      ],
+      "requires_if": [
+        "files.manage"
       ]
     },
     "POST /api/files/document-uploads": {
       "handler": "files.upload_documents",
       "requires": [
-        "files.manage",
+        "files.manage"
+      ],
+      "requires_if": [
         "submissions.manage"
       ]
     },
@@ -1486,7 +1493,9 @@
     "POST /api/files/gallery-uploads": {
       "handler": "files.upload_gallery_images",
       "requires": [
-        "photos.manage",
+        "photos.manage"
+      ],
+      "requires_if": [
         "submissions.manage"
       ]
     },
@@ -1587,7 +1596,9 @@
     "GET /api/files/upload-target-shared-albums": {
       "handler": "files.list_upload_target_shared_albums",
       "requires": [
-        "photos.manage",
+        "photos.manage"
+      ],
+      "requires_if": [
         "submissions.manage"
       ]
     },
@@ -1824,8 +1835,10 @@
     "DELETE /api/participants": {
       "handler": "participants.bulk_delete_participants",
       "requires": [
-        "access.manage",
         "participants.manage"
+      ],
+      "requires_if": [
+        "access.manage"
       ]
     },
     "GET /api/participants": {
@@ -1875,8 +1888,10 @@
     "DELETE /api/participants/{participant_id}": {
       "handler": "participants.delete_participant",
       "requires": [
-        "access.manage",
         "participants.manage"
+      ],
+      "requires_if": [
+        "access.manage"
       ]
     },
     "GET /api/participants/{participant_id}": {
@@ -1894,8 +1909,10 @@
     "PATCH /api/participants/{participant_id}": {
       "handler": "participants.patch_participant",
       "requires": [
-        "access.manage",
         "participants.manage"
+      ],
+      "requires_if": [
+        "access.manage"
       ]
     },
     "DELETE /api/participants/{participant_id}/invite": {
@@ -2055,8 +2072,11 @@
     },
     "PATCH /api/protocol-todos/{todo_id}": {
       "handler": "todos.patch_todo",
-      "requires": [
-        "todos.complete_own"
+      "requires_any": [
+        [
+          "meetings.edit",
+          "todos.complete_own"
+        ]
       ],
       "branches": [
         "fines.manage",
@@ -2184,8 +2204,10 @@
     "PATCH /api/protocols/{protocol_id}": {
       "handler": "protocols.patch_protocol",
       "requires": [
-        "meetings.approve",
         "meetings.edit"
+      ],
+      "requires_if": [
+        "meetings.approve"
       ]
     },
     "GET /api/protocols/{protocol_id}/agenda-items": {
@@ -2293,8 +2315,10 @@
     "POST /api/protocols/{protocol_id}/revert-status": {
       "handler": "protocols.revert_protocol_status",
       "requires": [
-        "meetings.approve",
         "meetings.edit"
+      ],
+      "requires_if": [
+        "meetings.approve"
       ]
     },
     "GET /api/protocols/{protocol_id}/scroll-position": {
@@ -2476,8 +2500,6 @@
     "POST /api/share-links": {
       "handler": "share_links.create_share_link",
       "requires": [
-        "files.read",
-        "photos.read",
         "sharing.public"
       ],
       "requires_any": [
@@ -2485,6 +2507,10 @@
           "files.read",
           "photos.read"
         ]
+      ],
+      "requires_if": [
+        "files.read",
+        "photos.read"
       ],
       "features": [
         "photo_sharing"
@@ -3300,7 +3326,9 @@
       "handler": "word_import.commit_word_import",
       "requires": [
         "meetings.approve",
-        "meetings.edit",
+        "meetings.edit"
+      ],
+      "requires_if": [
         "participants.manage"
       ]
     },
@@ -3332,7 +3360,9 @@
       "handler": "word_import.commit_word_import_document",
       "requires": [
         "meetings.approve",
-        "meetings.edit",
+        "meetings.edit"
+      ],
+      "requires_if": [
         "participants.manage"
       ]
     },

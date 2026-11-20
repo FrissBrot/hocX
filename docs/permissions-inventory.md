@@ -253,7 +253,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/documents/preview/canvas` | meetings.read, settings.manage, templates.edit |
 | `POST /api/documents/render` | meetings.read |
 | `GET /api/documents/render-jobs/{job_id}` | meetings.read |
-| `GET /api/documents/sources/{source}` | finances.read, meetings.edit, meetings.read + meetings.edit oder participants.manage + meetings.read_drafts oder photos.read |
+| `GET /api/documents/sources/{source}` | finances.read, meetings.read + meetings.edit oder participants.manage + meetings.read_drafts oder photos.read · je nach Fall: meetings.edit |
 | `GET /api/documents/{document_id}` | meetings.read |
 | `POST /api/documents/{document_id}/reprocess` | meetings.edit |
 | `GET /api/documents/{document_id}/versions/{version_id}/files/{role}` | meetings.read |
@@ -273,7 +273,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/events/{event_id}` | meetings.edit |
 | `PATCH /api/events/{event_id}` | meetings.edit |
 | `GET /api/events/{event_id}/delete-impact` | meetings.edit |
-| `GET /api/files` | photos.read + files.read oder photos.read |
+| `GET /api/files` | files.read oder photos.read · je nach Fall: photos.read |
 | `GET /api/files/album-pending-releases` | photos.read |
 | `GET /api/files/album-share-requests` | photos.read |
 | `GET /api/files/albums` | photos.read |
@@ -292,11 +292,11 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/files/analysis-progress` | photos.read |
 | `POST /api/files/bulk-capture-date` | photos.manage |
 | `POST /api/files/bulk-delete` | photos.manage |
-| `POST /api/files/bulk-tags` | files.manage, photos.manage |
-| `POST /api/files/document-uploads` | files.manage, submissions.manage |
+| `POST /api/files/bulk-tags` | photos.manage · je nach Fall: files.manage |
+| `POST /api/files/document-uploads` | files.manage · je nach Fall: submissions.manage |
 | `GET /api/files/gallery-upload-jobs` | photos.manage |
 | `GET /api/files/gallery-upload-jobs/{job_id}` | photos.manage |
-| `POST /api/files/gallery-uploads` | photos.manage, submissions.manage |
+| `POST /api/files/gallery-uploads` | photos.manage · je nach Fall: submissions.manage |
 | `GET /api/files/similarity-groups` | photos.read |
 | `GET /api/files/stats` | files.read oder photos.read |
 | `GET /api/files/tags` | files.read oder photos.read |
@@ -308,7 +308,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/files/trash/restore` | files.manage oder photos.manage |
 | `GET /api/files/trash/{file_id}/thumbnail` | files.manage oder photos.manage |
 | `POST /api/files/upload-precheck` | files.manage oder photos.manage |
-| `GET /api/files/upload-target-shared-albums` | photos.manage, submissions.manage |
+| `GET /api/files/upload-target-shared-albums` | photos.manage · je nach Fall: submissions.manage |
 | `PATCH /api/files/{file_id}/best` | photos.manage |
 | `GET /api/finance-settings` | meetings.read |
 | `PATCH /api/finance-settings` | settings.manage |
@@ -345,16 +345,16 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/lists/{list_definition_id}/columns/{column_id}/usages` | meetings.edit |
 | `GET /api/lists/{list_definition_id}/entries` | meetings.edit |
 | `POST /api/lists/{list_definition_id}/entries` | meetings.edit |
-| `DELETE /api/participants` | access.manage, participants.manage |
+| `DELETE /api/participants` | participants.manage · je nach Fall: access.manage |
 | `GET /api/participants` | participants.read |
 | `POST /api/participants` | participants.manage |
 | `POST /api/participants/bulk-invite` | access.manage, participants.manage |
 | `POST /api/participants/bulk-roles` | access.manage, participants.manage |
 | `POST /api/participants/import-csv` | participants.manage |
 | `GET /api/participants/invites` | access.manage |
-| `DELETE /api/participants/{participant_id}` | access.manage, participants.manage |
+| `DELETE /api/participants/{participant_id}` | participants.manage · je nach Fall: access.manage |
 | `GET /api/participants/{participant_id}` | participants.read |
-| `PATCH /api/participants/{participant_id}` | access.manage, participants.manage |
+| `PATCH /api/participants/{participant_id}` | participants.manage · je nach Fall: access.manage |
 | `DELETE /api/participants/{participant_id}/invite` | access.manage, participants.manage |
 | `POST /api/participants/{participant_id}/invite` | access.manage, participants.manage |
 | `POST /api/participants/{participant_id}/personal-data` | participants.export |
@@ -380,7 +380,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/protocol-elements/{protocol_element_id}/blocks/from-event` | meetings.edit |
 | `DELETE /api/protocol-images/{image_id}` | meetings.edit |
 | `DELETE /api/protocol-todos/{todo_id}` | meetings.edit |
-| `PATCH /api/protocol-todos/{todo_id}` | todos.complete_own |
+| `PATCH /api/protocol-todos/{todo_id}` | meetings.edit oder todos.complete_own |
 | `POST /api/protocol-todos/{todo_id}/accept-tracked-change` | meetings.edit |
 | `GET /api/protocol-todos/{todo_id}/details` | meetings.read |
 | `PUT /api/protocol-todos/{todo_id}/details` | meetings.edit |
@@ -397,7 +397,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/upcoming-sessions` | meetings.read |
 | `DELETE /api/protocols/{protocol_id}` | meetings.edit |
 | `GET /api/protocols/{protocol_id}` | meetings.read |
-| `PATCH /api/protocols/{protocol_id}` | meetings.approve, meetings.edit |
+| `PATCH /api/protocols/{protocol_id}` | meetings.edit · je nach Fall: meetings.approve |
 | `GET /api/protocols/{protocol_id}/agenda-items` | meetings.read |
 | `POST /api/protocols/{protocol_id}/agenda-items` | meetings.edit |
 | `POST /api/protocols/{protocol_id}/attendance/{participant_id}/excuse` | meetings.edit |
@@ -413,7 +413,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/{protocol_id}/pending-todos` | meetings.read |
 | `GET /api/protocols/{protocol_id}/period` | meetings.read |
 | `POST /api/protocols/{protocol_id}/quick-todos` | meetings.edit |
-| `POST /api/protocols/{protocol_id}/revert-status` | meetings.approve, meetings.edit |
+| `POST /api/protocols/{protocol_id}/revert-status` | meetings.edit · je nach Fall: meetings.approve |
 | `GET /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `PUT /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `POST /api/protocols/{protocol_id}/sync-template` | meetings.edit |
@@ -444,7 +444,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PATCH /api/roles/{role_id}` | access.manage · Feature custom_roles |
 | `POST /api/search` | files.read oder participants.read oder photos.read oder templates.edit |
 | `GET /api/share-links` | sharing.public |
-| `POST /api/share-links` | files.read, photos.read, sharing.public + files.read oder photos.read · Feature photo_sharing |
+| `POST /api/share-links` | sharing.public + files.read oder photos.read · je nach Fall: files.read, photos.read · Feature photo_sharing |
 | `DELETE /api/share-links/{share_link_id}` | sharing.public |
 | `GET /api/statistics/overview` | meetings.read |
 | `GET /api/storage/usage` | settings.manage |
@@ -559,12 +559,12 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/todos/blocks` | meetings.read |
 | `GET /api/todos/my` | meetings.read |
 | `POST /api/tools/word-import/analyze` | meetings.edit |
-| `POST /api/tools/word-import/commit` | meetings.approve, meetings.edit, participants.manage |
+| `POST /api/tools/word-import/commit` | meetings.approve, meetings.edit · je nach Fall: participants.manage |
 | `GET /api/tools/word-import/documents` | meetings.edit |
 | `POST /api/tools/word-import/documents` | meetings.edit |
 | `DELETE /api/tools/word-import/documents/{document_id}` | meetings.edit |
 | `GET /api/tools/word-import/documents/{document_id}` | meetings.edit |
-| `POST /api/tools/word-import/documents/{document_id}/commit` | meetings.approve, meetings.edit, participants.manage |
+| `POST /api/tools/word-import/documents/{document_id}/commit` | meetings.approve, meetings.edit · je nach Fall: participants.manage |
 | `PUT /api/tools/word-import/documents/{document_id}/draft` | meetings.edit |
 | `POST /api/tools/word-import/documents/{document_id}/reanalyze` | meetings.edit |
 | `GET /api/tools/word-import/last-template` | meetings.edit |

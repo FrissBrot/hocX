@@ -48,6 +48,12 @@ it("reverts only the affected protocol and reports failed updates", async () => 
   await waitFor(() => expect(toast).toHaveBeenCalledWith("Fehler", "error"));
   expect(screen.getAllByRole("button", { name: /Alex/ }).every((chip) => chip.getAttribute("aria-pressed") === "false")).toBe(true);
 });
+it("says when open fines stay after excusing without fines.manage", async () => {
+  api.mockImplementation((path: string) => Promise.resolve(path.includes("/excuse") ? { fines_kept: 1 } : {}));
+  mount();
+  fireEvent.click(screen.getAllByRole("button", { name: /Alex/ })[0]);
+  await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining("Die offene Busse bleibt stehen"), "info"));
+});
 it("prevents readers from changing attendance", () => {
   mount(sessions, false);
   screen.getAllByRole("button", { name: /Alex/ }).forEach((chip) => expect(chip).toBeDisabled());

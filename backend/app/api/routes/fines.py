@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
@@ -34,7 +35,7 @@ audit = AuditService()
 
 @router.get("/fines", response_model=list[AttendanceFineListItem])
 def list_fines(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     # 500 wie fetchAllPages im Frontend (Mobile lädt alle Seiten; mit le=200 kam 422)
     limit: int = Query(default=50, ge=1, le=500),
     # Annotated statt Query-Default: direkte Aufrufe (Tests) bekommen None statt eines Query-Objekts

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -89,7 +90,7 @@ def list_activity(
     # Auswahllisten (Vorgänge, Personen) nur bei Bedarf: das Frontend lädt sie mit der ersten Seite
     with_options: bool = True,
     limit: int = Query(50, gt=0, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -99,7 +100,7 @@ def list_todo_blocks(
 
 @router.get("/todos", response_model=list[TodoListItem])
 def list_all_todos(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -116,7 +117,7 @@ def list_all_todos(
 
 @router.get("/todos/my", response_model=list[TodoListItem])
 def list_my_todos(
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),

@@ -189,7 +189,7 @@ def _ensure_can_approve(db: Session, user: CurrentUser, protocol: Protocol) -> N
 def list_protocols(
     q: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -307,7 +307,7 @@ def get_upcoming_sessions(db: Session = Depends(get_db), user: CurrentUser = Dep
     return sessions if access_service.sees_all_protocols(user) else _without_draft_content(sessions)
 
 
-@router.post("/protocols/{protocol_id}/attendance/{participant_id}/excuse", response_model=dict[str, str])
+@router.post("/protocols/{protocol_id}/attendance/{participant_id}/excuse", response_model=dict[str, str | int])
 def excuse_participant(
     protocol_id: uuid.UUID,
     participant_id: uuid.UUID,
@@ -343,7 +343,18 @@ def excuse_participant(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
-    return {"message": "Participant excused" if payload.excused else "Participant marked unentschuldigt"}
+    # Ohne fines.manage bleiben offene Bussen stehen: die Oberfläche sagt das (Hinweis «die Kasse
+    # entscheidet»), statt still «entschuldigt» zu melden.
+    fines_kept = 0
+    if payload.excused and not user.can(P.FINES_MANAGE):
+        fines_kept = int(db.scalar(
+            select(func.count()).select_from(AttendanceFine).where(
+                AttendanceFine.protocol_id == protocol.id,
+                AttendanceFine.participant_id == participant_internal_id,
+                AttendanceFine.status == "pending",
+            )
+        ) or 0)
+    return {"message": "Participant excused" if payload.excused else "Participant marked unentschuldigt", "fines_kept": fines_kept}
 
 
 @router.get("/protocols/{protocol_id}", response_model=ProtocolRead)

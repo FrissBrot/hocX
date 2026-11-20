@@ -18,6 +18,9 @@ Felder je Route ("METHODE /pfad"):
   requires      require_permission(user, P.X) - alle müssen erfüllt sein
   requires_any  require_any_permission(user, P.X, P.Y) - je Gruppe eine
   features      require_feature(user, "...") bzw. F.X; «(lesen)» = auch im Nur-Lesen-Zustand
+  requires_if   require_permission(...) nur in einem Zweig (if/else, Schleife, except) - gilt
+                nur in bestimmten Fällen (z. B. meetings.approve beim Zurückstufen aus
+                «abgeschlossen»), ist kein Zugangstor für die Route
   branches      user.can(P.X) - verzweigt nur (z. B. mehr Daten), ist kein Zugangstor
   platform      Plattform-Admin-Route (Dependency aus core/admin_security.py)
   note          begründete Ausnahme aus dem Inventar-Test
@@ -106,19 +109,69 @@ def _call_name(call: ast.Call) -> str | None:
 
 
 def _empty() -> dict[str, set]:
-    return {"requires": set(), "requires_any": set(), "features": set(), "branches": set()}
+    return {"requires": set(), "requires_any": set(), "requires_if": set(), "features": set(), "branches": set()}
+
+
+def _conditional_nodes(function: ast.AST, alternatives: dict[int, list[str]]) -> set[int]:
+    """ids aller Knoten, die nur in einem Zweig laufen: Rumpf/else von if, Schleifenrümpfe,
+    except-/else-Zweige von try, match-Fälle, bedingte Ausdrücke und der rechte Teil von and/or.
+    Die Bedingung selbst (if not user.can(...)) läuft immer und zählt nicht als bedingt."""
+    conditional: set[int] = set()
+    alternatives.clear()
+
+    def can_test(test: ast.AST) -> tuple[list[str], bool] | None:
+        # user.can(P.X) bzw. not user.can(P.X)
+        negated = isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)
+        call = test.operand if negated else test
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "can":
+            return [_permission(arg) for arg in call.args], negated
+        return None
+
+    def mark(nodes) -> None:
+        for node in nodes:
+            for child in ast.walk(node):
+                conditional.add(id(child))
+
+    for node in ast.walk(function):
+        if node is not function and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.If):
+            mark(node.body + node.orelse)
+            # «if user.can(P.X): … else: require_permission(user, P.Y)» heisst X oder Y: die
+            # Pflichtprüfung direkt im Zweig ohne X wird zur Gruppe requires_any (X, Y).
+            tested = can_test(node.test)
+            if tested is not None:
+                permissions, negated = tested
+                for statement in node.body if negated else node.orelse:
+                    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                        alternatives[id(statement.value)] = permissions
+        elif isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+            mark(node.body + node.orelse)
+        elif isinstance(node, ast.Try):
+            mark(node.handlers + node.orelse)
+        elif isinstance(node, ast.Match):
+            mark(node.cases)
+        elif isinstance(node, ast.IfExp):
+            mark([node.body, node.orelse])
+        elif isinstance(node, ast.BoolOp):
+            mark(node.values[1:])
+    return conditional
 
 
 def _direct_checks(node: ast.AST, external: dict[str, dict[str, set]]) -> tuple[dict[str, set], set[str]]:
     checks = _empty()
     called: set[str] = set()
+    alternatives: dict[int, list[str]] = {}
+    conditional = _conditional_nodes(node, alternatives)
     for call in ast.walk(node):
         if not isinstance(call, ast.Call):
             continue
         name = _call_name(call)
         args = call.args[1:]
-        if name == "require_permission":
-            checks["requires"].update(_permission(arg) for arg in args)
+        if name == "require_permission" and id(call) in alternatives:
+            checks["requires_any"].add(tuple(sorted({*alternatives[id(call)], *(_permission(arg) for arg in args)})))
+        elif name == "require_permission":
+            checks["requires_if" if id(call) in conditional else "requires"].update(_permission(arg) for arg in args)
         elif name == "require_any_permission":
             checks["requires_any"].add(tuple(sorted(_permission(arg) for arg in args)))
         elif name == "require_feature":
@@ -134,10 +187,10 @@ def _direct_checks(node: ast.AST, external: dict[str, dict[str, set]]) -> tuple[
         # ist nicht die gleichnamige Route list_x (sonst erbte die Route deren Prüfungen und die
         # Übersicht zeigte mehr, als geprüft wird - aufgefallen im Matrix-Test, Phase 0).
         if name and isinstance(call.func, ast.Name):
-            called.add(name)
+            called.add(name if id(call) not in conditional else f"?{name}")
         for arg in call.args:  # run_in_threadpool(helper, ...)
             if isinstance(arg, ast.Name):
-                called.add(arg.id)
+                called.add(arg.id if id(call) not in conditional else f"?{arg.id}")
     return checks, called
 
 
@@ -151,10 +204,13 @@ def _module_checks(tree: ast.Module, external: dict[str, dict[str, set]]) -> dic
         if name in resolved:
             return resolved[name]
         checks = {field: set(values) for field, values in direct[name][0].items()}
-        for callee in direct[name][1]:
+        for marked in direct[name][1]:
+            # «?helper»: nur in einem Zweig aufgerufen - dessen Pflichtprüfungen gelten nur bedingt
+            callee, only_sometimes = marked.lstrip("?"), marked.startswith("?")
             if callee in functions and callee not in stack and callee != name:
                 for field, values in resolve(callee, stack | {name}).items():
-                    checks[field] |= values
+                    target = "requires_if" if only_sometimes and field == "requires" else field
+                    checks[target] |= values
         resolved[name] = checks
         return checks
 
@@ -223,6 +279,9 @@ def build() -> dict[str, dict]:
                     entry["requires"] = sorted(found["requires"])
                 if found["requires_any"]:
                     entry["requires_any"] = sorted(list(group) for group in found["requires_any"])
+                conditional_only = found["requires_if"] - found["requires"]
+                if conditional_only:
+                    entry["requires_if"] = sorted(conditional_only)
                 if found["features"]:
                     entry["features"] = sorted(found["features"])
                 if found["branches"]:
@@ -306,6 +365,8 @@ def render_inventory(routes: dict[str, dict]) -> str:
         parts = [", ".join(entry.get("requires") or [])]
         parts += [" oder ".join(group) for group in entry.get("requires_any") or []]
         text = " + ".join(p for p in parts if p)
+        if entry.get("requires_if"):
+            text += (" · " if text else "") + "je nach Fall: " + ", ".join(entry["requires_if"])
         if entry.get("platform"):
             text = "Plattform-Admin"
         if entry.get("note"):

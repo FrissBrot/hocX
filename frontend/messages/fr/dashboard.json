@@ -37,6 +37,7 @@
   "statsFines": "Total des amendes",
   "statsTodosOpen": "Tâches ouvertes",
   "statusChangeFailed": "Le statut n'a pas pu être modifié",
+  "excusedFinesKept": "{name} est excusé·e. {count, plural, one {L’amende ouverte reste} other {Les # amendes ouvertes restent}} – seule une personne autorisée à gérer les amendes peut {count, plural, one {la} other {les}} supprimer.",
   "today": "Aujourd'hui",
   "tomorrow": "Demain",
   "unexcuseTitle": "Remettre en non excusé",

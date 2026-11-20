@@ -266,6 +266,12 @@ app = FastAPI(
     openapi_url=None if settings.is_production else "/openapi.json",
 )
 
+# Innerste Schicht: NUL-Zeichen in Pfad, Query und JSON-Body als Eingabefehler (422) statt
+# DataError in der Datenbank (500/Fehlerprotokoll). Der Body ist dann schon durch
+# RequestBodyLimitMiddleware (weiter aussen) begrenzt.
+from app.nul_guard import NulGuardMiddleware
+app.add_middleware(NulGuardMiddleware)
+
 from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
 app.add_middleware(

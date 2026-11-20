@@ -20,6 +20,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import SUPPORTED_LOCALES
@@ -533,7 +534,7 @@ def list_document_exports(
     protocol_id: uuid.UUID | None = None,
     document_type: str | None = Query(default=None, max_length=40),
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
