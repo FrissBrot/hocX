@@ -39,10 +39,16 @@ class TotpEnrollmentStartRead(BaseModel):
     account_name: str
 
 
+# Längen für Tickets, Vorgänge und Codes (SEC-AUTH-002): Tickets sind 43 Zeichen, Codes 6.
+_TICKET = Field(min_length=1, max_length=128)
+_CODE = Field(min_length=1, max_length=16)
+_LABEL = Field(default=None, max_length=200)
+
+
 class TotpEnrollmentComplete(BaseModel):
-    flow_token: str
-    code: str
-    label: str | None = None
+    flow_token: str = _TICKET
+    code: str = _CODE
+    label: str | None = _LABEL
 
 
 class PasskeyRegistrationStartRead(BaseModel):
@@ -51,18 +57,24 @@ class PasskeyRegistrationStartRead(BaseModel):
 
 
 class PasskeyRegistrationComplete(BaseModel):
-    flow_token: str
-    label: str | None = None
+    flow_token: str = _TICKET
+    label: str | None = _LABEL
     credential: dict[str, Any]
 
 
 class TotpLoginVerifyRequest(BaseModel):
-    ticket: str
-    code: str
+    ticket: str = _TICKET
+    code: str = _CODE
 
 
 class MfaTicketRequest(BaseModel):
-    ticket: str
+    ticket: str = _TICKET
+
+
+class EmailChallengeVerifyRequest(BaseModel):
+    """Bestätigungscode per E-Mail bei erhöhtem Risiko (app/auth_security/email_challenge.py)."""
+    ticket: str = _TICKET
+    code: str = _CODE
 
 
 class PreferredMfaMethodUpdate(BaseModel):
@@ -70,7 +82,7 @@ class PreferredMfaMethodUpdate(BaseModel):
 
 
 class PasskeyAssertionStartRequest(BaseModel):
-    ticket: str
+    ticket: str = _TICKET
 
 
 class PasskeyAssertionStartRead(BaseModel):
@@ -79,7 +91,7 @@ class PasskeyAssertionStartRead(BaseModel):
 
 
 class PasskeyAssertionVerifyRequest(BaseModel):
-    flow_token: str
+    flow_token: str = _TICKET
     credential: dict[str, Any]
 
 
@@ -89,7 +101,8 @@ class MfaPendingLoginMethodRead(BaseModel):
 
 
 class MfaPendingLoginRead(BaseModel):
-    status: Literal["setup_required", "verification_required"]
+    # email_verification_required: erhöhtes Risiko, Konto ohne Faktor - Code per E-Mail
+    status: Literal["setup_required", "verification_required", "email_verification_required"]
     ticket: str
     required: bool
     # Pflicht kommt aus der Mandanten-Einstellung «MFA für alle Logins» (tenant.require_mfa)
@@ -110,7 +123,7 @@ class MfaPendingLoginRead(BaseModel):
 
 
 class MfaSkipRequest(BaseModel):
-    ticket: str
+    ticket: str = _TICKET
 
 
 class LoginResponse(SessionRead):

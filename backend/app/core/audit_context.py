@@ -16,10 +16,17 @@ from contextvars import ContextVar
 from app.core.client_ip import client_ip
 
 _client_ip: ContextVar[str | None] = ContextVar("audit_client_ip", default=None)
+# Korrelation (Auth-Audit 2026-11-20, Abschnitt 10.1): Request-ID, User-Agent und Host des Requests
+_request_meta: ContextVar[dict[str, str | None] | None] = ContextVar("audit_request_meta", default=None)
 
 
 def current_client_ip() -> str | None:
     return _client_ip.get()
+
+
+def current_request_meta() -> dict[str, str | None]:
+    """``request_id``, ``user_agent``, ``host``, ``path`` des laufenden Requests (leer ausserhalb)."""
+    return _request_meta.get() or {}
 
 
 def ip_fingerprint(address: str | None) -> str | None:
@@ -50,8 +57,26 @@ class AuditContextMiddleware:
             return
         from starlette.requests import HTTPConnection
 
-        token = _client_ip.set(client_ip(HTTPConnection(scope)))
+        import uuid
+
+        connection = HTTPConnection(scope)
+        request_id = uuid.uuid4().hex
+        token = _client_ip.set(client_ip(connection))
+        meta_token = _request_meta.set({
+            "request_id": request_id,
+            "user_agent": (connection.headers.get("user-agent") or "")[:512] or None,
+            "host": (connection.url.hostname or "")[:255] or None,
+            "path": scope.get("path"),
+        })
+
+        async def send_with_request_id(message):
+            if message["type"] == "http.response.start":
+                message.setdefault("headers", [])
+                message["headers"] = [*message["headers"], (b"x-request-id", request_id.encode())]
+            await send(message)
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, send_with_request_id if scope["type"] == "http" else send)
         finally:
+            _request_meta.reset(meta_token)
             _client_ip.reset(token)

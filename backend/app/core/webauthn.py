@@ -267,6 +267,13 @@ def _cose_public_key_to_pem(cose_raw: bytes) -> str:
         raise WebauthnError("Credential public key CBOR is malformed")
 
     kty = cose.get(1)
+    alg = cose.get(3)
+    # Nur die angebotenen Verfahren (pubKeyCredParams: ES256 = -7, RS256 = -257) und Kurve P-256;
+    # RSA-Schlüssel 2048-4096 Bit (Auth-Audit 2026-11-20, SEC-AUTH-020).
+    if kty == 2 and (alg != -7 or cose.get(-1) != 1):
+        raise WebauthnError("Unsupported elliptic-curve credential (only ES256 / P-256)")
+    if kty == 3 and alg != -257:
+        raise WebauthnError("Unsupported RSA credential (only RS256)")
     if kty == 2:
         x = cose.get(-2)
         y = cose.get(-3)
@@ -280,6 +287,8 @@ def _cose_public_key_to_pem(cose_raw: bytes) -> str:
         e = cose.get(-2)
         if not isinstance(n, bytes) or not isinstance(e, bytes):
             raise WebauthnError("RSA credential key is malformed")
+        if not 2048 <= len(n) * 8 <= 4096:
+            raise WebauthnError("RSA credential key size not allowed")
         numbers = rsa.RSAPublicNumbers(int.from_bytes(e, "big"), int.from_bytes(n, "big"))
         public_key = numbers.public_key()
     else:

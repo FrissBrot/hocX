@@ -21,6 +21,13 @@ def _validate_preferred_language(value: str | None) -> str | None:
         raise ValueError(f"Unbekannte Sprache: {value!r} (unterstützt: {sorted(SUPPORTED_LOCALES)})")
     return value
 
+
+# Längen der Anmeldedaten (SEC-AUTH-002): RFC 5321 erlaubt 320 Zeichen für eine Adresse;
+# Passwörter bis 1024 Zeichen (mehr braucht kein Passwortmanager, PBKDF2 über Megabytes wäre ein
+# CPU-DoS). Zu lange Eingaben enden mit 422, bevor Redis oder die Datenbank etwas sehen.
+EMAIL_MAX_LENGTH = 320
+PASSWORD_MAX_LENGTH = 1024
+
 class TenantRead(BaseModel):
     # Built via explicit keyword construction (tenant_service.py, auth_service.session())
     # in every call site - id is set from the tenant row's public_id there directly.
@@ -117,7 +124,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str | None = Field(default=None, min_length=12)
+    password: str | None = Field(default=None, min_length=12, max_length=1024)
     # Rollen des Mandanten (public_id). system_role: genau eine Standardrolle (Plattform-Admin-
     # Panel). Ohne beides: Standardrolle reader ("Mitglied").
     role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
@@ -145,7 +152,7 @@ class UserUpdate(BaseModel):
     left_at: date | None = None
     preferred_language: str | None = None
     is_active: bool | None = None
-    password: str | None = Field(default=None, min_length=12)
+    password: str | None = Field(default=None, min_length=12, max_length=1024)
     external_identity_json: dict[str, Any] | None = None
     # Setzt die Rollen vollständig (siehe UserCreate).
     role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
@@ -171,8 +178,8 @@ class UserPasswordChange(BaseModel):
     """Self-service password change while logged in - requires the current password as
     confirmation. «Passwort vergessen» per E-Mail-Link: app/notifications/account.py."""
 
-    current_password: str
-    new_password: str = Field(min_length=12)
+    current_password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=12, max_length=PASSWORD_MAX_LENGTH)
 
 
 class UserRead(UserBase):
@@ -190,8 +197,8 @@ class UserRead(UserBase):
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=1, max_length=EMAIL_MAX_LENGTH)
+    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
 
 
 class TenantByDomainRead(BaseModel):

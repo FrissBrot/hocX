@@ -18,10 +18,13 @@ class _BodyTooLarge(Exception):
 
 
 class RequestBodyLimitMiddleware:
-    def __init__(self, app, *, max_bytes: int, skip_prefixes: tuple[str, ...] = ()):
+    def __init__(self, app, *, max_bytes: int, skip_prefixes: tuple[str, ...] = (), path_limits: tuple[tuple[str, int], ...] = ()):
         self.app = app
         self.max_bytes = max_bytes
         self.skip_prefixes = skip_prefixes
+        # Engere Grenzen je Pfadpräfix, z. B. 16 KiB für die Anmeldung (SEC-AUTH-002): dort gibt es
+        # keinen legitimen grossen Body; Multipart ist auf diesen Pfaden ebenfalls begrenzt.
+        self.path_limits = path_limits
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope.get("method") not in _BODY_METHODS:
@@ -30,13 +33,16 @@ class RequestBodyLimitMiddleware:
         if not path.startswith("/api/") or path.startswith(self.skip_prefixes):
             return await self.app(scope, receive, send)
         headers = dict(scope.get("headers", []))
-        if headers.get(b"content-type", b"").lower().startswith(b"multipart/"):
-            return await self.app(scope, receive, send)
+        limit = next((value for prefix, value in self.path_limits if path.startswith(prefix)), None)
+        if limit is None:
+            if headers.get(b"content-type", b"").lower().startswith(b"multipart/"):
+                return await self.app(scope, receive, send)
+            limit = self.max_bytes
         try:
             length = int(headers.get(b"content-length", b"0"))
         except ValueError:
             length = 0
-        if length > self.max_bytes:
+        if length > limit:
             return await JSONResponse({"detail": "Anfrage zu gross"}, 413)(scope, receive, send)
 
         received = 0
@@ -47,7 +53,7 @@ class RequestBodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > limit:
                     raise _BodyTooLarge
             return message
 
