@@ -223,3 +223,26 @@ def test_album_link_hides_photos_of_tenants_without_an_accepted_share(db):
 
     assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
     assert not share_link_service.link_contains_file(db, link, stale.public_id)
+
+
+def test_link_overview_counts_only_the_files_the_public_page_shows(db):
+    """Die Linkübersicht (Mandant-Einstellungen › Zugangslinks, «Geteilte Links») zeigt je
+    Album-Link die Anzahl Dateien. Sie muss dieselben Regeln wie die öffentliche Seite anwenden:
+    Fotos eines Partners, der sie aus öffentlichen Links genommen hat, zählen nicht mit
+    (Nachtlauf 2026-11-20)."""
+    owner, partner = make_tenant(db, "Besitzer"), make_tenant(db, "Partner")
+    album = _shared_album(db, owner.id, partner.id)
+    own_photo, partner_photo = _make_file(db, owner.id, "eigen.png"), _make_file(db, partner.id, "partner.png")
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=own_photo.public_id), PhotoAlbumItem(album_id=album.id, file_id=partner_photo.public_id)])
+    db.commit()
+    link = share_link_service.create_for_album(db, tenant_id=owner.id, name="Link", album=album, expires_at=None, created_by=None)
+
+    def overview_count() -> int:
+        return next(row.file_count for row in share_link_service.list_for_tenant(db, owner.id) if row.link.id == link.id)
+
+    assert overview_count() == len(share_link_service.file_ids_for_link(db, link)) == 2
+
+    photo_album_share_service.set_my_photos_public(db, album_id=album.id, tenant_id=partner.id, value=False)
+
+    assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
+    assert overview_count() == 1

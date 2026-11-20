@@ -128,29 +128,35 @@ def can_manage(db: Session, link: ShareLink, tenant_id: int) -> bool:
     return db.scalar(select(PhotoAlbum.tenant_id).where(PhotoAlbum.id == link.album_id)) == tenant_id
 
 
-def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
-    if link.album_id is not None:
-        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link,
-        # ebenso Fotos von Partnern, die das fuer ihre Fotos abgeschaltet haben (SEC-002).
-        statement = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
-        # Nur Fotos von Besitzer und angenommenen Partnern: Einträge eines Mandanten, dessen
-        # Freigabe endete (Altbestand vor photo_album_share_service.revoke), bleiben draussen.
+def _album_link_items(db: Session, album_id: uuid.UUID, link_tenant_id: int):
+    """Album-Einträge, die ein öffentlicher Link des Mandanten link_tenant_id zeigt - einzige
+    Stelle für diese Regeln (öffentliche Seite und Anzahl in der Linkübersicht)."""
+    # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link,
+    # ebenso Fotos von Partnern, die das fuer ihre Fotos abgeschaltet haben (SEC-002).
+    statement = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id, PhotoAlbumItem.share_pending.is_(False))
+    # Nur Fotos von Besitzer und angenommenen Partnern: Einträge eines Mandanten, dessen
+    # Freigabe endete (Altbestand vor photo_album_share_service.revoke), bleiben draussen.
+    statement = statement.where(
+        select(StoredFile.id)
+        .where(
+            StoredFile.public_id == PhotoAlbumItem.file_id,
+            StoredFile.tenant_id.in_(photo_album_share_service.accessible_tenant_ids_for_album(db, album_id)),
+        )
+        .exists()
+    )
+    hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, album_id, link_tenant_id)
+    if hidden_tenant_ids:
         statement = statement.where(
-            select(StoredFile.id)
-            .where(
-                StoredFile.public_id == PhotoAlbumItem.file_id,
-                StoredFile.tenant_id.in_(photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id)),
-            )
+            ~select(StoredFile.id)
+            .where(StoredFile.public_id == PhotoAlbumItem.file_id, StoredFile.tenant_id.in_(hidden_tenant_ids))
             .exists()
         )
-        hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
-        if hidden_tenant_ids:
-            statement = statement.where(
-                ~select(StoredFile.id)
-                .where(StoredFile.public_id == PhotoAlbumItem.file_id, StoredFile.tenant_id.in_(hidden_tenant_ids))
-                .exists()
-            )
-        return list(db.scalars(statement))
+    return statement
+
+
+def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
+    if link.album_id is not None:
+        return list(db.scalars(_album_link_items(db, link.album_id, link.tenant_id)))
     # Papierkorb: der Eintrag bleibt (Wiederherstellen bringt die Freigabe zurück), die Datei
     # erscheint aber nicht mehr im Link.
     return list(
@@ -240,20 +246,26 @@ def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
         ).all()
         file_counts_by_link = dict(rows)
 
-    album_item_counts: dict[uuid.UUID, int] = {}
-    if album_ids:
-        rows = db.execute(
-            select(PhotoAlbumItem.album_id, func.count())
-            .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
-            .where(PhotoAlbumItem.album_id.in_(album_ids), PhotoAlbumItem.share_pending.is_(False), StoredFile.scan_status == "clean")
-            .group_by(PhotoAlbumItem.album_id)
-        ).all()
-        album_item_counts = dict(rows)
+    # Je (Album, Link-Mandant) dieselben Regeln wie die öffentliche Seite (file_ids_for_link):
+    # ohne Partner, die ihre Fotos aus öffentlichen Links genommen haben, und ohne Altbestand
+    # beendeter Freigaben - sonst zeigt die Übersicht mehr Dateien, als der Link enthält.
+    album_item_counts: dict[tuple[uuid.UUID, int], int] = {}
+    for key in {(link.album_id, link.tenant_id) for link in links if link.album_id is not None}:
+        visible = _album_link_items(db, key[0], key[1]).subquery()
+        album_item_counts[key] = int(
+            db.scalar(
+                select(func.count())
+                .select_from(visible)
+                .join(StoredFile, StoredFile.public_id == visible.c.file_id)
+                .where(StoredFile.scan_status == "clean")
+            )
+            or 0
+        )
 
     results = []
     for link in links:
         if link.album_id is not None:
-            file_count = album_item_counts.get(link.album_id, 0)
+            file_count = album_item_counts.get((link.album_id, link.tenant_id), 0)
             album_name = album_names.get(link.album_id)
         else:
             file_count = file_counts_by_link.get(link.id, 0)
