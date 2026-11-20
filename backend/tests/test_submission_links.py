@@ -508,6 +508,28 @@ def test_restricted_role_sees_only_the_tenant_of_its_link(db):
     assert error is None and rows == []
 
 
+def test_restricted_role_reads_the_scan_status_for_its_duplicate_check(db):
+    """Migration 0201: die Duplikatprüfung der Abgabebox lässt Dateien mit gescheitertem Nachscan
+    (error) oder Schadware-Befund aus und liest dafür stored_file.scan_status - nur diese Spalte
+    kommt dazu, Namen und Pfade bleiben gesperrt."""
+    tenant = make_tenant(db)
+    link = links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=tenant.id)
+    stored = StoredFile(
+        tenant_id=tenant.id, original_name="bericht.pdf", mime_type="application/pdf",
+        storage_path="quarantine/bericht.pdf", scan_status="error", checksum_sha256="a" * 64,
+    )
+    db.add(stored)
+    db.flush()
+
+    rows, error = _probe_as_abgabebox(
+        db, "SELECT checksum_sha256, scan_status FROM stored_file WHERE id = :id", {"id": stored.id}, link_token=link.token
+    )
+    assert error is None
+    assert [(row.checksum_sha256, row.scan_status) for row in rows] == [("a" * 64, "error")]
+    assert _denied(db, "SELECT original_name FROM stored_file")
+    assert _denied(db, "SELECT storage_path FROM stored_file")
+
+
 def test_restricted_role_cannot_write_files_into_another_tenant(db):
     tenant, other = make_tenant(db), make_tenant(db)
     link = links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=tenant.id)

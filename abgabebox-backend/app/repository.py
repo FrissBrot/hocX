@@ -262,6 +262,11 @@ def list_checksums_for_element(
             *_key_filter((event_id, list_entry_id, manual_element_id)),
             submission_upload_file_table.c.withdrawn_at.is_(None),
             stored_file_table.c.checksum_sha256.is_not(None),
+            # Nur Dateien, die angekommen sind oder noch geprüft werden: eine Datei mit
+            # gescheitertem Nachscan (error, in der Verwaltung gesperrt) oder Schadware-Befund ist
+            # keine Abgabe - dieselbe Datei erneut abzugeben darf nicht still «erfolgreich» sein,
+            # ohne dass etwas gespeichert wird (Spaltenrecht: Migration 0201).
+            func.coalesce(stored_file_table.c.scan_status, "clean").not_in(("error", "infected")),
         )
     )
     return {row[0] for row in rows}
