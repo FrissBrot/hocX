@@ -52,6 +52,17 @@ def _cycle_years(today: date, reset_month: int, reset_day: int, offsets: list[in
     return {cycle_start.year + offset for offset in offsets}
 
 
+def _shift_date(day: date, days: int) -> date:
+    """Datum ± Tage, an date.min/date.max geklemmt. Bewusste Duplikation aus
+    backend/app/services/submission_service.py::_shift_date: Altbestände mit riesigem Offset (vor
+    der Schema-Grenze 0..3650) oder Termine am Rand des Kalenders liefen sonst in einen
+    OverflowError, und die ganze öffentliche Abgabe antwortete mit 500."""
+    try:
+        return day + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
+
+
 def _participant_initials(participant: dict) -> str:
     """Initialen statt vollem Namen.
 
@@ -168,10 +179,10 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
             offset_after = assignment["offset_days_after"]
             # None = kein Zeitfenster auf dieser Seite - die Abgabe bleibt offen, bis sie
             # manuell geschlossen wird, statt an ein festes Datum gebunden zu sein.
-            window_start = event["event_date"] - timedelta(days=offset_before) if offset_before is not None else None
+            window_start = _shift_date(event["event_date"], -offset_before) if offset_before is not None else None
             # Wie SubmissionService (Fälligkeit der Pendenz): ab dem letzten Tag des Termins
             event_end = event.get("event_end_date") or event["event_date"]
-            window_end = event_end + timedelta(days=offset_after) if offset_after is not None else None
+            window_end = _shift_date(event_end, offset_after) if offset_after is not None else None
             if window_start is not None and today < window_start:
                 continue
             if window_end is not None and today > window_end and not keep_open:
