@@ -190,6 +190,9 @@ class ParticipantService:
         from app.services.audit_service import AuditService
 
         AuditService().forget_actors(db, [participant_id])
+        from app.auth_security import events as auth_events
+
+        auth_events.forget_user(db, [participant_id])
         from app.services import erasure_journal
 
         erasure_journal.record(db, "app_user", participant.public_id, tenant_id=tenant_id)
@@ -209,6 +212,9 @@ class ParticipantService:
         ids = [participant.id for participant in participants]
         role_service.ensure_not_last_admin_removed(db, tenant_id, ids)
         AuditService().forget_actors(db, ids)
+        from app.auth_security import events as auth_events
+
+        auth_events.forget_user(db, ids)
         self._clear_orphaned_list_references(db, tenant_id, set(ids))
         for participant in participants:
             erasure_journal.record(db, "app_user", participant.public_id, tenant_id=tenant_id)

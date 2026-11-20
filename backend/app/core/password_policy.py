@@ -29,7 +29,18 @@ COMMON_WORDS: tuple[str, ...] = (
     "123456", "654321", "abc123", "abcdef", "letmein", "welcome", "willkommen", "hallo",
     "admin", "login", "geheim", "secret", "sommer", "winter", "fruehling", "herbst",
     "iloveyou", "schatz", "fussball", "football", "schweiz", "verein",
+    # Häufigste Grundwörter aus öffentlich bekannten Passwortlisten (offline, ohne externen Dienst:
+    # SEC-AUTH-015) und Tastaturfolgen
+    "qwertzuiop", "qwertyuiop", "asdfghjkl", "zxcvbnm", "1q2w3e", "q1w2e3", "112233", "121212",
+    "dragon", "monkey", "master", "sunshine", "princess", "shadow", "superman", "batman", "trustno1",
+    "starwars", "baseball", "hockey", "liebe", "schalke", "bayern", "hallo123", "changeme", "zugang",
+    "startpass", "default", "computer", "internet", "michael", "andrea", "daniel", "thomas",
 )
+# Ersetzungen, die Passwortlisten kennen (p@ssw0rd = password): geprüft wird auch die so
+# zurückgeführte Form.
+LEET = str.maketrans({"4": "a", "@": "a", "3": "e", "1": "i", "!": "i", "0": "o", "5": "s", "$": "s", "7": "t"})
+# Auf- oder absteigende Folgen ab 5 Zeichen (12345, abcde, 98765)
+SEQUENCE_LENGTH = 5
 
 _LOWER = re.compile(r"[a-z]")
 _UPPER = re.compile(r"[A-Z]")
@@ -67,12 +78,32 @@ def personal_tokens(values: Iterable[str | None]) -> list[str]:
     return sorted(tokens)
 
 
+def has_sequence(value: str, length: int = SEQUENCE_LENGTH) -> bool:
+    """Folge gleichmässig auf- oder absteigender Zeichen (Buchstaben/Ziffern) ab ``length``."""
+    run = 1
+    direction = 0
+    for previous, current in zip(value, value[1:]):
+        step = ord(current) - ord(previous)
+        if step in (1, -1) and current.isalnum() and previous.isalnum() and (direction in (0, step)):
+            run += 1
+            direction = step
+            if run >= length:
+                return True
+        else:
+            run = 2 if step in (1, -1) and current.isalnum() and previous.isalnum() else 1
+            direction = step if run == 2 else 0
+    return False
+
+
 def evaluate_password(password: str, *, personal: Iterable[str | None] = ()) -> PasswordStrength:
     length = len(password)
     classes = sum(1 for pattern in (_LOWER, _UPPER, _DIGIT, _SYMBOL) if pattern.search(password))
     lowered = password.lower()
+    unleet = lowered.translate(LEET)
     words = (*COMMON_WORDS, *personal_tokens(personal))
-    guessable = length > 0 and (any(word in lowered for word in words) or bool(_REPEAT.search(password)))
+    guessable = length > 0 and (
+        any(word in lowered or word in unleet for word in words) or bool(_REPEAT.search(password)) or has_sequence(lowered)
+    )
     score = 0
     if length >= MIN_LENGTH:
         score = 1

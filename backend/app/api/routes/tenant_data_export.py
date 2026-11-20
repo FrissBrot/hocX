@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth_security.step_up import ADMIN, require_recent_auth
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
@@ -69,6 +70,8 @@ def list_tenant_data_exports(db: Session = Depends(get_db), user: CurrentUser = 
 @router.post("/tenant-data-exports", response_model=TenantDataExportRead, status_code=202)
 def create_tenant_data_export(payload: TenantDataExportRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     _require_export_admin(user)
+    # Gesamtexport = alle Personendaten des Vereins (SEC-AUTH-010)
+    require_recent_auth(user, kind=ADMIN, action="tenant.export")
     enforce_rate_limit(f"tenant-data-export:{user.current_tenant_id}", limit=5, period_seconds=24 * 3600)
     try:
         job = tenant_export.request_export(

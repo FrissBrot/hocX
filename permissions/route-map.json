@@ -23,6 +23,26 @@
       "handler": "admin.list_audit_log",
       "platform": true
     },
+    "GET /api/admin/auth-security/blocks": {
+      "handler": "admin_auth_security.auth_security_blocks",
+      "platform": true
+    },
+    "POST /api/admin/auth-security/blocks": {
+      "handler": "admin_auth_security.create_block",
+      "platform": true
+    },
+    "DELETE /api/admin/auth-security/blocks/{subject}": {
+      "handler": "admin_auth_security.delete_block",
+      "platform": true
+    },
+    "GET /api/admin/auth-security/events": {
+      "handler": "admin_auth_security.auth_security_events",
+      "platform": true
+    },
+    "GET /api/admin/auth-security/summary": {
+      "handler": "admin_auth_security.auth_security_summary",
+      "platform": true
+    },
     "POST /api/admin/auth/login": {
       "handler": "admin_auth.login",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
@@ -601,6 +621,12 @@
         "meetings.edit"
       ]
     },
+    "GET /api/auth-security/activity": {
+      "handler": "auth_security.tenant_login_activity",
+      "requires": [
+        "access.manage"
+      ]
+    },
     "POST /api/auth/account-link/complete": {
       "handler": "auth.account_link_complete",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
@@ -621,12 +647,24 @@
       "handler": "auth.bridge_preview",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
+    "POST /api/auth/challenge/email/resend": {
+      "handler": "auth.resend_email_challenge",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/challenge/email/verify": {
+      "handler": "auth.verify_email_challenge",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
     "POST /api/auth/login": {
       "handler": "auth.login",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/logout": {
       "handler": "auth.logout",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/logout-all": {
+      "handler": "auth.logout_all",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/passkeys/assertion/start": {
@@ -674,6 +712,18 @@
       "branches": [
         "meetings.read"
       ],
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "GET /api/auth/step-up": {
+      "handler": "auth.step_up_options",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/step-up": {
+      "handler": "auth.step_up",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/step-up/passkey/start": {
+      "handler": "auth.step_up_passkey_start",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "GET /api/auth/tenant-by-domain": {
@@ -3471,6 +3521,18 @@
     "POST /api/users/me/personal-data": {
       "handler": "users.export_my_personal_data",
       "note": "eigene Datenauskunft (rate-limitiert)"
+    },
+    "GET /api/users/me/sessions": {
+      "handler": "users.list_my_sessions",
+      "note": "eigene Sitzungen (Angemeldete Geräte)"
+    },
+    "POST /api/users/me/sessions/revoke-others": {
+      "handler": "users.revoke_my_other_sessions",
+      "note": "eigene übrige Sitzungen beenden"
+    },
+    "DELETE /api/users/me/sessions/{session_id}": {
+      "handler": "users.revoke_my_session",
+      "note": "eigene Sitzung beenden, fremde ergeben 404"
     },
     "GET /api/users/mfa-policy": {
       "handler": "users.get_mfa_policy",

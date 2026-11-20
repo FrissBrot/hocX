@@ -18,7 +18,42 @@ export const COMMON_PASSWORD_WORDS: readonly string[] = [
   "123456", "654321", "abc123", "abcdef", "letmein", "welcome", "willkommen", "hallo",
   "admin", "login", "geheim", "secret", "sommer", "winter", "fruehling", "herbst",
   "iloveyou", "schatz", "fussball", "football", "schweiz", "verein",
+  // Häufigste Grundwörter aus öffentlich bekannten Passwortlisten (offline) und Tastaturfolgen
+  "qwertzuiop", "qwertyuiop", "asdfghjkl", "zxcvbnm", "1q2w3e", "q1w2e3", "112233", "121212",
+  "dragon", "monkey", "master", "sunshine", "princess", "shadow", "superman", "batman", "trustno1",
+  "starwars", "baseball", "hockey", "liebe", "schalke", "bayern", "hallo123", "changeme", "zugang",
+  "startpass", "default", "computer", "internet", "michael", "andrea", "daniel", "thomas",
 ];
+
+// Ersetzungen aus Passwortlisten (p@ssw0rd = password), gleiche Tabelle wie im Backend
+const LEET: Readonly<Record<string, string>> = { "4": "a", "@": "a", "3": "e", "1": "i", "!": "i", "0": "o", "5": "s", "$": "s", "7": "t" };
+export const SEQUENCE_LENGTH = 5;
+
+function isAlnum(char: string): boolean {
+  return /^[\p{L}\p{N}]$/u.test(char);
+}
+
+/** Auf- oder absteigende Folge ab `length` Zeichen (12345, abcde, 98765) - wie has_sequence im Backend. */
+export function hasSequence(value: string, length = SEQUENCE_LENGTH): boolean {
+  const chars = Array.from(value);
+  let run = 1;
+  let direction = 0;
+  for (let index = 1; index < chars.length; index++) {
+    const previous = chars[index - 1];
+    const current = chars[index];
+    const step = (current.codePointAt(0) ?? 0) - (previous.codePointAt(0) ?? 0);
+    const alnum = isAlnum(current) && isAlnum(previous);
+    if ((step === 1 || step === -1) && alnum && (direction === 0 || direction === step)) {
+      run += 1;
+      direction = step;
+      if (run >= length) return true;
+    } else {
+      run = (step === 1 || step === -1) && alnum ? 2 : 1;
+      direction = run === 2 ? step : 0;
+    }
+  }
+  return false;
+}
 
 const SPLIT = /[^a-z0-9äöüàâçéèêëîïôûùÿñ]+/;
 const REPEAT = /(.)\1\1/su;
@@ -68,8 +103,11 @@ export function evaluatePassword(password: string, personal: ReadonlyArray<strin
   const hasSymbol = /[^A-Za-z0-9]/.test(password);
   const classes = [hasLower, hasUpper, hasDigit, hasSymbol].filter(Boolean).length;
   const lowered = password.toLowerCase();
+  const unleet = Array.from(lowered).map((char) => LEET[char] ?? char).join("");
   const words = [...COMMON_PASSWORD_WORDS, ...personalTokens(personal)];
-  const guessable = length > 0 && (words.some((word) => lowered.includes(word)) || REPEAT.test(password));
+  const guessable = length > 0 && (
+    words.some((word) => lowered.includes(word) || unleet.includes(word)) || REPEAT.test(password) || hasSequence(lowered)
+  );
   let score = 0;
   if (length >= PASSWORD_MIN_LENGTH) {
     score = 1;

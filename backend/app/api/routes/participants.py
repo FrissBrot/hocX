@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.schemas.base import MAX_QUERY_OFFSET
+from app.auth_security.step_up import ADMIN, require_recent_auth
 from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
@@ -252,6 +253,7 @@ def export_participant_personal_data(
     """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
     Nur mit data.export: die Auskunft enthält alle Daten der Person."""
     require_permission(user, P.PARTICIPANTS_EXPORT)
+    require_recent_auth(user, kind=ADMIN, action="personal_data.export_admin")
     enforce_rate_limit(f"personal-data-export-admin:{user.user_id}", limit=30, period_seconds=3600)
     participant = _get_participant_or_404(db, participant_id, user)
     return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
@@ -434,6 +436,12 @@ def _invite_one(db: Session, user: CurrentUser, participant: Participant):
     """Prüfungen und Versand einer Einladung (einzeln und als Mehrfachaktion). Aufrufer prüft
     participants.manage und access.manage."""
     _ensure_can_manage_login(db, user, participant)
+    # Einladung eines Kontos mit Administrationsrechten = Rechtevergabe (SEC-AUTH-010)
+    from app.core.permissions import requires_mfa
+    from app.core.security import load_role_permissions
+
+    if requires_mfa(load_role_permissions(db, participant.id)[0]):
+        require_recent_auth(user, kind=ADMIN, action="participant.invite_admin")
     enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
     if participant.login_enabled:
         raise HTTPException(status_code=409, detail={"code": "already_has_login", "message": "Diese Person hat bereits einen Login."})

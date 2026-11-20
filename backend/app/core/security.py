@@ -72,6 +72,10 @@ class CurrentUser:
     role_ids: tuple[int, ...] = ()
     # Anzeige in der Session (Name bzw. system_key der Standardrolle).
     roles: tuple["RoleSummary", ...] = ()
+    # Session-Register (SEC-AUTH-011): ID der Session (None bei Tokens von vor dem Update) und
+    # Zeitpunkt der letzten starken Anmeldung (Step-up, SEC-AUTH-010).
+    session_id: uuid.UUID | None = None
+    auth_time: datetime | None = None
 
     def can(self, permission: P) -> bool:
         """Funktionsberechtigung: Permission vorhanden und - falls an ein Modul gebunden - das
@@ -128,41 +132,91 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
+def _key_id(secret: str) -> str:
+    """Schlüssel-ID im Token (SEC-AUTH-011): erlaubt die Rotation von AUTH_SECRET ohne alle
+    abzumelden (AUTH_SECRET_PREVIOUS prüft weiter)."""
+    return hashlib.sha256(b"hocx session kid v1:" + secret.encode("utf-8")).hexdigest()[:8]
+
+
+def _session_secrets() -> list[str]:
+    return [value for value in (settings.auth_secret, settings.auth_secret_previous) if value]
+
+
 def _sign_payload(payload: bytes) -> str:
     signature = hmac.new(settings.auth_secret.encode("utf-8"), payload, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def create_session_token(user_id: int, *, mfa_verified: bool = False) -> str:
+def session_cookie_name() -> str:
+    """Cookie-Name mit ``__Host-``-Präfix (SEC-AUTH-018), sobald Cookies ``Secure`` sind: ein
+    Browser nimmt ihn nur host-only und mit Path=/ an - eine Geschwister-Subdomain kann ihn nicht
+    unterschieben (Cookie-Tossing). Ohne HTTPS (lokal, E2E) bleibt der bisherige Name."""
+    name = settings.auth_session_cookie
+    if settings.auth_secure_cookies and not name.startswith("__Host-"):
+        return f"__Host-{name}"
+    return name
+
+
+def session_cookie_names() -> tuple[str, ...]:
+    """Gelesen wird zuerst der neue, dann der bisherige Name (Übergang nach dem Update)."""
+    names = (session_cookie_name(), settings.auth_session_cookie)
+    return tuple(dict.fromkeys(names))
+
+
+def session_token_from_cookies(cookies) -> str | None:
+    for name in session_cookie_names():
+        value = cookies.get(name)
+        if value:
+            return value
+    return None
+
+
+def create_session_token(
+    user_id: int, *, mfa_verified: bool = False, sid: str | None = None, expires_at: datetime | None = None,
+) -> str:
     now = datetime.now(UTC)
-    payload = json.dumps(
-        {
-            "user_id": user_id,
-            "mfa": bool(mfa_verified),
-            "iat": int(now.timestamp()),
-            "exp": int((now + timedelta(hours=settings.auth_session_ttl_hours)).timestamp()),
-        },
-        separators=(",", ":"),
-    ).encode("utf-8")
+    exp = expires_at or now + timedelta(hours=settings.auth_session_ttl_hours)
+    claims = {
+        "user_id": user_id,
+        "mfa": bool(mfa_verified),
+        "iat": int(now.timestamp()),
+        # Millisekunden: Widerruf und Neuausstellung in derselben Sekunde (Audit-Test H1)
+        "iat_ms": int(now.timestamp() * 1000),
+        "exp": int(exp.timestamp()),
+        "kid": _key_id(settings.auth_secret),
+    }
+    if sid:
+        claims["sid"] = str(sid)
+    payload = json.dumps(claims, separators=(",", ":")).encode("utf-8")
     return _sign_payload(payload)
 
 
-def issue_session_cookie(response: Response, user_id: int, *, mfa_verified: bool = False) -> None:
+def issue_session_cookie(
+    response: Response, user_id: int, *, mfa_verified: bool = False, sid: str | None = None, expires_at: datetime | None = None,
+) -> None:
     """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
-    login and the cross-domain login bridge so both stay consistent. (OIDC is admin-panel-only
-    now - see platform_oidc_service.py / issue_admin_session_cookie.) Sessions issued before
-    the single-tenant switch carry an extra "tenant_id" claim, which parse_session_token simply
-    ignores."""
-    token = create_session_token(user_id, mfa_verified=mfa_verified)
+    login and the cross-domain login bridge so both stay consistent. Mit ``sid`` gehört das Token zu
+    einer Zeile im Session-Register (app/auth_security/sessions.py) und läuft mit ihr ab."""
+    token = create_session_token(user_id, mfa_verified=mfa_verified, sid=sid, expires_at=expires_at)
+    max_age = int((expires_at - datetime.now(UTC)).total_seconds()) if expires_at else settings.auth_session_ttl_hours * 3600
+    name = session_cookie_name()
     response.set_cookie(
-        key=settings.auth_session_cookie,
+        key=name,
         value=token,
         httponly=True,
         secure=settings.auth_secure_cookies,
         samesite="lax",
-        max_age=settings.auth_session_ttl_hours * 3600,
+        max_age=max(60, max_age),
         path="/",
     )
+    if name != settings.auth_session_cookie:
+        # Bisheriges Cookie ohne Präfix ablösen (Übergang SEC-AUTH-018)
+        response.delete_cookie(settings.auth_session_cookie, path="/")
+
+
+def clear_session_cookies(response: Response) -> None:
+    for name in session_cookie_names():
+        response.delete_cookie(name, path="/", secure=settings.auth_secure_cookies, httponly=True, samesite="lax")
 
 
 def issue_locale_cookie(response: Response, locale: str | None) -> None:
@@ -192,19 +246,72 @@ def parse_session_token(token: str | None) -> dict | None:
     payload_b64, signature_b64 = token.split(".", 1)
     try:
         payload = base64.urlsafe_b64decode(payload_b64.encode("utf-8"))
-        expected = hmac.new(settings.auth_secret.encode("utf-8"), payload, hashlib.sha256).digest()
         provided = base64.urlsafe_b64decode(signature_b64.encode("utf-8"))
     except (ValueError, TypeError):
         return None
-    if not hmac.compare_digest(expected, provided):
+    if not any(
+        hmac.compare_digest(hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).digest(), provided)
+        for secret in _session_secrets()
+    ):
         return None
     try:
         data = json.loads(payload.decode("utf-8"))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return None
-    if int(data.get("exp", 0)) < int(datetime.now(UTC).timestamp()):
+    if not isinstance(data, dict) or int(data.get("exp", 0)) < int(datetime.now(UTC).timestamp()):
         return None
     return data
+
+
+def _token_predates_revoke(user: AppUser, session_data: dict) -> bool:
+    if user.session_revoke_at is None:
+        return False
+    if "iat_ms" in session_data:
+        return int(user.session_revoke_at.timestamp() * 1000) > int(session_data["iat_ms"])
+    return int(user.session_revoke_at.timestamp()) > int(session_data.get("iat", 0))
+
+
+@dataclass
+class ValidatedSession:
+    user: AppUser
+    data: dict
+    # Zeile im Session-Register; None bei Tokens von vor dem Update (ohne sid)
+    record: object | None
+
+    @property
+    def mfa_verified(self) -> bool:
+        return bool(self.data.get("mfa")) or bool(self.record is not None and getattr(self.record, "mfa", False))
+
+    @property
+    def auth_time(self) -> datetime:
+        if self.record is not None:
+            return self.record.auth_time
+        return datetime.fromtimestamp(int(self.data.get("iat", 0)), UTC)
+
+
+def validate_session_token(db: Session, token: str | None) -> ValidatedSession | None:
+    """Gemeinsame Kontoprüfung für REST und WebSocket (SEC-AUTH-014): Signatur und Ablauf, Konto
+    aktiv, Login erlaubt, nicht ausgetreten, kein Widerruf seit Ausstellung, Session im Register
+    aktiv (Inaktivität, absolute Dauer, Einzel-Widerruf). Die MFA-Regeln prüfen die Aufrufer."""
+    session_data = parse_session_token(token)
+    if session_data is None:
+        return None
+    try:
+        user = db.get(AppUser, int(session_data["user_id"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if user is None or not user.is_active or not user.login_enabled or user.has_left:
+        return None
+    if _token_predates_revoke(user, session_data):
+        return None
+    record = None
+    if session_data.get("sid"):
+        from app.auth_security import sessions
+
+        record = sessions.validate(db, session_data["sid"], user.id)
+        if record is None:
+            return None
+    return ValidatedSession(user=user, data=session_data, record=record)
 
 
 def _load_role_rows(db: Session, user_id: int):
@@ -306,18 +413,14 @@ def get_optional_current_user(
     db: Session = Depends(get_db),
     session_cookie: str | None = Cookie(default=None, alias=settings.auth_session_cookie),
 ) -> CurrentUser | None:
-    token = session_cookie or request.cookies.get(settings.auth_session_cookie)
-    session_data = parse_session_token(token)
-    if session_data is None:
+    token = (session_token_from_cookies(request.cookies) if request is not None else None) or session_cookie
+    validated = validate_session_token(db, token)
+    if validated is None:
         return None
-    user = db.get(AppUser, int(session_data["user_id"]))
-    if user is None or not user.is_active or not user.login_enabled or user.has_left:
-        return None
-    if user.session_revoke_at is not None:
-        token_iat = int(session_data.get("iat", 0))
-        if int(user.session_revoke_at.timestamp()) > token_iat:
-            return None
-    current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
+    user = validated.user
+    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified)
+    current_user.session_id = validated.record.id if validated.record is not None else None
+    current_user.auth_time = validated.auth_time
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None

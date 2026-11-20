@@ -6,9 +6,9 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 584 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 379
-- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
+- Routen gesamt: 599 (Plattform-Admin: 132)
+- Mandanten-Routen mit Rechteprüfung: 380
+- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 87
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
 
@@ -72,8 +72,11 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/auth/bridge` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/bridge` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/bridge/preview` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/challenge/email/resend` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/challenge/email/verify` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/login` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/logout` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/logout-all` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/assertion/start` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/assertion/verify` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/setup/complete` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
@@ -85,6 +88,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/auth/password-reset/available` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/password-reset/request` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/session` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `GET /api/auth/step-up` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/step-up` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/step-up/passkey/start` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/tenant-by-domain` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/calendar-feeds` | eigene Kalender-Abos |
 | `DELETE /api/calendar-feeds/{kind}` | eigene Kalender-Abos |
@@ -130,6 +136,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PUT /api/users/me/notification-preferences` | eigene E-Mail-Benachrichtigungen |
 | `POST /api/users/me/password` | eigenes Passwort |
 | `POST /api/users/me/personal-data` | eigene Datenauskunft (rate-limitiert) |
+| `GET /api/users/me/sessions` | eigene Sitzungen (Angemeldete Geräte) |
+| `POST /api/users/me/sessions/revoke-others` | eigene übrige Sitzungen beenden |
+| `DELETE /api/users/me/sessions/{session_id}` | eigene Sitzung beenden, fremde ergeben 404 |
 | `DELETE /api/users/{user_id}` | UserService (access.manage) |
 | `GET /api/users/{user_id}` | UserService (access.manage) |
 | `PATCH /api/users/{user_id}` | UserService (access.manage) |
@@ -159,13 +168,17 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/agenda-items/{item_id}` | meetings.edit |
 | `PATCH /api/agenda-items/{item_id}` | meetings.edit |
 | `POST /api/agenda-items/{item_id}/postpone` | meetings.edit |
+| `GET /api/auth-security/activity` | access.manage |
 | `POST /api/auth/account-link/complete` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/account-link/preview` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/bridge` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/bridge` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/bridge/preview` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/challenge/email/resend` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/challenge/email/verify` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/login` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/logout` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/logout-all` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/assertion/start` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/assertion/verify` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/mfa/passkeys/setup/complete` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
@@ -177,6 +190,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/auth/password-reset/available` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/password-reset/request` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/session` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `GET /api/auth/step-up` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/step-up` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
+| `POST /api/auth/step-up/passkey/start` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/tenant-by-domain` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/calendar-feeds` | eigene Kalender-Abos |
 | `DELETE /api/calendar-feeds/{kind}` | eigene Kalender-Abos |
@@ -586,6 +602,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PUT /api/users/me/notification-preferences` | eigene E-Mail-Benachrichtigungen |
 | `POST /api/users/me/password` | eigenes Passwort |
 | `POST /api/users/me/personal-data` | eigene Datenauskunft (rate-limitiert) |
+| `GET /api/users/me/sessions` | eigene Sitzungen (Angemeldete Geräte) |
+| `POST /api/users/me/sessions/revoke-others` | eigene übrige Sitzungen beenden |
+| `DELETE /api/users/me/sessions/{session_id}` | eigene Sitzung beenden, fremde ergeben 404 |
 | `GET /api/users/mfa-policy` | access.manage |
 | `PUT /api/users/mfa-policy` | access.manage |
 | `GET /api/users/protocol-policy` | settings.manage |

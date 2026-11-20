@@ -232,6 +232,10 @@ __all__ += [
     "StorageState",
 ]
 
+from app.models.auth_security_entities import AuthEvent, AuthKnownDevice, AuthSession  # noqa: E402 - Migration 0206
+
+__all__ += ["AuthEvent", "AuthKnownDevice", "AuthSession"]
+
 from app.models.backup_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0115
     BackupContent,
     BackupEvent,

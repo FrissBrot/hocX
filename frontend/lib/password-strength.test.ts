@@ -23,6 +23,10 @@ const VECTORS: Array<[string, number, boolean, boolean]> = [
   ["Passwort-Sicher-9", 1, true, false],
   ["mmm-Kiesel-Wolke7", 1, true, false],
   ["Fluss Ufer Möwe 42", 4, false, true],
+  // SEC-AUTH-015: Folgen und Leetspeak aus Passwortlisten
+  ["Kiesel-Wolke-12345", 1, true, false],
+  ["Dr4gon-Kiesel-Wolke", 1, true, false],
+  ["Wolke-Kiesel-98765", 1, true, false],
 ];
 
 describe("evaluatePassword", () => {

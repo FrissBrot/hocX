@@ -1,7 +1,7 @@
 """Minimal ORM row builders for tests - not a full fixture framework, just enough to
 satisfy FK constraints for the tables these tests actually touch."""
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, select
 
@@ -339,6 +339,9 @@ def make_current_user(
         # role: eine Standardrolle (admin/writer/kassier/reader) als Abkürzung für ihre
         # Berechtigungen; permissions überschreibt das für eigene Rollen (RBAC-Tests).
         permissions=permissions if permissions is not None else system_role_permissions(role),
+        # Frisch angemeldet: kritische Aktionen ohne Step-up (SEC-AUTH-010); Step-up-Tests setzen
+        # einen älteren Zeitpunkt.
+        auth_time=datetime.now(UTC),
     )
 
 

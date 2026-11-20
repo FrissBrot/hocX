@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from fastapi import HTTPException, status
 
-from app.core.rate_limit import check_account_lockout, record_failed_attempt
+from app.core.password_policy import ensure_password_acceptable
+from app.core.rate_limit import consume_attempt, release_attempt
 from app.core.permissions import P
 from app.core.security import CurrentUser, hash_password, require_permission, verify_password
 from app.core.tenant_scope import tenant_scope_suspended
@@ -147,6 +148,9 @@ class UserService:
 
     def create_user(self, db: Session, payload: UserCreate, actor: CurrentUser):
         require_permission(actor, P.ACCESS_MANAGE)
+        if payload.password:
+            tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == actor.current_tenant_id))
+            ensure_password_acceptable(payload.password, personal=(payload.first_name, payload.last_name, payload.display_name, payload.email, tenant_name))
         if payload.tenant_id is not None and payload.tenant_id != actor.current_tenant_public_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Users can only be created in the own tenant")
         if payload.login_enabled and payload.is_active:
@@ -183,6 +187,9 @@ class UserService:
         tenant_id = public_id_service.resolve_internal_id(db, Tenant, payload.tenant_id)
         if tenant_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if payload.password:
+            tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == tenant_id))
+            ensure_password_acceptable(payload.password, personal=(payload.first_name, payload.last_name, payload.display_name, payload.email, tenant_name))
         user = self._new_app_user(db, payload, tenant_id=tenant_id)
         self.repository.create(db, user)
         self._assign_initial_roles(db, None, user, payload)
@@ -215,6 +222,21 @@ class UserService:
             # Keine Konto-Übernahme Höherberechtigter (Passwort, Login, E-Mail, Aktiv).
             role_service.ensure_can_manage_account(db, actor, user.id)
         roles = self._requested_roles(db, user.tenant_id, payload.role_ids, payload.system_role)
+        if actor is not None:
+            current_role_ids = {role.id for role in role_service.roles_by_user(db, [user.id]).get(user.id, [])}
+            if (
+                payload.password
+                or (payload.login_enabled is not None and payload.login_enabled != bool(user.login_enabled))
+                or (roles is not None and {role.id for role in roles} != current_role_ids)
+            ):
+                # Passwort setzen, Login und Rollen ändern = Konto- bzw. Rechtevergabe: frische
+                # Anmeldung nötig (SEC-AUTH-010). Gilt für /users und /participants.
+                from app.auth_security.step_up import ADMIN, require_recent_auth
+
+                require_recent_auth(actor, kind=ADMIN, action="user.update_access")
+        if payload.password:
+            tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == user.tenant_id))
+            ensure_password_acceptable(payload.password, personal=(user.first_name, user.last_name, user.display_name, values.get("email", user.email), tenant_name))
         login_enabled = user.login_enabled if payload.login_enabled is None else payload.login_enabled
         if login_enabled:
             email = values.get("email", user.email)
@@ -247,6 +269,10 @@ class UserService:
         if payload.login_enabled is False:
             # Disabling login invalidates all existing sessions
             values.setdefault("session_revoke_at", datetime.now(UTC))
+        if "session_revoke_at" in values:
+            from app.auth_security import sessions as session_register
+
+            session_register.revoke_all(db, user.id, reason="account_changed")
         # Deaktivieren, Login entziehen und Rollen ändern dürfen den letzten Administrator nicht
         # treffen und nicht die eigene Benutzerverwaltung entziehen (role_service.admin_guard).
         with role_service.admin_guard(db, user.tenant_id, actor, affects_actor=actor is not None and user.id == actor.user_id):
@@ -321,10 +347,14 @@ class UserService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         lockout_key = f"password-change:{actor.user_id}"
-        check_account_lockout(lockout_key, limit=_PASSWORD_CHANGE_ATTEMPT_LIMIT)
+        # Zählen vor Prüfen (SEC-AUTH-003), Erfolg gibt den Versuch zurück
+        consume_attempt(lockout_key, limit=_PASSWORD_CHANGE_ATTEMPT_LIMIT, period_seconds=_PASSWORD_CHANGE_WINDOW_SECONDS)
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
-            record_failed_attempt(lockout_key, period_seconds=_PASSWORD_CHANGE_WINDOW_SECONDS)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "wrong_current_password", "message": "Aktuelles Passwort ist nicht korrekt"})
+        release_attempt(lockout_key)
+        # Passwortregel überall (SEC-AUTH-015), nicht nur bei Reset/Einladung
+        tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == user.tenant_id))
+        ensure_password_acceptable(payload.new_password, personal=(user.first_name, user.last_name, user.display_name, user.email, tenant_name))
 
         self.repository.update(
             db,

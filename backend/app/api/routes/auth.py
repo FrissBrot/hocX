@@ -9,8 +9,9 @@ from app.core.client_ip import client_ip
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_optional_current_user
+from app.core.security import CurrentUser, get_current_user, get_optional_current_user
 from app.schemas.mfa import (
+    EmailChallengeVerifyRequest,
     LoginResponse,
     MfaSkipRequest,
     MfaTicketRequest,
@@ -35,11 +36,15 @@ from app.schemas.notifications import (
 )
 from app.core.permissions import P
 from app.services import context_visibility_service, domain_bridge_service
+from app.core.auth_pseudonym import normalize_email, source_address
+from app.schemas.step_up import EmailChallengeResendRequest, StepUpOptionsRead, StepUpRead, StepUpRequest
 from app.services.auth_service import AuthService
+from app.services.step_up_service import StepUpService
 from app.services.tenant_service import build_tenant_profile_image_url
 
 router = APIRouter()
 service = AuthService()
+step_up_service = StepUpService()
 
 
 def _expected_origin(request: Request) -> str:
@@ -60,12 +65,27 @@ def _expected_origin(request: Request) -> str:
 
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
-    return service.login(db, response, payload, request_host=request.url.hostname, client_address=client_ip(request))
+    return service.login(db, response, payload, request_host=request.url.hostname, client_address=client_ip(request), request=request)
 
 
 @router.post("/mfa/totp/verify", response_model=LoginResponse)
-def verify_login_totp(payload: TotpLoginVerifyRequest, response: Response, db: Session = Depends(get_db)):
-    return service.verify_login_totp(db, response, payload)
+def verify_login_totp(payload: TotpLoginVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    return service.verify_login_totp(db, response, payload, request=request)
+
+
+@router.post("/challenge/email/verify", response_model=LoginResponse)
+def verify_email_challenge(payload: EmailChallengeVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Bestätigungscode per E-Mail (erhöhtes Risiko, Konto ohne zweiten Faktor). Begrenzt je
+    Ticket (email_challenge.verify) und je Quelle."""
+    enforce_rate_limit(f"email-challenge-ip:{source_address(client_ip(request)).exact}", limit=60, period_seconds=15 * 60)
+    return service.verify_email_challenge(db, response, payload, request=request)
+
+
+@router.post("/challenge/email/resend", response_model=dict[str, str])
+def resend_email_challenge(payload: EmailChallengeResendRequest, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit(f"email-challenge-resend-ip:{source_address(client_ip(request)).exact}", limit=20, period_seconds=15 * 60)
+    service.resend_email_challenge(db, payload.ticket)
+    return {"status": "sent"}
 
 
 def _limit_mfa_setup(request: Request) -> None:
@@ -84,14 +104,14 @@ def start_login_totp_setup(payload: MfaTicketRequest, request: Request, db: Sess
 @router.post("/mfa/totp/setup/complete", response_model=LoginResponse)
 def complete_login_totp_setup(payload: TotpEnrollmentComplete, request: Request, response: Response, db: Session = Depends(get_db)):
     _limit_mfa_setup(request)
-    return service.complete_login_totp_setup(db, response, payload)
+    return service.complete_login_totp_setup(db, response, payload, request=request)
 
 
 @router.post("/mfa/setup/skip", response_model=LoginResponse)
 def skip_login_mfa_setup(payload: MfaSkipRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten». Bei Pflicht 403."""
     _limit_mfa_setup(request)
-    return service.skip_invite_mfa_setup(db, response, payload)
+    return service.skip_invite_mfa_setup(db, response, payload, request=request)
 
 
 @router.post("/mfa/passkeys/setup/start", response_model=PasskeyRegistrationStartRead)
@@ -113,11 +133,13 @@ def complete_login_passkey_setup(
     db: Session = Depends(get_db),
 ):
     _limit_mfa_setup(request)
-    return service.complete_login_passkey_setup(db, response, payload)
+    return service.complete_login_passkey_setup(db, response, payload, request=request)
 
 
 @router.post("/mfa/passkeys/assertion/start", response_model=PasskeyAssertionStartRead)
 def start_login_passkey_assertion(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    # Bisher ohne Grenze (Audit 6.1): je Quelle begrenzt, das Konto begrenzt die Prüfung (L6)
+    enforce_rate_limit(f"passkey-assertion-ip:{source_address(client_ip(request)).exact}", limit=120, period_seconds=15 * 60)
     return service.start_login_passkey_assertion(
         db,
         payload,
@@ -129,10 +151,11 @@ def start_login_passkey_assertion(payload: MfaTicketRequest, request: Request, d
 @router.post("/mfa/passkeys/assertion/verify", response_model=LoginResponse)
 def verify_login_passkey(
     payload: PasskeyAssertionVerifyRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
-    return service.verify_login_passkey(db, response, payload)
+    return service.verify_login_passkey(db, response, payload, request=request)
 
 
 @router.get("/tenant-by-domain", response_model=TenantByDomainRead)
@@ -142,7 +165,7 @@ def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db
     picking their organisation from a dropdown. Deliberately unauthenticated (used pre-login),
     but rate-limited per source IP (audit finding, 2026-08-27) - without a cap this doubled as
     a free domain-enumeration oracle."""
-    enforce_rate_limit(f"tenant-by-domain:{client_ip(request)}", limit=20, period_seconds=60)
+    enforce_rate_limit(f"tenant-by-domain:{client_ip(request)}", limit=20, period_seconds=60, fail_open=True)
     tenant = domain_bridge_service.resolve_tenant_by_app_domain(db, domain)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")
@@ -155,11 +178,47 @@ def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db
 
 @router.post("/logout", response_model=dict[str, str])
 def logout(
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     user: CurrentUser | None = Depends(get_optional_current_user),
 ):
-    return service.logout(db, response, user)
+    """Meldet nur diese Session ab (SEC-AUTH-011); «Überall abmelden»: /logout-all."""
+    return service.logout(db, response, user, request)
+
+
+@router.post("/logout-all", response_model=dict[str, str])
+def logout_all(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    return service.logout(db, response, user, request, everywhere=True)
+
+
+# ── Step-up (SEC-AUTH-010) ─────────────────────────────────────────────
+
+
+def _browser_host(request: Request) -> str | None:
+    """Host aus dem Origin-Header (die /api-Weiterleitung des Frontends überschreibt Host)."""
+    origin = request.headers.get("origin")
+    return urlparse(origin).hostname if origin else request.url.hostname
+
+
+@router.get("/step-up", response_model=StepUpOptionsRead)
+def step_up_options(request: Request, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    return step_up_service.options(db, user, _browser_host(request))
+
+
+@router.post("/step-up/passkey/start", response_model=PasskeyAssertionStartRead)
+def step_up_passkey_start(request: Request, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    return step_up_service.start_passkey(db, user, request_host=_browser_host(request), request_origin=_expected_origin(request))
+
+
+@router.post("/step-up", response_model=StepUpRead)
+def step_up(payload: StepUpRequest, request: Request, response: Response, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    return step_up_service.verify(db, response, user, payload, request_host=_browser_host(request))
 
 
 @router.get("/session", response_model=SessionRead)
@@ -233,7 +292,7 @@ def _email_sending_enabled(db: Session) -> bool:
 
 @router.get("/password-reset/available", response_model=PasswordResetAvailableRead)
 def password_reset_available(request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"password-reset-available:{client_ip(request)}", limit=60, period_seconds=60)
+    enforce_rate_limit(f"password-reset-available:{client_ip(request)}", limit=60, period_seconds=60, fail_open=True)
     return PasswordResetAvailableRead(enabled=_email_sending_enabled(db))
 
 
@@ -250,11 +309,14 @@ def _issue_password_reset(email: str) -> None:
 
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED, response_model=dict[str, str])
 def request_password_reset(payload: PasswordResetRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
-    """Antwortet immer gleich, ob es das Konto gibt oder nicht (kein Orakel). Je Adresse höchstens
-    drei Links pro Stunde, damit niemand ein Postfach mit Mails flutet."""
-    enforce_rate_limit(f"password-reset-ip:{client_ip(request)}", limit=10, period_seconds=15 * 60)
-    email_key = account_links.hash_token(payload.email.strip().lower())
-    enforce_rate_limit(f"password-reset-email:{email_key}", limit=3, period_seconds=60 * 60)
+    """Antwortet immer gleich, ob es das Konto gibt oder nicht (kein Orakel). Je Adresse und Quelle
+    höchstens drei Links pro Stunde, je Adresse insgesamt zehn (SEC-AUTH-017: wer für eine fremde
+    Adresse anfragt, verbraucht nur sein eigenes Kontingent, nicht das der Inhaberin)."""
+    source = source_address(client_ip(request)).exact
+    enforce_rate_limit(f"password-reset-ip:{source}", limit=10, period_seconds=15 * 60)
+    email = normalize_email(payload.email)
+    enforce_rate_limit(f"password-reset-email-src:{email}|{source}", limit=3, period_seconds=60 * 60)
+    enforce_rate_limit(f"password-reset-email:{email}", limit=10, period_seconds=60 * 60)
     if _email_sending_enabled(db):
         background.add_task(_issue_password_reset, payload.email)
     return {"status": "accepted"}

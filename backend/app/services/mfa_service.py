@@ -7,10 +7,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
+from app.auth_security import events
+from app.auth_security.guard import consume_factor_attempt, count_invalid_token, refund_factor_attempt
+from app.core.audit_context import current_client_ip
+from app.core.rate_limit import enforce_rate_limit
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.mfa_policy import account_requires_mfa, mfa_grace_until
 from app.core.permissions import P
@@ -66,6 +69,8 @@ class PendingLoginContext:
     user: AppUser
     current_user: CurrentUser
     request_host: str | None
+    # Risiko aus der Passwortphase (app/auth_security/risk.py), reist im Ticket mit
+    risk_context: dict | None = None
 
 
 class MfaService:
@@ -81,6 +86,8 @@ class MfaService:
     def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
         raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
         if raw is None:
+            # Risikosignal «ungültige Tickets je Quelle» (Audit 7.2)
+            count_invalid_token(current_client_ip())
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         try:
             data = json.loads(raw)
@@ -92,6 +99,9 @@ class MfaService:
 
     def _delete_flow(self, token: str) -> None:
         self._redis().delete(f"{_FLOW_PREFIX}{token}")
+
+    def has_factor(self, db: Session, user_id: int) -> bool:
+        return db.scalar(select(UserMfaFactor.id).where(UserMfaFactor.user_id == user_id).limit(1)) is not None
 
     def _list_factors(self, db: Session, user_id: int, *, factor_type: str | None = None) -> list[UserMfaFactor]:
         statement = select(UserMfaFactor).where(UserMfaFactor.user_id == user_id).order_by(UserMfaFactor.created_at.asc(), UserMfaFactor.id.asc())
@@ -287,9 +297,15 @@ class MfaService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten",
             )
+        factor_type = factor.factor_type
         db.delete(factor)
         account_notifications.notify_security(db, user, "security.mfa_removed")
         db.commit()
+        # Eigene Faktor-Löschung war nicht auditiert (SEC-AUTH-012)
+        from app.services.audit_service import AuditService
+
+        AuditService().log(db, action="user.mfa_factor_deleted", actor=actor, entity_type="user_mfa_factor", entity_id=factor_id, details={"self": True, "factor": factor_type})
+        events.record(event_type="mfa.remove", outcome="success", user_id=user.id, tenant_id=user.tenant_id, details={"factor": factor_type, "by_admin": False})
         self._sync_preferred_factor_type(db, user, self._list_factors(db, actor.user_id))
         return self.get_self_overview(db, actor, request_host=None)
 
@@ -307,7 +323,11 @@ class MfaService:
         user.mfa_grace_until = user.session_revoke_at
         db.add(user)
         account_notifications.notify_security(db, user, "security.mfa_removed", by_admin=True)
+        from app.auth_security import sessions as session_register
+
+        session_register.revoke_all(db, user.id, reason="mfa_reset")
         db.commit()
+        events.record(event_type="mfa.remove", outcome="success", user_id=user.id, tenant_id=user.tenant_id, details={"by_admin": True})
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_managed_user_overview(db, actor, user.id)
 
@@ -455,6 +475,7 @@ class MfaService:
         account_notifications.notify_security(db, user, "security.mfa_added")
         db.commit()
         db.refresh(factor)
+        events.record(event_type="mfa.enroll", outcome="success", user_id=user.id, tenant_id=user.tenant_id, details={"factor": "totp"})
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         self._delete_flow(flow_token)
         return factor
@@ -637,6 +658,7 @@ class MfaService:
         account_notifications.notify_security(db, user, "security.mfa_added")
         db.commit()
         db.refresh(factor)
+        events.record(event_type="mfa.enroll", outcome="success", user_id=user.id, tenant_id=user.tenant_id, details={"factor": "passkey"})
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return factor
 
@@ -647,6 +669,7 @@ class MfaService:
         user: AppUser,
         current_user: CurrentUser,
         request_host: str | None,
+        risk_context: dict | None = None,
     ) -> MfaPendingLoginRead | None:
         factors = self._list_factors(db, user.id)
         required = self.user_requires_mfa(db, user.id)
@@ -662,6 +685,7 @@ class MfaService:
                 "user_id": user.id,
                 "request_host": request_host,
                 "issued_at": int(datetime.now(UTC).timestamp()),
+                "risk": risk_context or {},
             },
         )
         if factors:
@@ -745,6 +769,7 @@ class MfaService:
             db, action="user.mfa_setup_skipped", tenant_id=context.user.tenant_id,
             actor_user_id=context.user.id, entity_type="app_user", entity_id=context.user.id,
         )
+        events.record(event_type="mfa.setup_skipped", outcome="info", user_id=context.user.id, tenant_id=context.user.tenant_id)
         return self._consume_login_ticket(db, ticket)
 
     def _build_pending_login(
@@ -796,7 +821,7 @@ class MfaService:
         if issued_at is not None and user.session_revoke_at is not None and int(user.session_revoke_at.timestamp()) > int(issued_at):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         current_user = build_current_user(db, user, mfa_verified=False)
-        return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
+        return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"), risk_context=flow.get("risk") or None)
 
     def _consume_login_ticket(self, db: Session, ticket: str) -> PendingLoginContext:
         context = self._load_login_ticket(db, ticket)
@@ -808,11 +833,9 @@ class MfaService:
 
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> PendingLoginContext:
         context = self._load_login_ticket(db, ticket)
-        # Account-level ceiling first (audit finding, 2026-08-27, see _ACCOUNT_TOTP_ATTEMPT_LIMIT
-        # above) - this is the one that actually stops multi-ticket abuse; the per-ticket limit
-        # below is kept as defense in depth for a single ticket being hammered.
-        account_lockout_key = f"mfa-account:{context.user.id}"
-        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
+        # Konto-Grenze (L6) atomar VOR der Prüfung gezählt (SEC-AUTH-003): auch 40 gleichzeitige
+        # Codes über mehrere Tickets kommen nicht über die Grenze; danach 1 Versuch/Minute.
+        attempt = consume_factor_attempt(context.user.id, kind="totp")
         enforce_rate_limit(f"mfa-login-totp:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         factors = self._list_factors(db, context.user.id, factor_type="totp")
         if not factors:
@@ -827,18 +850,19 @@ class MfaService:
             )
             if counter is None:
                 continue
-            factor.totp_last_counter = counter
-            factor.last_used_at = datetime.now(UTC)
-            db.add(factor)
-            db.commit()
+            if not claim_totp_counter(db, factor.id, counter):
+                # Derselbe Code wurde gleichzeitig schon verwendet (SEC-AUTH-004): Replay
+                break
+            refund_factor_attempt(attempt)
+            events.record(event_type="login.mfa.totp", outcome="success", user_id=context.user.id, tenant_id=context.user.tenant_id)
             return self._consume_login_ticket(db, ticket)
-        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
         from app.services.audit_service import AuditService
 
         AuditService().log(
             db, action="user.mfa_failed", outcome="failure", tenant_id=context.user.tenant_id,
             actor_user_id=context.user.id, details={"factor": "totp"},
         )
+        events.record(event_type="login.mfa.totp", outcome="failure", user_id=context.user.id, tenant_id=context.user.tenant_id, details={"factor": "totp"})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
 
     def start_login_passkey_assertion(
@@ -906,7 +930,9 @@ class MfaService:
                 UserMfaFactor.webauthn_rp_id == str(flow["rp_id"]),
             )
         )
+        attempt = consume_factor_attempt(context.user.id, kind="passkey")
         if factor is None or not factor.webauthn_public_key_pem:
+            self._passkey_failed(db, context.user, "unknown_credential")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_unknown", "message": "Unbekannte Passkey-Anmeldung"})
         try:
             result = verify_assertion(
@@ -919,10 +945,35 @@ class MfaService:
                 expected_credential_id=credential_id,
             )
         except WebauthnError as exc:
+            self._passkey_failed(db, context.user, "invalid_assertion")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_invalid", "message": str(exc)}) from exc
         factor.webauthn_sign_count = result.sign_count
         factor.last_used_at = datetime.now(UTC)
         db.add(factor)
         db.commit()
         self._delete_flow(flow_token)
+        refund_factor_attempt(attempt)
+        events.record(event_type="login.mfa.passkey", outcome="success", user_id=context.user.id, tenant_id=context.user.tenant_id)
         return self._consume_login_ticket(db, ticket)
+
+    def _passkey_failed(self, db: Session, user: AppUser, reason: str) -> None:
+        """Passkey-Fehlschlag war nicht auditiert (SEC-AUTH-012)."""
+        from app.services.audit_service import AuditService
+
+        AuditService().log(db, action="user.passkey_failed", outcome="failure", tenant_id=user.tenant_id, actor_user_id=user.id, details={"reason": reason})
+        events.record(event_type="login.mfa.passkey", outcome="failure", user_id=user.id, tenant_id=user.tenant_id, details={"reason": reason, "factor": "passkey"})
+
+
+def claim_totp_counter(db: Session, factor_id: int, counter: int) -> bool:
+    """TOTP-Zähler atomar weitersetzen (SEC-AUTH-004): nur ein gleichzeitiger Request gewinnt
+    denselben Code. ``UPDATE ... WHERE totp_last_counter < :counter`` ist ohne Zeilensperre im
+    Python-Code atomar. Gemeinsam für Mandanten- und Plattform-Login (Admin-Branch:
+    admin_mfa_service.verify_login_totp umstellen)."""
+    claimed = db.execute(
+        update(UserMfaFactor)
+        .where(UserMfaFactor.id == factor_id, or_(UserMfaFactor.totp_last_counter.is_(None), UserMfaFactor.totp_last_counter < counter))
+        .values(totp_last_counter=counter, last_used_at=datetime.now(UTC))
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    db.commit()
+    return bool(claimed)

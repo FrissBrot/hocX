@@ -1,3 +1,4 @@
+import pytest
 from fastapi import HTTPException
 
 from app.core.secret_crypto import encrypt_secret
@@ -166,8 +167,12 @@ def test_verify_login_totp_locks_out_account_across_tickets(db):
         except HTTPException as exc:
             assert exc.status_code == 401
 
-    # A brand-new ticket with the *correct* code should still be blocked: the ceiling is
-    # per-account, not per-ticket.
+    # Über der Grenze bleibt ein Versuch je Minute («Drip», Auth-Audit 2026-11-20) - danach ist
+    # auch ein neues Ticket mit dem *richtigen* Code gesperrt: die Grenze gilt je Konto.
+    pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
+    with pytest.raises(HTTPException) as drip:
+        service.verify_login_totp(db, ticket=pending.ticket, code="000000")
+    assert drip.value.status_code == 401
     pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
     try:
         service.verify_login_totp(db, ticket=pending.ticket, code=current_totp_code(secret))

@@ -412,6 +412,10 @@ run_preflight() {
       return 1
       ;;
   esac
+  if [ -n "${AUTH_SECRET_PREVIOUS:-}" ] && [ "${#AUTH_SECRET_PREVIOUS}" -lt 32 ]; then
+    echo "AUTH_SECRET_PREVIOUS muss leer oder mindestens 32 Zeichen lang sein." >&2
+    return 1
+  fi
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
@@ -486,6 +490,8 @@ write_secret_files() {
   write_secret_file "$secrets_dir" app_database_url "$APP_DATABASE_URL"
   write_secret_file "$secrets_dir" app_db_password "$APP_DB_PASSWORD"
   write_secret_file "$secrets_dir" auth_secret "$AUTH_SECRET"
+  # Optional (Rotation, RUNBOOK «Anmeldeschutz»): leer = keine Rotation im Gang
+  write_secret_file "$secrets_dir" auth_secret_previous "${AUTH_SECRET_PREVIOUS:-}"
   write_secret_file "$secrets_dir" admin_auth_secret "$ADMIN_AUTH_SECRET"
   write_secret_file "$secrets_dir" initial_admin_password "$INITIAL_ADMIN_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"

@@ -30,6 +30,10 @@ VECTORS = [
     ("Passwort-Sicher-9", 1, True, False),
     ("mmm-Kiesel-Wolke7", 1, True, False),
     ("Fluss Ufer Möwe 42", 4, False, True),
+    # SEC-AUTH-015: Folgen und Leetspeak aus Passwortlisten
+    ("Kiesel-Wolke-12345", 1, True, False),
+    ("Dr4gon-Kiesel-Wolke", 1, True, False),
+    ("Wolke-Kiesel-98765", 1, True, False),
 ]
 
 

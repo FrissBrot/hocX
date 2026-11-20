@@ -19,6 +19,11 @@ from app.services import role_service
 from app.services.participant_service import ParticipantService
 from tests.factories import assign_roles, entry_value, make_app_user, make_current_user, make_list_definition, make_list_entry, make_participant, make_tenant
 
+import secrets as _secrets
+
+# Zur Laufzeit erzeugt (SECURITY-RULES 5.1), stark genug für app/core/password_policy.py
+STRONG_PASSWORD = f"Kiesel-Tanne-Wolke-{_secrets.randbelow(90) + 10}x"
+
 PASSWORD = "ein-sehr-langes-passwort"
 
 
@@ -188,9 +193,9 @@ def test_own_password_change_issues_new_session_cookie(db):
     person = make_app_user(db, "selbst@example.com", password=PASSWORD, tenant_id=tenant.id)
     actor = make_current_user(tenant.id, role="reader", user_id=person.id)
     response = Response()
-    user_routes.change_my_password(UserPasswordChange(current_password=PASSWORD, new_password="noch-ein-langes-passwort"), response, db, actor)
+    user_routes.change_my_password(UserPasswordChange(current_password=PASSWORD, new_password=STRONG_PASSWORD), response, db, actor)
     assert "hocx_session=" in response.headers.get("set-cookie", "")
-    assert verify_password("noch-ein-langes-passwort", person.password_hash)
+    assert verify_password(STRONG_PASSWORD, person.password_hash)
     assert person.session_revoke_at is not None
 
 
@@ -199,7 +204,7 @@ def test_wrong_current_password_has_stable_code(db):
     person = make_app_user(db, "falsch@example.com", password=PASSWORD, tenant_id=tenant.id)
     actor = make_current_user(tenant.id, role="reader", user_id=person.id)
     with pytest.raises(HTTPException) as error:
-        user_routes.change_my_password(UserPasswordChange(current_password="nicht-das-passwort", new_password="noch-ein-langes-passwort"), Response(), db, actor)
+        user_routes.change_my_password(UserPasswordChange(current_password="nicht-das-passwort", new_password=STRONG_PASSWORD), Response(), db, actor)
     assert error.value.status_code == 400
     assert error.value.detail["code"] == "wrong_current_password"
 
