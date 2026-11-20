@@ -189,7 +189,9 @@ export function formatTime(input: string | null | undefined, locale?: string) {
 export function formatLongDateRange(start: string | null | undefined, end: string | null | undefined, locale?: string) {
   const from = start ? new Date(start) : null;
   const to = end ? new Date(end) : null;
-  const formatter = new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "long", year: "numeric", timeZone: APP_TIME_ZONE });
+  // Aufnahmezeiten sind schwebende Kamerazeit, als UTC gespeichert (wie formatCaptureDateTime):
+  // in UTC formatieren, sonst rutscht ein Abendfoto in der App-Zeitzone auf den nächsten Tag.
+  const formatter = new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   if (from && !Number.isNaN(from.getTime()) && to && !Number.isNaN(to.getTime())) {
     return formatter.formatRange(from, to);
   }

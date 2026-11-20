@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatLongDateRange,
   formatDate,
   formatFileSize,
   formatDateInputValue,
@@ -106,5 +107,15 @@ describe("formatFileSize mit UI-Sprache", () => {
     expect(formatFileSize(1.5 * 1024 * 1024, "fr")).toBe("1,5 MB");
     expect(formatFileSize(1.5 * 1024 * 1024, "en")).toBe("1.5 MB");
     expect(formatFileSize(512)).toBe("512 B");
+  });
+});
+
+describe("formatLongDateRange (Aufnahmedaten der Teilen-Seite)", () => {
+  // Aufnahmezeiten sind "schwebende" Kamerazeit, als UTC gespeichert (wie formatCaptureDateTime):
+  // ein Foto vom 12.07. um 23:30 Kamerazeit darf nicht als 13.07. erscheinen (Nachtlauf 2026-11-20).
+  it("verschiebt eine späte Aufnahme nicht auf den nächsten Tag", () => {
+    expect(formatLongDateRange("2024-07-12T23:30:00Z", "2024-07-12T23:45:00Z", "de")).toBe("12. Juli 2024");
+    expect(formatLongDateRange("2024-07-10T09:00:00Z", "2024-07-12T23:30:00Z", "de")).toBe("10.–12. Juli 2024");
+    expect(formatLongDateRange("2024-12-31T23:30:00Z", null, "de")).toBe("31. Dezember 2024");
   });
 });
