@@ -11,6 +11,7 @@ from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
+from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN
 from app.services import public_id_service
 from app.services.event_cycle_service import lock_cycle_assignments
 from app.services.event_service import EventService, swiss_today
@@ -146,6 +147,9 @@ def list_cycles(
         .where(
             Template.tenant_id == user.current_tenant_id,
             Template.cycle_config_id == cfg.id,
+            # Altbestand ausserhalb des Datumsbereichs (vor der Grenze in ProtocolCreate/Update
+            # entstanden, z. B. Jahr 1) liesse get_cycle_year mit ValueError abbrechen.
+            Protocol.protocol_date.between(EVENT_DATE_MIN, EVENT_DATE_MAX),
         )
         .order_by(Protocol.protocol_date)
     ).all()
