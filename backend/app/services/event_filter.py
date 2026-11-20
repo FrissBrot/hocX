@@ -40,6 +40,11 @@ from app.core.cycle_utils import get_cycle_year
 RANGE_MODES = ("all", "future", "past", "window")
 DEFAULT_WINDOW_START_DAYS = 0
 DEFAULT_WINDOW_END_DAYS = 14
+# Fenster «N Tage vor/nach dem Sitzungsdatum» höchstens ±100 Jahre. Der Editor setzt die Tage per
+# Stepper, per API (Vorlagen-Element, Document-Studio-Parameter) kam aber jede Zahl an: ab ca.
+# 3 Mio. Tagen brach das Rendern mit OverflowError ab (PDF/Dokument 500, Fehlerprotokoll), der
+# Editor mit RangeError. Gleiche Grenze in event-filter.ts (WINDOW_DAYS_LIMIT).
+WINDOW_DAYS_LIMIT = 36500
 
 
 def default_event_filter(*, range_mode: str = "all") -> dict:
@@ -76,6 +81,19 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+def _window_days(value: Any, default: int) -> int:
+    return max(-WINDOW_DAYS_LIMIT, min(WINDOW_DAYS_LIMIT, _int(value, default)))
+
+
+def _shift(day: date, days: int) -> date:
+    # Sitzungsdatum am Kalenderrand (Altbestand, z. B. Jahr 1): Fenster endet am Rand statt mit
+    # OverflowError.
+    try:
+        return day + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
+
+
 def normalize_event_filter(raw: Any, *, default_range_mode: str = "all") -> dict:
     """Bringt einen gespeicherten Filter in die vollständige Form (fehlende Felder = Vorgabe)."""
     result = default_event_filter(range_mode=default_range_mode)
@@ -88,8 +106,8 @@ def normalize_event_filter(raw: Any, *, default_range_mode: str = "all") -> dict
     mode = str(raw_range.get("mode") or default_range_mode)
     result["range"] = {
         "mode": mode if mode in RANGE_MODES else default_range_mode,
-        "start_days": _int(raw_range.get("start_days"), DEFAULT_WINDOW_START_DAYS),
-        "end_days": _int(raw_range.get("end_days"), DEFAULT_WINDOW_END_DAYS),
+        "start_days": _window_days(raw_range.get("start_days"), DEFAULT_WINDOW_START_DAYS),
+        "end_days": _window_days(raw_range.get("end_days"), DEFAULT_WINDOW_END_DAYS),
     }
     raw_cycle = raw.get("cycle")
     if isinstance(raw_cycle, dict):
@@ -165,10 +183,10 @@ def _matches_range(event: Any, event_range: dict, protocol_date: date | None) ->
     if mode == "past":
         return end < protocol_date
     if mode == "window":
-        start_days = _int(event_range.get("start_days"), DEFAULT_WINDOW_START_DAYS)
-        end_days = _int(event_range.get("end_days"), DEFAULT_WINDOW_END_DAYS)
-        window_start = protocol_date + timedelta(days=min(start_days, end_days))
-        window_end = protocol_date + timedelta(days=max(start_days, end_days))
+        start_days = _window_days(event_range.get("start_days"), DEFAULT_WINDOW_START_DAYS)
+        end_days = _window_days(event_range.get("end_days"), DEFAULT_WINDOW_END_DAYS)
+        window_start = _shift(protocol_date, min(start_days, end_days))
+        window_end = _shift(protocol_date, max(start_days, end_days))
         return end >= window_start and start <= window_end
     return True
 

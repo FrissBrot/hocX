@@ -25,6 +25,9 @@ export type EventFilter = {
 export const RANGE_MODES: readonly EventRangeMode[] = ["future", "past", "all", "window"];
 export const DEFAULT_WINDOW_START_DAYS = 0;
 export const DEFAULT_WINDOW_END_DAYS = 14;
+/** Fenster höchstens ±100 Jahre, wie WINDOW_DAYS_LIMIT in backend/app/services/event_filter.py
+ * (sonst RangeError in addDays bzw. OverflowError im PDF bei per API gespeicherten Werten). */
+export const WINDOW_DAYS_LIMIT = 36500;
 
 export function defaultEventFilter(rangeMode: EventRangeMode = "all"): EventFilter {
   return {
@@ -54,6 +57,10 @@ function toInt(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
+function toWindowDays(value: unknown, fallback: number): number {
+  return Math.max(-WINDOW_DAYS_LIMIT, Math.min(WINDOW_DAYS_LIMIT, toInt(value, fallback)));
+}
+
 /** Bringt einen gespeicherten Filter in die vollständige Form (fehlende Felder = Vorgabe). */
 export function normalizeEventFilter(raw: unknown, defaultRangeMode: EventRangeMode = "all"): EventFilter {
   const result = defaultEventFilter(defaultRangeMode);
@@ -69,8 +76,8 @@ export function normalizeEventFilter(raw: unknown, defaultRangeMode: EventRangeM
     description: String(source.description ?? "").trim(),
     range: {
       mode: RANGE_MODES.includes(mode) ? mode : defaultRangeMode,
-      start_days: toInt(range.start_days, DEFAULT_WINDOW_START_DAYS),
-      end_days: toInt(range.end_days, DEFAULT_WINDOW_END_DAYS),
+      start_days: toWindowDays(range.start_days, DEFAULT_WINDOW_START_DAYS),
+      end_days: toWindowDays(range.end_days, DEFAULT_WINDOW_END_DAYS),
     },
     cycle: cycle ? { config_id: cycle.config_id ? String(cycle.config_id) : null, offset: toInt(cycle.offset, 0) } : null,
     use_column_filter: source.use_column_filter === true,
