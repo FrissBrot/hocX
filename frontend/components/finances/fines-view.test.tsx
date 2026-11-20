@@ -89,6 +89,14 @@ describe("fines-model", () => {
     expect(computeKpis(rows, YEAR)).toEqual({ openAmount: 44, openCount: 4, collectedAmount: 10, collectedCount: 1, peopleOpen: 3, peopleTotal: 3 });
     expect(computeKpis(rows, YEAR - 1).collectedCount).toBe(0);
   });
+
+  it("zählt «im Jahr kassiert» nach Schweizer Zeit (Neujahr 00:30 gehört ins neue Jahr)", () => {
+    // 31.12.2025 23:30 UTC = 01.01.2026 00:30 in Zürich - wie das Buchungsdatum im Backend
+    const newYear = attendance("9", "Anna Muster", "p-anna", { status: "collected", collected_at: "2025-12-31T23:30:00Z" });
+    const kpiRows = buildRows([newYear], []);
+    expect(computeKpis(kpiRows, 2026).collectedCount).toBe(1);
+    expect(computeKpis(kpiRows, 2025).collectedCount).toBe(0);
+  });
 });
 
 describe("FinesView (Kasse › Bussen)", () => {

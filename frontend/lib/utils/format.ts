@@ -101,6 +101,17 @@ export function formatDateRange(start: string | null | undefined, end?: string |
   return `${formattedStart} - ${formattedEnd}`;
 }
 
+/** Kalenderjahr eines Zeitpunkts in Schweizer Zeit (Kennzahlen «im Jahr X» wie die Buchungen im
+ * Backend). Ein Zeitstempel aus der API ist UTC: «2025-12-31T23:30:00Z» ist in Zürich schon 2026.
+ * Ein reines Datum (JJJJ-MM-TT) bleibt, wie es ist; ohne Wert: das laufende Jahr. */
+export function swissYear(input?: string | Date | null): number | null {
+  if (typeof input === "string" && ISO_DATE_PATTERN.test(input)) return Number(input.slice(0, 4));
+  if (input === null || input === "") return null;
+  const parsed = input instanceof Date ? input : input === undefined ? new Date() : new Date(input);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return Number(new Intl.DateTimeFormat("en-CH", { year: "numeric", timeZone: APP_TIME_ZONE }).format(parsed));
+}
+
 // `locale` ist optional und faellt auf Deutsch/de-CH zurueck, damit noch nicht auf
 // useLocale() umgestellte Aufrufstellen unveraendert funktionieren - siehe CLAUDE.md,
 // Abschnitt i18n: neue/berührte Aufrufstellen sollen die aktuelle UI-Locale durchreichen.

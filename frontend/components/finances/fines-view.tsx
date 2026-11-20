@@ -39,7 +39,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
-import { formatDate, formatMoney } from "@/lib/utils/format";
+import { formatDate, formatMoney, swissYear } from "@/lib/utils/format";
 import { financeErrorMessage } from "@/components/finances/finance-errors";
 import { AttendanceFineListItem, FinanceAccount, TodoFineListItem } from "@/types/api";
 
@@ -114,7 +114,8 @@ export function FinesView({
   const [waiveReason, setWaiveReason] = useState("");
   const [resolveTarget, setResolveTarget] = useState<TodoFineListItem | null>(null);
   const canWriteTodo = canWrite && todoFinesWritable;
-  const currentYear = new Date().getFullYear();
+  // Laufendes Jahr in Schweizer Zeit, wie das Jahr der Kassierungen (rowYear)
+  const currentYear = swissYear() ?? new Date().getFullYear();
 
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
