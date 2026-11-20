@@ -41,6 +41,9 @@ test("a deleted file goes to the trash, can be restored and deleted permanently"
   await page.locator("tr, li", { hasText: stem }).first().getByRole("button", { name: "Weitere Aktionen" }).click();
   await page.getByRole("menuitem", { name: "In den Papierkorb" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "In den Papierkorb" }).click();
+  // Erst wenn das Löschen durch ist (Zeile weg), steht die Datei im Papierkorb - der Dialog lädt
+  // seine Liste beim Öffnen einmal.
+  await expect(page.locator("tr, li", { hasText: stem })).toHaveCount(0);
   await page.getByRole("button", { name: "Papierkorb", exact: true }).click();
   await trash.locator("tr", { hasText: name }).getByRole("button", { name: "Endgültig löschen" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Endgültig löschen" }).click();
