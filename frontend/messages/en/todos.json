@@ -204,5 +204,26 @@
     "calendarSubscribe": "Subscribe in Apple or Google Calendar",
     "boardDueToday": "due today"
   },
-  "createEyebrow": "New to-do"
+  "createEyebrow": "New to-do",
+  "toSubmission": {
+    "button": "Collect as submission",
+    "hint": "Creates a single submission with this todo. It is completed as soon as the file is submitted.",
+    "created": "Submission “{title}” created",
+    "copyLink": "Copy link",
+    "customize": "Customize",
+    "linkCopied": "Link copied",
+    "copyFailed": "Link could not be copied",
+    "failed": "Submission could not be created",
+    "errors": {
+      "todo_already_submission": "This todo already belongs to a submission.",
+      "todo_pending_delete": "This todo is marked for deletion.",
+      "todo_from_task_package": "Todos from a task package cannot be collected as a submission.",
+      "todo_closed": "Completed or cancelled todos cannot be collected as a submission.",
+      "todo_without_assignee": "The todo needs a responsible person to be collected as a submission.",
+      "todo_too_many_assignees": "A submission has at most 50 responsible people per element.",
+      "submission_no_default_link": "There is no default link for submissions. Please create a link under Submissions first.",
+      "protocol_closed": "The minutes are already closed.",
+      "submission_conflict": "The submission could not be created. Please try again."
+    }
+  }
 }

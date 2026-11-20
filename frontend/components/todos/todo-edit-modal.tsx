@@ -20,9 +20,14 @@ import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
 import { TodoFineSection, type TodoFineDraft } from "@/components/finances/todo-fine-section";
+import { canCollectAsSubmission, useCreateSubmissionFromTodo } from "./use-create-submission-from-todo";
 
-export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false }: {
+export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false, canCollectSubmission = false, onUpdated }: {
   todo: TodoListItem;
+  /** «Als Abgabe einsammeln» anbieten: submissions.manage (inkl. Modul Abgabebox) und Pendenzen bearbeiten */
+  canCollectSubmission?: boolean;
+  /** Pendenz serverseitig geändert, Dialog bleibt offen (z. B. nach «Als Abgabe einsammeln») */
+  onUpdated?: (todo: TodoListItem) => void;
   /** Pendenzen-Bussen gebucht (Feature todo_fines): Abschnitt «Busse» anzeigen */
   showFine?: boolean;
   canEdit: boolean;
@@ -47,6 +52,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const [detailsDraft, setDetailsDraft] = useState<TodoDetails | null>(null);
   const confirm = useConfirm();
   const showToast = useToast();
+  const createSubmission = useCreateSubmissionFromTodo();
   const editable = canEdit && !busy;
   const dueLabel = draft.resolved_due_label || (draft.resolved_due_date ? formatDate(draft.resolved_due_date) : t("noEndDate"));
   const overdueDays = draft.resolved_due_date ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${draft.resolved_due_date}T00:00:00`).getTime()) / 86400000) : 0;
@@ -110,6 +116,29 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     } finally { setBusy(false); }
   }
 
+  async function collectAsSubmission() {
+    setBusy(true);
+    try {
+      const result = await createSubmission(todo.id);
+      if (!result) return;
+      const linked = result.todo;
+      // Nur die Felder, die der Abgleich jetzt führt; ungespeicherte Eingaben bleiben im Entwurf
+      setDraft((current) => ({
+        ...current,
+        submission_assignment_id: linked.submission_assignment_id,
+        element_ref: linked.element_ref,
+        submission_title: linked.submission_title,
+        reference_link: linked.reference_link,
+        due_date: linked.due_date,
+        due_event_id: linked.due_event_id,
+        due_marker: linked.due_marker,
+        resolved_due_date: linked.resolved_due_date,
+        resolved_due_label: linked.resolved_due_label,
+      }));
+      onUpdated?.({ ...todo, ...linked });
+    } finally { setBusy(false); }
+  }
+
   async function remove() {
     if (!await confirm({ message: t("deleteConfirm"), tone: "danger", confirmLabel: tCommon("delete") })) return;
     setBusy(true);
@@ -167,6 +196,12 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
             <span className="todo-edit-source-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /></svg></span>
             <span><strong>{todo.protocol_number}{todo.protocol_title ? ` · ${todo.protocol_title}` : ''}</strong>{todo.block_title && <small>{t("agendaItemNamed", { title: todo.block_title })}</small>}</span><span className="todo-edit-source-arrow" aria-hidden="true">↗</span>
           </a> : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a> : <span className="muted">{todo.submission_assignment_id ? t("submissionBoxLink") : t("manuallyCreated")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
+          {/* Protokoll-Pendenz, die eine Abgabe führt: Abgabe-Link zusätzlich zum Protokoll */}
+          {!todo.task_package_name && todo.protocol_id && todo.submission_assignment_id && todo.reference_link && /^https?:\/\//i.test(todo.reference_link) && <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a>}
+          {canCollectSubmission && canEdit && canCollectAsSubmission(todo) && <div>
+            <button type="button" className="button-secondary" disabled={busy} onClick={() => void collectAsSubmission()}>{t("toSubmission.button")}</button>
+            <small className="field-help">{t("toSubmission.hint")}</small>
+          </div>}
         </div>
       </div>
       <aside className="todo-edit-sidebar">

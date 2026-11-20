@@ -16,10 +16,10 @@ import {
 } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
 
-export default async function SubmissionAssignmentsPage({ searchParams }: { searchParams: Promise<{ assignment?: string }> }) {
+export default async function SubmissionAssignmentsPage({ searchParams }: { searchParams: Promise<{ assignment?: string; edit?: string }> }) {
   const session = await requireSession();
   // ?assignment=<public_id> öffnet die Abgabe direkt (Link aus der Dateiübersicht)
-  const { assignment: initialAssignmentId } = await searchParams;
+  const { assignment: initialAssignmentId, edit } = await searchParams;
   // Lesen genügt (Prüfer, Plan «Berechtigungen» Phase 4); Verwalten und Prüfen schalten die Aktionen frei.
   const canRead = can(session, "submissions.read");
   const canManage = can(session, "submissions.manage");
@@ -62,7 +62,7 @@ export default async function SubmissionAssignmentsPage({ searchParams }: { sear
         desktop={
           <>
           <section className="panel">
-            <SubmissionAssignmentManager {...shared} initialSelectedId={initialAssignmentId ?? null} />
+            <SubmissionAssignmentManager {...shared} initialSelectedId={initialAssignmentId ?? null} initialEdit={edit === "1"} />
           </section>
           </>
         }

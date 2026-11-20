@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.storage import ABGABEBOX, MAIN
@@ -26,6 +26,7 @@ from app.models.entities import (
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolImage,
+    ProtocolTodo,
     StoredFile,
     SubmissionAssignment,
     SubmissionUpload,
@@ -227,6 +228,13 @@ def delete_assignment(db: Session, assignment: SubmissionAssignment, *, delete_f
         result.deleted_files += 1
     submission_items = [item for item in to_erase if item.group == "submission"]
     erasure_journal.record(db, "submission_assignment", assignment.public_id, tenant_id=assignment.tenant_id)
+    # Pendenzen aus einem Protokoll (Abgabe aus der Pendenz erstellt) bleiben im Protokoll stehen:
+    # nur den Bezug lösen, sonst löschte sie protocol_todo.submission_assignment_id ON DELETE CASCADE
+    db.execute(
+        update(ProtocolTodo)
+        .where(ProtocolTodo.submission_assignment_id == assignment.id, ProtocolTodo.protocol_element_block_id.is_not(None))
+        .values(submission_assignment_id=None, element_ref=None, reference_link=None)
+    )
     db.delete(assignment)
     db.flush()
     for item in submission_items:

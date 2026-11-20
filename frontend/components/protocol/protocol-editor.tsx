@@ -16,6 +16,7 @@ import { ParticipantDateContext } from "@/contexts/participant-date-context";
 import { ParticipantDirectoryContext } from "@/contexts/participant-directory-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import type { QuickTodoFineAccess } from "@/components/protocol/quick-todo-fine";
+import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submission-from-todo";
 import { Modal } from "@/components/ui/modal";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Badge } from "@/components/ui/badge";
@@ -112,6 +113,8 @@ type ProtocolEditorProps = {
   canManageFinances?: boolean;
   /** Pendenzen-Bussen in «Schnelle Pendenz» (Sitzungsmenü) */
   todoFines?: QuickTodoFineAccess;
+  /** «Als Abgabe einsammeln» im Menü einer Pendenz (submissions.manage inkl. Modul Abgabebox, meetings.edit) */
+  canCollectSubmissions?: boolean;
   accordionEnabled?: boolean;
   /** Rad-Effekt beim Scrollen (Profileinstellung); wirkt nur zusammen mit dem Akkordeon */
   wheelEnabled?: boolean;
@@ -143,6 +146,7 @@ export function ProtocolEditor({
   canViewFines = true,
   canManageFinances = false,
   todoFines,
+  canCollectSubmissions = false,
   accordionEnabled: accordionPreference = true,
   wheelEnabled = false,
 }: ProtocolEditorProps) {
@@ -231,6 +235,7 @@ export function ProtocolEditor({
   }, [protocol.id, protocol.session_notes]);
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const showToast = useToast();
+  const createSubmissionFromTodo = useCreateSubmissionFromTodo();
   const confirm = useConfirm();
   const elementSaveTimerRef = useRef<number | null>(null);
   const isRestoringRef = useRef(true);
@@ -1556,6 +1561,21 @@ export function ProtocolEditor({
     }
   }
 
+  // «Als Abgabe einsammeln»: die Pendenz wird die Pendenz der neuen Einzelabgabe (Titel, Frist, Link
+  // und Status führt ab jetzt der Abgleich der Abgabe)
+  async function collectTodoAsSubmission(protocolElementBlockId: string, todoId: string) {
+    setStatus(protocolElementBlockId, "saving");
+    const result = await createSubmissionFromTodo(todoId);
+    if (!result) {
+      setStatus(protocolElementBlockId, "error");
+      return;
+    }
+    const next = (todosByBlockRef.current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? { ...todo, ...result.todo } : todo));
+    setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+    collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
+    setStatus(protocolElementBlockId, "saved");
+  }
+
   async function deleteTodo(protocolElementBlockId: string, todoId: string) {
     const ok = await confirm({
       message: t("todoDeleteConfirm"),
@@ -2150,6 +2170,7 @@ export function ProtocolEditor({
     addTodo,
     updateTodo,
     deleteTodo,
+    collectTodoAsSubmission,
     acceptTodoTrackedChange,
     acceptTrackedListEntry,
     acceptTrackedRow,
@@ -2349,6 +2370,7 @@ export function ProtocolEditor({
               addTodo={elementHandlers.addTodo}
               updateTodo={elementHandlers.updateTodo}
               deleteTodo={elementHandlers.deleteTodo}
+              collectTodoAsSubmission={canCollectSubmissions && !isReadOnly ? elementHandlers.collectTodoAsSubmission : undefined}
               acceptTodoTrackedChange={elementHandlers.acceptTodoTrackedChange}
               acceptTrackedListEntry={elementHandlers.acceptTrackedListEntry}
               acceptTrackedRow={elementHandlers.acceptTrackedRow}

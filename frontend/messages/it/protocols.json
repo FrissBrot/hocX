@@ -628,5 +628,6 @@
   },
   "elementPointNumber": "Punto {number}",
   "participantPickerSelected": "{count, plural, one {# selezionato} other {# selezionati}}",
-  "participantPickerVisible": "{count} visibili"
+  "participantPickerVisible": "{count} visibili",
+  "todoActions": "Azioni dell'attività"
 }

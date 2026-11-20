@@ -10,7 +10,7 @@ export interface ToastItem {
   message: string;
   type: ToastType;
   onMessageClick?: () => void;
-  action?: ToastAction;
+  actions?: ToastAction[];
 }
 
 /** Einzelne Folgeaktion direkt im Toast, z.B. "Rückgängig" nach dem Abhaken eines Todos. */
@@ -19,7 +19,8 @@ export interface ToastAction {
   onClick: () => void;
 }
 
-type ToastOptions = { onMessageClick?: () => void; action?: ToastAction };
+/** `actions` für mehrere Folgeaktionen (z.B. «Link kopieren» und «Anpassen»); `action` = eine. */
+type ToastOptions = { onMessageClick?: () => void; action?: ToastAction; actions?: ToastAction[] };
 
 interface ToastContextValue {
   showToast: (message: string, type?: ToastType, opts?: ToastOptions) => void;
@@ -40,7 +41,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const showToast = useCallback(
     (message: string, type: ToastType = "info", opts?: ToastOptions) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      setToasts((prev) => [...prev.slice(-3), { id, message, type, onMessageClick: opts?.onMessageClick, action: opts?.action }]);
+      setToasts((prev) => [...prev.slice(-3), { id, message, type, onMessageClick: opts?.onMessageClick, actions: opts?.actions ?? (opts?.action ? [opts.action] : undefined) }]);
       timers.current[id] = setTimeout(() => dismiss(id), 8000);
     },
     [dismiss]
@@ -68,18 +69,19 @@ function ToastList({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id:
           >
             {toast.message}
           </span>
-          {toast.action ? (
+          {toast.actions?.map((action) => (
             <button
+              key={action.label}
               type="button"
               className="app-toast-action"
               onClick={() => {
-                toast.action?.onClick();
+                action.onClick();
                 onDismiss(toast.id);
               }}
             >
-              {toast.action.label}
+              {action.label}
             </button>
-          ) : null}
+          ))}
           <button
             type="button"
             className="app-toast-close"

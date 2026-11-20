@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
 const api = vi.hoisted(() => vi.fn());
 const sideApi = vi.hoisted(() => vi.fn());
@@ -12,6 +12,8 @@ vi.mock("@/lib/api/client", () => ({
     (url.endsWith('/details') && !init?.method) || url.startsWith('/api/files') ? sideApi(url, init) : api(url, init),
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
 // Tiptap rendert in jsdom nicht zuverlässig (wie in element-definition-manager.test.tsx gemockt)
 vi.mock("@/components/ui/rich-text-editor", () => ({
@@ -149,4 +151,43 @@ it('links an uploaded file and saves it with the todo', async () => {
   expect(api).toHaveBeenCalledTimes(2);
   expect(api.mock.calls[1][0]).toBe('/api/protocol-todos/todo-1/details');
   expect(JSON.parse(api.mock.calls[1][1].body)).toEqual({ file_ids: ['file-2'] });
+});
+
+describe('«Als Abgabe einsammeln»', () => {
+  const linked = { ...todo, submission_assignment_id: 'sa-1', element_ref: 'manual', reference_link: 'https://abgabe.example/tok/bankvollmacht/manual', resolved_due_date: null };
+  it('is offered only with the right and for a todo that is no submission yet', () => {
+    mount();
+    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    cleanup();
+    render(<TodoEditModal todo={{ ...todo, submission_assignment_id: 'sa-1' }} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    cleanup();
+    render(<TodoEditModal todo={{ ...todo, todo_status_code: 'done', todo_status_id: 3 }} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+    cleanup();
+    render(<TodoEditModal todo={todo} canEdit={false} canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Als Abgabe einsammeln' })).not.toBeInTheDocument();
+  });
+  it('creates the submission with one click, keeps the dialog open and offers copy/customize', async () => {
+    const updated = vi.fn();
+    api.mockResolvedValueOnce({ assignment_id: 'sa-1', title: 'Bankvollmacht einreichen', public_slug: 'bankvollmacht-einreichen', element_url: linked.reference_link, todo: linked });
+    render(<TodoEditModal todo={todo} canEdit canCollectSubmission onUpdated={updated} participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Als Abgabe einsammeln' }));
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce());
+    expect(api).toHaveBeenCalledWith('/api/protocol-todos/todo-1/create-submission', { method: 'POST' });
+    expect(updated.mock.calls[0][0]).toMatchObject({ id: 'todo-1', submission_assignment_id: 'sa-1' });
+    expect(closed).not.toHaveBeenCalled();
+    const [message, type, opts] = toast.mock.calls[0];
+    expect([message, type]).toEqual(['Abgabe «Bankvollmacht einreichen» erstellt', 'success']);
+    expect(opts.actions.map((action: { label: string }) => action.label)).toEqual(['Link kopieren', 'Anpassen']);
+    opts.actions[1].onClick();
+    expect(push).toHaveBeenCalledWith('/submission-assignments?assignment=sa-1&edit=1');
+  });
+  it('shows the backend reason as error toast', async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    api.mockRejectedValueOnce(new ApiError('x', 'validation', 400, { code: 'todo_without_assignee', message: 'x' }));
+    render(<TodoEditModal todo={todo} canEdit canCollectSubmission participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Als Abgabe einsammeln' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('verantwortliche Person'), 'error'));
+  });
 });

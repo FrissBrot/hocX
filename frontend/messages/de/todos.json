@@ -204,5 +204,26 @@
     "calendarSubscribe": "In Apple oder Google Kalender abonnieren",
     "boardDueToday": "heute fällig"
   },
-  "createEyebrow": "Neue Pendenz"
+  "createEyebrow": "Neue Pendenz",
+  "toSubmission": {
+    "button": "Als Abgabe einsammeln",
+    "hint": "Legt eine Einzelabgabe mit dieser Pendenz an. Sie wird erledigt, sobald die Datei eingereicht ist.",
+    "created": "Abgabe «{title}» erstellt",
+    "copyLink": "Link kopieren",
+    "customize": "Anpassen",
+    "linkCopied": "Link kopiert",
+    "copyFailed": "Link konnte nicht kopiert werden",
+    "failed": "Abgabe konnte nicht erstellt werden",
+    "errors": {
+      "todo_already_submission": "Diese Pendenz gehört schon zu einer Abgabe.",
+      "todo_pending_delete": "Diese Pendenz ist zum Löschen markiert.",
+      "todo_from_task_package": "Pendenzen aus einem Aufgabenpaket lassen sich nicht als Abgabe einsammeln.",
+      "todo_closed": "Erledigte oder abgebrochene Pendenzen lassen sich nicht als Abgabe einsammeln.",
+      "todo_without_assignee": "Die Pendenz braucht eine verantwortliche Person, um sie als Abgabe einzusammeln.",
+      "todo_too_many_assignees": "Eine Abgabe hat höchstens 50 Verantwortliche je Element.",
+      "submission_no_default_link": "Es gibt keinen Standard-Link für Abgaben. Bitte zuerst unter Abgaben einen Link anlegen.",
+      "protocol_closed": "Das Protokoll ist abgeschlossen.",
+      "submission_conflict": "Die Abgabe konnte nicht erstellt werden. Bitte erneut versuchen."
+    }
+  }
 }

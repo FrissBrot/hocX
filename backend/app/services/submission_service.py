@@ -371,8 +371,11 @@ class SubmissionService:
         return self.repository.get_assignment(db, assignment_id)
 
     def create_assignment(
-        self, db: Session, payload: SubmissionAssignmentCreate, *, tenant_id: int
+        self, db: Session, payload: SubmissionAssignmentCreate, *, tenant_id: int, link_todo: ProtocolTodo | None = None
     ) -> SubmissionAssignmentRead:
+        """Abgabe anlegen. ``link_todo`` (nur Einzelabgaben, todo_submission_service): diese
+        bestehende Pendenz wird im selben Commit zur Pendenz des Standard-Elements, bevor der
+        Abgleich läuft - er übernimmt sie statt eine zweite anzulegen."""
         self._validate_source_fields(payload)
         if payload.manual_elements is not None and payload.source_type != "manual":
             raise ValueError("Elemente gibt es nur bei Einzelabgaben")
@@ -398,6 +401,13 @@ class SubmissionService:
             db.add(entity)
             db.flush()
             self._sync_manual_elements(db, entity, payload.manual_elements, fallback_deadline=fallback_deadline)
+            if link_todo is not None:
+                link_todo.submission_assignment_id = entity.id
+                link_todo.element_ref = MANUAL_ELEMENT_REF
+                db.add(link_todo)
+                db.flush()
+        elif link_todo is not None:
+            raise ValueError("Eine Pendenz lässt sich nur mit einer Einzelabgabe verknüpfen")
         created = self.repository.create_assignment(db, entity)
         self.sync_todos_if_tracked(db, created)
         return self._assignment_read(created, db)
@@ -1178,7 +1188,9 @@ class SubmissionService:
             if element_ref not in current_refs and todo.todo_status_id not in closed_ids:
                 # Von Hand ergänzte Pendenzen (Notizen, Dateien) nicht löschen, nur abbrechen -
                 # fällt das Element nur kurz weg, bleibt die Arbeit erhalten
-                has_details = (todo.notes or "").strip() or db.scalar(
+                # Pendenzen aus einem Protokoll (Abgabe aus der Pendenz erstellt) gehören zum
+                # Protokoll: nie löschen, nur abbrechen
+                has_details = todo.protocol_element_block_id is not None or (todo.notes or "").strip() or db.scalar(
                     select(ProtocolTodoFile.protocol_todo_id).where(ProtocolTodoFile.protocol_todo_id == todo.id).limit(1)
                 )
                 if has_details:

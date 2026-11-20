@@ -204,5 +204,26 @@
     "calendarSubscribe": "Abbonati in Apple o Google Calendar",
     "boardDueToday": "scade oggi"
   },
-  "createEyebrow": "Nuova attività"
+  "createEyebrow": "Nuova attività",
+  "toSubmission": {
+    "button": "Raccogli come consegna",
+    "hint": "Crea una consegna singola con questa attività. Viene completata non appena il file è consegnato.",
+    "created": "Consegna «{title}» creata",
+    "copyLink": "Copia link",
+    "customize": "Modifica",
+    "linkCopied": "Link copiato",
+    "copyFailed": "Impossibile copiare il link",
+    "failed": "Impossibile creare la consegna",
+    "errors": {
+      "todo_already_submission": "Questa attività appartiene già a una consegna.",
+      "todo_pending_delete": "Questa attività è contrassegnata per l'eliminazione.",
+      "todo_from_task_package": "Le attività di un pacchetto non possono essere raccolte come consegna.",
+      "todo_closed": "Le attività completate o annullate non possono essere raccolte come consegna.",
+      "todo_without_assignee": "L'attività ha bisogno di una persona responsabile per essere raccolta come consegna.",
+      "todo_too_many_assignees": "Una consegna ha al massimo 50 responsabili per elemento.",
+      "submission_no_default_link": "Non esiste un link standard per le consegne. Crea prima un link nella sezione Consegne.",
+      "protocol_closed": "Il verbale è chiuso.",
+      "submission_conflict": "Impossibile creare la consegna. Riprova."
+    }
+  }
 }

@@ -157,6 +157,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
                 currency: session.current_tenant?.finance_currency ?? "CHF",
               }}
               canViewFines={canViewFines}
+              canCollectSubmissions={can(session, "submissions.manage") && can(session, "meetings.edit")}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
               wheelEnabled={session.user?.protocol_wheel_enabled ?? false}
             />
