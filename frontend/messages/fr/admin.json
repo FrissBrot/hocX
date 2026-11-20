@@ -239,6 +239,11 @@
         "title": "Protection contre la surcharge",
         "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
         "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
+      },
+      "auth_protection": {
+        "title": "Protection des connexions",
+        "detail": "{limiterErrors, number} pannes du limiteur (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocages · {privateSourcePercent, number} % sources privées",
+        "problem": "Protection des connexions perturbée ou Redis presque plein"
       }
     },
     "problems": {
@@ -262,6 +267,18 @@
         "failing": "La tâche {subject} a échoué",
         "overdue": "La tâche {subject} est en retard",
         "never_run": "La tâche {subject} n'a jamais été exécutée"
+      },
+      "auth": {
+        "stuffing": "Credential stuffing : nombreux échecs depuis de nombreux réseaux",
+        "spraying": "Password spraying depuis un réseau",
+        "account_attack": "Compte attaqué",
+        "admin_mfa": "MFA admin échouée",
+        "admin_new_device": "Connexion plateforme depuis un nouvel appareil",
+        "blocks": "Nombreux blocages d'IP",
+        "network": "Nombreux échecs depuis un réseau",
+        "cross_tenant": "Attaque sur plusieurs mandants",
+        "tenant": "Nombreux comptes d'un mandant avec des échecs",
+        "limiter": "Protection des connexions (Redis) perturbée"
       }
     },
     "events": {
@@ -559,6 +576,10 @@
       "capture_date_file_sync": {
         "title": "Écrire les dates de prise de vue dans les fichiers",
         "description": "Écrit les dates de prise de vue corrigées dans les fichiers image et y réécrit la date d’origine lors du rétablissement."
+      },
+      "auth_security_maintenance": {
+        "title": "Nettoyage de la protection des connexions",
+        "description": "Toutes les heures : supprime les événements de sécurité après 90 jours, les sessions terminées et les appareils longtemps inutilisés, et répare les compteurs sans expiration."
       }
     }
   },

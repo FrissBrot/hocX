@@ -70,6 +70,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "file_trash_purge": 202600034,
     # Korrigiertes Aufnahmedatum in die Datei schreiben (Migration 0203, services/capture_date_file_sync.py)
     "capture_date_file_sync": 202600035,
+    # Anmeldeschutz: Aufbewahrung auth_event, Sessions, Geräte, Zähler ohne TTL (Migration 0206)
+    "auth_security_maintenance": 202600036,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

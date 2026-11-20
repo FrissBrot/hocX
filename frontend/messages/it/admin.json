@@ -239,6 +239,11 @@
         "title": "Protezione dal sovraccarico",
         "detail": "{rejected, number} rifiuti · {users, number} nuovi utenti · {tenants, number} organizzazioni · carico fino al {pressurePercent, number} % (ultimi {minutes, number} min)",
         "problem": "Sovraccarico: i nuovi utenti vengono respinti"
+      },
+      "auth_protection": {
+        "title": "Protezione accessi",
+        "detail": "{limiterErrors, number} guasti del limitatore (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocchi · {privateSourcePercent, number} % fonti private",
+        "problem": "Protezione accessi compromessa o Redis quasi pieno"
       }
     },
     "problems": {
@@ -262,6 +267,18 @@
         "failing": "Il job {subject} non è riuscito",
         "overdue": "Il job {subject} è in ritardo",
         "never_run": "Il job {subject} non è mai stato eseguito"
+      },
+      "auth": {
+        "stuffing": "Credential stuffing: molti tentativi falliti da molte reti",
+        "spraying": "Password spraying da una rete",
+        "account_attack": "Account sotto attacco",
+        "admin_mfa": "MFA admin fallita",
+        "admin_new_device": "Accesso piattaforma da un nuovo dispositivo",
+        "blocks": "Molti blocchi IP",
+        "network": "Molti tentativi falliti da una rete",
+        "cross_tenant": "Attacco su più mandanti",
+        "tenant": "Molti account di un mandante con tentativi falliti",
+        "limiter": "Protezione accessi (Redis) compromessa"
       }
     },
     "events": {
@@ -559,6 +576,10 @@
       "capture_date_file_sync": {
         "title": "Scrivere le date di scatto nei file",
         "description": "Scrive le date di scatto corrette nei file immagine e, al ripristino, riscrive nel file la data originale."
+      },
+      "auth_security_maintenance": {
+        "title": "Pulizia protezione accessi",
+        "description": "Ogni ora: elimina gli eventi di sicurezza dopo 90 giorni, le sessioni terminate e i dispositivi inutilizzati da tempo e ripara i contatori senza scadenza."
       }
     }
   },
