@@ -9,7 +9,7 @@ const refreshMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
   ApiError: class ApiError extends Error {
-    constructor(message: string, public readonly kind: string, public readonly status?: number) {
+    constructor(message: string, public readonly kind: string, public readonly status?: number, public readonly detail?: unknown) {
       super(message);
     }
   },
@@ -23,7 +23,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/hooks/use-refresh-on-restore", () => ({ useRefreshOnRestore: () => undefined }));
 vi.mock("@/lib/hooks/use-infinite-scroll", () => ({ useInfiniteScroll: () => () => undefined }));
 
-import { ProtocolBuilder } from "./protocol-builder";
+import { ProtocolBuilder, protocolActionError } from "./protocol-builder";
+import { ApiError } from "@/lib/api/client";
 import { ProtocolSummary } from "@/types/api";
 
 function makeProtocol(overrides: Partial<ProtocolSummary> = {}): ProtocolSummary {
@@ -142,5 +143,14 @@ describe("ProtocolBuilder: Liste (Audit 2026-11)", () => {
     fireEvent.change(screen.getByPlaceholderText("Protokolle durchsuchen"), { target: { value: "xyz" } });
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(browserApiFetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("protocolActionError", () => {
+  const t = (key: string) => key;
+
+  it("übersetzt die Ablehnung beim Löschen eines Protokolls mit Bussen", () => {
+    const error = new ApiError("Protocol has attendance fines", "conflict", 409, { code: "protocol_has_fines", message: "Protocol has attendance fines" });
+    expect(protocolActionError(error, t, "deleteFailed")).toBe("deleteHasFinesError");
   });
 });

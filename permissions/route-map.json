@@ -2170,6 +2170,9 @@
       "handler": "protocols.delete_protocol",
       "requires": [
         "meetings.edit"
+      ],
+      "branches": [
+        "fines.manage"
       ]
     },
     "GET /api/protocols/{protocol_id}": {
@@ -2228,6 +2231,9 @@
       "handler": "protocols.delete_protocol_with_selection",
       "requires": [
         "meetings.edit"
+      ],
+      "branches": [
+        "fines.manage"
       ]
     },
     "GET /api/protocols/{protocol_id}/deletion-preview": {

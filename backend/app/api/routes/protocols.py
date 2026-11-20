@@ -24,7 +24,7 @@ from app.services.collaboration_service import protocol_channel
 from app.services.event_service import EventService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, Tenant, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
+from app.models.entities import AttendanceFine, CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, Tenant, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -588,6 +588,13 @@ def _delete_protocol_with_files(db: Session, existing: Protocol, user: CurrentUs
     from app.services.file_service import FileService
 
     service.get_protocol_or_404_not_frozen(db, existing.id)
+    # attendance_fine hängt per ON DELETE CASCADE am Protokoll: Löschen entfernte die Bussen
+    # (auch einkassierte) mit. Bussen löschen ist fines.manage (+ Modul «finance»), nicht
+    # meetings.edit - ohne das Recht zuerst die Kasse die Bussen entfernen lassen.
+    if not user.can(P.FINES_MANAGE) and db.scalar(
+        select(AttendanceFine.id).where(AttendanceFine.protocol_id == existing.id).limit(1)
+    ) is not None:
+        raise HTTPException(status_code=409, detail={"code": "protocol_has_fines", "message": "Protocol has attendance fines"})
     audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
     protocol_internal_id = existing.id
     try:
