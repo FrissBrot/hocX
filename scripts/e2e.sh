@@ -49,6 +49,24 @@ prepare_abgabebox_storage() {
   chmod 0777 "$REPO_DIR/storage-e2e/abgabebox-uploads"
 }
 
+# ClamAV lädt beim ersten Start die Signaturen (frisches Volume nach `down --volumes`, mehrere
+# Minuten). Bis clamd antwortet, bleibt jeder Upload in Quarantäne (scan_status "pending") -
+# Upload-Specs scheiterten dann mit «ClamAV unreachable», Teilen-Seiten zeigten «0 Dateien».
+# Der Healthcheck des Dienstes prüft nur alle 60 s, darum hier direkt clamdcheck.sh abfragen.
+wait_for_clamav() {
+  local timeout="${E2E_CLAMAV_TIMEOUT:-900}" started=$SECONDS
+  until "${DC[@]}" exec -T clamav clamdcheck.sh >/dev/null 2>&1; do
+    if (( SECONDS - started >= timeout )); then
+      echo "ClamAV ist nach ${timeout}s nicht bereit (Signaturen nicht geladen?) - Uploads blieben in Quarantäne." >&2
+      echo "Letzte Meldungen des Dienstes:" >&2
+      "${DC[@]}" logs --tail 30 clamav >&2 || true
+      return 1
+    fi
+    sleep 5
+  done
+  echo "ClamAV bereit nach $((SECONDS - started))s"
+}
+
 start_stack() {
   prepare_abgabebox_storage
   "${DC[@]}" up -d --build
@@ -56,6 +74,7 @@ start_stack() {
   wait_for_url http://127.0.0.1:13000/login
   wait_for_url http://127.0.0.1:18001/api/health
   wait_for_url http://127.0.0.1:13001/
+  wait_for_clamav
 }
 
 # E2E_ARGS (optional): zusätzliche Playwright-Argumente, z. B. E2E_ARGS="rbac-roles.spec.ts"

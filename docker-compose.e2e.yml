@@ -4,7 +4,11 @@ services:
       - "127.0.0.1:55432:5432"
   backend:
     # Tests must not lose in-flight requests when source/test files change locally.
-    command: sh -c "alembic -x seed_demo=true upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # --timeout-keep-alive 75 wie produktiv (docker-compose.yml): der Next-Rewrite-Proxy des
+    # Frontends hält Verbindungen offen und verwendet sie wieder; mit uvicorns Standard von 5 s
+    # schloss das Backend sie vorher, und eine wiederverwendete Verbindung endete gelegentlich mit
+    # «socket hang up (ECONNRESET)» mitten in einem E2E-Test.
+    command: sh -c "alembic -x seed_demo=true upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 75"
     ports: !override
       - "127.0.0.1:18000:8000"
     environment:
@@ -40,6 +44,9 @@ services:
       FRONTEND_API_PROXY_TARGET: http://backend:8000
       HOCX_VERSION: e2e
   abgabebox-backend:
+    # Wie das Backend oben: ohne --reload und mit Keep-Alive 75 s (Abgabebox-Frontend proxyt
+    # /api über ABGABEBOX_API_PROXY_TARGET, sonst ECONNRESET bei wiederverwendeten Verbindungen).
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 75"
     ports: !override
       - "127.0.0.1:18001:8000"
     environment:
