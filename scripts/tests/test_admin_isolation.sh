@@ -62,27 +62,47 @@ grep -q 'ADMIN_GATE_SECRET' scripts/lib/env.sh || fail "env.sh-Allowlist ohne AD
 grep -q 'ADMIN_GATE_SECRET' scripts/lib/env_migrate.sh || fail "env_migrate.sh erzeugt ADMIN_GATE_SECRET nicht"
 # shellcheck disable=SC2016  # literale Suchmuster
 grep -q 'write_secret_file "$secrets_dir" admin_gate_secret "$ADMIN_GATE_SECRET"' scripts/deploy.sh || fail "deploy.sh: Secret-Datei"
-grep -q '^write_admin_gate_traefik_config$' scripts/deploy.sh || fail "deploy.sh schreibt admin-gate.yml nicht"
+grep -q '^if ! write_admin_gate_traefik_config; then$' scripts/deploy.sh || fail "deploy.sh schreibt admin-gate.yml nicht"
 for example in .env.prod.example .env.test.example; do
   grep -q '^ADMIN_GATE_SECRET=' "$example" || fail "$example ohne ADMIN_GATE_SECRET"
 done
+
+# 4b. Quellcode-Stack (docker-compose.yml) angeglichen: Admin-Router mit admin-gate@file, Secret nur
+#     fürs Backend, öffentliche Router ohne Admin-Pfade.
+for router in hocx-admin-api hocx-admin-auth hocx-tenant-import hocx-admin-frontend; do
+  grep -qE "traefik\.http\.routers\.$router\.middlewares=.*admin-gate@file" docker-compose.yml ||
+    fail "docker-compose.yml: $router ohne admin-gate@file"
+done
+docker compose -p admiso-src --env-file .env.e2e.example -f docker-compose.yml config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+users = sorted(n for n, s in services.items() if "ADMIN_GATE_SECRET" in (s.get("environment") or {}))
+assert users == ["backend"], f"ADMIN_GATE_SECRET bei: {users}"
+'
 
 # 5. deploy.sh-Funktion: Datei mit korrektem YAML, Rechten 0660, ungültige Werte abgelehnt.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/infra/traefik/dynamic"
-fn="$(sed -n '/^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
+fn="$(sed -n '/^admin_source_cidrs() {$/,/^}$/p; /^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
 [ -n "$fn" ] || fail "write_admin_gate_traefik_config nicht gefunden"
 (
   eval "$fn"
-  # shellcheck disable=SC2034  # von der Funktion gelesen
+  # shellcheck disable=SC2034  # von den Funktionen gelesen (PROJECT_DIR, HOCX_ADMIN_SOURCE_CIDRS)
   PROJECT_DIR="$work"
   ADMIN_GATE_SECRET="$(printf 'a%.0s' {1..64})"
+  export HOCX_ADMIN_SOURCE_CIDRS="172.31.0.1/32"
   write_admin_gate_traefik_config > /dev/null
   file="$work/infra/traefik/dynamic/admin-gate.yml"
   [ "$(stat -c '%a' "$file")" = 660 ] || fail "admin-gate.yml hat Modus $(stat -c '%a' "$file")"
   grep -q "^          X-Hocx-Admin-Gate: '$ADMIN_GATE_SECRET'$" "$file" || fail "admin-gate.yml ohne Header"
   grep -q '^    admin-gate:$' "$file" || fail "admin-gate.yml ohne Middleware admin-gate"
+  # Review M1: admin-gate ist eine Kette aus Quellbeschränkung und Header
+  grep -A4 '^    admin-gate:$' "$file" | grep -q -- '- admin-gate-source' || fail "admin-gate ohne Quellbeschränkung"
+  grep -A3 '^    admin-gate-source:$' "$file" | grep -q "'172.31.0.1/32'" || fail "Quelladresse fehlt"
+  HOCX_ADMIN_SOURCE_CIDRS="0.0.0.0/0;x"
+  if write_admin_gate_traefik_config > /dev/null 2>&1; then fail "ungültige Quelladresse angenommen"; fi
+  HOCX_ADMIN_SOURCE_CIDRS="172.31.0.1/32"
   for bad in "" "kurz" "mit'quote-und-genug-zeichen-0123456789abcdef" "$(printf 'a%.0s' {1..40})
 zeile"; do
     ADMIN_GATE_SECRET="$bad"

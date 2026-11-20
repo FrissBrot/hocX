@@ -184,8 +184,6 @@ services:
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       # Erwarteter WebAuthn-Origin der Plattform-Admin-Passkeys (Security-Audit SEC-021).
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
-      # Passkey-Origin, wenn die Admin-Domain direkt mit dem Host-Port aufgerufen wird (admin_origin.py)
-      TRAEFIK_ADMIN_PORT: ${TRAEFIK_ADMIN_PORT:-8443}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
       # Nur als gesperrte Mandanten-Domains (SEC-AUTH-001, traefik_config_service.is_reserved_domain).
       TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
@@ -489,6 +487,9 @@ services:
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       HOCX_FRONTEND_IMAGE: ${HOCX_FRONTEND_IMAGE:-}
       HOCX_APP_URL: ${HOCX_APP_URL:-}
+      # Review M3: öffentliches Frontend - liefert /admin nie aus und reicht nie einen Gate-Header
+      # weiter. Das Admin-Panel läuft im eigenen Dienst admin-frontend.
+      HOCX_FRONTEND_ROLE: public
     depends_on:
       - backend
     healthcheck:
@@ -512,14 +513,6 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
-      # Gate-Header auch fürs Frontend: es reicht ihn bei serverseitigen Admin-API-Aufrufen weiter
-      # (frontend/lib/admin-gate.ts), ohne das Secret selbst zu kennen.
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.middlewares=admin-gate@file"
       # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
       # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie, und der
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
@@ -530,6 +523,59 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
+
+  # Plattform-Admin-Panel (Review M3): dasselbe Frontend-Image als eigener Prozess, nur über den
+  # Admin-Entrypoint (adminsecure, OpenZiti) erreichbar. Nur dieser Dienst bekommt von Traefik den
+  # Gate-Header (admin-gate@file) und reicht ihn bei serverseitigen Admin-Aufrufen an das Backend
+  # weiter; das öffentliche Frontend sieht ihn nie. Kennt kein Secret.
+  admin-frontend:
+    image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.75
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
+      HOCX_VERSION: ${HOCX_VERSION}
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_FRONTEND_IMAGE: ${HOCX_FRONTEND_IMAGE:-}
+      HOCX_FRONTEND_ROLE: admin
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-admin-frontend"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-frontend.loadbalancer.server.port=3000"
+      # Gate-Header (und Quellbeschränkung): das Admin-Frontend reicht ihn bei serverseitigen
+      # Admin-API-Aufrufen weiter (frontend/lib/admin-gate.ts).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.middlewares=admin-gate@file"
 
   # Lokales S3 (Garage) - siehe docker-compose.yml und docs-site/docs/technik/storage/lokales-s3.md.
   local-s3:

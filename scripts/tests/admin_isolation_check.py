@@ -159,6 +159,15 @@ def main() -> None:
                     if matches(router["rule"], host, path, method):
                         errors.append(f"{name} ({entrypoints}) matcht {method} {host}{path}")
                         break
+    # Review M3: Admin-Panel als eigener Dienst; das öffentliche Frontend hat keinen Admin-Router
+    roles = {name: (svc.get("environment") or {}).get("HOCX_FRONTEND_ROLE") for name, svc in services.items()}
+    if roles.get("frontend") != "public" or roles.get("admin-frontend") != "admin":
+        errors.append(f"HOCX_FRONTEND_ROLE falsch: frontend={roles.get('frontend')}, admin-frontend={roles.get('admin-frontend')}")
+    for name in admin_routers:
+        if name.endswith("admin-frontend") and routers[name]["_service"] != "admin-frontend":
+            errors.append(f"{name} gehört zu Dienst {routers[name]['_service']} statt admin-frontend")
+        if routers[name]["_service"] == "frontend":
+            errors.append(f"{name}: öffentliches Frontend auf adminsecure")
     expected_admin = {"admin-api", "admin-auth", "tenant-import", "admin-frontend"}
     found_admin = {name.split("-", 1)[1] for name in admin_routers}
     if not expected_admin <= found_admin:

@@ -21,11 +21,12 @@ TRAEFIK_IMAGE="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml |
 ECHO_IMAGE="python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f"
 SUFFIX="$(od -An -N4 -tx4 /dev/urandom | tr -d ' ')"
 NAME="hocx-admiso-test-$SUFFIX"
+NET="${NAME}_default"
 WORK="$(mktemp -d)"
 
 cleanup() {
   docker rm -f "$NAME-traefik" "$NAME-echo" > /dev/null 2>&1 || true
-  docker network rm "$NAME" > /dev/null 2>&1 || true
+  docker network rm "$NET" > /dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -39,18 +40,6 @@ fail() {
 mkdir -p "$WORK/dynamic" "$WORK/letsencrypt"
 cp infra/traefik/dynamic/security.yml infra/traefik/dynamic/admin-isolation.yml "$WORK/dynamic/"
 
-# admin-gate.yml mit der echten deploy.sh-Funktion
-ADMIN_GATE_SECRET="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-fn="$(sed -n '/^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
-mkdir -p "$WORK/project/infra/traefik"
-(
-  eval "$fn"
-  # shellcheck disable=SC2034  # von der Funktion gelesen
-  PROJECT_DIR="$WORK/project"
-  mkdir -p "$PROJECT_DIR/infra/traefik/dynamic"
-  write_admin_gate_traefik_config > /dev/null
-)
-cp "$WORK/project/infra/traefik/dynamic/admin-gate.yml" "$WORK/dynamic/admin-gate.yml"
 
 # Router aus den Compose-Labels -> Dateiprovider (JSON ist gültiges YAML). Dienste zeigen auf den
 # Echo-Server, Zertifikate kommen aus Traefiks Standard-Zertifikat (tls: {}).
@@ -90,8 +79,20 @@ print(" ".join([env["TRAEFIK_DOMAIN"], env["TRAEFIK_ADMIN_DOMAIN"], env["TRAEFIK
 ' "$WORK/dynamic/routers.yml" > "$WORK/domains"
 read -r MAIN ADMIN ABGABEBOX DOCS < "$WORK/domains"
 
-docker network create "$NAME" > /dev/null
-docker run -d --name "$NAME-echo" --network "$NAME" --network-alias echo --read-only --cap-drop ALL \
+docker network create "$NET" > /dev/null
+# admin-gate.yml mit den echten deploy.sh-Funktionen (Gate-Header + Quellbeschränkung auf das
+# Gateway des Compose-Netzes "<projekt>_default", Review M1)
+ADMIN_GATE_SECRET="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+fn="$(sed -n '/^admin_source_cidrs() {$/,/^}$/p; /^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
+mkdir -p "$WORK/project/infra/traefik/dynamic"
+(
+  eval "$fn"
+  # shellcheck disable=SC2034  # von den Funktionen gelesen
+  PROJECT_DIR="$WORK/project" PROJECT_NAME="$NAME"
+  write_admin_gate_traefik_config > /dev/null
+)
+cp "$WORK/project/infra/traefik/dynamic/admin-gate.yml" "$WORK/dynamic/admin-gate.yml"
+docker run -d --name "$NAME-echo" --network "$NET" --network-alias echo --read-only --cap-drop ALL \
   --security-opt no-new-privileges:true --memory 64m "$ECHO_IMAGE" python3 -c '
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -112,7 +113,7 @@ class Echo(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", 8080), Echo).serve_forever()
 ' > /dev/null
 
-docker run -d --name "$NAME-traefik" --network "$NAME" --memory 256m \
+docker run -d --name "$NAME-traefik" --network "$NET" --network-alias traefik --memory 256m \
   -p 127.0.0.1::80 -p 127.0.0.1::443 -p 127.0.0.1::8443 \
   -v "$REPO_DIR/infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro" \
   -v "$WORK/dynamic:/etc/traefik/dynamic:ro" \
@@ -180,5 +181,25 @@ code="$(curl --silent --max-time 10 --output /dev/null --write-out '%{http_code}
 [[ "$code" =~ ^30[178]$ ]] || fail "Port 80 /admin/login: $code statt Weiterleitung"
 code="$(request "$MAIN" "$HTTPS_PORT" /.well-known/acme-challenge/test)"
 [[ "$code" == *'"echo": true'* ]] || fail "ACME-/well-known-Pfad wird blockiert: $code"
+
+# 5. Sperr-Kennzeichen (Review L1): traefik_checks.sh verlangt 404 UND X-Hocx-Admin-Block
+headers="$(curl --silent --insecure --max-time 10 --path-as-is --resolve "$MAIN:$HTTPS_PORT:127.0.0.1" -o /dev/null -D - \
+  "https://$MAIN:$HTTPS_PORT/api/admin/auth/health")"
+grep -qi '^x-hocx-admin-block: *1' <<< "$headers" || fail "Sperr-Router ohne Kennzeichen: $headers"
+headers="$(curl --silent --insecure --max-time 10 --resolve "$MAIN:$HTTPS_PORT:127.0.0.1" -o /dev/null -D - "https://$MAIN:$HTTPS_PORT/login")"
+if grep -qi '^x-hocx-admin-block' <<< "$headers"; then fail "Kennzeichen auch ausserhalb der Sperre"; fi
+
+# 6. Review M1: Ein Container im selben Netz erreicht den Admin-Entrypoint direkt (traefik:8443) -
+#    die Quellbeschränkung lässt nur das Gateway (Docker-Portweiterleitung vom Host) zu.
+inside="$(docker run --rm --network "$NET" "$ECHO_IMAGE" python3 -c '
+import http.client, ssl, sys
+conn = http.client.HTTPSConnection("traefik", 8443, context=ssl._create_unverified_context(), timeout=10)
+conn.request("GET", "/api/admin/auth/session", headers={"Host": sys.argv[1], "X-Hocx-Admin-Gate": "x"})
+response = conn.getresponse()
+print(response.status, response.read().decode()[:200])
+' "$ADMIN")"
+[[ "$inside" == 403* ]] || fail "Container im Netz erreicht den Admin-Entrypoint: $inside"
+response="$(request "$ADMIN" "$ADMIN_PORT" /api/admin/auth/session)"
+[[ "$response" == *"\"gate\": [\"$ADMIN_GATE_SECRET\"]"* ]] || fail "Host-Port 127.0.0.1 nicht mehr zugelassen: $response"
 
 echo "admin isolation live tests: ok"

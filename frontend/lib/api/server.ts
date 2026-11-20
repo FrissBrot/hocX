@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { adminGateForwardHeaders, isAdminApiPath } from "@/lib/admin-gate";
-import { backendFetch } from "@/lib/api/client";
+import { backendFetch, internalApiUrl } from "@/lib/api/client";
 import { SessionInfo, TenantSummary } from "@/types/api";
 
 export async function cookieHeader(): Promise<string> {
@@ -17,7 +17,7 @@ export async function cookieHeader(): Promise<string> {
 export async function backendFetchWithSession<T>(path: string): Promise<T | null> {
   const cookie = await cookieHeader();
   // Admin-API: Gate-Header und Host vom Admin-Entrypoint weiterreichen (SEC-AUTH-001, lib/admin-gate.ts)
-  const gate = isAdminApiPath(path) ? adminGateForwardHeaders(await headers()) : {};
+  const gate = isAdminApiPath(path) ? adminGateForwardHeaders(await headers(), internalApiUrl) : {};
   const requestHeaders = { ...gate, ...(cookie ? { Cookie: cookie } : {}) };
   return backendFetch<T>(path, {
     headers: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined

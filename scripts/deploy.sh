@@ -374,6 +374,10 @@ if [[ ! "$GHCR_NAMESPACE" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]; then
 fi
 
 DC=(docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}")
+# Für traefik_checks.sh (SEC-AUTH-001): aktive Mandanten-Domains aus der vom Backend generierten Datei
+tenant_domains_for_checks() {
+  "${DC[@]}" exec -T backend cat /app/traefik_dynamic/tenant-domains.yml 2> /dev/null
+}
 
 run_preflight() {
   local command available_kb minimum_kb
@@ -404,6 +408,12 @@ run_preflight() {
   fi
   HOCX_ENVIRONMENT="$app_environment"
   export HOCX_ENVIRONMENT
+  # Review L2: Der Next.js-Server reicht bei Admin-Aufrufen den Gate-Header an INTERNAL_API_URL weiter -
+  # das Ziel muss deshalb intern sein (nie eine öffentliche Domain, über die der Header Dritte erreicht).
+  if ! [[ "${INTERNAL_API_URL:-}" =~ ^http://(backend|localhost|127\.0\.0\.1)(:[0-9]+)?/?$ ]]; then
+    echo "INTERNAL_API_URL muss intern sein (z. B. http://backend:8000), aktuell: '${INTERNAL_API_URL:-}'." >&2
+    return 1
+  fi
   if [ "${AUTH_SECURE_COOKIES:-true}" != true ]; then
     echo "AUTH_SECURE_COOKIES darf in Release-Umgebungen nicht deaktiviert sein." >&2
     return 1
@@ -567,20 +577,54 @@ run_pre_deploy_backup() {
   fi
 }
 
+# Quelle der Admin-Zugriffe (Review M1): Der OpenZiti-Tunnel trifft 127.0.0.1:<TRAEFIK_ADMIN_PORT> auf
+# dem Host; über die Docker-Portweiterleitung sieht Traefik dann die Gateway-Adresse des
+# Compose-Netzes "<projekt>_default" (live geprüft, docker-proxy). Ein Container im selben Netz, der
+# traefik:8443 direkt anspricht, kommt mit seiner eigenen Adresse und wird abgewiesen. Abweichende
+# Wege (anderer Tunnel-Endpunkt) über HOCX_ADMIN_SOURCE_CIDRS (Komma-Liste).
+admin_source_cidrs() {
+  local gateway
+  if [ -n "${HOCX_ADMIN_SOURCE_CIDRS:-}" ]; then
+    printf '%s\n' "$HOCX_ADMIN_SOURCE_CIDRS"
+    return 0
+  fi
+  gateway="$(docker network inspect "${PROJECT_NAME}_default" --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}' 2> /dev/null)" || gateway=""
+  gateway="${gateway%% *}"
+  [ -n "$gateway" ] || return 1
+  case "$gateway" in
+    *:*) printf '%s/128\n' "$gateway" ;;
+    *) printf '%s/32\n' "$gateway" ;;
+  esac
+}
+
 # Auth-Audit SEC-AUTH-001: Traefik setzt an jedem Admin-Router (Entrypoint adminsecure) den Header
 # X-Hocx-Admin-Gate auf ADMIN_GATE_SECRET; das Backend nimmt /api/admin nur damit an
-# (backend/app/core/admin_gate.py). Der Wert steht in einer Dateiprovider-Datei statt in einem
+# (backend/app/core/admin_gate.py). Davor lässt admin-gate-source nur die Quelle des Ziti-Tunnels zu
+# (siehe admin_source_cidrs). Der Wert steht in einer Dateiprovider-Datei statt in einem
 # Docker-Label (Labels zeigt jedes `docker inspect`). Rechte wie tenant-domains.yml: 0660, Gruppe
 # 5001 über das setgid-Verzeichnis (prepare_thumbnail_dir), nicht world-readable, nicht im Repo
-# (.gitignore). Traefik lädt die Datei per watch nach, ein Neustart ist nicht nötig.
+# (.gitignore). Traefik lädt die Datei per watch nach, ein Neustart ist nicht nötig. Läuft nach
+# `compose up` (das Netz muss existieren); bis dahin gilt die Datei des letzten Deploys.
 write_admin_gate_traefik_config() {
-  local dir="$PROJECT_DIR/infra/traefik/dynamic" file temp_file
+  local dir="$PROJECT_DIR/infra/traefik/dynamic" file temp_file cidrs cidr
+  local -a cidr_list
   file="$dir/admin-gate.yml"
   # Nur unkritische Zeichen: der Wert landet in YAML (in einfachen Anführungszeichen).
   if ! [[ "${ADMIN_GATE_SECRET:-}" =~ ^[A-Za-z0-9._~+/=-]{32,}$ ]]; then
     echo "ADMIN_GATE_SECRET fehlt oder ist ungueltig (mindestens 32 Zeichen, nur A-Z a-z 0-9 . _ ~ + / = -)." >&2
     return 1
   fi
+  if ! cidrs="$(admin_source_cidrs)"; then
+    echo "Quelladresse des Admin-Zugangs nicht ermittelbar (Netz ${PROJECT_NAME}_default fehlt?); HOCX_ADMIN_SOURCE_CIDRS setzen." >&2
+    return 1
+  fi
+  IFS=',' read -r -a cidr_list <<< "$cidrs"
+  for cidr in "${cidr_list[@]}"; do
+    if ! [[ "$cidr" =~ ^[0-9a-fA-F.:]+/[0-9]{1,3}$ ]]; then
+      echo "Ungueltiger Eintrag in den Admin-Quelladressen: $cidr" >&2
+      return 1
+    fi
+  done
   if [ -L "$dir" ] || [ -L "$file" ]; then
     echo "Runtime-Pfad darf kein Symlink sein: $file" >&2
     return 1
@@ -590,12 +634,18 @@ write_admin_gate_traefik_config() {
   {
     printf '# Automatisch durch scripts/deploy.sh erzeugt (ADMIN_GATE_SECRET). Nicht bearbeiten, nicht committen.\n'
     printf '# Verwendet von den Admin-Routern in docker-compose.release.yml (admin-gate@file).\n'
-    printf 'http:\n  middlewares:\n    admin-gate:\n      headers:\n        customRequestHeaders:\n'
+    printf 'http:\n  middlewares:\n    admin-gate:\n      chain:\n        middlewares:\n'
+    printf '          - admin-gate-source\n          - admin-gate-header\n'
+    printf '    admin-gate-source:\n      ipAllowList:\n        sourceRange:\n'
+    for cidr in "${cidr_list[@]}"; do
+      printf "          - '%s'\n" "$cidr"
+    done
+    printf '    admin-gate-header:\n      headers:\n        customRequestHeaders:\n'
     printf "          X-Hocx-Admin-Gate: '%s'\n" "$ADMIN_GATE_SECRET"
   } > "$temp_file"
   chmod 660 "$temp_file"
   mv "$temp_file" "$file"
-  echo "    Traefik-Admin-Gate: $file"
+  echo "    Traefik-Admin-Gate: $file (Quelle: $cidrs)"
 }
 
 prepare_runtime_permissions() {
@@ -938,6 +988,11 @@ run_smoke_checks() {
     wait_for_exec frontend "Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" || return 1
   fi
 
+  # Admin-Panel als eigener Dienst (Review M3); auf einem fremden Host antwortet es mit 404.
+  if service_exists admin-frontend; then
+    wait_for_exec admin-frontend "Admin-Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" || return 1
+  fi
+
   if service_exists abgabebox-backend; then
     wait_for_exec abgabebox-backend "Abgabebox-Backend" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\"" || return 1
   fi
@@ -1056,7 +1111,6 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 verify_release_images
 create_release_manifest
 prepare_thumbnail_dir
-write_admin_gate_traefik_config
 
 # 1.2.0: PostgreSQL 16 -> 18 in ein neues Volume (scripts/lib/pg_upgrade.sh). Läuft nach dem
 # Pre-Deploy-Backup und vor dem ersten Start des neuen db-Dienstes; ohne altes Volume ein No-op.
@@ -1107,6 +1161,11 @@ fi
 
 echo "==> [$ENVIRONMENT] Deploy"
 if ! "${DC[@]}" up -d --pull never; then
+  rollback_apps || true
+  exit 1
+fi
+
+if ! write_admin_gate_traefik_config; then
   rollback_apps || true
   exit 1
 fi

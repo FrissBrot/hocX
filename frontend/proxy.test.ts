@@ -183,6 +183,36 @@ describe("proxy", () => {
     });
   });
 
+  describe("getrennte Frontend-Prozesse (Review M3, HOCX_FRONTEND_ROLE)", () => {
+    async function proxyWithRole(role: string) {
+      vi.stubEnv("TRAEFIK_ADMIN_DOMAIN", "admin.example.ch");
+      vi.stubEnv("HOCX_FRONTEND_ROLE", role);
+      vi.resetModules();
+      return (await import("./proxy")).proxy;
+    }
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("das öffentliche Frontend liefert /admin nie aus, auch nicht auf der Admin-Domain", async () => {
+      const publicProxy = await proxyWithRole("public");
+      const fetchSpy = unauthenticatedBackend();
+      for (const [host, path] of [["admin.example.ch", "/admin"], ["admin.example.ch", "/"], ["app.example.ch", "/admin/login"]]) {
+        const response = await publicProxy(new NextRequest(`http://0.0.0.0:3000${path}`, { headers: { host, "x-hocx-admin-gate": "g" } }));
+        expect(response.status).toBe(404);
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("das Admin-Frontend bedient nur die Admin-Domain und schreibt alles auf /admin um", async () => {
+      const adminProxy = await proxyWithRole("admin");
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
+
+      const other = await adminProxy(new NextRequest("http://0.0.0.0:3000/admin", { headers: { host: "app.example.ch" } }));
+      expect(other.status).toBe(404);
+      const own = await adminProxy(new NextRequest("http://0.0.0.0:3000/login", { headers: { host: "admin.example.ch" } }));
+      expect(own.headers.get("x-middleware-rewrite")).toBe("http://0.0.0.0:3000/admin/login");
+    });
+  });
+
   it("rendert bei haengendem Backend nach dem Timeout normal statt zu blockieren", async () => {
     // Audit MAIN-FE-002: der Session-Check traegt ein Timeout-Signal; laeuft es ab, gilt der
     // Status als unbekannt (null) und die Seite rendert ohne Umleitung.
