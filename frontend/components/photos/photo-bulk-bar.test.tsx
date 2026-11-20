@@ -68,7 +68,7 @@ describe("PhotoBulkBar toggleBest", () => {
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
-    fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     const messages = showToastMock.mock.calls.map(([message]) => message);
@@ -88,7 +88,7 @@ describe("PhotoBulkBar toggleBest", () => {
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
-    fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     const messages = showToastMock.mock.calls.map(([message]) => message);
@@ -106,7 +106,7 @@ describe("PhotoBulkBar toggleBest", () => {
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
-    fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(showToastMock).toHaveBeenCalledTimes(1);

@@ -7,7 +7,7 @@ import { HelpPopover } from "@/components/ui/help-popover";
 
 import { PhotoActionIcon } from "./photo-action-icon";
 import { PhotoCaptureDateDialog } from "./photo-capture-date-dialog";
-import { Popover } from "@/components/ui/popover";
+import { menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
@@ -182,18 +182,18 @@ export function PhotoBulkBar({
         {onReleaseSelected && <button type="button" className="button-secondary button-ghost" onClick={onReleaseSelected} disabled={busy}>{t("release")}</button>}
         <div ref={albumAnchorRef}>
           <button type="button" className="button-secondary button-ghost" onClick={() => setAlbumOpen((open) => !open)} disabled={busy} aria-expanded={albumOpen}><PhotoActionIcon name="album" />{t("albumAction")}</button>
-          <Popover open={albumOpen} onOpenChange={setAlbumOpen} anchorRef={albumAnchorRef} className="photo-bulk-album-popover">
+          <Popover open={albumOpen} onOpenChange={setAlbumOpen} anchorRef={albumAnchorRef} className="photo-bulk-album-popover" role="dialog" label={t("albumAction")}>
             <SearchableSelect className="photo-bulk-bar-album-select" options={albums} getId={(album) => album.id} getLabel={(album) => album.name} value={selectedAlbumId || null} onChange={(album) => setSelectedAlbumId(album?.id ?? "")} nullLabel={t("albumPlaceholder")} disabled={busy} />
             <button type="button" className="button-primary" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>{t("addToAlbum")}</button>
           </Popover>
         </div>
         <button type="button" className="button-secondary button-ghost" onClick={() => setTaggingOpen((open) => !open)} disabled={busy} aria-expanded={taggingOpen}><PhotoActionIcon name="tag" />{t("tagsAction")}</button>
         <div ref={bestAnchorRef}>
-          <button type="button" className="button-secondary button-ghost photo-bulk-best" onClick={() => setBestOpen((open) => !open)} disabled={busy} aria-expanded={bestOpen}><PhotoActionIcon name="star" />{t("bestAction")}</button>
+          <button type="button" className="button-secondary button-ghost photo-bulk-best" onClick={() => setBestOpen((open) => !open)} onKeyDown={menuButtonKeyDown(bestOpen, setBestOpen)} disabled={busy} aria-haspopup="menu" aria-expanded={bestOpen}><PhotoActionIcon name="star" />{t("bestAction")}</button>
           <HelpPopover topic={t("bestAction")} docs={{ page: "fotos", anchor: "best-of" }}>{t("bestHelp")}</HelpPopover>
           <Popover open={bestOpen} onOpenChange={setBestOpen} anchorRef={bestAnchorRef} className="action-menu">
-            <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("include"); }}>{t("markBest")}</button>
-            <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("exclude"); }}>{t("unmarkBest")}</button>
+            <button type="button" role="menuitem" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("include"); }}>{t("markBest")}</button>
+            <button type="button" role="menuitem" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("exclude"); }}>{t("unmarkBest")}</button>
           </Popover>
         </div>
         <button type="button" className="button-secondary button-ghost" onClick={() => setCaptureDateOpen(true)} disabled={busy}><PhotoActionIcon name="calendar" />{tCapture("bulkAction")}</button>

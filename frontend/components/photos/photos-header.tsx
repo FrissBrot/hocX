@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { MobileSegmented } from "@/components/mobile/mobile-ui";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Popover } from "@/components/ui/popover";
+import { menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { formatInteger } from "@/lib/utils/format";
@@ -167,6 +167,7 @@ export function PhotosToolbar({
               aria-expanded={sortOpen}
               aria-label={t("toolbar.sortLabel", { current: currentSort.label })}
               onClick={() => setSortOpen((open) => !open)}
+              onKeyDown={menuButtonKeyDown(sortOpen, setSortOpen)}
             >
               <SortIcon />
               <span className="photos-toolbar-button-label">{currentSort.label}</span>
@@ -203,7 +204,7 @@ export function PhotosToolbar({
               <TagIcon />
               {tags.length > 0 ? t("toolbar.tagsButtonCount", { count: tags.length }) : t("toolbar.tagsButton")}
             </button>
-            <Popover open={tagsOpen} onOpenChange={setTagsOpen} anchorRef={tagsRef} align="end" className="photos-tags-panel">
+            <Popover open={tagsOpen} onOpenChange={setTagsOpen} anchorRef={tagsRef} align="end" className="photos-tags-panel" role="dialog" label={t("toolbar.tagsButton")}>
               <TagInput
                 value={tags.join(",")}
                 onChange={(value) => onTagsChange(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])}

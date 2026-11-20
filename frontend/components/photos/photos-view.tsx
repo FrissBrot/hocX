@@ -33,6 +33,7 @@ import { MobileFab } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacyJob } from "@/lib/utils/upload-results";
 import {
   AlbumPendingRelease,
@@ -427,14 +428,9 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     });
   }
 
-  useEffect(() => {
-    if (selectedIds.size === 0 || viewerIndex !== null) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setSelectedIds(new Set());
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedIds.size, viewerIndex]);
+  // Escape hebt die Auswahl auf - über den gemeinsamen Overlay-Stapel, damit ein offener Dialog,
+  // ein Menü oder der Viewer darüber zuerst schliesst.
+  usePopupEscape(selectedIds.size > 0 && viewerIndex === null, () => setSelectedIds(new Set()));
 
   async function handleAlbumScopedToggleBest(item: FileOverviewItem) {
     if (!albumId) return;

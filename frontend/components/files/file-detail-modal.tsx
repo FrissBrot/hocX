@@ -25,6 +25,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/contexts/toast-context";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { fileDisplay, fileExtension } from "@/lib/files/display";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
@@ -186,21 +187,12 @@ export function FileDetailModal({
     if (trashed) onTrashed?.(item);
   }
 
-  useEffect(() => {
-    if (!onStep) return;
-    function onKey(event: KeyboardEvent) {
-      // Beim Tippen (Tag-Feld, Umbenennen) bewegen die Pfeiltasten den Cursor, nicht die Datei
-      const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key === "ArrowLeft") { event.preventDefault(); void step(-1); }
-      if (event.key === "ArrowRight") { event.preventDefault(); void step(1); }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // step hängt an position/onStep/Papierkorb; bei jedem Wechsel neu binden
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onStep, position?.index, position?.total, item.id, trashed]);
+  // Blättern mit Pfeil links/rechts bzw. J/L (Registry `media.previous`/`media.next`, wie im
+  // Foto-Viewer). Der Dispatcher lässt Tippen (Tag-Feld, Umbenennen), Menüs/Listen und darüber
+  // liegende Rückfragen aussen vor; am Rand ist die Bindung «nicht zuständig».
+  const detailRef = useRef<HTMLDivElement>(null);
+  useShortcut("media.previous", () => (hasPrev ? void step(-1) : false), { scopeRef: detailRef, enabled: Boolean(onStep) });
+  useShortcut("media.next", () => (hasNext ? void step(1) : false), { scopeRef: detailRef, enabled: Boolean(onStep) });
 
   async function moveToTrash() {
     setTrash("trashing");
@@ -438,7 +430,7 @@ export function FileDetailModal({
       footer={trashed ? undefined : footer}
     >
       {saveError ? <StatusBanner tone="error" message={saveError} /> : null}
-      <div className="file-detail">
+      <div className="file-detail" ref={detailRef}>
         <div className="file-detail-preview-col">
           {item.document ? (
             <DocumentPreviewPane

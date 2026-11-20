@@ -58,14 +58,14 @@ Select) sind hier nicht aufgeführt, nur Produktivitäts-Kürzel.
 | 1–4 | Anwesenheitsstatus (Hover/Fokus/Menü) | Komponente | `attendance-board.tsx` (window) | – | `protocol.attendanceStatus`; im Menü über das Menü selbst |
 | Strg/⌘+S, Z, Umschalt+Z, Y, D; Entf/Rücktaste; Alt+Pfeil; Escape | Speichern, Undo/Redo, Duplizieren, Löschen, Verschieben, Auswahl aufheben | Seite | `designer.tsx` (window) | Strg+D/Strg+S überschreiben Browser-Standards ohne Kennzeichnung; Strg+S wirkte auch bei offenem Dialog | Gruppe `designer.*`, `overridesBrowser` dokumentiert, Dialog sperrt |
 | Pfeil links/rechts, J/L | Foto blättern | Viewer | `photo-viewer.tsx`, `public-share-gallery.tsx` (window) | öffentliche Galerie ohne «nicht beim Tippen» | `media.previous/next` mit `scopeRef` |
-| Pfeil links/rechts | Datei blättern | Datei-Detail | `file-detail-modal.tsx` (window) | eigene Logik | **gesperrte Datei**: nach Zusammenführung auf `media.*` umstellen |
-| Escape | Fotoauswahl aufheben | Seite | `photos-view.tsx` (window) | eigener Escape-Listener neben dem Overlay-Stapel | **gesperrte Datei (Fotos-Seite)**: nach Zusammenführung auf `usePopupEscape` |
+| Pfeil links/rechts | Datei blättern | Datei-Detail | `file-detail-modal.tsx` (window) | eigene Logik | `media.previous/next` mit `scopeRef` (Integration 1.4.3) |
+| Escape | Fotoauswahl aufheben | Seite | `photos-view.tsx` (window) | eigener Escape-Listener neben dem Overlay-Stapel | `usePopupEscape` (Integration 1.4.3) |
 | Escape | Datums-Tooltip schliessen | Komponente | `photo-date-marker.tsx` (document) | schloss zusätzlich den Dialog darunter | `usePopupEscape` |
 | Tippen nach Strg+K | Zeichen puffern bis Suchfeld da ist | intern | `app-shell.tsx` | kein Shortcut | bleibt, `a11y-ok` |
 | Enter in leerem Listenpunkt | Liste verlassen | Editor-intern | `rich-text-editor.tsx` | kein Shortcut | bleibt, `a11y-ok` |
 | Strg/⌘+B/I | fett/kursiv | Editor | Tiptap | – | Standard des Editors (Titel der Knöpfe) |
 
-Ergebnis: alle Produktivitäts-Kürzel ausser den beiden gesperrten Dateien laufen über **eine**
+Ergebnis: alle Produktivitäts-Kürzel laufen über **eine**
 Registry und **einen** Dispatcher; die Hilfe («?») zeigt sie aus derselben Quelle.
 
 ## 4. Befunde
@@ -153,7 +153,7 @@ Details und Zahlen: Abschlussbericht des Branches. Dauerhaft eingerichtet:
   `lib/keyboard/use-shortcut.test.tsx`.
 - Playwright: `e2e/keyboard-navigation.spec.ts`.
 
-## 7. Gesperrte Dateien - nach Zusammenführung umsetzen
+## 7. Gesperrte Dateien - bei der Zusammenführung (1.4.3) umgesetzt
 
 Diese Dateien werden parallel umgebaut und wurden hier **nicht** inhaltlich geändert. Sie
 profitieren automatisch von den korrigierten Bausteinen (Modal, Popover/Menüs, SearchableSelect,
@@ -161,12 +161,12 @@ TagInput, DateInput, TimeInput, Confirm). Offen nach dem Merge:
 
 | Datei | Befund | Umsetzung |
 |---|---|---|
-| `files/file-detail-modal.tsx` | eigener `window`-Listener für Pfeil links/rechts (Blättern) mit eigener «nicht beim Tippen»-Logik | `useShortcut("media.previous"/"media.next", …, { scopeRef })` wie `photo-viewer.tsx`; Listener entfernen (Baseline sinkt) |
+| `files/file-detail-modal.tsx` | eigener `window`-Listener für Pfeil links/rechts (Blättern) mit eigener «nicht beim Tippen»-Logik | erledigt: `useShortcut("media.previous"/"media.next", …, { scopeRef })`, Listener entfernt, Baseline gesunken |
 | `files/document-panel.tsx` | keine Tastaturbefunde im Code | – |
-| `photos/photos-view.tsx` (Fotos-Seite) | eigener Escape-Listener (Auswahl aufheben) neben dem Overlay-Stapel | `usePopupEscape(selectedIds.size > 0 && viewerIndex === null, clear)` oder Registry-Eintrag |
-| `photos/*` Kopfzeile/Werkzeugleiste/Suche, `photo-bulk-bar.tsx` | Popover «Beste» nutzt `action-menu-item` ohne `role="menuitem"` → keine Pfeiltasten (Startfokus und Tab funktionieren über das Popover) | `role="menuitem"` an den Einträgen |
-| `events/event-create-modal.tsx`, Bearbeiten, `mobile/mobile-events.tsx` | über `Modal`/Bausteine abgedeckt; `event-manager.tsx` (nicht gesperrt) hat klickbare Zeilen mit Kontextmenü - Knopf vorhanden | nach dem Umbau mit `check-keyboard-a11y.py` prüfen |
-| `todos/todo-edit-modal.tsx` (neuer Knopf) | neuer Knopf mit `type="button"` und Namen; Test `todo-edit-modal.test.tsx` hier minimal angepasst (Datei-Vorschlag per `click` statt `mouseDown`, weil `todo-file-picker` jetzt auf `onClick` reagiert) | beim Merge die Testzeile übernehmen |
+| `photos/photos-view.tsx` (Fotos-Seite) | eigener Escape-Listener (Auswahl aufheben) neben dem Overlay-Stapel | erledigt: `usePopupEscape(selectedIds.size > 0 && viewerIndex === null, clear)`, Baseline gesunken |
+| `photos/*` Kopfzeile/Werkzeugleiste/Suche, `photo-bulk-bar.tsx` | Popover «Beste» nutzt `action-menu-item` ohne `role="menuitem"` → keine Pfeiltasten (Startfokus und Tab funktionieren über das Popover) | erledigt: `role="menuitem"` + `menuButtonKeyDown`; Sortier-Menü der Kopfzeile ebenso, Tag- und Album-Panel als `role="dialog"` |
+| `events/event-create-modal.tsx`, Bearbeiten, `mobile/mobile-events.tsx` | über `Modal`/Bausteine abgedeckt; `event-manager.tsx` (nicht gesperrt) hat klickbare Zeilen mit Kontextmenü - Knopf vorhanden | geprüft (`event-dialog.tsx`, `photos-header.tsx`, `document-panel.tsx`, `todo-edit-modal.tsx`): keine Funde |
+| `todos/todo-edit-modal.tsx` (neuer Knopf) | neuer Knopf mit `type="button"` und Namen; Test `todo-edit-modal.test.tsx` hier minimal angepasst (Datei-Vorschlag per `click` statt `mouseDown`, weil `todo-file-picker` jetzt auf `onClick` reagiert) | übernommen |
 | `submission-assignments/submission-assignment-form.tsx` (neues Tag-Feld) | nutzt `TagInput` → K-02 automatisch behoben | Tag-Feld per Tastatur nachtesten |
 | `settings/activity-log.tsx` | keine Tastaturbefunde im Code | – |
 

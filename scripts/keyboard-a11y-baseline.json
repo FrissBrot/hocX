@@ -16,9 +16,6 @@
     "frontend/components/files/document-upload-modal.tsx": {
       "role-without-keyboard": 1
     },
-    "frontend/components/files/file-detail-modal.tsx": {
-      "global-key-listener": 1
-    },
     "frontend/components/files/files-table.tsx": {
       "clickable-no-keyboard": 2
     },
@@ -30,9 +27,6 @@
     },
     "frontend/components/photos/gallery-upload-modal.tsx": {
       "role-without-keyboard": 1
-    },
-    "frontend/components/photos/photos-view.tsx": {
-      "global-key-listener": 1
     },
     "frontend/components/protocol/planning/event-overview-modal.tsx": {
       "clickable-no-keyboard": 1
