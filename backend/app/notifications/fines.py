@@ -169,6 +169,10 @@ class UpcomingCalculator:
         facts = fine_service.load_facts(self.db, todo)
         if facts is None or facts.due is None or facts.fine_mode == "none" or facts.status_code not in fine_service.OPEN_STATUS_CODES:
             return [], facts, None
+        # Schon gebüsst (eingefroren, kassiert oder erlassen, z. B. nach dem Wiedereröffnen): für
+        # diese Person entsteht keine zweite Busse (sync_todo), also droht ihr auch keine.
+        if recipient_id in fine_service.stored_participants(self.db, [todo.id]).get(todo.id, set()):
+            return [], facts, None
         ctx = self._context(todo.tenant_id)
         steps: list[tuple[date, Decimal]] = []
         first = None

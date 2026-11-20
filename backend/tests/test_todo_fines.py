@@ -222,6 +222,28 @@ def test_completing_late_freezes_and_reopening_keeps_frozen_fines(db, setup):
     assert sorted((f.participant_name_snapshot, f.amount) for f in again) == [("Anna", Decimal("4.00")), ("Ben", Decimal("20.00"))]
 
 
+def test_no_fine_warning_for_person_who_already_has_a_fine_on_this_todo(db, setup):
+    """Wieder geöffnet und neu terminiert: wer schon eine gespeicherte Busse hat, bekommt keine
+    zweite (sync_todo, open_items) - also auch keine Mail «Busse droht» mit neuen Beträgen."""
+    from app.notifications.fines import UpcomingCalculator
+
+    s = setup
+    _rule(db, s)
+    s["carl"] = make_participant(db, s["tenant"].id, "Carl")
+    todo = _todo(db, s, days_late=5, people=("anna", "ben"))
+    _complete(db, todo, on=TODAY - timedelta(days=3))
+    service = ProtocolTodoService()
+    service.update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "open")))
+    set_todo_assignees(db, todo, [s["anna"].id, s["ben"].id, s["carl"].id])
+    todo.due_date = TODAY + timedelta(days=3)
+    db.commit()
+    calculator = UpcomingCalculator(db)
+    assert calculator.steps(todo, s["anna"].id)[0] == []
+    assert calculator.steps(todo, s["ben"].id)[0] == []
+    # Carl kam neu dazu und hat noch keine Busse: für ihn droht eine
+    assert calculator.steps(todo, s["carl"].id)[0][0] == (TODAY + timedelta(days=4), Decimal("3.00"))
+
+
 def test_on_time_or_cancelled_todos_have_no_fine(db, setup):
     s = setup
     _rule(db, s)
