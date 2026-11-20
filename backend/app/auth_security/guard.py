@@ -166,7 +166,8 @@ class LoginGuard:
         exempt_from_source_blocks: bool = False,
     ) -> PasswordCheck:
         """``exempt_from_source_blocks``: Plattform-Login über Ziti (Notfallzugang, Audit 8.3) -
-        IP-Sperren der Stufen 4/5 und kritische Abweisungen gelten dort nicht, die Zähler schon."""
+        IP-Sperren der Stufen 4/5, die harte Quellgrenze (L1/L2 mit Strike) und kritische
+        Abweisungen gelten dort nicht; gezählt wird trotzdem, Konto+Quelle (L4) sperrt weiter."""
         address = source_address(ip)
         subject = subject_hash(email)
         result = PasswordCheck(email=email, ip=ip, address=address, subject=subject, known_device=known_device, device_hash=device_hash)
@@ -211,7 +212,9 @@ class LoginGuard:
             raise _too_many("login_locked", "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen")
         net_soft, net_hard = net_limits(address)
         if not known_device:
-            if counts["source"] > settings.auth_ip_failures_hard or counts["net_hour"] > net_hard:
+            # Notzugang (exempt_from_source_blocks): keine Quell-Sperre und kein Strike - die Grenze je
+            # Konto+Quelle (L4, oben) und die Konto-Grenze des Aufrufers gelten weiter.
+            if not exempt_from_source_blocks and (counts["source"] > settings.auth_ip_failures_hard or counts["net_hour"] > net_hard):
                 self._locked_event(result, "source", tenant_id)
                 blocks.strike(ip, reason="source_hard", tenant_id=tenant_id)
                 raise _too_many("login_locked", "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen")
@@ -261,7 +264,7 @@ class LoginGuard:
             accounts_from_net=result.signals.accounts_from_net, invalid_tokens_from_source=result.signals.invalid_tokens_from_source,
             known_device=True,
         ))
-        if source_only.score >= settings.auth_risk_high and not known_device and risk.enforcing():
+        if source_only.score >= settings.auth_risk_high and not known_device and not exempt_from_source_blocks and risk.enforcing():
             result.pre = source_only
             self._deny_critical(result, tenant_id)
         return result

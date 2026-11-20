@@ -506,8 +506,11 @@ def clear_admin_lockouts(admin: PlatformAdmin) -> int:
     from app.core.redis_client import get_ratelimit_redis_sync
 
     counters = get_ratelimit_redis_sync()
-    keys = [redis_key("login-admin", subject_hash(admin.email)), redis_key("admin-passkey-account", str(admin.id))]
+    # Gleitende Zähler liegen je Zeitfenster unter «<Schlüssel>:<Fenster>» (rate_limit._SLIDING_LUA)
+    keys: list = []
+    for base in (redis_key("login-admin", subject_hash(admin.email)), redis_key("admin-passkey-account", str(admin.id))):
+        keys += list(counters.scan_iter(match=f"{base}*", count=500))
     keys += list(counters.scan_iter(match=f"{PREFIX}login-admin-ip:*", count=500))
-    deleted = int(counters.delete(*keys) or 0)
+    deleted = int(counters.delete(*keys) or 0) if keys else 0
     deleted += int(get_redis_sync().delete(f"authsec:drip:admin:passkey:{counter_subject('drip', str(admin.id))}") or 0)
     return deleted

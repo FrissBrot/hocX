@@ -34,8 +34,8 @@ def _enabled(monkeypatch):
     import app.services.admin_mfa_service as mfa
 
     monkeypatch.setattr(mfa, "enforce_rate_limit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(mfa, "check_account_lockout", lambda *args, **kwargs: None)
-    monkeypatch.setattr(mfa, "record_failed_attempt", lambda *args, **kwargs: None)
+    # Passkey-Versuche zählt der Anmeldeschutz (consume_factor_attempt); conftest leert die Zähler
+    # vor jedem Test.
 
 
 def _client(db, role: str = "owner", admin_id: int = 1) -> TestClient:

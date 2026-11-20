@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { test as setup, expect, request } from "@playwright/test";
 import fs from "node:fs/promises";
 import { authFiles, platformAdminPasskeyFile } from "./auth";
@@ -12,11 +13,15 @@ import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 // "verification_required" - remember each email's TOTP secret (and which 30s counter
 // it was last used for, so a later verify can wait out anti-replay) across calls.
 const tenantTwoEmail = "reader-regional@hocx.local";
+// Neue Konten unterliegen der Passwortregel (backend app/core/password_policy.py: «changeme» ist ein
+// häufiges Wort) - das Demo-Passwort der Seed-Konten taugt dafür nicht. Zur Laufzeit erzeugt
+// (SECURITY-RULES 5.1), alle vier Zeichenarten, nur innerhalb dieses Setups benutzt.
+const tenantTwoPassword = `Rl-${randomBytes(12).toString("base64url")}-9a`;
 const totpFactors = new Map<string, { secret: string; lastCounter: number }>();
 
-async function authenticate(email: string, file: string) {
+async function authenticate(email: string, file: string, password = process.env.E2E_USER_PASSWORD ?? "ChangeMe123!") {
   const context = await request.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL });
-  const response = await context.post("/api/auth/login", { data: { email, password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!" } });
+  const response = await context.post("/api/auth/login", { data: { email, password } });
   expect(response.ok(), await response.text()).toBeTruthy();
   const body = await response.json();
 
@@ -114,7 +119,7 @@ setup("creates reproducible role and tenant sessions", async () => {
     last_name: "Reader",
     display_name: "Regional Reader",
     email: tenantTwoEmail,
-    password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
+    password: tenantTwoPassword,
     tenant_id: regional.id,
     system_role: "reader",
     login_enabled: true,
@@ -122,17 +127,23 @@ setup("creates reproducible role and tenant sessions", async () => {
   const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
   if (!adminPasskey) throw new Error("Software-Passkey des Plattform-Admins fehlt");
   const adminOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
-  await platformAdmin.post("/api/admin/users", {
+  const created = await platformAdmin.post("/api/admin/users", {
     data: userBody,
     headers: {
       "Content-Type": "application/json",
       ...(await stepUpHeaders(platformAdmin, adminPasskey, adminOrigin, "user-manage", "POST", "/api/admin/users", userBody)),
     },
   });
+  // Idempotent: «existiert schon» ist in Ordnung, jeder andere Fehler soll hier sichtbar werden
+  // (vorher scheiterte erst der Login darunter mit «ungültig»).
+  if (!created.ok() && created.status() !== 409) {
+    const text = await created.text();
+    expect(created.status() === 400 && /could not be created|existiert|exist/i.test(text), `Konto anlegen: ${created.status()} ${text}`).toBeTruthy();
+  }
   await adminPasskey.save(platformAdminPasskeyFile);
   await platformAdmin.dispose();
 
-  const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo);
+  const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo, tenantTwoPassword);
   const session = await (await tenantContext.get("/api/auth/session")).json();
   expect(session.current_tenant.id).toBe(regional.id);
   expect(session.roles.map((role: { system_key: string | null }) => role.system_key)).toEqual(["reader"]);

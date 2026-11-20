@@ -39,7 +39,9 @@ fail() {
 }
 
 mkdir -p "$WORK/dynamic" "$WORK/letsencrypt"
-cp infra/traefik/dynamic/security.yml infra/traefik/dynamic/admin-isolation.yml "$WORK/dynamic/"
+# maintenance.yml (Wartungsseite): die Router in docker-compose.release.yml verweisen auf ihre
+# errors-Middlewares - ohne Datei schaltete Traefik sie ab.
+cp infra/traefik/dynamic/security.yml infra/traefik/dynamic/admin-isolation.yml infra/traefik/dynamic/maintenance.yml "$WORK/dynamic/"
 
 
 # Router aus den Compose-Labels -> Dateiprovider (JSON ist gültiges YAML). Dienste zeigen auf den

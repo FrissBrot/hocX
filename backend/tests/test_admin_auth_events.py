@@ -154,3 +154,29 @@ def test_failed_passkeys_trigger_admin_mfa_alarm_and_are_counted_before_checking
 def test_logout_is_recorded(db, admin):
     AdminAuthService().logout(db, Response(), CurrentAdmin(admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name="Ops"))
     assert [event.outcome for event in _events(db, admin.id, "admin.logout")] == ["success"]
+
+
+def test_account_limit_locks_admin_login_even_with_the_right_password(db, admin, monkeypatch):
+    """Review-Fund 1: harte Grenze je Admin-Konto (wie früher check_login_lockout), vor der
+    Passwortprüfung - verteiltes Raten endet, auch das richtige Passwort hilft dann nicht."""
+    monkeypatch.setattr(mfa_module.settings, "auth_account_failures_known_only", 3)
+    for _ in range(3):
+        with pytest.raises(HTTPException) as exc_info:
+            _login(db, admin.email, password="falsch-falsch")
+        assert exc_info.value.status_code == 401
+    with pytest.raises(HTTPException) as exc_info:
+        _login(db, admin.email)
+    assert exc_info.value.status_code == 429 and exc_info.value.detail["code"] == "login_locked"
+    clear_admin_lockouts(admin)
+    assert _login(db, admin.email).authenticated is False  # wieder bis zum Passkey
+
+
+def test_source_limit_does_not_block_the_admin_emergency_access(db, admin, monkeypatch):
+    """Review-Fund 2: exempt_from_source_blocks deckt auch die harte Quellgrenze (L1) ab - viele
+    Fehlversuche von der Ziti-Quelle sperren den Admin-Login dieser Quelle nicht."""
+    monkeypatch.setattr(mfa_module.settings, "auth_ip_failures_hard", 2)
+    for index in range(4):
+        with pytest.raises(HTTPException) as exc_info:
+            _login(db, f"fremd-{index}@example.com", password="falsch-falsch")
+        assert exc_info.value.status_code == 401
+    assert _login(db, admin.email).authenticated is False

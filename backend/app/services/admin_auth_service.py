@@ -46,9 +46,10 @@ class AdminAuthService:
         request: Request | None = None,
     ) -> AdminSessionRead:
         """Passwortphase mit dem Anmeldeschutz der Konten (app/auth_security/guard.py, Scope
-        login-admin): gezählt wird VOR der Prüfung. IP-Sperren der Stufen 4/5 und kritische
-        Abweisungen gelten hier nicht - der Admin-Zugang ist der Ziti-Notzugang (Audit 8.3); die
-        Zähler je Konto und Konto+Quelle schon. Ein richtiges Passwort gibt nie eine Session."""
+        login-admin): gezählt wird VOR der Prüfung. IP-Sperren der Stufen 4/5, die harte Quellgrenze
+        und kritische Abweisungen gelten hier nicht - der Admin-Zugang ist der Ziti-Notzugang (Audit
+        8.3); gesperrt wird je Konto+Quelle (LoginGuard) und je Konto (unten, auch für bekannte
+        Geräte). Ein richtiges Passwort gibt nie eine Session."""
         guard = LoginGuard(scope="login-admin")
         ctx = request_context.current(client_address)
         admin = db.query(PlatformAdmin).filter(PlatformAdmin.email == payload.email).one_or_none()
@@ -59,6 +60,19 @@ class AdminAuthService:
             email=payload.email, ip=client_address, known_device=known, device_hash=device_hash, tenant_id=None,
             exempt_from_source_blocks=True,
         )
+        # Harte Grenze je Konto (wie vorher check_login_lockout, MAIN-SEC-007): verteiltes Raten gegen
+        # ein Admin-Konto endet hier für alle Geräte - vor der Passwortprüfung und für existierende wie
+        # unbekannte E-Mails gleich (kein Orakel). Der Notausgang (admin_cli) setzt den Zähler zurück.
+        if not check.degraded and check.account_failures > settings.auth_account_failures_known_only:
+            events.record(
+                ctx=ctx, event_type="admin.login.password", outcome="blocked", actor_kind="admin",
+                platform_admin_id=admin.id if admin is not None else None, subject_hash=check.subject, device_hash=device_hash,
+                enforcement="block", details={"reason": "account_locked"},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "login_locked", "message": "Zu viele fehlgeschlagene Anmeldungen, bitte später erneut versuchen"},
+            )
         # See auth_service.py's identical fix - always run verify_password's full PBKDF2
         # work to avoid an email-enumeration timing side channel (audit finding, 2026-08-25).
         password_ok = verify_password(payload.password, admin.password_hash if admin is not None else DUMMY_PASSWORD_HASH)

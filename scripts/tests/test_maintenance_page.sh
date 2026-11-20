@@ -310,6 +310,17 @@ openssl x509 -req -in "$WORK/tls.csr" -CA "$WORK/ca.crt" -CAkey "$WORK/ca.key" -
 
 mkdir -p "$WORK/dynamic" "$WORK/certs" "$WORK/stub"
 cp infra/traefik/dynamic/security.yml infra/traefik/dynamic/maintenance.yml "$WORK/dynamic/"
+# Die Admin-Router verweisen auf admin-gate@file (Admin-Abschottung, deploy.sh schreibt die Datei).
+# Hier nur der Header ohne Quellbeschränkung: die Abschottung selbst prüft
+# scripts/tests/test_admin_isolation_live.sh.
+cat > "$WORK/dynamic/admin-gate.yml" <<'EOF'
+http:
+  middlewares:
+    admin-gate:
+      headers:
+        customRequestHeaders:
+          X-Hocx-Admin-Gate: mtest-gate-secret
+EOF
 cp "$WORK/tls.crt" "$WORK/tls.key" "$WORK/certs/"
 TENANT=0
 if [ -n "${MTEST_TENANT_FILE:-}" ]; then

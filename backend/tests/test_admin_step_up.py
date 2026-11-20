@@ -123,6 +123,9 @@ STEP_UP = {
     ("PUT", "/api/admin/tenants/{tenant_id}/users/{user_id}"): "user-manage",
     ("DELETE", "/api/admin/tenants/{tenant_id}/users/{user_id}"): "user-manage",
     ("DELETE", "/api/admin/users/{user_id}/mfa/factors/{factor_id}"): "user-mfa-reset",
+    # Anmeldeschutz: Sperre aufheben hilft einer gestohlenen Session, sperren trifft Verfügbarkeit
+    ("POST", "/api/admin/auth-security/blocks"): "platform-settings",
+    ("DELETE", "/api/admin/auth-security/blocks/{subject}"): "platform-settings",
     ("PUT", "/api/admin/notifications"): "platform-settings",
     ("PUT", "/api/admin/notifications/email"): "platform-settings",
     ("POST", "/api/admin/notifications/status-token"): "platform-settings",
@@ -148,9 +151,6 @@ _LOGIN = "Anmeldung selbst (führt erst zur Session)"
 _OPERATIONAL = "betrieblich und umkehrbar, kein Zugang zu Daten oder Konten; Audit-Log"
 _COMMERCIAL = "kaufmännisch (Abo, Preise, Forderungen), kein Zugang zu Daten oder Konten; Audit-Log"
 EXEMPT = {
-    # Anmeldeschutz (feat/auth-hardening): IP-/Subjekt-Sperren setzen bzw. aufheben, nur API
-    ("POST", "/api/admin/auth-security/blocks"): _OPERATIONAL + " (Sperren laufen von selbst ab)",
-    ("DELETE", "/api/admin/auth-security/blocks/{subject}"): _OPERATIONAL,
     ("POST", "/api/admin/auth/login"): _LOGIN,
     ("POST", "/api/admin/auth/logout"): "beendet nur die eigene Session",
     ("POST", "/api/admin/auth/mfa/passkey/start"): _LOGIN,

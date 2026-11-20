@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth_security import blocks, read_service
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
+from app.core.admin_step_up import require_step_up
 from app.core.db import get_db
 from app.schemas.base import MAX_QUERY_OFFSET
 from app.services.audit_service import AuditService
@@ -52,7 +53,7 @@ def auth_security_blocks():
     return read_service.active_blocks()
 
 
-@router.post("/auth-security/blocks", status_code=201)
+@router.post("/auth-security/blocks", status_code=201, dependencies=[Depends(require_step_up("platform-settings"))])
 def create_block(payload: BlockCreate, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     if not payload.ip and not payload.subject:
         raise HTTPException(status_code=422, detail="ip oder subject angeben")
@@ -64,7 +65,7 @@ def create_block(payload: BlockCreate, db: Session = Depends(get_db), admin: Cur
     return {"subject": block.subject, "until": block.until}
 
 
-@router.delete("/auth-security/blocks/{subject}", status_code=204)
+@router.delete("/auth-security/blocks/{subject}", status_code=204, dependencies=[Depends(require_step_up("platform-settings"))])
 def delete_block(subject: str, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     if len(subject) > 64 or not blocks.clear(subject, admin_id=admin.admin_id):
         raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
