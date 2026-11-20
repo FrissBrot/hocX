@@ -129,7 +129,7 @@ describe("Dokumente im Dateien-Tab", () => {
     expect((screen.getByRole("link", { name: "Download" }) as HTMLAnchorElement).getAttribute("href")).toBe("/api/stored-files/file-1/content");
   });
 
-  it("zeigt im Detaildialog die Vorschau der ersten PDF-Seite, Original-Download, Text und Versionshistorie", async () => {
+  it("zeigt im Detaildialog die Vorschau der ersten PDF-Seite, den Original-Download und den extrahierten Text", async () => {
     browserApiFetchMock.mockImplementation(async (url: string) => {
       if (url === `/api/documents/${DOC_ID}`) return makeDetail();
       if (url.endsWith("/text?format=plain")) return { format: "plain", status: "ready", text: "Jahresbericht\n\nInhalt", content: null };
@@ -143,14 +143,48 @@ describe("Dokumente im Dateien-Tab", () => {
     expect(preview.getAttribute("src")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/preview`);
     // Ein Klick auf die Vorschau öffnet das vollständige PDF im eigenen Tab.
     expect(preview.closest("a")?.getAttribute("href")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/pdf`);
-    expect((screen.getByRole("link", { name: "Originaldatei herunterladen" }) as HTMLAnchorElement).getAttribute("href")).toContain(
+    expect((screen.getByRole("link", { name: /Originaldatei herunterladen \(DOCX\)/ }) as HTMLAnchorElement).getAttribute("href")).toContain(
       "/versions/v2/files/original?download=1"
     );
-    expect(screen.getByText("Versionen (2)")).toBeInTheDocument();
-    expect(screen.getByText("Version 1")).toBeInTheDocument();
+    // Fuss: mit PDF «In neuem Tab» und primär «PDF herunterladen»
+    expect((screen.getByRole("link", { name: "PDF herunterladen" }) as HTMLAnchorElement).getAttribute("href")).toContain("/versions/v2/files/pdf?download=1");
+    expect(screen.getByRole("link", { name: "In neuem Tab" })).toBeInTheDocument();
+    expect(screen.getByText("Version 2 von 2")).toBeInTheDocument();
+    expect(screen.getByText("Word-Dokument · 100 B", { exact: false })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Extrahierten Text anzeigen" }));
-    await waitFor(() => expect(screen.getByLabelText("Text")).toHaveTextContent("Jahresbericht"));
+    fireEvent.click(screen.getByRole("tab", { name: "Extrahierter Text" }));
+    await waitFor(() => expect(screen.getByLabelText("Extrahierter Text")).toHaveTextContent("Jahresbericht"));
+  });
+
+  it("zeigt im Verlauf alle Versionen und eine ältere Version links an", async () => {
+    browserApiFetchMock.mockImplementation(async (url: string) => (url === `/api/documents/${DOC_ID}` ? makeDetail() : null));
+    render(
+      <FileDetailModal item={makeItem()} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}} />
+    );
+    await screen.findByAltText("PDF-Vorschau von bericht.pdf");
+    fireEvent.click(screen.getByRole("tab", { name: /Verlauf/ }));
+    expect(screen.getByText("Aktuell")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Version 1/ }));
+    expect(await screen.findByText("Ältere Version 1 wird angezeigt")).toBeInTheDocument();
+    expect(screen.getByText("Version 1 von 2")).toBeInTheDocument();
+    // Ohne Vorschaubild: Fläche «PDF öffnen» mit dem PDF der gewählten Version
+    expect(screen.getAllByRole("link", { name: /PDF öffnen/ })[0].getAttribute("href")).toBe(`/api/documents/${DOC_ID}/versions/v1/files/pdf`);
+    fireEvent.click(screen.getByRole("button", { name: "Zur aktuellen" }));
+    await waitFor(() => expect(screen.queryByText(/Ältere Version/)).not.toBeInTheDocument());
+  });
+
+  it("zeigt Verarbeitungsschritte, solange die PDF-Ansicht erstellt wird", async () => {
+    const detail = makeDetail({ status: "processing", versions: [{ ...makeDetail().versions[0], pdf: null, preview: null, extraction: null,
+      pdf_job: { status: "running", result: null, attempts: 1 }, extract_job: { status: "queued", result: null, attempts: 0 } }] });
+    browserApiFetchMock.mockImplementation(async (url: string) => (url === `/api/documents/${DOC_ID}` ? detail : null));
+    render(
+      <FileDetailModal item={makeItem({ scan_status: "clean" })} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}} />
+    );
+    expect(await screen.findByText("Die PDF-Ansicht wird gerade erstellt …")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Extrahierter Text" })).toBeDisabled();
+    // Ohne PDF: primär «Original herunterladen», kein «In neuem Tab»
+    expect(screen.getByRole("link", { name: "Original herunterladen" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "In neuem Tab" })).not.toBeInTheDocument();
   });
 
   it("bietet erneute Verarbeitung nur an, wenn sie erlaubt und nötig ist", async () => {
@@ -178,6 +212,7 @@ describe("FileDetailModal: Element der Abgabe und Blättern", () => {
       />
     );
     expect(await screen.findByText("Element")).toBeInTheDocument();
+    expect(screen.getByText("Gehört zu einer Abgabe – dort entfernen.")).toBeInTheDocument();
     expect(screen.getByText("Scharanlass")).toBeInTheDocument();
     expect(screen.getByText(/25\.10\.2026/)).toBeInTheDocument();
   });

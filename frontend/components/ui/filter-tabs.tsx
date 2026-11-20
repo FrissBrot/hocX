@@ -6,6 +6,10 @@ export type FilterTabOption<T extends string = string> = {
   count?: number;
   /** Optionales Icon vor dem Text (z. B. Ansicht Liste/Board). */
   icon?: ReactNode;
+  /** Nicht wählbar (z. B. «Extrahierter Text», solange es keinen Text gibt). */
+  disabled?: boolean;
+  /** Tooltip, z. B. warum die Option nicht wählbar ist. */
+  title?: string;
 };
 
 type Props<T extends string> = {
@@ -27,6 +31,8 @@ export function FilterTabs<T extends string>({ options, value, onChange, variant
             type="button"
             role="tab"
             aria-selected={isActive}
+            disabled={option.disabled}
+            title={option.title}
             className={`filter-tabs-option${isActive ? " filter-tabs-option-active" : ""}`}
             onClick={() => onChange(option.value)}
           >

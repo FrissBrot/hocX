@@ -21,7 +21,7 @@ export default async function FilesPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileFiles initialItems={files ?? []} />}
+        mobile={<MobileFiles initialItems={files ?? []} canManage={can(session, "files.manage")} />}
         desktop={
           <>
           <section className="files-page">

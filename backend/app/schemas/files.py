@@ -150,6 +150,32 @@ class StoredFileTagsUpdate(BaseModel):
     tags: list[str]
 
 
+# Anzeigename einer Datei (Datei-Detail «Umbenennen»). Nur der Name in der Oberfläche und beim
+# Herunterladen - der Speicherpfad wird nie aus diesem Wert gebaut.
+MAX_STORED_FILE_NAME_LENGTH = 200
+_FILE_NAME_FORBIDDEN = re.compile(r"[\x00-\x1f\x7f/\\]")
+
+
+class StoredFileRename(BaseModel):
+    name: str = Field(min_length=1, max_length=MAX_STORED_FILE_NAME_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value or value in {".", ".."}:
+            raise ValueError("Name darf nicht leer sein")
+        # Steuerzeichen (inkl. NUL) und Pfadtrenner: der Name landet im Content-Disposition-Header
+        # und in ZIP-Exporten.
+        if _FILE_NAME_FORBIDDEN.search(value):
+            raise ValueError("Name enthält ungültige Zeichen")
+        return value
+
+
+class StoredFileRenameResult(BaseModel):
+    original_name: str
+
+
 class GalleryUploadJobRead(BaseModel):
     """Lightweight shape for the tenant-wide active-jobs listing the "Bilder hochladen"
     status bar polls (GET /files/gallery-upload-jobs) - no per-file detail, just enough to

@@ -62,13 +62,16 @@ from app.schemas.files import (
     PhotoAnalysisProgress,
     SimilarityGroupList,
     StoredFileMetadata,
+    MAX_STORED_FILE_NAME_LENGTH,
+    StoredFileRename,
+    StoredFileRenameResult,
     StoredFileTagsUpdate,
     UploadFileResult,
     UploadPrecheckRequest,
     UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
-from app.services import file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
+from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -1089,6 +1092,49 @@ def update_stored_file_tags(
     # Fotos verwaltet photos.manage, übrige Dateien files.manage (Plan «Berechtigungen», Phase 3)
     require_permission(user, P.PHOTOS_MANAGE if (stored_file.mime_type or "").startswith("image/") else P.FILES_MANAGE)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
+
+
+@router.patch("/stored-files/{stored_file_id}/name", response_model=StoredFileRenameResult)
+def rename_stored_file(
+    stored_file_id: uuid.UUID,
+    payload: StoredFileRename,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Anzeigename einer Datei ändern (Datei-Detail «Umbenennen»). Ändert nur original_name (und
+    den Namen des Dokuments, wenn die Datei dessen aktuelles Original ist) - nie den Speicherpfad.
+    Rechte und Mandant wie beim Tag-Speichern."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
+    if stored_file is None or user.current_tenant_id is None or stored_file.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)  # schreibt: nur Rollenrechte
+    require_permission(user, P.PHOTOS_MANAGE if (stored_file.mime_type or "").startswith("image/") else P.FILES_MANAGE)
+    new_name = _keep_extension(stored_file.original_name, payload.name)
+    if len(new_name) > MAX_STORED_FILE_NAME_LENGTH + 12:
+        raise HTTPException(status_code=422, detail="Name ist zu lang")
+    old_name = stored_file.original_name
+    if new_name != old_name:
+        stored_file.original_name = new_name
+        document_service.sync_display_name_for_original(db, stored_file, new_name)
+        audit.log(
+            db, action="file.renamed", actor=user, entity_type="stored_file", entity_id=stored_file.id,
+            details={"from": old_name, "to": new_name}, commit=False,
+        )
+        db.commit()
+    return StoredFileRenameResult(original_name=new_name)
+
+
+def _keep_extension(old_name: str, new_name: str) -> str:
+    """Die Endung bleibt die der hochgeladenen Datei (Symbol, MIME-Typ und Download passen sonst
+    nicht mehr zusammen): fehlt sie im neuen Namen, wird sie angehängt."""
+    dot = old_name.rfind(".")
+    if dot <= 0 or dot == len(old_name) - 1:
+        return new_name
+    extension = old_name[dot:]
+    if new_name.lower().endswith(extension.lower()):
+        return new_name[: len(new_name) - len(extension)] + extension
+    return f"{new_name}{extension}"
 
 
 @router.get("/stored-files/{stored_file_id}/metadata", response_model=StoredFileMetadata)

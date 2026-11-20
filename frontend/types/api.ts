@@ -395,6 +395,8 @@ export type DocumentVersionRead = {
   pdf_job: DocumentJobState;
   extract_job: DocumentJobState;
   extraction: DocumentExtractionRead | null;
+  /** Wer die Version hochgeladen hat (fehlt bei anonymen Abgaben und älteren Antworten). */
+  created_by_name?: string | null;
 };
 
 export type DocumentDetail = {

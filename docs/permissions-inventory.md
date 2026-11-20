@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 582 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 377
+- Routen gesamt: 583 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 378
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
@@ -453,6 +453,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/stored-files/{stored_file_id}/content` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/download` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/metadata` | meetings.read |
+| `PATCH /api/stored-files/{stored_file_id}/name` | <P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE> + files.manage oder photos.manage |
 | `PATCH /api/stored-files/{stored_file_id}/tags` | <P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE> + files.manage oder photos.manage |
 | `GET /api/stored-files/{stored_file_id}/thumbnail` | meetings.read |
 | `GET /api/submission-assignments` | submissions.read |

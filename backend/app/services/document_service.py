@@ -60,6 +60,15 @@ def document_for_original(db: Session, stored_file_id: int) -> Document | None:
     )
 
 
+def sync_display_name_for_original(db: Session, stored_file: StoredFile, name: str) -> None:
+    """Datei umbenannt: ist sie das Original eines Upload-Dokuments, trägt das Dokument denselben
+    Namen (Protokollexporte benennt die Erzeugung selbst). Flusht nicht, committet nicht."""
+    document = document_for_original(db, stored_file.id)
+    if document is None or document.tenant_id != stored_file.tenant_id or document.source_kind != DOCUMENT_SOURCE_UPLOAD:
+        return
+    document.display_name = name
+
+
 def register_upload(db: Session, stored_file: StoredFile) -> Document | None:
     """Legt für eine hochgeladene Datei das logische Dokument samt Version 1 und Aufträgen an.
     Nicht-Dokumente (Bilder, ZIP, Video, ...) bekommen keins und liefern None. Idempotent: hat die
