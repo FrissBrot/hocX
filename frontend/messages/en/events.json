@@ -272,5 +272,28 @@
     "participantCountTooLarge": "Row {row}: participant count is too large (at most {max, number})",
     "tagTooLong": "Row {row}: tag is longer than {max} characters",
     "dateOutOfRange": "Row {row}: date «{value}» is outside 1900–2999"
+  },
+  "dialog": {
+    "moreActions": "More: delete, mark as cancelled",
+    "createHint": "Fill in title and date, then create",
+    "from": "From",
+    "until": "To",
+    "sameDay": "same day",
+    "periodHint": "Only set an end date for multi-day events. Times are optional.",
+    "exactlyOneTag": "Exactly one tag",
+    "participantCountHint": "For statistics and minutes",
+    "decrease": "Fewer",
+    "increase": "More",
+    "addPeople": "+ Add",
+    "editPeople": "Edit",
+    "chooseRole": "Choose {role}",
+    "searchPlaceholder": "Search…",
+    "noExtraFields": "No additional fields shown.",
+    "cancelledChip": "Cancelled",
+    "dateRange": "{start} – {end}",
+    "timeRange": "{start}–{end}",
+    "timeFrom": "from {start}",
+    "timeUntil": "until {end}",
+    "dateWithTime": "{date} · {time}"
   }
 }

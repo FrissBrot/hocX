@@ -272,5 +272,28 @@
     "participantCountTooLarge": "Ligne {row} : le nombre de participants est trop élevé (au maximum {max, number})",
     "tagTooLong": "Ligne {row} : le tag dépasse {max} caractères",
     "dateOutOfRange": "Ligne {row} : la date «{value}» est en dehors de 1900–2999"
+  },
+  "dialog": {
+    "moreActions": "Plus : supprimer, marquer comme annulé",
+    "createHint": "Saisir le titre et la date, puis créer",
+    "from": "Du",
+    "until": "Au",
+    "sameDay": "même jour",
+    "periodHint": "Ne définir une date de fin que pour les rendez-vous sur plusieurs jours. Les heures sont facultatives.",
+    "exactlyOneTag": "Exactement un tag",
+    "participantCountHint": "Pour les statistiques et le procès-verbal",
+    "decrease": "Moins",
+    "increase": "Plus",
+    "addPeople": "+ Ajouter",
+    "editPeople": "Modifier",
+    "chooseRole": "Choisir : {role}",
+    "searchPlaceholder": "Rechercher…",
+    "noExtraFields": "Aucun champ supplémentaire affiché.",
+    "cancelledChip": "Annulé",
+    "dateRange": "{start} – {end}",
+    "timeRange": "{start}–{end}",
+    "timeFrom": "dès {start}",
+    "timeUntil": "jusqu’à {end}",
+    "dateWithTime": "{date} · {time}"
   }
 }

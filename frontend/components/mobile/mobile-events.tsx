@@ -1,21 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { useAllEvents, useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
-import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
+import { EventDetailSheet } from "@/components/mobile/mobile-event-sheets";
+import { EventDialog } from "@/components/events/event-dialog";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { MobileChip, MobileChipRow, MobileDateTile, MobileEmpty, MobileFab, MobilePageHeader, MobileSegmented, MobileTagPill } from "@/components/mobile/mobile-ui";
 import { dateParts, tagColor, todayIso } from "@/components/mobile/mobile-utils";
 import { effectiveEndDate } from "@/components/events/event-utils";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { sortTagsByImportance, TagConfig, useTagConfig } from "@/lib/hooks/use-tag-config";
-import type { EventSummary, ParticipantSummary } from "@/types/api";
+import { useToast } from "@/contexts/toast-context";
+import { browserApiFetch } from "@/lib/api/client";
+import type { EventPatch, EventSummary, ParticipantSummary } from "@/types/api";
 
 type Period = "upcoming" | "all" | "past";
+
+/**
+ * Autosave des Termin-Dialogs in den mobilen Listen: lokal sofort übernehmen, Zyklen aus der
+ * Antwort (sie wandern serverseitig mit dem Datum). Fehler: Toast, Dialog meldet «Nicht gespeichert».
+ */
+export function useMobileEventUpdate(setEvents: (update: (list: EventSummary[]) => EventSummary[]) => void) {
+  const tEvents = useTranslations("events");
+  const showToast = useToast();
+  return useCallback(
+    async (eventId: string, patch: EventPatch): Promise<boolean> => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { role_ids_base, ...fields } = patch;
+      setEvents((list) => list.map((item) => (item.id === eventId ? { ...item, ...fields } : item)));
+      try {
+        const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, { method: "PATCH", body: JSON.stringify(patch) });
+        setEvents((list) => list.map((item) => (item.id === eventId ? { ...item, cycle_assignments: updated.cycle_assignments } : item)));
+        return true;
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : tEvents("toasts.eventUpdateFailed"), "error");
+        return false;
+      }
+    },
+    [setEvents, showToast, tEvents]
+  );
+}
 
 export function MobileEventRow({
   event,
@@ -84,7 +112,7 @@ export function MobileEvents({
   const t = useTranslations("mobile");
   const locale = useLocale();
   const searchParams = useSearchParams();
-  const { tagConfig } = useTagConfig();
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const { options: cycleOptions } = useCycleOptions();
   const [events, setEvents] = useAllEvents(initialEvents);
   const participants = useParticipants(true, initialParticipants);
@@ -128,6 +156,8 @@ export function MobileEvents({
     });
     return result;
   }, [events, period, tagFilter, query, locale]);
+
+  const updateEvent = useMobileEventUpdate(setEvents);
 
   const openEvent = events.find((event) => event.id === openId) ?? null;
   const formEvent = formFor && formFor !== "new" ? events.find((event) => event.id === formFor) ?? null : null;
@@ -203,17 +233,27 @@ export function MobileEvents({
         />
       ) : null}
       {formFor && canEdit ? (
-        <EventFormSheet
+        // Anlegen und Bearbeiten im selben Termin-Dialog wie am Desktop (alle Felder, Autosave).
+        <EventDialog
+          open
           event={formEvent}
-          tags={tags}
-          tagConfig={tagConfig}
-          onClose={() => setFormFor(null)}
-          onSaved={(saved, created) => {
-            setEvents((list) => (created ? [saved, ...list] : list.map((item) => (item.id === saved.id ? saved : item))));
+          initialDate={todayIso()}
+          onClose={() => {
+            if (formEvent) setOpenId(formEvent.id);
             setFormFor(null);
-            setOpenId(saved.id);
-            if (created) setPeriod("all");
           }}
+          allowEndDate
+          availableParticipants={participants}
+          knownEventTags={tags}
+          tagConfig={tagConfig}
+          onTagColorChange={updateTagColor}
+          onTagRename={renameTag}
+          onCreated={(saved) => {
+            setEvents((list) => [saved, ...list]);
+            setPeriod("all");
+            setFormFor(saved.id);
+          }}
+          onUpdate={(patch) => (formEvent ? updateEvent(formEvent.id, patch) : true)}
         />
       ) : null}
     </div>

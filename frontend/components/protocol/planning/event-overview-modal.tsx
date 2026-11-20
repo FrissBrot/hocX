@@ -7,7 +7,7 @@ import { useConfirmEventDelete } from "@/components/events/use-confirm-event-del
 import { Modal } from "@/components/ui/modal";
 import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
-import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
+import { EventDialog } from "@/components/events/event-dialog";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { EventSummary, ParticipantSummary } from "@/types/api";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
@@ -148,7 +148,7 @@ export function EventOverviewModal({
 
   async function handleUpdate(eventId: string, patch: Partial<EventSummary>) {
     setDetailEvent((current) => (current && current.id === eventId ? { ...current, ...patch } : current));
-    await onUpdateEvent(eventId, patch);
+    return onUpdateEvent(eventId, patch);
   }
 
   // Zyklen aus dem Server-Stand (visibleEvents) übernehmen - sie wandern beim Datumswechsel
@@ -158,9 +158,10 @@ export function EventOverviewModal({
     ? { ...detailEvent, cycle_assignments: serverDetailEvent.cycle_assignments }
     : detailEvent;
 
-  async function handleDelete(eventId: string, title: string) {
-    if (!(await confirmEventDelete(eventId, title))) return;
+  async function handleDelete(eventId: string, title: string): Promise<boolean> {
+    if (!(await confirmEventDelete(eventId, title))) return false;
     await onDeleteEvent(eventId);
+    return true;
   }
 
   return (
@@ -356,26 +357,23 @@ export function EventOverviewModal({
         )}
       </div>
 
-      <Modal
-        open={Boolean(detailEvent)}
-        onClose={() => setDetailEvent(null)}
-        title={detailEvent?.title || t("detailModal.fallbackTitle")}
-        description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
-        size="wide"
-      >
-        {detailEvent ? (
-          <EventDetailForm
-            event={liveDetailEvent ?? detailEvent}
-            allowEndDate={allowEndDate}
-            availableParticipants={availableParticipants}
-            knownEventTags={knownEventTags}
-            tagConfig={tagConfig}
-            onTagColorChange={onTagColorChange}
-            onTagRename={onTagRename}
-            onUpdate={(patch) => handleUpdate(detailEvent.id, patch)}
-          />
-        ) : null}
-      </Modal>
+      {detailEvent ? (
+        <EventDialog
+          open
+          onClose={() => setDetailEvent(null)}
+          event={liveDetailEvent ?? detailEvent}
+          allowEndDate={allowEndDate}
+          availableParticipants={availableParticipants}
+          knownEventTags={knownEventTags}
+          tagConfig={tagConfig}
+          onTagColorChange={onTagColorChange}
+          onTagRename={onTagRename}
+          onUpdate={(patch) => handleUpdate(detailEvent.id, patch)}
+          onDelete={async () => {
+            if (await handleDelete(detailEvent.id, detailEvent.title)) setDetailEvent(null);
+          }}
+        />
+      ) : null}
     </Modal>
   );
 }

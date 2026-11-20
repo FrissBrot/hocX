@@ -21,7 +21,6 @@ import { Modal } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { useToast } from "@/contexts/toast-context";
@@ -38,7 +37,7 @@ import {
 } from "@/types/api";
 
 // Erst beim Oeffnen laden.
-const EventCreateModal = dynamic(() => import("@/components/events/event-create-modal").then((m) => m.EventCreateModal), {
+const EventDialog = dynamic(() => import("@/components/events/event-dialog").then((m) => m.EventDialog), {
   ssr: false,
 });
 const EventCalendarModal = dynamic(
@@ -422,16 +421,18 @@ export function EventManager({
     return names.length ? names.join(", ") : t("selectedCount", { count: ids.length });
   }
 
-  async function deleteEvent(eventId: string) {
+  async function deleteEvent(eventId: string): Promise<boolean> {
     const title = events.find((event) => event.id === eventId)?.title ?? null;
     const ok = await confirmEventDelete(eventId, title);
-    if (!ok) return;
+    if (!ok) return false;
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
       showToast(t("toasts.deleted"), "success");
+      return true;
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
+      return false;
     }
   }
 
@@ -1088,19 +1089,6 @@ export function EventManager({
         </div>
       </Modal>
 
-      {createDate !== null ? (
-        <EventCreateModal
-          open
-          onClose={() => setCreateDate(null)}
-          initialDate={createDate}
-          knownTags={knownTags}
-          availableParticipants={availableParticipants}
-          cycleConfigs={cycleConfigs}
-          tenantName={tenantName}
-          onCreated={(saved) => setEvents((current) => [saved, ...current])}
-        />
-      ) : null}
-
       {calendarOpen ? (
         <EventCalendarModal
           open
@@ -1113,34 +1101,48 @@ export function EventManager({
         />
       ) : null}
 
-      <Modal
-        open={Boolean(detailEvent)}
-        onClose={() => setDetailEvent(null)}
-        title={detailEvent?.title || t("detailModal.fallbackTitle")}
-        description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
-        size="wide"
-      >
-        {detailEvent ? (
-          <EventDetailForm
-            event={detailEvent}
-            allowEndDate
-            availableParticipants={availableParticipants}
-            knownEventTags={knownTags}
-            tagConfig={tagConfig}
-            onTagColorChange={updateTagColor}
-            onTagRename={renameTag}
-            readOnly={!canEdit}
-            canManageCycles={canManageCycles}
-            fieldSettingsHref={canManageSettings ? "/tenant-settings" : null}
-            onUpdate={(patch) => {
-              const eventId = detailEvent.id;
-              // Nur in den noch offenen Termin übernehmen (verspätetes Speichern nach einem Wechsel).
-              setDetailEvent((current) => (current && current.id === eventId ? { ...current, ...patch } : current));
-              return updateEventDetail(eventId, patch);
-            }}
-          />
-        ) : null}
-      </Modal>
+      {createDate !== null || detailEvent ? (
+        <EventDialog
+          open
+          event={detailEvent}
+          initialDate={createDate ?? todayIso}
+          onClose={() => {
+            setCreateDate(null);
+            setDetailEvent(null);
+          }}
+          allowEndDate
+          availableParticipants={availableParticipants}
+          knownEventTags={knownTags}
+          tagConfig={tagConfig}
+          onTagColorChange={updateTagColor}
+          onTagRename={renameTag}
+          cycleConfigs={cycleConfigs}
+          readOnly={!canEdit}
+          canManageCycles={canManageCycles}
+          fieldSettingsHref={canManageSettings ? "/tenant-settings" : null}
+          onCreated={(saved) => {
+            setEvents((current) => [saved, ...current]);
+            // Derselbe Dialog arbeitet mit dem neuen Termin weiter (Autosave).
+            setCreateDate(null);
+            setDetailEvent(saved);
+          }}
+          onUpdate={(patch) => {
+            if (!detailEvent) return true;
+            const eventId = detailEvent.id;
+            // Nur in den noch offenen Termin übernehmen (verspätetes Speichern nach einem Wechsel).
+            setDetailEvent((current) => (current && current.id === eventId ? { ...current, ...patch } : current));
+            return updateEventDetail(eventId, patch);
+          }}
+          onDelete={
+            canEdit && detailEvent
+              ? async () => {
+                  const eventId = detailEvent.id;
+                  if (await deleteEvent(eventId)) setDetailEvent((current) => (current?.id === eventId ? null : current));
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(

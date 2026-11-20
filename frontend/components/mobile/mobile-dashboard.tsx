@@ -6,8 +6,9 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
-import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
-import { MobileEventRow } from "@/components/mobile/mobile-events";
+import { EventDialog } from "@/components/events/event-dialog";
+import { EventDetailSheet } from "@/components/mobile/mobile-event-sheets";
+import { MobileEventRow, useMobileEventUpdate } from "@/components/mobile/mobile-events";
 import { MobileStatsCard } from "@/components/mobile/areas/mobile-stats-card";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useMobileSession } from "@/components/mobile/mobile-shell";
@@ -52,13 +53,14 @@ export function MobileDashboard({
   const locale = useLocale();
   const router = useRouter();
   const session = useMobileSession();
-  const { tagConfig } = useTagConfig();
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const { options: cycleOptions } = useCycleOptions();
   const permissions = dashboardPermissions(access);
   const { canExcuse, canWrite } = permissions;
   const data = useDashboardData({ todos: initialTodos, fines, fineSummary, permissions });
   const { todos, setTodos, events, setEvents, today, fineTotalLabel, finePeople } = data;
   const participants = useParticipants(canWrite);
+  const updateEvent = useMobileEventUpdate(setEvents);
   const protocolsByEvent = useProtocolsByEvent(true);
   const toggleTodo = useTodoToggle(setTodos);
   const { sessions, busy, toggleExcused } = useSessionAttendance(upcomingSessions, canExcuse);
@@ -333,15 +335,18 @@ export function MobileDashboard({
         />
       ) : null}
       {editEvent ? (
-        <EventFormSheet
+        // Bearbeiten im selben Termin-Dialog wie am Desktop (alle Felder, Autosave).
+        <EventDialog
+          open
           event={editEvent}
-          tags={[...new Set(events.map((event) => event.tag).filter((tag): tag is string => !!tag))]}
-          tagConfig={tagConfig}
           onClose={() => setEditEventId(null)}
-          onSaved={(saved) => {
-            setEvents((list) => list.map((item) => (item.id === saved.id ? saved : item)));
-            setEditEventId(null);
-          }}
+          allowEndDate
+          availableParticipants={participants}
+          knownEventTags={[...new Set(events.map((event) => event.tag).filter((tag): tag is string => !!tag))]}
+          tagConfig={tagConfig}
+          onTagColorChange={updateTagColor}
+          onTagRename={renameTag}
+          onUpdate={(patch) => updateEvent(editEvent.id, patch)}
         />
       ) : null}
     </div>

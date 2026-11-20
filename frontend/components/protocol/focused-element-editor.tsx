@@ -30,7 +30,7 @@ import { EventOverviewModal } from "@/components/protocol/planning/event-overvie
 import { EventCalendarModal } from "@/components/events/event-calendar-modal";
 import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
-import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
+import { EventDialog } from "@/components/events/event-dialog";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { AttendanceBoard } from "@/components/protocol/attendance-board";
 import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "@/components/protocol/planning/event-remove-dialog";
@@ -4167,20 +4167,20 @@ function FocusedElementEditorImpl({
       onClose={() => setRemovingSeriesEvent(null)}
       onConfirm={(removeTags) => void confirmRemoveSeriesEvent(removeTags)}
     />
-    <Modal open={Boolean(editingSeriesEvent && editingEvent)} onClose={() => setEditingSeriesEvent(null)} title={t("eventSeries.edit")} size="wide">
-      {editingSeriesEvent && editingEvent ? (
-        <EventDetailForm
-          event={editingEvent}
-          allowEndDate={editingEventConfig.event_allow_end_date === true}
-          availableParticipants={availableParticipants}
-          knownEventTags={knownEventTags}
-          tagConfig={tagConfig}
-          onTagColorChange={updateTagColor}
-          onTagRename={renameTag}
-          onUpdate={(patch) => updateEventFromBlock(editingSeriesEvent.blockId, editingEvent.id, patch).then(refreshEventBlockCandidates)}
-        />
-      ) : null}
-    </Modal>
+    {editingSeriesEvent && editingEvent ? (
+      <EventDialog
+        open
+        onClose={() => setEditingSeriesEvent(null)}
+        event={editingEvent}
+        allowEndDate={editingEventConfig.event_allow_end_date === true}
+        availableParticipants={availableParticipants}
+        knownEventTags={knownEventTags}
+        tagConfig={tagConfig}
+        onTagColorChange={updateTagColor}
+        onTagRename={renameTag}
+        onUpdate={(patch) => updateEventFromBlock(editingSeriesEvent.blockId, editingEvent.id, patch).then(refreshEventBlockCandidates)}
+      />
+    ) : null}
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => closeParticipantPicker()}

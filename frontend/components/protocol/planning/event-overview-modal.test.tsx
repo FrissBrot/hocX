@@ -5,8 +5,8 @@ import type { EventSummary } from "@/types/api";
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: vi.fn() }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
-vi.mock("@/components/protocol/planning/event-detail-form", () => ({
-  EventDetailForm: ({ event }: { event: EventSummary }) => <div data-testid="event-detail">{event.title}</div>,
+vi.mock("@/components/events/event-dialog", () => ({
+  EventDialog: ({ event }: { event: EventSummary }) => <div data-testid="event-detail">{event.title}</div>,
 }));
 
 import { EventOverviewModal } from "./event-overview-modal";

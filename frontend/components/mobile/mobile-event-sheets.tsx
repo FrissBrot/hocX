@@ -2,14 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { MobileIcon } from "@/components/mobile/mobile-icons";
-import { MobileAvatar, MobileChip, MobileListRow, MobileSwitch, MobileTagPill } from "@/components/mobile/mobile-ui";
-import { dateParts, relativeDay, tagColor, todayIso } from "@/components/mobile/mobile-utils";
+import { MobileAvatar, MobileListRow, MobileTagPill } from "@/components/mobile/mobile-ui";
+import { dateParts, relativeDay, tagColor } from "@/components/mobile/mobile-utils";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -203,154 +202,6 @@ export function EventDetailSheet({
             </div>
           </div>
         ) : null}
-      </div>
-    </Modal>
-  );
-}
-
-type Draft = {
-  title: string;
-  event_date: string;
-  event_end_date: string;
-  tag: string | null;
-  participant_count: number;
-  location: string;
-  description: string;
-  is_cancelled: boolean;
-};
-
-function draftFrom(event: EventSummary | null): Draft {
-  return {
-    title: event?.title ?? "",
-    event_date: event?.event_date?.slice(0, 10) ?? todayIso(),
-    event_end_date: event?.event_end_date?.slice(0, 10) ?? "",
-    tag: event?.tag ?? null,
-    participant_count: event?.participant_count ?? 0,
-    location: event?.location ?? "",
-    description: event?.description ?? "",
-    is_cancelled: event?.is_cancelled ?? false,
-  };
-}
-
-export function EventFormSheet({
-  event,
-  tags,
-  tagConfig,
-  onClose,
-  onSaved,
-}: {
-  event: EventSummary | null;
-  tags: string[];
-  tagConfig: TagConfig;
-  onClose: () => void;
-  onSaved: (event: EventSummary, created: boolean) => void;
-}) {
-  const t = useTranslations("mobile");
-  const tEvents = useTranslations("events");
-  const showToast = useToast();
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(event));
-  const [saving, setSaving] = useState(false);
-  const valid = draft.title.trim().length > 0 && draft.event_date.length > 0;
-  const update = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
-
-  async function save() {
-    if (!valid || saving) return;
-    setSaving(true);
-    const body = {
-      title: draft.title.trim(),
-      event_date: draft.event_date,
-      event_end_date: draft.event_end_date && draft.event_end_date > draft.event_date ? draft.event_end_date : null,
-      tag: draft.tag || null,
-      participant_count: Math.max(0, draft.participant_count),
-      location: draft.location.trim() || null,
-      description: draft.description.trim() || null,
-      is_cancelled: draft.is_cancelled,
-    };
-    try {
-      const saved = event
-        ? await browserApiFetch<EventSummary>(`/api/events/${event.id}`, { method: "PATCH", body: JSON.stringify(body) })
-        : await browserApiFetch<EventSummary>("/api/events", { method: "POST", body: JSON.stringify(body) });
-      onSaved(saved, !event);
-      showToast(event ? t("events.saved") : tEvents("toasts.eventCreated"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : tEvents("toasts.saveFailed"), "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      size="sheet"
-      title={event ? t("events.editTitle") : t("events.newTitle")}
-      onClose={onClose}
-      className="mobile-sheet"
-      footer={
-        <div className="modal-actions mobile-sheet-footer">
-          <button type="button" className="button-ghost" onClick={onClose}>
-            {t("common.cancel")}
-          </button>
-          <button type="button" className="button-primary" data-modal-save disabled={!valid || saving} onClick={() => void save()}>
-            {t("common.save")}
-          </button>
-        </div>
-      }
-    >
-      <div className="grid mobile-sheet-body">
-        <label className="field-stack">
-          <span className="field-label">{t("events.fieldTitle")}</span>
-          <input value={draft.title} onChange={(e) => update({ title: e.target.value })} placeholder={t("events.titlePlaceholder")} />
-        </label>
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">{t("events.fieldStart")}</span>
-            <DateInput value={draft.event_date} onChange={(value) => update({ event_date: value })} />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{t("events.fieldEnd")}</span>
-            <DateInput value={draft.event_end_date} min={draft.event_date || undefined} onChange={(value) => update({ event_end_date: value })} />
-          </label>
-        </div>
-        {tags.length > 0 ? (
-          <div className="field-stack">
-            <span className="field-label">{t("events.fieldTag")}</span>
-            <div className="mobile-tag-wrap">
-              {tags.map((tag) => (
-                <MobileChip key={tag} active={draft.tag === tag} dotColor={tagColor(tag, tagConfig)} onClick={() => update({ tag: draft.tag === tag ? null : tag })}>
-                  {tag}
-                </MobileChip>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <div className="mobile-stepper-row">
-          <span className="field-label">{t("events.participantCount")}</span>
-          <div className="mobile-stepper">
-            <button type="button" aria-label={t("events.decrease")} onClick={() => update({ participant_count: Math.max(0, draft.participant_count - 1) })}>
-              −
-            </button>
-            <span>{draft.participant_count}</span>
-            <button type="button" aria-label={t("events.increase")} onClick={() => update({ participant_count: draft.participant_count + 1 })}>
-              +
-            </button>
-          </div>
-        </div>
-        <label className="field-stack">
-          <span className="field-label">{t("events.location")}</span>
-          <input value={draft.location} onChange={(e) => update({ location: e.target.value })} placeholder={t("events.locationPlaceholder")} />
-        </label>
-        <div className="field-stack">
-          <span className="field-label">{t("events.description")}</span>
-          <RichTextEditor value={draft.description} onChange={(markdown) => update({ description: markdown })} placeholder={t("events.descriptionPlaceholder")} />
-        </div>
-        <div className="mobile-card mobile-group-card">
-          <button type="button" className="mobile-list-row" aria-pressed={draft.is_cancelled} onClick={() => update({ is_cancelled: !draft.is_cancelled })}>
-            <span className="mobile-list-row-label">{t("events.cancelledToggle")}</span>
-            <MobileSwitch checked={draft.is_cancelled} danger />
-          </button>
-        </div>
-        <p className="mobile-muted-sm">{t("events.formDesktopHint")}</p>
       </div>
     </Modal>
   );
