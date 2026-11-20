@@ -13,11 +13,12 @@ from sqlalchemy import select
 
 from app.api.routes import admin_backups
 from app.core.admin_security import CurrentAdmin, get_current_admin
+from app.core.admin_step_up import require_step_up
 from app.core.db import get_db
 from app.models import BackupJob, BackupRestoreJob, BackupSet, BackupSettings, PlatformAdmin
 from app.services import backup_admin_service
 from app.services.admin_mfa_service import AdminMfaService
-from tests.soft_passkey import SoftPasskey
+from tests.soft_passkey import SoftPasskey, step_up_header
 
 RP_ID = "admin.backup.example"
 ORIGIN = f"https://{RP_ID}"
@@ -26,6 +27,9 @@ ORIGIN = f"https://{RP_ID}"
 @pytest.fixture(autouse=True)
 def _enabled(monkeypatch):
     monkeypatch.setenv("BACKUP_ENABLED", "true")
+    import app.services.admin_mfa_service as mfa_service
+
+    monkeypatch.setattr(mfa_service.settings, "traefik_admin_domain", RP_ID)
     monkeypatch.setattr(admin_backups, "enforce_rate_limit", lambda *args, **kwargs: None)
     import app.services.admin_mfa_service as mfa
 
@@ -40,6 +44,8 @@ def _client(db, role: str = "owner", admin_id: int = 1) -> TestClient:
     current = CurrentAdmin(admin_id=admin_id, admin_public_id=uuid.uuid4(), email=f"{role}@example.com", display_name=role, role=role)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_admin] = lambda: current
+    # Einstellungen: die Step-up-Prüfung selbst testen test_admin_step_up.py und die Restore-Tests hier
+    app.dependency_overrides[require_step_up("backup-settings")] = lambda: current
     return TestClient(app)
 
 
@@ -60,9 +66,18 @@ def _owner_with_passkey(db) -> tuple[PlatformAdmin, SoftPasskey]:
     return admin, passkey
 
 
-def _step_up(db, admin: PlatformAdmin, passkey: SoftPasskey) -> dict:
-    start = AdminMfaService().start_step_up(db, admin_id=admin.id, purpose="backup-restore", request_host=RP_ID, request_origin=ORIGIN)
-    return {"flow_token": start.flow_token, "credential": passkey.get(start.public_key, origin=ORIGIN)}
+def _step_up(db, admin: PlatformAdmin, passkey: SoftPasskey, body: dict, path: str = "/api/admin/restores") -> dict:
+    import json as _json
+
+    return step_up_header(db, admin.id, passkey, purpose="backup-restore", method="POST", path=path,
+                          body=_json.dumps(body).encode(), rp_id=RP_ID, origin=ORIGIN)
+
+
+def _post(client, body: dict, headers: dict | None = None):
+    import json as _json
+
+    return client.post("/api/admin/restores", content=_json.dumps(body).encode(),
+                       headers={"Content-Type": "application/json", **(headers or {})})
 
 
 def _set(db, **values) -> BackupSet:
@@ -154,54 +169,70 @@ def test_restore_requires_fresh_passkey_and_confirmation(db):
     admin, passkey = _owner_with_passkey(db)
     client = _client(db, admin_id=admin.id)
     phrase = backup_admin_service.confirmation_phrase("tenant_copy", backup_set)
-    base = {"backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
-            "confirmation": phrase}
-    # Ohne Step-up kein Restore; eine Assertion eines fremden Schlüssels gilt nicht
-    assert client.post("/api/admin/restores", json=base).status_code == 422
-    foreign = _step_up(db, admin, SoftPasskey())
-    assert client.post("/api/admin/restores", json={**base, "step_up": foreign}).status_code == 401
+    body = {"backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
+            "confirmation": phrase, "idempotency_key": "r1"}
+    # Ohne Step-up kein Restore; ein fremder Schlüssel gilt nicht
+    assert _post(client, body).status_code == 403
+    assert _post(client, body, _step_up(db, admin, SoftPasskey(), body)).status_code == 401
 
-    step_up = _step_up(db, admin, passkey)
-    wrong = client.post("/api/admin/restores", json={**base, "step_up": step_up, "confirmation": "ja"})
-    assert wrong.status_code == 422
-    # BORG-009: die falsche Phrase hat die Bestätigung NICHT verbraucht - sie gilt noch.
-    created = client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r1"})
+    # Review L7: eine Bestätigung für andere Parameter gilt nicht
+    other = {**body, "new_name": "Andere Kopie"}
+    assert _post(client, body, _step_up(db, admin, passkey, other)).status_code == 401
+
+    wrong = {**body, "confirmation": "ja"}
+    assert _post(client, wrong, _step_up(db, admin, passkey, wrong)).status_code == 422
+    headers = _step_up(db, admin, passkey, body)
+    created = _post(client, body, headers)
     assert created.status_code == 202, created.text
     job = db.get(BackupRestoreJob, uuid.UUID(created.json()["id"]))
     assert job.options == {
         "source_tenant_id": 5, "new_name": "Verein (Kopie)", "replay_erasures": True, "replay_erasures_reason": None,
     } and job.mfa_verified_at is not None
-    assert "step_up" not in created.text and "credential" not in created.text
+    assert "credential" not in created.text
     # Wiederholung derselben Anfrage (Netzwerkfehler): derselbe Auftrag, obwohl die Bestätigung verbraucht ist.
-    again = client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r1"})
+    again = _post(client, body, headers)
     assert again.status_code == 202 and again.json()["id"] == created.json()["id"]
     # Neue Anfrage mit anderem Schlüssel: fachlich blockiert (ein Restore läuft), bevor der Passkey geprüft wird.
-    assert client.post("/api/admin/restores", json={**base, "step_up": step_up, "idempotency_key": "r2"}).status_code == 409
+    second = {**body, "idempotency_key": "r2"}
+    assert _post(client, second, _step_up(db, admin, passkey, second)).status_code == 409
 
 
 def test_restore_step_up_cannot_be_reused(db):
     """Eine Step-up-Assertion ist einmalig: der Vorgang wird vor der Prüfung atomar verbraucht."""
     from fastapi import HTTPException
 
+    from app.core.admin_step_up import step_up_binding
+
     admin, passkey = _owner_with_passkey(db)
-    step_up = _step_up(db, admin, passkey)
+    binding = step_up_binding("POST", "/api/admin/restores", b"{}")
     service = AdminMfaService()
-    service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", **step_up)
+    start = service.start_step_up(db, admin_id=admin.id, purpose="backup-restore", binding=binding, request_host=RP_ID, request_origin=ORIGIN)
+    credential = passkey.get(start.public_key, origin=ORIGIN)
+    service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", flow_token=start.flow_token, credential=credential, binding=binding)
     with pytest.raises(HTTPException) as exc_info:
-        service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", **step_up)
+        service.verify_step_up(db, admin_id=admin.id, purpose="backup-restore", flow_token=start.flow_token, credential=credential, binding=binding)
     assert exc_info.value.status_code == 401
 
 
-def test_restore_step_up_is_bound_to_purpose_and_admin(db):
+def test_restore_step_up_is_bound_to_purpose_admin_and_binding(db):
     from fastapi import HTTPException
+
+    from app.core.admin_step_up import step_up_binding
 
     admin, passkey = _owner_with_passkey(db)
     other, _ = _owner_with_passkey(db)
     service = AdminMfaService()
-    with pytest.raises(HTTPException):
-        service.verify_step_up(db, admin_id=other.id, purpose="backup-restore", **_step_up(db, admin, passkey))
-    with pytest.raises(HTTPException):
-        service.verify_step_up(db, admin_id=admin.id, purpose="anderes", **_step_up(db, admin, passkey))
+    binding = step_up_binding("POST", "/api/admin/restores", b"{}")
+    for admin_id, purpose, used_binding in (
+        (other.id, "backup-restore", binding),
+        (admin.id, "admin-manage", binding),
+        (admin.id, "backup-restore", step_up_binding("POST", "/api/admin/restores", b"{\"x\":1}")),
+    ):
+        start = service.start_step_up(db, admin_id=admin.id, purpose="backup-restore", binding=binding, request_host=RP_ID, request_origin=ORIGIN)
+        with pytest.raises(HTTPException) as exc_info:
+            service.verify_step_up(db, admin_id=admin_id, purpose=purpose, flow_token=start.flow_token,
+                                   credential=passkey.get(start.public_key, origin=ORIGIN), binding=used_binding)
+        assert exc_info.value.status_code == 401
 
 
 def test_restore_without_passkey_is_forbidden(db):
@@ -211,7 +242,7 @@ def test_restore_without_passkey_is_forbidden(db):
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        AdminMfaService().start_step_up(db, admin_id=admin.id, purpose="backup-restore", request_host=RP_ID, request_origin=ORIGIN)
+        AdminMfaService().start_step_up(db, admin_id=admin.id, purpose="backup-restore", binding="x", request_host=RP_ID, request_origin=ORIGIN)
     assert exc_info.value.status_code == 403
 
 

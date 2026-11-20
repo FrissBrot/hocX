@@ -9,7 +9,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.mfa import AdminStepUpAssertion
 
 Severity = Literal["warning", "critical"]
 
@@ -252,7 +251,6 @@ class RestorePreviewRead(BaseModel):
 
 class RestoreCreate(RestorePreviewRequest):
     confirmation: str = Field(min_length=1, max_length=200)
-    step_up: AdminStepUpAssertion
     skip_rescue_backup: bool = False
     skip_rescue_reason: str | None = Field(default=None, max_length=500)
     # Löschungen nach dem Sicherungspunkt erneut anwenden (Löschjournal, PRIV-010); aus nur mit Begründung.

@@ -1,5 +1,6 @@
-import { test, expect, type BrowserContext } from "@playwright/test";
-import { authFiles } from "./auth";
+import { test, expect, request } from "@playwright/test";
+import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { addVirtualAuthenticator } from "./webauthn";
 
 // Plattform-Admins: nur Passwort + Passkey (backend admin_mfa_service.py, Migration 0205).
@@ -10,24 +11,22 @@ import { addVirtualAuthenticator } from "./webauthn";
 const localhostBaseURL = (process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").replace("127.0.0.1", "localhost");
 const password = process.env.E2E_USER_PASSWORD ?? "ChangeMe123!";
 
-async function platformAdminApi(browser: import("@playwright/test").Browser): Promise<BrowserContext> {
-  // Session des Plattform-Admins aus auth.setup.ts (Software-Passkey), auf localhost übertragen
-  const seed = await browser.newContext({ storageState: authFiles.platformAdmin });
-  const cookies = await seed.cookies();
-  await seed.close();
-  const context = await browser.newContext({ baseURL: localhostBaseURL });
-  await context.addCookies(cookies.map((cookie) => ({ ...cookie, domain: "localhost" })));
-  return context;
-}
-
 test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit Passkey", async ({ browser }) => {
-  const owner = await platformAdminApi(browser);
+  // Admin anlegen braucht eine Passkey-Bestätigung (Review M2): mit dem Software-Passkey aus auth.setup.ts
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000";
+  const origin = new URL(baseURL).origin;
+  const owner = await request.newContext({ baseURL, storageState: authFiles.platformAdmin, extraHTTPHeaders: { Origin: origin } });
+  const ownerPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
+  expect(ownerPasskey, "Software-Passkey aus auth.setup.ts fehlt").toBeTruthy();
   const email = `passkey-${Date.now()}@hocx.local`;
-  const created = await owner.request.post("/api/admin/admins", {
-    data: { email, display_name: "Passkey Test", password, role: "owner" },
-  });
+  const body = JSON.stringify({ email, display_name: "Passkey Test", password, role: "owner" });
+  const unconfirmed = await owner.post("/api/admin/admins", { data: body, headers: { "Content-Type": "application/json" } });
+  expect(unconfirmed.status()).toBe(403);
+  const confirmHeaders = await stepUpHeaders(owner, ownerPasskey!, origin, "admin-manage", "POST", "/api/admin/admins", body);
+  const created = await owner.post("/api/admin/admins", { data: body, headers: { "Content-Type": "application/json", ...confirmHeaders } });
   expect(created.ok(), await created.text()).toBeTruthy();
-  await owner.close();
+  await ownerPasskey!.save(platformAdminPasskeyFile);
+  await owner.dispose();
 
   const context = await browser.newContext({ baseURL: localhostBaseURL });
   const page = await context.newPage();
@@ -62,8 +61,9 @@ test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit 
     await expect(page.locator(".security-factor-card")).toHaveCount(1);
     await expect(page.locator(".security-factor-card").getByRole("button", { name: "Entfernen" })).toBeDisabled();
     const overview = await (await context.request.get("/api/admin/mfa")).json();
-    const lastDelete = await context.request.delete(`/api/admin/mfa/factors/${overview.factors[0].id}`);
-    expect(lastDelete.status()).toBe(409);
+    // Ohne Passkey-Bestätigung lehnt der Server jede Änderung ab (Review M2)
+    const unconfirmedDelete = await context.request.delete(`/api/admin/mfa/factors/${overview.factors[0].id}`);
+    expect(unconfirmedDelete.status()).toBe(403);
 
     await page.getByRole("button", { name: "Passkey hinzufügen" }).click();
     await expect(page.locator(".security-factor-card")).toHaveCount(2);

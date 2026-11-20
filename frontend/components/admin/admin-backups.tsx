@@ -14,8 +14,8 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { Tabs } from "@/components/ui/tabs";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
-import { getPasskeyAssertion } from "@/lib/webauthn";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
@@ -28,7 +28,6 @@ import {
   BackupSettings,
   BackupStatus,
   BackupTenant,
-  PasskeyAssertionStart,
   RestoreJob,
   RestoreJobState,
   RestorePreview,
@@ -614,21 +613,17 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
     if (kind === "full" && !(await confirm({ message: t("confirm.fullRestore"), tone: "danger", confirmLabel: t("actions.startRestore") }))) return;
     setWorking(true);
     try {
-      // Frische Passkey-Bestätigung (Step-up) - zusätzlich zur Sitzung, nur für diese Wiederherstellung.
-      const stepUp = await browserApiFetch<PasskeyAssertionStart>("/api/admin/mfa/step-up/start", {
-        method: "POST",
-        body: JSON.stringify({ purpose: "backup-restore" }),
+      // Frische Passkey-Bestätigung (Step-up), gebunden an genau diese Anfrage (Security-Review M2/L7).
+      const restoreBody = JSON.stringify({
+        backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
+        new_name: kind === "tenant_copy" ? newName : null, confirmation,
+        skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
+        replay_erasures: replayErasures, replay_erasures_reason: replayErasures ? null : replayReason,
+        idempotency_key: restoreKeyFor(`restore-${setId}`),
       });
-      const credential = await getPasskeyAssertion(stepUp.public_key);
-      const job = await browserApiFetch<RestoreJob>("/api/admin/restores", {
+      const job = await stepUpFetch<RestoreJob>("backup-restore", "/api/admin/restores", {
         method: "POST",
-        body: JSON.stringify({
-          backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
-          new_name: kind === "tenant_copy" ? newName : null, confirmation, step_up: { flow_token: stepUp.flow_token, credential },
-          skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
-          replay_erasures: replayErasures, replay_erasures_reason: replayErasures ? null : replayReason,
-          idempotency_key: restoreKeyFor(`restore-${setId}`),
-        }),
+        body: restoreBody,
       });
       showToast(t("toast.restoreQueued"), "success");
       setWatching(job.id);
@@ -821,7 +816,7 @@ function Settings({ t, locale, settings, isOwner, onSaved }: { t: TFunc; locale:
     event.preventDefault();
     setSaving(true);
     try {
-      const saved = await browserApiFetch<BackupSettings>("/api/admin/backups/settings", { method: "PUT", body: JSON.stringify(form) });
+      const saved = await stepUpFetch<BackupSettings>("backup-settings", "/api/admin/backups/settings", { method: "PUT", body: JSON.stringify(form) });
       onSaved(saved);
       showToast(t("toast.settingsSaved"), "success");
     } catch (error) {

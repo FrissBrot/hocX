@@ -138,7 +138,9 @@
     "mfa_policy_own_mfa_missing": "Set up MFA for your own account first.",
     "mfa_setup_required": "Your organisation requires MFA. Please sign in again and set up a second factor.",
     "last_passkey": "The last passkey cannot be removed. Add another one first.",
-    "mfa_already_configured": "A second factor is already set up for this account. Please sign in with it."
+    "mfa_already_configured": "A second factor is already set up for this account. Please sign in with it.",
+    "step_up_required": "This action must be confirmed with your passkey.",
+    "step_up_mismatch": "The passkey confirmation belongs to a different action. Please try again."
   },
   "grace": {
     "title": "Second factor becomes mandatory",

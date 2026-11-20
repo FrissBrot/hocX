@@ -239,6 +239,11 @@
         "title": "Überlast-Schutz",
         "detail": "{rejected, number} Abweisungen · {users, number} neue Nutzer · {tenants, number} Mandanten · Auslastung bis {pressurePercent, number} % (letzte {minutes, number} Min.)",
         "problem": "Überlast: neue Nutzer werden abgewiesen"
+      },
+      "admin_passkeys": {
+        "title": "Admin-Passkeys",
+        "detail": "{count, number} gesperrte Admin-Passkeys",
+        "problem": "Admin-Passkey gesperrt (Zähler zurückgelaufen, möglicher Klon)"
       }
     },
     "problems": {

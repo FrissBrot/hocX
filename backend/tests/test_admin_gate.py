@@ -129,3 +129,25 @@ def test_websocket_under_admin_api_is_rejected(gate_secret):
     with pytest.raises(WebSocketDisconnect):
         with _client().websocket_connect("/api/admin/ws-test"):
             pass
+
+
+@pytest.mark.parametrize(
+    ("environment", "domain", "secret", "ok"),
+    [
+        ("development", None, None, True),
+        ("production", "admin.example.ch", "x" * 32, True),
+        ("production", None, "x" * 32, False),
+        ("production", "admin.example.ch", "x" * 31, False),
+        ("test", "admin.example.ch", None, False),
+    ],
+)
+def test_startup_requires_admin_domain_and_secret_outside_development(monkeypatch, environment, domain, secret, ok):
+    """Review L3: ohne Admin-Domain/Gate-Secret startet die API ausserhalb der Entwicklung nicht."""
+    monkeypatch.setattr(admin_gate.settings, "environment", environment)
+    monkeypatch.setattr(admin_gate.settings, "traefik_admin_domain", domain)
+    monkeypatch.setattr(admin_gate.settings, "admin_gate_secret", secret)
+    if ok:
+        admin_gate.validate_startup()
+    else:
+        with pytest.raises(RuntimeError):
+            admin_gate.validate_startup()

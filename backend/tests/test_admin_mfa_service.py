@@ -305,10 +305,6 @@ def test_admin_cli_reset_passkeys_revokes_sessions_and_forces_new_setup(db, monk
         yield db
 
     monkeypatch.setattr(admin_cli, "SessionLocal", same_session)
-    # Session aus derselben Sekunde wie das Zurücksetzen: Token muss älter sein
-    import time
-
-    time.sleep(1.1)
     assert admin_cli.main(["reset-passkeys", "--email", admin.email]) == 0
     assert "1 Passkey(s)" in capsys.readouterr().out
 
@@ -322,6 +318,89 @@ def test_admin_cli_reset_passkeys_revokes_sessions_and_forces_new_setup(db, monk
         AdminAuthService().start_login_passkey_setup(db, ticket=pending_before.mfa.ticket, request_host=None, request_origin=ORIGIN)
     assert _login(db, admin.email).mfa.status == "setup_required"
     assert db.execute(
-        text("SELECT 1 FROM audit_log WHERE action = 'admin.passkeys_reset' AND actor_email = :email"), {"email": admin.email}
+        text("SELECT 1 FROM audit_log WHERE action = 'admin.passkeys_reset' AND actor_email = 'cli' AND entity_id = :id"), {"id": admin.id}
     ).first() is not None
     assert admin_cli.main(["reset-passkeys", "--email", "gibt-es-nicht@example.com"]) == 1
+
+
+def test_admin_cli_reset_password(db, monkeypatch, capsys):
+    from contextlib import contextmanager
+
+    from app import admin_cli
+    from app.core.security import verify_password
+
+    admin = _make_admin(db, "cli-password@example.com")
+    token = _session_cookie(_enroll_via_login(db, admin, SoftPasskey()))
+
+    @contextmanager
+    def same_session():
+        yield db
+
+    monkeypatch.setattr(admin_cli, "SessionLocal", same_session)
+    assert admin_cli.main(["reset-password", "--email", admin.email]) == 0
+    new_password = capsys.readouterr().out.strip().splitlines()[-1]
+    assert len(new_password) >= 20
+    db.refresh(admin)
+    assert verify_password(new_password, admin.password_hash) and not verify_password(PASSWORD, admin.password_hash)
+    from app.core.admin_security import get_optional_current_admin
+    from starlette.requests import Request
+
+    assert get_optional_current_admin(Request({"type": "http", "headers": []}), db, token) is None
+    assert db.execute(
+        text("SELECT 1 FROM audit_log WHERE action = 'admin.password_reset' AND actor_email = 'cli' AND entity_id = :id"), {"id": admin.id}
+    ).first() is not None
+
+
+def test_session_revoked_in_the_same_second_counts(db):
+    """Review L5: Widerruf in Millisekunden - ein Token, das vor dem Widerruf (auch in derselben
+    Sekunde) ausgestellt wurde, gilt nicht mehr; eines danach schon."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.admin_security import get_optional_current_admin
+    from starlette.requests import Request
+
+    admin = _make_admin(db, "same-second@example.com")
+    before = create_admin_session_token(admin.id)
+    admin.session_revoke_at = datetime.now(UTC)
+    db.flush()
+    request = Request({"type": "http", "headers": []})
+    assert get_optional_current_admin(request, db, before) is None
+    admin.session_revoke_at = datetime.now(UTC) - timedelta(milliseconds=50)
+    db.flush()
+    assert get_optional_current_admin(request, db, create_admin_session_token(admin.id)) is not None
+
+
+def test_sign_counter_regression_locks_passkey_and_alerts(db, monkeypatch):
+    """Review L8: Zähler läuft zurück (geklonter Schlüssel?) -> Passkey gesperrt, Systemcheck kritisch."""
+    from app.services import system_health_service
+
+    recorded: list[Exception] = []
+    import app.core.error_log as error_log
+
+    monkeypatch.setattr(error_log, "record_system_error", lambda db, *, exc, **_kw: recorded.append(exc))
+    admin = _make_admin(db, "clone@example.com")
+    passkey = SoftPasskey()
+    _enroll_via_login(db, admin, passkey)
+    service = AdminAuthService()
+    for _ in range(2):  # Zähler steigt auf 2
+        pending = _login(db, admin.email)
+        start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=passkey.get(start.public_key, origin=ORIGIN))
+
+    passkey.sign_count = 0  # Klon mit altem Zählerstand
+    pending = _login(db, admin.email)
+    start = service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    with pytest.raises(HTTPException) as exc_info:
+        service.verify_login_passkey(db, Response(), flow_token=start.flow_token, credential=passkey.get(start.public_key, origin=ORIGIN))
+    assert exc_info.value.detail == {"code": "passkey_invalid", "message": "Der Passkey konnte nicht geprüft werden"}
+    factor = db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).one()
+    assert factor.locked_at is not None
+    assert recorded and "gesperrt" in str(recorded[0])
+
+    # Gesperrt: auch der «richtige» Schlüssel kommt nicht mehr durch, nur der Notausgang hilft
+    passkey.sign_count = 100
+    pending = _login(db, admin.email)
+    with pytest.raises(HTTPException):
+        service.start_login_passkey(db, ticket=pending.mfa.ticket, request_host=None, request_origin=ORIGIN)
+    check = system_health_service._check_admin_passkeys(db)
+    assert check.status == "critical" and check.params["count"] >= 1

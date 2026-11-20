@@ -239,6 +239,11 @@
         "title": "Overload protection",
         "detail": "{rejected, number} rejections · {users, number} new users · {tenants, number} organizations · load up to {pressurePercent, number} % (last {minutes, number} min)",
         "problem": "Overload: new users are being turned away"
+      },
+      "admin_passkeys": {
+        "title": "Admin passkeys",
+        "detail": "{count, number} locked admin passkeys",
+        "problem": "Admin passkey locked (counter went backwards, possible clone)"
       }
     },
     "problems": {

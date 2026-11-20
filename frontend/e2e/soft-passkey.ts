@@ -128,3 +128,22 @@ export class SoftPasskey {
     };
   }
 }
+
+// Passkey-Bestätigung (Step-up) für eine Admin-API-Anfrage aus einem API-Kontext (backend
+// app/core/admin_step_up.py): Zweck, Methode, Pfad und SHA-256 des Bodys.
+export async function stepUpHeaders(
+  context: { post: (url: string, options: { data: unknown }) => Promise<{ ok(): boolean; text(): Promise<string>; json(): Promise<any> }> },
+  passkey: SoftPasskey,
+  origin: string,
+  purpose: string,
+  method: string,
+  path: string,
+  body = ""
+): Promise<Record<string, string>> {
+  const bodySha256 = crypto.createHash("sha256").update(body).digest("hex");
+  const start = await context.post("/api/admin/mfa/step-up/start", { data: { purpose, method, path, body_sha256: bodySha256 } });
+  if (!start.ok()) throw new Error(`step-up start: ${await start.text()}`);
+  const { flow_token, public_key } = await start.json();
+  const proof = JSON.stringify({ flow_token, credential: passkey.assertion(public_key, origin) });
+  return { "X-Hocx-Step-Up": Buffer.from(proof).toString("base64url") };
+}

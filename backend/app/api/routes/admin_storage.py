@@ -17,6 +17,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.schemas.base import MAX_QUERY_OFFSET
+from app.core.admin_step_up import require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
@@ -179,7 +180,7 @@ def update_profile(profile_id: uuid.UUID, payload: StorageProfileUpdate, db: Ses
     return _profile_read(db, profile)
 
 
-@router.delete("/storage/profiles/{profile_id}", status_code=204)
+@router.delete("/storage/profiles/{profile_id}", dependencies=[Depends(require_step_up("storage-destructive"))], status_code=204)
 def delete_profile(profile_id: uuid.UUID, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     profile = _profile_or_404(db, profile_id)
     name = profile.name
@@ -222,7 +223,7 @@ def list_migrations(db: Session = Depends(get_db), limit: int = Query(20, ge=1, 
     return [_migration_read(db, row, with_events=False) for row in rows]
 
 
-@router.post("/storage/migrations", response_model=StorageMigrationRead, status_code=201)
+@router.post("/storage/migrations", dependencies=[Depends(require_step_up("storage-destructive"))], response_model=StorageMigrationRead, status_code=201)
 def create_migration(payload: StorageMigrationCreate, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     target = _profile_or_404(db, payload.target_profile_id)
     if target.data_location == "third_country" and not payload.confirm_third_country:
@@ -308,12 +309,12 @@ def retry_failed_objects(migration_id: uuid.UUID, db: Session = Depends(get_db),
     return _action(db, admin, migration_id, "retry_failed", sms.retry_failed)
 
 
-@router.post("/storage/migrations/{migration_id}/accept-missing", response_model=StorageMigrationRead)
+@router.post("/storage/migrations/{migration_id}/accept-missing", dependencies=[Depends(require_step_up("storage-destructive"))], response_model=StorageMigrationRead)
 def accept_missing_objects(migration_id: uuid.UUID, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_owner)):
     return _action(db, admin, migration_id, "accepted_missing", sms.accept_missing)
 
 
-@router.post("/storage/migrations/{migration_id}/confirm-cutover", response_model=StorageMigrationRead)
+@router.post("/storage/migrations/{migration_id}/confirm-cutover", dependencies=[Depends(require_step_up("storage-destructive"))], response_model=StorageMigrationRead)
 def confirm_cutover(migration_id: uuid.UUID, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     return _action(db, admin, migration_id, "cutover_confirmed", sms.confirm_cutover)
 
@@ -339,7 +340,7 @@ def request_local_s3(db: Session = Depends(get_db), admin: CurrentAdmin = Depend
 # --- Generationen -----------------------------------------------------------------------------
 
 
-@router.post("/storage/generations/{generation_id}/purge", response_model=StorageGenerationRead)
+@router.post("/storage/generations/{generation_id}/purge", dependencies=[Depends(require_step_up("storage-destructive"))], response_model=StorageGenerationRead)
 def purge_generation(
     generation_id: int, payload: GenerationPurgeRequest, db: Session = Depends(get_db),
     admin: CurrentAdmin = Depends(require_admin_owner), _writer: CurrentAdmin = Depends(require_admin_write),

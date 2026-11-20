@@ -551,6 +551,17 @@ def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
     )
 
 
+def _check_admin_passkeys(db: Session) -> HealthCheckRead:
+    """Gesperrte Admin-Passkeys (Review L8): der Zähler eines Passkeys lief zurück - Hinweis auf
+    einen geklonten Schlüssel. Kritisch, bis der Passkey per admin_cli reset-passkeys entfernt ist."""
+    from app.models import UserMfaFactor
+
+    locked = db.scalar(
+        select(func.count()).where(UserMfaFactor.platform_admin_id.is_not(None), UserMfaFactor.locked_at.is_not(None))
+    ) or 0
+    return HealthCheckRead(key="admin_passkeys", status="critical" if locked else "ok", params={"count": locked})
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -785,6 +796,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     # Netzwerkprüfung: ein Ausfall des Captcha-Dienstes ist kein Bug, nicht ins Fehlerprotokoll.
     checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db, report_errors=False)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
+    checks += _run_check("admin_passkeys", lambda: _check_admin_passkeys(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)

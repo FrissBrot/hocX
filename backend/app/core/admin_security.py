@@ -48,6 +48,9 @@ def create_admin_session_token(admin_id: int) -> str:
             "mfa": True,
             "amr": SESSION_AMR,
             "iat": int(now.timestamp()),
+            # Millisekunden (Review L5): ein Widerruf in derselben Sekunde wie die Ausstellung
+            # entscheidet sonst je nach Rundung falsch.
+            "iat_ms": int(now.timestamp() * 1000),
             "exp": int((now + timedelta(hours=settings.admin_session_ttl_hours)).timestamp()),
         },
         separators=(",", ":"),
@@ -108,8 +111,10 @@ def get_optional_current_admin(
     if admin is None or not admin.is_active:
         return None
     if admin.session_revoke_at is not None:
-        token_iat = int(session_data.get("iat", 0))
-        if int(admin.session_revoke_at.timestamp()) > token_iat:
+        # Ältere Tokens ohne iat_ms: Ende ihrer Ausstellungssekunde (strenger als vorher nicht nötig,
+        # sie gelten ohnehin nur noch mit amr=passkey).
+        token_iat_ms = int(session_data.get("iat_ms") or int(session_data.get("iat", 0)) * 1000)
+        if int(admin.session_revoke_at.timestamp() * 1000) >= token_iat_ms:
             return None
     # Audit finding, 2026-08-27: platform admins are the highest-privilege tier (full
     # cross-tenant access, backup export, admin management) but previously had no MFA

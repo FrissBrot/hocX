@@ -420,6 +420,8 @@ class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list
     )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Gesperrt, weil der Zähler zurücklief (0205, admin_mfa_service, Systemcheck admin_passkeys)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):

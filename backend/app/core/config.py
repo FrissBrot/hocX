@@ -80,9 +80,6 @@ class Settings(BaseSettings):
     traefik_abgabebox_domain: str | None = None
     # Domain des Plattform-Admin-Panels: erwarteter WebAuthn-Origin der Admin-Passkeys (SEC-021).
     traefik_admin_domain: str | None = None
-    # Host-Port des Admin-Entrypoints (docker-compose.traefik.yml). Wird die Admin-Domain mit
-    # diesem Port aufgerufen, ist https://<Admin-Domain>:<Port> der erwartete Passkey-Origin.
-    traefik_admin_port: int | None = None
     # Docs- und Website-Domain: nur, damit sie nie als Mandanten-Domain eingetragen werden können.
     traefik_docs_domain: str | None = None
     traefik_website_domain: str | None = None

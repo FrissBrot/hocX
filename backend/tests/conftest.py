@@ -50,6 +50,8 @@ def _admin_gate_open(request, monkeypatch):
         from app.core import admin_gate
 
         monkeypatch.setattr(admin_gate, "gate_mode", lambda: admin_gate.MODE_OPEN)
+        # Start ohne Admin-Domain/Gate-Secret erlauben (die Suite läuft als «production»)
+        monkeypatch.setattr(admin_gate, "validate_startup", lambda: None)
 
 
 # --- RLS-Testmodus -------------------------------------------------------------------------

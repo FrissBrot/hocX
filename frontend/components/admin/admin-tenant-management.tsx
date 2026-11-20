@@ -12,6 +12,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
+import { stepUpFetch, stepUpHeaders } from "@/lib/admin-step-up";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -237,11 +238,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     try {
       const { browserApiBaseUrl } = await import("@/lib/api/client");
       // POST statt GET: das optionale Passwort steht nur im Body, nie in einer URL.
-      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export`, {
+      const exportPath = `/api/admin/tenants/${exportTenant.id}/export`;
+      const exportBody = JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials });
+      // Export enthält alle Daten des Mandanten: nur mit Passkey-Bestätigung (Security-Review M2)
+      const confirmHeaders = await stepUpHeaders("tenant-export", "POST", exportPath, exportBody);
+      const res = await fetch(`${browserApiBaseUrl}${exportPath}`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials }),
+        headers: { "Content-Type": "application/json", ...confirmHeaders },
+        body: exportBody,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -270,7 +275,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     });
     if (!confirmed) return;
     try {
-      await browserApiFetch(`/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
+      await stepUpFetch("tenant-delete", `/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
       // Deleting the last item on a page would strand the view past the new end - fall
       // back a page first if that's about to happen (changing offset re-triggers the load).
       if (tenants.length === 1 && offset > 0) {

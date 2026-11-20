@@ -8,6 +8,8 @@
 - Alle Admin-Sessions werden beendet (``session_revoke_at``); zusätzlich gelten Tokens ohne den
   Claim ``amr=passkey`` ohnehin nicht mehr (admin_security.py).
 - Neue CHECK-Constraint: Faktoren eines Plattform-Admins sind immer ``webauthn``.
+- Neue Spalte ``user_mfa_factor.locked_at``: ein Passkey, dessen Zähler zurückläuft (geklonter
+  Schlüssel?), wird gesperrt statt nur abgelehnt; der Systemcheck ``admin_passkeys`` meldet ihn.
 
 Downgrade: Tabelle und Spalten kommen leer zurück, die Constraint entfällt. Gelöschte Faktoren und
 eine SSO-Konfiguration lassen sich nicht wiederherstellen (ein älteres Release lässt Admins ohne
@@ -28,6 +30,7 @@ def upgrade() -> None:
         "ALTER TABLE user_mfa_factor ADD CONSTRAINT ck_user_mfa_factor_admin_passkey "
         "CHECK (platform_admin_id IS NULL OR factor_type = 'webauthn')"
     )
+    op.execute("ALTER TABLE user_mfa_factor ADD COLUMN locked_at timestamptz")
     op.execute("UPDATE platform_admin SET session_revoke_at = now()")
     op.execute("ALTER TABLE platform_admin DROP CONSTRAINT IF EXISTS uq_platform_admin_oidc")
     op.execute("ALTER TABLE platform_admin DROP COLUMN IF EXISTS oidc_subject")
@@ -68,3 +71,4 @@ def downgrade() -> None:
     op.execute("ALTER TABLE platform_admin ADD COLUMN oidc_issuer text")
     op.execute("ALTER TABLE platform_admin ADD CONSTRAINT uq_platform_admin_oidc UNIQUE (oidc_issuer, oidc_subject)")
     op.execute("ALTER TABLE user_mfa_factor DROP CONSTRAINT IF EXISTS ck_user_mfa_factor_admin_passkey")
+    op.execute("ALTER TABLE user_mfa_factor DROP COLUMN IF EXISTS locked_at")

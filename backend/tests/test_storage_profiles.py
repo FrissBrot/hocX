@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from app.api.routes import admin_storage
 from app.core.admin_security import CurrentAdmin, get_current_admin
+from app.core.admin_step_up import require_step_up
 from app.core.db import get_db
 from app.models import StorageProfile, StorageState
 from app.services import storage_profile_service as sps
@@ -23,7 +24,10 @@ def _client(db, role: str = "owner") -> TestClient:
     app = FastAPI()
     app.include_router(admin_storage.router, prefix="/api/admin")
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[get_current_admin] = lambda: CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email=f"{role}@example.com", display_name=role, role=role)
+    current = CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email=f"{role}@example.com", display_name=role, role=role)
+    app.dependency_overrides[get_current_admin] = lambda: current
+    # Passkey-Step-up (app/core/admin_step_up.py) wird in test_admin_step_up.py geprüft
+    app.dependency_overrides[require_step_up("storage-destructive")] = lambda: current
     return TestClient(app)
 
 

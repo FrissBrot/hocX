@@ -96,6 +96,25 @@ def admin_request_allowed(headers: dict[str, str], peer: str | None) -> bool:
     return _host_allowed(headers, peer)
 
 
+def is_development() -> bool:
+    return settings.environment.strip().lower() in DEVELOPMENT_ENVIRONMENT_NAMES
+
+
+def validate_startup() -> None:
+    """Review L3: Ausserhalb der Entwicklung startet die API nur mit Admin-Domain und Gate-Secret
+    (mindestens 32 Zeichen) - sonst hinge die Isolation an einer fehlenden Variable. Der Deploy
+    scheitert dann an den Smoke-Checks und rollt zurück."""
+    if is_development():
+        return
+    problems = []
+    if not (settings.traefik_admin_domain or "").strip():
+        problems.append("TRAEFIK_ADMIN_DOMAIN fehlt")
+    if len(settings.admin_gate_secret or "") < 32:
+        problems.append("ADMIN_GATE_SECRET fehlt oder ist kürzer als 32 Zeichen")
+    if problems:
+        raise RuntimeError("Admin-Isolation nicht konfiguriert: " + ", ".join(problems))
+
+
 def log_gate_configuration() -> None:
     """Beim Start: fehlendes Secret ausserhalb der Entwicklung ins Fehlerprotokoll (Admin-Panel und
     ntfy sehen es sonst nie - das Panel selbst ist dann ja nicht erreichbar)."""

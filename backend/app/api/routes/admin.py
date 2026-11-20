@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_origin import admin_request_hostname, expected_admin_origin
+from app.core.admin_step_up import require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
@@ -511,7 +512,7 @@ async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
     return tenant
 
 
-@router.delete("/tenants/{tenant_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}", dependencies=[Depends(require_step_up("tenant-delete"))], status_code=204)
 def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
@@ -536,7 +537,7 @@ def preview_tenant_cleanup(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     return cleanup_service.preview(db, internal_tenant_id)
 
 
-@router.post("/tenants/{tenant_id}/cleanup", response_model=TenantCleanupCounts)
+@router.post("/tenants/{tenant_id}/cleanup", dependencies=[Depends(require_step_up("tenant-delete"))], response_model=TenantCleanupCounts)
 def cleanup_tenant(
     tenant_id: uuid.UUID,
     payload: TenantCleanupRequest,
@@ -598,7 +599,7 @@ def list_features(db: Session = Depends(get_db)):
     return tenant_service.list_features(db)
 
 
-@router.put("/features/{code}", response_model=AdminFeatureRead)
+@router.put("/features/{code}", dependencies=[Depends(require_step_up("catalog-change"))], response_model=AdminFeatureRead)
 def update_feature(
     code: str,
     payload: AdminFeatureUpdate,
@@ -687,7 +688,7 @@ def upsert_storage_package(
     return result
 
 
-@router.delete("/plans/{code}", status_code=204)
+@router.delete("/plans/{code}", dependencies=[Depends(require_step_up("catalog-change"))], status_code=204)
 def delete_plan(
     code: str,
     db: Session = Depends(get_db),
@@ -703,7 +704,7 @@ def delete_plan(
               entity_type="plan", entity_id=None, details={"code": code})
 
 
-@router.delete("/storage-packages/{code}", status_code=204)
+@router.delete("/storage-packages/{code}", dependencies=[Depends(require_step_up("catalog-change"))], status_code=204)
 def delete_storage_package(
     code: str,
     db: Session = Depends(get_db),
@@ -734,7 +735,7 @@ def preview_catalog_import(
     return catalog_config_service.preview(db, payload.config, overwrite=payload.overwrite)
 
 
-@router.post("/catalog/import", response_model=CatalogImportPreview)
+@router.post("/catalog/import", dependencies=[Depends(require_step_up("catalog-change"))], response_model=CatalogImportPreview)
 def apply_catalog_import(
     payload: CatalogImportRequest,
     db: Session = Depends(get_db),
@@ -866,7 +867,7 @@ def clone_tenant(
     return result
 
 
-@router.post("/tenants/{tenant_id}/export")
+@router.post("/tenants/{tenant_id}/export", dependencies=[Depends(require_step_up("tenant-export"))])
 def export_tenant(
     tenant_id: uuid.UUID,
     payload: TenantExportRequest,
@@ -1128,7 +1129,7 @@ def get_user_mfa(
     return mfa_service.get_platform_admin_user_overview(db, internal_user_id)
 
 
-@router.delete("/users/{user_id}/mfa/factors/{factor_id}", response_model=UserMfaRead)
+@router.delete("/users/{user_id}/mfa/factors/{factor_id}", dependencies=[Depends(require_step_up("user-mfa-reset"))], response_model=UserMfaRead)
 def delete_user_mfa_factor(
     user_id: uuid.UUID,
     factor_id: uuid.UUID,
@@ -1162,7 +1163,7 @@ def get_my_admin_mfa(
     return admin_mfa_service.get_self_overview(db, current_admin)
 
 
-@router.post("/mfa/passkeys/start", response_model=PasskeyRegistrationStartRead)
+@router.post("/mfa/passkeys/start", dependencies=[Depends(require_step_up("passkey-manage"))], response_model=PasskeyRegistrationStartRead)
 def start_my_admin_passkey_registration(
     request: Request,
     db: Session = Depends(get_db),
@@ -1193,7 +1194,7 @@ def complete_my_admin_passkey_registration(
     return admin_mfa_service.get_self_overview(db, current_admin)
 
 
-@router.delete("/mfa/factors/{factor_id}", response_model=UserMfaRead)
+@router.delete("/mfa/factors/{factor_id}", dependencies=[Depends(require_step_up("passkey-manage"))], response_model=UserMfaRead)
 def delete_my_admin_mfa_factor(
     factor_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -1210,13 +1211,14 @@ def start_my_admin_step_up(
     payload: AdminStepUpStart,
     request: Request,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(require_admin_write),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
-    """Frische Passkey-Bestätigung für kritische Aktionen (Backup-Wiederherstellung)."""
+    """Frische Passkey-Bestätigung für kritische Aktionen (app/core/admin_step_up.py)."""
     return admin_mfa_service.start_step_up(
         db,
         admin_id=current_admin.admin_id,
         purpose=payload.purpose,
+        binding=f"{payload.method} {payload.path} {payload.body_sha256}",
         request_host=admin_request_hostname(request),
         request_origin=expected_admin_origin(request),
     )
@@ -1230,7 +1232,7 @@ def list_admins(
     return admin_account_service.list_admins(db)
 
 
-@router.post("/admins", response_model=PlatformAdminRead, status_code=201)
+@router.post("/admins", dependencies=[Depends(require_step_up("admin-manage"))], response_model=PlatformAdminRead, status_code=201)
 def create_admin(
     payload: PlatformAdminCreate,
     db: Session = Depends(get_db),
@@ -1249,7 +1251,7 @@ def create_admin(
     return result
 
 
-@router.patch("/admins/{admin_id}", response_model=PlatformAdminRead)
+@router.patch("/admins/{admin_id}", dependencies=[Depends(require_step_up("admin-manage"))], response_model=PlatformAdminRead)
 def update_admin(
     admin_id: uuid.UUID,
     payload: PlatformAdminUpdate,

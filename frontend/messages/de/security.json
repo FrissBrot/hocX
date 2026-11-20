@@ -138,7 +138,9 @@
     "mfa_policy_own_mfa_missing": "Richte zuerst für dein eigenes Konto MFA ein.",
     "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein.",
     "last_passkey": "Der letzte Passkey kann nicht entfernt werden. Füge zuerst einen weiteren hinzu.",
-    "mfa_already_configured": "Für dieses Konto ist bereits ein zweiter Faktor eingerichtet. Bitte melde dich damit an."
+    "mfa_already_configured": "Für dieses Konto ist bereits ein zweiter Faktor eingerichtet. Bitte melde dich damit an.",
+    "step_up_required": "Diese Aktion muss mit deinem Passkey bestätigt werden.",
+    "step_up_mismatch": "Die Passkey-Bestätigung gehört zu einer anderen Aktion. Bitte erneut versuchen."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",

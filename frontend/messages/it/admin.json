@@ -239,6 +239,11 @@
         "title": "Protezione dal sovraccarico",
         "detail": "{rejected, number} rifiuti · {users, number} nuovi utenti · {tenants, number} organizzazioni · carico fino al {pressurePercent, number} % (ultimi {minutes, number} min)",
         "problem": "Sovraccarico: i nuovi utenti vengono respinti"
+      },
+      "admin_passkeys": {
+        "title": "Passkey admin",
+        "detail": "{count, number} passkey admin bloccate",
+        "problem": "Passkey admin bloccata (contatore tornato indietro, possibile clone)"
       }
     },
     "problems": {

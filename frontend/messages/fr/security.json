@@ -138,7 +138,9 @@
     "mfa_policy_own_mfa_missing": "Configurez d'abord la MFA pour votre propre compte.",
     "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur.",
     "last_passkey": "La dernière clé d’accès ne peut pas être supprimée. Ajoutez-en d’abord une autre.",
-    "mfa_already_configured": "Un second facteur est déjà configuré pour ce compte. Veuillez vous connecter avec celui-ci."
+    "mfa_already_configured": "Un second facteur est déjà configuré pour ce compte. Veuillez vous connecter avec celui-ci.",
+    "step_up_required": "Cette action doit être confirmée avec votre clé d’accès.",
+    "step_up_mismatch": "La confirmation par clé d’accès concerne une autre action. Veuillez réessayer."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",

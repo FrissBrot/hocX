@@ -107,3 +107,19 @@ class SoftPasskey:
                 "userHandle": None,
             },
         }
+
+
+def step_up_header(db, admin_id: int, passkey: SoftPasskey, *, purpose: str, method: str, path: str, body: bytes = b"",
+                   rp_id: str, origin: str) -> dict[str, str]:
+    """Header X-Hocx-Step-Up für eine bestimmte Admin-Anfrage (app/core/admin_step_up.py)."""
+    import base64
+
+    from app.core.admin_step_up import step_up_binding
+    from app.services.admin_mfa_service import AdminMfaService
+
+    start = AdminMfaService().start_step_up(
+        db, admin_id=admin_id, purpose=purpose, binding=step_up_binding(method, path, body),
+        request_host=rp_id, request_origin=origin,
+    )
+    proof = {"flow_token": start.flow_token, "credential": passkey.get(start.public_key, origin=origin)}
+    return {"X-Hocx-Step-Up": base64.urlsafe_b64encode(json.dumps(proof).encode()).decode().rstrip("=")}

@@ -24,6 +24,17 @@ Installationen aktualisieren können.
   erhält erst danach eine Session. Mehrere Passkeys je Admin, der letzte ist nicht entfernbar. Die
   Backup-Wiederherstellung verlangt eine frische Passkey-Bestätigung statt eines TOTP-Codes.
   Notausgang: `python -m app.admin_cli reset-passkeys --email …` im Backend-Container.
+- **Security-Review der Abschottung:** Der Admin-Entrypoint nimmt nur noch die Quelle des
+  Ziti-Tunnels an (Gateway des Compose-Netzes; ein Container im selben Netz bekommt 403).
+  Das Admin-Panel läuft als eigener Dienst `admin-frontend`; das öffentliche Frontend liefert `/admin`
+  nie aus und sieht nie den Gate-Header, der nur an ein internes `INTERNAL_API_URL` geht. Kritische
+  Admin-Aktionen (Passkeys, Admins, Mandant löschen/exportieren, Speicher, Backups, Katalog,
+  MFA-Reset) verlangen eine an genau diese Anfrage gebundene Passkey-Bestätigung. Ohne Admin-Domain
+  und Gate-Secret startet die API ausserhalb der Entwicklung nicht. Ein Passkey mit rückläufigem
+  Zähler wird gesperrt (Systemcheck «Admin-Passkeys»). Notausgang zusätzlich `reset-password`.
+  Der Sperr-Router kennzeichnet seine 404 (`X-Hocx-Admin-Block`), die Deploy-Prüfung verlangt das
+  Kennzeichen, prüft Pfad-Varianten, POST und alle Mandanten-Domains (höchstens 20) und lässt im
+  Traefik-Dateiprovider nur bekannte Dateien zu. PyJWT entfernt (nicht mehr verwendet).
 - Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
   Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
   erreichbar sind; sonst Rollback.
@@ -41,10 +52,15 @@ Installationen aktualisieren können.
   (auch bisherige Admin-Passkeys, deren RP-ID die Hauptdomain war), beendet alle Admin-Sessions,
   entfernt `platform_oidc_config` und `platform_admin.oidc_*`, neue CHECK-Constraint (Admin-Faktoren
   nur `webauthn`). Downgrade möglich, ohne Daten zurück. Keine neuen Umgebungsvariablen ausser
-  dem Backend durchgereichten `TRAEFIK_ADMIN_PORT` (Compose).
+  `HOCX_ADMIN_SOURCE_CIDRS`/`HOCX_VERIFY_TENANT_DOMAIN_LIMIT` (optional, siehe unten).
 - Prüfadresse des Admin-Zugangs ist jetzt `GET /api/admin/auth/health` (statt
   `/api/admin/auth/oidc/public-config`) - auch für die Wartungsseite.
 - `DEMO_TOTP_SEED` gilt nur noch für Mandanten-Demokonten, nicht mehr für Plattform-Admins.
+- Neuer Dienst `admin-frontend` (gleiches Frontend-Image, `HOCX_FRONTEND_ROLE=admin`); `deploy.sh`
+  startet und prüft ihn mit. `admin-gate.yml` wird jetzt nach `compose up` geschrieben (enthält die
+  Quelladresse); abweichende Tunnel-Endpunkte über `HOCX_ADMIN_SOURCE_CIDRS`. `INTERNAL_API_URL`
+  muss intern sein (Standard `http://backend:8000`), sonst bricht `deploy.sh` ab.
+- Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
 - Fehlerbilder und Ablauf: RUNBOOK Abschnitt 20.
 
 ## [1.4.2] - 2026-11-20

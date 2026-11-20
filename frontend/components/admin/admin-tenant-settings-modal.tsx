@@ -21,6 +21,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { AdminTenantVerificationPanel } from "@/components/admin/admin-identity-verification";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -359,7 +360,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       return;
     setCleanupBusy(true);
     try {
-      const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenant.id}/cleanup`, {
+      const result = await stepUpFetch<TenantCleanupCounts>("tenant-delete", `/api/admin/tenants/${tenant.id}/cleanup`, {
         method: "POST",
         body: JSON.stringify({ categories: Array.from(cleanupSelected), confirm_name: cleanupConfirmName.trim() })
       });

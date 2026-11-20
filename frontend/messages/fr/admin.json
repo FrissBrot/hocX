@@ -239,6 +239,11 @@
         "title": "Protection contre la surcharge",
         "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
         "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
+      },
+      "admin_passkeys": {
+        "title": "Clés d’accès admin",
+        "detail": "{count, number} clés d’accès admin bloquées",
+        "problem": "Clé d’accès admin bloquée (compteur en recul, clone possible)"
       }
     },
     "problems": {

@@ -2,8 +2,8 @@
 
 Mit konfigurierter Admin-Domain ist der erwartete Origin fest ``https://<Admin-Domain>`` (Security-
 Audit SEC-021: ein Vergleich mit dem Origin-Header desselben Requests prüft nichts). Über OpenZiti
-wird die Admin-Domain auf Port 443 angesprochen; nur wenn sie direkt mit dem konfigurierten
-Host-Port des Admin-Entrypoints (TRAEFIK_ADMIN_PORT) aufgerufen wird, gilt dieser Origin. Nur lokal ohne Admin-Domain (Entwicklung,
+wird die Admin-Domain auf Port 443 angesprochen (der Browser meldet keinen Port); ein Aufruf über
+einen anderen Port wird für Passkeys bewusst nicht unterstützt. Nur lokal ohne Admin-Domain (Entwicklung,
 E2E-Stack) gelten Origin und Host der Anfrage - dort laufen die Requests über Next.js' /api-Rewrite,
 dessen Host-Header der Backend-Container ist, deshalb der Origin-Header des Browsers.
 """
@@ -27,14 +27,10 @@ def _browser_origin(request: Request) -> str:
 
 
 def expected_admin_origin(request: Request) -> str:
+    """Nie aus Client-Headern, sobald eine Admin-Domain konfiguriert ist (ausserhalb der Entwicklung
+    erzwingt admin_gate.validate_startup das, Review L3)."""
     if settings.traefik_admin_domain:
-        base = f"https://{settings.traefik_admin_domain.strip().lower().rstrip('.')}"
-        # Aufruf direkt über den Host-Port des Admin-Entrypoints (z. B. per SSH-Tunnel oder
-        # Abnahme-Skript): nur genau dieser konfigurierte Port, nie ein beliebiger aus dem Request.
-        port = settings.traefik_admin_port
-        if port and port != 443 and (request.headers.get("origin") or "").lower() == f"{base}:{port}":
-            return f"{base}:{port}"
-        return base
+        return f"https://{settings.traefik_admin_domain.strip().lower().rstrip('.')}"
     return _browser_origin(request)
 
 

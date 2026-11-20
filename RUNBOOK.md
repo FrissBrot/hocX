@@ -922,19 +922,34 @@ OpenZiti-Tunnel. Seit dem Auth-Audit (SEC-AUTH-001) ist das auf mehreren Ebenen 
    bei Anlage, Prüfung und Import abgelehnt und beim Generieren übersprungen.
 2. **Sperr-Router** `admin-block` (`infra/traefik/dynamic/admin-isolation.yml`, versioniert): auf
    `websecure` mit höchster Priorität für jeden Host, antwortet mit 404 ohne Backend.
-3. **Gate-Header:** Die Admin-Router setzen `X-Hocx-Admin-Gate` auf `ADMIN_GATE_SECRET`
-   (Middleware `admin-gate@file` in `infra/traefik/dynamic/admin-gate.yml`). `websecure` und
-   `adminsecure` entfernen einen von aussen mitgeschickten Header zuerst (`admin-gate-strip@file`).
+3. **Gate-Header und Quelle:** Die Admin-Router setzen `X-Hocx-Admin-Gate` auf `ADMIN_GATE_SECRET`
+   (Middleware `admin-gate@file` in `infra/traefik/dynamic/admin-gate.yml`, eine Kette). Davor
+   lässt `admin-gate-source` nur die Quelladresse des Ziti-Tunnels zu: Über die Docker-
+   Portweiterleitung von `127.0.0.1:<TRAEFIK_ADMIN_PORT>` sieht Traefik das Gateway des Netzes
+   `<projekt>_default`; ein Container im selben Netz, der `traefik:8443` direkt anspricht, bekommt
+   403. `deploy.sh` ermittelt das Gateway nach `compose up`; abweichend über
+   `HOCX_ADMIN_SOURCE_CIDRS` (Komma-Liste). `websecure` und `adminsecure` entfernen einen von aussen
+   mitgeschickten Header zuerst (`admin-gate-strip@file`).
 4. **Backend** (`app/core/admin_gate.py`, äusserste Middleware): `/api/admin/*` nur mit korrektem
    Gate-Header und Host = Admin-Domain, sonst 404. Der Next.js-Server reicht Gate-Header und Host bei
    serverseitigen Admin-Aufrufen weiter (`frontend/lib/admin-gate.ts`), kennt das Secret aber nicht.
-5. **Frontend** (`frontend/proxy.ts`): `/admin*` nur auf der Admin-Domain, sonst 404. Das
-   Admin-Session-Cookie ist host-only und `SameSite=Strict`.
+5. **Frontend:** Das Admin-Panel läuft als eigener Dienst `admin-frontend` (gleiches Image,
+   `HOCX_FRONTEND_ROLE=admin`), nur hinter dem Admin-Entrypoint. Das öffentliche Frontend
+   (`HOCX_FRONTEND_ROLE=public`) liefert `/admin` nie aus und reicht nie einen Gate-Header weiter
+   (`frontend/proxy.ts`, `frontend/lib/admin-gate.ts`). Der Gate-Header geht nur an ein internes
+   `INTERNAL_API_URL` (`deploy.sh` bricht sonst ab). Das Admin-Session-Cookie ist host-only und
+   `SameSite=Strict`.
 6. **Deploy/Verify** (`scripts/lib/traefik_checks.sh`): prüft über den Admin-Entrypoint
    `GET /api/admin/auth/health` (öffentlich, ohne Session) und über den öffentlichen Entrypoint, dass
    `/api/admin/…` und `/admin/…` auf Haupt-, Abgabebox-, Admin-, Docs-, Website- und einer
    Mandanten-Domain (`HOCX_VERIFY_TENANT_DOMAIN` oder die erste aus `tenant-domains.yml`, falls
-   lesbar) eine 4xx liefern. Sonst scheitert der Deploy mit Rollback.
+   lesbar) 404 **mit** `X-Hocx-Admin-Block: 1` liefern - auch `/api/%61dmin/…`, `//api/admin/…` und
+   `POST /api/admin/auth/login`, für alle aktiven Mandanten-Domains (aus dem Backend-Container,
+   höchstens `HOCX_VERIFY_TENANT_DOMAIN_LIMIT`, Standard 20). Zusätzlich dürfen im
+   Traefik-Dateiprovider-Verzeichnis nur `security.yml`, `admin-isolation.yml`, `admin-gate.yml`
+   und `tenant-domains.yml` liegen (das Backend kann dort schreiben; ein eigenes Unterverzeichnis
+   ginge nicht, weil Traefik Unterverzeichnisse nicht beobachtet). Sonst scheitert der Deploy mit
+   Rollback.
 
 **Secret:** `ADMIN_GATE_SECRET` (64 Hex) erzeugt `scripts/lib/env_migrate.sh` beim ersten Deploy
 einmalig in der `.env`. `deploy.sh` schreibt bei jedem Deploy `.secrets/admin_gate_secret` (nur für
@@ -952,13 +967,17 @@ Secret rotieren: Wert in `.env` ersetzen (`openssl rand -hex 32`), `./scripts/de
   als `.secrets/admin_gate_secret` (z. B. nach einer Rotation ohne Deploy). `deploy.sh` erneut
   laufen lassen. Traefik-Log: `middleware "admin-gate@file" does not exist` → Datei fehlt oder ist
   für Gruppe 5001 nicht lesbar.
+- *Admin-API 403 über den Ziti-Zugang*: Quelladresse passt nicht (anderer Tunnel-Endpunkt, Netz neu
+  erstellt ohne Deploy). `docker logs <traefik>`/Zugriff prüfen, `HOCX_ADMIN_SOURCE_CIDRS` setzen oder
+  `deploy.sh` erneut laufen lassen.
 - *Admin über die Hauptdomain erreichbar*: darf nie sein - `traefik_checks.sh` schlägt dann Alarm.
   `infra/traefik/dynamic/admin-isolation.yml` vorhanden? `docker logs <traefik>` auf Fehler im
   Dateiprovider prüfen (ein YAML-Fehler in einer Datei dort legt alle Datei-Middlewares lahm).
 - **Entwicklung:** ohne `ADMIN_GATE_SECRET` und mit `HOCX_ENVIRONMENT=development` ist das Gate offen
-  (kein OpenZiti-Einstieg, Next-Rewrite statt Traefik). Die Quellcode-Instanz (`docker-compose.yml`)
-  mit `HOCX_ENVIRONMENT=production` hat kein Gate-Secret → Admin-API gesperrt; Produktion läuft über
-  den Release-Stack (`deploy.sh`).
+  (kein OpenZiti-Einstieg, Next-Rewrite statt Traefik). `scripts/dev.sh` legt eine Entwicklungs-
+  `admin-gate.yml` an, falls sie fehlt (für `--profile edge`). Die Quellcode-Instanz
+  (`docker-compose.yml`) mit `HOCX_ENVIRONMENT=production` startet ohne `ADMIN_GATE_SECRET` und
+  `TRAEFIK_ADMIN_DOMAIN` nicht; Produktion läuft über den Release-Stack (`deploy.sh`).
 - **Tests:** `scripts/tests/test_admin_isolation.sh` (statisch, Labels, Secret-Verdrahtung) und
   `scripts/tests/test_admin_isolation_live.sh` (echter Traefik in Wegwerf-Containern).
 
@@ -966,29 +985,42 @@ Secret rotieren: Wert in `.env` ersetzen (`openssl rand -hex 32`), `./scripts/de
 
 Seit Migration `0205_admin_passkey_only` melden sich Plattform-Admins **nur** mit Passwort und
 Passkey an (WebAuthn, `userVerification: required`). TOTP und das Admin-SSO (OIDC) gibt es nicht
-mehr. RP-ID ist die Admin-Domain (`TRAEFIK_ADMIN_DOMAIN`), erwarteter Origin
-`https://<Admin-Domain>` - bzw. `https://<Admin-Domain>:<TRAEFIK_ADMIN_PORT>`, wenn die Domain direkt
-über den Host-Port des Admin-Entrypoints aufgerufen wird. Einen Passkey, der auf der einen Adresse
-registriert wurde, akzeptiert der Browser auf der anderen nicht: immer dieselbe Adresse verwenden
-(über OpenZiti: ohne Port).
+mehr. RP-ID ist die Admin-Domain (`TRAEFIK_ADMIN_DOMAIN`), erwarteter Origin fest
+`https://<Admin-Domain>` - nie aus Headern des Clients. Über OpenZiti wird die Admin-Domain ohne
+Port aufgerufen; ein Aufruf über den Host-Port (`…:8443`) wird für Passkeys nicht unterstützt.
+Ausserhalb der Entwicklung startet die API ohne `TRAEFIK_ADMIN_DOMAIN` und `ADMIN_GATE_SECRET`
+(≥ 32 Zeichen) gar nicht.
 
 - **Erster Login / nach dem Update / neues Konto:** Nach dem Passwort verlangt die Login-Seite
   zwingend die Einrichtung eines Passkeys (Trust on first use). Erst danach gibt es eine Session;
   vorher erreicht das Konto keine andere Admin-API.
 - **Weitere Passkeys** (empfohlen: zweites Gerät oder Sicherheitsschlüssel): Profil-Dialog
-  (`/admin/security`). Der letzte Passkey lässt sich nicht entfernen.
-- **Backup-Wiederherstellung** verlangt zusätzlich eine frische Passkey-Bestätigung.
+  (`/admin/security`). Der letzte Passkey lässt sich nicht entfernen. Sicherheitsschlüssel ohne
+  PIN/Biometrie funktionieren nicht - die Nutzerverifikation ist Pflicht.
+- **Passkey-Bestätigung (Step-up)** zusätzlich zur Session, gebunden an genau die eine Anfrage
+  (Methode, Pfad, SHA-256 des Bodys; `app/core/admin_step_up.py`):
+  Passkey hinzufügen/entfernen, Admin anlegen/ändern (Rolle, Passwort, Deaktivieren), Mandant
+  löschen/bereinigen, Mandanten-Export, MFA eines Mandanten-Kontos zurücksetzen,
+  Speicherprofil löschen, Speicher-Migration anlegen/umschalten/fehlende Objekte akzeptieren,
+  Generation endgültig löschen, Backup-Einstellungen, Wiederherstellung, Feature-/Plan-/
+  Speicherpaket-Änderungen (Feature ändern, Plan/Paket löschen, Katalog-Import).
+- **Gesperrter Passkey:** Läuft der Zähler eines Passkeys zurück (geklonter Schlüssel?), wird er
+  gesperrt; Systemcheck «Admin-Passkeys» kritisch, Eintrag im Fehlerprotokoll. Schlüssel prüfen,
+  dann Notausgang `reset-passkeys`.
 - **Prüfadresse** für Deploy, `verify_release.sh` und die Wartungsseite:
   `GET https://<Admin-Domain>/api/admin/auth/health` → `{"status":"ok"}` (ohne Session, ohne DB).
   `/api/admin/auth/oidc/public-config` gibt es nicht mehr.
 
-**Notausgang** (Passkey verloren, letzter Admin ausgesperrt) - nur auf dem Host:
+**Notausgang** (Passkey oder Passwort verloren, letzter Admin ausgesperrt) - nur auf dem Host:
 
 ```bash
 docker compose -p <projekt> exec backend python -m app.admin_cli reset-passkeys --email <admin-email>
+docker compose -p <projekt> exec backend python -m app.admin_cli reset-password --email <admin-email>
 ```
 
-Löscht alle Passkeys des Kontos, beendet seine Sessions und offenen Login-Vorgänge und schreibt
-`admin.passkeys_reset` ins Audit-Log. Beim nächsten Login richtet das Konto nach dem Passwort einen
-neuen Passkey ein - wer in diesem Moment das Passwort kennt, kann das tun. Deshalb nach dem
-Zurücksetzen sofort selbst anmelden (oder vorher das Passwort ändern).
+`reset-passkeys` löscht alle Passkeys des Kontos, `reset-password` setzt ein neues zufälliges
+Passwort und zeigt es genau einmal an. Beide beenden alle Sessions und offenen Login-Vorgänge,
+löschen die Sperrzähler des Kontos und schreiben den Audit-Eintrag (`actor_email = cli`) in
+derselben Transaktion. Nach `reset-passkeys` richtet das Konto beim nächsten Login nach dem Passwort
+einen neuen Passkey ein - wer in diesem Moment das Passwort kennt, kann das tun. Deshalb sofort
+selbst anmelden (bei Verdacht vorher `reset-password`).

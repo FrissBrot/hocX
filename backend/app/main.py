@@ -17,6 +17,7 @@ from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
+from app.core import admin_gate as admin_gate_module
 from app.core.admin_gate import AdminGateMiddleware, log_gate_configuration
 from app.core.admin_security import parse_admin_session_token
 from app.core.audit_context import AuditContextMiddleware
@@ -227,6 +228,7 @@ async def lifespan(_: FastAPI):
         ensure_startup_seed_data()
         ensure_document_studio()
         ensure_traefik_dynamic_config()
+        admin_gate_module.validate_startup()
         log_gate_configuration()
         ensure_local_storage_profile()
         # Leichte Loops im Backend; die schweren laufen im job-worker (core/loops.py, Paket 10).
