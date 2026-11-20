@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -49,9 +50,11 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
     });
     if (!ok) return;
     try {
-      const next = await browserApiFetch<UserMfaOverview>(`${deletePathBase}/${factorId}`, {
-        method: "DELETE",
-      });
+      const path = `${deletePathBase}/${factorId}`;
+      // Im Plattform-Admin: MFA eines Kontos zurücksetzen nur mit Passkey-Bestätigung (Security-Review M2)
+      const next = path.startsWith("/api/admin/")
+        ? await stepUpFetch<UserMfaOverview>("user-mfa-reset", path, { method: "DELETE" })
+        : await browserApiFetch<UserMfaOverview>(path, { method: "DELETE" });
       setOverview(next);
       showToast(t("factorDeleted"), "success");
     } catch (error) {

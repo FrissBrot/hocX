@@ -63,7 +63,7 @@ def test_admin_paths_need_admin_session():
 
     user_cookie = {settings.auth_session_cookie: create_session_token(1, mfa_verified=True)}
     assert client.post("/api/admin/upload", files={"file": ("a.bin", b"x")}, cookies=user_cookie).status_code == 401
-    admin_cookie = {settings.admin_session_cookie: create_admin_session_token(1, mfa_verified=True)}
+    admin_cookie = {settings.admin_session_cookie: create_admin_session_token(1)}
     assert client.post("/api/admin/upload", files={"file": ("a.bin", b"x")}, cookies=admin_cookie).status_code == 200
 
 

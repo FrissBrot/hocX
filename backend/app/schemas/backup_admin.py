@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+
 Severity = Literal["warning", "critical"]
 
 
@@ -243,13 +244,13 @@ class RestorePreviewRead(BaseModel):
     risks: list[str]
     blockers: list[str]
     confirmation_phrase: str
-    requires_totp: bool = True
+    # Frische Passkey-Bestätigung (POST /api/admin/mfa/step-up/start, purpose backup-restore)
+    requires_passkey: bool = True
     estimated_bytes: int
 
 
 class RestoreCreate(RestorePreviewRequest):
     confirmation: str = Field(min_length=1, max_length=200)
-    totp_code: str = Field(min_length=6, max_length=10, pattern=r"^[0-9 ]+$")
     skip_rescue_backup: bool = False
     skip_rescue_reason: str | None = Field(default=None, max_length=500)
     # Löschungen nach dem Sicherungspunkt erneut anwenden (Löschjournal, PRIV-010); aus nur mit Begründung.

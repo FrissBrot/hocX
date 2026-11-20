@@ -10,6 +10,7 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
@@ -132,7 +133,7 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
 
   async function deleteProfile(profile: StorageProfile) {
     if (!(await confirm({ message: t("confirm.deleteProfile", { name: profile.name }), tone: "danger", confirmLabel: t("actions.delete") }))) return;
-    await run(`delete:${profile.id}`, () => browserApiFetch(`/api/admin/storage/profiles/${profile.id}`, { method: "DELETE" }), t("toast.deleted"));
+    await run(`delete:${profile.id}`, () => stepUpFetch("storage-destructive", `/api/admin/storage/profiles/${profile.id}`, { method: "DELETE" }), t("toast.deleted"));
   }
 
   const active = overview.active_profile;
@@ -462,7 +463,15 @@ function MigrationPanel({ migration, t, locale, busy, run }: {
 
   async function action(name: string, path: string, message: string, tone: "default" | "danger" = "default") {
     if (!(await confirm({ message, tone, confirmLabel: t(`actions.${name}`) }))) return;
-    await run(`${migration.id}:${name}`, () => browserApiFetch(`${base}/${path}`, { method: "POST" }), t(`toast.${name}`));
+    // Endgültige Schritte (Umschalten, fehlende Objekte akzeptieren) nur mit Passkey-Bestätigung
+    const destructive = path === "confirm-cutover" || path === "accept-missing";
+    await run(
+      `${migration.id}:${name}`,
+      () => (destructive
+        ? stepUpFetch("storage-destructive", `${base}/${path}`, { method: "POST" })
+        : browserApiFetch(`${base}/${path}`, { method: "POST" })),
+      t(`toast.${name}`)
+    );
   }
 
   const full = migration.estimate?.full ?? null;
@@ -714,7 +723,7 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
     setSaving(true);
     try {
       const options = { parallelism, bandwidth_limit_mbps: bandwidth, verify_mode: verifyMode, auto_cutover: autoCutover };
-      await browserApiFetch("/api/admin/storage/migrations", {
+      await stepUpFetch("storage-destructive", "/api/admin/storage/migrations", {
         method: "POST", body: JSON.stringify({ target_profile_id: target, options, confirm_third_country: confirmThirdCountry }),
       });
       showToast(t("toast.migrationCreated"), "success");
@@ -828,7 +837,7 @@ function PurgeModal({ t, generation, onClose, onSaved }: { t: TFunc; generation:
     event.preventDefault();
     setSaving(true);
     try {
-      await browserApiFetch(`/api/admin/storage/generations/${generation.id}/purge`, { method: "POST", body: JSON.stringify({ confirmation }) });
+      await stepUpFetch("storage-destructive", `/api/admin/storage/generations/${generation.id}/purge`, { method: "POST", body: JSON.stringify({ confirmation }) });
       showToast(t("toast.purgeRequested"), "success");
       onSaved();
     } catch (error) {

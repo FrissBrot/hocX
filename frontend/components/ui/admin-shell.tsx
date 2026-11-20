@@ -19,7 +19,7 @@ import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
 import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "security" | "storage" | "backups" | "maintenance";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -57,7 +57,6 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     titleKey: "groups.access",
     links: [
       { href: "/admin/admins", labelKey: "nav.admins", icon: "admins" },
-      { href: "/admin/sso", labelKey: "nav.sso", icon: "sso" },
     ],
   },
 ];
@@ -138,12 +137,6 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       </>
     ),
     admins: <path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.5-4.4-1.4-7.5-4.9-7.5-9.5V6z" />,
-    sso: (
-      <>
-        <circle cx="7.5" cy="15.5" r="4" />
-        <path d="M10.4 12.6L20 3M16 7l2.5 2.5M13.5 9.5l2 2" />
-      </>
-    ),
     system: (
       <>
         <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />

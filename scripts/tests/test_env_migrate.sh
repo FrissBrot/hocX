@@ -207,6 +207,18 @@ else
   echo "    (Docker nicht verfuegbar: Compose-Aufloesung uebersprungen)"
 fi
 
+# --- Review L2: eine öffentliche INTERNAL_API_URL wird auf das interne Ziel umgestellt ---
+fresh_env
+grep -Ev "^INTERNAL_API_URL=" "$ENV_FILE" > "$ENV_FILE.next" && mv "$ENV_FILE.next" "$ENV_FILE" && chmod 600 "$ENV_FILE"
+printf "INTERNAL_API_URL='https://app.example.org'\n" >> "$ENV_FILE"
+migrate_output="$(migrate_env_file "$ENV_FILE")"
+test "$(value_of "$ENV_FILE" INTERNAL_API_URL)" = "http://backend:8000" || fail "INTERNAL_API_URL nicht umgestellt"
+[[ "$migrate_output" == *"INTERNAL_API_URL"* ]] || fail "Umstellung von INTERNAL_API_URL nicht gemeldet"
+test "$(grep -c '^INTERNAL_API_URL=' "$ENV_FILE")" -eq 1 || fail "INTERNAL_API_URL doppelt"
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" INTERNAL_API_URL)" = "http://backend:8000" || fail "interne INTERNAL_API_URL verändert"
+
 # --- Objektspeicher (1.2.0): Secrets werden einmalig erzeugt und danach nie ueberschrieben ---
 fresh_env
 migrate_env_file "$ENV_FILE" > /dev/null
@@ -217,7 +229,11 @@ test "${#key_first}" -ge 32 || fail "STORAGE_CREDENTIALS_KEY nicht erzeugt"
 [[ "$(value_of "$ENV_FILE" LOCAL_S3_SECRET_KEY)" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_S3_SECRET_KEY hat nicht 64 Hex-Zeichen"
 export_key_first="$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)"
 [[ "$export_key_first" =~ ^[0-9a-f]{64}$ ]] || fail "EXPORT_ENCRYPTION_KEY hat nicht 64 Hex-Zeichen"
+# SEC-AUTH-001: Admin-Gate-Secret für Traefiks Admin-Entrypoint
+gate_first="$(value_of "$ENV_FILE" ADMIN_GATE_SECRET)"
+[[ "$gate_first" =~ ^[0-9a-f]{64}$ ]] || fail "ADMIN_GATE_SECRET hat nicht 64 Hex-Zeichen"
 migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" ADMIN_GATE_SECRET)" = "$gate_first" || fail "ADMIN_GATE_SECRET wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)" = "$export_key_first" || fail "EXPORT_ENCRYPTION_KEY wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)" = "$key_first" || fail "STORAGE_CREDENTIALS_KEY wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" = "$access_first" || fail "LOCAL_S3_ACCESS_KEY wurde beim zweiten Lauf ueberschrieben"

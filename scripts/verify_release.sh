@@ -19,6 +19,8 @@ ENVIRONMENT="${1:-}"
 source "$REPO_DIR/scripts/lib/env.sh"
 # shellcheck source=scripts/lib/traefik_checks.sh
 source "$REPO_DIR/scripts/lib/traefik_checks.sh"
+# shellcheck source=scripts/lib/admin_gate.sh
+source "$REPO_DIR/scripts/lib/admin_gate.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -66,6 +68,10 @@ load_env_file "$ENV_FILE"
 : "${TRAEFIK_ABGABEBOX_DOMAIN:?TRAEFIK_ABGABEBOX_DOMAIN fehlt in $ENV_FILE}"
 
 DC=(docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}")
+# Für traefik_checks.sh (SEC-AUTH-001): aktive Mandanten-Domains aus der vom Backend generierten Datei
+tenant_domains_for_checks() {
+  "${DC[@]}" exec -T backend cat /app/traefik_dynamic/tenant-domains.yml 2> /dev/null
+}
 
 note() {
   printf '==> [%s] %s\n' "$ENVIRONMENT" "$1"
@@ -93,6 +99,11 @@ check_abgabebox_backend_health() {
 
 check_frontend_local() {
   probe_from_backend "http://frontend:3000/login"
+}
+
+# Admin-Frontend (eigener Dienst, Review M3): antwortet ohne Admin-Host mit 404, also nur «kein 5xx».
+check_admin_frontend_local() {
+  "${DC[@]}" exec -T admin-frontend node -e "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
 }
 
 check_docs_local() {
@@ -131,10 +142,12 @@ run_check "Backend-Health lokal" check_backend_health
 run_check "Backend laeuft in der erwarteten Umgebung" check_backend_environment
 run_check "Abgabebox-Backend-Health lokal" check_abgabebox_backend_health
 run_check "Frontend antwortet lokal" check_frontend_local
+run_check "Admin-Frontend antwortet lokal" check_admin_frontend_local
 run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 
 command -v curl > /dev/null 2>&1 || { echo "curl wird fuer die Domain-Checks benoetigt." >&2; exit 1; }
+run_check "Traefik-Admin-Gate-Datei aktuell (admin-gate.yml)" admin_gate_traefik_config_check
 run_check "Alle Traefik-Router von aussen (Frontend, APIs, Prüfseite, Admin, Docs, Website)" traefik_route_checks
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"

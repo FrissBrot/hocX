@@ -64,6 +64,7 @@ _CHECK_TITLES_DE = {
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien",
     "tenant_offboarding": "Offboarding",
+    "admin_passkeys": "Admin-Passkeys",
     "captcha_endpoint": "Captcha-Endpunkt",
     "security": "Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange",
@@ -90,6 +91,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien im Speicher",
     "tenant_offboarding": "Mandanten nach Vertragsende noch nicht gelöscht",
+    "admin_passkeys": "Admin-Passkey gesperrt (Zähler zurückgelaufen, möglicher Klon)",
     "captcha_endpoint": "Captcha-Endpunkt nicht erreichbar",
     "security": "Auffällige Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
@@ -172,6 +174,11 @@ def _check_message(check) -> str:
             return (
                 f"{params.get('count')} Mandanten haben ihr Vertragsende vor über {params.get('days')} Tagen erreicht - "
                 "Daten löschen (Adminportal → Mandanten)."
+            )
+        case "admin_passkeys":
+            return (
+                f"{params.get('count')} Admin-Passkey(s) gesperrt, weil der Zähler zurücklief - Schlüssel prüfen, "
+                "danach python -m app.admin_cli reset-passkeys (RUNBOOK Abschnitt 22)."
             )
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."

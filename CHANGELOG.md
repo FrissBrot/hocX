@@ -103,6 +103,37 @@ Installationen aktualisieren können.
   Dokument-Worker dieselben Zeilen in umgekehrter Reihenfolge, die Datenbank brach mit einem
   Deadlock ab. Das Löschen wartet jetzt auf den Worker.
 
+### Sicherheit
+
+- **Plattform-Admin nur noch über die Admin-Domain (Auth-Audit SEC-AUTH-001):** Die Admin-API war über
+  jede aktive Mandanten-Domain aus dem Internet erreichbar. Jetzt mehrfach abgesichert: Mandanten-
+  und alle öffentlichen Router schliessen `/admin` und `/api/admin` aus, ein Sperr-Router mit höchster
+  Priorität beantwortet diese Pfade auf dem öffentlichen Entrypoint für jede Domain mit 404, die
+  Admin-Router setzen einen geheimen Gate-Header (öffentliche Entrypoints entfernen ihn), das Backend
+  nimmt `/api/admin` nur damit und auf der Admin-Domain an (sonst 404), das Frontend liefert `/admin`
+  nur auf der Admin-Domain aus. Mandanten-Domains, die einer Systemdomain gleichen oder Subdomain der
+  Admin-Domain sind, werden abgelehnt. Das Admin-Session-Cookie ist jetzt `SameSite=Strict`.
+- **Plattform-Admins nur noch mit Passwort + Passkey:** TOTP und das Admin-SSO (OIDC) sind
+  vollständig entfernt. Passkeys sind Pflicht (RP-ID = Admin-Domain, Nutzerverifikation, jede
+  Challenge einmalig), ein Konto ohne Passkey richtet nach dem Passwort zwingend einen ein und
+  erhält erst danach eine Session. Mehrere Passkeys je Admin, der letzte ist nicht entfernbar. Die
+  Backup-Wiederherstellung verlangt eine frische Passkey-Bestätigung statt eines TOTP-Codes.
+  Notausgang: `python -m app.admin_cli reset-passkeys --email …` im Backend-Container.
+- **Security-Review der Abschottung:** Der Admin-Entrypoint nimmt nur noch die Quelle des
+  Ziti-Tunnels an (Gateway des Compose-Netzes; ein Container im selben Netz bekommt 403).
+  Das Admin-Panel läuft als eigener Dienst `admin-frontend`; das öffentliche Frontend liefert `/admin`
+  nie aus und sieht nie den Gate-Header, der nur an ein internes `INTERNAL_API_URL` geht. Kritische
+  Admin-Aktionen (Passkeys, Admins, Mandant löschen/exportieren, Speicher, Backups, Katalog,
+  MFA-Reset) verlangen eine an genau diese Anfrage gebundene Passkey-Bestätigung. Ohne Admin-Domain
+  und Gate-Secret startet die API ausserhalb der Entwicklung nicht. Ein Passkey mit rückläufigem
+  Zähler wird gesperrt (Systemcheck «Admin-Passkeys»). Notausgang zusätzlich `reset-password`.
+  Der Sperr-Router kennzeichnet seine 404 (`X-Hocx-Admin-Block`), die Deploy-Prüfung verlangt das
+  Kennzeichen, prüft Pfad-Varianten, POST und alle Mandanten-Domains (höchstens 20) und lässt im
+  Traefik-Dateiprovider nur bekannte Dateien zu. PyJWT entfernt (nicht mehr verwendet).
+- Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
+  Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
+  erreichbar sind; sonst Rollback.
+
 ### Update
 
 - **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue
@@ -125,6 +156,37 @@ Installationen aktualisieren können.
   Wartungsseite gilt dort also nach dem Neustart des Backends automatisch.
 - Keine Migrationen, keine neuen Secrets. Neue, optionale Variable `HOCX_DEPLOY_MAINTENANCE`
   (nur Shell, Standard an; `0` = ohne Wartungsmodus während des Updates).
+- `./scripts/deploy.sh <test|prod>` genügt. **Neues Secret `ADMIN_GATE_SECRET`** wird beim Update
+  automatisch in der `.env` erzeugt; `deploy.sh` schreibt daraus `.secrets/admin_gate_secret` und die
+  Traefik-Datei `infra/traefik/dynamic/admin-gate.yml` (nicht im Repo). Traefik wird wegen der
+  geänderten `traefik.yml` automatisch neu erstellt. Keine Migration.
+- Wer das Admin-Panel über einen Link von einer anderen Seite (oder nach dem SSO) öffnet, sieht kurz
+  die Login-Seite, die mit bestehender Sitzung sofort weiterleitet (`SameSite=Strict`).
+- **Beim Update werden Admin-TOTP und Admin-SSO entfernt; beim ersten Admin-Login wird ein Passkey
+  eingerichtet.** Migration `0205_admin_passkey_only`: löscht alle MFA-Faktoren der Plattform-Admins
+  (auch bisherige Admin-Passkeys, deren RP-ID die Hauptdomain war), beendet alle Admin-Sessions,
+  entfernt `platform_oidc_config` und `platform_admin.oidc_*`, neue CHECK-Constraint (Admin-Faktoren
+  nur `webauthn`). Downgrade möglich, ohne Daten zurück. Keine neuen Umgebungsvariablen ausser
+  `HOCX_ADMIN_SOURCE_CIDRS`/`HOCX_VERIFY_TENANT_DOMAIN_LIMIT` (optional, siehe unten).
+- Prüfadresse des Admin-Zugangs ist jetzt `GET /api/admin/auth/health` (statt
+  `/api/admin/auth/oidc/public-config`) - auch für die Wartungsseite.
+- `DEMO_TOTP_SEED` gilt nur noch für Mandanten-Demokonten, nicht mehr für Plattform-Admins.
+- Neuer Dienst `admin-frontend` (gleiches Frontend-Image, `HOCX_FRONTEND_ROLE=admin`); `deploy.sh`
+  startet und prüft ihn mit. `admin-gate.yml` wird jetzt nach `compose up` geschrieben (enthält die
+  Quelladresse); abweichende Tunnel-Endpunkte über `HOCX_ADMIN_SOURCE_CIDRS`. `INTERNAL_API_URL`
+  muss intern sein (Standard `http://backend:8000`), sonst bricht `deploy.sh` ab.
+- Neues Netz `edge`: Traefik ist nur noch darin (mit den Diensten, die es anspricht), nicht mehr im
+  Standardnetz; `compose up` erstellt die Dienste neu. Die Datenbank läuft ohne NET_RAW (nur die
+  Rechte des Postgres-Entrypoints).
+- `infra/traefik/dynamic` wird beim Deploy auf 3770 (Sticky-Bit) gesetzt, versionierte Dateien und
+  `admin-gate.yml` auf 0640.
+- **`INTERNAL_API_URL`** wird beim Update automatisch auf `http://backend:8000` umgestellt, falls
+  dort noch die öffentliche Domain steht (Hinweis im Deploy-Log); `deploy.sh` verlangt ein internes
+  Ziel.
+- Admin-Konten-, Mandanten-Konten- und Plattform-Einstellungen (SMTP, ntfy) sowie das Klonen eines
+  Mandanten verlangen jetzt ebenfalls eine Passkey-Bestätigung.
+- Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
+- Fehlerbilder und Ablauf: RUNBOOK Abschnitte 21 (Admin-Zugang) und 22 (Anmeldung, Notausgang).
 
 ## [1.4.2] - 2026-11-20
 

@@ -1,37 +1,34 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
+import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
-import { AdminLoginResponse, AdminSessionInfo, PendingMfaLogin, PlatformOidcConfigPublic, TotpEnrollmentStart } from "@/types/api";
+import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
+import { AdminLoginResponse, AdminSessionInfo, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
-import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 
-function sanitizeTotpCode(value: string) {
-  return value.replace(/\D/g, "").slice(0, 6);
-}
-
+// Plattform-Admins melden sich nur mit Passwort + Passkey an (kein TOTP, kein SSO). Ein Konto ohne
+// Passkey richtet nach dem Passwort zwingend einen ein und bekommt erst danach eine Session
+// (backend/app/services/admin_mfa_service.py).
 export default function AdminLoginPage() {
   const t = useTranslations("admin.login");
-  // Fehlercodes des Backends (invalid_credentials, totp_invalid, rate_limited …) teilt sich der
+  // Fehlercodes des Backends (invalid_credentials, passkey_invalid, rate_limited …) teilt sich der
   // Admin-Login mit dem Mandanten-Login
   const tSecurity = useTranslations("security");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [oidcConfig, setOidcConfig] = useState<PlatformOidcConfigPublic | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingMfa, setPendingMfa] = useState<PendingMfaLogin | null>(null);
-  const [totpCode, setTotpCode] = useState("");
-  const [totpLabel, setTotpLabel] = useState("");
-  const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
+  const [passkeyLabel, setPasskeyLabel] = useState("");
+  const [passkeysSupported, setPasskeysSupported] = useState(true);
 
   useEffect(() => {
+    setPasskeysSupported(browserSupportsPasskeys());
     async function checkSession() {
       try {
         const session = await browserApiFetch<AdminSessionInfo>("/api/admin/auth/session");
@@ -43,35 +40,15 @@ export default function AdminLoginPage() {
     void checkSession();
   }, [router]);
 
-  useEffect(() => {
-    async function loadOidc() {
-      try {
-        const cfg = await browserApiFetch<PlatformOidcConfigPublic>("/api/admin/auth/oidc/public-config");
-        setOidcConfig(cfg ?? null);
-      } catch {
-        setOidcConfig(null);
-      }
-    }
-    void loadOidc();
-  }, []);
-
-  function loginWithOidc() {
-    window.location.href = `${browserApiBaseUrl}/api/admin/auth/oidc/authorize?redirect_to=/admin`;
-  }
-
   function finishLogin() {
     // Nur replace(), kein zusätzliches refresh() - beide lösen sonst nahezu gleichzeitig
-    // eine Server-Neuladen für die Zielroute aus, was zu einem kurzen Hin-und-Her zwischen
-    // /admin/login und /admin führte (spürbar als Login-Loop, da staleTimes.dynamic=0 ohnehin
-    // schon jede Navigation frisch vom Server lädt - refresh() ist hier redundant).
+    // eine Server-Neuladen für die Zielroute aus (spürbar als Login-Loop).
     router.replace("/admin");
   }
 
   function resetMfaFlow() {
     setPendingMfa(null);
-    setTotpSetup(null);
-    setTotpCode("");
-    setTotpLabel("");
+    setPasskeyLabel("");
     setStatusMsg("");
   }
 
@@ -90,7 +67,6 @@ export default function AdminLoginPage() {
       }
       if (result.mfa) {
         setPendingMfa(result.mfa);
-        setTotpCode("");
         setStatusMsg("");
         return;
       }
@@ -102,68 +78,53 @@ export default function AdminLoginPage() {
     }
   }
 
-  async function verifyTotp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function verifyPasskey() {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg(t("status.codeChecking"));
+    setStatusMsg(t("status.passkeyChecking"));
     try {
-      const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/totp/verify", {
-        method: "POST",
-        body: JSON.stringify({ ticket: pendingMfa.ticket, code: totpCode }),
-      });
-      if (result.authenticated) {
-        finishLogin();
-        return;
-      }
-      setStatusMsg(t("status.codeCheckFailed"));
-    } catch (error) {
-      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.codeCheckFailed")));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function startTotpSetup() {
-    if (!pendingMfa) return;
-    setLoading(true);
-    setStatusMsg(t("status.totpSetupPreparing"));
-    try {
-      const setup = await browserApiFetch<TotpEnrollmentStart>("/api/admin/auth/mfa/totp/setup/start", {
+      const start = await browserApiFetch<PasskeyAssertionStart>("/api/admin/auth/mfa/passkey/start", {
         method: "POST",
         body: JSON.stringify({ ticket: pendingMfa.ticket }),
       });
-      setTotpSetup(setup);
-      setTotpCode("");
-      setTotpLabel("");
-      setStatusMsg("");
-    } catch (error) {
-      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpSetupStartFailed")));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function completeTotpSetup() {
-    if (!totpSetup) return;
-    setLoading(true);
-    setStatusMsg(t("status.totpActivating"));
-    try {
-      const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/totp/setup/complete", {
+      const credential = await getPasskeyAssertion(start.public_key);
+      const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/passkey/verify", {
         method: "POST",
-        body: JSON.stringify({
-          flow_token: totpSetup.flow_token,
-          code: totpCode,
-          label: totpLabel || null,
-        }),
+        body: JSON.stringify({ flow_token: start.flow_token, credential }),
       });
       if (result.authenticated) {
         finishLogin();
         return;
       }
-      setStatusMsg(t("status.totpActivateFailed"));
+      setStatusMsg(t("status.passkeyFailed"));
     } catch (error) {
-      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpActivateFailed")));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.passkeyFailed")));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function setupPasskey() {
+    if (!pendingMfa) return;
+    setLoading(true);
+    setStatusMsg(t("status.passkeySetupPreparing"));
+    try {
+      const start = await browserApiFetch<PasskeyRegistrationStart>("/api/admin/auth/mfa/passkey/setup/start", {
+        method: "POST",
+        body: JSON.stringify({ ticket: pendingMfa.ticket }),
+      });
+      const credential = await createPasskeyCredential(start.public_key);
+      const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/passkey/setup/complete", {
+        method: "POST",
+        body: JSON.stringify({ flow_token: start.flow_token, label: passkeyLabel || null, credential }),
+      });
+      if (result.authenticated) {
+        finishLogin();
+        return;
+      }
+      setStatusMsg(t("status.passkeySetupFailed"));
+    } catch (error) {
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.passkeySetupFailed")));
     } finally {
       setLoading(false);
     }
@@ -171,30 +132,29 @@ export default function AdminLoginPage() {
 
   function renderPasswordStep() {
     return (
-      <>
-        {oidcConfig?.enabled && (
-          <div className="login-sso">
-            <button type="button" className="button-secondary oidc-button" onClick={loginWithOidc}>
-              {t("loginWithSso", { host: new URL(oidcConfig.issuer_url).hostname })}
-            </button>
-            <div className="login-divider"><span>{t("or")}</span></div>
-          </div>
-        )}
+      <form className="grid" onSubmit={submit}>
+        <label className="field-stack">
+          <span className="field-label">{t("email")}</span>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+        </label>
+        <label className="field-stack">
+          <span className="field-label">{t("password")}</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+        </label>
+        <button type="submit" className="button-secondary" disabled={loading}>
+          {loading ? "…" : t("submit")}
+        </button>
+      </form>
+    );
+  }
 
-        <form className="grid" onSubmit={submit}>
-          <label className="field-stack">
-            <span className="field-label">{t("email")}</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{t("password")}</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
-          </label>
-          <button type="submit" className="button-secondary" disabled={loading}>
-            {loading ? "…" : t("submit")}
-          </button>
-        </form>
-      </>
+  function renderBackButton() {
+    return (
+      <div className="table-actions table-actions-start">
+        <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
+          {t("backToLogin")}
+        </button>
+      </div>
     );
   }
 
@@ -205,34 +165,24 @@ export default function AdminLoginPage() {
         <div className="security-summary-card">
           <div>
             <div className="eyebrow">{t("mandatorySetupEyebrow")}</div>
-            <strong>{t("mfaRequiredTitle")}</strong>
-            <div className="muted">{t("mfaRequiredDescription", { user: pendingMfa.user_display_name })}</div>
+            <strong>{t("passkeyRequiredTitle")}</strong>
+            <div className="muted">{t("passkeyRequiredDescription", { user: pendingMfa.user_display_name })}</div>
           </div>
         </div>
-
-        {!totpSetup ? (
-          <button type="button" className="button-secondary" onClick={() => void startTotpSetup()} disabled={loading}>
-            {t("startTotpSetup")}
-          </button>
+        {passkeysSupported ? (
+          <>
+            <label className="field-stack">
+              <span className="field-label">{t("passkeyLabel")}</span>
+              <input value={passkeyLabel} onChange={(event) => setPasskeyLabel(event.target.value)} placeholder={t("passkeyLabelPlaceholder")} />
+            </label>
+            <button type="button" className="button-secondary" onClick={() => void setupPasskey()} disabled={loading}>
+              {loading ? t("checking") : t("setupPasskeyAndLogin")}
+            </button>
+          </>
         ) : (
-          <TotpEnrollCard
-            setup={totpSetup}
-            label={totpLabel}
-            onLabelChange={setTotpLabel}
-            code={totpCode}
-            onCodeChange={setTotpCode}
-            onSubmit={() => void completeTotpSetup()}
-            busy={loading}
-            submitLabel={t("totpActivateAndLogin")}
-            submitBusyLabel={t("totpActivatingShort")}
-          />
+          <div className="info-note">{t("passkeyUnsupported")}</div>
         )}
-
-        <div className="table-actions table-actions-start">
-          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-            {t("backToLogin")}
-          </button>
-        </div>
+        {renderBackButton()}
       </div>
     );
   }
@@ -244,27 +194,15 @@ export default function AdminLoginPage() {
         <div className="login-heading">
           <p className="login-subtitle">{pendingMfa.user_email}</p>
         </div>
-        <form className="grid" onSubmit={verifyTotp}>
-          <label className="field-stack">
-            <span className="field-label">{t("confirmationCodeLabel")}</span>
-            <input
-              value={totpCode}
-              onChange={(event) => setTotpCode(sanitizeTotpCode(event.target.value))}
-              inputMode="numeric"
-              placeholder="123456"
-              autoComplete="one-time-code"
-              autoFocus
-            />
-          </label>
-          <button type="submit" className="button-secondary" disabled={totpCode.length !== 6 || loading}>
-            {loading ? t("checking") : t("confirmButton")}
+        <p className="muted">{t("passkeyVerifyHint")}</p>
+        {passkeysSupported ? (
+          <button type="button" className="button-secondary" onClick={() => void verifyPasskey()} disabled={loading} autoFocus>
+            {loading ? t("checking") : t("verifyWithPasskey")}
           </button>
-        </form>
-        <div className="table-actions table-actions-start">
-          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-            {t("backToLogin")}
-          </button>
-        </div>
+        ) : (
+          <div className="info-note">{t("passkeyUnsupported")}</div>
+        )}
+        {renderBackButton()}
       </div>
     );
   }

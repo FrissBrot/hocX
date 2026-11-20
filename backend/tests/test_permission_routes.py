@@ -144,6 +144,11 @@ def _platform_client(db, role: str):
     )
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_admin] = lambda: current_admin
+    # Passkey-Bestätigung (app/core/admin_step_up.py) prüft test_admin_step_up.py; hier geht es um Rollen
+    from app.core.admin_step_up import PURPOSES, require_step_up
+
+    for purpose in PURPOSES:
+        app.dependency_overrides[require_step_up(purpose)] = lambda: current_admin
     return TestClient(app)
 
 

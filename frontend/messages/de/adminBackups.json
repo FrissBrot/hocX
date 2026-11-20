@@ -301,8 +301,6 @@
     "skipRescue": "Ohne Rettungspunkt des aktuellen Zustands fortfahren (nicht empfohlen)",
     "skipRescueReason": "Begründung",
     "confirmationLabel": "Zur Bestätigung eingeben: {phrase}",
-    "totp": "Aktueller TOTP-Code",
-    "totpHelp": "Frische Bestätigung mit dem Authenticator deines Admin-Kontos.",
     "panelTitle": {
       "full": "Vollständige Wiederherstellung",
       "tenant_copy": "Mandanten-Wiederherstellung als Kopie"
@@ -322,7 +320,8 @@
     "historyEmpty": "Noch keine Wiederherstellungen.",
     "replayErasures": "Löschungen nach dem Sicherungspunkt erneut anwenden",
     "replayErasuresHint": "Personen, Dateien, Protokolle oder Mandanten, die nach diesem Sicherungspunkt gelöscht wurden, werden nach dem Restore wieder gelöscht. Nur in begründeten Ausnahmen abschalten.",
-    "replayErasuresReason": "Begründung, warum gelöschte Daten zurückkommen sollen"
+    "replayErasuresReason": "Begründung, warum gelöschte Daten zurückkommen sollen",
+    "passkeyHelp": "Beim Start bestätigst du die Wiederherstellung zusätzlich mit deinem Passkey."
   },
   "preview": {
     "schema": "Datenbankschema",

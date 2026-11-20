@@ -133,3 +133,16 @@ class TenantMfaPolicyUpdate(BaseModel):
 class TenantProtocolPolicy(BaseModel):
     """Vier-Augen-Prinzip für Protokolle (tenant.four_eyes_protocols, Migration 0191)."""
     four_eyes_protocols: bool
+
+
+class AdminStepUpStart(BaseModel):
+    """Zweck und Zielaktion der Bestätigung (app/core/admin_step_up.py) - die Assertion gilt nur für
+    genau diese Anfrage: Methode, Pfad und SHA-256 des Bodys (leerer Body = Hash von b"")."""
+
+    purpose: Literal[
+        "passkey-manage", "admin-manage", "tenant-delete", "tenant-export", "storage-destructive",
+        "backup-restore", "backup-settings", "catalog-change", "user-mfa-reset", "user-manage", "platform-settings",
+    ]
+    method: Literal["POST", "PUT", "PATCH", "DELETE"]
+    path: str = Field(pattern=r"^/api/admin/[A-Za-z0-9/_.%-]+$", max_length=500)
+    body_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")

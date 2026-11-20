@@ -23,6 +23,10 @@
       "handler": "admin.list_audit_log",
       "platform": true
     },
+    "GET /api/admin/auth/health": {
+      "handler": "admin_auth.health",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
     "POST /api/admin/auth/login": {
       "handler": "admin_auth.login",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
@@ -31,28 +35,20 @@
       "handler": "admin_auth.logout",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
     },
-    "POST /api/admin/auth/mfa/totp/setup/complete": {
-      "handler": "admin_auth.complete_login_totp_setup",
+    "POST /api/admin/auth/mfa/passkey/setup/complete": {
+      "handler": "admin_auth.complete_login_passkey_setup",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
     },
-    "POST /api/admin/auth/mfa/totp/setup/start": {
-      "handler": "admin_auth.start_login_totp_setup",
+    "POST /api/admin/auth/mfa/passkey/setup/start": {
+      "handler": "admin_auth.start_login_passkey_setup",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
     },
-    "POST /api/admin/auth/mfa/totp/verify": {
-      "handler": "admin_auth.verify_login_totp",
+    "POST /api/admin/auth/mfa/passkey/start": {
+      "handler": "admin_auth.start_login_passkey",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
     },
-    "GET /api/admin/auth/oidc/authorize": {
-      "handler": "admin_auth.oidc_authorize",
-      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
-    },
-    "GET /api/admin/auth/oidc/callback": {
-      "handler": "admin_auth.oidc_callback",
-      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
-    },
-    "GET /api/admin/auth/oidc/public-config": {
-      "handler": "admin_auth.get_oidc_public_config",
+    "POST /api/admin/auth/mfa/passkey/verify": {
+      "handler": "admin_auth.verify_login_passkey",
       "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
     },
     "GET /api/admin/auth/session": {
@@ -243,12 +239,8 @@
       "handler": "admin.start_my_admin_passkey_registration",
       "platform": true
     },
-    "POST /api/admin/mfa/totp/complete": {
-      "handler": "admin.complete_my_admin_totp_enrollment",
-      "platform": true
-    },
-    "POST /api/admin/mfa/totp/start": {
-      "handler": "admin.start_my_admin_totp_enrollment",
+    "POST /api/admin/mfa/step-up/start": {
+      "handler": "admin.start_my_admin_step_up",
       "platform": true
     },
     "GET /api/admin/notifications": {
@@ -281,14 +273,6 @@
     },
     "POST /api/admin/notifications/test": {
       "handler": "admin.send_test_notification",
-      "platform": true
-    },
-    "GET /api/admin/oidc-config": {
-      "handler": "admin.get_platform_oidc_config",
-      "platform": true
-    },
-    "PUT /api/admin/oidc-config": {
-      "handler": "admin.update_platform_oidc_config",
       "platform": true
     },
     "GET /api/admin/plans": {

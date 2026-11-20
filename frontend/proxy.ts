@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { adminAllowedOnHost, adminGateForwardHeaders, frontendRole, isAdminPagePath } from "@/lib/admin-gate";
 import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
 
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
@@ -24,10 +25,10 @@ import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
 // parallelen serverseitigen Fetches entstehen) nachweislich gelegentlich die falsche Antwort für
 // eine gültige Session zurückgab - reproduzierbar mit echten parallelen curl-Requests direkt
 // gegen den Container, aber NIE über Traefik/den öffentlichen Domain-Pfad. Der eigentliche Fix
-// ist deshalb INTERNAL_API_URL auf die öffentliche Domain zu setzen (siehe .env), sodass auch
-// interner Server-Traffic über Traefik läuft statt uvicorn direkt zu treffen. Diese Middleware
-// bleibt als zusätzliche Absicherung gegen die (separate, ebenfalls reale) Router-Cache-Replay-
-// Problematik oben bestehen.
+// war damals, INTERNAL_API_URL auf die öffentliche Domain zu setzen. Das gilt nicht mehr: im Release
+// ist INTERNAL_API_URL immer intern (http://backend:8000, von scripts/deploy.sh erzwungen), weil der
+// Next-Server bei Admin-Aufrufen den Gate-Header dorthin weiterreicht (SEC-AUTH-001, Review L2).
+// Diese Middleware bleibt als Absicherung gegen die Router-Cache-Replay-Problematik oben bestehen.
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // Lets admin.hocx.ch serve the whole admin panel at its own root instead of requiring
@@ -41,6 +42,11 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_A
 // which made it look like a routing bug in Traefik or the browser instead.
 const adminDomain = process.env.TRAEFIK_ADMIN_DOMAIN;
 
+// Review M3: Im Release laufen öffentliches Frontend (HOCX_FRONTEND_ROLE=public) und Admin-Frontend
+// (=admin, eigener Dienst admin-frontend, nur hinter dem Admin-Entrypoint) als getrennte Prozesse.
+// Ohne Angabe (Entwicklung, E2E) entscheidet wie bisher der Host.
+const processKind = frontendRole();
+
 // Oeffentliche Website (Landing Page) auf eigener Domain, typischerweise der Hauptdomain:
 // Traefik routet sie auf denselben Frontend-Service, hier wird jeder Pfad analog zur
 // Admin-Domain auf /website umgeschrieben. Die Seite braucht keine Session.
@@ -51,10 +57,15 @@ const WEBSITE_PATH = "/website";
 // undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
 export const SESSION_CHECK_TIMEOUT_MS = 5_000;
 
-async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | "overloaded" | null> {
+async function isAuthenticated(
+  cookie: string,
+  sessionPath: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<boolean | "overloaded" | null> {
   try {
+    const headers = { ...extraHeaders, ...(cookie ? { Cookie: cookie } : {}) };
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
-      headers: cookie ? { Cookie: cookie } : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS)
     });
@@ -99,16 +110,30 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   // Host-Header statt nextUrl.hostname: hinter `HOSTNAME=0.0.0.0` (Dev-Server/standalone) liefert
   // nextUrl.hostname die Bind-Adresse statt der angefragten Domain.
   const requestHost = request.headers.get("host")?.split(":")[0] ?? hostname;
-  const isWebsiteHost = !!websiteDomain && requestHost === websiteDomain;
+  if (processKind === "public" && (isAdminPagePath(pathname) || (!!adminDomain && requestHost === adminDomain))) {
+    // Das öffentliche Frontend liefert das Admin-Panel nie aus, auf keiner Domain.
+    return new NextResponse(null, { status: 404 });
+  }
+  if (processKind === "admin" && !adminAllowedOnHost(requestHost, adminDomain)) {
+    // Das Admin-Frontend bedient nur die Admin-Domain.
+    return new NextResponse(null, { status: 404 });
+  }
+  const isWebsiteHost = processKind !== "admin" && !!websiteDomain && requestHost === websiteDomain;
   const rewrittenPathname = isWebsiteHost
     ? pathname.startsWith(WEBSITE_PATH)
       ? pathname
       : `${WEBSITE_PATH}${pathname === "/" ? "" : pathname}`
-    : adminDomain && requestHost === adminDomain && !pathname.startsWith("/admin")
+    : (processKind === "admin" || (adminDomain && requestHost === adminDomain)) && !isAdminPagePath(pathname)
       ? `/admin${pathname === "/" ? "" : pathname}`
       : pathname;
 
-  const isAdmin = rewrittenPathname.startsWith("/admin");
+  const isAdmin = isAdminPagePath(rewrittenPathname);
+  // SEC-AUTH-001: das Admin-Panel gibt es nur auf der Admin-Domain (Traefik routet /admin ohnehin
+  // nur dort hin; das hier greift, falls ein anderer Router es doch einmal durchlässt). Ohne
+  // konfigurierte Admin-Domain (Entwicklung, E2E) bleibt es überall erreichbar.
+  if (isAdmin && !adminAllowedOnHost(requestHost, adminDomain)) {
+    return new NextResponse(null, { status: 404 });
+  }
   const sessionPath = isAdmin ? "/api/admin/auth/session" : "/api/auth/session";
   const loginPath = isAdmin ? "/admin/login" : "/login";
 
@@ -145,7 +170,7 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     rewrittenPathname.startsWith(`${WEBSITE_PATH}/`);
   if (rewrittenPathname !== loginPath && !isPublicPath) {
     const cookie = request.headers.get("cookie") ?? "";
-    const authenticated = await isAuthenticated(cookie, sessionPath);
+    const authenticated = await isAuthenticated(cookie, sessionPath, isAdmin ? adminGateForwardHeaders(request.headers, internalApiUrl, processKind) : {});
     if (authenticated === false) {
       return NextResponse.redirect(new URL(loginPath, request.url));
     }

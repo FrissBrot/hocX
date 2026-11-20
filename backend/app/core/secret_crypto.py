@@ -1,10 +1,8 @@
-"""Symmetric encryption for small secret values stored at rest in the DB (currently only
-PlatformOidcConfig.client_secret - see security audit 2026-08-13, finding M3). Reuses
-ADMIN_AUTH_SECRET rather than introducing a second app secret to manage: that value is already
-required to be a random 32+ char string in production (see Settings.validate_for_production)
-and this data is only ever read back by the admin-panel OIDC login flow, so scoping the
-encryption key to the same secret as the admin session/state signing is a reasonable fit rather
-than over-engineering a dedicated key-management story for a single column."""
+"""Symmetric encryption for small secret values stored at rest in the DB (e.g. TOTP secrets of
+tenant users - originally introduced for the admin SSO client secret, security audit 2026-08-13,
+finding M3; the admin SSO was removed in 0205). Reuses ADMIN_AUTH_SECRET rather than introducing a
+second app secret to manage: that value is already required to be a random 32+ char string in
+production (see Settings.validate_for_production)."""
 from __future__ import annotations
 
 import base64

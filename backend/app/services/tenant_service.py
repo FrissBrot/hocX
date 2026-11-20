@@ -356,8 +356,8 @@ class TenantService:
         domain = domain_verification_service.normalize_domain(payload.domain)
         if not domain_verification_service.is_valid_domain_format(domain):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_domain_error("invalid_format", "Ungültiges Domain-Format"))
-        reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
-        if domain in reserved:
+        # Haupt-, Admin-, Abgabebox-, Docs-, Website-Domain und Subdomains der Admin-Domain (SEC-AUTH-001)
+        if traefik_config_service.is_reserved_domain(domain):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=_domain_error("reserved", "Diese Domain ist bereits durch hocX belegt")
             )
@@ -406,6 +406,11 @@ class TenantService:
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")
         require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[row.purpose])
+        if traefik_config_service.is_reserved_domain(row.domain):
+            # Vor SEC-AUTH-001 angelegte, noch ausstehende Domain: nie aktivieren
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=_domain_error("reserved", "Diese Domain ist bereits durch hocX belegt")
+            )
 
         target_host = traefik_config_service.target_host_for_purpose(row.purpose)
         if not target_host:

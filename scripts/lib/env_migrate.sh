@@ -104,7 +104,9 @@ migrate_env_file() {
   local storage_key storage_value
   # EXPORT_ENCRYPTION_KEY (Security-Audit release/1.2.0): X25519-Schlüssel der Mandanten-Exporte,
   # 64 Hex-Zeichen; ein Neuerzeugen machte ohne Passwort erstellte Exporte unlesbar.
-  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
+  # ADMIN_GATE_SECRET (Auth-Audit SEC-AUTH-001): Nachweis, dass ein /api/admin-Request über Traefiks
+  # Admin-Entrypoint kam (deploy.sh schreibt daraus infra/traefik/dynamic/admin-gate.yml).
+  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY ADMIN_GATE_SECRET GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
     LOCAL_S3_ACCESS_KEY LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
     if [ -n "$(env_file_value "$tmp_file" "$storage_key")" ]; then
       continue
@@ -124,6 +126,19 @@ migrate_env_file() {
     notes+=("ergaenzt: $storage_key (neu erzeugt)")
     changed=true
   done
+
+  # Review L2 (SEC-AUTH-001): Der Next.js-Server reicht bei Admin-Aufrufen den Gate-Header an
+  # INTERNAL_API_URL weiter - das Ziel muss intern sein. Ältere Hosts hatten die öffentliche Domain
+  # eingetragen (Umgehung eines Login-Loops); deploy.sh bricht damit ab. Einmalig umstellen.
+  local internal_api_url
+  internal_api_url="$(env_file_value "$tmp_file" INTERNAL_API_URL)"
+  if [ -n "$internal_api_url" ] && ! [[ "$internal_api_url" =~ ^http://(backend|localhost|127\.0\.0\.1)(:[0-9]+)?/?$ ]]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?INTERNAL_API_URL=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "INTERNAL_API_URL='http://backend:8000'\n" >> "$tmp_file"
+    notes+=("umgestellt: INTERNAL_API_URL ($internal_api_url -> http://backend:8000, muss intern sein)")
+    changed=true
+  fi
 
   # MAIN-OPS-005: Redis verlangt im Release-Stack ein Passwort (requirepass).
   if [ -z "$(env_file_value "$env_file" REDIS_PASSWORD)" ]; then

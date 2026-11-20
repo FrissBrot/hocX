@@ -10,6 +10,17 @@ services:
     # discovered alongside.
     mem_limit: 1536m
     cpus: 2.0
+    # Review M1 (ARP-Spoofing im Compose-Netz): ohne NET_RAW. Nur die Rechte, die der offizielle
+    # Postgres-Entrypoint braucht (Datenverzeichnis anlegen/chownen, mit gosu zum Benutzer postgres
+    # wechseln); live geprüft: Init, Neustart, pg_dump, pg_stat_statements.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
     # Audit finding, 2026-08-16/2026-08-26: mirrors docker-compose.yml's (dev) equivalent -
     # see the comment there for the reasoning. Retuned 2026-09-02 to the new 1536m
     # mem_limit above (shared_buffers ~25%, effective_cache_size ~75%, standard Postgres
@@ -164,6 +175,9 @@ services:
       APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
       AUTH_SECRET_FILE: /run/secrets/auth_secret
       ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      # Nachweis «über den Admin-Entrypoint» (SEC-AUTH-001, app/core/admin_gate.py). Nur das Backend
+      # prüft ihn; Traefik bekommt den Wert über infra/traefik/dynamic/admin-gate.yml (deploy.sh).
+      ADMIN_GATE_SECRET_FILE: /run/secrets/admin_gate_secret
       INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
       ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
       # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
@@ -182,6 +196,9 @@ services:
       # Erwarteter WebAuthn-Origin der Plattform-Admin-Passkeys (Security-Audit SEC-021).
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
+      # Nur als gesperrte Mandanten-Domains (SEC-AUTH-001, traefik_config_service.is_reserved_domain).
+      TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
+      TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
       ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
@@ -264,6 +281,7 @@ services:
       - app_db_password
       - auth_secret
       - admin_auth_secret
+      - admin_gate_secret
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
@@ -273,6 +291,7 @@ services:
       - local_s3_abgabebox_secret_key
       - redis_password
     networks:
+      - edge
       - default
       - docker-api
       - storage
@@ -307,7 +326,7 @@ services:
       - "traefik.enable=true"
       # Das Backend hängt zusätzlich im internen Netz docker-api - ohne diese Angabe wählt Traefik
       # je nach Reihenfolge die dort unerreichbare IP.
-      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       # maintenance-errors*@file (infra/traefik/dynamic/maintenance.yml, Wartungsseite ab 1.4.3)
       # steht an jedem App-Router zuerst: erreicht Traefik den Container nicht (502/504), antwortet
       # die Wartungsseite mit 503 + Retry-After (API: JSON). Ein 503 des Backends selbst
@@ -323,11 +342,12 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.amount=100"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.middlewares=maintenance-errors-api@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.service=${ROUTER_PREFIX:-hocx}-admin-api"
+      # SEC-AUTH-001: jeder Router auf adminsecure setzt den Gate-Header (admin-gate.yml, deploy.sh)
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.middlewares=maintenance-errors-api@file,admin-gate@file"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-api.loadbalancer.server.port=8000"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/login`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.entrypoints=websecure"
@@ -344,7 +364,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-auth-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-auth-ratelimit,admin-gate@file"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
       # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
       # previously fell through to the generic backend router with no Traefik-level rate
@@ -382,7 +402,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.service=${ROUTER_PREFIX:-hocx}-tenant-import"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-tenant-import-body-limit,admin-gate@file"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-import.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
@@ -451,6 +471,10 @@ services:
   frontend:
     image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
     # compose's frontend - see its mem_limit comment there), so this is lighter
     # than the dev value, but still bounded per audit I1. Raised 2026-09-02 alongside
@@ -484,6 +508,9 @@ services:
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       HOCX_FRONTEND_IMAGE: ${HOCX_FRONTEND_IMAGE:-}
       HOCX_APP_URL: ${HOCX_APP_URL:-}
+      # Review M3: öffentliches Frontend - liefert /admin nie aus und reicht nie einen Gate-Header
+      # weiter. Das Admin-Panel läuft im eigenen Dienst admin-frontend.
+      HOCX_FRONTEND_ROLE: public
     depends_on:
       - backend
     healthcheck:
@@ -499,7 +526,8 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.amount=200"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.middlewares=maintenance-errors@file,${ROUTER_PREFIX:-hocx}-web-inflight"
@@ -507,22 +535,74 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.middlewares=maintenance-errors-admin@file"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
       # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
       # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie, und der
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
       # website.invalid zu holen und loggt bei jedem Start einen Fehler.
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
+
+  # Plattform-Admin-Panel (Review M3): dasselbe Frontend-Image als eigener Prozess, nur über den
+  # Admin-Entrypoint (adminsecure, OpenZiti) erreichbar. Nur dieser Dienst bekommt von Traefik den
+  # Gate-Header (admin-gate@file) und reicht ihn bei serverseitigen Admin-Aufrufen an das Backend
+  # weiter; das öffentliche Frontend sieht ihn nie. Kennt kein Secret.
+  admin-frontend:
+    image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
+    restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
+    mem_limit: 512m
+    cpus: 0.75
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
+      HOCX_VERSION: ${HOCX_VERSION}
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_FRONTEND_IMAGE: ${HOCX_FRONTEND_IMAGE:-}
+      HOCX_FRONTEND_ROLE: admin
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-admin-frontend"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-frontend.loadbalancer.server.port=3000"
+      # Gate-Header (und Quellbeschränkung): das Admin-Frontend reicht ihn bei serverseitigen
+      # Admin-API-Aufrufen weiter (frontend/lib/admin-gate.ts).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.middlewares=maintenance-errors-admin@file,admin-gate@file"
 
   # Lokales S3 (Garage) - siehe docker-compose.yml und docs-site/docs/technik/storage/lokales-s3.md.
   local-s3:
@@ -933,6 +1013,7 @@ services:
       - abgabebox_captcha_session_secret
       - storage_credentials_key
     networks:
+      - edge
       - default
       - storage
     depends_on:
@@ -957,8 +1038,8 @@ services:
       # Die Abgabebox hängt zusätzlich im internen Netz storage - ohne diese Angabe wählt Traefik je
       # nach Reihenfolge die dort unerreichbare IP und jede Anfrage endet mit 504 (Prüfseite und
       # Abgabebox live ausgefallen nach dem Update auf 1.4.0, interne Prüfungen blieben grün).
-      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
@@ -1010,6 +1091,10 @@ services:
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Raised 2026-09-02 alongside the other services now that the host has 16GB/8 cores.
     mem_limit: 1024m
     cpus: 1.0
@@ -1043,7 +1128,8 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=maintenance-errors-abgabebox@file,${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
@@ -1058,6 +1144,10 @@ services:
   docs:
     image: ${HOCX_DOCS_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Static nginx, genuinely lightweight - small bump 2026-09-02 for margin, not because
     # of any observed problem here.
     mem_limit: 256m
@@ -1092,13 +1182,18 @@ services:
       start_period: 10s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-docs.loadbalancer.server.port=80"
 
 networks:
+  # Review M1: Traefik hängt nur in diesem Netz (plus seinem Socket-Proxy-Netz), zusammen mit den
+  # Diensten, die es anspricht. Datenbank, Worker und ClamAV sind darin nicht erreichbar; die
+  # Quellbeschränkung des Admin-Entrypoints erlaubt nur das Gateway dieses Netzes (Host-Port).
+  edge: {}
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
     internal: true
@@ -1132,6 +1227,8 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/auth_secret
   admin_auth_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/admin_auth_secret
+  admin_gate_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/admin_gate_secret
   initial_admin_password:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/initial_admin_password
   abgabebox_db_password:

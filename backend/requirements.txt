@@ -11,7 +11,6 @@ pyclamd==0.4.0
 redis==8.1.0
 dnspython==2.9.2  # CVE-2026-128089 (GHSA-vvf4-9x63-8xvv, WKS-Parser), Sicherheitsfix
 PyYAML==6.0.3
-PyJWT[crypto]==2.15.1
 cryptography==50.0.2
 python-docx==1.2.0
 pdfplumber==0.11.10

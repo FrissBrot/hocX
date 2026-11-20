@@ -13,7 +13,7 @@ const tenantRoutes = [
 ];
 const platformAdminRoutes = [
   "/admin", "/admin/admins", "/admin/domains", "/admin/error-logs", "/admin/jobs", "/admin/notifications",
-  "/admin/plans", "/admin/security", "/admin/sso", "/admin/system", "/admin/tenants", "/admin/upload-pipeline",
+  "/admin/plans", "/admin/security", "/admin/system", "/admin/tenants", "/admin/upload-pipeline",
   "/admin/users",
 ];
 const publicRoutes = ["/login", "/admin/login", "/website", "/auth/bridge#token=ungueltig", "/share/ungueltig"];

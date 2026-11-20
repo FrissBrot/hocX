@@ -78,7 +78,8 @@ fallbacks = {n: r for n, r in routers.items() if r["service"] == "maintenance-pa
 app = {n: r for n, r in routers.items() if r["service"] != "maintenance-page"}
 frontend_router = {"main": "frontend", "abgabebox": "abgabebox-frontend", "admin": "admin-frontend"}
 for kind, domain in domains.items():
-    catch_all = [r for r in fallbacks.values() if host(r["rule"]) == domain and "/api" not in r["rule"]]
+    # Catch-all: ohne positives PathPrefix(`/api`) (Ausschlüsse wie !PathPrefix(`/api/admin`) zählen nicht)
+    catch_all = [r for r in fallbacks.values() if host(r["rule"]) == domain and "PathPrefix(`/api" not in r["rule"].replace("!PathPrefix(`/api", "")]
     assert len(catch_all) == 1, f"Ausweich-Router für {domain} fehlt"
     # Gleiche Pfade wie das Frontend der Domain: sonst bekäme ein Pfad ohne Router (404) auch im
     # Normalbetrieb die Wartungsseite.
@@ -93,15 +94,17 @@ for kind, domain in domains.items():
     low = [r for r in same_host if int(r["priority"]) <= 1]
     assert not low, f"App-Router mit Priorität <= 1 auf {domain}: {low}"
     # API-Ausweich-Router: über dem Frontend (10), unter jedem Backend-Router (>= 100).
-    api = [r for r in fallbacks.values() if host(r["rule"]) == domain and "/api" in r["rule"]]
+    api = [r for r in fallbacks.values() if host(r["rule"]) == domain and "PathPrefix(`/api" in r["rule"].replace("!PathPrefix(`/api", "")]
     assert len(api) == 1, f"API-Ausweich-Router für {domain} fehlt"
     prio = int(api[0]["priority"])
     for r in same_host:
-        if "PathPrefix(`/api" in r["rule"] or "Path(`/api" in r["rule"]:
+        positive = r["rule"].replace("!PathPrefix(`/api", "")
+        if "PathPrefix(`/api" in positive or "Path(`/api" in positive:
             assert int(r["priority"]) > prio, (r, api)
         else:
             assert int(r["priority"]) < prio, (r, api)
-    assert api[0]["middlewares"] == "maintenance-path-api@file", api
+    # Admin-Domain zusätzlich mit admin-gate@file (Quellbeschränkung, test_admin_isolation.sh)
+    assert api[0]["middlewares"] in ("maintenance-path-api@file", "maintenance-path-api@file,admin-gate@file"), api
 assert all(r["middlewares"].startswith("maintenance-path-") for r in fallbacks.values()), fallbacks
 assert labels(page)["traefik.docker.network"].endswith("_maintenance"), labels(page)
 
@@ -471,7 +474,7 @@ wait_status "https://$ABG_DOMAIN/api/health" 200 || true
 expect "Abgabebox-API 200" '[ "$STATUS" = 200 ]'
 wait_status "https://$ADMIN_DOMAIN/admin/login" 200 || true
 expect "Admin-Frontend 200" '[ "$STATUS" = 200 ]'
-wait_status "https://$ADMIN_DOMAIN/api/admin/auth/oidc/public-config" 200 || true
+wait_status "https://$ADMIN_DOMAIN/api/admin/auth/health" 200 || true
 expect "Admin-API 200" '[ "$STATUS" = 200 ]'
 request "https://$DOMAIN/admin/login"
 expect "Hauptdomain /admin (kein Router) bleibt 404, keine Wartungsseite" '[ "$STATUS" = 404 ] && [ -z "$(header X-Hocx-Maintenance-Page)" ]'
@@ -498,7 +501,7 @@ expect "Wartungsseite: Tokens eingebettet" 'grep -q -- "--accent:" <<< "$BODY" &
 expect "Wartungsseite: HSTS vom Entrypoint" '[ -n "$(header Strict-Transport-Security)" ]'
 expect "Wartungsseite: setzt keine Cookies" '[ -z "$(header Set-Cookie)" ]'
 request "https://$ADMIN_DOMAIN/fail-502"
-expect "Admin-Frontend 502 -> Wartungsseite (admin)" 'maintenance_html admin && grep -q "data-health=\"/api/admin/auth/oidc/public-config\"" <<< "$BODY"'
+expect "Admin-Frontend 502 -> Wartungsseite (admin)" 'maintenance_html admin && grep -q "data-health=\"/api/admin/auth/health\"" <<< "$BODY"'
 request "https://$ABG_DOMAIN/fail-502"
 expect "Abgabebox-Frontend 502 -> Wartungsseite (abgabebox)" 'maintenance_html abgabebox'
 
@@ -510,7 +513,7 @@ request "https://$DOMAIN/api/system-status/summary"
 expect "/api/system-status/summary -> JSON-503" 'maintenance_json'
 request "https://$DOMAIN/login"
 expect "Frontend läuft weiter (200)" '[ "$STATUS" = 200 ]'
-request "https://$ADMIN_DOMAIN/api/admin/auth/oidc/public-config"
+request "https://$ADMIN_DOMAIN/api/admin/auth/health"
 expect "Admin-API -> JSON-503" 'maintenance_json'
 # shellcheck source=scripts/lib/traefik_checks.sh
 source scripts/lib/traefik_checks.sh

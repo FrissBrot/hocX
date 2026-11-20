@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -30,7 +31,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const created = await browserApiFetch<PlatformAdminSummary>("/api/admin/admins", {
+      const created = await stepUpFetch<PlatformAdminSummary>("admin-manage", "/api/admin/admins", {
         method: "POST",
         body: JSON.stringify({ email, display_name: displayName, password, role }),
       });
@@ -61,7 +62,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       if (!ok) return;
     }
     try {
-      const updated = await browserApiFetch<PlatformAdminSummary>(`/api/admin/admins/${admin.id}`, {
+      const updated = await stepUpFetch<PlatformAdminSummary>("admin-manage", `/api/admin/admins/${admin.id}`, {
         method: "PATCH",
         body: JSON.stringify({ role: nextRole }),
       });
@@ -82,7 +83,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       if (!ok) return;
     }
     try {
-      const updated = await browserApiFetch<PlatformAdminSummary>(`/api/admin/admins/${admin.id}`, {
+      const updated = await stepUpFetch<PlatformAdminSummary>("admin-manage", `/api/admin/admins/${admin.id}`, {
         method: "PATCH",
         body: JSON.stringify({ is_active: !admin.is_active }),
       });

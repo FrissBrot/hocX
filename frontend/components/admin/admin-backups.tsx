@@ -14,6 +14,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { Tabs } from "@/components/ui/tabs";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
@@ -543,7 +544,6 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
   const [profileId, setProfileId] = useState<string | null>(null);
   const [preview, setPreview] = useState<RestorePreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
-  const [totp, setTotp] = useState("");
   const [skipRescue, setSkipRescue] = useState(false);
   const [skipReason, setSkipReason] = useState("");
   const [replayErasures, setReplayErasures] = useState(true);
@@ -613,20 +613,21 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
     if (kind === "full" && !(await confirm({ message: t("confirm.fullRestore"), tone: "danger", confirmLabel: t("actions.startRestore") }))) return;
     setWorking(true);
     try {
-      const job = await browserApiFetch<RestoreJob>("/api/admin/restores", {
+      // Frische Passkey-Bestätigung (Step-up), gebunden an genau diese Anfrage (Security-Review M2/L7).
+      const restoreBody = JSON.stringify({
+        backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
+        new_name: kind === "tenant_copy" ? newName : null, confirmation,
+        skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
+        replay_erasures: replayErasures, replay_erasures_reason: replayErasures ? null : replayReason,
+        idempotency_key: restoreKeyFor(`restore-${setId}`),
+      });
+      const job = await stepUpFetch<RestoreJob>("backup-restore", "/api/admin/restores", {
         method: "POST",
-        body: JSON.stringify({
-          backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
-          new_name: kind === "tenant_copy" ? newName : null, confirmation, totp_code: totp.replace(/\s/g, ""),
-          skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
-          replay_erasures: replayErasures, replay_erasures_reason: replayErasures ? null : replayReason,
-          idempotency_key: restoreKeyFor(`restore-${setId}`),
-        }),
+        body: restoreBody,
       });
       showToast(t("toast.restoreQueued"), "success");
       setWatching(job.id);
       setPreview(null);
-      setTotp("");
       setConfirmation("");
       await onChanged();
       await loadHistory();
@@ -639,7 +640,7 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
 
   const selectedSet = sets.find((item) => item.id === setId) ?? null;
   const canPreview = setId !== null && (kind === "full" || (tenantId !== null && newName.trim() !== ""));
-  const canSubmit = preview !== null && preview.blockers.length === 0 && confirmation.trim() === preview.confirmation_phrase && totp.replace(/\s/g, "").length >= 6
+  const canSubmit = preview !== null && preview.blockers.length === 0 && confirmation.trim() === preview.confirmation_phrase
     && (!skipRescue || skipReason.trim() !== "") && (replayErasures || replayReason.trim() !== "");
 
   return (
@@ -737,17 +738,11 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
                     <textarea className="input" rows={2} maxLength={500} value={replayReason} onChange={(event) => setReplayReason(event.target.value)} />
                   </label>
                 ) : null}
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("restore.confirmationLabel", { phrase: preview.confirmation_phrase })}</span>
-                    <input className="input" value={confirmation} autoComplete="off" onChange={(event) => setConfirmation(event.target.value)} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("restore.totp")}</span>
-                    <input className="input" value={totp} inputMode="numeric" autoComplete="one-time-code" maxLength={10} onChange={(event) => setTotp(event.target.value)} />
-                    <span className="field-help">{t("restore.totpHelp")}</span>
-                  </label>
-                </div>
+                <label className="field-stack">
+                  <span className="field-label">{t("restore.confirmationLabel", { phrase: preview.confirmation_phrase })}</span>
+                  <input className="input" value={confirmation} autoComplete="off" onChange={(event) => setConfirmation(event.target.value)} />
+                  <span className="field-help">{t("restore.passkeyHelp")}</span>
+                </label>
                 <div className="modal-actions">
                   <button type="submit" className={kind === "full" ? "button-danger" : "button-primary"} disabled={!canSubmit || working}>
                     {kind === "full" ? t("actions.startFullRestore") : t("actions.startTenantRestore")}
@@ -821,7 +816,7 @@ function Settings({ t, locale, settings, isOwner, onSaved }: { t: TFunc; locale:
     event.preventDefault();
     setSaving(true);
     try {
-      const saved = await browserApiFetch<BackupSettings>("/api/admin/backups/settings", { method: "PUT", body: JSON.stringify(form) });
+      const saved = await stepUpFetch<BackupSettings>("backup-settings", "/api/admin/backups/settings", { method: "PUT", body: JSON.stringify(form) });
       onSaved(saved);
       showToast(t("toast.settingsSaved"), "success");
     } catch (error) {

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.schemas.base import MAX_QUERY_OFFSET
+from app.core.admin_step_up import StepUpProof, require_step_up, step_up_proof
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
@@ -36,7 +37,6 @@ from app.schemas.backup_admin import (
     VerifyCreate,
 )
 from app.services import backup_admin_service as svc
-from app.services.admin_mfa_service import AdminMfaService
 from app.services.audit_service import AuditService
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
@@ -74,7 +74,7 @@ def backup_settings(db: Session = Depends(get_db)) -> BackupSettingsRead:
     return svc.read_settings(db)
 
 
-@router.put("/backups/settings", response_model=BackupSettingsRead)
+@router.put("/backups/settings", dependencies=[Depends(require_step_up("backup-settings"))], response_model=BackupSettingsRead)
 def update_backup_settings(payload: BackupSettingsUpdate, admin: CurrentAdmin = Depends(require_admin_write), db: Session = Depends(get_db)) -> BackupSettingsRead:
     _limit(admin, "settings")
     result, changes = svc.update_settings(db, payload, actor_email=admin.email)
@@ -193,18 +193,25 @@ def restore_preview(payload: RestorePreviewRequest, admin: CurrentAdmin = Depend
 
 
 @router.post("/restores", response_model=RestoreJobRead, status_code=status.HTTP_202_ACCEPTED)
-def create_restore(payload: RestoreCreate, admin: CurrentAdmin = Depends(require_admin_write), db: Session = Depends(get_db)) -> RestoreJobRead:
+def create_restore(
+    payload: RestoreCreate,
+    admin: CurrentAdmin = Depends(require_admin_write),
+    db: Session = Depends(get_db),
+    proof: StepUpProof = Depends(step_up_proof("backup-restore")),
+) -> RestoreJobRead:
     _limit(admin, "restore", 5)
     # Wiederholung derselben Anfrage (z. B. nach Netzwerkfehler): laufenden Auftrag zurückgeben,
-    # es wird nichts Neues ausgelöst - der TOTP-Code ist dann bereits verbraucht.
+    # es wird nichts Neues ausgelöst - die Passkey-Bestätigung ist dann bereits verbraucht.
     existing = svc.find_existing_restore(db, request=payload, actor_email=admin.email)
     if existing is not None:
         return svc.restore_read(db, existing)
     try:
-        # Fachliche Prüfung (Blocker, Bestätigungsphrase) VOR dem TOTP: ein Tippfehler verbraucht keinen Code.
+        # Fachliche Prüfung (Blocker, Bestätigungsphrase) VOR dem Passkey: ein Tippfehler verbraucht
+        # keine Bestätigung.
         plan = svc.validate_restore(db, payload)
-        # Frische MFA-Bestätigung - unabhängig davon, wie lange die Sitzung schon besteht.
-        AdminMfaService().verify_step_up_totp(db, admin_id=admin.admin_id, code=payload.totp_code, purpose="backup-restore")
+        # Frische Passkey-Bestätigung - unabhängig davon, wie lange die Sitzung schon besteht.
+        # Bestätigung gilt nur für genau diese Anfrage (Methode, Pfad, Body-Hash - Review L7).
+        proof.verify(db, admin.admin_id)
         job, created = svc.create_restore(db, request=payload, actor_email=admin.email, plan=plan)
     except svc.BackupAdminError as exc:
         _audit(db, admin, "backup.restore.rejected", reason=exc.code, kind=payload.kind, backup_set_id=payload.backup_set_id)

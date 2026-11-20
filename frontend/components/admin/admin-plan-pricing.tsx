@@ -15,6 +15,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { NavIcon } from "@/components/ui/nav-icons";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -373,7 +374,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         description: featureForm.description.trim() === "" ? null : featureForm.description.trim(),
         standalone_price_monthly_rp: chfInputToRp(featureForm.priceMonthlyChf),
       };
-      const updated = await browserApiFetch<AdminFeature>(`/api/admin/features/${encodeURIComponent(featureForm.code)}`, {
+      const updated = await stepUpFetch<AdminFeature>("catalog-change", `/api/admin/features/${encodeURIComponent(featureForm.code)}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
@@ -423,7 +424,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
     if (entry.tenant_count !== 0) return;
     if (!(await confirm({ message: t("deleteConfirm", { name: entry.name }), confirmLabel: t("delete"), tone: "danger" }))) return;
     try {
-      await browserApiFetch(`/api/admin/${kind}/${encodeURIComponent(entry.code)}`, { method: "DELETE" });
+      await stepUpFetch("catalog-change", `/api/admin/${kind}/${encodeURIComponent(entry.code)}`, { method: "DELETE" });
       if (kind === "plans") setPlans((current) => current.filter((plan) => plan.code !== entry.code));
       else setStoragePackages((current) => current.filter((pkg) => pkg.code !== entry.code));
       showToast(t("deleted"), "success");

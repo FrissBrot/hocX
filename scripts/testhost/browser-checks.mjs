@@ -55,6 +55,10 @@ async function login(base, prefix, who) {
   if (!response.ok()) return { skip: `Login ${who} schlug fehl: HTTP ${response.status()}` };
   const body = await response.json();
   if (body.mfa?.status === "setup_required") return { skip: `${who}: MFA nicht eingerichtet, das Skript richtet sie nicht ein` };
+  // Plattform-Admins melden sich nur mit Passkey an (Migration 0205) - nicht automatisierbar ohne
+  // hinterlegten Schlüssel; Crawl TH-20d deshalb SKIP (Lücke im Bericht nennen).
+  if (body.mfa?.available_methods?.some?.((method) => method.factor_type === "webauthn") && prefix.startsWith("/api/admin"))
+    return { skip: `${who}: Passkey-Anmeldung (Plattform-Admin) wird vom Skript nicht automatisiert` };
   if (body.mfa?.status === "verification_required") {
     const secret = env[`TH_${who}_TOTP`];
     if (!secret) return { skip: `${who}: braucht TOTP, TH_${who}_TOTP fehlt` };

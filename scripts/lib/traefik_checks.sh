@@ -5,8 +5,9 @@
 # storage-Netz), während alle internen Prüfungen grün waren.
 #
 # Erwartet: TRAEFIK_DOMAIN, TRAEFIK_ABGABEBOX_DOMAIN; optional TRAEFIK_ADMIN_DOMAIN,
-# TRAEFIK_DOCS_DOMAIN, TRAEFIK_WEBSITE_DOMAIN, TRAEFIK_WEBSECURE_BIND, HOCX_VERIFY_CA_FILE und
-# REPO_DIR (für einen relativen CA-Pfad). Benutzt von deploy.sh und verify_release.sh.
+# TRAEFIK_DOCS_DOMAIN, TRAEFIK_WEBSITE_DOMAIN, TRAEFIK_WEBSECURE_BIND, HOCX_VERIFY_CA_FILE,
+# HOCX_VERIFY_TENANT_DOMAIN(_LIMIT), optional die Funktion tenant_domains_for_checks und REPO_DIR (für einen relativen CA-Pfad und tenant-domains.yml).
+# Benutzt von deploy.sh und verify_release.sh.
 
 # curl-Argumente für eine URL: Host-Namen auf die Traefik-Bindung bzw. 127.0.0.1 auflösen, falls
 # kein DNS (oder eine private Bindung), eigene Test-CA.
@@ -85,6 +86,7 @@ probe_post_json() {
 # Alle Router von aussen. Ein Aufruf je Router - Frontend und API einer Domain sind eigene
 # Router (eigene Dienste), beide müssen erreichbar sein.
 traefik_route_checks() {
+  dynamic_config_files_check || return 1
   local zero_hash
   zero_hash="$(printf '0%.0s' {1..64})"
   _traefik_check "Hauptdomain: Frontend" probe_domain "https://${TRAEFIK_DOMAIN}/login" || return 1
@@ -96,8 +98,9 @@ traefik_route_checks() {
   if [ -n "${TRAEFIK_ADMIN_DOMAIN:-}" ]; then
     local admin="https://${TRAEFIK_ADMIN_DOMAIN}:${TRAEFIK_ADMIN_PORT:-8443}"
     _traefik_check "Admin: Frontend" probe_domain "$admin/admin/login" || return 1
-    _traefik_check "Admin: API" probe_domain "$admin/api/admin/auth/oidc/public-config" || return 1
+    _traefik_check "Admin: API" probe_domain "$admin/api/admin/auth/health" || return 1
   fi
+  admin_isolation_checks || return 1
   # Docs und Website sind keine Kernfunktion (oft eigene DNS/Zertifikate): ein Fehler dort ist
   # eine Warnung, kein Rollback - ein Rollback setzt nur die Images zurück, nicht die Datenbank.
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
@@ -106,6 +109,106 @@ traefik_route_checks() {
   if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
     _traefik_check "Website (Landing Page)" probe_website_domain "https://${TRAEFIK_WEBSITE_DOMAIN}/" || echo "    WARNUNG: Website über Traefik nicht erreichbar (kein Rollback)." >&2
   fi
+}
+
+# Auth-Audit SEC-AUTH-001: Das Plattform-Admin-Panel (/admin, /api/admin) darf über den
+# öffentlichen Entrypoint (websecure, Port 443) auf KEINER Domain erreichbar sein - weder auf der
+# Haupt-, Abgabebox-, Docs- oder Website-Domain noch auf einer Mandanten-Domain oder der
+# Admin-Domain selbst (die nur über adminsecure/OpenZiti bedient wird). Erwartet wird eine 4xx
+# (der Sperr-Router in infra/traefik/dynamic/admin-isolation.yml antwortet mit 404).
+#
+# Immer direkt gegen die eigene Traefik-Bindung (--resolve), nie über DNS: eine Mandanten-Domain
+# kann auf einen fremden Server zeigen. --insecure: geprüft wird nur der Statuscode, es wird
+# nichts Geheimes gesendet, und eine Mandanten-Domain hat evtl. (noch) kein Zertifikat.
+probe_admin_blocked() {
+  local url="$1" method="${2:-GET}" host bind headers code
+  host="${url#https://}"
+  host="${host%%/*}"
+  bind="${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}"
+  [ "$bind" != 0.0.0.0 ] || bind=127.0.0.1
+  # --path-as-is: Pfad-Tricks (//api/admin, %61) unverändert senden
+  headers="$(curl --silent --insecure --path-as-is --max-time 15 --output /dev/null --dump-header - -X "$method" \
+    --resolve "$host:443:$bind" "$url")" || true
+  code="$(awk 'NR == 1 {print $2}' <<< "$headers")"
+  if [ "$code" = 404 ] && grep -qi '^x-hocx-admin-block: *1' <<< "$headers"; then
+    return 0
+  fi
+  echo "    $method $url antwortet über den öffentlichen Entrypoint mit HTTP ${code:-?} ohne Sperr-Kennzeichen (erwartet: 404 + X-Hocx-Admin-Block)" >&2
+  return 1
+}
+
+# Aktive Mandanten-Domains für die Prüfung (höchstens HOCX_VERIFY_TENANT_DOMAIN_LIMIT, Standard 20):
+# HOCX_VERIFY_TENANT_DOMAIN (Komma-Liste) oder die Funktion tenant_domains_for_checks des Aufrufers
+# (deploy.sh/verify_release.sh lesen tenant-domains.yml im Backend-Container), sonst die Datei, falls lesbar.
+admin_check_tenant_domains() {
+  local file="${REPO_DIR:-.}/infra/traefik/dynamic/tenant-domains.yml" limit="${HOCX_VERIFY_TENANT_DOMAIN_LIMIT:-20}"
+  # shellcheck disable=SC2016  # literale Backticks der Traefik-Regel
+  {
+    if [ -n "${HOCX_VERIFY_TENANT_DOMAIN:-}" ]; then
+      tr ',' '\n' <<< "$HOCX_VERIFY_TENANT_DOMAIN"
+    elif declare -F tenant_domains_for_checks > /dev/null; then
+      tenant_domains_for_checks || true
+    elif [ -r "$file" ]; then
+      cat "$file"
+    fi
+  } | grep -o 'Host(`[^`]*`)\|^[a-z0-9.-]*$' | sed -e 's/^Host(`//' -e 's/`)$//' | grep . | sort -u | head -n "$limit" || true
+}
+
+admin_isolation_checks() {
+  local host path tenant
+  local -a hosts=("$TRAEFIK_DOMAIN" "$TRAEFIK_ABGABEBOX_DOMAIN")
+  [ -z "${TRAEFIK_ADMIN_DOMAIN:-}" ] || hosts+=("$TRAEFIK_ADMIN_DOMAIN")
+  [ -z "${TRAEFIK_DOCS_DOMAIN:-}" ] || hosts+=("$TRAEFIK_DOCS_DOMAIN")
+  [ -z "${TRAEFIK_WEBSITE_DOMAIN:-}" ] || hosts+=("$TRAEFIK_WEBSITE_DOMAIN")
+  while IFS= read -r tenant; do
+    [ -z "$tenant" ] || hosts+=("$tenant")
+  done < <(admin_check_tenant_domains)
+  for host in "${hosts[@]}"; do
+    for path in /api/admin/auth/health /api/%61dmin/auth/health //api/admin/auth/health /admin/login /admin; do
+      _traefik_negative_check "Admin gesperrt: $host$path" probe_admin_blocked "https://$host$path" || return 1
+    done
+    _traefik_negative_check "Admin gesperrt: POST $host/api/admin/auth/login" \
+      probe_admin_blocked "https://$host/api/admin/auth/login" POST || return 1
+  done
+}
+
+# Review L4: Das Backend darf im Traefik-Dateiprovider-Verzeichnis nur tenant-domains.yml schreiben.
+# Ein eigenes Unterverzeichnis ginge nicht: Traefik lädt Unterverzeichnisse zwar, beobachtet sie aber
+# nicht (live geprüft) - neue Mandanten-Domains würden erst nach einem Traefik-Neustart aktiv.
+# Stattdessen: jede andere Konfigurationsdatei dort lässt Deploy und verify_release.sh scheitern.
+dynamic_config_files_check() {
+  local dir="${REPO_DIR:-.}/infra/traefik/dynamic" unexpected
+  # find-Fehler (z. B. Verzeichnis nicht lesbar) = Fehlschlag, nicht «nichts gefunden» (Review L4)
+  if ! unexpected="$(find "$dir" -mindepth 1 \( -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -type d \) \
+    ! -name security.yml ! -name admin-isolation.yml ! -name admin-gate.yml ! -name tenant-domains.yml -print)"; then
+    echo "    Traefik-Dateiprovider-Verzeichnis nicht prüfbar: $dir" >&2
+    return 1
+  fi
+  if [ -n "$unexpected" ]; then
+    echo "    Unerwartete Dateien im Traefik-Dateiprovider-Verzeichnis (von wem?): $unexpected" >&2
+    return 1
+  fi
+  # Versionierte Dateien unverändert (das Backend kann im Verzeichnis schreiben)
+  if ! git -C "${REPO_DIR:-.}" diff --quiet -- infra/traefik/dynamic; then
+    echo "    Versionierte Traefik-Dateien wurden verändert: git -C ${REPO_DIR:-.} diff -- infra/traefik/dynamic" >&2
+    return 1
+  fi
+  echo "    Traefik-Dateiprovider: nur bekannte, unveränderte Dateien"
+}
+
+_traefik_negative_check() {
+  local description="$1"
+  shift
+  for _ in 1 2 3; do
+    if "$@" 2> /dev/null; then
+      echo "    $description: ok"
+      return 0
+    fi
+    sleep 3
+  done
+  "$@" || true # letzter Versuch mit Fehlerausgabe
+  echo "    $description: ÖFFENTLICH ERREICHBAR (SEC-AUTH-001)" >&2
+  return 1
 }
 
 # Ein Check mit Wiederholungen: Traefik übernimmt neue Container erst nach einigen Sekunden.

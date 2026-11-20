@@ -22,7 +22,7 @@ def _load_file_secrets() -> None:
     for variable in (
         "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
         "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY", "REDIS_PASSWORD",
-        "EXPORT_ENCRYPTION_KEY",
+        "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     traefik_abgabebox_domain: str | None = None
     # Domain des Plattform-Admin-Panels: erwarteter WebAuthn-Origin der Admin-Passkeys (SEC-021).
     traefik_admin_domain: str | None = None
+    # Docs- und Website-Domain: nur, damit sie nie als Mandanten-Domain eingetragen werden können.
+    traefik_docs_domain: str | None = None
+    traefik_website_domain: str | None = None
     # Extra Origins for CORS (main.py) and the protocol-collaboration WebSocket
     # (collaboration_ws.py's _static_allowed_origins) beyond localhost/127.0.0.1:3000 and
     # traefik_domain - needed whenever a deployment's published port differs from the
@@ -199,6 +202,10 @@ class Settings(BaseSettings):
     admin_auth_secret: str = "hocx-local-dev-admin-secret"
     admin_session_cookie: str = "hocx_admin_session"
     admin_session_ttl_hours: int = 12
+    # Nachweis «kam über den Admin-Entrypoint» (SEC-AUTH-001, app/core/admin_gate.py): Traefik setzt
+    # diesen Wert an jedem Admin-Router als Header X-Hocx-Admin-Gate. Ohne Wert ist die Admin-API
+    # ausserhalb der Entwicklung gesperrt (fail closed).
+    admin_gate_secret: str | None = None
     initial_admin_email: str | None = None
     initial_admin_password: str | None = None
     clamav_host: str = "clamav"

@@ -74,40 +74,6 @@
   }
 }
 
-.login-sso {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.oidc-button {
-  --button-hover-bg: var(--accent-soft);
-  width: 100%;
-  --button-bg: transparent;
-  background: var(--button-bg);
-  color: var(--text);
-  border: 1.5px solid var(--border-strong);
-  box-shadow: none;
-}
-
-.login-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.login-divider::before,
-.login-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
 /* Redesigned admin/tenant MFA settings screens (2026-09-02): icon badges for the hero
    status card, the TOTP/passkey method cards, and each row in the active-factors list,
    plus the required/optional indicator pill. Layered on top of the existing

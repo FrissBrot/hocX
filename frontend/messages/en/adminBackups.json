@@ -301,8 +301,6 @@
     "skipRescue": "Continue without a rescue point of the current state (not recommended)",
     "skipRescueReason": "Reason",
     "confirmationLabel": "Type to confirm: {phrase}",
-    "totp": "Current TOTP code",
-    "totpHelp": "Fresh confirmation with the authenticator of your admin account.",
     "panelTitle": {
       "full": "Full restore",
       "tenant_copy": "Tenant restore as a copy"
@@ -322,7 +320,8 @@
     "historyEmpty": "No restores yet.",
     "replayErasures": "Re-apply deletions made after the restore point",
     "replayErasuresHint": "People, files, protocols or tenants deleted after this restore point are deleted again after the restore. Only switch off in justified exceptions.",
-    "replayErasuresReason": "Reason why deleted data should come back"
+    "replayErasuresReason": "Reason why deleted data should come back",
+    "passkeyHelp": "When you start, you additionally confirm the restore with your passkey."
   },
   "preview": {
     "schema": "Database schema",

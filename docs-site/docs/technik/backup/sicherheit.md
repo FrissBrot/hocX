@@ -20,10 +20,10 @@
 | Status, Verlauf, Einstellungen lesen | Owner, Support | – |
 | Backup starten, Prüfung, Restore-Test, Abbruch, Einstellungen ändern | Owner | Rate-Limit, Audit-Log (`backup.*`) |
 | Restore-Vorschau | Owner | Rate-Limit |
-| Restore starten (Voll und Mandant) | Owner | Bestätigungsphrase + **frischer TOTP-Code** (Replay-Schutz, Konto-Sperre nach Fehlversuchen), Audit-Log inkl. abgelehnter Versuche |
+| Restore starten (Voll und Mandant) | Owner | Bestätigungsphrase + **frische Passkey-Bestätigung** (einmalige Challenge, an Zweck und Konto gebunden, Konto-Sperre nach Fehlversuchen), Audit-Log inkl. abgelehnter Versuche |
 
-Admins ohne TOTP-Faktor (nur Passkey/SSO) können keinen Restore starten – sie müssen zuerst
-einen TOTP-Faktor einrichten. Produktive Restores starten nie automatisch; automatisch läuft nur
+Plattform-Admins melden sich seit Migration 0205 nur mit Passwort + Passkey an (kein TOTP, kein
+SSO); die Bestätigung erfolgt mit einem ihrer Passkeys. Produktive Restores starten nie automatisch; automatisch läuft nur
 der Restore-**Test** in eine isolierte Datenbank.
 
 ## Trennung der Zugänge

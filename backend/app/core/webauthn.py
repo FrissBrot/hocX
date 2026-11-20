@@ -24,6 +24,10 @@ class WebauthnError(ValueError):
     pass
 
 
+class SignCountError(WebauthnError):
+    """Zähler des Authenticators ist nicht gestiegen - Hinweis auf einen geklonten Schlüssel."""
+
+
 @dataclass
 class RegisteredCredential:
     credential_id: str
@@ -223,7 +227,7 @@ def verify_assertion(
         raise WebauthnError("Passkey signature verification failed") from exc
 
     if stored_sign_count > 0 and parsed.sign_count > 0 and parsed.sign_count <= stored_sign_count:
-        raise WebauthnError("Passkey sign counter did not increase")
+        raise SignCountError("Passkey sign counter did not increase")
 
     return AssertionResult(credential_id=expected_credential_id, sign_count=parsed.sign_count)
 

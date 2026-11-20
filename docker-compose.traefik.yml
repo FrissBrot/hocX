@@ -84,8 +84,10 @@ services:
       - ./infra/traefik/letsencrypt:/letsencrypt
       - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik_tmp:/tmp
+    # Review M1: nur im Netz edge (mit den Diensten, die Traefik anspricht) und im Proxy-Netz -
+    # nicht im Standardnetz von Datenbank und Workern.
     networks:
-      - default
+      - edge
       - traefik-docker-api
       # Wartungsseite (maintenance-page), siehe unten.
       - maintenance
@@ -173,37 +175,40 @@ services:
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-maintenance-page.loadbalancer.server.port=8080"
       # Ausweich-Router: niedrigste Priorität (1) je Domain. Die App-Router haben 10/100/200/300 und
       # gewinnen im Normalbetrieb immer; fehlen sie, antwortet hier die Wartungsseite (503). Jede
-      # Regel deckt genau die Pfade der App-Router ab - /admin auf der Hauptdomain hat keinen
-      # Router (404) und bekommt auch im Normalbetrieb keine Wartungsseite.
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      # Regel deckt genau die Pfade der App-Router ab - /admin und /api/admin auf Hauptdomain und
+      # Abgabebox haben keinen Router (404, Admin-Abschottung) und bekommen auch im Normalbetrieb
+      # keine Wartungsseite.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.priority=1"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.middlewares=maintenance-path-hocx@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback.service=${ROUTER_PREFIX:-hocx}-maintenance-page"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.priority=1"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.middlewares=maintenance-path-abgabebox@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox.service=${ROUTER_PREFIX:-hocx}-maintenance-page"
+      # Admin-Entrypoint: auch die Wartungsseite nur über das Admin-Gate (Quellbeschränkung auf den
+      # Ziti-Tunnel, scripts/tests/test_admin_isolation.sh)
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.priority=1"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.middlewares=maintenance-path-admin@file"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.middlewares=maintenance-path-admin@file,admin-gate@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin.service=${ROUTER_PREFIX:-hocx}-maintenance-page"
       # API-Pfade: JSON-503 statt HTML. Priorität 50 liegt über den Frontend-Routern (10), die /api
       # sonst übernähmen, wenn nur das Backend fehlt (Next.js antwortete mit einer 404-HTML-Seite),
       # und unter den Backend-Routern (100-300). Die Regeln entsprechen genau den Backend-Routern;
-      # /api/admin auf der Hauptdomain gehört weiter dem Frontend.
+      # /api/admin gibt es nur auf der Admin-Domain (Admin-Abschottung).
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.priority=50"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.middlewares=maintenance-path-api@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-api.service=${ROUTER_PREFIX:-hocx}-maintenance-page"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox-api.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox-api.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox-api.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-abgabebox-api.priority=50"
@@ -213,13 +218,14 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.priority=50"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.middlewares=maintenance-path-api@file"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.middlewares=maintenance-path-api@file,admin-gate@file"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-fallback-admin-api.service=${ROUTER_PREFIX:-hocx}-maintenance-page"
 
 volumes:
   traefik_tmp:
 
 networks:
+  edge: {}
   # Nur Traefik und sein Socket-Proxy (MAIN-OPS-004).
   traefik-docker-api:
     internal: true

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
 import type { Locale } from "@/i18n/locale-config.generated";
@@ -60,6 +61,7 @@ export function useMfaEnrollment(
   const [totpLabel, setTotpLabel] = useState("");
   const [passkeyLabel, setPasskeyLabel] = useState("");
   const [busy, setBusy] = useState(false);
+  const isAdminPath = basePath.startsWith("/api/admin/");
 
   async function startTotp() {
     setBusy(true);
@@ -106,7 +108,11 @@ export function useMfaEnrollment(
     }
     setBusy(true);
     try {
-      const start = await browserApiFetch<PasskeyRegistrationStart>(`${basePath}/passkeys/start`, { method: "POST" });
+      // Plattform-Admins: Passkeys hinzufügen/entfernen nur mit Bestätigung durch einen vorhandenen
+      // Passkey (Security-Review M2, backend app/core/admin_step_up.py)
+      const start = isAdminPath
+        ? await stepUpFetch<PasskeyRegistrationStart>("passkey-manage", `${basePath}/passkeys/start`, { method: "POST" })
+        : await browserApiFetch<PasskeyRegistrationStart>(`${basePath}/passkeys/start`, { method: "POST" });
       const credential = await createPasskeyCredential(start.public_key);
       const next = await browserApiFetch<UserMfaOverview>(`${basePath}/passkeys/complete`, {
         method: "POST",
@@ -134,9 +140,9 @@ export function useMfaEnrollment(
     });
     if (!ok) return;
     try {
-      const next = await browserApiFetch<UserMfaOverview>(`${basePath}/factors/${factorId}`, {
-        method: "DELETE",
-      });
+      const next = isAdminPath
+        ? await stepUpFetch<UserMfaOverview>("passkey-manage", `${basePath}/factors/${factorId}`, { method: "DELETE" })
+        : await browserApiFetch<UserMfaOverview>(`${basePath}/factors/${factorId}`, { method: "DELETE" });
       setOverview(next);
       showToast(t("factorRemoved"), "success");
     } catch (error) {

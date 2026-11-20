@@ -833,9 +833,6 @@ export type SubmissionElementStatusEntry = {
   withdrawn_count?: number;
 };
 
-export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
-export type PlatformOidcConfigRead = { enabled: boolean; issuer_url: string; client_id: string; scopes: string };
-export type PlatformOidcConfigWrite = { enabled: boolean; issuer_url: string; client_id: string; client_secret: string; scopes: string };
 
 export type UserSummary = {
   id: string;
@@ -2561,7 +2558,7 @@ export type RestorePreview = {
   risks: string[];
   blockers: string[];
   confirmation_phrase: string;
-  requires_totp: boolean;
+  requires_passkey: boolean;
   estimated_bytes: number;
 };
 

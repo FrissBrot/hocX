@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
@@ -15,8 +14,9 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from app.schemas.base import MAX_QUERY_OFFSET
+from app.core.admin_origin import admin_request_hostname, expected_admin_origin
+from app.core.admin_step_up import normalize_step_up_path, require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
-from app.core.config import settings
 from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
@@ -65,13 +65,12 @@ from app.schemas.admin import (
     UploadPipelineOverview,
 )
 from app.schemas.mfa import (
+    AdminStepUpStart,
+    PasskeyAssertionStartRead,
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
-    TotpEnrollmentComplete,
-    TotpEnrollmentStartRead,
     UserMfaRead,
 )
-from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
 from app.schemas.catalog_config import CatalogImportPreview, CatalogImportRequest
 from app.schemas.storage import StorageUsageRead
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
@@ -89,7 +88,6 @@ from app.services.admin_user_service import AdminUserService, PlatformAdminServi
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
-from app.services.platform_oidc_service import PlatformOidcService
 from app.services.tenant_service import tenant_profile_image_response
 from app.services.upload_pipeline import stage_upload_to_disk
 from app.services.storage_service import StorageService
@@ -106,7 +104,6 @@ catalog_config_service = CatalogConfigService(tenant_service)
 tenant_user_service = AdminTenantUserService()
 user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
-oidc_service = PlatformOidcService()
 clone_service = TenantCloneService()
 cleanup_service = TenantCleanupService()
 domain_service = AdminDomainService()
@@ -141,43 +138,6 @@ def _resolve_factor_id(db: Session, factor_id: uuid.UUID) -> int:
     if internal_id is None:
         raise HTTPException(status_code=404, detail="MFA factor not found")
     return internal_id
-
-
-def _browser_origin(request: Request) -> str:
-    """Origin der Seite, wie der Browser ihn meldet - nur für die Entscheidung, ob auf diesem
-    Host Passkeys angeboten werden (siehe _request_hostname), nie als Prüfwert."""
-    origin = request.headers.get("origin")
-    if origin:
-        return origin
-    host = request.headers.get("host") or request.url.netloc
-    if host.startswith("localhost") or host.startswith("127.0.0.1"):
-        return f"http://{host}"
-    return f"https://{host}"
-
-
-def _expected_origin(request: Request) -> str:
-    """Erwarteter WebAuthn-Origin. Mit konfigurierter Admin-Domain fest auf diese gesetzt statt aus
-    dem Origin-Header des Requests übernommen (Security-Audit SEC-021, gleiche Regel wie
-    routes/auth.py) - ein Vergleich mit dem Wert aus demselben Request prüft nichts. Nur lokal
-    (ohne Domain) gilt weiter der Origin des Requests."""
-    if settings.traefik_admin_domain:
-        return f"https://{settings.traefik_admin_domain}"
-    return _browser_origin(request)
-
-
-def _request_hostname(request: Request) -> str | None:
-    """WebAuthn's rp.id must match the browser's real page origin - request.url.hostname is
-    wrong whenever this request arrived through the frontend's own /api/* rewrite proxy
-    (next.config.mjs's rewrites()), which replaces the Host header with its own upstream
-    target (the backend container's internal hostname, e.g. "backend") rather than
-    preserving the browser's original one. Reuses _browser_origin's own header-derived
-    value (the Origin header the browser sends, which passes through that same proxy hop
-    unchanged, unlike Host) instead of computing a second, independently-diverging notion
-    of "the request's host" (audit fix, 2026-09-17 - this silently broke every admin
-    passkey registration ceremony: navigator.credentials.create() rejects a mismatched
-    rp.id with a SecurityError before ever reaching an authenticator, with no server-side
-    error to notice)."""
-    return urlparse(_browser_origin(request)).hostname
 
 
 @router.get("/tenants", response_model=AdminTenantPage)
@@ -346,7 +306,7 @@ def get_notification_settings(
     return notification_settings_service.read(db)
 
 
-@router.put("/notifications", response_model=NotificationSettingsRead)
+@router.put("/notifications", dependencies=[Depends(require_step_up("platform-settings"))], response_model=NotificationSettingsRead)
 def update_notification_settings(
     payload: NotificationSettingsWrite,
     db: Session = Depends(get_db),
@@ -395,7 +355,7 @@ def get_email_settings(
     return notification_settings_service.read_email(db)
 
 
-@router.put("/notifications/email", response_model=EmailSettingsRead)
+@router.put("/notifications/email", dependencies=[Depends(require_step_up("platform-settings"))], response_model=EmailSettingsRead)
 def update_email_settings(
     payload: EmailSettingsWrite,
     db: Session = Depends(get_db),
@@ -451,7 +411,7 @@ def list_notification_log(
     return notification_log.list_log(db, status=status, search=search, limit=limit, offset=offset)
 
 
-@router.post("/notifications/status-token", response_model=NotificationSettingsRead)
+@router.post("/notifications/status-token", dependencies=[Depends(require_step_up("platform-settings"))], response_model=NotificationSettingsRead)
 def rotate_status_token(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
@@ -552,7 +512,7 @@ async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
     return tenant
 
 
-@router.delete("/tenants/{tenant_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}", dependencies=[Depends(require_step_up("tenant-delete"))], status_code=204)
 def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
@@ -577,7 +537,7 @@ def preview_tenant_cleanup(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     return cleanup_service.preview(db, internal_tenant_id)
 
 
-@router.post("/tenants/{tenant_id}/cleanup", response_model=TenantCleanupCounts)
+@router.post("/tenants/{tenant_id}/cleanup", dependencies=[Depends(require_step_up("tenant-delete"))], response_model=TenantCleanupCounts)
 def cleanup_tenant(
     tenant_id: uuid.UUID,
     payload: TenantCleanupRequest,
@@ -639,7 +599,7 @@ def list_features(db: Session = Depends(get_db)):
     return tenant_service.list_features(db)
 
 
-@router.put("/features/{code}", response_model=AdminFeatureRead)
+@router.put("/features/{code}", dependencies=[Depends(require_step_up("catalog-change"))], response_model=AdminFeatureRead)
 def update_feature(
     code: str,
     payload: AdminFeatureUpdate,
@@ -728,7 +688,7 @@ def upsert_storage_package(
     return result
 
 
-@router.delete("/plans/{code}", status_code=204)
+@router.delete("/plans/{code}", dependencies=[Depends(require_step_up("catalog-change"))], status_code=204)
 def delete_plan(
     code: str,
     db: Session = Depends(get_db),
@@ -744,7 +704,7 @@ def delete_plan(
               entity_type="plan", entity_id=None, details={"code": code})
 
 
-@router.delete("/storage-packages/{code}", status_code=204)
+@router.delete("/storage-packages/{code}", dependencies=[Depends(require_step_up("catalog-change"))], status_code=204)
 def delete_storage_package(
     code: str,
     db: Session = Depends(get_db),
@@ -775,7 +735,7 @@ def preview_catalog_import(
     return catalog_config_service.preview(db, payload.config, overwrite=payload.overwrite)
 
 
-@router.post("/catalog/import", response_model=CatalogImportPreview)
+@router.post("/catalog/import", dependencies=[Depends(require_step_up("catalog-change"))], response_model=CatalogImportPreview)
 def apply_catalog_import(
     payload: CatalogImportRequest,
     db: Session = Depends(get_db),
@@ -877,7 +837,7 @@ def update_tenant_storage_packages(
     return result
 
 
-@router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
+@router.post("/tenants/{tenant_id}/clone", dependencies=[Depends(require_step_up("tenant-export"))], response_model=AdminTenantRead, status_code=201)
 def clone_tenant(
     tenant_id: uuid.UUID,
     payload: TenantCloneRequest,
@@ -907,7 +867,7 @@ def clone_tenant(
     return result
 
 
-@router.post("/tenants/{tenant_id}/export")
+@router.post("/tenants/{tenant_id}/export", dependencies=[Depends(require_step_up("tenant-export"))])
 def export_tenant(
     tenant_id: uuid.UUID,
     payload: TenantExportRequest,
@@ -1039,7 +999,7 @@ def list_tenant_users(
     return tenant_user_service.list_users(db, internal_tenant_id)
 
 
-@router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
+@router.put("/tenants/{tenant_id}/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], response_model=AdminTenantUserRead)
 def set_tenant_user_role(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -1061,7 +1021,7 @@ def set_tenant_user_role(
     return result
 
 
-@router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], status_code=204)
 def delete_tenant_user(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -1081,25 +1041,6 @@ def delete_tenant_user(
         db, action="admin.tenant_user_deleted", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="user", entity_id=internal_user_id,
     )
-
-
-@router.get("/oidc-config", response_model=PlatformOidcConfigRead)
-def get_platform_oidc_config(db: Session = Depends(get_db)):
-    return oidc_service.get_config(db)
-
-
-@router.put("/oidc-config", response_model=PlatformOidcConfigRead)
-def update_platform_oidc_config(
-    payload: PlatformOidcConfigWrite,
-    db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(require_admin_write),
-):
-    result = oidc_service.upsert_config(db, payload)
-    audit.log(
-        db, action="admin.oidc_config_updated", actor_email=current_admin.email,
-        details={"enabled": payload.enabled, "issuer_url": payload.issuer_url},
-    )
-    return result
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
@@ -1123,7 +1064,7 @@ def list_users(
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
-@router.post("/users", response_model=UserRead, status_code=201)
+@router.post("/users", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead, status_code=201)
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
@@ -1155,7 +1096,7 @@ def get_user(
     return user
 
 
-@router.patch("/users/{user_id}", response_model=UserRead)
+@router.patch("/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead)
 def update_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
@@ -1188,7 +1129,7 @@ def get_user_mfa(
     return mfa_service.get_platform_admin_user_overview(db, internal_user_id)
 
 
-@router.delete("/users/{user_id}/mfa/factors/{factor_id}", response_model=UserMfaRead)
+@router.delete("/users/{user_id}/mfa/factors/{factor_id}", dependencies=[Depends(require_step_up("user-mfa-reset"))], response_model=UserMfaRead)
 def delete_user_mfa_factor(
     user_id: uuid.UUID,
     factor_id: uuid.UUID,
@@ -1209,15 +1150,10 @@ def delete_user_mfa_factor(
     return result
 
 
-# ── MFA (self-service, for the currently-authenticated admin) ──────────────────────────────
-# Audit finding, 2026-08-27: platform admins previously had no MFA option at all. These mirror
-# the shape of /api/users/me/mfa/* for tenant users (app/api/routes/users.py) as closely as
-# possible - same request/response schemas, same start/complete split - reachable only once an
-# admin already has a full session (this router requires get_current_admin, which itself now
-# requires a completed MFA claim - see admin_security.get_optional_current_admin), so this
-# covers adding an *additional*/replacement factor. The first factor for an admin with none
-# yet is enrolled via the ticket-based /api/admin/auth/mfa/totp/setup/* endpoints instead,
-# during login, since there is no full session to gate this router on at that point.
+# ── Passkeys (Selbstverwaltung des angemeldeten Admins) ───────────────────────────────────
+# Admins melden sich nur mit Passwort + Passkey an (AdminMfaService). Den ersten Passkey richtet ein
+# Konto im Login ein (/api/admin/auth/mfa/passkey/setup/*), weitere hier. Der letzte ist nicht
+# entfernbar; verloren → Notausgang `python -m app.admin_cli reset-passkeys` (RUNBOOK).
 
 @router.get("/mfa", response_model=UserMfaRead)
 def get_my_admin_mfa(
@@ -1227,27 +1163,7 @@ def get_my_admin_mfa(
     return admin_mfa_service.get_self_overview(db, current_admin)
 
 
-@router.post("/mfa/totp/start", response_model=TotpEnrollmentStartRead)
-def start_my_admin_totp_enrollment(
-    db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
-):
-    return admin_mfa_service.start_self_totp_enrollment(db, current_admin)
-
-
-@router.post("/mfa/totp/complete", response_model=UserMfaRead)
-def complete_my_admin_totp_enrollment(
-    payload: TotpEnrollmentComplete,
-    db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
-):
-    admin_mfa_service.complete_self_totp_enrollment(
-        db, current_admin, flow_token=payload.flow_token, code=payload.code, label=payload.label
-    )
-    return admin_mfa_service.get_self_overview(db, current_admin)
-
-
-@router.post("/mfa/passkeys/start", response_model=PasskeyRegistrationStartRead)
+@router.post("/mfa/passkeys/start", dependencies=[Depends(require_step_up("passkey-manage"))], response_model=PasskeyRegistrationStartRead)
 def start_my_admin_passkey_registration(
     request: Request,
     db: Session = Depends(get_db),
@@ -1256,8 +1172,8 @@ def start_my_admin_passkey_registration(
     return admin_mfa_service.start_self_passkey_registration(
         db,
         current_admin,
-        request_host=_request_hostname(request),
-        request_origin=_expected_origin(request),
+        request_host=admin_request_hostname(request),
+        request_origin=expected_admin_origin(request),
     )
 
 
@@ -1267,24 +1183,45 @@ def complete_my_admin_passkey_registration(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
-    admin_mfa_service.complete_self_passkey_registration(
+    factor = admin_mfa_service.complete_self_passkey_registration(
         db,
         current_admin,
         flow_token=payload.flow_token,
         label=payload.label,
         credential=payload.credential,
     )
+    audit.log(db, action="admin.passkey_enrolled", actor_email=current_admin.email, entity_type="user_mfa_factor", entity_id=factor.id)
     return admin_mfa_service.get_self_overview(db, current_admin)
 
 
-@router.delete("/mfa/factors/{factor_id}", response_model=UserMfaRead)
+@router.delete("/mfa/factors/{factor_id}", dependencies=[Depends(require_step_up("passkey-manage"))], response_model=UserMfaRead)
 def delete_my_admin_mfa_factor(
     factor_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
     internal_factor_id = _resolve_factor_id(db, factor_id)
-    return admin_mfa_service.delete_self_factor(db, current_admin, internal_factor_id)
+    result = admin_mfa_service.delete_self_factor(db, current_admin, internal_factor_id)
+    audit.log(db, action="admin.passkey_removed", actor_email=current_admin.email, entity_type="user_mfa_factor", entity_id=internal_factor_id)
+    return result
+
+
+@router.post("/mfa/step-up/start", response_model=PasskeyAssertionStartRead)
+def start_my_admin_step_up(
+    payload: AdminStepUpStart,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    """Frische Passkey-Bestätigung für kritische Aktionen (app/core/admin_step_up.py)."""
+    return admin_mfa_service.start_step_up(
+        db,
+        admin_id=current_admin.admin_id,
+        purpose=payload.purpose,
+        binding=f"{payload.method} {normalize_step_up_path(payload.path)} {payload.body_sha256}",
+        request_host=admin_request_hostname(request),
+        request_origin=expected_admin_origin(request),
+    )
 
 
 @router.get("/admins", response_model=list[PlatformAdminRead])
@@ -1295,7 +1232,7 @@ def list_admins(
     return admin_account_service.list_admins(db)
 
 
-@router.post("/admins", response_model=PlatformAdminRead, status_code=201)
+@router.post("/admins", dependencies=[Depends(require_step_up("admin-manage"))], response_model=PlatformAdminRead, status_code=201)
 def create_admin(
     payload: PlatformAdminCreate,
     db: Session = Depends(get_db),
@@ -1314,7 +1251,7 @@ def create_admin(
     return result
 
 
-@router.patch("/admins/{admin_id}", response_model=PlatformAdminRead)
+@router.patch("/admins/{admin_id}", dependencies=[Depends(require_step_up("admin-manage"))], response_model=PlatformAdminRead)
 def update_admin(
     admin_id: uuid.UUID,
     payload: PlatformAdminUpdate,

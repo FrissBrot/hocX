@@ -115,6 +115,8 @@ services:
       - path: .env
         required: false
     environment:
+      # SEC-AUTH-001: nur das Backend kennt das Admin-Gate-Secret (env_file lädt sonst die ganze .env)
+      ADMIN_GATE_SECRET: ""
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -239,6 +241,11 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      # SEC-AUTH-001: nur das Backend. Leer in der Entwicklung = Admin-Gate offen; mit
+      # HOCX_ENVIRONMENT=production Pflicht (RUNBOOK Abschnitt 21).
+      ADMIN_GATE_SECRET: ${ADMIN_GATE_SECRET:-}
+      TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
+      TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
@@ -316,6 +323,9 @@ services:
       - "traefik.http.routers.hocx-admin-api.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-api.priority=100"
       - "traefik.http.routers.hocx-admin-api.service=hocx-admin-api"
+      # SEC-AUTH-001: Gate-Header (infra/traefik/dynamic/admin-gate.yml; im Release von deploy.sh, hier
+      # von scripts/dev.sh angelegt, falls sie fehlt)
+      - "traefik.http.routers.hocx-admin-api.middlewares=admin-gate@file"
       - "traefik.http.services.hocx-admin-api.loadbalancer.server.port=8000"
       # Dedicated router for the login endpoint specifically, with rate limiting - narrowly
       # scoped to just POST /api/auth/login (not all of /api/auth/*), since /api/auth/session
@@ -342,7 +352,7 @@ services:
       - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-auth.priority=200"
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
-      - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
+      - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit,admin-gate@file"
       - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
       # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
       # previously fell through to the generic hocx-backend router with no Traefik-level rate
@@ -381,7 +391,7 @@ services:
       - "traefik.http.routers.hocx-tenant-import.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-tenant-import.priority=200"
       - "traefik.http.routers.hocx-tenant-import.service=hocx-tenant-import"
-      - "traefik.http.routers.hocx-tenant-import.middlewares=tenant-import-body-limit"
+      - "traefik.http.routers.hocx-tenant-import.middlewares=tenant-import-body-limit,admin-gate@file"
       - "traefik.http.services.hocx-tenant-import.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       # Dedicated router for the Word/PDF/ZIP import upload endpoints - defense in depth
@@ -435,6 +445,8 @@ services:
       - path: .env
         required: false
     environment:
+      # SEC-AUTH-001: nur das Backend kennt das Admin-Gate-Secret (env_file lädt sonst die ganze .env)
+      ADMIN_GATE_SECRET: ""
       PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
       STORAGE_ROOT: /app/storage
       ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
@@ -513,7 +525,7 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.middlewares.web-inflight.inflightreq.amount=200"
       - "traefik.http.middlewares.web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.hocx-frontend.middlewares=web-inflight"
@@ -528,11 +540,12 @@ services:
       - "traefik.http.routers.hocx-admin-frontend.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-frontend.priority=10"
       - "traefik.http.routers.hocx-admin-frontend.service=hocx-frontend"
+      - "traefik.http.routers.hocx-admin-frontend.middlewares=admin-gate@file"
       # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
       # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie, und der
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
       # website.invalid zu holen und loggt bei jedem Start einen Fehler.
-      - "traefik.http.routers.hocx-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.hocx-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.hocx-website-frontend.middlewares=web-inflight"
       - "traefik.http.routers.hocx-website-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+letsencrypt}"
@@ -587,7 +600,7 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.abgabebox-backend.middlewares=api-inflight"
       - "traefik.http.routers.abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-backend.tls.certresolver=letsencrypt"
@@ -997,7 +1010,7 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.abgabebox-frontend.middlewares=web-inflight"
       - "traefik.http.routers.abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-frontend.tls.certresolver=letsencrypt"
@@ -1027,7 +1040,7 @@ services:
       start_period: 10s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hocx-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"
+      - "traefik.http.routers.hocx-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.hocx-docs.entrypoints=websecure"
       - "traefik.http.routers.hocx-docs.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-docs.priority=10"

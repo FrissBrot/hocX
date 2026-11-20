@@ -56,6 +56,8 @@ source "$REPO_DIR/scripts/lib/env_migrate.sh"
 source "$REPO_DIR/scripts/lib/cosign.sh"
 # shellcheck source=scripts/lib/traefik_checks.sh
 source "$REPO_DIR/scripts/lib/traefik_checks.sh"
+# shellcheck source=scripts/lib/admin_gate.sh
+source "$REPO_DIR/scripts/lib/admin_gate.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
 # shellcheck source=scripts/lib/image_cleanup.sh
@@ -270,6 +272,7 @@ create_env_file() {
   POSTGRES_PASSWORD="$(generate_secret)"
   AUTH_SECRET="$(generate_secret)"
   ADMIN_AUTH_SECRET="$(generate_secret)"
+  ADMIN_GATE_SECRET="$(generate_secret)"
   INITIAL_ADMIN_PASSWORD="$(generate_secret)"
   APP_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
@@ -310,6 +313,7 @@ create_env_file() {
   write_env_value TRAEFIK_DOCS_DOMAIN "$TRAEFIK_DOCS_DOMAIN"
   write_env_value AUTH_SECRET "$AUTH_SECRET"
   write_env_value ADMIN_AUTH_SECRET "$ADMIN_AUTH_SECRET"
+  write_env_value ADMIN_GATE_SECRET "$ADMIN_GATE_SECRET"
   write_env_value INITIAL_ADMIN_EMAIL "$INITIAL_ADMIN_EMAIL"
   write_env_value INITIAL_ADMIN_PASSWORD "$INITIAL_ADMIN_PASSWORD"
   write_env_value TRAEFIK_ABGABEBOX_DOMAIN "$TRAEFIK_ABGABEBOX_DOMAIN"
@@ -372,6 +376,10 @@ if [[ ! "$GHCR_NAMESPACE" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]; then
 fi
 
 DC=(docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}")
+# Für traefik_checks.sh (SEC-AUTH-001): aktive Mandanten-Domains aus der vom Backend generierten Datei
+tenant_domains_for_checks() {
+  "${DC[@]}" exec -T backend cat /app/traefik_dynamic/tenant-domains.yml 2> /dev/null
+}
 
 run_preflight() {
   local command available_kb minimum_kb
@@ -402,6 +410,12 @@ run_preflight() {
   fi
   HOCX_ENVIRONMENT="$app_environment"
   export HOCX_ENVIRONMENT
+  # Review L2: Der Next.js-Server reicht bei Admin-Aufrufen den Gate-Header an INTERNAL_API_URL weiter -
+  # das Ziel muss deshalb intern sein (nie eine öffentliche Domain, über die der Header Dritte erreicht).
+  if ! [[ "${INTERNAL_API_URL:-}" =~ ^http://(backend|localhost|127\.0\.0\.1)(:[0-9]+)?/?$ ]]; then
+    echo "INTERNAL_API_URL muss intern sein (z. B. http://backend:8000), aktuell: '${INTERNAL_API_URL:-}'." >&2
+    return 1
+  fi
   if [ "${AUTH_SECURE_COOKIES:-true}" != true ]; then
     echo "AUTH_SECURE_COOKIES darf in Release-Umgebungen nicht deaktiviert sein." >&2
     return 1
@@ -413,7 +427,7 @@ run_preflight() {
       ;;
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
-    "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
+    "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
@@ -487,6 +501,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" app_db_password "$APP_DB_PASSWORD"
   write_secret_file "$secrets_dir" auth_secret "$AUTH_SECRET"
   write_secret_file "$secrets_dir" admin_auth_secret "$ADMIN_AUTH_SECRET"
+  write_secret_file "$secrets_dir" admin_gate_secret "$ADMIN_GATE_SECRET"
   write_secret_file "$secrets_dir" initial_admin_password "$INITIAL_ADMIN_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
@@ -605,6 +620,42 @@ prepare_runtime_permissions() {
   fi
 }
 
+# infra/traefik/dynamic (Review L4): Traefik liest über Gruppe 5001, das Backend (uid 5000, Gruppe 5001)
+# schreibt dort nur tenant-domains.yml (traefik_config_service, atomar über eine .tmp-Datei).
+# Verzeichnis 3770 (setgid + Sticky-Bit: niemand ersetzt oder löscht fremde Dateien), versionierte
+# Dateien und admin-gate.yml 0640 (nur der Deploy-Benutzer schreibt), tenant-domains.yml 0660.
+# Live geprüft: das Backend ersetzt seine eigene Datei weiter, fremde nicht.
+traefik_dynamic_dir_ok() {
+  local dir="$1"
+  [ "$(stat -c '%a %g' "$dir")" = "3770 5001" ] || return 1
+  ! find "$dir" -mindepth 1 -maxdepth 1 -type f ! -name tenant-domains.yml ! -name '*.tmp' \
+    \( ! -group 5001 -o ! -perm -g+r -o -perm /0137 \) -print -quit | grep -q . || return 1
+  ! find "$dir" -mindepth 1 -maxdepth 1 -type f -name tenant-domains.yml \
+    \( ! -group 5001 -o ! -perm -g+rw -o -perm /007 \) -print -quit | grep -q .
+}
+
+prepare_traefik_dynamic_dir() {
+  local dir="$PROJECT_DIR/infra/traefik/dynamic"
+  if [ -L "$dir" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+    return 1
+  fi
+  mkdir -p "$dir"
+  if traefik_dynamic_dir_ok "$dir"; then
+    echo "    dynamic: ok"
+    return 0
+  fi
+  echo "    Haerte Berechtigungen: $dir"
+  docker run --rm --pull never --network none --user 0:0 \
+    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+    --security-opt no-new-privileges:true --entrypoint sh \
+    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+    -c 'chgrp -R 5001 /target && chmod 3770 /target \
+        && find /target -mindepth 1 -maxdepth 1 -type f ! -name tenant-domains.yml -exec chmod 0640 {} + \
+        && find /target -mindepth 1 -maxdepth 1 -type f -name tenant-domains.yml -exec chmod 0660 {} +' || return 1
+  traefik_dynamic_dir_ok "$dir" || { echo "Berechtigungen von $dir konnten nicht gesetzt werden." >&2; return 1; }
+}
+
 prepare_thumbnail_dir() {
   # storage-local/thumbnails (ab 1.1.0) und storage-local/work (ab 1.2.0, lokaler Arbeitsbereich
   # des Objektspeichers) liegen bewusst ausserhalb von HOCX_STORAGE_PATH und sind nicht im Repo.
@@ -613,17 +664,17 @@ prepare_thumbnail_dir() {
   # Gruppe 5001 chgrp'en; deshalb laeuft die Berechtigungs-Korrektur in einem kurzlebigen
   # Container aus dem bereits signaturgeprueften Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem
   # Release-Manifest).
-  # infra/traefik/dynamic gehoert ebenfalls dazu: Git schreibt die versionierte security.yml bei
-  # einem Deploy-Code-Update als hocx-deploy:hocx-deploy 0644 neu, Traefik liest sie aber nur
-  # ueber die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
+  # infra/traefik/dynamic: eigene Regeln, siehe prepare_traefik_dynamic_dir. Git schreibt die
+  # versionierten Dateien bei einem Deploy-Code-Update als hocx-deploy 0644 neu, Traefik liest sie
+  # nur über die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
   # infra/maintenance (Wartungsseite, ab 1.4.3): nur lesbar fuer Gruppe 5001 (nginx im Dienst
   # maintenance-page, UID 101, group_add 5001), ohne Schreibrecht - siehe prepare_maintenance_dir.
   local base="$PROJECT_DIR/storage-local"
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
-  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work" \
-    "$PROJECT_DIR/infra/traefik/dynamic"; do
+  prepare_traefik_dynamic_dir || return 1
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1
@@ -1002,6 +1053,11 @@ run_smoke_checks() {
     wait_for_exec frontend "Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" || return 1
   fi
 
+  # Admin-Panel als eigener Dienst (Review M3); auf einem fremden Host antwortet es mit 404.
+  if service_exists admin-frontend; then
+    wait_for_exec admin-frontend "Admin-Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" || return 1
+  fi
+
   if service_exists abgabebox-backend; then
     wait_for_exec abgabebox-backend "Abgabebox-Backend" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\"" || return 1
   fi
@@ -1184,6 +1240,11 @@ fi
 
 echo "==> [$ENVIRONMENT] Deploy"
 if ! "${DC[@]}" up -d --pull never; then
+  rollback_apps || true
+  exit 1
+fi
+
+if ! write_admin_gate_traefik_config; then
   rollback_apps || true
   exit 1
 fi

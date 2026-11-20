@@ -5967,14 +5967,6 @@ button.table-row-link.table-row-toggle {
   font-size: var(--text-md);
 }
 
-.oidc-button:hover {
-  --button-bg: var(--accent-soft);
-  background: var(--button-bg);
-  border-color: var(--accent);
-  transform: none;
-  box-shadow: none;
-}
-
 .mfa-screen-header p {
   margin: 0;
   color: var(--muted);

@@ -21,6 +21,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { AdminTenantVerificationPanel } from "@/components/admin/admin-identity-verification";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -359,7 +360,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       return;
     setCleanupBusy(true);
     try {
-      const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenant.id}/cleanup`, {
+      const result = await stepUpFetch<TenantCleanupCounts>("tenant-delete", `/api/admin/tenants/${tenant.id}/cleanup`, {
         method: "POST",
         body: JSON.stringify({ categories: Array.from(cleanupSelected), confirm_name: cleanupConfirmName.trim() })
       });
@@ -439,7 +440,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant) return;
     const previous = tenantUsers;
     try {
-      const updated = await browserApiFetch<AdminTenantUser>(`/api/admin/tenants/${tenant.id}/users/${userId}`, {
+      const updated = await stepUpFetch<AdminTenantUser>("user-manage", `/api/admin/tenants/${tenant.id}/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ role_code: roleCode })
       });
@@ -462,7 +463,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     )
       return;
     try {
-      await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
+      await stepUpFetch("user-manage", `/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
       setTenantUsers((current) => current.filter((u) => u.user_id !== userId));
       showToast(t("tenantModal.toasts.userDeleted"), "success");
     } catch (error) {

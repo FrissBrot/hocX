@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { useMfaEnrollment, formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
 import { browserSupportsPasskeys } from "@/lib/webauthn";
 import type { Locale } from "@/i18n/locale-config.generated";
@@ -14,17 +13,6 @@ function ShieldIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={24} height={24} aria-hidden="true" className={className}>
       <path d="M12 3l7 3v6c0 4.5-2.9 7.9-7 9-4.1-1.1-7-4.5-7-9V6l7-3z" />
       <path d="M9 12l2 2 4-4.2" />
-    </svg>
-  );
-}
-
-function KeyIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={20} height={20} aria-hidden="true" className={className}>
-      <circle cx="7.5" cy="15.5" r="4.5" />
-      <path d="M10.9 12.1L20 3" />
-      <path d="M16.5 6.5L19 9" />
-      <path d="M13.5 9.5L15.5 11.5" />
     </svg>
   );
 }
@@ -59,23 +47,13 @@ export function AdminMfaSettings({ initialOverview }: Props) {
   const t = useTranslations("admin.mfa");
   const locale = useLocale() as Locale;
   const [overview, setOverview] = useState<UserMfaOverview>(initialOverview);
-  const {
-    totpSetup,
-    setTotpSetup,
-    totpCode,
-    setTotpCode,
-    totpLabel,
-    setTotpLabel,
-    passkeyLabel,
-    setPasskeyLabel,
-    busy,
-    startTotp,
-    completeTotp,
-    startPasskey,
-    deleteFactor,
-    hasTotpFactor,
-    hasPasskeyFactor,
-  } = useMfaEnrollment("/api/admin/mfa", overview, setOverview);
+  // Admins: nur Passkeys (kein TOTP mehr, Migration 0205) - der gemeinsame Hook bietet TOTP für
+  // Mandanten-Konten, hier wird nur der Passkey-Teil genutzt.
+  const { passkeyLabel, setPasskeyLabel, busy, startPasskey, deleteFactor } = useMfaEnrollment(
+    "/api/admin/mfa",
+    overview,
+    setOverview
+  );
   // Starts false to match server-rendered markup, then flips after mount - calling
   // browserSupportsPasskeys() directly during render would read `window` on the server too
   // (this page renders immediately, unlike MfaProfilePanel which only ever mounts inside an
@@ -113,41 +91,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
         </div>
       </div>
 
-      <div className="two-col">
-        <article className="security-method-card">
-          <div className="security-method-header">
-            <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
-              <div className="security-method-icon">
-                <KeyIcon />
-              </div>
-              <div>
-                <div className="eyebrow">{t("optionA")}</div>
-                <h3>{t("authenticatorApp")}</h3>
-              </div>
-            </div>
-            {hasTotpFactor ? <span className="pill">{t("setUp")}</span> : null}
-          </div>
-          <p className="muted">
-            {t("totpDescription")}
-          </p>
-          {!totpSetup ? (
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void startTotp()}>
-              {t("setUpTotp")}
-            </button>
-          ) : (
-            <TotpEnrollCard
-              setup={totpSetup}
-              label={totpLabel}
-              onLabelChange={setTotpLabel}
-              code={totpCode}
-              onCodeChange={setTotpCode}
-              onSubmit={() => void completeTotp()}
-              onCancel={() => setTotpSetup(null)}
-              busy={busy}
-            />
-          )}
-        </article>
-
+      <div className="grid">
         <article className="security-method-card">
           <div className="security-method-header">
             <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
@@ -155,11 +99,9 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                 <FingerprintIcon />
               </div>
               <div>
-                <div className="eyebrow">{t("optionB")}</div>
                 <h3>{t("passkey")}</h3>
               </div>
             </div>
-            {hasPasskeyFactor ? <span className="pill">{t("setUp")}</span> : null}
           </div>
           <p className="muted">
             {t("passkeyDescription")}
@@ -190,12 +132,11 @@ export function AdminMfaSettings({ initialOverview }: Props) {
           {!overview.factors.length ? <div className="selection-card muted">{t("noFactorsYet")}</div> : null}
           {overview.factors.map((factor) => {
             const isLastFactor = overview.factors.length <= 1;
-            const isWebauthn = factor.factor_type === "webauthn";
             return (
               <article key={factor.id} className="security-factor-card">
                 <div className="security-factor-row-main">
-                  <div className={`security-factor-icon${isWebauthn ? " is-webauthn" : ""}`}>
-                    {isWebauthn ? <FingerprintIcon /> : <KeyIcon />}
+                  <div className="security-factor-icon is-webauthn">
+                    <FingerprintIcon />
                   </div>
                   <div className="security-factor-main">
                     <div className="security-factor-row">
