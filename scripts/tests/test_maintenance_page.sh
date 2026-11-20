@@ -40,7 +40,11 @@ assert "no-new-privileges:true" in page.get("security_opt", []), "maintenance-pa
 assert page.get("mem_limit") and page.get("cpus"), "maintenance-page: Ressourcenlimits fehlen"
 assert not page.get("ports"), "maintenance-page darf keine Ports veröffentlichen"
 assert not page.get("secrets") and not page.get("environment"), "maintenance-page braucht weder Secrets noch Umgebung"
-assert list((page.get("networks") or {}).keys()) == ["default"], page.get("networks")
+# Eigenes internes Netz nur mit Traefik (Security-Review G2): kein Zugang zu den App-Diensten.
+assert list((page.get("networks") or {}).keys()) == ["maintenance"], page.get("networks")
+assert config["networks"]["maintenance"].get("internal") is True, config["networks"]["maintenance"]
+users = sorted(n for n, s in services.items() if "maintenance" in (s.get("networks") or {}))
+assert users == ["maintenance-page", "traefik"], users
 mounts = page.get("volumes", [])
 assert len(mounts) == 1 and mounts[0]["target"] == "/srv/maintenance" and mounts[0].get("read_only"), mounts
 assert mounts[0]["source"].endswith("/infra/maintenance"), mounts
@@ -99,6 +103,7 @@ for kind, domain in domains.items():
             assert int(r["priority"]) < prio, (r, api)
     assert api[0]["middlewares"] == "maintenance-path-api@file", api
 assert all(r["middlewares"].startswith("maintenance-path-") for r in fallbacks.values()), fallbacks
+assert labels(page)["traefik.docker.network"].endswith("_maintenance"), labels(page)
 
 # errors-Middleware an allen App-Routern ausser Docs und Website (als erste Middleware).
 expected = {
@@ -200,9 +205,31 @@ cmp -s design/tokens.css infra/maintenance/tokens.css || { echo "infra/maintenan
 
 # Prüfungen von aussen zählen die Wartungsseite nie als erreichbar: sie liefert immer 503, und
 # jede Prüfung in traefik_checks.sh nutzt curl --fail (HTTP >= 400 = Fehler).
-test "$(grep -c 'curl --silent --show-error --fail' scripts/lib/traefik_checks.sh)" -eq 2
+test "$(grep -c 'curl --silent --show-error --fail' scripts/lib/traefik_checks.sh)" -eq 1
+# probe_post_json (ohne --fail): Statuscode selbst geprüft, Wartung erkannt - mit gefälschtem curl.
+FAKE="$(mktemp -d)"
+cat > "$FAKE/curl" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n%s' "$FAKE_BODY" "$FAKE_STATUS"
+SH
+chmod +x "$FAKE/curl"
+probe_case() {
+  FAKE_BODY="$1" FAKE_STATUS="$2" PATH="$FAKE:$PATH" bash -c 'source scripts/lib/traefik_checks.sh; probe_post_json https://x.invalid/api/public/verify "{}" "\"found\":false"' 2>&1
+}
+out="$(probe_case '{"found":false}' 200)" || { echo "probe_post_json: 200 abgelehnt: $out" >&2; exit 1; }
+if out="$(probe_case '{"detail":"x","code": "maintenance"}' 503)"; then echo "probe_post_json: Wartung als ok gezählt" >&2; exit 1; fi
+grep -q "Wartung noch aktiv" <<< "$out" || { echo "probe_post_json: Wartung nicht gemeldet: $out" >&2; exit 1; }
+if out="$(probe_case '{"code":"service_unavailable","found":false}' 503)"; then echo "probe_post_json: Wartungsseite (503) als ok gezählt" >&2; exit 1; fi
+grep -q "HTTP 503" <<< "$out" || { echo "probe_post_json: 503 nicht gemeldet: $out" >&2; exit 1; }
+if probe_case '{"found":true}' 200 > /dev/null; then echo "probe_post_json: falsche Antwort akzeptiert" >&2; exit 1; fi
+rm -rf "$FAKE"
 # deploy.sh: Rechte und Neustart bei geänderter nginx.conf
-grep -q '"$PROJECT_DIR/infra/maintenance"; do' scripts/deploy.sh
+grep -q "chmod -R g+rX,g-w,o-rwx /target" scripts/deploy.sh
+grep -q '^  prepare_maintenance_dir$' scripts/deploy.sh
+if grep -q '"$PROJECT_DIR/infra/maintenance"; do' scripts/deploy.sh; then
+  echo "infra/maintenance darf nicht gruppenschreibbar gehärtet werden" >&2
+  exit 1
+fi
 grep -q 'sync_maintenance_page_config' scripts/deploy.sh
 
 # Wartungsmodus während des Updates: Reihenfolge in deploy.sh (Hauptablauf ausserhalb von Funktionen)
@@ -215,26 +242,32 @@ def first(pattern, start=0):
             return index
     raise AssertionError(f"nicht gefunden: {pattern}")
 begin = first(r"^begin_deploy_maintenance$")
-trap = first(r"^trap 'end_deploy_maintenance aborted' EXIT$")
+trap = first(r"^trap 'end_deploy_maintenance aborted \|\| true' EXIT$")
 alembic = first(r'run --rm --no-deps backend alembic')
 migration_failed = first(r"Datenbankmigration fehlgeschlagen")
-migration_end = first(r"^  end_deploy_maintenance aborted$", migration_failed)
+migration_end = first(r"^  end_deploy_maintenance aborted \|\| true$", migration_failed)
 migration_exit = first(r"^  exit 1$", migration_failed)
 smoke = first(r"^if ! run_smoke_checks; then$")
-success = first(r"^end_deploy_maintenance success$")
+success = first(r"^if ! end_deploy_maintenance success; then$")
+success_exit = first(r"^  exit 1$", success)
+assert "rollback_apps" not in "\n".join(lines[success:success_exit]), "Wartung nicht beendbar: kein Rollback"
+trap_line = first(r"^trap 'end_deploy_maintenance aborted \|\| true' EXIT$")
+assert trap_line < first(r"^begin_deploy_maintenance$"), "EXIT-Trap vor begin_deploy_maintenance"
 route_checks = first(r"^if ! traefik_route_checks; then$")
-assert begin < trap < alembic, "begin-deploy und Trap vor der Migration"
+assert trap < begin < alembic, "Trap, dann begin-deploy, beides vor der Migration"
 assert migration_end < migration_exit, "Migration fehlgeschlagen: Wartung vor exit beenden"
 assert smoke < success < route_checks, "Wartung nach den Smoke-Checks, vor den Traefik-Prüfungen beenden"
 # rollback_apps beendet die Wartung in jedem Fall
 body = "\n".join(lines[first(r"^rollback_apps\(\) \{$"):first(r"^rollback_app_images\(\) \{$")])
-assert "rollback_app_images || status=$?" in body and "end_deploy_maintenance rollback" in body, body
+assert "rollback_app_images || status=$?" in body and "end_deploy_maintenance rollback || true" in body, body
 # Ende mit dem Image des neuen Releases, SQL-Rückfall, nie Abbruch
 text = "\n".join(lines)
 assert 'HOCX_BACKEND_IMAGE="$DEPLOY_MAINTENANCE_IMAGE"' in text
 assert "WHERE source_job_type = 'deploy' AND state NOT IN ('completed', 'cancelled')" in text
 end_fn = text.split("end_deploy_maintenance() {", 1)[1].split("\n}\n", 1)[0]
-assert "return 1" not in end_fn and "exit" not in end_fn, "end_deploy_maintenance darf nie abbrechen"
+assert "exit" not in end_fn, "end_deploy_maintenance darf nie abbrechen (nur Rückgabewert)"
+assert end_fn.rstrip().endswith("return 1"), "end_deploy_maintenance meldet Misserfolg"
+assert "audit_log" in text.split("DEPLOY_MAINTENANCE_END_SQL=", 1)[1].split("\n", 1)[0], "SQL-Rückfall ohne Audit"
 begin_fn = text.split("begin_deploy_maintenance() {", 1)[1].split("\n}\n", 1)[0]
 assert "return 1" not in begin_fn and "exit" not in begin_fn, "begin_deploy_maintenance darf nie abbrechen"
 assert begin_fn.index("DEPLOY_MAINTENANCE_ACTIVE=1") < begin_fn.index("begin-deploy")
@@ -359,7 +392,7 @@ import json, sys
 work, project, traefik_image = sys.argv[1:4]
 services = json.load(sys.stdin)["services"]
 page = services["maintenance-page"]
-out = {"name": project, "services": {}, "networks": {"default": {}}}
+out = {"name": project, "services": {}, "networks": {"default": {}, "maintenance": {"internal": True}}}
 out["services"]["maintenance-page"] = {k: v for k, v in page.items() if k not in ("depends_on",)}
 stub = {
     "image": page["image"],
@@ -374,6 +407,7 @@ out["services"]["traefik"] = {
     "image": traefik_image,
     "command": ["--configFile=/etc/traefik/traefik.yml"],
     "ports": ["127.0.0.1::443", "127.0.0.1::8443"],
+    "networks": ["default", "maintenance"],
     "volumes": [
         {"type": "bind", "source": f"{work}/traefik.yml", "target": "/etc/traefik/traefik.yml", "read_only": True},
         {"type": "bind", "source": f"{work}/dynamic", "target": "/etc/traefik/dynamic", "read_only": True},
@@ -496,6 +530,14 @@ request "https://$DOMAIN/" -I
 expect "HEAD -> 503 mit Kennung" '[ "$STATUS" = 503 ] && [ "$(header X-Hocx-Maintenance-Page)" = 1 ]'
 request "https://$DOMAIN/api/auth/login" -X POST --data '{}'
 expect "POST /api/auth/login -> JSON-503" 'maintenance_json'
+head -c 2048 /dev/urandom > "$WORK/upload-2k.bin"
+head -c 5242880 /dev/urandom > "$WORK/upload-5m.bin"
+request "https://$ABG_DOMAIN/api/public/x/upload" -X POST -H 'Content-Type: application/octet-stream' --data-binary "@$WORK/upload-2k.bin"
+expect "Upload 2 KiB (Ausweich-Router) -> JSON-503, nicht 413" 'maintenance_json'
+request "https://$ABG_DOMAIN/api/public/x/upload" -X POST -F "files=@$WORK/upload-5m.bin"
+expect "Upload 5 MB multipart (Ausweich-Router) -> JSON-503, nicht 413" 'maintenance_json'
+request "https://$DOMAIN/fotos" -X POST --data-binary "@$WORK/upload-5m.bin"
+expect "POST 5 MB auf HTML-Pfad -> Wartungsseite 503" 'maintenance_html hocx'
 request "https://$ADMIN_DOMAIN/admin/tenants"
 expect "Admin -> Wartungsseite (admin)" 'maintenance_html admin'
 request "https://$ABG_DOMAIN/abc"

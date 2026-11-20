@@ -10,7 +10,7 @@
 # ursprünglichen Fehler (wie vor 1.4.3).
 #
 # Namen ohne ROUTER_PREFIX: der Dateiprovider gehört zu genau einer Traefik-Instanz, und die
-# Adresse maintenance-page löst Docker im Projektnetz dieser Instanz auf.
+# Adresse maintenance-page löst Docker im internen Netz «maintenance» dieser Instanz auf.
 #
 # Die Ausweich-Router (App-Container gestoppt, entfernt oder noch nicht healthy) stehen als Labels
 # am Dienst maintenance-page, weil sie die Domains aus .env brauchen.

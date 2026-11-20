@@ -616,14 +616,14 @@ prepare_thumbnail_dir() {
   # infra/traefik/dynamic gehoert ebenfalls dazu: Git schreibt die versionierte security.yml bei
   # einem Deploy-Code-Update als hocx-deploy:hocx-deploy 0644 neu, Traefik liest sie aber nur
   # ueber die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
-  # infra/maintenance (Wartungsseite, ab 1.4.3) ebenso: nginx im Dienst maintenance-page (UID 101)
-  # liest es ueber group_add 5001.
+  # infra/maintenance (Wartungsseite, ab 1.4.3): nur lesbar fuer Gruppe 5001 (nginx im Dienst
+  # maintenance-page, UID 101, group_add 5001), ohne Schreibrecht - siehe prepare_maintenance_dir.
   local base="$PROJECT_DIR/storage-local"
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
   for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work" \
-    "$PROJECT_DIR/infra/traefik/dynamic" "$PROJECT_DIR/infra/maintenance"; do
+    "$PROJECT_DIR/infra/traefik/dynamic"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1
@@ -641,6 +641,29 @@ prepare_thumbnail_dir() {
       -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
   done
   prepare_acme_dir
+  prepare_maintenance_dir
+}
+
+# infra/maintenance: Gruppe 5001 nur lesen (g+rX, kein g+w), andere nichts. Der Besitzer
+# (Deploy-Benutzer, Git) behaelt seine Rechte; setgid, damit neue Dateien die Gruppe erben.
+prepare_maintenance_dir() {
+  local dir="$PROJECT_DIR/infra/maintenance"
+
+  if [ -L "$dir" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+    return 1
+  fi
+  [ -d "$dir" ] || return 0
+  if ! find "$dir" \( ! -group 5001 -o ! -perm -g+r -o -perm /g+w -o -perm /007 -o \( -type d ! -perm -g+xs \) \) -print -quit | grep -q .; then
+    echo "    maintenance: ok"
+    return 0
+  fi
+  echo "    Haerte Berechtigungen: $dir (Gruppe 5001 nur lesen)"
+  docker run --rm --pull never --network none --user 0:0 \
+    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+    --security-opt no-new-privileges:true --entrypoint sh \
+    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+    -c 'chgrp -R 5001 /target && chmod -R g+rX,g-w,o-rwx /target && find /target -type d -exec chmod g+s {} +'
 }
 
 # infra/traefik/letsencrypt gehoert root (Traefik laeuft als root ohne CAP_DAC_OVERRIDE und
@@ -773,7 +796,7 @@ capture_current_release() {
 rollback_apps() {
   local status=0
   rollback_app_images || status=$?
-  end_deploy_maintenance rollback
+  end_deploy_maintenance rollback || true
   return "$status"
 }
 
@@ -905,7 +928,8 @@ recreate_on_config_change() {
 # HOCX_DEPLOY_MAINTENANCE=0 schaltet es ab.
 DEPLOY_MAINTENANCE_ACTIVE=0
 DEPLOY_MAINTENANCE_IMAGE=""
-DEPLOY_MAINTENANCE_END_SQL="WITH ended AS (UPDATE public.maintenance_window SET state = 'completed', ended_at = now(), updated_at = now() WHERE source_job_type = 'deploy' AND state NOT IN ('completed', 'cancelled') RETURNING id) INSERT INTO public.maintenance_event (window_id, kind, actor_email, to_state, details) SELECT id, 'transition', 'system:deploy', 'completed', '{\"source\": \"deploy-sql\"}'::jsonb FROM ended"
+# Statisches SQL ohne Variablen: Fenster beenden, Verlauf und Audit-Eintrag wie die CLI.
+DEPLOY_MAINTENANCE_END_SQL="WITH ended AS (UPDATE public.maintenance_window SET state = 'completed', ended_at = now(), updated_at = now() WHERE source_job_type = 'deploy' AND state NOT IN ('completed', 'cancelled') RETURNING id), events AS (INSERT INTO public.maintenance_event (window_id, kind, actor_email, to_state, details) SELECT id, 'transition', 'system:deploy', 'completed', '{\"source\": \"deploy-sql\"}'::jsonb FROM ended) INSERT INTO public.audit_log (actor_email, action, entity_type, details_json) SELECT 'system:deploy', 'admin.maintenance_deploy_ended', 'maintenance_window', jsonb_build_object('window_ids', jsonb_agg(id), 'outcome', 'sql-fallback') FROM ended HAVING count(*) > 0"
 
 # Immer mit dem Backend-Image des neuen Releases (gemerkt bei begin): nach einem Rollback zeigt
 # HOCX_BACKEND_IMAGE auf das alte Release, das die CLI noch nicht kennen muss.
@@ -929,7 +953,7 @@ begin_deploy_maintenance() {
   fi
 }
 
-# end_deploy_maintenance <success|rollback|aborted>
+# end_deploy_maintenance <success|rollback|aborted> - 1, wenn die Wartung danach noch aktiv ist
 end_deploy_maintenance() {
   [ "$DEPLOY_MAINTENANCE_ACTIVE" = 1 ] || return 0
   echo "==> [$ENVIRONMENT] Wartungsmodus des Updates beenden ($1)"
@@ -946,7 +970,7 @@ end_deploy_maintenance() {
   echo "    FEHLER: Wartungsmodus des Updates ist NOCH AKTIV - die App bleibt für Nutzer gesperrt." >&2
   echo "    Manuell beenden: docker compose -p $PROJECT_NAME ... run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome $1" >&2
   echo "    oder Admin-Portal -> System -> Wartung -> Freigeben (Fenster «Update»)." >&2
-  return 0
+  return 1
 }
 
 wait_for_exec() {
@@ -1130,9 +1154,10 @@ if service_exists maintenance-page; then
 fi
 wait_for_exec db "Postgres" "pg_isready -U '$POSTGRES_USER' -d '$POSTGRES_DB'" 30 2
 
+# Jeder Abbruch ab hier (exit 1) beendet die Wartung wieder; die Funktion ist idempotent und
+# ohne aktive Wartung ein No-op. Vor begin gesetzt: auch ein Abbruch mitten im Start wird erfasst.
+trap 'end_deploy_maintenance aborted || true' EXIT
 begin_deploy_maintenance
-# Jeder Abbruch ab hier (exit 1) beendet die Wartung wieder; die Funktion ist idempotent.
-trap 'end_deploy_maintenance aborted' EXIT
 
 echo "==> [$ENVIRONMENT] Datenbankmigration"
 ALEMBIC_ARGS=()
@@ -1150,7 +1175,7 @@ esac
 if ! "${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head; then
   echo "Datenbankmigration fehlgeschlagen. Die laufende App wurde nicht veraendert." >&2
   restart_containers_stopped_for_pg_upgrade
-  end_deploy_maintenance aborted
+  end_deploy_maintenance aborted || true
   [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
   echo "Meldet die Migration 0078 Konten mit mehreren Mandanten oder ohne Mandant:" >&2
   echo "entweder bereinigen oder HOCX_SINGLE_TENANT_RESOLUTION=auto in .env setzen und erneut deployen." >&2
@@ -1176,7 +1201,14 @@ fi
 # Vor den Prüfungen über Traefik: während voller Wartung sperrt die Abgabebox auch die
 # Prüfseite (POST /api/public/verify) - die Prüfung würde scheitern und ein Rollback auslösen.
 # Scheitern die Prüfungen danach, rollt rollback_apps zurück (die Wartung ist dann schon beendet).
-end_deploy_maintenance success
+# Lässt sich die Wartung nicht beenden, scheiterten die Prüfungen nur an ihr - kein Rollback
+# eines guten Releases, sondern Abbruch mit klarer Anleitung (das neue Release läuft weiter).
+if ! end_deploy_maintenance success; then
+  echo "Deploy angehalten: $HOCX_VERSION läuft und hat die Smoke-Checks bestanden, aber der Wartungsmodus" >&2
+  echo "des Updates ist noch aktiv (siehe oben). Kein Rollback. Nach dem manuellen Beenden:" >&2
+  echo "  ./scripts/verify_release.sh $ENVIRONMENT  und danach ./scripts/deploy.sh $ENVIRONMENT erneut (setzt das Rollback-Ziel)." >&2
+  exit 1
+fi
 
 # Von aussen über Traefik: jeder Router muss seinen Dienst erreichen (falsches Docker-Netz,
 # fehlende Middleware, Zertifikat). Die Smoke-Checks oben laufen in den Containern und sehen das

@@ -60,13 +60,25 @@ probe_website_domain() {
   [[ "/$path" != /login* ]]
 }
 
-# POST mit JSON über Traefik; prüft, dass die Antwort den erwarteten Text enthält.
+# POST mit JSON über Traefik; prüft, dass die Antwort den erwarteten Text enthält. HTTP >= 400
+# scheitert; ein 503 mit Code "maintenance" (Wartungsmodus noch aktiv, z. B. ein nicht beendetes
+# Deploy-Fenster) wird als solcher gemeldet statt als «nicht erreichbar».
 probe_post_json() {
-  local url="$1" body="$2" expected="$3" response
+  local url="$1" body="$2" expected="$3" response status
   local -a extra
   mapfile -t extra < <(_traefik_curl_args "$url")
-  response="$(curl --silent --show-error --fail --max-time 15 -H 'Content-Type: application/json' \
-    --data "$body" "${extra[@]}" "$url")" || return 1
+  response="$(curl --silent --show-error --max-time 15 -H 'Content-Type: application/json' \
+    --data "$body" --write-out $'\n%{http_code}' "${extra[@]}" "$url")" || return 1
+  status="${response##*$'\n'}"
+  response="${response%$'\n'*}"
+  if [ "$status" = 503 ] && [[ "$response" =~ \"code\":[[:space:]]*\"maintenance\" ]]; then
+    echo "    Wartung noch aktiv (503 maintenance) - Wartungsfenster beenden: Adminportal -> System -> Wartung" >&2
+    return 1
+  fi
+  if ! [[ "$status" =~ ^[0-9]{3}$ ]] || [ "$status" -ge 400 ]; then
+    echo "    HTTP $status: ${response:0:200}" >&2
+    return 1
+  fi
   [[ "$response" == *"$expected"* ]] || { echo "    Unerwartete Antwort: ${response:0:200}" >&2; return 1; }
 }
 

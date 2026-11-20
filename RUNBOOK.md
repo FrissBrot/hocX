@@ -919,11 +919,12 @@ Wartungsseite. API-Aufrufe bekommen ein JSON-503.
 
 - Dienst `maintenance-page` in `docker-compose.traefik.yml`: nginx-unprivileged (dasselbe, per
   Digest gepinnte Image wie `docs-site`), read-only, ohne Capabilities, 64 MB / 0.25 CPU, ohne
-  Ports, ohne Secrets. Er gehört zum Traefik-Teil des Stacks; ein App-Update erstellt ihn nicht neu.
+  Ports, ohne Secrets, nur im internen Netz `maintenance` (das ausser ihm nur Traefik nutzt). Er gehört zum Traefik-Teil des Stacks; ein App-Update erstellt ihn nicht neu.
   `deploy.sh` startet ihn vor den Migrationen und erstellt ihn nur neu, wenn sich
   `infra/maintenance/nginx.conf` ändert (`sync_maintenance_page_config`, Hash unter
   `.releases/maintenance-nginx.sha256`).
-- Inhalte in `infra/maintenance/` (read-only gemountet, Gruppe 5001 wie `infra/traefik/dynamic`):
+- Inhalte in `infra/maintenance/` (read-only gemountet; `deploy.sh` setzt Gruppe 5001 nur lesend,
+  `prepare_maintenance_dir`):
   `maintenance.html` (eine Seite für alle Varianten, nginx setzt per SSI Variante, Prüfadresse und
   `tokens.css` ein), `api-503.json`, `tokens.css` (Kopie von `design/tokens.css`, nur über
   `./scripts/sync-design-tokens.sh`), `nginx.conf`.
@@ -990,19 +991,25 @@ Prüfseite und ihre API). Sie zeigen auf `maintenance-page@file`. Fehlt
    wiederverwendet. Erste Installation (Tabelle fehlt): übersprungen.
 2. Nach den Smoke-Checks, **vor** den Prüfungen über Traefik: `end-deploy --outcome success`. Vorher
    ginge nicht: in voller Wartung sperrt die Abgabebox auch die Prüfseite, deren Prüfung sonst ein
-   Rollback auslöste.
+   Rollback auslöste. Lässt sich die Wartung nicht beenden (CLI und SQL scheitern), bricht
+   `deploy.sh` hier ab **ohne Rollback** (das neue Release läuft) und nennt den Befehl zum Beenden;
+   danach `verify_release.sh` und erneut `deploy.sh`. Die Prüfseiten-Prüfung meldet eine 503 mit
+   Code `maintenance` ausdrücklich als «Wartung noch aktiv».
 3. `rollback_apps` beendet die Wartung immer (`--outcome rollback`), ebenso eine fehlgeschlagene
    Migration und jeder andere Abbruch (EXIT-Trap, `--outcome aborted`).
 4. `end-deploy` beendet nur Fenster mit `source_job_type=deploy` (auch verwaiste aus einem
    abgebrochenen Lauf), nie von Admins geplante oder Speicher-Fenster, und ohne die
    Freigabebedingungen (ein offener Speicher-Cutover hat sein eigenes Fenster). Scheitert die CLI,
-   beendet `deploy.sh` das Fenster direkt per SQL im `db`-Container; scheitert auch das, steht im
+   beendet `deploy.sh` das Fenster direkt per SQL im `db`-Container (mit Verlauf und Audit-Eintrag
+   `outcome: sql-fallback`); scheitert auch das, steht im
    Log «Wartungsmodus des Updates ist NOCH AKTIV» mit dem Befehl. Von Hand:
    `docker compose -p <projekt> <compose-dateien> run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome aborted`
    oder Admin-Portal → System → Wartung → Fenster «Update» freigeben. `status` zeigt offene
    Deploy-Fenster.
-5. Begin- und End-Fehler sind nur Warnungen, nie ein Abbruch. Abschalten: `HOCX_DEPLOY_MAINTENANCE=0
+5. Begin-Fehler sind nur Warnungen. Abschalten: `HOCX_DEPLOY_MAINTENANCE=0
    ./scripts/deploy.sh <test|prod>`.
+6. Systemmonitoring: die Prüfung `deploy_maintenance` (Adminportal → System, ntfy) warnt, wenn ein
+   Deploy-Fenster länger als 30 Minuten aktiv ist, kritisch ab 2 Stunden.
 
 Tests: `tests/test_maintenance_cli.py`, `tests/test_traefik_config_service.py` (Backend),
 Reihenfolge in `deploy.sh` in `scripts/tests/test_maintenance_page.sh`; der Live-Test prüft mit

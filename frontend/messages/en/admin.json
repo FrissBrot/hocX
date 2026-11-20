@@ -195,6 +195,11 @@
         "detail": "{verified, number} of {total, number} objects verified · {dead, number} permanently failed",
         "problem": "Storage migration needs attention"
       },
+      "deploy_maintenance": {
+        "title": "Update maintenance mode",
+        "detail": "{state, select, active {Active for {minutes, number} minutes} other {No update running}}",
+        "problem": "Maintenance mode of an update is still active"
+      },
       "backup": {
         "title": "Backup",
         "detail": "{state, select, disabled {Not set up} never {No successful backup yet} other {Last successful backup {hours, number} h ago}} · {points, number} restore points",

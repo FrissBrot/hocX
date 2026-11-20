@@ -33,14 +33,19 @@ Installationen aktualisieren können.
   ihr Wartungsbanner. Admin-API, Healthchecks und Wartungsstatus bleiben erreichbar. Von Admins
   geplante oder Speicher-Wartungsfenster fasst das Update nie an. Abschalten:
   `HOCX_DEPLOY_MAINTENANCE=0`. Neuer Wartungsgrund `deploy` in Wartungsansicht und Admin-Portal
-  (alle Sprachen).
+  (alle Sprachen). Lässt sich die Wartung nach einem sonst erfolgreichen Update nicht beenden,
+  bricht das Update ohne Rollback mit Anleitung ab. Neue Systemprüfung «Wartungsmodus des
+  Updates» (Warnung nach 30 Minuten, kritisch nach 2 Stunden, auch per ntfy).
+- Die Wartungsseite läuft in einem eigenen internen Netz nur mit Traefik und antwortet auch auf
+  grosse Uploads mit 503 (statt 413).
 
 ### Update
 
 - `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
   `maintenance-page` (Image `nginxinc/nginx-unprivileged`, wird beim Pull geholt) vor den
-  Migrationen und härtet `infra/maintenance/` auf die Gruppe 5001. Traefik selbst wird nicht neu
-  erstellt: die neue Datei `infra/traefik/dynamic/maintenance.yml` lädt es ohne Neustart. Beim
+  Migrationen und setzt `infra/maintenance/` auf die Gruppe 5001 (nur lesen). Traefik wird neu
+  erstellt (neues internes Netz `maintenance`, kurze Unterbrechung von wenigen Sekunden beim
+  `docker compose up`); die Datei `infra/traefik/dynamic/maintenance.yml` lädt es ohne Neustart. Beim
   Update auf diese Version selbst greift die Wartungsseite erst, sobald der Dienst läuft (also für
   den Austausch der App-Container bereits).
 - Ab diesem Update ist hocX während der Datenbankmigration im Wartungsmodus (Fenster «Update» im

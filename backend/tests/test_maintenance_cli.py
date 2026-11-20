@@ -113,3 +113,32 @@ def test_main_reports_errors_with_exit_code(monkeypatch, capsys):
     monkeypatch.setattr(maintenance_cli, "end_deploy", boom)
     assert maintenance_cli.main(["end-deploy", "--outcome", "aborted"]) == 1
     assert "FEHLER RuntimeError" in capsys.readouterr().err
+
+
+# --- Systemmonitoring: hängendes Deploy-Fenster (system_health_service._check_deploy_maintenance) ---
+
+
+def test_health_check_reports_long_running_deploy_window(db):
+    from app.services import system_alert_service, system_health_service
+
+    now = datetime.now(UTC)
+    assert system_health_service._check_deploy_maintenance(db, now).status == "ok"
+    maintenance_cli.begin_deploy(db, version="1.4.3")
+    [window] = _deploy_windows(db)
+
+    check = system_health_service._check_deploy_maintenance(db, window.started_at + timedelta(minutes=5))
+    assert (check.status, check.params["state"]) == ("ok", "active")
+    check = system_health_service._check_deploy_maintenance(db, window.started_at + timedelta(minutes=45))
+    assert (check.status, check.params["minutes"]) == ("warning", 45)
+    check = system_health_service._check_deploy_maintenance(db, window.started_at + timedelta(hours=3))
+    assert check.status == "critical"
+    assert "end-deploy" in system_alert_service._check_message(check)
+    assert "deploy_maintenance" in system_alert_service._CHECK_TITLES_DE
+    assert "deploy_maintenance" in system_alert_service._CHECK_PROBLEM_TITLES_DE
+
+    # Ein Admin-Fenster zählt hier nicht, ein beendetes Deploy-Fenster auch nicht.
+    maintenance_cli.end_deploy(db, outcome="success")
+    admin_window = maintenance_service.create_window(db, kind="full", reason_code="manual", state="preparing")
+    db.commit()
+    assert system_health_service._check_deploy_maintenance(db, admin_window.started_at + timedelta(hours=3)).status == "ok"
+    assert "deploy_maintenance" in [c.key for c in system_health_service.collect_checks(db, now)]

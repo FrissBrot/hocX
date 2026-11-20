@@ -87,6 +87,8 @@ services:
     networks:
       - default
       - traefik-docker-api
+      # Wartungsseite (maintenance-page), siehe unten.
+      - maintenance
     logging:
       driver: json-file
       options:
@@ -149,8 +151,10 @@ services:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777,size=8m
     volumes:
       - ./infra/maintenance:/srv/maintenance:ro
+    # Nur im internen Netz «maintenance» mit Traefik (Security-Review G2): kein Zugang zu den
+    # App-Diensten im Projektnetz, kein Internet. Traefik erreicht http://maintenance-page:8080.
     networks:
-      - default
+      - maintenance
     logging:
       driver: json-file
       options:
@@ -165,7 +169,7 @@ services:
       start_interval: 2s
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_maintenance"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-maintenance-page.loadbalancer.server.port=8080"
       # Ausweich-Router: niedrigste Priorität (1) je Domain. Die App-Router haben 10/100/200/300 und
       # gewinnen im Normalbetrieb immer; fehlen sie, antwortet hier die Wartungsseite (503). Jede
@@ -218,6 +222,9 @@ volumes:
 networks:
   # Nur Traefik und sein Socket-Proxy (MAIN-OPS-004).
   traefik-docker-api:
+    internal: true
+  # Nur Traefik und die Wartungsseite.
+  maintenance:
     internal: true
 
 secrets:
