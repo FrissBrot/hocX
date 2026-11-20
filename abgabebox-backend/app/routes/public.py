@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import io
 import re
-from datetime import UTC, datetime
 from pathlib import Path
 
 import imagehash
@@ -500,7 +499,9 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             text = re.sub(r"[üÜ]", "ue", text); text = re.sub(r"ß", "ss", text)
             return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
-        date_str = datetime.now(UTC).strftime("%Y%m%d")
+        # Schweizer Datum wie Fenster und Fristen (element_resolver.local_today), nicht UTC: sonst
+        # trug eine Abgabe kurz nach Mitternacht das Datum des Vortags im Namen.
+        date_str = element_resolver.local_today().strftime("%Y%m%d")
         assignment_slug = _slugify(assignment["title"])
         element_slug = _slugify(element.get("label") or element_ref)
 
