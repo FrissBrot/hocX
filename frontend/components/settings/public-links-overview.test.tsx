@@ -81,8 +81,10 @@ describe("PublicLinksOverview", () => {
   it("bestätigt das Widerrufen inline, entfernt die Zeile und meldet es", async () => {
     api.mockResolvedValue(undefined);
     render(<PublicLinksOverview links={LINKS} />);
-    // nur eigene Datei-/Album-Links sind hier widerrufbar
-    expect(screen.getAllByRole("button", { name: "Widerrufen" })).toHaveLength(1);
+    // eigene Datei-/Album-Links und Partner-Links auf eigene Alben sind hier widerrufbar
+    expect(screen.getAllByRole("button", { name: "Widerrufen" })).toHaveLength(2);
+    const partnerRow = screen.getByText("Lager-Rückblick").closest("li") as HTMLElement;
+    expect(within(partnerRow).getByRole("button", { name: "Widerrufen" })).toBeInTheDocument();
     const row = screen.getByText("datei").closest("li") as HTMLElement;
     fireEvent.click(within(row).getByRole("button", { name: "Widerrufen" }));
     expect(within(row).getByText(/«datei» widerrufen\? Wer den Link hat/)).toBeInTheDocument();
@@ -100,7 +102,7 @@ describe("PublicLinksOverview", () => {
 
   it("schliesst eine offene Bestätigung beim Reiterwechsel", () => {
     render(<PublicLinksOverview links={LINKS} />);
-    fireEvent.click(screen.getByRole("button", { name: "Widerrufen" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Widerrufen" })[0]);
     expect(screen.getByText(/Wer den Link hat/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /Dateien/ }));
     expect(screen.queryByText(/Wer den Link hat/)).not.toBeInTheDocument();

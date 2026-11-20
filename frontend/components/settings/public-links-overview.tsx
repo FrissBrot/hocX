@@ -37,7 +37,8 @@ function partnerOf(link: PublicLinkItem): string | null {
 // Direkt hier widerrufbar (Plan «Berechtigungen», Phase 6): eigene Freigabelinks für Dateien/Alben
 // über DELETE /api/share-links/{id}. Andere Arten verwalten ihre Seiten (Abgabe-Links hängen an
 // Aufträgen, Einladungen an Personen, Partner-Links verwaltet die Partner-Organisation).
-const REVOCABLE = new Set(["share_files", "share_album"]);
+// Partner-Links auf eigene Alben darf der Album-Besitzer widerrufen (share_link_service.can_manage)
+const REVOCABLE = new Set(["share_files", "share_album", "share_album_partner"]);
 
 /** Nur Tag und Monat («17.11.») - für «genutzt …» in der Zeile. */
 function dayMonth(input: string): string {

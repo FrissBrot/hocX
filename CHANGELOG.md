@@ -17,7 +17,7 @@ Installationen aktualisieren können.
   Aktionen «Verlauf», «Widerrufen», «Verwalten →»). Erstellt/von steht als Tooltip am Namen.
   Widerrufen bestätigt man direkt unter der Zeile statt im Dialog; der Knopf erscheint nur mit
   dem Recht «Öffentlich teilen». Partner-Links auf eigene Alben stehen jetzt im Reiter
-  Partner-Organisationen.
+  Partner-Organisationen und lassen sich dort vom Album-Besitzer ebenfalls widerrufen.
 - **Verlauf der Partner-Organisationen** im Reiter Partner-Organisationen, filterbar je Partner:
   Album-Einladungen, angenommene/abgelehnte Freigaben und öffentliche Links, die Partner auf eigene
   Alben erstellt haben. Neue Lese-Route `GET /api/public-links/partner-history`
