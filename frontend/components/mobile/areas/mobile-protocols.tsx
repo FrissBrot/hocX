@@ -27,7 +27,7 @@ import { Select } from "@/components/ui/select";
 const STATUSES = ["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"] as const;
 const PREVIOUS_STATUS: Record<string, string> = { vorbereitet: "geplant", durchgeführt: "vorbereitet", abgeschlossen: "durchgeführt" };
 
-export function MobileProtocols({ initialProtocols, templates, readOnly, preferredTemplateId }: { initialProtocols: ProtocolSummary[]; templates: TemplateSummary[]; readOnly: boolean; preferredTemplateId?: string | null }) {
+export function MobileProtocols({ initialProtocols, templates, readOnly, canApprove = true, preferredTemplateId }: { initialProtocols: ProtocolSummary[]; templates: TemplateSummary[]; readOnly: boolean; canApprove?: boolean; preferredTemplateId?: string | null }) {
   const t = useTranslations("protocols.builder");
   const tRoot = useTranslations("protocols");
   const tMobile = useTranslations("mobile");
@@ -172,7 +172,7 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
           onClose={() => setActionsFor(null)}
           actions={[
             { label: t("openPdf"), onClick: () => void openOrGeneratePdf(actionsFor) },
-            ...(!readOnly && PREVIOUS_STATUS[actionsFor.status]
+            ...(!readOnly && PREVIOUS_STATUS[actionsFor.status] && (actionsFor.status !== "abgeschlossen" || canApprove)
               ? [{ label: t("revertTo", { status: protocolStatusLabel(PREVIOUS_STATUS[actionsFor.status], tRoot) }), onClick: () => void revert(actionsFor) }]
               : []),
             ...(!readOnly ? [{ label: t("deleteProtocol"), danger: true, onClick: () => void remove(actionsFor) }] : []),

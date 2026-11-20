@@ -389,6 +389,9 @@ def patch_protocol(
     previous_status = existing.status
     if payload.status == "abgeschlossen" and previous_status != "abgeschlossen":
         _ensure_can_approve(db, user, existing)
+    if previous_status == "abgeschlossen" and payload.status is not None and payload.status != "abgeschlossen":
+        # Rückwärts aus «abgeschlossen» hebt die Freigabe auf - wie revert-status nur mit meetings.approve.
+        require_permission(user, P.MEETINGS_APPROVE)
     if previous_status == "abgeschlossen" and _FROZEN_CONTENT_FIELDS & payload.model_fields_set:
         # Abgeschlossen = eingefrorener Stand, zu dem das signierte PDF passt. Ändern nur nach
         # dem Zurückstufen (Audit 2026-11, vorher liefen Titel/Datum/Notizen hier durch).
@@ -446,6 +449,11 @@ def revert_protocol_status(
     prev = _PREVIOUS_STATUS.get(current_status)
     if prev is None:
         raise HTTPException(status_code=400, detail="Protocol is already at the initial status")
+    if current_status == "abgeschlossen":
+        # Abgeschlossen = freigegeben: die Freigabe aufheben darf nur, wer freigeben darf -
+        # sonst stuft ein Konto ohne meetings.approve (z. B. «Aktuar» mit Vier-Augen) ein
+        # freigegebenes Protokoll zurück, ändert es und verbirgt es vor Lesern ohne Entwurfsrecht.
+        require_permission(user, P.MEETINGS_APPROVE)
     try:
         protocol = service.update_protocol(db, existing.id, ProtocolUpdate(status=prev))
     except SQLAlchemyError as exc:

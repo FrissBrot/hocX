@@ -101,6 +101,19 @@ describe("ProtocolBuilder: Elemente aus Vorlage neu laden", () => {
 
     expect(screen.queryByRole("menuitem", { name: "Elemente aus Vorlage neu laden" })).toBeNull();
   });
+
+  it("bietet das Zurückstufen eines abgeschlossenen Protokolls nur mit Freigaberecht an", () => {
+    const { unmount } = render(
+      <ProtocolBuilder initialProtocols={[makeProtocol({ status: "abgeschlossen" })]} templates={[]} canApprove={false} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Aktionen für P-7" }));
+    expect(screen.queryByRole("menuitem", { name: /Zurück auf/ })).toBeNull();
+    unmount();
+
+    render(<ProtocolBuilder initialProtocols={[makeProtocol({ status: "durchgeführt" })]} templates={[]} canApprove={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Aktionen für P-7" }));
+    expect(screen.getByRole("menuitem", { name: /Zurück auf/ })).toBeTruthy();
+  });
 });
 
 describe("ProtocolBuilder: Liste (Audit 2026-11)", () => {
