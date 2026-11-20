@@ -30,7 +30,8 @@ Betrag je Person (Tarif der Person, sonst Standardtarif):
     Grundbetrag + floor(Tage zu spät / Intervall) x Intervallbetrag
 Beispiel Intervall 2 Tage, 5.- Grundbetrag, 2.- pro Intervall: 1 Tag zu spät 5.-, 2 Tage 7.-,
 5 Tage 9.-. Bei Aufteilung ("split") zahlt jede Person ihren Betrag geteilt durch die Zahl der
-Verantwortlichen; ein Rappenrest geht an die erste Person (10.- / 3 = 3.34 + 3.33 + 3.33).
+Verantwortlichen; die Summe bleibt auf den Rappen genau, Restrappen gehen an die ersten Personen
+(10.- / 3 = 3.34 + 3.33 + 3.33, 5.- / 3 = 1.67 + 1.67 + 1.66).
 """
 from __future__ import annotations
 
@@ -337,6 +338,7 @@ def evaluate(ctx: TenantFineContext, facts: TodoFacts, *, on: date | None = None
     split_mode = (facts.fine_split_mode or "each") if rule is None else rule.split_mode
     share = Decimal(len(people)) if split_mode == "split" and people else Decimal(1)
     lines: list[Line] = []
+    exact: list[Decimal] = []
     fixed_total = money(facts.fine_fixed_amount or 0)
     for person in (people[pid] for pid in facts.assignee_ids if pid in people):
         group_id = ctx.group_for(person)
@@ -347,11 +349,15 @@ def evaluate(ctx: TenantFineContext, facts: TodoFacts, *, on: date | None = None
             base, per_interval = rule.rates.get(group_id, (Decimal("0"), Decimal("0"))) if group_id is not None else (Decimal("0"), Decimal("0"))
             full = rule_amount(base, per_interval, rule.interval_days, days_late)
             tariff_name = ctx.group_name(group_id)
-        amount = (full / share).quantize(CENTS, rounding=ROUND_DOWN) if rule is None else money(full / share)
-        lines.append(Line(person.id, person.name, tariff_name, amount))
-    if rule is None and share > 1 and lines:
-        # Fixer Betrag geteilt: der Rappenrest geht an die erste Person, die Summe bleibt der Betrag
-        lines[0].amount = money(lines[0].amount + fixed_total - sum((line.amount for line in lines), Decimal("0")))
+        exact.append(full / share)
+        lines.append(Line(person.id, person.name, tariff_name, (full / share).quantize(CENTS, rounding=ROUND_DOWN)))
+    if share > 1 and lines:
+        # Geteilt (Fixbetrag wie Regel): abgerundet, die fehlenden Rappen gehen an die Personen mit
+        # dem grössten Rest, bei Gleichstand in der Reihenfolge der Verantwortlichen. So bleibt die
+        # Summe der Betrag (5.- / 3 = 1.67 + 1.67 + 1.66 statt 3 x 1.67 = 5.01).
+        rest = int((money(sum(exact, Decimal("0"))) - sum((line.amount for line in lines), Decimal("0"))) / CENTS)
+        for index in sorted(range(len(lines)), key=lambda i: (-(exact[i] - lines[i].amount), i))[:rest]:
+            lines[index].amount += CENTS
     return Evaluation(
         state="ok", due=facts.due, days_late=days_late, rule=rule, matching=matching, split_mode=split_mode,
         account_id=ctx.account_for(rule), lines=lines,
