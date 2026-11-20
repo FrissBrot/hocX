@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.entities import AppUser, Event, Template, Tenant
 from app.schemas.base import PublicIdModel
-from app.schemas.event import EventRead
+from app.schemas.event import EventRead, check_event_date_range
 
 # Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
 # ProtocolService._STATUS_ORDER - the full, ordered protocol lifecycle.
@@ -37,6 +37,14 @@ class ProtocolCreateFromTemplate(BaseModel):
     title: str | None = None
     event_id: uuid.UUID | None = None
 
+    # Gleicher Bereich wie bei Terminen (1900-2999): mit dem Jahr 1 brach die Zyklusberechnung
+    # (Vorjahres-Stichtag im Jahr 0) jeden Abruf der Zyklenliste mit 500 ab, mit 9999 die
+    # Zyklusgrenzen (Folgejahr 10000).
+    @field_validator("protocol_date")
+    @classmethod
+    def _protocol_date_in_range(cls, value: date) -> date:
+        return check_event_date_range(value)
+
 
 class ProtocolUpdate(BaseModel):
     title: str | None = None
@@ -46,6 +54,11 @@ class ProtocolUpdate(BaseModel):
     session_notes: str | None = None
     expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
+
+    @field_validator("protocol_date")
+    @classmethod
+    def _protocol_date_in_range(cls, value: date | None) -> date | None:
+        return check_event_date_range(value)
 
 
 class ProtocolListCycle(BaseModel):
