@@ -385,8 +385,11 @@ class EventService:
         if unknown:
             raise ValueError(f"Unknown cycle_config_id: {sorted(str(i) for i in unknown)}")
         db.query(EventCycle).filter(EventCycle.event_id == event_id).delete(synchronize_session=False)
-        for a in assignments:
-            db.add(EventCycle(event_id=event_id, cycle_config_id=cycle_config_map[a.cycle_config_id], cycle_year=a.cycle_year))
+        # Derselbe Zyklus zweimal in der Liste verletzte sonst pk_event_cycle (IntegrityError,
+        # 400 plus Fehlerprotokoll) - doppelte Einträge sind gleichbedeutend mit einem.
+        keys = dict.fromkeys((cycle_config_map[a.cycle_config_id], a.cycle_year) for a in assignments)
+        for cycle_config_id, cycle_year in keys:
+            db.add(EventCycle(event_id=event_id, cycle_config_id=cycle_config_id, cycle_year=cycle_year))
         if commit:
             db.commit()
 
