@@ -577,7 +577,7 @@ Das Backend liest Container-Daten über den Dienst `docker-socket-proxy`
 `/_ping`, `/version`; alles andere beantwortet der Proxy mit 403. Er hängt allein mit dem
 Backend im internen Netz `docker-api`, damit die öffentlich erreichbaren Dienste die
 Docker-API (und darüber die Umgebungsvariablen aller Container) nicht erreichen. Das Backend
-hat deshalb zwei Netze; das Label `traefik.docker.network=${COMPOSE_PROJECT_NAME}_default`
+hat deshalb mehrere Netze; das Label `traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge`
 sorgt dafür, dass Traefik die richtige Backend-IP nimmt. Nach dem ersten Deploy mit diesem
 Stand ist `docker compose up -d` nötig (neuer Dienst + Netz), nicht nur ein Neustart.
 
@@ -926,9 +926,15 @@ OpenZiti-Tunnel. Seit dem Auth-Audit (SEC-AUTH-001) ist das auf mehreren Ebenen 
    (Middleware `admin-gate@file` in `infra/traefik/dynamic/admin-gate.yml`, eine Kette). Davor
    lässt `admin-gate-source` nur die Quelladresse des Ziti-Tunnels zu: Über die Docker-
    Portweiterleitung von `127.0.0.1:<TRAEFIK_ADMIN_PORT>` sieht Traefik das Gateway des Netzes
-   `<projekt>_default`; ein Container im selben Netz, der `traefik:8443` direkt anspricht, bekommt
-   403. `deploy.sh` ermittelt das Gateway nach `compose up`; abweichend über
-   `HOCX_ADMIN_SOURCE_CIDRS` (Komma-Liste). `websecure` und `adminsecure` entfernen einen von aussen
+   `<projekt>_edge`; ein Container im selben Netz, der `traefik:8443` direkt anspricht, bekommt
+   403. Traefik hängt nur im Netz `<projekt>_edge` (mit Frontend, Admin-Frontend, Backend,
+   Abgabebox, Docs), nicht im Netz von Datenbank und Workern; die Datenbank läuft ohne NET_RAW.
+   `deploy.sh` ermittelt das Gateway von `<projekt>_edge` nach `compose up`; abweichend über
+   `HOCX_ADMIN_SOURCE_CIDRS` (Komma-Liste, IPv4 mindestens /16, IPv6 mindestens /48).
+   `admin-gate.yml` ist 0640 (Deploy-Benutzer), das Verzeichnis `infra/traefik/dynamic` 3770 mit
+   Sticky-Bit: das Backend ersetzt nur seine eigene `tenant-domains.yml`. `verify_release.sh`
+   vergleicht `admin-gate.yml` mit dem erwarteten Inhalt und prüft die versionierten Dateien
+   (`git diff`). `websecure` und `adminsecure` entfernen einen von aussen
    mitgeschickten Header zuerst (`admin-gate-strip@file`).
 4. **Backend** (`app/core/admin_gate.py`, äusserste Middleware): `/api/admin/*` nur mit korrektem
    Gate-Header und Host = Admin-Domain, sonst 404. Der Next.js-Server reicht Gate-Header und Host bei
@@ -999,14 +1005,20 @@ Ausserhalb der Entwicklung startet die API ohne `TRAEFIK_ADMIN_DOMAIN` und `ADMI
   PIN/Biometrie funktionieren nicht - die Nutzerverifikation ist Pflicht.
 - **Passkey-Bestätigung (Step-up)** zusätzlich zur Session, gebunden an genau die eine Anfrage
   (Methode, Pfad, SHA-256 des Bodys; `app/core/admin_step_up.py`):
-  Passkey hinzufügen/entfernen, Admin anlegen/ändern (Rolle, Passwort, Deaktivieren), Mandant
-  löschen/bereinigen, Mandanten-Export, MFA eines Mandanten-Kontos zurücksetzen,
+  Passkey hinzufügen/entfernen, Admin anlegen/ändern (Rolle, Passwort, Deaktivieren),
+  Mandanten-Konten anlegen/ändern/löschen und ihre Rolle setzen, Benachrichtigungs- und
+  E-Mail-Einstellungen (SMTP, ntfy, Status-Token), Mandant löschen/bereinigen/klonen,
+  Mandanten-Export, MFA eines Mandanten-Kontos zurücksetzen,
   Speicherprofil löschen, Speicher-Migration anlegen/umschalten/fehlende Objekte akzeptieren,
   Generation endgültig löschen, Backup-Einstellungen, Wiederherstellung, Feature-/Plan-/
-  Speicherpaket-Änderungen (Feature ändern, Plan/Paket löschen, Katalog-Import).
+  Speicherpaket-Änderungen (Feature ändern, Plan/Paket löschen, Katalog-Import). Alle übrigen
+  mutierenden Admin-Routen stehen begründet in `backend/tests/test_admin_step_up.py` (EXEMPT); eine
+  neue Route ohne Bestätigung und ohne Begründung lässt die Tests scheitern.
 - **Gesperrter Passkey:** Läuft der Zähler eines Passkeys zurück (geklonter Schlüssel?), wird er
-  gesperrt; Systemcheck «Admin-Passkeys» kritisch, Eintrag im Fehlerprotokoll. Schlüssel prüfen,
-  dann Notausgang `reset-passkeys`.
+  gesperrt (gilt für Login und Bestätigungen nicht mehr); Systemcheck «Admin-Passkeys» kritisch,
+  Eintrag im Fehlerprotokoll. Schlüssel prüfen, dann den gesperrten Passkey in den
+  Kontoeinstellungen entfernen (Bestätigung mit einem anderen Passkey) oder, falls es der einzige
+  war, Notausgang `reset-passkeys`.
 - **Prüfadresse** für Deploy, `verify_release.sh` und die Wartungsseite:
   `GET https://<Admin-Domain>/api/admin/auth/health` → `{"status":"ok"}` (ohne Session, ohne DB).
   `/api/admin/auth/oidc/public-config` gibt es nicht mehr.

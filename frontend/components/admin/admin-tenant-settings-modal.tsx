@@ -440,7 +440,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant) return;
     const previous = tenantUsers;
     try {
-      const updated = await browserApiFetch<AdminTenantUser>(`/api/admin/tenants/${tenant.id}/users/${userId}`, {
+      const updated = await stepUpFetch<AdminTenantUser>("user-manage", `/api/admin/tenants/${tenant.id}/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ role_code: roleCode })
       });
@@ -463,7 +463,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     )
       return;
     try {
-      await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
+      await stepUpFetch("user-manage", `/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
       setTenantUsers((current) => current.filter((u) => u.user_id !== userId));
       showToast(t("tenantModal.toasts.userDeleted"), "success");
     } catch (error) {

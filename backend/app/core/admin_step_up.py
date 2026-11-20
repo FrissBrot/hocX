@@ -22,12 +22,13 @@ import json
 from dataclasses import dataclass
 from functools import cache
 from typing import Any
+from urllib.parse import unquote
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.core.admin_security import CurrentAdmin, get_current_admin
+from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.db import get_db
 
 STEP_UP_HEADER = "x-hocx-step-up"
@@ -44,11 +45,23 @@ PURPOSES = frozenset({
     "backup-settings",
     "catalog-change",
     "user-mfa-reset",
+    "user-manage",
+    "platform-settings",
 })
+
+# Alle Zwecke ausser der eigenen Passkey-Verwaltung gehören zu Owner-Aktionen: die Rolle wird geprüft,
+# BEVOR die Bestätigung verbraucht wird (ein Support-Admin verbraucht so nichts).
+SELF_SERVICE_PURPOSES = frozenset({"passkey-manage"})
+
+
+def normalize_step_up_path(path: str) -> str:
+    """Pfad prozent-dekodiert vergleichen: das Frontend kodiert Pfadteile mit encodeURIComponent, die
+    Anfrage kommt je nach Weg kodiert an (raw_path) - beide Seiten werden gleich dekodiert."""
+    return unquote(path)
 
 
 def step_up_binding(method: str, path: str, body: bytes) -> str:
-    return f"{method.upper()} {path} {hashlib.sha256(body).hexdigest()}"
+    return f"{method.upper()} {normalize_step_up_path(path)} {hashlib.sha256(body).hexdigest()}"
 
 
 def _required() -> HTTPException:
@@ -87,7 +100,9 @@ async def _read_proof(request: Request, purpose: str) -> StepUpProof:
     if not isinstance(flow_token, str) or not isinstance(credential, dict):
         raise _required()
     body = await request.body()
-    return StepUpProof(purpose, flow_token, credential, step_up_binding(request.method, request.url.path, body))
+    raw_path = request.scope.get("raw_path")
+    path = raw_path.decode("latin-1") if raw_path else request.url.path
+    return StepUpProof(purpose, flow_token, credential, step_up_binding(request.method, path, body))
 
 
 @cache  # je Zweck dieselbe Funktion: Tests können sie über dependency_overrides ersetzen
@@ -102,13 +117,17 @@ def step_up_proof(purpose: str):
 
 @cache
 def require_step_up(purpose: str):
-    """Dependency: angemeldeter Admin mit frischer, an diese Anfrage gebundener Passkey-Bestätigung.
-    Rollenprüfungen (Owner) bleiben Sache der Route."""
+    """Dependency: Admin mit frischer, an diese Anfrage gebundener Passkey-Bestätigung. Die Rolle
+    (Owner, ausser bei der eigenen Passkey-Verwaltung) wird vor dem Verbrauch geprüft. Ein ungültiger
+    Body fällt erst danach auf (FastAPI löst Dependencies vor der Body-Validierung auf) - dann muss
+    nur neu bestätigt werden, es geschieht nichts."""
     assert purpose in PURPOSES, purpose
+
+    role_dependency = get_current_admin if purpose in SELF_SERVICE_PURPOSES else require_admin_write
 
     async def dependency(
         request: Request,
-        admin: CurrentAdmin = Depends(get_current_admin),
+        admin: CurrentAdmin = Depends(role_dependency),
         db: Session = Depends(get_db),
     ) -> CurrentAdmin:
         proof = await _read_proof(request, purpose)

@@ -9,6 +9,7 @@ import { HelpPopover } from "@/components/ui/help-popover";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/utils/format";
 import { NotificationSettings, NotificationSettingsWrite, NotificationTestResult } from "@/types/api";
@@ -54,7 +55,7 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
   async function save(payload: NotificationSettingsWrite) {
     setSaving(true);
     try {
-      const updated = await browserApiFetch<NotificationSettings>("/api/admin/notifications", {
+      const updated = await stepUpFetch<NotificationSettings>("platform-settings", "/api/admin/notifications", {
         method: "PUT",
         body: JSON.stringify(payload),
       });
@@ -110,7 +111,7 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
       if (!confirmed) return;
     }
     try {
-      const updated = await browserApiFetch<NotificationSettings>("/api/admin/notifications/status-token", { method: "POST" });
+      const updated = await stepUpFetch<NotificationSettings>("platform-settings", "/api/admin/notifications/status-token", { method: "POST" });
       setSettings(updated);
       showToast(t("rotated"), "success");
     } catch (error) {

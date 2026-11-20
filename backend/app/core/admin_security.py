@@ -111,8 +111,8 @@ def get_optional_current_admin(
     if admin is None or not admin.is_active:
         return None
     if admin.session_revoke_at is not None:
-        # Ältere Tokens ohne iat_ms: Ende ihrer Ausstellungssekunde (strenger als vorher nicht nötig,
-        # sie gelten ohnehin nur noch mit amr=passkey).
+        # Ältere Tokens ohne iat_ms: Anfang ihrer Ausstellungssekunde - ein Widerruf in derselben
+        # Sekunde trifft sie dann sicher (>=), statt je nach Rundung nicht.
         token_iat_ms = int(session_data.get("iat_ms") or int(session_data.get("iat", 0)) * 1000)
         if int(admin.session_revoke_at.timestamp() * 1000) >= token_iat_ms:
             return None

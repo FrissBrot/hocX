@@ -196,7 +196,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     if (!cloneTenant) return;
     setCloneBusy(true);
     try {
-      await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
+      await stepUpFetch<AdminTenantSummary>("tenant-export", `/api/admin/tenants/${cloneTenant.id}/clone`, {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
         timeoutMs: LONG_RUNNING_TIMEOUT_MS,

@@ -113,19 +113,27 @@ def test_step_up_start_route_binds_purpose_and_request(db):
     assert outside.status_code == 422
 
 
-EXPECTED = {
+STEP_UP = {
     ("POST", "/api/admin/mfa/passkeys/start"): "passkey-manage",
     ("DELETE", "/api/admin/mfa/factors/{factor_id}"): "passkey-manage",
     ("POST", "/api/admin/admins"): "admin-manage",
     ("PATCH", "/api/admin/admins/{admin_id}"): "admin-manage",
+    ("POST", "/api/admin/users"): "user-manage",
+    ("PATCH", "/api/admin/users/{user_id}"): "user-manage",
+    ("PUT", "/api/admin/tenants/{tenant_id}/users/{user_id}"): "user-manage",
+    ("DELETE", "/api/admin/tenants/{tenant_id}/users/{user_id}"): "user-manage",
+    ("DELETE", "/api/admin/users/{user_id}/mfa/factors/{factor_id}"): "user-mfa-reset",
+    ("PUT", "/api/admin/notifications"): "platform-settings",
+    ("PUT", "/api/admin/notifications/email"): "platform-settings",
+    ("POST", "/api/admin/notifications/status-token"): "platform-settings",
     ("DELETE", "/api/admin/tenants/{tenant_id}"): "tenant-delete",
     ("POST", "/api/admin/tenants/{tenant_id}/cleanup"): "tenant-delete",
     ("POST", "/api/admin/tenants/{tenant_id}/export"): "tenant-export",
+    ("POST", "/api/admin/tenants/{tenant_id}/clone"): "tenant-export",
     ("PUT", "/api/admin/features/{code}"): "catalog-change",
     ("DELETE", "/api/admin/plans/{code}"): "catalog-change",
     ("DELETE", "/api/admin/storage-packages/{code}"): "catalog-change",
     ("POST", "/api/admin/catalog/import"): "catalog-change",
-    ("DELETE", "/api/admin/users/{user_id}/mfa/factors/{factor_id}"): "user-mfa-reset",
     ("DELETE", "/api/admin/storage/profiles/{profile_id}"): "storage-destructive",
     ("POST", "/api/admin/storage/migrations"): "storage-destructive",
     ("POST", "/api/admin/storage/migrations/{migration_id}/accept-missing"): "storage-destructive",
@@ -135,21 +143,138 @@ EXPECTED = {
     ("POST", "/api/admin/restores"): "backup-restore",
 }
 
+# Mutierende Admin-Routen ohne Passkey-Bestätigung - jede mit Begründung (Review-Inventar).
+_LOGIN = "Anmeldung selbst (führt erst zur Session)"
+_OPERATIONAL = "betrieblich und umkehrbar, kein Zugang zu Daten oder Konten; Audit-Log"
+_COMMERCIAL = "kaufmännisch (Abo, Preise, Forderungen), kein Zugang zu Daten oder Konten; Audit-Log"
+EXEMPT = {
+    ("POST", "/api/admin/auth/login"): _LOGIN,
+    ("POST", "/api/admin/auth/logout"): "beendet nur die eigene Session",
+    ("POST", "/api/admin/auth/mfa/passkey/start"): _LOGIN,
+    ("POST", "/api/admin/auth/mfa/passkey/verify"): _LOGIN,
+    ("POST", "/api/admin/auth/mfa/passkey/setup/start"): _LOGIN,
+    ("POST", "/api/admin/auth/mfa/passkey/setup/complete"): _LOGIN,
+    ("POST", "/api/admin/mfa/step-up/start"): "holt die Challenge der Bestätigung selbst",
+    ("POST", "/api/admin/mfa/passkeys/complete"): "an den Vorgang aus passkeys/start gebunden (der hat die Bestätigung)",
+    ("POST", "/api/admin/notifications/test"): "sendet nur eine Testnachricht an das bereits bestätigte Ziel",
+    ("POST", "/api/admin/notifications/email/test"): "sendet nur eine Testnachricht an das bereits bestätigte Ziel",
+    ("POST", "/api/admin/catalog/import/preview"): "nur Vorschau, ändert nichts",
+    ("POST", "/api/admin/restores/preview"): "nur Vorschau, ändert nichts",
+    ("POST", "/api/admin/restores/{restore_id}/cancel"): _OPERATIONAL,
+    ("POST", "/api/admin/backups"): "erstellt ein zusätzliches Backup",
+    ("POST", "/api/admin/backups/restore-test"): "Probe-Wiederherstellung in isolierter Umgebung",
+    ("POST", "/api/admin/backups/{job_id}/verify"): _OPERATIONAL,
+    ("POST", "/api/admin/backups/{job_id}/cancel"): _OPERATIONAL,
+    ("POST", "/api/admin/tenants"): "legt einen leeren Mandanten an (Konten darin brauchen user-manage)",
+    ("POST", "/api/admin/tenants/import"): "legt einen neuen Mandanten aus einer Datei an, kein Zugriff auf bestehende Daten; "
+                                           "Body bis 2 GiB (Hash im Browser unpraktisch)",
+    ("PATCH", "/api/admin/tenants/{tenant_id}"): "nur Name und Profilbild",
+    ("PUT", "/api/admin/tenants/{tenant_id}/website-listing"): "Anzeige auf der Website",
+    ("PUT", "/api/admin/tenants/{tenant_id}/features"): _COMMERCIAL,
+    ("PATCH", "/api/admin/tenants/{tenant_id}/subscription"): _COMMERCIAL,
+    ("PUT", "/api/admin/tenants/{tenant_id}/storage-packages"): _COMMERCIAL,
+    ("POST", "/api/admin/plans"): _COMMERCIAL,
+    ("PUT", "/api/admin/plans/{code}"): _COMMERCIAL,
+    ("POST", "/api/admin/storage-packages"): _COMMERCIAL,
+    ("PUT", "/api/admin/storage-packages/{code}"): _COMMERCIAL,
+    ("PATCH", "/api/admin/cashflow/charges/{charge_id}"): _COMMERCIAL,
+    ("POST", "/api/admin/cashflow/charges/{charge_id}/recalculate"): _COMMERCIAL,
+    ("POST", "/api/admin/cashflow/costs"): _COMMERCIAL,
+    ("PUT", "/api/admin/cashflow/costs/{cost_id}"): _COMMERCIAL,
+    ("PATCH", "/api/admin/cashflow/costs/{cost_id}/status"): _COMMERCIAL,
+    ("DELETE", "/api/admin/cashflow/costs/{cost_id}"): _COMMERCIAL,
+    ("DELETE", "/api/admin/domains/{domain_id}"): "nimmt eine Mandanten-Domain aus dem Routing (Verfügbarkeit, kein Datenzugang)",
+    ("POST", "/api/admin/tenants/{tenant_id}/identity-verification/approve"): "Prüfvermerk, kein Datenzugang; Audit-Log",
+    ("POST", "/api/admin/tenants/{tenant_id}/identity-verification/reject"): "Prüfvermerk, kein Datenzugang; Audit-Log",
+    ("POST", "/api/admin/tenants/{tenant_id}/identity-verification/revoke"): "Prüfvermerk, kein Datenzugang; Audit-Log",
+    ("POST", "/api/admin/document-templates/{template_id}/archive"): "Vorlagenpflege, kein Datenzugang",
+    ("POST", "/api/admin/document-templates/{template_id}/platform-default"): "Vorlagenpflege, kein Datenzugang",
+    ("POST", "/api/admin/maintenance"): "Wartungsfenster (Verfügbarkeit, kein Datenzugang); Audit-Log",
+    ("PATCH", "/api/admin/maintenance/{window_id}"): "Wartungsfenster (Verfügbarkeit, kein Datenzugang); Audit-Log",
+    ("POST", "/api/admin/maintenance/{window_id}/start"): "Wartungsfenster (Verfügbarkeit, kein Datenzugang); Audit-Log",
+    ("POST", "/api/admin/maintenance/{window_id}/release"): "Wartungsfenster (Verfügbarkeit, kein Datenzugang); Audit-Log",
+    ("POST", "/api/admin/maintenance/{window_id}/cancel"): "Wartungsfenster (Verfügbarkeit, kein Datenzugang); Audit-Log",
+    ("POST", "/api/admin/storage/profiles"): "legt nur ein Profil an; Umschalten braucht storage-destructive",
+    ("PATCH", "/api/admin/storage/profiles/{profile_id}"): "aktive Profile sind gesperrt (409); Umschalten braucht storage-destructive",
+    ("POST", "/api/admin/storage/profiles/{profile_id}/test"): "Verbindungstest",
+    ("POST", "/api/admin/storage/local-s3/request"): _OPERATIONAL,
+    ("POST", "/api/admin/storage/migrations/{migration_id}/start"): "kopiert nur; Umschalten braucht storage-destructive",
+    ("POST", "/api/admin/storage/migrations/{migration_id}/pause"): _OPERATIONAL,
+    ("POST", "/api/admin/storage/migrations/{migration_id}/resume"): _OPERATIONAL,
+    ("POST", "/api/admin/storage/migrations/{migration_id}/cancel"): _OPERATIONAL,
+    ("POST", "/api/admin/storage/migrations/{migration_id}/retry-failed"): _OPERATIONAL,
+    ("POST", "/api/admin/storage/migrations/{migration_id}/acknowledge-rollback"): _OPERATIONAL,
+}
 
-def test_critical_routes_carry_step_up():
-    """Inventar: jede kritische Admin-Route hat ihre Step-up-Prüfung (Liste im Review-Bericht)."""
+
+def test_every_mutating_admin_route_has_step_up_or_a_reason():
+    """Review-Inventar: ALLE mutierenden Routen unter /api/admin (alle Router der App) - jede hat
+    ihre Passkey-Bestätigung oder steht begründet in EXEMPT. Eine neue Route ohne beides lässt diesen
+    Test scheitern."""
+    import importlib
+    import re
+    from pathlib import Path
+
     from app.core.admin_step_up import require_step_up, step_up_proof
 
-    found = {}
-    for module in (admin_routes, admin_storage, admin_backups):
-        for route in module.router.routes:
-            if not isinstance(route, APIRoute):
-                continue
-            calls = {d.call for d in route.dependant.dependencies}
-            for dep in route.dependant.dependencies:
-                calls |= {sub.call for sub in dep.dependencies}
-            for purpose in PURPOSES:
-                if require_step_up(purpose) in calls or step_up_proof(purpose) in calls:
-                    for method in route.methods:
-                        found[(method, "/api/admin" + route.path)] = purpose
-    assert found == EXPECTED
+    def calls(dependant):
+        found = {dependant.call}
+        for sub in dependant.dependencies:
+            found |= calls(sub)
+        return found
+
+    # Alle in main.py unter /api/admin eingebundenen Router (FastAPI kopiert die Routen nicht mehr
+    # flach nach app.routes - deshalb über die Einbindungen statt über app.routes).
+    main_source = (Path(__file__).resolve().parents[1] / "app/main.py").read_text(encoding="utf-8")
+    includes = re.findall(r'app\.include_router\((\w+)\.router, prefix="(/api/admin[^"]*)"', main_source)
+    assert len(includes) >= 8, includes
+    routes = []
+    for module_name, prefix in includes:
+        module = importlib.import_module(f"app.api.routes.{module_name}")
+        routes += [(prefix + route.path, route) for route in module.router.routes if isinstance(route, APIRoute)]
+
+    found_step_up, unlisted = {}, []
+    for path, route in routes:
+        route_calls = calls(route.dependant)
+        for method in sorted(route.methods & {"POST", "PUT", "PATCH", "DELETE"}):
+            key = (method, path)
+            purposes = [p for p in PURPOSES if require_step_up(p) in route_calls or step_up_proof(p) in route_calls]
+            if purposes:
+                found_step_up[key] = purposes[0]
+            elif key not in EXEMPT:
+                unlisted.append(key)
+    assert unlisted == [], f"mutierende Admin-Routen ohne Passkey-Bestätigung und ohne Begründung: {unlisted}"
+    assert found_step_up == STEP_UP
+    assert not set(STEP_UP) & set(EXEMPT)
+
+
+def test_step_up_path_binding_is_percent_decoded(db):
+    """Das Frontend kodiert Pfadteile (encodeURIComponent); Start und Prüfung vergleichen dekodiert."""
+    from app.core.admin_step_up import normalize_step_up_path, step_up_binding
+
+    assert normalize_step_up_path("/api/admin/features/a%20b%C3%BC") == "/api/admin/features/a bü"
+    assert step_up_binding("put", "/api/admin/features/a%20b", b"{}") == step_up_binding("PUT", "/api/admin/features/a b", b"{}")
+
+
+def test_step_up_with_encoded_path_over_http(db):
+    """Ende zu Ende: Start mit kodiertem Pfad (wie encodeURIComponent im Frontend), Anfrage mit
+    demselben kodierten Pfad - die Bindung passt (kein 401/403), ein anderer Pfad nicht."""
+    import base64
+    import hashlib
+
+    admin, passkey, actor = _owner(db)
+    client = _client(db, actor)
+    body = b"{}"
+
+    def header_for(path: str) -> dict:
+        start = client.post("/api/admin/mfa/step-up/start", json={
+            "purpose": "catalog-change", "method": "PUT", "path": path, "body_sha256": hashlib.sha256(body).hexdigest(),
+        }).json()
+        proof = {"flow_token": start["flow_token"], "credential": passkey.get(start["public_key"], origin=ORIGIN)}
+        return {"X-Hocx-Step-Up": base64.urlsafe_b64encode(json.dumps(proof).encode()).decode().rstrip("=")}
+
+    encoded = "/api/admin/features/gibt%20es%C3%BC"
+    ok = client.put(encoded, content=body, headers={"Content-Type": "application/json", **header_for(encoded)})
+    assert ok.status_code not in (401, 403), ok.text
+    other = client.put("/api/admin/features/anderes", content=body, headers={"Content-Type": "application/json", **header_for(encoded)})
+    assert other.status_code == 401

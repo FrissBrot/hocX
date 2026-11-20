@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/utils/format";
 import type { EmailSettings, EmailSettingsWrite, NotificationTestResult, SmtpSecurity } from "@/types/api";
@@ -71,7 +72,7 @@ export function AdminEmailSettings({ initialSettings }: { initialSettings: Email
   async function save(body: EmailSettingsWrite) {
     setSaving(true);
     try {
-      const updated = await browserApiFetch<EmailSettings>("/api/admin/notifications/email", { method: "PUT", body: JSON.stringify(body) });
+      const updated = await stepUpFetch<EmailSettings>("platform-settings", "/api/admin/notifications/email", { method: "PUT", body: JSON.stringify(body) });
       setSettings(updated);
       setForm(toForm(updated));
       showToast(t("saved"), "success");

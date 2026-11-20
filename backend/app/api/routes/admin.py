@@ -15,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.admin_origin import admin_request_hostname, expected_admin_origin
-from app.core.admin_step_up import require_step_up
+from app.core.admin_step_up import normalize_step_up_path, require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
@@ -306,7 +306,7 @@ def get_notification_settings(
     return notification_settings_service.read(db)
 
 
-@router.put("/notifications", response_model=NotificationSettingsRead)
+@router.put("/notifications", dependencies=[Depends(require_step_up("platform-settings"))], response_model=NotificationSettingsRead)
 def update_notification_settings(
     payload: NotificationSettingsWrite,
     db: Session = Depends(get_db),
@@ -355,7 +355,7 @@ def get_email_settings(
     return notification_settings_service.read_email(db)
 
 
-@router.put("/notifications/email", response_model=EmailSettingsRead)
+@router.put("/notifications/email", dependencies=[Depends(require_step_up("platform-settings"))], response_model=EmailSettingsRead)
 def update_email_settings(
     payload: EmailSettingsWrite,
     db: Session = Depends(get_db),
@@ -411,7 +411,7 @@ def list_notification_log(
     return notification_log.list_log(db, status=status, search=search, limit=limit, offset=offset)
 
 
-@router.post("/notifications/status-token", response_model=NotificationSettingsRead)
+@router.post("/notifications/status-token", dependencies=[Depends(require_step_up("platform-settings"))], response_model=NotificationSettingsRead)
 def rotate_status_token(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
@@ -837,7 +837,7 @@ def update_tenant_storage_packages(
     return result
 
 
-@router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
+@router.post("/tenants/{tenant_id}/clone", dependencies=[Depends(require_step_up("tenant-export"))], response_model=AdminTenantRead, status_code=201)
 def clone_tenant(
     tenant_id: uuid.UUID,
     payload: TenantCloneRequest,
@@ -999,7 +999,7 @@ def list_tenant_users(
     return tenant_user_service.list_users(db, internal_tenant_id)
 
 
-@router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
+@router.put("/tenants/{tenant_id}/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], response_model=AdminTenantUserRead)
 def set_tenant_user_role(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -1021,7 +1021,7 @@ def set_tenant_user_role(
     return result
 
 
-@router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], status_code=204)
 def delete_tenant_user(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -1064,7 +1064,7 @@ def list_users(
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
-@router.post("/users", response_model=UserRead, status_code=201)
+@router.post("/users", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead, status_code=201)
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
@@ -1096,7 +1096,7 @@ def get_user(
     return user
 
 
-@router.patch("/users/{user_id}", response_model=UserRead)
+@router.patch("/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead)
 def update_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
@@ -1218,7 +1218,7 @@ def start_my_admin_step_up(
         db,
         admin_id=current_admin.admin_id,
         purpose=payload.purpose,
-        binding=f"{payload.method} {payload.path} {payload.body_sha256}",
+        binding=f"{payload.method} {normalize_step_up_path(payload.path)} {payload.body_sha256}",
         request_host=admin_request_hostname(request),
         request_origin=expected_admin_origin(request),
     )

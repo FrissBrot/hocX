@@ -11,6 +11,7 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
@@ -119,11 +120,11 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       const payload = !userForm.id || system_role !== originalSystemRole ? { ...rest, system_role } : rest;
 
       const saved = userForm.id
-        ? await browserApiFetch<UserSummary>(`/api/admin/users/${userForm.id}`, {
+        ? await stepUpFetch<UserSummary>("user-manage", `/api/admin/users/${userForm.id}`, {
             method: "PATCH",
             body: JSON.stringify(payload)
           })
-        : await browserApiFetch<UserSummary>("/api/admin/users", {
+        : await stepUpFetch<UserSummary>("user-manage", "/api/admin/users", {
             method: "POST",
             body: JSON.stringify(payload)
           });

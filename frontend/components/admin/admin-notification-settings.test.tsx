@@ -9,6 +9,15 @@ vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
 }));
 
+// Passkey-Bestätigung (lib/admin-step-up.ts) eigens getestet - hier direkt durchreichen
+const stepUpPurposes: string[] = [];
+vi.mock("@/lib/admin-step-up", () => ({
+  stepUpFetch: (purpose: string, ...args: unknown[]) => {
+    stepUpPurposes.push(purpose);
+    return browserApiFetchMock(...args);
+  },
+}));
+
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
 }));
@@ -54,6 +63,7 @@ describe("AdminNotificationSettings", () => {
     await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalled());
     const [path, init] = browserApiFetchMock.mock.calls[0];
     expect(path).toBe("/api/admin/notifications");
+    expect(stepUpPurposes).toContain("platform-settings");
     expect(JSON.parse(init.body)).toMatchObject({ ntfy_topic: "neu", ntfy_token: null, ntfy_enabled: true });
     expect(showToastMock).toHaveBeenCalledWith("Einstellungen gespeichert.", "success");
   });

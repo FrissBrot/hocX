@@ -17,7 +17,9 @@ export type StepUpPurpose =
   | "backup-restore"
   | "backup-settings"
   | "catalog-change"
-  | "user-mfa-reset";
+  | "user-mfa-reset"
+  | "user-manage"
+  | "platform-settings";
 
 export const STEP_UP_HEADER = "X-Hocx-Step-Up";
 

@@ -1,7 +1,7 @@
 import { test as setup, expect, request } from "@playwright/test";
 import fs from "node:fs/promises";
 import { authFiles, platformAdminPasskeyFile } from "./auth";
-import { SoftPasskey } from "./soft-passkey";
+import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 
 // Any user with an admin role in any tenant must have MFA before being considered
@@ -108,18 +108,28 @@ setup("creates reproducible role and tenant sessions", async () => {
   const tenants = await (await platformAdmin.get("/api/admin/tenants")).json();
   const regional = tenants.items.find((entry: { name: string }) => entry.name === "Regional Workspace");
   expect(regional, "Demo-Mandant 'Regional Workspace' fehlt").toBeTruthy();
+  // Konto anlegen braucht eine Passkey-Bestätigung (backend app/core/admin_step_up.py)
+  const userBody = JSON.stringify({
+    first_name: "Regional",
+    last_name: "Reader",
+    display_name: "Regional Reader",
+    email: tenantTwoEmail,
+    password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
+    tenant_id: regional.id,
+    system_role: "reader",
+    login_enabled: true,
+  });
+  const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
+  if (!adminPasskey) throw new Error("Software-Passkey des Plattform-Admins fehlt");
+  const adminOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
   await platformAdmin.post("/api/admin/users", {
-    data: {
-      first_name: "Regional",
-      last_name: "Reader",
-      display_name: "Regional Reader",
-      email: tenantTwoEmail,
-      password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
-      tenant_id: regional.id,
-      system_role: "reader",
-      login_enabled: true,
+    data: userBody,
+    headers: {
+      "Content-Type": "application/json",
+      ...(await stepUpHeaders(platformAdmin, adminPasskey, adminOrigin, "user-manage", "POST", "/api/admin/users", userBody)),
     },
   });
+  await adminPasskey.save(platformAdminPasskeyFile);
   await platformAdmin.dispose();
 
   const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo);

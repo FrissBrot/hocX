@@ -234,8 +234,9 @@ class AdminMfaService:
             )
         except SignCountError as exc:
             # Review L8: Zähler läuft zurück - möglicherweise ein geklonter Schlüssel. Passkey sperren
-            # (nur der Notausgang admin_cli reset-passkeys hebt das auf), Systemcheck admin_passkeys
-            # alarmiert, Eintrag im Fehlerprotokoll.
+            # (gilt für Login und Step-up nicht mehr), Systemcheck admin_passkeys alarmiert, Eintrag im
+            # Fehlerprotokoll. Aufheben: den gesperrten Passkey in den Kontoeinstellungen entfernen
+            # (mit einem anderen Passkey bestätigt) oder Notausgang admin_cli reset-passkeys.
             factor.locked_at = datetime.now(UTC)
             db.add(factor)
             db.commit()
@@ -454,7 +455,7 @@ class AdminMfaService:
         if (
             int(flow["admin_id"]) != admin_id
             or flow.get("purpose") != purpose
-            or not hmac.compare_digest(str(flow.get("binding", "")), binding)
+            or not hmac.compare_digest(str(flow.get("binding", "")).encode("utf-8"), binding.encode("utf-8"))
         ):
             raise _flow_error("step_up_mismatch", "Die Bestätigung gehört zu einer anderen Aktion")
         self._assertion(db, admin_id, flow, credential, lockout_key=lockout_key)

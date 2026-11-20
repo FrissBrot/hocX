@@ -60,6 +60,16 @@ Installationen aktualisieren können.
   startet und prüft ihn mit. `admin-gate.yml` wird jetzt nach `compose up` geschrieben (enthält die
   Quelladresse); abweichende Tunnel-Endpunkte über `HOCX_ADMIN_SOURCE_CIDRS`. `INTERNAL_API_URL`
   muss intern sein (Standard `http://backend:8000`), sonst bricht `deploy.sh` ab.
+- Neues Netz `edge`: Traefik ist nur noch darin (mit den Diensten, die es anspricht), nicht mehr im
+  Standardnetz; `compose up` erstellt die Dienste neu. Die Datenbank läuft ohne NET_RAW (nur die
+  Rechte des Postgres-Entrypoints).
+- `infra/traefik/dynamic` wird beim Deploy auf 3770 (Sticky-Bit) gesetzt, versionierte Dateien und
+  `admin-gate.yml` auf 0640.
+- **`INTERNAL_API_URL`** wird beim Update automatisch auf `http://backend:8000` umgestellt, falls
+  dort noch die öffentliche Domain steht (Hinweis im Deploy-Log); `deploy.sh` verlangt ein internes
+  Ziel.
+- Admin-Konten-, Mandanten-Konten- und Plattform-Einstellungen (SMTP, ntfy) sowie das Klonen eines
+  Mandanten verlangen jetzt ebenfalls eine Passkey-Bestätigung.
 - Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
 - Fehlerbilder und Ablauf: RUNBOOK Abschnitt 20.
 
