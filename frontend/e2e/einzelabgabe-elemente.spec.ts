@@ -50,9 +50,9 @@ test.describe("Einzelabgabe mit mehreren Elementen", () => {
     const end = dialog.getByLabel("Stichtag von Element 2");
     await end.fill("31.12.2030");
     await end.press("Tab");
-    await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente.png"), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente.png") });
     await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-    await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente-dark.png"), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente-dark.png") });
     await page.evaluate(() => { document.documentElement.dataset.theme = "light"; });
 
     // Schritt 3: Verantwortliche je Element

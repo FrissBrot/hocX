@@ -23,7 +23,7 @@ test("uploading with a Zyklus target puts the photo in that cycle's auto-album",
 
   try {
     await page.goto("/photos");
-    await page.getByRole("button", { name: "+ Bilder hochladen" }).click();
+    await page.getByRole("button", { name: "Bilder hochladen", exact: true }).click();
 
     const modal = page.getByRole("dialog", { name: "Bilder hochladen" });
 
