@@ -112,6 +112,8 @@ def list_active_assignments(db: Session, *, tenant_id: int, link_id: int) -> lis
             submission_assignment_table.c.is_active.is_(True),
             _linked_to(link_id),
         )
+        # Wie SubmissionRepository.list_assignments im Hauptbackend (Titel, dann id)
+        .order_by(submission_assignment_table.c.title.asc(), submission_assignment_table.c.id.asc())
     ).mappings()
     return [dict(row) for row in rows]
 
