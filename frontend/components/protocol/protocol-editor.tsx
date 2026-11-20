@@ -1,6 +1,9 @@
 "use client";
 
 import { useShortcutLabel } from "@/lib/search/shortcuts";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
+import { announce } from "@/lib/a11y/announce";
+import { reorderKeyDown } from "@/lib/a11y/reorder";
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
@@ -161,6 +164,7 @@ export function ProtocolEditor({
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
   const tCommon = useTranslations("common");
+  const tKeyboard = useTranslations("common.keyboard");
   const locale = useLocale();
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
@@ -1076,88 +1080,55 @@ export function ProtocolEditor({
     };
   }, [accordionEnabled, visibleElementIdsKey]);
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      const inFormField = target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
-
-      // Ctrl+F → Kapitel-/Volltextsuche öffnen (statt der nativen Browsersuche), auch
-      // während in einem Textfeld getippt wird. Ist eine Anwesenheitskontrolle im aktiven
-      // Punkt, fokussiert das erste Ctrl+F deren Personensuche, ein weiteres (Fokus schon dort)
-      // öffnet die globale Suche.
-      if (event.key.toLowerCase() === "f" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
-        event.preventDefault();
-        const activeSection = selectedElementId ? document.getElementById(`protocol-element-${selectedElementId}`) : null;
-        const attendanceSearch = activeSection?.querySelector<HTMLInputElement>(`[${ATTENDANCE_SEARCH_ATTR}]`);
-        if (attendanceSearch && document.activeElement !== attendanceSearch) {
-          attendanceSearch.focus();
-          attendanceSearch.select();
-          return;
-        }
-        setSearchOpen(true);
-        return;
-      }
-
-      // Ctrl+Alt+T → open session panel and focus todo input
-      if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
-        event.preventDefault();
-        sessionPanelRef.current?.openTodo();
-        return;
-      }
-
-      // Ctrl+Alt+N → open session panel and focus notes
-      if (event.key === "n" && (event.ctrlKey || event.metaKey) && event.altKey) {
-        event.preventDefault();
-        sessionPanelRef.current?.openNotes();
-        return;
-      }
-
-      // Ctrl+Shift+Enter → go to previous element
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && event.shiftKey) {
-        if (!visibleElements.length) return;
-        const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
-        const prevIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
-        if (currentIndex > 0) {
-          event.preventDefault();
-          focusElement(visibleElements[prevIndex].id);
-        }
-        return;
-      }
-
-      // Ctrl+Enter → advance to next element (works everywhere, including form fields)
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-        if (!visibleElements.length) return;
-        const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
-        const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
-        if (nextIndex < visibleElements.length) {
-          event.preventDefault();
-          focusElement(visibleElements[nextIndex].id);
-        } else if (!isReadOnly) {
-          event.preventDefault();
-          closeProtocol();
-        }
-        return;
-      }
-
-      if (inFormField) return;
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      if (!visibleElements.length) return;
-
-      const currentIndex = visibleElements.findIndex((element) => element.id === selectedElementId);
-      const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-      const nextIndex =
-        event.key === "ArrowDown"
-          ? Math.min(visibleElements.length - 1, safeIndex + 1)
-          : Math.max(0, safeIndex - 1);
-      if (nextIndex !== safeIndex) {
-        event.preventDefault();
-        focusElement(visibleElements[nextIndex].id);
-      }
+  // Tastenkürzel des Editors (Definitionen und Regeln: lib/keyboard/registry.ts, Gruppe «protocol»).
+  // Der zentrale Dispatcher sorgt dafür, dass sie nicht in offenen Dialogen/Menüs, nicht in
+  // Listen-Widgets und (ohne Modifier) nicht beim Tippen auslösen.
+  // Strg+F → Kapitel-/Volltextsuche (statt der Browsersuche), auch beim Tippen. Ist eine
+  // Anwesenheitskontrolle im aktiven Punkt, fokussiert das erste Strg+F deren Personensuche, ein
+  // weiteres (Fokus schon dort) öffnet die Kapitelsuche.
+  useShortcut("protocol.find", () => {
+    const activeSection = selectedElementId ? document.getElementById(`protocol-element-${selectedElementId}`) : null;
+    const attendanceSearch = activeSection?.querySelector<HTMLInputElement>(`[${ATTENDANCE_SEARCH_ATTR}]`);
+    if (attendanceSearch && document.activeElement !== attendanceSearch) {
+      attendanceSearch.focus();
+      attendanceSearch.select();
+      return;
     }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedElementId, visibleElements]);
+    setSearchOpen(true);
+  });
+  useShortcut("protocol.openTodo", () => {
+    sessionPanelRef.current?.openTodo();
+  });
+  useShortcut("protocol.openNotes", () => {
+    sessionPanelRef.current?.openNotes();
+  });
+  useShortcut("protocol.previousElement", () => {
+    const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
+    if (currentIndex <= 0) return false;
+    focusElement(visibleElements[currentIndex - 1].id);
+  });
+  // Strg+Enter → nächster Abschnitt (auch in Feldern); nach dem letzten wird das Protokoll geschlossen
+  useShortcut("protocol.nextElement", () => {
+    if (!visibleElements.length) return false;
+    const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
+    const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
+    if (nextIndex < visibleElements.length) {
+      focusElement(visibleElements[nextIndex].id);
+      return;
+    }
+    if (isReadOnly) return false;
+    closeProtocol();
+  });
+  function stepElement(direction: 1 | -1) {
+    if (!visibleElements.length) return false;
+    const currentIndex = visibleElements.findIndex((element) => element.id === selectedElementId);
+    const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+    const nextIndex = Math.min(visibleElements.length - 1, Math.max(0, safeIndex + direction));
+    if (nextIndex === safeIndex) return false;
+    focusElement(visibleElements[nextIndex].id);
+  }
+  useShortcut("protocol.elementDown", () => stepElement(1));
+  useShortcut("protocol.elementUp", () => stepElement(-1));
 
   async function reorderElements(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
@@ -2321,7 +2292,7 @@ export function ProtocolEditor({
               className="protocol-doc-section-wrap"
               // Rad-Effekt: Lage auf der Walze als CSS-Variablen (Transition in protocol.css)
               style={wheelActive && selectedIndex >= 0 ? ((wheelVars(index - selectedIndex) as CSSProperties | null) ?? undefined) : undefined}
-              onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)}
+              onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)} // a11y-ok: Maus-Abkürzung; Tastatur: Schnellnavigation, Strg+Enter, Pfeile
             >
             <FocusedElementEditor
               isActive={selectedElementId === element.id}
@@ -2419,7 +2390,7 @@ export function ProtocolEditor({
           <div className="card protocol-quicknav-section">
             <div className="eyebrow">{t("quickAccessEyebrow")}</div>
             <nav className="protocol-quicknav-list">
-              {visibleElements.map((element) => (
+              {visibleElements.map((element, elementIndex) => (
                 <div
                   className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
                   key={element.id}
@@ -2441,6 +2412,20 @@ export function ProtocolEditor({
                     className={`protocol-quicknav-item${selectedElementId === element.id ? " protocol-quicknav-item-active" : ""}`}
                     onClick={() => focusElement(element.id)}
                     title={element.section_name_snapshot}
+                    data-reorder-key={`reorder:quicknav:${element.id}`}
+                    aria-keyshortcuts={isReadOnly ? undefined : "Alt+ArrowUp Alt+ArrowDown"}
+                    // Tastatur-Alternative zum Ziehen: Alt+Pfeil verschiebt den Abschnitt
+                    onKeyDown={isReadOnly ? undefined : (event) =>
+                      reorderKeyDown(event, {
+                        index: elementIndex,
+                        count: visibleElements.length,
+                        focusKey: `reorder:quicknav:${element.id}`,
+                        move: async (_from, to) => {
+                          await reorderElements(element.id, visibleElements[to].id);
+                          announce(tKeyboard("moved", { name: element.section_name_snapshot, position: to + 1, total: visibleElements.length }));
+                        },
+                      })
+                    }
                   >
                     <span className="protocol-quicknav-icon-badge"><NavIcon name={sectionIconKey(element)} /></span>
                     <span className="protocol-quicknav-item-label">{element.section_name_snapshot}</span>

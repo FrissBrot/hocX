@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { ActionIcon } from "@/components/ui/action-icons";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { useModalFocus } from "@/lib/a11y/use-focus-trap";
 
 type LightboxImageProps = {
   src: string;
@@ -24,6 +25,8 @@ export function LightboxImage({ src, alt, className, previewSrc }: LightboxImage
   const rootRef = useRef<HTMLDivElement>(null);
   usePopupEscape(open, () => setOpen(false), rootRef);
   usePopupScrollLock(open);
+  // Vollbild-Ansicht ist ein modaler Dialog: Fokus hinein, Tab bleibt drin, danach zurück aufs Bild
+  useModalFocus(open, rootRef);
 
   return (
     <>
@@ -45,7 +48,7 @@ export function LightboxImage({ src, alt, className, previewSrc }: LightboxImage
       />
       {open && typeof document !== "undefined"
         ? createPortal(
-            <div ref={rootRef} className="image-lightbox-backdrop" onClick={() => setOpen(false)} role="presentation">
+            <div ref={rootRef} className="image-lightbox-backdrop" onClick={() => setOpen(false)} /* a11y-ok: Klick auf den Hintergrund schliesst, Tastatur: Escape/Schliessen-Knopf */ role="dialog" aria-modal="true" aria-label={alt || tCommon("close")} tabIndex={-1}>
               <img alt={alt} src={src} className="image-lightbox-img" onClick={(event) => event.stopPropagation()} />
               <button
                 type="button"

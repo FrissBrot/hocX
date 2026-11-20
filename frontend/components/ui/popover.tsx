@@ -1,8 +1,9 @@
 "use client";
 
-import { CSSProperties, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { focusIsLost, focusTargetIn, getTabbables, registerReturnTarget } from "@/lib/a11y/focus";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 
 export type Align = "start" | "end";
@@ -96,6 +97,139 @@ export function usePopoverDismiss(open: boolean, onClose: () => void, refs: RefO
   }, [open, onClose]);
 }
 
+export type PopoverFocusMode = "menu" | "dialog";
+export type PopoverInitialFocus = "first" | "panel" | "none";
+
+const MENU_ITEMS = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]';
+
+function menuItems(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(MENU_ITEMS)).filter(
+    (item) => !item.hasAttribute("disabled") && item.getAttribute("aria-disabled") !== "true"
+  );
+}
+
+/**
+ * Tastaturvertrag aller Popover (design/KEYBOARD_ACCESSIBILITY.md, «Popover und Menüs»):
+ *  - Öffnen legt den Fokus ins Panel (Menü: erster Eintrag, sonst erstes Feld bzw. das Panel),
+ *    ausser der Fokus ist schon drin (z. B. Suchfeld per eigenem Effekt) oder `initialFocus="none"`.
+ *  - Menüs: Pfeil hoch/runter, Pos1/Ende wandern zwischen den Einträgen; Tab verlässt das Menü wie
+ *    vom Auslöser aus und schliesst es.
+ *  - Dialog-artige Panels: Tab läuft durch die Felder; am Ende geht es hinter dem Auslöser
+ *    weiter, Umschalt+Tab am Anfang zurück auf den Auslöser - das Panel schliesst dabei.
+ *  - Escape (usePopupEscape) und Auswahl schliessen; lag der Fokus im Panel, kehrt er zum Auslöser
+ *    zurück, statt auf <body> zu fallen.
+ * Hintergrund: Popover liegen als Portal am Ende von <body>; ohne diese Regeln wären ihre
+ * Einträge per Tab nur über die ganze Seite (in Dialogen gar nicht) erreichbar.
+ */
+export function usePopoverFocus({
+  open,
+  panelRef,
+  anchorRef,
+  returnFocusRef,
+  onClose,
+  mode,
+  initialFocus = "first",
+}: {
+  open: boolean;
+  panelRef: RefObject<HTMLElement | null>;
+  anchorRef: RefObject<HTMLElement | null>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  mode: PopoverFocusMode;
+  initialFocus?: PopoverInitialFocus;
+}) {
+  const hadFocusRef = useRef(false);
+  const returnTarget = () => focusTargetIn(returnFocusRef?.current ?? anchorRef.current);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const unregister = registerReturnTarget(panel, returnTarget);
+    if (initialFocus !== "none" && !panel.contains(document.activeElement)) {
+      const target =
+        initialFocus === "panel" ? panel : (mode === "menu" ? menuItems(panel)[0] : undefined) ?? getTabbables(panel)[0] ?? panel;
+      if (target === panel && !panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
+      target.focus({ preventScroll: true });
+    }
+    return unregister;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (open || !hadFocusRef.current) return;
+    hadFocusRef.current = false;
+    if (focusIsLost()) returnTarget()?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    const panel = panelRef.current;
+    if (!panel || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // Nur echte Menüs (mit menuitem-Einträgen) verhalten sich wie ein Menü; Panels mit Feldern
+    // (Ansicht-Einstellungen, Checkbox-Listen) bleiben Tab-durchlaufbar, auch wenn role="menu" gesetzt ist.
+    const isMenu = mode === "menu" && menuItems(panel).length > 0;
+    if (event.key === "Tab") {
+      const tabbables = getTabbables(panel);
+      const active = document.activeElement;
+      const atEnd = !event.shiftKey && (tabbables.length === 0 || active === tabbables[tabbables.length - 1]);
+      const atStart = event.shiftKey && (tabbables.length === 0 || active === tabbables[0] || active === panel);
+      if (!isMenu && !atEnd && !atStart) return;
+      const back = returnTarget();
+      hadFocusRef.current = false;
+      onClose();
+      if (!back) return;
+      back.focus({ preventScroll: true });
+      // Vorwärts: kein preventDefault - der Browser setzt die Tab-Reihenfolge ab dem Auslöser fort.
+      // Rückwärts aus einem Dialog-Panel: auf dem Auslöser stehen bleiben (das Panel folgt ihm).
+      if (event.shiftKey && !isMenu) event.preventDefault();
+      return;
+    }
+    if (!isMenu || event.altKey || event.ctrlKey || event.metaKey) return;
+    const items = menuItems(panel);
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === "ArrowDown" ? items[(index + 1) % items.length]
+      : event.key === "ArrowUp" ? items[(index - 1 + items.length) % items.length]
+      : event.key === "Home" || event.key === "PageUp" ? items[0]
+      : event.key === "End" || event.key === "PageDown" ? items[items.length - 1]
+      : event.key.length === 1 && event.key !== " " ? typeahead(items, index, event.key)
+      : undefined;
+    if (next) {
+      event.preventDefault();
+      next.focus();
+    }
+  }
+
+  return {
+    onKeyDown,
+    onFocus: () => {
+      hadFocusRef.current = true;
+    },
+  };
+}
+
+/**
+ * Auslöser eines Menüs (WAI-ARIA APG «Menu Button»): Pfeil runter/hoch öffnet zusätzlich zu
+ * Enter/Leertaste (die über click laufen). Für alle Knöpfe mit aria-haspopup="menu".
+ */
+export function menuButtonKeyDown(open: boolean, setOpen: (open: boolean) => void) {
+  return (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (open || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+    }
+  };
+}
+
+function typeahead(items: HTMLElement[], index: number, key: string): HTMLElement | undefined {
+  const needle = key.toLowerCase();
+  const ordered = [...items.slice(index + 1), ...items.slice(0, index + 1)];
+  return ordered.find((item) => (item.textContent ?? "").trim().toLowerCase().startsWith(needle));
+}
+
 type PopoverProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -103,20 +237,42 @@ type PopoverProps = {
   align?: Align;
   gap?: number;
   className?: string;
+  /** ARIA-Rolle des Panels: «menu» (Standard, Aktionen), «dialog» (Felder/Filter), «presentation» (eigenes Widget darin, z. B. Listbox). */
+  role?: "menu" | "dialog" | "presentation";
+  /** Zugänglicher Name des Panels (Pflicht bei role="dialog"). */
+  label?: string;
+  /** Wohin der Fokus beim Öffnen geht (siehe usePopoverFocus). */
+  initialFocus?: PopoverInitialFocus;
   children: ReactNode;
 };
 
-export function Popover({ open, onOpenChange, anchorRef, align = "start", gap = 6, className, children }: PopoverProps) {
+export function Popover({ open, onOpenChange, anchorRef, align = "start", gap = 6, className, role = "menu", label, initialFocus, children }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const style = usePopoverPosition(open, anchorRef, align, gap);
   usePopoverDismiss(open, () => onOpenChange(false), [anchorRef, panelRef]);
+  const focus = usePopoverFocus({
+    open,
+    panelRef,
+    anchorRef,
+    onClose: () => onOpenChange(false),
+    mode: role === "menu" ? "menu" : "dialog",
+    initialFocus,
+  });
 
   if (!open || typeof document === "undefined") {
     return null;
   }
 
   return createPortal(
-    <div ref={panelRef} className={`popover-panel${className ? ` ${className}` : ""}`} style={style} role="menu">
+    <div
+      ref={panelRef}
+      className={`popover-panel${className ? ` ${className}` : ""}`}
+      style={style}
+      role={role}
+      aria-label={label}
+      onKeyDown={focus.onKeyDown}
+      onFocus={focus.onFocus}
+    >
       {children}
     </div>,
     document.body
@@ -129,8 +285,8 @@ export function Menu({ children }: { children: ReactNode }) {
 
 export function MenuSection({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="menu-section">
-      <div className="menu-section-label">{label}</div>
+    <div className="menu-section" role="group" aria-label={label}>
+      <div className="menu-section-label" aria-hidden="true">{label}</div>
       {children}
     </div>
   );
@@ -148,13 +304,14 @@ export function MenuItem({ icon, selected, danger, onSelect, children }: MenuIte
   return (
     <button
       type="button"
-      role="menuitem"
+      role={selected === undefined ? "menuitem" : "menuitemradio"}
+      aria-checked={selected === undefined ? undefined : selected}
       className={`menu-item${selected ? " menu-item-selected" : ""}${danger ? " menu-item-danger" : ""}`}
       onClick={onSelect}
     >
       {icon ? <span className="menu-item-icon">{icon}</span> : null}
       <span className="menu-item-label">{children}</span>
-      {selected ? <span className="menu-item-check">✓</span> : null}
+      {selected ? <span className="menu-item-check" aria-hidden="true">✓</span> : null}
     </button>
   );
 }

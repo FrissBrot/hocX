@@ -307,6 +307,7 @@
 .todo-v2-task-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 
 .todo-v2-task { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+button.table-row-link.todo-v2-task { font-weight: 600; } /* Knopf-Variante behält die Optik des Titels */
 
 .table-row-done .todo-v2-task { text-decoration: line-through; color: var(--muted); }
 

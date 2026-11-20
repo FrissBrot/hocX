@@ -71,7 +71,7 @@ describe("AttendanceBoard", () => {
       fireEvent.pointerUp(card);
       fireEvent.click(card);
       expect(handlers.onChange).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole("menuitem", { name: /Entschuldigt/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /Entschuldigt/ }));
       expect(handlers.onChange).toHaveBeenLastCalledWith(people[2], "excused");
     } finally {
       vi.useRealTimers();

@@ -11,8 +11,13 @@ import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
 import { AdminAccountSettings } from "@/components/admin/admin-account-settings";
-import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
+import { Menu, MenuDivider, MenuItem, menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
+import { ShortcutHelp } from "@/components/ui/shortcut-help";
+import { SkipLink } from "@/components/ui/skip-link";
+import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
+import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 
 type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
@@ -191,6 +196,11 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
 
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
   const t = useTranslations("adminShell");
+  const tCommon = useTranslations("common");
+  // Shortcut-Hilfe («?») und Auffangen verlorenen Fokus wie in der App-Shell
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  useShortcut("global.help", () => setShortcutHelpOpen(true));
+  useFocusRescue();
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement>(null);
@@ -232,7 +242,8 @@ export function AdminShell({ children, session }: { children: ReactNode; session
   return (
     <ToastProvider>
     <ConfirmProvider>
-    <main className="app-frame">
+    <div className="app-frame">
+      <SkipLink />
       <div className="shell">
         {mobileNavOpen && (
           <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
@@ -255,6 +266,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                   href={link.href as Route}
                   key={link.href}
                   className={isActiveLink(link.href, pathname) ? "nav-link nav-link-active" : "nav-link"}
+                  aria-current={isActiveLink(link.href, pathname) ? "page" : undefined}
                   onClick={() => setMobileNavOpen(false)}
                 >
                   <AdminNavIcon name={link.icon} />
@@ -290,7 +302,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
           </nav>
           <div className="sidebar-footer">
             <div className="admin-identity">
-              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountSettings")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)}>
+              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountSettings")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)} onKeyDown={menuButtonKeyDown(avatarMenuOpen, setAvatarMenuOpen)}>
                 <span className="identity-avatar admin-identity-avatar">{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
               </button>
               <div className="admin-identity-copy">
@@ -309,9 +321,11 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             <button
               type="button"
               className="button-ghost mobile-nav-toggle"
+              aria-expanded={mobileNavOpen}
+              aria-label={mobileNavOpen ? undefined : tCommon("menuToggle")}
               onClick={() => setMobileNavOpen((current) => !current)}
             >
-              {mobileNavOpen ? t("menuToggleClose") : "☰"}
+              {mobileNavOpen ? t("menuToggleClose") : <span aria-hidden="true">☰</span>}
             </button>
             <nav className="topbar-breadcrumb admin-breadcrumb" aria-label={t("breadcrumbNav")}>
               {activeLink && activeLink.href !== "/admin" ? (
@@ -332,10 +346,11 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               {t("readOnlyBanner")}
             </div>
           )}
-          <div className="shell-content">{children}</div>
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">{children}</main>
         </div>
       </div>
-    </main>
+      {shortcutHelpOpen ? <ShortcutHelp open onClose={() => setShortcutHelpOpen(false)} /> : null}
+    </div>
     <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
       <Menu>
         <div className="menu-header">

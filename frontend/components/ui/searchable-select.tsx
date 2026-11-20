@@ -1,6 +1,6 @@
 "use client";
 
-import { ButtonHTMLAttributes, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ButtonHTMLAttributes, KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Popover } from "@/components/ui/popover";
@@ -22,6 +22,43 @@ type BaseProps<T> = {
   triggerProps?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "onClick" | "className" | "disabled"> &
     Record<`data-${string}`, unknown>;
 };
+
+/**
+ * Tastatur für die Trefferliste (Combobox-Muster, WAI-ARIA APG): der Fokus bleibt im Suchfeld,
+ * Pfeile/Pos1/Ende/Bild bewegen die Markierung (aria-activedescendant), Enter wählt.
+ * Gibt den neuen Index zurück oder null, wenn die Taste nicht zur Liste gehört.
+ */
+function moveHighlight(key: string, current: number, count: number): number | null {
+  if (count <= 0) return null;
+  switch (key) {
+    case "ArrowDown":
+      return Math.min(current + 1, count - 1);
+    case "ArrowUp":
+      return Math.max(current - 1, 0);
+    case "PageDown":
+      return Math.min(current + 8, count - 1);
+    case "PageUp":
+      return Math.max(current - 8, 0);
+    case "Home":
+      return 0;
+    case "End":
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+/** Trigger: Pfeil runter/hoch öffnet wie bei einem nativen Select. */
+function triggerKeyDown(open: boolean, setOpen: (open: boolean) => void, own?: (event: KeyboardEvent<HTMLButtonElement>) => void) {
+  return (event: KeyboardEvent<HTMLButtonElement>) => {
+    own?.(event);
+    if (event.defaultPrevented || open) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+    }
+  };
+}
 
 type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS-Typzeile, kein JSX-Text
   getId: (option: T) => Id;
@@ -65,6 +102,7 @@ export function SearchableSelect<T, Id extends string | number>({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId();
 
   const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
@@ -100,16 +138,11 @@ export function SearchableSelect<T, Id extends string | number>({
   function handleInputKey(event: KeyboardEvent<HTMLInputElement>) {
     const offset = nullLabel ? 1 : 0;
     const count = filtered.length + offset;
-    if (event.key === "ArrowDown") {
+    const next = moveHighlight(event.key, highlighted, count);
+    if (next !== null) {
       event.preventDefault();
-      const next = Math.min(highlighted + 1, count - 1);
       setHighlighted(next);
-      (listRef.current?.children[next] as HTMLElement | undefined)?.scrollIntoView({ block: "nearest" });
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      const prev = Math.max(highlighted - 1, 0);
-      setHighlighted(prev);
-      (listRef.current?.children[prev] as HTMLElement | undefined)?.scrollIntoView({ block: "nearest" });
+      (listRef.current?.children[next] as HTMLElement | undefined)?.scrollIntoView?.({ block: "nearest" });
     } else if (event.key === "Enter") {
       event.preventDefault();
       if (nullLabel && highlighted === 0) {
@@ -134,24 +167,38 @@ export function SearchableSelect<T, Id extends string | number>({
         aria-haspopup="listbox"
         aria-expanded={open}
         {...triggerProps}
+        onKeyDown={triggerKeyDown(open, setOpen, triggerProps?.onKeyDown)}
       >
         <span className="mini-menu-trigger-label">{triggerLabel}</span>
-        <span className="mini-menu-trigger-icon">⌄</span>
+        <span className="mini-menu-trigger-icon" aria-hidden="true">⌄</span>
       </button>
-      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} onKeyDown={handleInputKey} />
-        <div className="menu-list" role="listbox" ref={listRef}>
+      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal" role="presentation">
+        <SearchInput
+          ref={searchRef}
+          value={search}
+          onChange={setSearch}
+          placeholder={resolvedSearchPlaceholder}
+          onKeyDown={handleInputKey}
+          role="combobox"
+          aria-expanded
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={filtered.length + (nullLabel ? 1 : 0) > 0 ? `${listId}-${highlighted}` : undefined}
+        />
+        <div className="menu-list" role="listbox" ref={listRef} id={listId} aria-label={triggerLabel}>
           {nullLabel ? (
             <button
               type="button"
               role="option"
+              id={`${listId}-0`}
+              tabIndex={-1}
               aria-selected={value === null}
               className={`menu-item${value === null ? " menu-item-selected" : ""}${highlighted === 0 ? " menu-item-highlighted" : ""}`}
               onMouseEnter={() => setHighlighted(0)}
               onClick={() => pick(null)}
             >
               <span className="menu-item-label">{nullLabel}</span>
-              {value === null ? <span className="menu-item-check">✓</span> : null}
+              {value === null ? <span className="menu-item-check" aria-hidden="true">✓</span> : null}
             </button>
           ) : null}
           {filtered.length === 0 && !nullLabel ? (
@@ -165,13 +212,15 @@ export function SearchableSelect<T, Id extends string | number>({
                   key={id}
                   type="button"
                   role="option"
+                  id={`${listId}-${rowIndex}`}
+                  tabIndex={-1}
                   aria-selected={id === value}
                   className={`menu-item${id === value ? " menu-item-selected" : ""}${rowIndex === highlighted ? " menu-item-highlighted" : ""}`}
                   onMouseEnter={() => setHighlighted(rowIndex)}
                   onClick={() => pick(option)}
                 >
                   <span className="menu-item-label">{getLabel(option)}</span>
-                  {id === value ? <span className="menu-item-check">✓</span> : null}
+                  {id === value ? <span className="menu-item-check" aria-hidden="true">✓</span> : null}
                 </button>
               );
             })
@@ -219,11 +268,18 @@ export function SearchableMultiSelect<T, Id extends string | number>({
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const listId = useId();
+  const [highlighted, setHighlighted] = useState(0);
 
   const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
     ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
     : selectable;
+
+  useEffect(() => {
+    setHighlighted(0);
+  }, [search, open]);
 
   const selectedSet = new Set(values);
   let triggerLabel = emptySelectionLabel ?? resolvedPlaceholder;
@@ -255,6 +311,20 @@ export function SearchableMultiSelect<T, Id extends string | number>({
     onChange(selectedSet.has(id) ? values.filter((v) => v !== id) : [...values, id]);
   }
 
+  // Mehrfachauswahl: Enter schaltet den markierten Eintrag um, die Liste bleibt offen
+  function handleInputKey(event: KeyboardEvent<HTMLInputElement>) {
+    const next = moveHighlight(event.key, highlighted, filtered.length);
+    if (next !== null) {
+      event.preventDefault();
+      setHighlighted(next);
+      (listRef.current?.children[next] as HTMLElement | undefined)?.scrollIntoView?.({ block: "nearest" });
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const option = filtered[highlighted];
+      if (option) toggle(getId(option));
+    }
+  }
+
   return (
     <div className={`mini-menu mini-menu-compact${className ? ` ${className}` : ""}`}>
       <button
@@ -266,17 +336,29 @@ export function SearchableMultiSelect<T, Id extends string | number>({
         aria-haspopup="listbox"
         aria-expanded={open}
         {...triggerProps}
+        onKeyDown={triggerKeyDown(open, setOpen, triggerProps?.onKeyDown)}
       >
         <span className="mini-menu-trigger-label">{triggerLabel}</span>
-        <span className="mini-menu-trigger-icon">⌄</span>
+        <span className="mini-menu-trigger-icon" aria-hidden="true">⌄</span>
       </button>
-      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
-        <div className="menu-list" role="listbox">
+      <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal" role="presentation">
+        <SearchInput
+          ref={searchRef}
+          value={search}
+          onChange={setSearch}
+          placeholder={resolvedSearchPlaceholder}
+          onKeyDown={handleInputKey}
+          role="combobox"
+          aria-expanded
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={filtered.length > 0 ? `${listId}-${highlighted}` : undefined}
+        />
+        <div className="menu-list" role="listbox" aria-multiselectable="true" ref={listRef} id={listId} aria-label={triggerLabel}>
           {filtered.length === 0 ? (
             <span className="assignee-empty">{resolvedEmptyLabel}</span>
           ) : (
-            filtered.map((option) => {
+            filtered.map((option, index) => {
               const id = getId(option);
               const isSelected = selectedSet.has(id);
               return (
@@ -284,12 +366,15 @@ export function SearchableMultiSelect<T, Id extends string | number>({
                   key={id}
                   type="button"
                   role="option"
+                  id={`${listId}-${index}`}
+                  tabIndex={-1}
                   aria-selected={isSelected}
-                  className={`menu-item${isSelected ? " menu-item-selected" : ""}`}
+                  className={`menu-item${isSelected ? " menu-item-selected" : ""}${index === highlighted ? " menu-item-highlighted" : ""}`}
+                  onMouseEnter={() => setHighlighted(index)}
                   onClick={() => toggle(id)}
                 >
                   <span className="menu-item-label">{getLabel(option)}</span>
-                  {isSelected ? <span className="menu-item-check">✓</span> : null}
+                  {isSelected ? <span className="menu-item-check" aria-hidden="true">✓</span> : null}
                 </button>
               );
             })

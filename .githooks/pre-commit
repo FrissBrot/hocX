@@ -11,6 +11,14 @@ CONFIG="$REPO_ROOT/.gitleaks.toml"
 # Gilt fuer alle Agents (Claude, Codex, Gemini, ...) und Menschen gleichermassen.
 python3 "$REPO_ROOT/scripts/check-security-rules.py" --staged
 
+# Tastatur-Barrierefreiheit (design/KEYBOARD_ACCESSIBILITY.md): gestagte Frontend-Dateien gegen
+# die Tastatur-Regeln; der eingefrorene Altbestand (scripts/keyboard-a11y-baseline.json) zählt.
+KBD_FILES="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(frontend|abgabebox-frontend)/.*\.(tsx|ts|css)$' || true)"
+if [ -n "$KBD_FILES" ]; then
+  # shellcheck disable=SC2086 # Pfade im Repo enthalten keine Leerzeichen
+  (cd "$REPO_ROOT" && python3 scripts/check-keyboard-a11y.py $KBD_FILES)
+fi
+
 # RBAC: Katalog vollstaendig (Uebersetzungen, Migration, Verwendung) und Rechte-Uebersicht
 # permissions/route-map.json aktuell, sobald Routen, Berechtigungen oder der Katalog gestagt sind.
 if git diff --cached --name-only | grep -qE '^(backend/app/api/routes/|backend/app/documents/permissions\.py|backend/app/main\.py|backend/tests/test_route_permission_inventory\.py|permissions/|backend/alembic/versions/|frontend/messages/[^/]+/roles\.json)'; then

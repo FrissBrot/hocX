@@ -31,6 +31,7 @@ jobs:
           python3 -m unittest discover -s scripts/tests -p "test_release_notes.py"
           python3 -m unittest discover -s scripts/tests -p "test_security_rules.py"
           python3 -m unittest discover -s scripts/tests -p "test_i18n_hardcoded_text.py"
+          python3 -m unittest discover -s scripts/tests -p "test_keyboard_a11y.py"
           python3 -m unittest discover -s scripts/tests -p "test_garage_bootstrap.py"
           bash scripts/tests/test_env_migrate.sh
           bash scripts/tests/test_run_job.sh
@@ -41,6 +42,9 @@ jobs:
           bash scripts/tests/test_testhost_abnahme.sh
           bash scripts/sync-design-tokens.sh --check
           python3 scripts/check-design-rules.py
+          # Tastatur-Barrierefreiheit (design/KEYBOARD_ACCESSIBILITY.md): neue Verstösse blockieren,
+          # Altbestand ist in scripts/keyboard-a11y-baseline.json eingefroren.
+          python3 scripts/check-keyboard-a11y.py
 
       # Elementtypen (id, Code, Render-Typ, Fähigkeiten) kommen ausschliesslich aus
       # element-types/registry.json - die generierten Dateien in frontend/ und backend/ müssen

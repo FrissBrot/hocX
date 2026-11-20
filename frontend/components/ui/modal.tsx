@@ -1,22 +1,15 @@
 "use client";
 
-import { ComponentProps, createContext, KeyboardEvent as ReactKeyboardEvent, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { ComponentProps, createContext, ReactNode, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
+import { focusIsLost, restoreFocus, stableFocusTarget } from "@/lib/a11y/focus";
+import { useFocusTrap } from "@/lib/a11y/use-focus-trap";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { ActionIcon } from "@/components/ui/action-icons";
 
 const ModalDepth = createContext(0);
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled]):not([type=\"hidden\"])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[contenteditable=\"true\"]",
-  "[tabindex]:not([tabindex=\"-1\"])",
-].join(",");
 const pendingSaves = new WeakMap<HTMLFormElement, Promise<void>>();
 
 /** Behält native Formularvalidierung bei und macht laufende Submits für Escape sichtbar. */
@@ -63,6 +56,8 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
   }, []);
 
   const depth = useContext(ModalDepth);
+  const titleId = useId();
+  const descriptionId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   // Klick-Ziehen aus dem Dialog (z. B. Textauswahl bis ueber den Rand) endet als click auf dem
@@ -72,11 +67,12 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
   // Element, das vor dem Oeffnen den Fokus hatte - bekommt ihn nach dem Schliessen zurueck.
   const previousFocusRef = useRef<HTMLElement | null>(null);
   if (open && previousFocusRef.current === null && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
-    previousFocusRef.current = document.activeElement;
+    previousFocusRef.current = stableFocusTarget(document.activeElement);
   }
 
   // Fokus beim Oeffnen in den Dialog legen (sofern nicht schon ein Feld per autoFocus drin ist)
-  // und beim Schliessen zurueckgeben (WCAG 2.4.3).
+  // und beim Schliessen zurueckgeben (WCAG 2.4.3). Ist das ausloesende Element inzwischen weg
+  // (z. B. die geloeschte Zeile), landet der Fokus auf dem Hauptinhalt statt auf <body>.
   useEffect(() => {
     if (!open || !mounted) return;
     const shell = shellRef.current;
@@ -84,33 +80,16 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
     return () => {
       const previous = previousFocusRef.current;
       previousFocusRef.current = null;
-      if (previous && previous.isConnected) previous.focus({ preventScroll: true });
+      // Nur zurueckgeben, wenn der Fokus noch im Dialog war bzw. verloren ist - nicht, wenn
+      // jemand inzwischen bewusst anderswo hin navigiert hat.
+      if (focusIsLost(shell)) restoreFocus(previous);
     };
   }, [open, mounted]);
 
-  // Tab/Shift+Tab bleiben im Dialog. Nur fuer Ereignisse aus diesem Dialog selbst: ein darin
-  // geoeffneter Unterdialog liegt in einem eigenen Portal, seine Ereignisse blubbern aber durch
-  // den React-Baum bis hierher.
-  function trapTab(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Tab") return;
-    const shell = shellRef.current;
-    if (!shell || !(event.target instanceof Node) || !shell.contains(event.target)) return;
-    const focusable = Array.from(shell.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === shell)) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
+  // Tab/Shift+Tab bleiben im Dialog (lib/a11y/use-focus-trap.ts): nur sichtbare, aktive
+  // Tab-Ziele zaehlen, Popover/Rueckfragen aus dem Dialog heraus gelten als innen, und auch ein
+  // Tab bei verlorenem Fokus (<body>) landet wieder im Dialog.
+  useFocusTrap(open && mounted, shellRef);
   usePopupScrollLock(open && mounted);
   usePopupEscape(open && mounted, () => {
     if (onEscape) return onEscape();
@@ -147,17 +126,18 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
         tabIndex={-1}
         className={`modal-shell modal-${size}${hideHeader ? " modal-noheader" : ""}${footer ? " modal-has-footer" : ""} ${className}`}
         onClick={(event) => event.stopPropagation()}
-        onKeyDown={trapTab}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={hideHeader || header ? title : undefined}
+        aria-labelledby={hideHeader || header ? undefined : titleId}
+        aria-describedby={description && !hideHeader && !header ? descriptionId : undefined}
       >
         {!hideHeader ? (
           <div className="modal-header">
             {header ?? (
               <div>
-                <h2>{title}</h2>
-                {description ? <p className="muted">{description}</p> : null}
+                <h2 id={titleId}>{title}</h2>
+                {description ? <p className="muted" id={descriptionId}>{description}</p> : null}
               </div>
             )}
             <div className="modal-header-actions">

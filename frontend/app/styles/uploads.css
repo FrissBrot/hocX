@@ -206,7 +206,7 @@
 }
 
 .person-section-title:focus {
-  outline: none;
+  outline: none; /* a11y-ok: Tastaturfokus zeigt die :focus-visible-Regel darunter */
 }
 
 .person-section-title:focus-visible {

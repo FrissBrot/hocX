@@ -5,6 +5,7 @@
 // Autosave in den Entwurf (optimistische Sperre gegen parallele Bearbeitung), Undo/Redo,
 // Tastaturbedienung und Drag-and-drop. Veröffentlichen prüft die Vorlage serverseitig.
 
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useTranslations } from "next-intl";
@@ -420,50 +421,46 @@ function DesignerWorkspace({ initial, sessionTemplateId, onDetach }: { initial: 
   };
 
   // ── Tastatur ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
-      const meta = event.metaKey || event.ctrlKey;
-      if (meta && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void save();
-        return;
-      }
-      if (typing) return;
-      // Offener Dialog (Revisionen, Zuweisungen, Rückfrage): Tasten gehören dem Dialog
-      if (document.querySelector('[aria-modal="true"]')) return;
-      // Löschen/Duplizieren/Verschieben nur mit Fokus auf Arbeitsfläche oder Struktur, nicht z. B.
-      // auf einem Knopf der Werkzeugleiste oder im Eigenschaftenbereich
-      const onElements = !(target instanceof HTMLElement) || target === document.body || !!target.closest('.studio-center, [role="tree"]');
-      if (meta && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) history.redo();
-        else history.undo();
-      } else if (meta && event.key.toLowerCase() === "y") {
-        event.preventDefault();
-        history.redo();
-      } else if (!editable || !onElements) {
-        return;
-      } else if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
-        event.preventDefault();
-        history.set(removeNode(content, selectedId));
-        setSelectedId(null);
-      } else if (meta && event.key.toLowerCase() === "d" && selectedId) {
-        event.preventDefault();
-        const result = duplicateNode(content, selectedId);
-        history.set(result.content);
-        if (result.newId) setSelectedId(result.newId);
-      } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown") && selectedId) {
-        event.preventDefault();
-        history.set(moveWithinParent(content, selectedId, event.key === "ArrowUp" ? -1 : 1));
-      } else if (event.key === "Escape") {
-        setSelectedId(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [save, history, editable, selectedId, content]);
+  // Definitionen: lib/keyboard/registry.ts (Gruppe «designer»). Der Dispatcher lässt Kürzel ohne
+  // Modifier beim Tippen und in offenen Dialogen (Revisionen, Zuweisungen, Rückfrage) aus; Strg+Z
+  // in einem Feld bleibt das Rückgängig des Feldes. Löschen/Duplizieren/Verschieben nur mit Fokus
+  // auf Arbeitsfläche oder Struktur, nicht z. B. auf einem Knopf der Werkzeugleiste.
+  const onElements = (event: KeyboardEvent) => {
+    const target = event.target;
+    return !(target instanceof HTMLElement) || target === document.body || !!target.closest('.studio-center, [role="tree"]');
+  };
+  useShortcut("designer.save", () => {
+    void save();
+  });
+  useShortcut("designer.undo", () => {
+    history.undo();
+  });
+  useShortcut("designer.redo", () => {
+    history.redo();
+  });
+  useShortcut("designer.delete", (event) => {
+    if (!editable || !selectedId || !onElements(event)) return false;
+    history.set(removeNode(content, selectedId));
+    setSelectedId(null);
+  });
+  useShortcut("designer.duplicate", (event) => {
+    if (!editable || !selectedId || !onElements(event)) return false;
+    const result = duplicateNode(content, selectedId);
+    history.set(result.content);
+    if (result.newId) setSelectedId(result.newId);
+  });
+  useShortcut("designer.move", (event) => {
+    if (!editable || !selectedId || !onElements(event)) return false;
+    history.set(moveWithinParent(content, selectedId, event.key === "ArrowUp" ? -1 : 1));
+  });
+  useShortcut(
+    "designer.deselect",
+    (event) => {
+      if (!editable || !onElements(event)) return false;
+      setSelectedId(null);
+    },
+    { preventDefault: false }
+  );
 
   // Sitzungsdokumente (Protokoll, Einladung …) und alle anderen Vorlagen liegen gemeinsam unter
   // «Dokumentvorlagen» - dorthin führt auch «Zurück».

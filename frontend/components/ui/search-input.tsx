@@ -24,6 +24,7 @@ export const SearchInput = forwardRef<HTMLInputElement, Props>(function SearchIn
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        aria-label={rest["aria-label"] ?? (rest["aria-labelledby"] ? undefined : placeholder)}
         {...rest}
       />
       {clearable ? (

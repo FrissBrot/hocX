@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { findListSearchInput, focusListSearch, isEditableTarget } from "@/lib/search/list-search";
+import { findListSearchInput, focusListSearch } from "@/lib/search/list-search";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 
-/** ⌘ auf Apple-Geräten, sonst Ctrl - nur für die Anzeige der Tastenkürzel. */
 /** Apple-Gerät (Mac, iPhone, iPad): Kürzel mit ⌘ statt Ctrl/Strg. Nur im Browser aufrufen. */
 export function isApplePlatform(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -37,44 +37,42 @@ export function useShortcutLabel(): (key: string) => string {
 }
 
 /**
- * Tastenkürzel der App-Shell:
- * - Ctrl+K / ⌘K: globale Suche (überall, auch beim Tippen in einem Feld)
- * - Ctrl+F / ⌘F: auf Seiten mit Liste ins Suchfeld der Liste; ist der Fokus schon dort (oder
- *   gibt es keine Liste), bleibt es bei der Browsersuche
- * - «/» ausserhalb von Eingabefeldern: Suchfeld der Liste, sonst globale Suche
- * Seiten mit eigener Suche (Protokoll-Editor) fangen Ctrl+F selbst ab (preventDefault); das hat
- * Vorrang.
+ * Tastenkürzel der App-Shell (Definitionen in lib/keyboard/registry.ts):
+ * - global.search (Strg+K / ⌘K): globale Suche (überall, auch beim Tippen in einem Feld)
+ * - global.listSearch (Strg+F / ⌘F): auf Seiten mit Liste ins Suchfeld der Liste; ist der Fokus
+ *   schon dort (oder gibt es keine Liste), bleibt es bei der Browsersuche
+ * - global.quickSearch («/» ausserhalb von Eingabefeldern): Suchfeld der Liste, sonst globale Suche
+ * Seiten mit eigener Suche (Protokoll-Editor) binden `protocol.find` (Scope «page») - der
+ * Dispatcher gibt ihr Vorrang. `data-own-find` bleibt als Markierung für Bereiche ohne eigene
+ * Bindung erhalten (die Taste geht dann an den Browser).
  */
 export function useGlobalSearchShortcuts(onOpenSearch: () => void, enabled = true): void {
-  useEffect(() => {
-    if (!enabled) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.isComposing) return;
-      const mod = event.ctrlKey || event.metaKey;
-      const key = event.key.toLowerCase();
-      if (mod && !event.altKey && !event.shiftKey && key === "k") {
-        event.preventDefault();
-        onOpenSearch();
-        return;
-      }
-      if (mod && !event.altKey && !event.shiftKey && key === "f") {
-        if (document.querySelector("[data-own-find]")) return;
-        const input = findListSearchInput();
-        if (!input || document.activeElement === input) return;
-        event.preventDefault();
-        focusListSearch(input);
-        return;
-      }
-      if (key === "/" && !mod && !event.altKey && !isEditableTarget(event.target)) {
-        const input = findListSearchInput();
-        // In einem offenen Dialog ohne Suchfeld nichts tun (die Suche nicht über den Dialog legen)
-        if (!input && document.querySelector('[role="dialog"]')) return;
-        event.preventDefault();
-        if (input) focusListSearch(input);
-        else onOpenSearch();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onOpenSearch, enabled]);
+  useShortcut(
+    "global.search",
+    () => {
+      onOpenSearch();
+    },
+    { enabled }
+  );
+  useShortcut(
+    "global.listSearch",
+    () => {
+      if (document.querySelector("[data-own-find]")) return false;
+      const input = findListSearchInput();
+      if (!input || document.activeElement === input) return false;
+      focusListSearch(input);
+    },
+    { enabled }
+  );
+  useShortcut(
+    "global.quickSearch",
+    () => {
+      const input = findListSearchInput();
+      // In einem offenen Dialog ohne Suchfeld nichts tun (die Suche nicht über den Dialog legen)
+      if (!input && document.querySelector('[role="dialog"]')) return false;
+      if (input) focusListSearch(input);
+      else onOpenSearch();
+    },
+    { enabled }
+  );
 }

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+
 // Kennzeichnung, woher ein angezeigtes Bilddatum stammt: nichts bei echtem Aufnahmedatum, ein
 // "≈"-Kalendersymbol bei geschätztem Datum, ein Info-Symbol, wenn mangels Aufnahmedatum das
 // Uploaddatum verwendet wird. In den Tagesköpfen der Galerie als beschriftete Pille ("pill"),
@@ -49,19 +51,17 @@ export function PhotoDateMarker({
   const label = partial ? t("partial", { label: base, count: count!, total: total! }) : base;
   const short = kind === "estimated" ? t("estimatedShort") : t("uploadShort");
 
+  // Escape über den gemeinsamen Overlay-Stapel (schliesst nur den obersten Tooltip, nicht den
+  // Dialog darunter), Klick daneben schliesst wie bisher.
+  usePopupEscape(open, () => setOpen(false), ref);
   useEffect(() => {
     if (!open) return;
-    const close = (event: Event) => {
-      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
-      if (event instanceof MouseEvent && ref.current?.contains(event.target as Node)) return;
+    const close = (event: MouseEvent) => {
+      if (ref.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener("keydown", close);
     document.addEventListener("mousedown", close);
-    return () => {
-      document.removeEventListener("keydown", close);
-      document.removeEventListener("mousedown", close);
-    };
+    return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
   return (

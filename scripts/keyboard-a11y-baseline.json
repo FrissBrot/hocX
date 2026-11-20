@@ -1,0 +1,68 @@
+{
+  "_comment": "Eingefrorener Altbestand von scripts/check-keyboard-a11y.py (Anzahl pro Datei und Regel). Nur verkleinern, nie erhöhen - siehe KEYBOARD_AUDIT.md.",
+  "files": {
+    "frontend/components/admin/admin-user-management.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/agenda/agenda-list-view.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/documents/designer/canvas.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/events/event-manager.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/files/document-upload-modal.tsx": {
+      "role-without-keyboard": 1
+    },
+    "frontend/components/files/file-detail-modal.tsx": {
+      "global-key-listener": 1
+    },
+    "frontend/components/files/files-table.tsx": {
+      "clickable-no-keyboard": 2
+    },
+    "frontend/components/lists/structured-list-table.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/participants/participant-manager.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/photos/gallery-upload-modal.tsx": {
+      "role-without-keyboard": 1
+    },
+    "frontend/components/photos/photos-view.tsx": {
+      "global-key-listener": 1
+    },
+    "frontend/components/protocol/planning/event-overview-modal.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/protocol/protocol-builder.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/settings/tenant-charges.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/share/public-share-gallery.tsx": {
+      "clickable-no-keyboard": 3
+    },
+    "frontend/components/template/element-definition-manager.tsx": {
+      "clickable-no-keyboard": 2
+    },
+    "frontend/components/template/session-template-studio.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/template/template-builder.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/tools/word-import-wizard.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/components/users/role-management.tsx": {
+      "clickable-no-keyboard": 1
+    },
+    "frontend/contexts/toast-context.tsx": {
+      "clickable-no-keyboard": 1
+    }
+  }
+}

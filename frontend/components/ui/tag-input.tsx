@@ -73,7 +73,35 @@ export function TagInput({
     onChange(tags.filter((t) => t !== tag).join(","));
   }
 
+  // Maus: Fokus bleibt im Eingabefeld (die Aktion läuft über onClick, damit Enter/Leertaste auf
+  // einem fokussierten Knopf dasselbe tun - früher reagierten die Knöpfe nur auf pointerdown).
+  function keepInputFocus(event: React.MouseEvent) {
+    event.preventDefault();
+  }
+
+  function dropdownOptions(): HTMLElement[] {
+    return Array.from(wrapRef.current?.querySelectorAll<HTMLElement>(".tag-input-dropdown .tag-input-option") ?? []);
+  }
+
+  // Pfeile wandern zwischen Eingabefeld und Vorschlägen
+  function handleDropdownKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const options = dropdownOptions();
+    const index = options.indexOf(document.activeElement as HTMLElement);
+    if (index < 0) return;
+    e.preventDefault();
+    const next = index + (e.key === "ArrowDown" ? 1 : -1);
+    if (next < 0) inputRef.current?.focus();
+    else options[Math.min(next, options.length - 1)]?.focus();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown" && dropdownOptions().length > 0) {
+      e.preventDefault();
+      setOpen(true);
+      dropdownOptions()[0]?.focus();
+      return;
+    }
     if (e.key === "Enter" && inputVal.trim()) {
       e.preventDefault();
       addTag(inputVal);
@@ -142,8 +170,18 @@ export function TagInput({
   }
 
   return (
-    <div className="tag-input-wrap" ref={wrapRef}>
-      <div className="tag-input-field" onClick={() => inputRef.current?.focus()}>
+    <div
+      className="tag-input-wrap"
+      ref={wrapRef}
+      onBlur={(event) => {
+        // Fokus verlässt das Feld per Tab: Vorschläge schliessen statt offen über dem Formular stehen lassen
+        if (event.relatedTarget && !wrapRef.current?.contains(event.relatedTarget as Node)) {
+          setOpen(false);
+          setEditingTag(null);
+        }
+      }}
+    >
+      <div className="tag-input-field" onClick={() => inputRef.current?.focus()}> {/* a11y-ok: Klickfläche fokussiert nur das Eingabefeld, das selbst per Tab erreichbar ist */}
         {tags.map((tag) => {
           const color = tagConfig?.[tag]?.color;
           return (
@@ -158,7 +196,6 @@ export function TagInput({
                 <button
                   type="button"
                   className="tag-chip-remove"
-                  tabIndex={-1}
                   onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
                   aria-label={t("removeTag", { tag })}
                 >
@@ -182,12 +219,12 @@ export function TagInput({
       </div>
 
       {showDropdown && (
-        <div className="tag-input-dropdown">
+        <div className="tag-input-dropdown" onKeyDown={handleDropdownKeyDown}>
           {editingTag !== null ? (
             <div className="tag-edit-panel">
               <div className="tag-edit-header">
                 <span className="tag-edit-title">{t("editTag")}</span>
-                <button type="button" className="tag-edit-cancel" title={tCommonClose} aria-label={tCommonClose} onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}><ActionIcon name="close" /></button>
+                <button type="button" className="tag-edit-cancel" title={tCommonClose} aria-label={tCommonClose} onMouseDown={keepInputFocus} onClick={() => { setEditingTag(null); setRenameError(null); inputRef.current?.focus(); }}><ActionIcon name="close" /></button>
               </div>
               {onTagRename && (
                 <input
@@ -210,23 +247,22 @@ export function TagInput({
                       type="button"
                       className={`tag-color-swatch${tagConfig?.[editingTag]?.color === hex ? " tag-color-swatch-active" : ""}`}
                       style={{ background: hex }}
-                      onPointerDown={async (e) => {
-                        e.preventDefault();
-                        await onTagColorChange(editingTag, hex);
-                      }}
+                      onMouseDown={keepInputFocus}
+                      onClick={() => void onTagColorChange(editingTag, hex)}
                       title={hex}
+                      aria-label={hex}
+                      aria-pressed={tagConfig?.[editingTag]?.color === hex}
                     />
                   ))}
                   <button
                     type="button"
                     className="tag-color-swatch tag-color-swatch-none"
-                    onPointerDown={async (e) => {
-                      e.preventDefault();
-                      await onTagColorChange(editingTag, "");
-                    }}
+                    onMouseDown={keepInputFocus}
+                    onClick={() => void onTagColorChange(editingTag, "")}
                     title={t("noColor")}
+                    aria-label={t("noColor")}
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </button>
                 </div>
               )}
@@ -235,7 +271,8 @@ export function TagInput({
                   type="button"
                   className="tag-edit-save"
                   disabled={saving || !renameVal.trim() || renameVal.trim() === editingTag}
-                  onPointerDown={async (e) => { e.preventDefault(); await handleRenameConfirm(); }}
+                  onMouseDown={keepInputFocus}
+                  onClick={() => void handleRenameConfirm()}
                 >
                   {saving ? "…" : t("rename")}
                 </button>
@@ -248,7 +285,8 @@ export function TagInput({
               <button
                 type="button"
                 className="tag-input-option tag-input-option-create"
-                onPointerDown={(e) => { e.preventDefault(); addTag(typed); }}
+                onMouseDown={keepInputFocus}
+                onClick={() => { addTag(typed); inputRef.current?.focus(); }}
               >
                 {t("createTag", { tag: typed })}
               </button>
@@ -259,7 +297,8 @@ export function TagInput({
               <button
                 type="button"
                 className="tag-input-option"
-                onPointerDown={(e) => { e.preventDefault(); addTag(s); }}
+                onMouseDown={keepInputFocus}
+                onClick={() => { addTag(s); inputRef.current?.focus(); }}
               >
                 {tagDot(s)}
                 {s}
@@ -270,8 +309,8 @@ export function TagInput({
                   className="tag-input-edit-btn"
                   title={t("colorOrRename")}
                   aria-label={t("colorOrRename")}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
+                  onMouseDown={keepInputFocus}
+                  onClick={() => {
                     setEditingTag(s);
                     setRenameVal(s);
                     setRenameError(null);
@@ -287,7 +326,8 @@ export function TagInput({
             <button
               type="button"
               className="tag-input-option"
-              onPointerDown={(e) => { e.preventDefault(); addTag(inputVal); }}
+              onMouseDown={keepInputFocus}
+              onClick={() => { addTag(inputVal); inputRef.current?.focus(); }}
             >
               {t("addNewTag", { tag: inputVal })}
             </button>

@@ -49,7 +49,16 @@ export function DataTable({ columns, children, emptyMessage, className, footer }
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={typeof column === "string" ? column : column.key}>
+              <th
+                key={typeof column === "string" ? column : column.key}
+                aria-sort={
+                  typeof column !== "string" && column.sortable && column.sortDirection
+                    ? column.sortDirection === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : undefined
+                }
+              >
                 {typeof column === "string" ? (
                   column
                 ) : column.header ? (
@@ -57,7 +66,7 @@ export function DataTable({ columns, children, emptyMessage, className, footer }
                 ) : column.sortable && column.onSort ? (
                   <button type="button" className="table-sort-button" onClick={column.onSort}>
                     <span>{column.label}</span>
-                    <span className="table-sort-indicator">
+                    <span className="table-sort-indicator" aria-hidden="true">
                       {column.sortDirection === "asc" ? "↑" : column.sortDirection === "desc" ? "↓" : "↕"}
                     </span>
                   </button>

@@ -9,7 +9,7 @@ import { KeyboardEvent, PointerEvent, RefObject, useEffect, useRef, useState } f
 import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 
-import { usePopoverDismiss, usePopoverPosition } from "./popover";
+import { usePopoverDismiss, usePopoverFocus, usePopoverPosition } from "./popover";
 
 const HEX = /^#([0-9a-f]{6})$/i;
 
@@ -129,6 +129,8 @@ function ColorPopover({
   const style = usePopoverPosition(true, anchorRef, "start", 6, { minWidth: 248, estimatedHeight: 340 });
   const close = () => onClose(panelRef.current?.contains(document.activeElement) ?? false);
   usePopoverDismiss(true, close, [anchorRef, panelRef]);
+  // Tab verlässt das Panel hinter dem Farbfeld-Button statt am Ende von <body>
+  const focus = usePopoverFocus({ open: true, panelRef, anchorRef, onClose: close, mode: "dialog", initialFocus: "none" });
   // Farbton bleibt bei Grau/Schwarz erhalten (aus dem Hex-Wert nicht ableitbar)
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(value));
   const [text, setText] = useState(value);
@@ -197,7 +199,7 @@ function ColorPopover({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div ref={panelRef} className="popover-panel color-picker" style={style} role="dialog" aria-label={label}>
+    <div ref={panelRef} className="popover-panel color-picker" style={style} role="dialog" aria-label={label} onKeyDown={focus.onKeyDown}>
       <div
         ref={areaRef}
         className="color-picker-area"

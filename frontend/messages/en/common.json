@@ -248,10 +248,23 @@
     "bulletList": "Bullet list",
     "italic": "Italic ({shortcut})",
     "openLink": "{modifier} + click opens the link",
-    "orderedList": "Numbered list"
+    "orderedList": "Numbered list",
+    "toolbar": "Text formatting"
   },
   "keys": {
-    "ctrl": "Ctrl"
+    "ctrl": "Ctrl",
+    "alt": "Alt",
+    "shift": "Shift",
+    "enter": "Enter",
+    "escape": "Esc",
+    "space": "Space",
+    "tab": "Tab",
+    "delete": "Del",
+    "backspace": "Backspace",
+    "home": "Home",
+    "end": "End",
+    "pageUp": "Page Up",
+    "pageDown": "Page Down"
   },
   "columnFilter": {
     "label": "Filter {column}",
@@ -259,5 +272,55 @@
   },
   "csvImportErrors": {
     "csv_too_many_rows": "The CSV file has too many rows (at most {max, number} data rows). Please split it and import it in several steps."
+  },
+  "keyboard": {
+    "skipToContent": "Skip to content",
+    "helpTitle": "Keyboard shortcuts",
+    "helpDescription": "What you can do with the keyboard on this page right now.",
+    "inputsHint": "While typing in a field, shortcuts without {modifier} do nothing; browser and editor shortcuts keep working.",
+    "moveUp": "Move “{name}” up",
+    "moveDown": "Move “{name}” down",
+    "moveLeft": "Move “{name}” left",
+    "moveRight": "Move “{name}” right",
+    "moved": "“{name}” is now at position {position} of {total}.",
+    "groups": {
+      "global": "Everywhere",
+      "lists": "Lists, menus and tabs",
+      "dialogs": "Dialogs and forms",
+      "reorder": "Change order",
+      "protocol": "Minutes",
+      "designer": "Document Studio",
+      "media": "Photos and files"
+    },
+    "shortcuts": {
+      "global_search": "Open or close global search",
+      "global_listSearch": "Jump to the list search (second time: browser search)",
+      "global_quickSearch": "List search, otherwise global search",
+      "global_help": "Open this overview",
+      "search_toListSearch": "In the search window: use the term for the page’s list search",
+      "standard_nextField": "Next or previous control",
+      "standard_activate": "Activate button, link or entry",
+      "standard_close": "Close dialog, menu or list",
+      "standard_listNavigate": "Move through lists and menus",
+      "standard_tabsNavigate": "Switch between tabs and filters",
+      "standard_reorder": "Move the focused entry in the order",
+      "protocol_find": "Chapter and full-text search in the minutes",
+      "protocol_nextElement": "Next section (at the end: close the minutes)",
+      "protocol_previousElement": "Previous section",
+      "protocol_elementDown": "Change section (outside of fields)",
+      "protocol_elementUp": "Previous section (outside of fields)",
+      "protocol_openTodo": "New task in the session panel",
+      "protocol_openNotes": "Notes in the session panel",
+      "protocol_attendanceStatus": "Set attendance: present, late, excused, absent",
+      "designer_save": "Save template",
+      "designer_undo": "Undo",
+      "designer_redo": "Redo",
+      "designer_duplicate": "Duplicate selected element",
+      "designer_delete": "Delete selected element",
+      "designer_move": "Move selected element",
+      "designer_deselect": "Clear selection",
+      "media_previous": "Previous photo or file",
+      "media_next": "Next photo or file"
+    }
   }
 }

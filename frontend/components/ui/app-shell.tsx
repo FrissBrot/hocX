@@ -31,7 +31,7 @@ import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
 import { clearSimilarityGroupsCache } from "@/components/photos/use-similarity-groups";
 import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
-import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
+import { Menu, MenuDivider, MenuItem, menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { MobileShell } from "@/components/mobile/mobile-shell";
@@ -40,12 +40,20 @@ import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 import { MfaGraceBanner } from "@/components/ui/mfa-grace-banner";
 import { findListSearchInput } from "@/lib/search/list-search";
 import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
+import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
+import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
+import { SkipLink } from "@/components/ui/skip-link";
 import type { GlobalSearchAction } from "@/components/search/global-search";
 
 // Globale Suche (Ctrl+K): erst beim ersten Öffnen laden.
 const GlobalSearch = dynamic(() => import("@/components/search/global-search").then((m) => m.GlobalSearch), {
   ssr: false,
 });
+
+// Shortcut-Hilfe («?»): erst beim Oeffnen laden.
+const ShortcutHelp = dynamic(() => import("@/components/ui/shortcut-help").then((m) => m.ShortcutHelp), { ssr: false });
 
 // Erst beim Oeffnen laden (MFA-Verwaltung, geschuetzter Export, Sprachwahl).
 const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then((m) => m.ProfileModal), {
@@ -124,6 +132,15 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const navToggleRef = useRef<HTMLButtonElement | null>(null);
+  // Ausklappbare Seitenleiste (schmale Fenster, Schreibmodus): Escape schliesst sie und gibt den
+  // Fokus an den Menü-Knopf zurück, wenn er in der Leiste stand.
+  usePopupEscape(mobileNavOpen && !isMobile, () => {
+    const hadFocus = sidebarRef.current?.contains(document.activeElement) ?? false;
+    setMobileNavOpen(false);
+    if (hadFocus) navToggleRef.current?.focus();
+  }, sidebarRef);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -153,6 +170,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     else openSearch();
   }, [openSearch]);
   useGlobalSearchShortcuts(toggleSearch, session?.authenticated !== false);
+  // «?» öffnet die Shortcut-Hilfe (lib/keyboard/registry.ts), verlorener Fokus landet im Inhalt
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  useShortcut("global.help", () => setShortcutHelpOpen(true), { enabled: session?.authenticated !== false });
+  useFocusRescue();
   // Tippen direkt nach Ctrl+K/⌘K, bevor das Suchfeld existiert (Fenster wird nachgeladen und
   // montiert): die Zeichen sammeln und dem Feld übergeben, statt sie zu verlieren.
   const pendingSearchKeys = useRef<{ text: string; consumed: boolean }>({ text: "", consumed: true });
@@ -171,7 +192,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         event.preventDefault();
       }
     }
-    window.addEventListener("keydown", collect, true);
+    window.addEventListener("keydown", collect, true); // a11y-ok: kein Shortcut - puffert Tipp-Eingaben, bis das Suchfeld montiert ist
     return () => window.removeEventListener("keydown", collect, true);
   }, [searchOpen]);
   // Suchfenster im Leerlauf vorladen: beim ersten Ctrl+K/⌘K ist es sofort da, und kein
@@ -411,6 +432,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     <GlobalSearch open onClose={() => setSearchOpen(false)} session={session} listInput={searchListInput} onAction={runSearchAction} pendingKeys={pendingSearchKeys} />
   ) : null;
 
+  const shortcutHelp = shortcutHelpOpen ? <ShortcutHelp open onClose={() => setShortcutHelpOpen(false)} /> : null;
+
   const profileModal = profileModalOpen ? (
     <ProfileModal
       open
@@ -445,12 +468,14 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         </MobileShell>
         {profileModal}
         {globalSearch}
+        {shortcutHelp}
       </>
     );
   }
 
   return (
-    <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
+    <div className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
+      <SkipLink />
       <ConnectivityStatus userId={session?.user?.id ?? null} />
       <div className="shell">
         {isProtocolWriting && (
@@ -464,6 +489,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
         )}
         <aside
+          ref={sidebarRef}
           className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
           onMouseLeave={() => {
             // In protocol writing, the sidebar is a temporary overlay opened from either
@@ -496,6 +522,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                   href={link.href as Route}
                   key={link.href}
                   className={isNavLinkActive(link, pathname) ? "nav-link nav-link-active" : "nav-link"}
+                  aria-current={isNavLinkActive(link, pathname) ? "page" : undefined}
                   onClick={() => setMobileNavOpen(false)}
                 >
                   <NavIcon name={link.icon} className="nav-link-icon" />
@@ -549,6 +576,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                   aria-haspopup="menu"
                   aria-expanded={avatarMenuOpen}
                   onClick={() => setAvatarMenuOpen((current) => !current)}
+                  onKeyDown={menuButtonKeyDown(avatarMenuOpen, setAvatarMenuOpen)}
                 >
                   <div className="identity-avatar identity-avatar-user">
                     <span>{userInitial}</span>
@@ -566,8 +594,22 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         <div className="shell-main">
           <header className="topbar">
             <div className="topbar-actions">
-              <button type="button" className="button-ghost mobile-nav-toggle" onClick={() => setMobileNavOpen((current) => !current)}>
-                {mobileNavOpen ? t("menuToggleClose") : "☰"}
+              <button
+                ref={navToggleRef}
+                type="button"
+                className="button-ghost mobile-nav-toggle"
+                aria-expanded={mobileNavOpen}
+                aria-label={mobileNavOpen ? undefined : tCommon("menuToggle")}
+                onClick={(event) => {
+                  const opening = !mobileNavOpen;
+                  setMobileNavOpen(opening);
+                  // Per Tastatur geöffnet (detail 0): Fokus in die Leiste, sie steht im DOM vor dem Knopf
+                  if (opening && event.detail === 0) {
+                    window.requestAnimationFrame(() => sidebarRef.current?.querySelector<HTMLElement>(".nav-link-active, .nav-link")?.focus());
+                  }
+                }}
+              >
+                {mobileNavOpen ? t("menuToggleClose") : <span aria-hidden="true">☰</span>}
               </button>
             </div>
             <nav className="topbar-breadcrumb" aria-label={tCommon("breadcrumbNav")}>
@@ -635,6 +677,17 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 >
                   {t("connections")}
                 </MenuItem>
+                <MenuItem
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    setShortcutHelpOpen(true);
+                  }}
+                >
+                  <span className="menu-item-with-kbd">
+                    {tCommon("keyboard.helpTitle")}
+                    <kbd className="global-search-kbd">?</kbd>
+                  </span>
+                </MenuItem>
                 <MenuDivider />
                 <div className="menu-header menu-header-tight">{t("appearance")}</div>
                 <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
@@ -659,7 +712,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               </Menu>
             </Popover>
           </header>
-          <div className="shell-content">
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">
             <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} />
             <InstallAppPrompt />
             {inSettings && usesSettingsFrame(pathname) ? (
@@ -667,12 +720,13 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             ) : (
               children
             )}
-          </div>
+          </main>
         </div>
       </div>
 
       {profileModal}
       {globalSearch}
-    </main>
+      {shortcutHelp}
+    </div>
   );
 }

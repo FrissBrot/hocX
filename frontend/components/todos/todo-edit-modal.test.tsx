@@ -144,7 +144,7 @@ it('links an uploaded file and saves it with the todo', async () => {
   mount();
   const search = await screen.findByLabelText('Hochgeladene Datei suchen …');
   fireEvent.focus(search);
-  fireEvent.mouseDown(await screen.findByRole('option', { name: /Budget.xlsx/ }));
+  fireEvent.click(await screen.findByRole('option', { name: /Budget.xlsx/ }));
   expect(screen.getByRole('link', { name: /Budget.xlsx/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());

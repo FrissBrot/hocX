@@ -14,6 +14,7 @@ import { useTranslations } from "next-intl";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
+import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { ParticipantSummary } from "@/types/api";
 
 export const ATTENDANCE_STATUSES = ["present", "late", "excused", "absent"] as const;
@@ -53,11 +54,6 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function isFormField(target: EventTarget | null) {
-  const el = target as HTMLElement | null;
-  return Boolean(el && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable));
-}
-
 export function AttendanceBoard({ participants, statusById, editable, fineAmountById, fineCurrency = "", onChange, onMarkOpenPresent }: Props) {
   const t = useTranslations("protocols.attendanceBoard");
   const tStatus = useTranslations("protocols.attendance");
@@ -87,21 +83,17 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
   const total = participants.length;
   const deviations = counts.late + counts.excused + counts.absent;
 
-  // Hover/Menü + 1–4 setzt den Status (nicht beim Tippen in einem Feld)
-  useEffect(() => {
-    if (!editable) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.ctrlKey || event.metaKey || event.altKey || !/^[1-4]$/.test(event.key) || isFormField(event.target)) return;
-      const id = menuFor ?? targetRef.current;
-      const participant = id ? participants.find((p) => p.id === id) : null;
-      if (!participant) return;
-      event.preventDefault();
-      setMenuFor(null);
-      void onChange(participant, ATTENDANCE_STATUSES[Number(event.key) - 1]);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editable, menuFor, participants, onChange]);
+  // Hover/Fokus auf einer Karte + 1–4 setzt den Status (Registry `protocol.attendanceStatus`;
+  // nicht beim Tippen, nicht in fremden Dialogen). Im offenen Statusmenü übernimmt das Menü selbst
+  // die Ziffern (onKeyDown unten), weil Tasten in Menüs dem Menü gehören.
+  function setStatusByDigit(participantId: string | null, key: string) {
+    const participant = participantId ? participants.find((p) => p.id === participantId) : null;
+    if (!participant) return false;
+    setMenuFor(null);
+    void onChange(participant, ATTENDANCE_STATUSES[Number(key) - 1]);
+    return true;
+  }
+  useShortcut("protocol.attendanceStatus", (event) => (setStatusByDigit(targetRef.current, event.key) ? undefined : false), { enabled: editable });
 
   useEffect(() => () => window.clearTimeout(longPressTimerRef.current), []);
 
@@ -265,6 +257,13 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
 
       <Popover open={Boolean(menuParticipant)} onOpenChange={(open) => !open && setMenuFor(null)} anchorRef={menuAnchorRef}>
         {menuParticipant ? (
+          <div
+            onKeyDown={(event) => {
+              if (/^[1-4]$/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey && setStatusByDigit(menuParticipant.id, event.key)) {
+                event.preventDefault();
+              }
+            }}
+          >
           <Menu>
             {ATTENDANCE_STATUSES.map((status, index) => (
               <MenuItem
@@ -283,6 +282,7 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
               </MenuItem>
             ))}
           </Menu>
+          </div>
         ) : null}
       </Popover>
     </div>
