@@ -9,6 +9,7 @@ import { dashboardPermissions } from "@/components/dashboard/dashboard-permissio
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, OpenFinesSummary, ProtocolSummary, TodoListItem } from "@/types/api";
+import "@/app/styles/event-dialog.css";
 import "@/app/styles/home.css";
 
 export default async function HomePage() {

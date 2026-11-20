@@ -272,5 +272,28 @@
     "participantCountTooLarge": "Zeile {row}: Teilnehmerzahl ist zu gross (höchstens {max, number})",
     "tagTooLong": "Zeile {row}: Tag ist länger als {max} Zeichen",
     "dateOutOfRange": "Zeile {row}: Datum «{value}» liegt ausserhalb von 1900–2999"
+  },
+  "dialog": {
+    "moreActions": "Mehr: Löschen, Abgesagt markieren",
+    "createHint": "Titel und Datum ausfüllen, dann erstellen",
+    "from": "Von",
+    "until": "Bis",
+    "sameDay": "gleicher Tag",
+    "periodHint": "Enddatum nur bei mehrtägigen Terminen setzen. Zeiten sind optional.",
+    "exactlyOneTag": "Genau ein Tag",
+    "participantCountHint": "Für Statistik und Protokoll",
+    "decrease": "Weniger",
+    "increase": "Mehr",
+    "addPeople": "+ Hinzufügen",
+    "editPeople": "Bearbeiten",
+    "chooseRole": "{role} wählen",
+    "searchPlaceholder": "Suchen…",
+    "noExtraFields": "Keine weiteren Felder eingeblendet.",
+    "cancelledChip": "Abgesagt",
+    "dateRange": "{start} – {end}",
+    "timeRange": "{start}–{end}",
+    "timeFrom": "ab {start}",
+    "timeUntil": "bis {end}",
+    "dateWithTime": "{date} · {time}"
   }
 }

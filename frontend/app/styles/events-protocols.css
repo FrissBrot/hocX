@@ -1,69 +1,11 @@
 /* Bereichs-CSS, geladen nur von: events protocols. Siehe design/DESIGN.md Abschnitt 10. */
 
-.event-detail-form .tabs-panel {
-  min-height: 460px;
-  align-content: start;
-}
-
-.event-detail-role-picker {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--panel-solid) 94%, transparent 6%);
-}
-
 .editor-planning-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
   margin-bottom: var(--space-1);
-}
-
-/* ── Cycle chips ── */
-.cycle-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
-.cycle-chip {
-  --button-hover-bg: transparent;
-  padding: 3px var(--space-3);
-  border-radius: var(--radius-xl);
-  border: 1.5px solid var(--border);
-  --button-bg: transparent;
-  background: var(--button-bg);
-  color: var(--text);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  width: fit-content;
-  white-space: nowrap;
-  transition: background var(--dur-base), border-color var(--dur-base), color var(--dur-base);
-}
-
-.cycle-chip:hover {
-  --button-bg: transparent;
-  background: var(--button-bg);
-  color: var(--text);
-  border-color: var(--accent);
-}
-
-.cycle-chip-active {
-  --button-hover-bg: var(--accent);
-  --button-bg: var(--accent);
-  background: var(--button-bg);
-  border-color: var(--accent);
-  color: var(--on-solid);
-}
-
-.cycle-chip-active:hover {
-  --button-bg: var(--accent);
-  background: var(--button-bg);
-  color: var(--on-solid);
 }
 
 .event-list-row-meta {
@@ -74,17 +16,6 @@
   min-width: 0;
   color: var(--muted);
   font-size: var(--text-sm);
-}
-
-.event-tag-badge {
-  min-height: 22px;
-  padding: 0 var(--space-2);
-  background: color-mix(in srgb, var(--tag-color) 16%, transparent 84%);
-  color: color-mix(in srgb, var(--tag-color) 60%, var(--text) 40%);
-}
-
-.event-tag-badge .badge-dot {
-  background: var(--tag-color);
 }
 
 /* ── Terminkalender (components/events/event-calendar-modal.tsx) ─── */
@@ -646,21 +577,3 @@
   }
 }
 
-/* Tab-Inhalte des Terminformulars: Fieldset nur zum gemeinsamen Sperren (Leseansicht), ohne eigene Optik. */
-.event-detail-fieldset {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.event-detail-save-status {
-  margin: 0 0 var(--space-2);
-}
-
-/* Spezialfelder im Terminformular: Name frei wählbar (Mandant-Einstellungen › Spezialfelder) */
-.event-special-field-label { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: var(--text-xs); }
-
-.event-special-field-tag { display: inline-flex; align-items: center; padding: 1px var(--space-2); border-radius: var(--radius-pill); background: var(--neutral-bg); color: var(--neutral-fg); font-size: var(--text-xs); font-weight: 500; letter-spacing: 0; text-transform: none; text-decoration: none; }
-
-a.event-special-field-tag:hover { background: var(--accent-soft); color: var(--accent-strong); }

@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EVENT_TEXT_SAVE_DELAY_MS, useEventAutosave } from "./event-detail-form";
+import { EVENT_TEXT_SAVE_DELAY_MS, useEventAutosave } from "./use-event-autosave";
 import { eventDeleteMessage } from "@/components/events/use-confirm-event-delete";
 
 function deferred() {

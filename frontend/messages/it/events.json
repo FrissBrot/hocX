@@ -272,5 +272,28 @@
     "participantCountTooLarge": "Riga {row}: il numero di partecipanti è troppo grande (al massimo {max, number})",
     "tagTooLong": "Riga {row}: il tag supera {max} caratteri",
     "dateOutOfRange": "Riga {row}: la data «{value}» è fuori dall'intervallo 1900–2999"
+  },
+  "dialog": {
+    "moreActions": "Altro: elimina, segna come annullato",
+    "createHint": "Inserisci titolo e data, poi crea",
+    "from": "Dal",
+    "until": "Al",
+    "sameDay": "stesso giorno",
+    "periodHint": "Imposta una data di fine solo per gli appuntamenti di più giorni. Gli orari sono facoltativi.",
+    "exactlyOneTag": "Esattamente un tag",
+    "participantCountHint": "Per statistiche e verbale",
+    "decrease": "Meno",
+    "increase": "Più",
+    "addPeople": "+ Aggiungi",
+    "editPeople": "Modifica",
+    "chooseRole": "Scegli: {role}",
+    "searchPlaceholder": "Cerca…",
+    "noExtraFields": "Nessun campo aggiuntivo visualizzato.",
+    "cancelledChip": "Annullato",
+    "dateRange": "{start} – {end}",
+    "timeRange": "{start}–{end}",
+    "timeFrom": "dalle {start}",
+    "timeUntil": "fino alle {end}",
+    "dateWithTime": "{date} · {time}"
   }
 }
