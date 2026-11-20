@@ -112,6 +112,8 @@ def list_active_assignments(db: Session, *, tenant_id: int, link_id: int) -> lis
             submission_assignment_table.c.is_active.is_(True),
             _linked_to(link_id),
         )
+        # Wie SubmissionRepository.list_assignments im Hauptbackend (Titel, dann id)
+        .order_by(submission_assignment_table.c.title.asc(), submission_assignment_table.c.id.asc())
     ).mappings()
     return [dict(row) for row in rows]
 
@@ -151,7 +153,10 @@ def list_events_by_tag(
                 )
             )
         )
-    rows = db.execute(statement).mappings()
+    # Grundreihenfolge wie SubmissionRepository.list_events_by_tag im Hauptbackend: die sort_order
+    # der Abgabe sortiert danach stabil, Gleichstände (gleicher Titel, gleicher Abstand) bleiben so
+    # in derselben Reihenfolge wie in der Verwaltung statt in Heap-Reihenfolge.
+    rows = db.execute(statement.order_by(event_table.c.event_date.asc(), event_table.c.id.asc())).mappings()
     return [dict(row) for row in rows]
 
 
