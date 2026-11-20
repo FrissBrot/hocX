@@ -35,6 +35,10 @@ from sqlalchemy.orm import object_session
 
 from app.services import public_id_service
 
+# Obergrenze für skip/offset in Listen-Query-Parametern. Ohne sie wurde z. B. ?skip=10**19 als
+# OFFSET an PostgreSQL gereicht: «bigint out of range» (500 plus Fehlerprotokoll).
+MAX_QUERY_OFFSET = 2_147_483_647
+
 
 class PublicIdModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
