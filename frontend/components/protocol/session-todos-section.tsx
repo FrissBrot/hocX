@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
+import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -51,6 +52,7 @@ export function SessionTodosSection({
 }) {
   const t = useTranslations("protocols.todos");
   const tTodos = useTranslations("todos");
+  const tSession = useTranslations("protocols.sessionPanel");
   const showToast = useToast();
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
@@ -244,6 +246,11 @@ export function SessionTodosSection({
                   {t("delete")}
                 </button>
               )}
+              {todo.submission_assignment_id ? (
+                <div className="todo-tags-row">
+                  <Badge variant="info">{tSession("collect.badge")}</Badge>
+                </div>
+              ) : null}
             </article>
           );
         })}

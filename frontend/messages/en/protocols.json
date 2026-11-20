@@ -454,7 +454,25 @@
     "saving": "Saving…",
     "tagPlaceholder": "Category / tag",
     "taskPlaceholder": "Task…",
-    "taskPlaceholderWithTab": "Task… (Tab: person)"
+    "taskPlaceholderWithTab": "Task… (Tab: person)",
+    "collect": {
+      "label": "Collect a file as submission",
+      "hint": "{name} submits without login, then the todo is done.",
+      "hintNoPerson": "The person submits without login, then the todo is done.",
+      "needsPerson": "Assign a person first.",
+      "badge": "Submission"
+    },
+    "createWithSubmissionButton": "Create todo + submission",
+    "created": "Created: {title}",
+    "createdWithSubmission": "Created: {title} · with submission",
+    "keyHint": "{enter} creates · {escape} creates and closes",
+    "keyHintCollect": "{enter} creates · {collect} submission · {escape} creates and closes",
+    "clearFields": "Clear fields",
+    "taskLabel": "Task",
+    "assigneeLabel": "Person",
+    "dueLabel": "Due",
+    "tagLabel": "Category / tag",
+    "dueEmpty": "No results"
   },
   "settledLater": "Settled later",
   "showAction": "Show",

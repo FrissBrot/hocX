@@ -454,7 +454,25 @@
     "saving": "Salvataggio…",
     "tagPlaceholder": "Categoria / tag",
     "taskPlaceholder": "Attività…",
-    "taskPlaceholderWithTab": "Attività… (Tab: persona)"
+    "taskPlaceholderWithTab": "Attività… (Tab: persona)",
+    "collect": {
+      "label": "Raccogli un file come consegna",
+      "hint": "{name} consegna senza login, poi l'attività è completata.",
+      "hintNoPerson": "La persona consegna senza login, poi l'attività è completata.",
+      "needsPerson": "Assegna prima una persona.",
+      "badge": "Consegna"
+    },
+    "createWithSubmissionButton": "Crea attività + consegna",
+    "created": "Creato: {title}",
+    "createdWithSubmission": "Creato: {title} · con consegna",
+    "keyHint": "{enter} crea · {escape} crea e chiude",
+    "keyHintCollect": "{enter} crea · {collect} consegna · {escape} crea e chiude",
+    "clearFields": "Svuota i campi",
+    "taskLabel": "Attività",
+    "assigneeLabel": "Persona",
+    "dueLabel": "Scadenza",
+    "tagLabel": "Categoria / tag",
+    "dueEmpty": "Nessun risultato"
   },
   "settledLater": "Saldato più tardi",
   "showAction": "Mostra",

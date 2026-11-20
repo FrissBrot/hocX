@@ -251,7 +251,19 @@
     "orderedList": "Liste numérotée"
   },
   "keys": {
-    "ctrl": "Ctrl"
+    "ctrl": "Ctrl",
+    "alt": "Alt",
+    "shift": "Maj",
+    "enter": "Entrée",
+    "escape": "Échap",
+    "space": "Espace",
+    "tab": "Tab",
+    "delete": "Suppr",
+    "backspace": "Retour arrière",
+    "home": "Début",
+    "end": "Fin",
+    "pageUp": "Page préc.",
+    "pageDown": "Page suiv."
   },
   "columnFilter": {
     "label": "Filtrer {column}",

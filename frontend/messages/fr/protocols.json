@@ -454,7 +454,25 @@
     "saving": "Enregistrement…",
     "tagPlaceholder": "Catégorie / tag",
     "taskPlaceholder": "Tâche…",
-    "taskPlaceholderWithTab": "Tâche… (Tab : personne)"
+    "taskPlaceholderWithTab": "Tâche… (Tab : personne)",
+    "collect": {
+      "label": "Collecter un fichier comme remise",
+      "hint": "{name} remet sans connexion, puis la tâche est terminée.",
+      "hintNoPerson": "La personne remet sans connexion, puis la tâche est terminée.",
+      "needsPerson": "Attribuez d'abord une personne.",
+      "badge": "Remise"
+    },
+    "createWithSubmissionButton": "Créer tâche + remise",
+    "created": "Créé : {title}",
+    "createdWithSubmission": "Créé : {title} · avec remise",
+    "keyHint": "{enter} crée · {escape} crée et ferme",
+    "keyHintCollect": "{enter} crée · {collect} remise · {escape} crée et ferme",
+    "clearFields": "Vider les champs",
+    "taskLabel": "Tâche",
+    "assigneeLabel": "Personne",
+    "dueLabel": "Échéance",
+    "tagLabel": "Catégorie / tag",
+    "dueEmpty": "Aucun résultat"
   },
   "settledLater": "Réglé plus tard",
   "showAction": "Afficher",

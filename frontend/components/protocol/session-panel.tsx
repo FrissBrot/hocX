@@ -10,7 +10,12 @@ import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo,
 import { browserApiFetch } from "@/lib/api/client";
 import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { useToast } from "@/contexts/toast-context";
-import { formatDateRange } from "@/lib/utils/format";
+import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { avatarTone, participantInitials } from "@/lib/utils/avatar";
+import { normalizeSearchText } from "@/lib/utils/smart-dates";
+import { useIsApple } from "@/lib/search/shortcuts";
+import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submission-from-todo";
+import { useDefaultSmartDates, useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
@@ -19,7 +24,8 @@ import { QuickTodoFine, quickTodoFineInvalid, quickTodoFineSettings, type QuickT
 type DueDraft =
   | { type: "none" }
   | { type: "next_session" }
-  | { type: "event"; eventId: string; eventTitle: string };
+  | { type: "event"; eventId: string; eventTitle: string }
+  | { type: "date"; date: string; label: string };
 
 type SessionPanelProps = {
   protocol: ProtocolSummary;
@@ -30,6 +36,8 @@ type SessionPanelProps = {
   onQuickTodoCreated?: (blockId: string, todoId: string, elementId: string) => void;
   /** Pendenzen-Bussen: Regel zum Tag anzeigen, mit finances.manage auch festlegen */
   todoFines?: QuickTodoFineAccess;
+  /** «Datei als Abgabe einsammeln» anbieten (submissions.manage inkl. Modul Abgabebox, meetings.edit) */
+  canCollectSubmissions?: boolean;
 };
 
 export type SessionPanelHandle = {
@@ -44,10 +52,12 @@ export type SessionPanelHandle = {
 type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProps>(
-  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated, todoFines }, ref) {
+  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated, todoFines, canCollectSubmissions = false }, ref) {
     const isParticipantSelectable = useParticipantSelectable();
     const t = useTranslations("protocols.sessionPanel");
     const tCommon = useTranslations("common");
+    const tKeys = useTranslations("common.keys");
+    const apple = useIsApple();
     const showToast = useToast();
     const [active, setActive] = useState<ActivePanel>(null);
     const [notes, setNotes] = useState(protocol.session_notes ?? "");
@@ -55,7 +65,6 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const [todoTask, setTodoTask] = useState("");
     const [todoTag, setTodoTag] = useState(currentSectionName ?? t("defaultTag"));
     const [creatingTodo, setCreatingTodo] = useState(false);
-    const [todoSaved, setTodoSaved] = useState(false);
     const [openedByHover, setOpenedByHover] = useState(false);
     const [fineChoice, setFineChoice] = useState<QuickTodoFineChoice>({ mode: "auto" });
     const notesMutationKey = `protocol-notes:${protocol.id}`;
@@ -93,15 +102,25 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const [dueConfirmed, setDueConfirmed] = useState(false);
     const [dueHighlighted, setDueHighlighted] = useState(0);
 
+    // «Datei als Abgabe einsammeln»: nach der Pendenz eine Einzelabgabe anlegen
+    const [collect, setCollect] = useState(false);
+    const [collectError, setCollectError] = useState(false);
+    const [createdMessage, setCreatedMessage] = useState<string | null>(null);
+    const canCollect = Boolean(canCollectSubmissions) && participants.length > 0;
+    const createSubmissionFromTodo = useCreateSubmissionFromTodo();
+
     const { schedule: scheduleNotes, flush: flushNotes } = useDeferredPopupSave();
     const notesPanelRef = useRef<HTMLDivElement>(null);
     const todoPanelRef = useRef<HTMLDivElement>(null);
     const leaveTimerRef = useRef<number | undefined>(undefined);
+    const createdTimerRef = useRef<number | undefined>(undefined);
     const todoInputRef = useRef<HTMLInputElement | null>(null);
     const dueInputRef = useRef<HTMLInputElement | null>(null);
     const assigneeInputRef = useRef<HTMLInputElement | null>(null);
     const notesRef = useRef<HTMLTextAreaElement | null>(null);
     const openedByHoverRef = useRef(false);
+    const todoTaskRef = useRef(todoTask);
+    todoTaskRef.current = todoTask;
 
     const setHoverMode = useCallback((value: boolean) => {
       openedByHoverRef.current = value;
@@ -121,6 +140,11 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       },
       openTodo(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        // Markierter Text (Protokollfeld oder Seite) wird zum Titel, solange das Feld leer ist
+        if (focus && !todoTaskRef.current.trim()) {
+          const selected = selectedTextOutside(todoPanelRef.current);
+          if (selected) setTodoTask(selected);
+        }
         setHoverMode(!focus);
         setActive("todo");
         if (focus) window.setTimeout(() => todoInputRef.current?.focus(), 60);
@@ -170,37 +194,54 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       }
     }, [currentSectionName]);
 
+    const selectableParticipants = useMemo(() => participants.filter(isParticipantSelectable), [participants, isParticipantSelectable]);
     const filteredParticipants = useMemo(() => {
-      const q = assigneeSearch.trim().toLowerCase();
-      if (!q || assigneeConfirmed) return participants.filter(isParticipantSelectable);
-      return participants.filter(isParticipantSelectable).filter((p) => p.display_name.toLowerCase().includes(q));
-    }, [participants, assigneeSearch, assigneeConfirmed, isParticipantSelectable]);
+      const q = normalizeSearchText(assigneeSearch.trim());
+      if (!q || assigneeConfirmed) return selectableParticipants;
+      return selectableParticipants.filter((p) => normalizeSearchText(p.display_name).includes(q));
+    }, [selectableParticipants, assigneeSearch, assigneeConfirmed]);
+    const assignee = useMemo(() => participants.find((p) => p.id === assigneeId) ?? null, [participants, assigneeId]);
 
     useEffect(() => { setAssigneeHighlighted(0); }, [assigneeSearch]);
 
-    type DueOption = { label: string; sub?: string; draft: DueDraft };
-    const allDueOptions: DueOption[] = useMemo(() => [
-      { label: t("noDueDate"), draft: { type: "none" } },
-      { label: t("nextSession"), draft: { type: "next_session" } },
-      ...dueEvents.map((ev) => ({
-        label: ev.title,
-        sub: formatDateRange(ev.event_date, ev.event_end_date),
-        draft: { type: "event" as const, eventId: ev.id, eventTitle: ev.title },
-      })),
-    ], [dueEvents, t]);
-
-    const filteredDueOptions = useMemo(() => {
-      const q = dueSearch.trim().toLowerCase();
-      if (!q || dueConfirmed) return allDueOptions;
-      return allDueOptions.filter((o) => o.label.toLowerCase().includes(q));
-    }, [allDueOptions, dueSearch, dueConfirmed]);
+    // Fälligkeit: smarte Daten wie im Fälligkeitsmenü der Pendenzen (todo-due-menu) - ohne Eingabe
+    // die häufigsten, beim Tippen passend zum Text -, dann «Nächster Hock», Termine, «Kein Enddatum».
+    const dueQuery = dueConfirmed ? "" : dueSearch.trim();
+    const typedDates = useSmartDateSuggestions(dueQuery);
+    const defaultDates = useDefaultSmartDates();
+    type DueOption = { key: string; label: string; sub?: string; draft: DueDraft };
+    const filteredDueOptions: DueOption[] = useMemo(() => {
+      const wanted = normalizeSearchText(dueQuery);
+      const matches = (text: string) => !wanted || normalizeSearchText(text).includes(wanted);
+      const dates = (dueQuery ? typedDates : defaultDates).map((suggestion) => ({
+        key: `date:${suggestion.kind}:${suggestion.weekday ?? ""}:${suggestion.date}`,
+        label: suggestion.label,
+        sub: suggestion.subtle,
+        draft: {
+          type: "date" as const,
+          date: suggestion.date,
+          label: suggestion.kind === "exactDate" ? suggestion.label : `${suggestion.label} (${formatDate(suggestion.date)})`,
+        },
+      }));
+      const rest: DueOption[] = [
+        { key: "next", label: t("nextSession"), draft: { type: "next_session" } },
+        ...dueEvents.map((ev) => ({
+          key: `ev:${ev.id}`,
+          label: ev.title,
+          sub: formatDateRange(ev.event_date, ev.event_end_date),
+          draft: { type: "event" as const, eventId: ev.id, eventTitle: ev.title },
+        })),
+        { key: "none", label: t("noDueDate"), draft: { type: "none" } },
+      ];
+      return [...dates, ...rest.filter((option) => matches(option.label))];
+    }, [dueQuery, typedDates, defaultDates, dueEvents, t]);
 
     useEffect(() => { setDueHighlighted(0); }, [dueSearch]);
 
     function dueDraftLabel(draft: DueDraft): string {
-      if (draft.type === "none") return "";
       if (draft.type === "next_session") return t("nextSession");
-      if (draft.type === "event") return (draft as { eventTitle: string }).eventTitle;
+      if (draft.type === "event") return draft.eventTitle;
+      if (draft.type === "date") return draft.label;
       return "";
     }
 
@@ -212,6 +253,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     useEffect(() => {
       return () => {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        if (createdTimerRef.current) window.clearTimeout(createdTimerRef.current);
       };
     }, []);
 
@@ -260,9 +302,66 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       saveNotes(value);
     };
 
+    function selectAssignee(person: ParticipantSummary) {
+      setAssigneeId(person.id);
+      setAssigneeSearch(person.display_name);
+      setAssigneeConfirmed(true);
+      setCollectError(false);
+    }
+
+    function selectDue(option: DueOption) {
+      setNewDue(option.draft);
+      setDueSearch(dueDraftLabel(option.draft));
+      setDueConfirmed(true);
+    }
+
+    /** Alle Felder leeren (nach dem Erstellen und mit ✕); der Tag folgt dem Traktandum. */
+    function clearTodoFields() {
+      setTodoTask("");
+      setFineChoice({ mode: "auto" });
+      setAssigneeSearch("");
+      setAssigneeId(null);
+      setAssigneeConfirmed(false);
+      setNewDue({ type: "none" });
+      setDueSearch("");
+      setDueConfirmed(false);
+      setDueFocused(false);
+      setCollect(false);
+      setCollectError(false);
+    }
+
+    const todoHasInput = Boolean(todoTask.trim() || assigneeSearch.trim() || dueSearch.trim() || collect || fineChoice.mode !== "auto");
+
+    function clearOrClose() {
+      if (todoHasInput) {
+        clearTodoFields();
+        todoInputRef.current?.focus();
+      } else {
+        setActive(null);
+      }
+    }
+
+    function toggleCollect() {
+      setCollect((value) => !value);
+      setCollectError(false);
+    }
+
+    function showCreated(message: string) {
+      setCreatedMessage(message);
+      if (createdTimerRef.current) window.clearTimeout(createdTimerRef.current);
+      createdTimerRef.current = window.setTimeout(() => setCreatedMessage(null), 2600);
+    }
+
     const handleCreateTodo = async () => {
       const task = todoTask.trim();
       if (!task || creatingTodo || quickTodoFineInvalid(fineChoice)) return false;
+      const withSubmission = canCollect && collect;
+      if (withSubmission && !assigneeId) {
+        // Eine Abgabe braucht eine verantwortliche Person (Backend: todo_without_assignee)
+        setCollectError(true);
+        assigneeInputRef.current?.focus();
+        return false;
+      }
       setCreatingTodo(true);
       try {
         const result = await browserApiFetch<{ block_id: string; todo_id: string; element_id: string }>(
@@ -276,6 +375,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         if (assigneeId) patch.assigned_participant_id = assigneeId;
         if (newDue.type === "next_session") { patch.due_marker = "next_session"; patch.due_date = null; patch.due_event_id = null; }
         else if (newDue.type === "event") { patch.due_event_id = newDue.eventId; patch.due_date = null; patch.due_marker = null; }
+        else if (newDue.type === "date") { patch.due_date = newDue.date; patch.due_event_id = null; patch.due_marker = null; }
         if (Object.keys(patch).length > 0) {
           await browserApiFetch(`/api/protocol-todos/${result.todo_id}`, {
             method: "PATCH",
@@ -292,17 +392,12 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
             showToast(t("fine.saveFailed"), "error");
           }
         }
+        // Abgabe erst nach der fertigen Pendenz (Person und Frist übernimmt sie von dort). Scheitert
+        // sie, meldet der Hook den Fehler als Toast; die Pendenz bleibt bestehen.
+        const submission = withSubmission ? await createSubmissionFromTodo(result.todo_id) : null;
         onQuickTodoCreated?.(result.block_id, result.todo_id, result.element_id);
-        setTodoTask("");
-        setFineChoice({ mode: "auto" });
-        setAssigneeSearch("");
-        setAssigneeId(null);
-        setAssigneeConfirmed(false);
-        setNewDue({ type: "none" });
-        setDueSearch("");
-        setDueConfirmed(false);
-        setTodoSaved(true);
-        window.setTimeout(() => setTodoSaved(false), 2000);
+        clearTodoFields();
+        showCreated(submission ? t("createdWithSubmission", { title: task }) : t("created", { title: task }));
         todoInputRef.current?.focus();
         return true;
       } catch (error) {
@@ -312,15 +407,6 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         setCreatingTodo(false);
       }
     };
-
-    function handleTaskKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-      if (e.key === "Enter") { void handleCreateTodo(); return; }
-      if (e.key === "Tab" && participants.length > 0) {
-        e.preventDefault();
-        window.setTimeout(() => assigneeInputRef.current?.focus(), 0);
-        return;
-      }
-    }
 
     function handleAssigneeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
       if (e.key === "ArrowDown") {
@@ -333,28 +419,13 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         setAssigneeHighlighted((h) => Math.max(h - 1, 0));
         return;
       }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (assigneeConfirmed) {
-          void handleCreateTodo();
-        } else {
-          const selected = filteredParticipants[assigneeHighlighted];
-          if (selected) {
-            setAssigneeId(selected.id);
-            setAssigneeSearch(selected.display_name);
-            setAssigneeConfirmed(true);
-          } else {
-            void handleCreateTodo();
-          }
-        }
-        return;
-      }
-      if (e.key === "Tab") {
-        e.preventDefault();
-        if (dueEvents.length > 0) {
-          window.setTimeout(() => dueInputRef.current?.focus(), 0);
-        } else {
-          todoInputRef.current?.focus();
+      // Enter/Tab bei offener Liste wählen die markierte Person (Enter erstellt dann nicht);
+      // sonst erstellt Enter die Pendenz (Panel) und Tab geht zum nächsten Feld.
+      if ((e.key === "Enter" || e.key === "Tab") && showAssigneeDropdown) {
+        const selected = filteredParticipants[assigneeHighlighted];
+        if (selected) {
+          if (e.key === "Enter") e.preventDefault();
+          selectAssignee(selected);
         }
       }
     }
@@ -369,6 +440,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     function handleDueKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
+        if (!dueFocused) setDueFocused(true);
         setDueHighlighted((h) => Math.min(h + 1, filteredDueOptions.length - 1));
         return;
       }
@@ -377,25 +449,13 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         setDueHighlighted((h) => Math.max(h - 1, 0));
         return;
       }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (dueConfirmed) {
-          void handleCreateTodo();
-        } else {
-          const selected = filteredDueOptions[dueHighlighted];
-          if (selected) {
-            setNewDue(selected.draft);
-            setDueSearch(dueDraftLabel(selected.draft));
-            setDueConfirmed(true);
-          } else {
-            void handleCreateTodo();
-          }
+      // Tab übernimmt nur Getipptes - blosses Durchtabben setzt keine Frist
+      if ((e.key === "Enter" || (e.key === "Tab" && dueSearch.trim())) && showDueDropdown) {
+        const selected = filteredDueOptions[dueHighlighted];
+        if (selected) {
+          if (e.key === "Enter") e.preventDefault();
+          selectDue(selected);
         }
-        return;
-      }
-      if (e.key === "Tab") {
-        e.preventDefault();
-        todoInputRef.current?.focus();
       }
     }
 
@@ -404,6 +464,25 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       setDueConfirmed(false);
       setNewDue({ type: "none" });
       setDueHighlighted(0);
+    }
+
+    /** Tastatur im Menü «Schnelle Pendenz»: Enter erstellt, Alt+A (Mac ⌥A) schaltet die Abgabe um (Escape: usePopupEscape). */
+    function handleTodoPanelKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+      if (e.nativeEvent.isComposing) return;
+      // Mit Alt verändert macOS das Zeichen (⌥A = «å»), daher die Taste über event.code; AltGr
+      // (Windows: Strg+Alt) ist nie gemeint.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyA" && !e.nativeEvent.getModifierState?.("AltGraph")) {
+        if (!canCollect) return;
+        e.preventDefault();
+        toggleCollect();
+        return;
+      }
+      if (e.key !== "Enter" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const target = e.target as HTMLElement;
+      // Enter in Textfeldern und auf der Abgabe-Karte erstellt; Buttons und Auswahlfelder behalten Enter
+      if (target.tagName !== "INPUT" && target.dataset.quickTodoCollect === undefined) return;
+      e.preventDefault();
+      void handleCreateTodo();
     }
 
     const handleMouseEnter = () => {
@@ -419,25 +498,32 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         const activeEl = document.activeElement;
         const stillEditing =
           activeEl === notesRef.current ||
-          activeEl === todoInputRef.current ||
-          activeEl === assigneeInputRef.current ||
-          activeEl === dueInputRef.current;
+          Boolean(activeEl && todoPanelRef.current?.contains(activeEl));
         if (!stillEditing) setActive(null);
       }, 300);
     };
 
-    const showAssigneeDropdown = !assigneeConfirmed && assigneeSearch.trim() && filteredParticipants.length > 0;
+    const showAssigneeDropdown = Boolean(!assigneeConfirmed && assigneeSearch.trim() && filteredParticipants.length > 0);
     const [dueFocused, setDueFocused] = useState(false);
     const showDueDropdown = dueFocused && !dueConfirmed && filteredDueOptions.length > 0;
+    const assigneeMissing = canCollect && collect && !assigneeId;
 
     usePopupEscape(active === "notes", async () => {
       if (await flushNotes()) setActive(null);
     }, notesPanelRef);
+    // Escape legt die Pendenz an (wie Enter, inkl. Abgabe) und schliesst das Menü; ohne Titel
+    // schliesst es nur. Scheitert das Anlegen (z. B. Abgabe ohne Person), bleibt das Menü offen.
     usePopupEscape(active === "todo", async () => {
       if (!todoTask.trim() || await handleCreateTodo()) setActive(null);
     }, todoPanelRef);
-    usePopupEscape(active === "todo" && Boolean(showAssigneeDropdown), () => setAssigneeConfirmed(true), assigneeInputRef);
+    usePopupEscape(active === "todo" && showAssigneeDropdown, () => setAssigneeConfirmed(true), assigneeInputRef);
     usePopupEscape(active === "todo" && showDueDropdown, () => setDueFocused(false), dueInputRef);
+
+    const collectShortcut = apple ? "⌥A" : `${tKeys("alt")}+A`;
+    const keyHint = canCollect
+      ? t("keyHintCollect", { enter: tKeys("enter"), collect: collectShortcut, escape: tKeys("escape") })
+      : t("keyHint", { enter: tKeys("enter"), escape: tKeys("escape") });
+    const assigneeFirstName = assignee ? (assignee.first_name?.trim() || assignee.display_name) : null;
 
     return (
       <>
@@ -481,11 +567,12 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
 
         <div
           ref={todoPanelRef}
-          className={`quick-flyout${active === "todo" ? " quick-flyout-open" : ""}`}
+          className={`quick-flyout quick-flyout-todo${active === "todo" ? " quick-flyout-open" : ""}`}
           // Geschlossen nur per CSS unsichtbar: ohne inert bleiben die Felder per Tab erreichbar.
           inert={active !== "todo"}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          onKeyDown={handleTodoPanelKeyDown}
         >
           <div className="quick-flyout-header">
             <div className="quick-flyout-title">
@@ -494,56 +581,66 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
             </div>
             <button
               type="button"
-              className="button-ghost quick-flyout-close"
-              aria-label={tCommon("close")}
-              onClick={() => setActive(null)}
+              className="button-secondary button-icon quick-todo-clear"
+              aria-label={todoHasInput ? t("clearFields") : tCommon("close")}
+              title={todoHasInput ? t("clearFields") : tCommon("close")}
+              onClick={clearOrClose}
             >
               <ActionIcon name="close" />
             </button>
           </div>
 
           <div className="session-panel-section">
+            <div className="quick-todo-created" role="status" aria-live="polite">
+              {createdMessage ? <span className="quick-todo-created-text">✓ {createdMessage}</span> : null}
+            </div>
+
             <input
               ref={todoInputRef}
-              className="session-panel-input"
+              className="session-panel-input quick-todo-task"
               type="text"
               value={todoTask}
+              aria-label={t("taskLabel")}
               onChange={(e) => setTodoTask(e.target.value)}
               placeholder={participants.length > 0 ? t("taskPlaceholderWithTab") : t("taskPlaceholder")}
-              onKeyDown={handleTaskKeyDown}
             />
 
             {participants.length > 0 && (
-              <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
+              <div className="session-panel-assignee-wrap">
+                {assignee && assigneeConfirmed ? <ParticipantBadge person={assignee} className="quick-todo-field-avatar" /> : null}
                 <input
                   ref={assigneeInputRef}
-                  className={`session-panel-input session-panel-input-sm${assigneeConfirmed ? " session-panel-input-confirmed" : ""}`}
+                  className={`session-panel-input session-panel-input-sm${assigneeConfirmed ? " session-panel-input-confirmed" : ""}${assignee && assigneeConfirmed ? " quick-todo-input-with-avatar" : ""}${assigneeMissing ? " quick-todo-input-invalid" : ""}`}
                   type="text"
                   value={assigneeSearch}
+                  aria-label={t("assigneeLabel")}
+                  aria-invalid={assigneeMissing || undefined}
+                  aria-expanded={showAssigneeDropdown}
+                  aria-autocomplete="list"
+                  role="combobox"
                   onChange={(e) => handleAssigneeChange(e.target.value)}
                   placeholder={t("assignPlaceholder")}
                   onKeyDown={handleAssigneeKeyDown}
                   onFocus={() => { if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
                 />
                 {showAssigneeDropdown && (
-                  <div className="session-panel-assignee-dropdown">
+                  <div className="session-panel-assignee-dropdown" role="listbox" aria-label={t("assigneeLabel")}>
                     {filteredParticipants.map((p, index) => (
                       <button
                         key={p.id}
                         type="button"
+                        role="option"
+                        aria-selected={index === assigneeHighlighted}
+                        tabIndex={-1}
                         className={`session-panel-assignee-option${index === assigneeHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          setAssigneeId(p.id);
-                          setAssigneeSearch(p.display_name);
-                          setAssigneeConfirmed(true);
+                          selectAssignee(p);
                           assigneeInputRef.current?.focus();
                         }}
                         onMouseEnter={() => setAssigneeHighlighted(index)}
                       >
-                        <span className="session-panel-option-avatar">
-                          {p.display_name.trim().charAt(0)}
-                        </span>
+                        <ParticipantBadge person={p} className="session-panel-option-avatar" />
                         <span className="session-panel-option-name">{p.display_name}</span>
                       </button>
                     ))}
@@ -552,50 +649,54 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
               </div>
             )}
 
-            {dueEvents.length > 0 && (
-              <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
-                <input
-                  ref={dueInputRef}
-                  className={`session-panel-input session-panel-input-sm${dueConfirmed ? " session-panel-input-confirmed" : ""}`}
-                  type="text"
-                  value={dueSearch}
-                  onChange={(e) => handleDueChange(e.target.value)}
-                  placeholder={t("duePlaceholder")}
-                  onKeyDown={handleDueKeyDown}
-                  onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
-                  onBlur={() => setDueFocused(false)}
-                />
-                {showDueDropdown && (
-                  <div className="session-panel-assignee-dropdown">
-                    {filteredDueOptions.map((opt, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        className={`session-panel-assignee-option${index === dueHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setNewDue(opt.draft);
-                          setDueSearch(dueDraftLabel(opt.draft));
-                          setDueConfirmed(true);
-                          dueInputRef.current?.focus();
-                        }}
-                        onMouseEnter={() => setDueHighlighted(index)}
-                      >
-                        <span className="session-panel-option-text">
-                          <span className="session-panel-option-name">{opt.label}</span>
-                          {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="session-panel-assignee-wrap">
+              <input
+                ref={dueInputRef}
+                className={`session-panel-input session-panel-input-sm${dueConfirmed ? " session-panel-input-confirmed" : ""}`}
+                type="text"
+                value={dueSearch}
+                aria-label={t("dueLabel")}
+                aria-expanded={showDueDropdown}
+                aria-autocomplete="list"
+                role="combobox"
+                onChange={(e) => handleDueChange(e.target.value)}
+                placeholder={t("duePlaceholder")}
+                onKeyDown={handleDueKeyDown}
+                onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
+                onBlur={() => setDueFocused(false)}
+              />
+              {showDueDropdown && (
+                <div className="session-panel-assignee-dropdown" role="listbox" aria-label={t("dueLabel")}>
+                  {filteredDueOptions.map((opt, index) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="option"
+                      aria-selected={index === dueHighlighted}
+                      tabIndex={-1}
+                      className={`session-panel-assignee-option${index === dueHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        selectDue(opt);
+                        dueInputRef.current?.focus();
+                      }}
+                      onMouseEnter={() => setDueHighlighted(index)}
+                    >
+                      <span className="session-panel-option-text">
+                        <span className="session-panel-option-name">{opt.label}</span>
+                        {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <input
               className="session-panel-input session-panel-input-sm"
               type="text"
               value={todoTag}
+              aria-label={t("tagLabel")}
               onChange={(e) => setTodoTag(e.target.value)}
               placeholder={t("tagPlaceholder")}
             />
@@ -609,17 +710,79 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
                 onChange={setFineChoice}
               />
             ) : null}
+
+            {canCollect ? (
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={collect}
+                aria-keyshortcuts="Alt+A"
+                data-quick-todo-collect=""
+                className={`quick-todo-collect${collect ? " quick-todo-collect-on" : ""}${collectError ? " quick-todo-collect-error" : ""}`}
+                onClick={toggleCollect}
+              >
+                <span className="quick-todo-collect-box" aria-hidden="true">
+                  {collect ? (
+                    <svg viewBox="0 0 16 16" fill="none">
+                      <path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : null}
+                </span>
+                <span className="quick-todo-collect-text">
+                  <span className="quick-todo-collect-label">{t("collect.label")}</span>
+                  {collectError ? (
+                    <span className="quick-todo-collect-error-text">{t("collect.needsPerson")}</span>
+                  ) : collect ? (
+                    <span className="quick-todo-collect-hint">
+                      {assigneeFirstName ? t("collect.hint", { name: assigneeFirstName }) : t("collect.hintNoPerson")}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            ) : null}
+
             <button
               type="button"
               className="session-panel-btn"
               disabled={creatingTodo || !todoTask.trim() || quickTodoFineInvalid(fineChoice)}
               onClick={() => void handleCreateTodo()}
             >
-              {todoSaved ? `✓ ${t("createdBadge")}` : creatingTodo ? "…" : t("createTodoButton")}
+              {creatingTodo ? "…" : canCollect && collect ? t("createWithSubmissionButton") : t("createTodoButton")}
             </button>
+            <div className="quick-todo-keys">{keyHint}</div>
           </div>
         </div>
       </>
     );
   }
 ));
+
+/** Profil-Badge einer Person (Initialen und Farbton wie überall, Klassen .participant-avatar*). */
+function ParticipantBadge({ person, className }: { person: ParticipantSummary; className: string }) {
+  return (
+    <span className={`participant-avatar participant-avatar-tone-${avatarTone(person.id)} ${className}`} aria-hidden="true">
+      {participantInitials(person)}
+    </span>
+  );
+}
+
+/** Markierter Text ausserhalb des Menüs (Textfeld mit Fokus oder Seitenauswahl), eine Zeile. */
+function selectedTextOutside(panel: HTMLElement | null): string {
+  if (typeof window === "undefined") return "";
+  const active = document.activeElement;
+  let text = "";
+  if (
+    (active instanceof HTMLTextAreaElement || (active instanceof HTMLInputElement && active.type === "text")) &&
+    !panel?.contains(active) &&
+    active.selectionStart !== null &&
+    active.selectionEnd !== null &&
+    active.selectionEnd > active.selectionStart
+  ) {
+    text = active.value.slice(active.selectionStart, active.selectionEnd);
+  } else {
+    const selection = window.getSelection();
+    const anchor = selection?.anchorNode ?? null;
+    if (selection && !selection.isCollapsed && !(anchor && panel?.contains(anchor))) text = selection.toString();
+  }
+  return text.replace(/\s+/g, " ").trim().slice(0, 500);
+}

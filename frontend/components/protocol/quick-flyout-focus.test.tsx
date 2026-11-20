@@ -4,6 +4,7 @@ import type { ProtocolSummary } from "@/types/api";
 
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: vi.fn() }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { CollaborationStatusPanel } from "./collaboration-status-panel";
 import { SessionPanel } from "./session-panel";

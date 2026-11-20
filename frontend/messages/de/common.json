@@ -251,7 +251,19 @@
     "orderedList": "Nummerierte Liste"
   },
   "keys": {
-    "ctrl": "Strg"
+    "ctrl": "Strg",
+    "alt": "Alt",
+    "shift": "Umschalt",
+    "enter": "Enter",
+    "escape": "Esc",
+    "space": "Leertaste",
+    "tab": "Tab",
+    "delete": "Entf",
+    "backspace": "Rücktaste",
+    "home": "Pos1",
+    "end": "Ende",
+    "pageUp": "Bild auf",
+    "pageDown": "Bild ab"
   },
   "columnFilter": {
     "label": "{column} filtern",
