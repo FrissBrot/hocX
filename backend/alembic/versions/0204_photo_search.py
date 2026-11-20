@@ -37,14 +37,14 @@ enthalten, seit PG 13 «trusted»). Die Migration läuft mit dem Superuser-Zugan
 sie anlegen darf.
 
 Revision ID: 0204_photo_search
-Revises: 0201_abgabebox_scan_status
+Revises: 0203_capture_date_in_file
 Create Date: 2026-11-20
 """
 
 from alembic import op
 
 revision = "0204_photo_search"
-down_revision = "0201_abgabebox_scan_status"
+down_revision = "0203_capture_date_in_file"
 branch_labels = None
 depends_on = None
 

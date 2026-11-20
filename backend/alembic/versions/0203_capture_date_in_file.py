@@ -32,7 +32,6 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0203_capture_date_in_file"
-# Beim Zusammenführen auf 0202_submission_todo_tags umbiegen (0202 liegt auf einem anderen Zweig).
 down_revision = "0202_submission_todo_tags"
 branch_labels = None
 depends_on = None
