@@ -164,13 +164,22 @@ admin_isolation_checks() {
 # Stattdessen: jede andere Konfigurationsdatei dort lässt Deploy und verify_release.sh scheitern.
 dynamic_config_files_check() {
   local dir="${REPO_DIR:-.}/infra/traefik/dynamic" unexpected
-  unexpected="$(find "$dir" -mindepth 1 \( -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -type d \) \
-    ! -name security.yml ! -name admin-isolation.yml ! -name admin-gate.yml ! -name tenant-domains.yml -print 2> /dev/null || true)"
+  # find-Fehler (z. B. Verzeichnis nicht lesbar) = Fehlschlag, nicht «nichts gefunden» (Review L4)
+  if ! unexpected="$(find "$dir" -mindepth 1 \( -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -type d \) \
+    ! -name security.yml ! -name admin-isolation.yml ! -name admin-gate.yml ! -name tenant-domains.yml -print)"; then
+    echo "    Traefik-Dateiprovider-Verzeichnis nicht prüfbar: $dir" >&2
+    return 1
+  fi
   if [ -n "$unexpected" ]; then
     echo "    Unerwartete Dateien im Traefik-Dateiprovider-Verzeichnis (von wem?): $unexpected" >&2
     return 1
   fi
-  echo "    Traefik-Dateiprovider: nur bekannte Dateien"
+  # Versionierte Dateien unverändert (das Backend kann im Verzeichnis schreiben)
+  if ! git -C "${REPO_DIR:-.}" diff --quiet -- infra/traefik/dynamic; then
+    echo "    Versionierte Traefik-Dateien wurden verändert: git -C ${REPO_DIR:-.} diff -- infra/traefik/dynamic" >&2
+    return 1
+  fi
+  echo "    Traefik-Dateiprovider: nur bekannte, unveränderte Dateien"
 }
 
 _traefik_negative_check() {

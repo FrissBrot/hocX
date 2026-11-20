@@ -10,6 +10,17 @@ services:
     # discovered alongside.
     mem_limit: 1536m
     cpus: 2.0
+    # Review M1 (ARP-Spoofing im Compose-Netz): ohne NET_RAW. Nur die Rechte, die der offizielle
+    # Postgres-Entrypoint braucht (Datenverzeichnis anlegen/chownen, mit gosu zum Benutzer postgres
+    # wechseln); live geprüft: Init, Neustart, pg_dump, pg_stat_statements.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
     # Audit finding, 2026-08-16/2026-08-26: mirrors docker-compose.yml's (dev) equivalent -
     # see the comment there for the reasoning. Retuned 2026-09-02 to the new 1536m
     # mem_limit above (shared_buffers ~25%, effective_cache_size ~75%, standard Postgres
@@ -280,6 +291,7 @@ services:
       - local_s3_abgabebox_secret_key
       - redis_password
     networks:
+      - edge
       - default
       - docker-api
       - storage
@@ -314,7 +326,7 @@ services:
       - "traefik.enable=true"
       # Das Backend hängt zusätzlich im internen Netz docker-api - ohne diese Angabe wählt Traefik
       # je nach Reihenfolge die dort unerreichbare IP.
-      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
@@ -454,6 +466,10 @@ services:
   frontend:
     image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
     # compose's frontend - see its mem_limit comment there), so this is lighter
     # than the dev value, but still bounded per audit I1. Raised 2026-09-02 alongside
@@ -505,6 +521,7 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`) && !PathPrefix(`/api/admin`)"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.amount=200"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
@@ -531,6 +548,10 @@ services:
   admin-frontend:
     image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     mem_limit: 512m
     cpus: 0.75
     init: true
@@ -567,6 +588,7 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
@@ -986,6 +1008,7 @@ services:
       - abgabebox_captcha_session_secret
       - storage_credentials_key
     networks:
+      - edge
       - default
       - storage
     depends_on:
@@ -1010,7 +1033,7 @@ services:
       # Die Abgabebox hängt zusätzlich im internen Netz storage - ohne diese Angabe wählt Traefik je
       # nach Reihenfolge die dort unerreichbare IP und jede Anfrage endet mit 504 (Prüfseite und
       # Abgabebox live ausgefallen nach dem Update auf 1.4.0, interne Prüfungen blieben grün).
-      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
@@ -1063,6 +1086,10 @@ services:
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Raised 2026-09-02 alongside the other services now that the host has 16GB/8 cores.
     mem_limit: 1024m
     cpus: 1.0
@@ -1096,6 +1123,7 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
@@ -1111,6 +1139,10 @@ services:
   docs:
     image: ${HOCX_DOCS_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}}
     restart: unless-stopped
+    # Review M1: im Netz edge für Traefik, im Standardnetz für Backend/Datenbank
+    networks:
+      - default
+      - edge
     # Static nginx, genuinely lightweight - small bump 2026-09-02 for margin, not because
     # of any observed problem here.
     mem_limit: 256m
@@ -1145,6 +1177,7 @@ services:
       start_period: 10s
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`) && !PathPrefix(`/api/admin`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
@@ -1152,6 +1185,10 @@ services:
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-docs.loadbalancer.server.port=80"
 
 networks:
+  # Review M1: Traefik hängt nur in diesem Netz (plus seinem Socket-Proxy-Netz), zusammen mit den
+  # Diensten, die es anspricht. Datenbank, Worker und ClamAV sind darin nicht erreichbar; die
+  # Quellbeschränkung des Admin-Entrypoints erlaubt nur das Gateway dieses Netzes (Host-Port).
+  edge: {}
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
     internal: true

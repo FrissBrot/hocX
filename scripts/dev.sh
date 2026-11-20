@@ -121,18 +121,22 @@ run_smoke_checks() {
 
 # SEC-AUTH-001: Die Admin-Router in docker-compose.yml verweisen auf admin-gate@file (im Release
 # schreibt deploy.sh die Datei). Lokal (Traefik nur mit --profile edge) eine Entwicklungs-Variante
-# ohne Quellbeschränkung anlegen, falls sie fehlt - mit ADMIN_GATE_SECRET aus der .env, sonst einem
-# Zufallswert (das Backend lässt in der Entwicklung ohne Secret ohnehin durch).
+# ohne Quellbeschränkung - mit ADMIN_GATE_SECRET aus der .env (bei geändertem Secret neu geschrieben),
+# sonst einmalig einem Zufallswert (das Backend lässt in der Entwicklung ohne Secret ohnehin durch).
 ensure_dev_admin_gate() {
-  local file="$REPO_DIR/infra/traefik/dynamic/admin-gate.yml" secret
-  [ ! -e "$file" ] || return 0
+  local file="$REPO_DIR/infra/traefik/dynamic/admin-gate.yml" secret content
   secret="$(sed -n "s/^ADMIN_GATE_SECRET=['\"]\{0,1\}\([A-Za-z0-9._~+\/=-]*\).*/\1/p" "$ENV_FILE" | head -n 1)"
-  [ -n "$secret" ] || secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  if [ -z "$secret" ]; then
+    [ ! -e "$file" ] || return 0
+    secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  fi
+  content="$(printf "# Entwicklung (scripts/dev.sh). Im Release schreibt scripts/deploy.sh diese Datei.\nhttp:\n  middlewares:\n    admin-gate:\n      headers:\n        customRequestHeaders:\n          X-Hocx-Admin-Gate: '%s'" "$secret")"
+  [ "$(cat "$file" 2> /dev/null)" != "$content" ] || return 0
   (
-    umask 007
-    printf "# Entwicklung (scripts/dev.sh). Im Release schreibt scripts/deploy.sh diese Datei.\nhttp:\n  middlewares:\n    admin-gate:\n      headers:\n        customRequestHeaders:\n          X-Hocx-Admin-Gate: '%s'\n" "$secret" > "$file"
+    umask 027
+    printf '%s\n' "$content" > "$file"
   )
-  echo "    Entwicklungs-Datei angelegt: $file"
+  echo "    Entwicklungs-Datei geschrieben: $file"
 }
 
 case "$ACTION" in

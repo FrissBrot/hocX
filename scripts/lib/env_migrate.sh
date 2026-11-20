@@ -127,6 +127,19 @@ migrate_env_file() {
     changed=true
   done
 
+  # Review L2 (SEC-AUTH-001): Der Next.js-Server reicht bei Admin-Aufrufen den Gate-Header an
+  # INTERNAL_API_URL weiter - das Ziel muss intern sein. Ältere Hosts hatten die öffentliche Domain
+  # eingetragen (Umgehung eines Login-Loops); deploy.sh bricht damit ab. Einmalig umstellen.
+  local internal_api_url
+  internal_api_url="$(env_file_value "$tmp_file" INTERNAL_API_URL)"
+  if [ -n "$internal_api_url" ] && ! [[ "$internal_api_url" =~ ^http://(backend|localhost|127\.0\.0\.1)(:[0-9]+)?/?$ ]]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?INTERNAL_API_URL=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "INTERNAL_API_URL='http://backend:8000'\n" >> "$tmp_file"
+    notes+=("umgestellt: INTERNAL_API_URL ($internal_api_url -> http://backend:8000, muss intern sein)")
+    changed=true
+  fi
+
   # MAIN-OPS-005: Redis verlangt im Release-Stack ein Passwort (requirepass).
   if [ -z "$(env_file_value "$env_file" REDIS_PASSWORD)" ]; then
     command -v openssl > /dev/null 2>&1 || {

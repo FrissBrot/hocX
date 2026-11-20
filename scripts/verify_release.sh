@@ -19,6 +19,8 @@ ENVIRONMENT="${1:-}"
 source "$REPO_DIR/scripts/lib/env.sh"
 # shellcheck source=scripts/lib/traefik_checks.sh
 source "$REPO_DIR/scripts/lib/traefik_checks.sh"
+# shellcheck source=scripts/lib/admin_gate.sh
+source "$REPO_DIR/scripts/lib/admin_gate.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -145,6 +147,7 @@ run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 
 command -v curl > /dev/null 2>&1 || { echo "curl wird fuer die Domain-Checks benoetigt." >&2; exit 1; }
+run_check "Traefik-Admin-Gate-Datei aktuell (admin-gate.yml)" admin_gate_traefik_config_check
 run_check "Alle Traefik-Router von aussen (Frontend, APIs, Prüfseite, Admin, Docs, Website)" traefik_route_checks
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"

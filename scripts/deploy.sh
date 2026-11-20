@@ -56,6 +56,8 @@ source "$REPO_DIR/scripts/lib/env_migrate.sh"
 source "$REPO_DIR/scripts/lib/cosign.sh"
 # shellcheck source=scripts/lib/traefik_checks.sh
 source "$REPO_DIR/scripts/lib/traefik_checks.sh"
+# shellcheck source=scripts/lib/admin_gate.sh
+source "$REPO_DIR/scripts/lib/admin_gate.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
 # shellcheck source=scripts/lib/image_cleanup.sh
@@ -577,77 +579,6 @@ run_pre_deploy_backup() {
   fi
 }
 
-# Quelle der Admin-Zugriffe (Review M1): Der OpenZiti-Tunnel trifft 127.0.0.1:<TRAEFIK_ADMIN_PORT> auf
-# dem Host; über die Docker-Portweiterleitung sieht Traefik dann die Gateway-Adresse des
-# Compose-Netzes "<projekt>_default" (live geprüft, docker-proxy). Ein Container im selben Netz, der
-# traefik:8443 direkt anspricht, kommt mit seiner eigenen Adresse und wird abgewiesen. Abweichende
-# Wege (anderer Tunnel-Endpunkt) über HOCX_ADMIN_SOURCE_CIDRS (Komma-Liste).
-admin_source_cidrs() {
-  local gateway
-  if [ -n "${HOCX_ADMIN_SOURCE_CIDRS:-}" ]; then
-    printf '%s\n' "$HOCX_ADMIN_SOURCE_CIDRS"
-    return 0
-  fi
-  gateway="$(docker network inspect "${PROJECT_NAME}_default" --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}' 2> /dev/null)" || gateway=""
-  gateway="${gateway%% *}"
-  [ -n "$gateway" ] || return 1
-  case "$gateway" in
-    *:*) printf '%s/128\n' "$gateway" ;;
-    *) printf '%s/32\n' "$gateway" ;;
-  esac
-}
-
-# Auth-Audit SEC-AUTH-001: Traefik setzt an jedem Admin-Router (Entrypoint adminsecure) den Header
-# X-Hocx-Admin-Gate auf ADMIN_GATE_SECRET; das Backend nimmt /api/admin nur damit an
-# (backend/app/core/admin_gate.py). Davor lässt admin-gate-source nur die Quelle des Ziti-Tunnels zu
-# (siehe admin_source_cidrs). Der Wert steht in einer Dateiprovider-Datei statt in einem
-# Docker-Label (Labels zeigt jedes `docker inspect`). Rechte wie tenant-domains.yml: 0660, Gruppe
-# 5001 über das setgid-Verzeichnis (prepare_thumbnail_dir), nicht world-readable, nicht im Repo
-# (.gitignore). Traefik lädt die Datei per watch nach, ein Neustart ist nicht nötig. Läuft nach
-# `compose up` (das Netz muss existieren); bis dahin gilt die Datei des letzten Deploys.
-write_admin_gate_traefik_config() {
-  local dir="$PROJECT_DIR/infra/traefik/dynamic" file temp_file cidrs cidr
-  local -a cidr_list
-  file="$dir/admin-gate.yml"
-  # Nur unkritische Zeichen: der Wert landet in YAML (in einfachen Anführungszeichen).
-  if ! [[ "${ADMIN_GATE_SECRET:-}" =~ ^[A-Za-z0-9._~+/=-]{32,}$ ]]; then
-    echo "ADMIN_GATE_SECRET fehlt oder ist ungueltig (mindestens 32 Zeichen, nur A-Z a-z 0-9 . _ ~ + / = -)." >&2
-    return 1
-  fi
-  if ! cidrs="$(admin_source_cidrs)"; then
-    echo "Quelladresse des Admin-Zugangs nicht ermittelbar (Netz ${PROJECT_NAME}_default fehlt?); HOCX_ADMIN_SOURCE_CIDRS setzen." >&2
-    return 1
-  fi
-  IFS=',' read -r -a cidr_list <<< "$cidrs"
-  for cidr in "${cidr_list[@]}"; do
-    if ! [[ "$cidr" =~ ^[0-9a-fA-F.:]+/[0-9]{1,3}$ ]]; then
-      echo "Ungueltiger Eintrag in den Admin-Quelladressen: $cidr" >&2
-      return 1
-    fi
-  done
-  if [ -L "$dir" ] || [ -L "$file" ]; then
-    echo "Runtime-Pfad darf kein Symlink sein: $file" >&2
-    return 1
-  fi
-  # Endung ohne .yml: Traefik ignoriert die halb geschriebene Datei.
-  temp_file="$(mktemp "$dir/.admin-gate.tmp.XXXXXX")"
-  {
-    printf '# Automatisch durch scripts/deploy.sh erzeugt (ADMIN_GATE_SECRET). Nicht bearbeiten, nicht committen.\n'
-    printf '# Verwendet von den Admin-Routern in docker-compose.release.yml (admin-gate@file).\n'
-    printf 'http:\n  middlewares:\n    admin-gate:\n      chain:\n        middlewares:\n'
-    printf '          - admin-gate-source\n          - admin-gate-header\n'
-    printf '    admin-gate-source:\n      ipAllowList:\n        sourceRange:\n'
-    for cidr in "${cidr_list[@]}"; do
-      printf "          - '%s'\n" "$cidr"
-    done
-    printf '    admin-gate-header:\n      headers:\n        customRequestHeaders:\n'
-    printf "          X-Hocx-Admin-Gate: '%s'\n" "$ADMIN_GATE_SECRET"
-  } > "$temp_file"
-  chmod 660 "$temp_file"
-  mv "$temp_file" "$file"
-  echo "    Traefik-Admin-Gate: $file (Quelle: $cidrs)"
-}
-
 prepare_runtime_permissions() {
   local storage_path="${HOCX_STORAGE_PATH:-./storage}"
   local path
@@ -689,6 +620,42 @@ prepare_runtime_permissions() {
   fi
 }
 
+# infra/traefik/dynamic (Review L4): Traefik liest über Gruppe 5001, das Backend (uid 5000, Gruppe 5001)
+# schreibt dort nur tenant-domains.yml (traefik_config_service, atomar über eine .tmp-Datei).
+# Verzeichnis 3770 (setgid + Sticky-Bit: niemand ersetzt oder löscht fremde Dateien), versionierte
+# Dateien und admin-gate.yml 0640 (nur der Deploy-Benutzer schreibt), tenant-domains.yml 0660.
+# Live geprüft: das Backend ersetzt seine eigene Datei weiter, fremde nicht.
+traefik_dynamic_dir_ok() {
+  local dir="$1"
+  [ "$(stat -c '%a %g' "$dir")" = "3770 5001" ] || return 1
+  ! find "$dir" -mindepth 1 -maxdepth 1 -type f ! -name tenant-domains.yml ! -name '*.tmp' \
+    \( ! -group 5001 -o ! -perm -g+r -o -perm /0137 \) -print -quit | grep -q . || return 1
+  ! find "$dir" -mindepth 1 -maxdepth 1 -type f -name tenant-domains.yml \
+    \( ! -group 5001 -o ! -perm -g+rw -o -perm /007 \) -print -quit | grep -q .
+}
+
+prepare_traefik_dynamic_dir() {
+  local dir="$PROJECT_DIR/infra/traefik/dynamic"
+  if [ -L "$dir" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+    return 1
+  fi
+  mkdir -p "$dir"
+  if traefik_dynamic_dir_ok "$dir"; then
+    echo "    dynamic: ok"
+    return 0
+  fi
+  echo "    Haerte Berechtigungen: $dir"
+  docker run --rm --pull never --network none --user 0:0 \
+    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+    --security-opt no-new-privileges:true --entrypoint sh \
+    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+    -c 'chgrp -R 5001 /target && chmod 3770 /target \
+        && find /target -mindepth 1 -maxdepth 1 -type f ! -name tenant-domains.yml -exec chmod 0640 {} + \
+        && find /target -mindepth 1 -maxdepth 1 -type f -name tenant-domains.yml -exec chmod 0660 {} +' || return 1
+  traefik_dynamic_dir_ok "$dir" || { echo "Berechtigungen von $dir konnten nicht gesetzt werden." >&2; return 1; }
+}
+
 prepare_thumbnail_dir() {
   # storage-local/thumbnails (ab 1.1.0) und storage-local/work (ab 1.2.0, lokaler Arbeitsbereich
   # des Objektspeichers) liegen bewusst ausserhalb von HOCX_STORAGE_PATH und sind nicht im Repo.
@@ -697,15 +664,15 @@ prepare_thumbnail_dir() {
   # Gruppe 5001 chgrp'en; deshalb laeuft die Berechtigungs-Korrektur in einem kurzlebigen
   # Container aus dem bereits signaturgeprueften Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem
   # Release-Manifest).
-  # infra/traefik/dynamic gehoert ebenfalls dazu: Git schreibt die versionierte security.yml bei
-  # einem Deploy-Code-Update als hocx-deploy:hocx-deploy 0644 neu, Traefik liest sie aber nur
-  # ueber die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
+  # infra/traefik/dynamic: eigene Regeln, siehe prepare_traefik_dynamic_dir. Git schreibt die
+  # versionierten Dateien bei einem Deploy-Code-Update als hocx-deploy 0644 neu, Traefik liest sie
+  # nur über die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
   local base="$PROJECT_DIR/storage-local"
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
-  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work" \
-    "$PROJECT_DIR/infra/traefik/dynamic"; do
+  prepare_traefik_dynamic_dir || return 1
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1

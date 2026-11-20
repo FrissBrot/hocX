@@ -207,6 +207,18 @@ else
   echo "    (Docker nicht verfuegbar: Compose-Aufloesung uebersprungen)"
 fi
 
+# --- Review L2: eine öffentliche INTERNAL_API_URL wird auf das interne Ziel umgestellt ---
+fresh_env
+grep -Ev "^INTERNAL_API_URL=" "$ENV_FILE" > "$ENV_FILE.next" && mv "$ENV_FILE.next" "$ENV_FILE" && chmod 600 "$ENV_FILE"
+printf "INTERNAL_API_URL='https://app.example.org'\n" >> "$ENV_FILE"
+migrate_output="$(migrate_env_file "$ENV_FILE")"
+test "$(value_of "$ENV_FILE" INTERNAL_API_URL)" = "http://backend:8000" || fail "INTERNAL_API_URL nicht umgestellt"
+[[ "$migrate_output" == *"INTERNAL_API_URL"* ]] || fail "Umstellung von INTERNAL_API_URL nicht gemeldet"
+test "$(grep -c '^INTERNAL_API_URL=' "$ENV_FILE")" -eq 1 || fail "INTERNAL_API_URL doppelt"
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" INTERNAL_API_URL)" = "http://backend:8000" || fail "interne INTERNAL_API_URL verändert"
+
 # --- Objektspeicher (1.2.0): Secrets werden einmalig erzeugt und danach nie ueberschrieben ---
 fresh_env
 migrate_env_file "$ENV_FILE" > /dev/null

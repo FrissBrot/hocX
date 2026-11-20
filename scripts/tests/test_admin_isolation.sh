@@ -73,36 +73,55 @@ for router in hocx-admin-api hocx-admin-auth hocx-tenant-import hocx-admin-front
   grep -qE "traefik\.http\.routers\.$router\.middlewares=.*admin-gate@file" docker-compose.yml ||
     fail "docker-compose.yml: $router ohne admin-gate@file"
 done
-docker compose -p admiso-src --env-file .env.e2e.example -f docker-compose.yml config --format json | python3 -c '
+# Mit gesetztem Secret (env_file .env wäre die ganze .env - simuliert über --env-file): nur das Backend.
+gate_env="$(mktemp)"
+cp .env.e2e.example "$gate_env"
+printf 'ADMIN_GATE_SECRET=%s\n' "$(printf 'g%.0s' {1..40})" >> "$gate_env"
+docker compose -p admiso-src --env-file "$gate_env" -f docker-compose.yml config --format json | python3 -c '
 import json, sys
 services = json.load(sys.stdin)["services"]
-users = sorted(n for n, s in services.items() if "ADMIN_GATE_SECRET" in (s.get("environment") or {}))
+users = sorted(n for n, s in services.items() if (s.get("environment") or {}).get("ADMIN_GATE_SECRET"))
 assert users == ["backend"], f"ADMIN_GATE_SECRET bei: {users}"
 '
+rm -f "$gate_env"
 
-# 5. deploy.sh-Funktion: Datei mit korrektem YAML, Rechten 0660, ungültige Werte abgelehnt.
+# 5. scripts/lib/admin_gate.sh: Datei mit korrektem YAML, Rechten 0640, ungültige Werte abgelehnt.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/infra/traefik/dynamic"
-fn="$(sed -n '/^admin_source_cidrs() {$/,/^}$/p; /^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
-[ -n "$fn" ] || fail "write_admin_gate_traefik_config nicht gefunden"
+grep -q '^if ! write_admin_gate_traefik_config; then$' scripts/deploy.sh || fail "deploy.sh schreibt admin-gate.yml nicht"
+grep -q 'scripts/lib/admin_gate.sh' scripts/verify_release.sh || fail "verify_release.sh prüft admin-gate.yml nicht"
+grep -q 'admin_gate_traefik_config_check' scripts/verify_release.sh || fail "verify_release.sh prüft admin-gate.yml nicht"
 (
-  eval "$fn"
+  # shellcheck source=scripts/lib/admin_gate.sh
+  source scripts/lib/admin_gate.sh
   # shellcheck disable=SC2034  # von den Funktionen gelesen (PROJECT_DIR, HOCX_ADMIN_SOURCE_CIDRS)
   PROJECT_DIR="$work"
   ADMIN_GATE_SECRET="$(printf 'a%.0s' {1..64})"
   export HOCX_ADMIN_SOURCE_CIDRS="172.31.0.1/32"
   write_admin_gate_traefik_config > /dev/null
   file="$work/infra/traefik/dynamic/admin-gate.yml"
-  [ "$(stat -c '%a' "$file")" = 660 ] || fail "admin-gate.yml hat Modus $(stat -c '%a' "$file")"
+  [ "$(stat -c '%a' "$file")" = 640 ] || fail "admin-gate.yml hat Modus $(stat -c '%a' "$file")"
   grep -q "^          X-Hocx-Admin-Gate: '$ADMIN_GATE_SECRET'$" "$file" || fail "admin-gate.yml ohne Header"
   grep -q '^    admin-gate:$' "$file" || fail "admin-gate.yml ohne Middleware admin-gate"
   # Review M1: admin-gate ist eine Kette aus Quellbeschränkung und Header
   grep -A4 '^    admin-gate:$' "$file" | grep -q -- '- admin-gate-source' || fail "admin-gate ohne Quellbeschränkung"
   grep -A3 '^    admin-gate-source:$' "$file" | grep -q "'172.31.0.1/32'" || fail "Quelladresse fehlt"
-  HOCX_ADMIN_SOURCE_CIDRS="0.0.0.0/0;x"
-  if write_admin_gate_traefik_config > /dev/null 2>&1; then fail "ungültige Quelladresse angenommen"; fi
+  # Review: kein /0 und keine Riesennetze (IPv4 >= /16, IPv6 >= /48)
+  for bad_cidr in "0.0.0.0/0" "::/0" "10.0.0.0/8" "10.0.0.0/15" "fd00::/32" "x" "172.31.0.1/32;x" "1.2.3.4/33"; do
+    HOCX_ADMIN_SOURCE_CIDRS="$bad_cidr"
+    if write_admin_gate_traefik_config > /dev/null 2>&1; then fail "ungültige Quelladresse angenommen: $bad_cidr"; fi
+  done
+  for good_cidr in "172.31.0.1/32" "10.20.0.0/16" "fd00:1::/48" "172.31.0.1/32,fd00::1/128"; do
+    HOCX_ADMIN_SOURCE_CIDRS="$good_cidr"
+    write_admin_gate_traefik_config > /dev/null || fail "gültige Quelladresse abgelehnt: $good_cidr"
+  done
   HOCX_ADMIN_SOURCE_CIDRS="172.31.0.1/32"
+  write_admin_gate_traefik_config > /dev/null
+  # verify_release.sh: unveränderte Datei ok, veränderte fällt auf
+  REPO_DIR="$work" admin_gate_traefik_config_check || fail "frisch geschriebene admin-gate.yml gilt als abweichend"
+  printf '# manipuliert\n' >> "$file"
+  if REPO_DIR="$work" admin_gate_traefik_config_check 2> /dev/null; then fail "veränderte admin-gate.yml nicht erkannt"; fi
   for bad in "" "kurz" "mit'quote-und-genug-zeichen-0123456789abcdef" "$(printf 'a%.0s' {1..40})
 zeile"; do
     ADMIN_GATE_SECRET="$bad"

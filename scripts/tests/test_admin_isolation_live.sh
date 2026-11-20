@@ -21,12 +21,13 @@ TRAEFIK_IMAGE="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml |
 ECHO_IMAGE="python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f"
 SUFFIX="$(od -An -N4 -tx4 /dev/urandom | tr -d ' ')"
 NAME="hocx-admiso-test-$SUFFIX"
-NET="${NAME}_default"
+NET="${NAME}_edge"
+NET_INTERNAL="${NAME}_proxy"
 WORK="$(mktemp -d)"
 
 cleanup() {
   docker rm -f "$NAME-traefik" "$NAME-echo" > /dev/null 2>&1 || true
-  docker network rm "$NET" > /dev/null 2>&1 || true
+  docker network rm "$NET" "$NET_INTERNAL" > /dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -81,12 +82,12 @@ read -r MAIN ADMIN ABGABEBOX DOCS < "$WORK/domains"
 
 docker network create "$NET" > /dev/null
 # admin-gate.yml mit den echten deploy.sh-Funktionen (Gate-Header + Quellbeschränkung auf das
-# Gateway des Compose-Netzes "<projekt>_default", Review M1)
+# Gateway des Netzes "<projekt>_edge", Review M1)
 ADMIN_GATE_SECRET="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-fn="$(sed -n '/^admin_source_cidrs() {$/,/^}$/p; /^write_admin_gate_traefik_config() {$/,/^}$/p' scripts/deploy.sh)"
 mkdir -p "$WORK/project/infra/traefik/dynamic"
 (
-  eval "$fn"
+  # shellcheck source=scripts/lib/admin_gate.sh
+  source scripts/lib/admin_gate.sh
   # shellcheck disable=SC2034  # von den Funktionen gelesen
   PROJECT_DIR="$WORK/project" PROJECT_NAME="$NAME"
   write_admin_gate_traefik_config > /dev/null
@@ -119,6 +120,10 @@ docker run -d --name "$NAME-traefik" --network "$NET" --network-alias traefik --
   -v "$WORK/dynamic:/etc/traefik/dynamic:ro" \
   -v "$WORK/letsencrypt:/letsencrypt" \
   "$TRAEFIK_IMAGE" --configFile=/etc/traefik/traefik.yml > /dev/null
+# Wie im Release: Traefik zusätzlich in einem internen Netz (traefik-docker-api) - die Portweiterleitung
+# läuft trotzdem über edge, dessen Gateway die Quellbeschränkung zulässt.
+docker network create --internal "$NET_INTERNAL" > /dev/null
+docker network connect "$NET_INTERNAL" "$NAME-traefik"
 
 port_of() { docker port "$NAME-traefik" "$1" | head -n 1 | sed 's/.*://'; }
 HTTP_PORT="$(port_of 80)"

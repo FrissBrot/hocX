@@ -115,6 +115,8 @@ services:
       - path: .env
         required: false
     environment:
+      # SEC-AUTH-001: nur das Backend kennt das Admin-Gate-Secret (env_file lädt sonst die ganze .env)
+      ADMIN_GATE_SECRET: ""
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -443,6 +445,8 @@ services:
       - path: .env
         required: false
     environment:
+      # SEC-AUTH-001: nur das Backend kennt das Admin-Gate-Secret (env_file lädt sonst die ganze .env)
+      ADMIN_GATE_SECRET: ""
       PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
       STORAGE_ROOT: /app/storage
       ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
