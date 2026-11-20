@@ -110,7 +110,13 @@ def recompute_best_of(db: Session, file_service, album: PhotoAlbum) -> None:
 def set_best_override(db: Session, file_service, album: PhotoAlbum, file_id: uuid.UUID, override: str | None) -> None:
     """override is "include" (always best-of), "exclude" (never best-of), or None (back to
     automatic). Raises KeyError if file_id isn't actually in this album."""
-    item = db.get(PhotoAlbumItem, {"album_id": album.id, "file_id": file_id})
+    item = db.scalar(
+        select(PhotoAlbumItem).where(
+            PhotoAlbumItem.album_id == album.id,
+            PhotoAlbumItem.file_id == file_id,
+            not_trashed_public_id(PhotoAlbumItem.file_id),  # Papierkorb wie nicht im Album (404)
+        )
+    )
     if item is None:
         raise KeyError(file_id)
     item.best_override = override
@@ -279,7 +285,12 @@ def set_best_override_everywhere(db: Session, file_service, tenant_id: int, file
         db.scalars(
             select(PhotoAlbumItem)
             .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
-            .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.file_id == file_id)
+            .where(
+                PhotoAlbum.tenant_id == tenant_id,
+                PhotoAlbumItem.file_id == file_id,
+                # Papierkorb-ID wie eine unbekannte: 0 Alben → 422
+                not_trashed_public_id(PhotoAlbumItem.file_id),
+            )
         )
     )
     albums: dict[uuid.UUID, PhotoAlbum] = {}
@@ -326,7 +337,14 @@ def remove_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> i
     """Nimmt Fotos aus einem Album heraus, ohne sie zu löschen. Rückgabe: Anzahl entfernter Einträge."""
     if not file_ids:
         return 0
-    result = db.execute(delete(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id.in_(file_ids)))
+    result = db.execute(
+        delete(PhotoAlbumItem).where(
+            PhotoAlbumItem.album_id == album.id,
+            PhotoAlbumItem.file_id.in_(file_ids),
+            # Einträge von Papierkorb-Dateien bleiben (Wiederherstellen bringt sie zurück)
+            not_trashed_public_id(PhotoAlbumItem.file_id),
+        )
+    )
     db.flush()
     return result.rowcount or 0
 
@@ -334,7 +352,15 @@ def remove_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> i
 def album_item_ids(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> set[uuid.UUID]:
     if not file_ids:
         return set()
-    return set(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id.in_(file_ids))))
+    return set(
+        db.scalars(
+            select(PhotoAlbumItem.file_id).where(
+                PhotoAlbumItem.album_id == album.id,
+                PhotoAlbumItem.file_id.in_(file_ids),
+                not_trashed_public_id(PhotoAlbumItem.file_id),  # Papierkorb wie unbekannt (404)
+            )
+        )
+    )
 
 
 def drop_items_for_files(db: Session, file_ids: list[uuid.UUID]) -> set[uuid.UUID]:

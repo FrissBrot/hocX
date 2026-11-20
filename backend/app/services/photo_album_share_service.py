@@ -107,7 +107,12 @@ def hides_pending_items(album: PhotoAlbum, viewer_tenant_id: int | None) -> bool
 def release_pending(db: Session, album_id: uuid.UUID, file_ids: list[uuid.UUID] | None = None) -> int:
     """Gibt vorgemerkte Fotos frei (alle des Albums oder nur `file_ids`) - danach sehen
     Partner und Album-Links sie. Gibt die Anzahl freigegebener Fotos zurueck."""
-    statement = update(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album_id, PhotoAlbumItem.share_pending.is_(True))
+    statement = update(PhotoAlbumItem).where(
+        PhotoAlbumItem.album_id == album_id,
+        PhotoAlbumItem.share_pending.is_(True),
+        # Papierkorb-Fotos bleiben vorgemerkt: «Alle freigeben» gibt nur Sichtbares frei
+        not_trashed_public_id(PhotoAlbumItem.file_id),
+    )
     if file_ids is not None:
         statement = statement.where(PhotoAlbumItem.file_id.in_(file_ids))
     released = db.execute(statement.values(share_pending=False)).rowcount or 0

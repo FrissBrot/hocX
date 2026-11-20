@@ -25,6 +25,13 @@ Grenzen: Text-SQL (``text(...)``) und Core-Abfragen über ``StoredFile.__table__
 nicht - diese filtern selbst (``TRASH_FILTER_SQL``). Laden bereits geladener Objekte
 (Attribut-Refresh) und Beziehungs-Ladevorgänge bleiben ungefiltert, damit ein gerade in den
 Papierkorb gelegtes Objekt in derselben Anfrage weiter benutzbar ist.
+
+Achtung Identity-Map: ``Session.get`` liefert ein bereits geladenes Objekt ohne Abfrage aus der
+Identity-Map - der Filter greift dann nicht. Ein im Opt-in-Block (``include_trashed``) geladenes
+Papierkorb-Objekt bekommt also auch ein späteres ``session.get`` *ohne* Opt-in in derselben
+Session. Opt-in-Blöcke deshalb kurz halten und mit Papierkorb-Objekten, die danach nicht mehr
+gebraucht werden, ``db.expunge(obj)`` aufrufen (oder die Session nach dem Commit nicht weiter für
+gewöhnliche Lesepfade nutzen).
 """
 
 from __future__ import annotations

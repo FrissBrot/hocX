@@ -528,3 +528,27 @@ def test_grant_does_not_open_write_or_clip_paths(db, org):
     for part in ("video", "both"):
         error = _status(lambda: files_routes.download_stored_file(org.lager_photo.public_id, request=None, part=part, db=db, user=member))
         assert error.status_code in (403, 404)
+
+
+def test_trash_reports_files_outside_the_assigned_scope_like_unknown_ids(db, org):
+    """Papierkorb und Mehrfach-Löschen: eine Abgabe-Datei eines nicht lesbaren Auftrags ergibt
+    dieselbe Teil-Fehlermeldung wie eine unbekannte ID (kein 404 für die ganze Anfrage, kein Orakel)
+    und bleibt unangetastet."""
+    from app.schemas.files import FileBulkDelete, FileTrashAction
+    from app.services import file_trash_service
+
+    reviewer_role = _role(
+        db, org.admin_user, "Fotoprüfer", ["submissions.review", "photos.manage", "meetings.read"], {"submissions.review": "assigned"},
+    )
+    user = _user(db, _account(db, "papierkorb-pruefer@a.example", org.tenant.id, reviewer_role))
+    direct = _file(db, org.tenant.id, "andere-direkt.jpg", "image/jpeg")
+    db.add(GalleryImage(tenant_id=org.tenant.id, stored_file_id=direct.id, submission_assignment_id=org.andere.id, submission_element_ref="manual"))
+    db.flush()
+    hidden = [direct.public_id, org.andere_photo.public_id]
+
+    trash = files_routes.move_to_trash(FileTrashAction(file_ids=[*hidden, uuid.uuid4()]), db=db, user=user)
+    bulk = files_routes.bulk_delete_files(FileBulkDelete(file_ids=[*hidden, uuid.uuid4()]), db=db, user=user)
+
+    assert trash.file_ids == [] and trash.errors == [file_trash_service.NOT_FOUND] * 3
+    assert bulk.deleted_ids == [] and bulk.errors == [file_trash_service.NOT_FOUND] * 3
+    assert db.scalar(select(func.count()).select_from(StoredFile).where(StoredFile.public_id.in_(hidden))) == 2

@@ -41,6 +41,8 @@ from app.services.file_service import FileService
 from app.services.storage_service import StorageService
 from tests.factories import make_app_user, make_current_user, make_event, make_tenant
 from tests.test_share_link_routes import _FakeRequest, _isolated_storage_root, _make_file  # noqa: F401  (Fixture)
+from tests.test_submission_links import _probe_as_abgabebox
+from tests.test_submission_manual_elements import _create, org  # noqa: F401  (Fixture)
 
 service = FileService()
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -518,8 +520,8 @@ def test_personal_export_lists_trashed_files_with_date(db):
 # ── Migration ────────────────────────────────────────────────────────────────────────────────
 
 
-def _migration():
-    spec = importlib.util.spec_from_file_location("migration_0199", BACKEND_ROOT / "alembic/versions/0199_stored_file_soft_delete.py")
+def _migration(filename: str = "0199_stored_file_soft_delete.py"):
+    spec = importlib.util.spec_from_file_location(f"migration_{filename[:4]}", BACKEND_ROOT / "alembic/versions" / filename)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -536,7 +538,9 @@ def test_migration_downgrade_restores_trash_and_upgrade_recreates_policy():
     from app.core.db import engine
 
     module = _migration()
-    assert len(module.revision) <= 32 and module.down_revision == "0197_photo_worker_columns"
+    above = _migration("0200_photo_capture_override.py")
+    assert len(module.revision) <= 32 and module.down_revision == "0198_submission_manual_elements"
+    assert above.down_revision == module.revision
     with engine.connect() as conn:
         transaction = conn.begin()
         try:
@@ -548,18 +552,218 @@ def test_migration_downgrade_restores_trash_and_upgrade_recreates_policy():
                 ),
                 {"t": tenant_id},
             )
+            # Kette wie alembic: erst 0200 zurück, dann 0199; danach in umgekehrter Reihenfolge hoch
             with Operations.context(MigrationContext.configure(conn)):
+                above.downgrade()
                 module.downgrade()
             columns = {column["name"] for column in inspect(conn).get_columns("stored_file")}
             assert "deleted_at" not in columns and "deleted_by" not in columns
             assert conn.scalar(text("SELECT count(*) FROM pg_policies WHERE policyname = 'stored_file_hide_trash'")) == 0
             assert conn.scalar(text("SELECT id FROM stored_file WHERE id = :id"), {"id": file_id}) == file_id
+            assert not any("deleted_at" in source for source in _abgabebox_function_sources(conn))
+            _assert_abgabebox_function_rights(conn)
 
             with Operations.context(MigrationContext.configure(conn)):
                 module.upgrade()
+                above.upgrade()
             assert conn.scalar(text("SELECT deleted_at FROM stored_file WHERE id = :id"), {"id": file_id}) is None
             roles = set(conn.scalars(text("SELECT unnest(roles)::text FROM pg_policies WHERE policyname = 'stored_file_hide_trash'")))
             assert roles == {"hocx_abgabebox", "hocx_photo_worker"}
             assert conn.scalar(text("SELECT permissive FROM pg_policies WHERE policyname = 'stored_file_hide_trash'")) == "RESTRICTIVE"
+            sources = _abgabebox_function_sources(conn)
+            assert len(sources) == 2 and all("s.deleted_at IS NOT NULL" in source for source in sources)
+            _assert_abgabebox_function_rights(conn)
         finally:
             transaction.rollback()
+
+
+def _abgabebox_function_sources(conn) -> list[str]:
+    return list(conn.scalars(text(
+        "SELECT prosrc FROM pg_proc WHERE proname IN ('submission_linked_file_counts', 'submission_withdrawn_elements') ORDER BY proname"
+    )))
+
+
+def _assert_abgabebox_function_rights(conn) -> None:
+    """Wie 0198: SECURITY DEFINER mit festem search_path, nur hocx_abgabebox darf ausführen."""
+    rows = conn.execute(text(
+        "SELECT proname, prosecdef, proconfig, "
+        "has_function_privilege('hocx_abgabebox', p.oid, 'EXECUTE') AS box, "
+        "has_function_privilege('hocx_app', p.oid, 'EXECUTE') AS app "
+        "FROM pg_proc p WHERE proname IN ('submission_linked_file_counts', 'submission_withdrawn_elements')"
+    )).all()
+    assert len(rows) == 2
+    for row in rows:
+        assert row.prosecdef and row.proconfig == ["search_path=pg_catalog, public"]
+        assert row.box and not row.app
+
+
+# ── Nachbesserungen aus dem Security-Review des Papierkorbs ──────────────────────────────────
+
+
+def test_trashed_submission_photo_frees_capacity_in_backend_and_abgabebox(db, org):
+    """Eine verknüpfte Galerie-Datei einer Abgabe im Papierkorb belegt weder im Backend
+    (submission_upload_rules) noch in der Abgabebox (SECURITY-DEFINER-Funktionen, als Rolle
+    hocx_abgabebox) Platz und sperrt das Element nicht als «zurückgezogen»."""
+    from app.services import submission_upload_rules
+    from app.services.submission_service import SubmissionService
+
+    tenant_id = org["tenant"].id
+    user = _user(db, tenant_id, role="admin")
+    _read, assignment = _create(db, org, None, max_files_per_element=2)
+    keep = _make_file(db, tenant_id, "abgabe-bleibt.png")
+    gone = _make_file(db, tenant_id, "abgabe-papierkorb.png")
+    withdrawn = _make_file(db, tenant_id, "abgabe-zurueckgezogen.png")
+    for stored_file in (keep, gone, withdrawn):
+        db.execute(
+            GalleryImage.__table__.update().where(GalleryImage.stored_file_id == stored_file.id)
+            .values(submission_assignment_id=assignment.id, submission_element_ref="manual")
+        )
+    db.execute(GalleryImage.__table__.update().where(GalleryImage.stored_file_id == withdrawn.id).values(submission_withdrawn_at=datetime.now(UTC)))
+    db.commit()
+    counts_sql = "SELECT event_id, list_entry_id, manual_element_id, file_count FROM public.submission_linked_file_counts(:id)"
+    withdrawn_sql = "SELECT event_id, list_entry_id, manual_element_id FROM public.submission_withdrawn_elements(:id)"
+    token = org["link"].token
+
+    def state():
+        counts, error = _probe_as_abgabebox(db, counts_sql, {"id": assignment.id}, link_token=token)
+        assert error is None
+        locked, error = _probe_as_abgabebox(db, withdrawn_sql, {"id": assignment.id}, link_token=token)
+        assert error is None
+        [element] = SubmissionService().get_assignment_elements(db, assignment)
+        return (
+            submission_upload_rules.load_rules(db, assignment, "manual").remaining,
+            [tuple(row) for row in counts], [tuple(row) for row in locked], element.withdrawn_count,
+        )
+
+    assert state() == (0, [(None, None, None, 2)], [(None, None, None)], 1)
+
+    _trash(db, user, gone, withdrawn)
+
+    assert state() == (1, [(None, None, None, 1)], [], 0)
+
+
+def test_trash_errors_name_no_file_the_account_may_not_manage(db):
+    """Fehlertexte ohne Dateinamen: ohne Löschrecht derselbe Text wie für eine unbekannte ID."""
+    from tests.test_photo_bulk_delete import _make_protocol_image
+
+    tenant = make_tenant(db)
+    photos_only = _user(db, tenant.id, permissions=frozenset({"photos.read", "photos.manage", "meetings.read"}))
+    document = _make_file(db, tenant.id, "geheimer-bericht.pdf", content=b"%PDF-1.4 test", mime_type="application/pdf")
+    protocol_file = _make_protocol_image(db, tenant.id)
+    protocol_name = protocol_file.original_name
+    db.commit()
+
+    result = _trash(db, photos_only, document, protocol_file)
+    unknown = files_routes.move_to_trash(FileTrashAction(file_ids=[uuid.uuid4()]), db, photos_only)
+
+    assert result.file_ids == []
+    assert result.errors[0] == unknown.errors[0] == file_trash_service.NOT_FOUND
+    assert result.errors[1] == file_trash_service.NOT_DELETABLE_HERE
+    assert not any("geheimer-bericht" in error or protocol_name in error for error in result.errors)
+
+
+def test_release_all_pending_skips_trashed_photos(db):
+    from app.services import photo_album_share_service
+
+    tenant = make_tenant(db)
+    user = _user(db, tenant.id)
+    keep = _make_file(db, tenant.id, "frei.png")
+    gone = _make_file(db, tenant.id, "vorgemerkt-papierkorb.png")
+    album = PhotoAlbum(tenant_id=tenant.id, name="Geteilt", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [keep.public_id, gone.public_id], release=True)
+    db.execute(PhotoAlbumItem.__table__.update().where(PhotoAlbumItem.album_id == album.id).values(share_pending=True))
+    album_id, keep_id, gone_id = album.id, keep.public_id, gone.public_id
+    db.commit()
+    _trash(db, user, gone)
+
+    assert photo_album_share_service.release_pending(db, album_id) == 1
+
+    pending = dict(db.execute(select(PhotoAlbumItem.file_id, PhotoAlbumItem.share_pending).where(PhotoAlbumItem.album_id == album_id)).all())
+    assert pending == {keep_id: False, gone_id: True}
+
+
+def test_trashed_album_photo_behaves_like_an_unknown_id_for_best_and_remove(db):
+    from app.schemas.files import PhotoAlbumItemBestUpdate, PhotoAlbumItemsUpdate
+
+    tenant = make_tenant(db)
+    user = _user(db, tenant.id)
+    gone = _make_file(db, tenant.id, "stern-papierkorb.png")
+    album = PhotoAlbum(tenant_id=tenant.id, name="Sterne", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [gone.public_id], release=True)
+    album_id, gone_id = album.id, gone.public_id
+    db.commit()
+    _trash(db, user, gone)
+
+    for call, status in (
+        (lambda: files_routes.set_file_best_everywhere(gone_id, PhotoAlbumItemBestUpdate(best_override="include"), db, user), 422),
+        (lambda: files_routes.set_album_item_best(album_id, gone_id, PhotoAlbumItemBestUpdate(best_override="include"), db, user), 404),
+        (lambda: files_routes.remove_album_items(album_id, PhotoAlbumItemsUpdate(file_ids=[gone_id]), db, user), 404),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == status
+
+    assert photo_album_service.remove_items(db, db.get(PhotoAlbum, album_id), [gone_id]) == 0
+    assert photo_album_service.set_best_override_everywhere(db, service, tenant.id, gone_id, "include") == 0
+    [item] = db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album_id))
+    assert item.file_id == gone_id and item.best_override is None
+
+
+def _capture_errors(monkeypatch) -> list[int | None]:
+    """Fehlerprotokoll-Aufrufe mitschreiben (tenant_id je Aufruf). Nicht über system_error_log:
+    das Rollback im Fehlerzweig verwirft in der Test-Session auch die Testdaten (Mandant)."""
+    from app.core import error_log
+
+    calls: list[int | None] = []
+    monkeypatch.setattr(error_log, "record_system_error", lambda db, *, exc, tenant_id=None, **kwargs: calls.append(tenant_id))
+    return calls
+
+
+def test_purge_job_counts_a_deleted_file_as_purged_when_after_commit_fails(db, monkeypatch):
+    from app.services.file_eraser import FileEraser
+
+    tenant = make_tenant(db)
+    user = _user(db, tenant.id)
+    old = _make_file(db, tenant.id, "nacharbeit.png")
+    old_pk, tenant_id = old.id, tenant.id
+    db.commit()
+    _trash(db, user, old)
+    db.execute(StoredFile.__table__.update().where(StoredFile.id == old_pk).values(deleted_at=datetime.now(UTC) - TRASH_RETENTION - timedelta(hours=1)))
+    db.commit()
+
+    def broken(self, session):
+        raise RuntimeError("Vorschaubild weg")
+
+    monkeypatch.setattr(FileEraser, "after_commit", broken)
+    errors = _capture_errors(monkeypatch)
+    result = file_trash_service.purge_expired(db)
+
+    assert result["purged"] >= 1 and result["failed"] == 0
+    assert tenant_id in errors
+
+
+def test_purge_of_expired_orphans_logs_errors_with_the_tenant(db, monkeypatch):
+    from app.services.file_eraser import FileEraser
+
+    tenant = make_tenant(db)
+    tenant_id = tenant.id
+    orphan = StoredFile(
+        tenant_id=tenant.id, original_name="clip.mov", mime_type="video/quicktime", storage_path=f"uploads/{uuid.uuid4().hex}.mov",
+        deleted_at=datetime.now(UTC) - TRASH_RETENTION - timedelta(hours=1),
+    )
+    db.add(orphan)
+    db.commit()
+
+    def broken(self, session, stored_file, **kwargs):
+        raise RuntimeError("Speicher nicht erreichbar")
+
+    monkeypatch.setattr(FileEraser, "erase", broken)
+    errors = _capture_errors(monkeypatch)
+    result = file_trash_service.purge_expired(db)
+
+    assert result["orphans"] == 0
+    assert errors == [tenant_id]

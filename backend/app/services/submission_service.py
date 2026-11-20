@@ -12,6 +12,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
+from app.core.trash_scope import not_trashed_id
 from app import scanner
 from app.core.features_generated import F
 from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionManualElement, SubmissionUpload, SubmissionUploadFile, TenantFeature, TodoStatus, ProtocolTodoFile
@@ -740,6 +741,8 @@ class SubmissionService:
             .where(
                 GalleryImage.tenant_id == assignment.tenant_id, GalleryImage.submission_assignment_id == assignment.id,
                 GalleryImage.submission_withdrawn_at.is_not(None),
+                # wie die Abgabebox (submission_withdrawn_elements, 0199): Papierkorb zählt nicht
+                not_trashed_id(GalleryImage.stored_file_id),
             )
             .group_by(GalleryImage.submission_element_ref)
         ).all())

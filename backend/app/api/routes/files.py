@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
@@ -1425,18 +1425,25 @@ def download_stored_file(
 ALBUM_INVITES_PER_HOUR = 30
 
 
-def _ensure_files_in_scope(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> None:
-    """Reichweite «nur zugewiesene» (Phase 4/5) auch für Mehrfachaktionen: Abgabe-Dateien nicht
-    lesbarer Aufträge sind 404 wie im Einzelabruf."""
+def _files_outside_scope(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """IDs, die die Reichweite «nur zugewiesene» (Phase 4/5) ausblendet: Abgabe-Dateien nicht
+    lesbarer Aufträge."""
     readable = context_visibility_service.readable_assignment_ids(db, user)
     if readable is None or not public_ids:
-        return
-    outside = db.scalar(
-        select(func.count()).select_from(StoredFile).where(
-            StoredFile.public_id.in_(public_ids), ~context_visibility_service.abgabe_scope_clause(StoredFile.id, readable),
+        return set()
+    return set(
+        db.scalars(
+            select(StoredFile.public_id).where(
+                StoredFile.public_id.in_(public_ids), ~context_visibility_service.abgabe_scope_clause(StoredFile.id, readable),
+            )
         )
     )
-    if outside:
+
+
+def _ensure_files_in_scope(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> None:
+    """Reichweite «nur zugewiesene» auch für Mehrfachaktionen: Abgabe-Dateien nicht lesbarer
+    Aufträge sind 404 wie im Einzelabruf."""
+    if _files_outside_scope(db, user, public_ids):
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
 
 
@@ -1883,8 +1890,9 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
-    _ensure_files_in_scope(db, user, ids)
-    trashed, errors = file_trash_service.trash_files(db, user, ids)
+    # Teil-Erfolg je Datei: ausserhalb der Reichweite wie eine unbekannte ID melden, nicht mit 404
+    # für die ganze Anfrage (sonst unterscheidet die Antwort fremde Abgabe-Dateien von unbekannten).
+    trashed, errors = file_trash_service.trash_files(db, user, ids, hidden_ids=_files_outside_scope(db, user, ids))
     return FileBulkDeleteResult(deleted_ids=trashed, errors=errors)
 
 
@@ -1932,8 +1940,9 @@ def move_to_trash(payload: FileTrashAction, db: Session = Depends(get_db), user:
     """Löschen einer Datei auf der Dateien-Seite bzw. eines Fotos in der Ansicht: in den Papierkorb."""
     _require_trash_access(user)
     ids = list(dict.fromkeys(payload.file_ids))
-    _ensure_files_in_scope(db, user, ids)
-    trashed, errors = file_trash_service.trash_files(db, user, ids)
+    # Teil-Erfolg je Datei: ausserhalb der Reichweite wie eine unbekannte ID melden, nicht mit 404
+    # für die ganze Anfrage (sonst unterscheidet die Antwort fremde Abgabe-Dateien von unbekannten).
+    trashed, errors = file_trash_service.trash_files(db, user, ids, hidden_ids=_files_outside_scope(db, user, ids))
     return FileTrashActionResult(file_ids=trashed, errors=errors)
 
 
