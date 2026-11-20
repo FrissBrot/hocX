@@ -13,7 +13,7 @@ import { dateParts } from "@/components/mobile/mobile-utils";
 import { DocumentUploadModal } from "@/components/files/document-upload-modal";
 import { uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { countUploadResults } from "@/lib/utils/upload-results";
-import { FileDetailModal } from "@/components/files/file-detail-modal";
+import { countFrequentTags, FileDetailModal } from "@/components/files/file-detail-modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useOpenRequest } from "@/lib/search/handoff";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
@@ -48,7 +48,7 @@ export function FileTypeTile({ name }: { name: string }) {
   return <span className={`mobile-filetype${tone ? ` mobile-filetype-${tone}` : ""}`} aria-hidden="true">{ext || "?"}</span>;
 }
 
-export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[] }) {
+export function MobileFiles({ initialItems, canManage = false }: { initialItems: FileOverviewItem[]; canManage?: boolean }) {
   const t = useTranslations("files");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
@@ -199,6 +199,13 @@ export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[]
             setItems((current) => current.map((item) => (item.id === detail.id ? { ...item, tags } : item)));
             setDetail((current) => (current ? { ...current, tags } : current));
           }}
+          frequentTags={countFrequentTags(items)}
+          canManage={canManage}
+          onRenamed={(name) => {
+            setItems((current) => current.map((item) => (item.id === detail.id ? { ...item, original_name: name } : item)));
+            setDetail((current) => (current ? { ...current, original_name: name } : current));
+          }}
+          onTrashed={(trashed) => setItems((current) => current.filter((item) => item.id !== trashed.id))}
           onShare={() => {
             setShare(detail);
             setDetail(null);

@@ -1984,6 +1984,10 @@
         "reader"
       ]
     },
+    "PATCH /api/stored-files/{stored_file_id}/name": {
+      "handler": "files.rename_stored_file",
+      "allowed": []
+    },
     "PATCH /api/stored-files/{stored_file_id}/tags": {
       "handler": "files.update_stored_file_tags",
       "allowed": []

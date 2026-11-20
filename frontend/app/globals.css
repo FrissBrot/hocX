@@ -5848,6 +5848,13 @@ button.table-row-link:hover {
   color: var(--text);
 }
 
+.filter-tabs-option:disabled,
+.filter-tabs-option:disabled:hover {
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .filter-tabs-count {
   display: inline-flex;
   align-items: center;

@@ -21,6 +21,7 @@ export function TagInput({
   tagConfig,
   onTagColorChange,
   onTagRename,
+  offerCreate = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -35,6 +36,8 @@ export function TagInput({
   onTagColorChange?: (tag: string, color: string) => Promise<void>;
   /** `false` = abgebrochen (z. B. Rückfrage verneint): nichts übernehmen, Eingabe bleibt offen. */
   onTagRename?: (oldTag: string, newTag: string) => Promise<void | boolean>;
+  /** Zeigt beim Tippen eines unbekannten Tags den Eintrag «„x“ neu erstellen» in der Liste. */
+  offerCreate?: boolean;
 }) {
   const t = useTranslations("common.tagInput");
   const tCommonClose = useTranslations("common")("close");
@@ -114,7 +117,9 @@ export function TagInput({
   }, []);
 
   const showInput = !readOnly && (multi || tags.length === 0);
-  const showDropdown = open && (filtered.length > 0 || editingTag !== null || (onTagColorChange && suggestions.length > 0));
+  const typed = inputVal.trim();
+  const createOption = offerCreate && typed !== "" && !tags.includes(typed) && !suggestions.some((s) => s.toLowerCase() === typed.toLowerCase());
+  const showDropdown = open && (filtered.length > 0 || createOption || editingTag !== null || (onTagColorChange && suggestions.length > 0));
 
   usePopupEscape(Boolean(showDropdown), async () => {
     if (editingTag && renameVal.trim() !== editingTag) {
@@ -238,6 +243,17 @@ export function TagInput({
             </div>
           ) : null}
 
+          {createOption ? (
+            <div className="tag-input-option-row">
+              <button
+                type="button"
+                className="tag-input-option tag-input-option-create"
+                onPointerDown={(e) => { e.preventDefault(); addTag(typed); }}
+              >
+                {t("createTag", { tag: typed })}
+              </button>
+            </div>
+          ) : null}
           {filtered.map((s) => (
             <div key={s} className="tag-input-option-row">
               <button

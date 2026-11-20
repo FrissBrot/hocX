@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.permissions import P
 from app.core.security import CurrentUser, require_permission
-from app.models import StoredFile, SubmissionUpload, SubmissionUploadFile
+from app.models import AppUser, StoredFile, SubmissionUpload, SubmissionUploadFile
 from app.models.document_entities import (
     DOCUMENT_SOURCE_PROTOCOL_EXPORT,
     FILE_ROLE_ORIGINAL,
@@ -176,6 +176,15 @@ def build_detail(db: Session, document: Document, *, can_write: bool) -> Documen
         for extraction in db.scalars(select(DocumentExtraction).where(DocumentExtraction.document_version_id.in_(version_ids)))
     }
 
+    creator_ids = {version.created_by for version in versions if version.created_by is not None}
+    creator_names: dict[int, str] = {}
+    if creator_ids:
+        # Wie uploaded_by_name in den Metadaten bzw. deleted_by_name im Papierkorb.
+        creator_names = {
+            user_id: name
+            for user_id, name in db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(creator_ids))).all()
+        }
+
     version_reads = []
     for version in versions:
         extraction = extractions.get(version.id)
@@ -203,6 +212,7 @@ def build_detail(db: Session, document: Document, *, can_write: bool) -> Documen
                     error=extraction.error,
                     text_url=text_url(document, version) if extraction.status in ("ready", "ocr_required") else None,
                 ) if extraction is not None else None,
+                created_by_name=creator_names.get(version.created_by) if version.created_by is not None else None,
             )
         )
     current = document.current_version_id

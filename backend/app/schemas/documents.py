@@ -54,6 +54,8 @@ class DocumentVersionRead(BaseModel):
     pdf_job: DocumentJobState
     extract_job: DocumentJobState
     extraction: DocumentExtractionRead | None
+    # Wer die Version hochgeladen hat (Anzeigename im Mandanten); None bei anonymen Abgaben.
+    created_by_name: str | None = None
 
 
 class DocumentSummary(BaseModel):

@@ -78,7 +78,8 @@
     "noColor": "Aucune couleur",
     "rename": "Renommer",
     "colorOrRename": "Couleur / renommer",
-    "addNewTag": "+ Ajouter « {tag} »"
+    "addNewTag": "+ Ajouter « {tag} »",
+    "createTag": "Créer « {tag} »"
   },
   "connectivity": {
     "offlineWithPending": "{count, plural, one {Hors ligne – # modification enregistrée localement} other {Hors ligne – # modifications enregistrées localement}}",

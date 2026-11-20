@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { DocumentUploadModal } from "./document-upload-modal";
 import { UploadResultsModal, uploadResultsSummary } from "./upload-results-modal";
 import { countUploadResults } from "@/lib/utils/upload-results";
-import { FileDetailModal } from "./file-detail-modal";
+import { countFrequentTags, FileDetailModal } from "./file-detail-modal";
 import { useFileActions } from "./file-actions";
 import { FilesGrid } from "./files-grid";
 import { FilesTable } from "./files-table";
@@ -254,6 +254,14 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
+  function handleRenamed(itemId: string, name: string) {
+    setItems((current) => current.map((item) => (item.id === itemId ? { ...item, original_name: name } : item)));
+    setDetailItem((current) => (current && current.id === itemId ? { ...current, original_name: name } : current));
+  }
+
+  // «Häufig:» im Detail - aus den geladenen Dateien gezählt (die Tag-Liste des Servers hat keine Zähler).
+  const frequentTags = useMemo(() => countFrequentTags(items), [items]);
+
   const hasNoFiles = items.length === 0 && !hasMore && sourceFilter === "all" && !search.trim() && tagFilter.length === 0;
 
   function openUpload() {
@@ -387,6 +395,14 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
           onClose={() => setDetailItem(null)}
           onNavigate={(href) => router.push(href as Route)}
           onTagsSaved={(tags) => handleTagsSaved(detailItem.id, tags)}
+          frequentTags={frequentTags}
+          canManage={canDelete}
+          onRenamed={(name) => handleRenamed(detailItem.id, name)}
+          onShare={() => {
+            setShareItem(detailItem);
+            setDetailItem(null);
+          }}
+          onTrashed={(trashed) => setItems((current) => current.filter((entry) => entry.id !== trashed.id))}
           position={detailIndex >= 0 ? { index: detailIndex, total: items.length } : undefined}
           onStep={(direction) => {
             const next = items[detailIndex + direction];

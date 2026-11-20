@@ -2582,6 +2582,18 @@
         "photos.manage"
       ]
     },
+    "PATCH /api/stored-files/{stored_file_id}/name": {
+      "handler": "files.rename_stored_file",
+      "requires": [
+        "<P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE>"
+      ],
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
     "PATCH /api/stored-files/{stored_file_id}/tags": {
       "handler": "files.update_stored_file_tags",
       "requires": [
