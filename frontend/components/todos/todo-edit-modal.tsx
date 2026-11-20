@@ -20,13 +20,15 @@ import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
 import { TodoFineSection, type TodoFineDraft } from "@/components/finances/todo-fine-section";
-import { canCollectAsSubmission, useCreateSubmissionFromTodo } from "./use-create-submission-from-todo";
+import { TodoAutoCloseHint, TodoCollectPanel, TodoSubmittedFileItems, useTodoSubmissionStatus } from "./todo-submission-collect";
 
-export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false, canCollectSubmission = false, onUpdated }: {
+export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false, canCollectSubmission = false, canReadSubmission = false, onUpdated }: {
   todo: TodoListItem;
-  /** «Als Abgabe einsammeln» anbieten: submissions.manage (inkl. Modul Abgabebox) und Pendenzen bearbeiten */
+  /** «Datei einsammeln» (Dateien) anbieten: submissions.manage (inkl. Modul Abgabebox) und Pendenzen bearbeiten */
   canCollectSubmission?: boolean;
-  /** Pendenz serverseitig geändert, Dialog bleibt offen (z. B. nach «Als Abgabe einsammeln») */
+  /** Stand der Abgabe zeigen (Link, eingereichte Dateien): submissions.read (inkl. Modul Abgabebox) */
+  canReadSubmission?: boolean;
+  /** Pendenz serverseitig geändert, Dialog bleibt offen (z. B. nach «Einsammeln»/«Beenden») */
   onUpdated?: (todo: TodoListItem) => void;
   /** Pendenzen-Bussen gebucht (Feature todo_fines): Abschnitt «Busse» anzeigen */
   showFine?: boolean;
@@ -52,8 +54,9 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const [detailsDraft, setDetailsDraft] = useState<TodoDetails | null>(null);
   const confirm = useConfirm();
   const showToast = useToast();
-  const createSubmission = useCreateSubmissionFromTodo();
-  const editable = canEdit && !busy;
+  const [collecting, setCollecting] = useState(false);
+  const submission = useTodoSubmissionStatus(todo.id, draft.submission_assignment_id, canReadSubmission || canCollectSubmission);
+  const editable = canEdit && !busy && !collecting;
   const dueLabel = draft.resolved_due_label || (draft.resolved_due_date ? formatDate(draft.resolved_due_date) : t("noEndDate"));
   const overdueDays = draft.resolved_due_date ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${draft.resolved_due_date}T00:00:00`).getTime()) / 86400000) : 0;
 
@@ -67,6 +70,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todo.id]);
 
+  const fileCount = (detailsDraft?.files.length ?? 0) + (submission?.files.length ?? 0);
   const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
   const filesChanged = !!details && !!detailsDraft && detailsDraft.files.map((file) => file.id).join() !== details.files.map((file) => file.id).join();
 
@@ -97,7 +101,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           task: draft.task.trim(),
           ...(draft.tags.join("\u0000") !== todo.tags.join("\u0000") ? { tags: draft.tags } : {}),
           ...([...assignedIds].sort().join() !== [...originalIds].sort().join() ? { assigned_participant_ids: assignedIds } : {}),
-          ...(!todo.submission_assignment_id && draft.todo_status_id !== todo.todo_status_id ? { todo_status_id: draft.todo_status_id } : {}),
+          ...(!draft.submission_assignment_id && draft.todo_status_id !== todo.todo_status_id ? { todo_status_id: draft.todo_status_id } : {}),
           ...duePatch,
         }),
       });
@@ -116,27 +120,21 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     } finally { setBusy(false); }
   }
 
-  async function collectAsSubmission() {
-    setBusy(true);
-    try {
-      const result = await createSubmission(todo.id);
-      if (!result) return;
-      const linked = result.todo;
-      // Nur die Felder, die der Abgleich jetzt führt; ungespeicherte Eingaben bleiben im Entwurf
-      setDraft((current) => ({
-        ...current,
-        submission_assignment_id: linked.submission_assignment_id,
-        element_ref: linked.element_ref,
-        submission_title: linked.submission_title,
-        reference_link: linked.reference_link,
-        due_date: linked.due_date,
-        due_event_id: linked.due_event_id,
-        due_marker: linked.due_marker,
-        resolved_due_date: linked.resolved_due_date,
-        resolved_due_label: linked.resolved_due_label,
-      }));
-      onUpdated?.({ ...todo, ...linked });
-    } finally { setBusy(false); }
+  /** Einsammeln/Beenden: nur die Felder, die die Abgabe führt; ungespeicherte Eingaben bleiben im Entwurf. */
+  function applyServerTodo(linked: TodoListItem) {
+    setDraft((current) => ({
+      ...current,
+      submission_assignment_id: linked.submission_assignment_id,
+      element_ref: linked.element_ref,
+      submission_title: linked.submission_title,
+      reference_link: linked.reference_link,
+      due_date: linked.due_date,
+      due_event_id: linked.due_event_id,
+      due_marker: linked.due_marker,
+      resolved_due_date: linked.resolved_due_date,
+      resolved_due_label: linked.resolved_due_label,
+    }));
+    onUpdated?.({ ...todo, ...linked });
   }
 
   async function remove() {
@@ -161,9 +159,9 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
       <div className="todo-edit-main">
         <div className="field-stack"><span className="field-label" id="todo-status-label">{t("statusLabel")}</span>
           <div className="todo-edit-status" role="group" aria-labelledby="todo-status-label">
-            {([['open', t("statusOpenLabel")], ['in_progress', t("statusInProgressLabel")], ['done', t("statusDoneLabel")]] as const).map(([code, label]) => <button key={code} type="button" aria-pressed={draft.todo_status_code === code || (code === 'done' && draft.todo_status_code === 'cancelled')} disabled={!editable || !!todo.submission_assignment_id} onClick={() => setDraft({ ...draft, todo_status_code: code, todo_status_id: TODO_STATUS[code] })}>{label}</button>)}
+            {([['open', t("statusOpenLabel")], ['in_progress', t("statusInProgressLabel")], ['done', t("statusDoneLabel")]] as const).map(([code, label]) => <button key={code} type="button" aria-pressed={draft.todo_status_code === code || (code === 'done' && draft.todo_status_code === 'cancelled')} disabled={!editable || !!draft.submission_assignment_id} onClick={() => setDraft({ ...draft, todo_status_code: code, todo_status_id: TODO_STATUS[code] })}>{label}</button>)}
           </div>
-          {todo.submission_assignment_id && <small className="muted">{t("autoClosedHint")}</small>}
+          <TodoAutoCloseHint todo={draft} />
         </div>
         <div className="field-stack"><span className="field-label">{t("colTags")}</span><TagInput value={draft.tags.join(',')} onChange={(value) => setDraft({ ...draft, tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} suggestions={tagSuggestions} alwaysShowPlaceholder placeholder={t("addTagPlaceholder")} readOnly={!editable} /></div>
         {/* Plain div, kein <label>: der RichTextEditor hat Toolbar-Buttons vor dem Eingabefeld */}
@@ -173,9 +171,11 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
             : <span className="muted">{t("notesEmpty")}</span>)
             : <span className="muted">{t("filesLoading")}</span>}
         </div>
-        <div className="field-stack"><span className="field-label">{t("filesLabel")}</span>
+        <div className="field-stack"><span className="todo-collect-files-head"><span className="field-label">{t("filesLabel")}</span>
+          {fileCount > 0 && <small className="muted">{t("filesCount", { count: fileCount })}</small>}</span>
           {detailsDraft && <>
-            {detailsDraft.files.length > 0 ? <ul className="todo-edit-files">
+            {fileCount > 0 ? <ul className="todo-edit-files">
+              <TodoSubmittedFileItems todo={draft} status={submission} />
               {detailsDraft.files.map((file) => <li key={file.id}>
                 <a className="todo-edit-file" href={file.content_url} target="_blank" rel="noreferrer">
                   <FileTypeIcon name={file.original_name} />
@@ -188,6 +188,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
             </ul> : !canEdit && <span className="muted">{t("filesEmpty")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
             {editable && <TodoFilePicker excludeIds={detailsDraft.files.map((file) => file.id)} onPick={(file) => setDetailsDraft((current) => current && { ...current, files: [...current.files, file] })} />}
           </>}
+          <TodoCollectPanel todo={draft} status={submission} canCollect={canCollectSubmission && canEdit} disabled={busy} onBusyChange={setCollecting} onTodoChange={applyServerTodo} />
         </div>
         <div className="field-stack"><span className="field-label">{t("originLabel")}</span>
           {todo.task_package_name ? (
@@ -198,10 +199,6 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           </a> : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a> : <span className="muted">{todo.submission_assignment_id ? t("submissionBoxLink") : t("manuallyCreated")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
           {/* Protokoll-Pendenz, die eine Abgabe führt: Abgabe-Link zusätzlich zum Protokoll */}
           {!todo.task_package_name && todo.protocol_id && todo.submission_assignment_id && todo.reference_link && /^https?:\/\//i.test(todo.reference_link) && <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a>}
-          {canCollectSubmission && canEdit && canCollectAsSubmission(todo) && <div>
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void collectAsSubmission()}>{t("toSubmission.button")}</button>
-            <small className="field-help">{t("toSubmission.hint")}</small>
-          </div>}
         </div>
       </div>
       <aside className="todo-edit-sidebar">

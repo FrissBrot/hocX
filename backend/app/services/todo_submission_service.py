@@ -16,15 +16,16 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Participant, ProtocolTodo, SubmissionAssignment, TodoStatus
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 from app.repositories.submission_repository import MANUAL_ELEMENT_REF
+from app.schemas.protocol import TodoSubmissionFile, TodoSubmissionStatus
 from app.schemas.submission import MAX_ELEMENT_RESPONSIBLE, SubmissionAssignmentCreate, SubmissionManualElementWrite
 from app.services import submission_link_service
-from app.services.submission_service import SubmissionService, local_today
+from app.services.submission_service import SubmissionService, local_today, lock_submission_element
 from app.services.task_package_service import set_todo_assignees, todo_assignee_ids
 
 # Elementname (ManualElementName) ist auf 200 Zeichen begrenzt; der Titel bleibt gleich lang, damit
@@ -175,14 +176,101 @@ def create_from_todo(db: Session, todo: ProtocolTodo, *, tenant_id: int, service
         set_todo_assignees(db, todo, responsible)
     created = service.create_assignment(db, payload, tenant_id=tenant_id, link_todo=todo)
     assignment = db.get(SubmissionAssignment, _internal_id(db, created.id, tenant_id))
+    return TodoSubmissionResult(assignment=assignment, element_url=element_url(db, assignment, MANUAL_ELEMENT_REF))
+
+
+def element_url(db: Session, assignment: SubmissionAssignment, element_ref: str) -> str | None:
+    """Öffentliche Abgabebox-URL eines Elements über den bevorzugten Link (wie der Abgleich sie
+    als reference_link setzt). Enthält den Link-Token: nur an Leute mit Leserecht auf die Abgabe."""
     link = submission_link_service.preferred_link(assignment)
-    element_url = (
-        f"{submission_link_service.link_url(submission_link_service.abgabebox_base_url(db, tenant_id), link)}"
-        f"/{assignment.public_slug}/{MANUAL_ELEMENT_REF}"
-        if link is not None
-        else None
+    if link is None:
+        return None
+    base = submission_link_service.link_url(submission_link_service.abgabebox_base_url(db, assignment.tenant_id), link)
+    return f"{base}/{assignment.public_slug}/{element_ref}"
+
+
+def linked_assignment(db: Session, todo: ProtocolTodo) -> SubmissionAssignment | None:
+    """Abgabe der Pendenz, nur im Mandanten der Pendenz (Defense in depth zum FK)."""
+    if todo.submission_assignment_id is None or not todo.element_ref:
+        return None
+    assignment = db.get(SubmissionAssignment, todo.submission_assignment_id)
+    if assignment is None or assignment.tenant_id != todo.tenant_id:
+        return None
+    return assignment
+
+
+def submission_status(db: Session, todo: ProtocolTodo, assignment: SubmissionAssignment, *, service: SubmissionService | None = None) -> TodoSubmissionStatus:
+    """Stand der Abgabe einer Pendenz für «Pendenz bearbeiten» › Dateien (Statuskarte, eingereichte
+    Dateien). ``can_stop`` sagt nur, ob «Beenden» fachlich geht; die Rechte prüft die Route."""
+    service = service or SubmissionService()
+    elements = service.get_assignment_elements(db, assignment)
+    element = next((item for item in elements if item.element_ref == todo.element_ref), None)
+    files = [
+        TodoSubmissionFile(
+            id=file.id, original_name=file.original_name, mime_type=file.mime_type,
+            file_size_bytes=file.file_size_bytes, content_url=file.content_url, scan_status=file.scan_status,
+        )
+        for file in (element.files if element is not None else [])
+    ]
+    return TodoSubmissionStatus(
+        assignment_id=assignment.public_id,
+        title=assignment.title,
+        created_at=assignment.created_at,
+        element_status=element.status if element is not None else "closed",
+        submitted_at=element.submitted_at if element is not None else None,
+        element_url=element_url(db, assignment, todo.element_ref) if element is not None else None,
+        files=files,
+        can_stop=_stoppable(db, assignment, elements),
     )
-    return TodoSubmissionResult(assignment=assignment, element_url=element_url)
+
+
+def _stoppable(db: Session, assignment: SubmissionAssignment, elements: list) -> bool:
+    """«Beenden» löscht die Abgabe: nur eine Einzelabgabe mit genau einem Element, in die noch
+    nichts eingegangen ist (keine Einreichung, keine Datei, auch keine zurückgezogene)."""
+    from app.services import deletion_service
+
+    if assignment.source_type != "manual" or len(elements) != 1:
+        return False
+    if any(element.files or element.withdrawn_count for element in elements):
+        return False
+    # Hängt noch eine weitere Pendenz an der Abgabe (z. B. Verlauf eines früheren Elements),
+    # löschte ON DELETE CASCADE sie mit: dann nicht hier beenden
+    others = db.scalar(
+        select(func.count()).select_from(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id)
+    ) or 0
+    if others > 1:
+        return False
+    return not deletion_service.assignment_preview(db, assignment)
+
+
+def stop_collecting(db: Session, todo: ProtocolTodo, *, actor_user_id: int | None, service: SubmissionService | None = None) -> SubmissionAssignment:
+    """«Beenden»: Einsammeln abbrechen. Die Pendenz verliert den Bezug zur Abgabe und behält ihren
+    Status, ihre Fälligkeit, Notizen und Dateien; die (leere) Einzelabgabe wird gelöscht.
+
+    Bewusst nicht über DELETE /submission-assignments: dort löschte ON DELETE CASCADE eine Pendenz
+    ohne Protokoll mit. Und nicht über «Element schliessen»: das bräche die Pendenz ab. Dateien
+    werden nie gelöscht - kam zwischen Prüfung und Löschen doch eine an, bleibt sie in der
+    Galerie (delete_file_ids leer)."""
+    from app.services import deletion_service
+
+    service = service or SubmissionService()
+    assignment = linked_assignment(db, todo)
+    if assignment is None:
+        raise TodoSubmissionError("todo_not_submission", "Diese Pendenz gehört zu keiner Abgabe.", status_code=404)
+    # Gleichzeitiger Abgleich der Abgabe wartet (er legte sonst die Pendenz neu an)
+    lock_submission_element(db, assignment.id)
+    if not _stoppable(db, assignment, service.get_assignment_elements(db, assignment)):
+        raise TodoSubmissionError(
+            "submission_not_stoppable",
+            "Diese Abgabe lässt sich hier nicht beenden (schon eingereicht oder mehrere Elemente). Bitte unter Abgaben bearbeiten.",
+        )
+    todo.submission_assignment_id = None
+    todo.element_ref = None
+    todo.reference_link = None
+    db.add(todo)
+    db.flush()
+    deletion_service.delete_assignment(db, assignment, delete_file_ids=set(), actor_user_id=actor_user_id)
+    return assignment
 
 
 def _internal_id(db: Session, public_id: uuid.UUID, tenant_id: int) -> int:

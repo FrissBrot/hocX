@@ -20,12 +20,14 @@ from app.schemas.protocol import (
     TodoDetailsUpdate,
     TodoListItem,
     TodoSubmissionCreated,
+    TodoSubmissionStatus,
 )
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
+from app.services import submission_reviewer_service as submission_reviewers
 from app.services import todo_fine_service, todo_submission_service
 from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
@@ -428,6 +430,80 @@ def create_submission_from_todo(
         element_url=result.element_url,
         todo=service._row_to_list_item(db, row),
     )
+
+
+@router.get("/protocol-todos/{todo_id}/submission", response_model=TodoSubmissionStatus)
+def get_todo_submission(
+    todo_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Laufende Abgabe der Pendenz für «Pendenz bearbeiten» › Dateien: Link, seit wann,
+    eingereichte Dateien. Braucht Pendenzen lesen und Abgaben lesen in der eigenen Reichweite
+    (die Antwort enthält den Link-Token); sonst 404 wie für eine unbekannte Pendenz."""
+    require_permission(user, P.MEETINGS_READ)
+    require_permission(user, P.SUBMISSIONS_READ)  # bindet das Modul abgabebox (lesend)
+    todo = _todo_or_404(db, user, todo_id)
+    assignment = todo_submission_service.linked_assignment(db, todo)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail={"code": "todo_not_submission", "message": "Diese Pendenz gehört zu keiner Abgabe."})
+    submission_reviewers.ensure_can_read(db, user, assignment)  # Reichweite «zugewiesene» → 404
+    result = todo_submission_service.submission_status(db, todo, assignment)
+    if result.can_stop:
+        # «Beenden» nur anbieten, wenn die Route es auch erlaubte (Rechte wie stop-submission)
+        result.can_stop = user.can(P.SUBMISSIONS_MANAGE) and user.can(P.MEETINGS_EDIT) and not _todo_protocol_closed(db, todo)
+    return result
+
+
+@router.post("/protocol-todos/{todo_id}/stop-submission", response_model=TodoListItem)
+def stop_submission_from_todo(
+    todo_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """«Beenden» im Abschnitt Dateien: Einsammeln abbrechen, solange nichts eingereicht ist. Die
+    Pendenz bleibt (Status, Notizen, Dateien), die leere Einzelabgabe wird gelöscht
+    (todo_submission_service.stop_collecting). Rechte wie create-submission."""
+    require_permission(user, P.SUBMISSIONS_MANAGE)  # bindet das Modul abgabebox (require_feature, write)
+    require_permission(user, P.MEETINGS_EDIT)
+    existing = _todo_or_404(db, user, todo_id)
+    if _todo_protocol_closed(db, existing):
+        raise HTTPException(status_code=409, detail={"code": "protocol_closed", "message": "Das Protokoll ist abgeschlossen."})
+    assignment = todo_submission_service.linked_assignment(db, existing)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail={"code": "todo_not_submission", "message": "Diese Pendenz gehört zu keiner Abgabe."})
+    assignment_internal_id, title = assignment.id, assignment.title
+    try:
+        # Wie create-submission: die gebüsste Person selbst ändert den Ablauf ihrer Busse nicht
+        todo_fine_service.ensure_may_change(db, existing, actor_user_id=user.user_id, can_manage=user.can(P.FINES_MANAGE))
+        todo_submission_service.stop_collecting(db, existing, actor_user_id=user.user_id)
+    except todo_fine_service.TodoFineError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+    except todo_submission_service.TodoSubmissionError as exc:
+        # Beide Prüfungen laufen vor dem ersten Schreiben (stop_collecting) - nichts zurückzurollen;
+        # der Advisory-Lock endet mit der Transaktion der Anfrage
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Abgabe konnte nicht beendet werden") from exc
+    audit.log(
+        db, action="submission_assignment.deleted", actor=user, entity_type="submission_assignment", entity_id=assignment_internal_id,
+        details={"origin": "todo_stop", "todo_id": str(existing.public_id), "title": title, "deleted_files": 0, "kept_files": 0},
+    )
+    row = service.repository.get_row(db, existing.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    service._prime_public_ids(db, [row])
+    return service._row_to_list_item(db, row)
+
+
+def _todo_protocol_closed(db: Session, todo: ProtocolTodo) -> bool:
+    """Pendenz eines abgeschlossenen Protokolls (eingefroren wie bei create-submission)."""
+    protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo.id)
+    if not protocol_id:
+        return False
+    protocol = db.get(Protocol, protocol_id)
+    return protocol is not None and protocol.status == "abgeschlossen"
 
 
 @router.get("/protocol-todos/{todo_id}/details", response_model=TodoDetails)

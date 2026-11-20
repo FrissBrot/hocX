@@ -359,6 +359,35 @@ class TodoSubmissionCreated(BaseModel):
     todo: "TodoListItem"
 
 
+class TodoSubmissionFile(BaseModel):
+    """Über die Abgabe eingereichte Datei (Dateiliste «Pendenz bearbeiten», Zustand «eingereicht»)."""
+
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    content_url: str
+    scan_status: str = "clean"
+
+
+class TodoSubmissionStatus(BaseModel):
+    """GET /protocol-todos/{id}/submission: laufende Abgabe einer Pendenz für den Abschnitt
+    «Dateien» (Statuskarte bzw. eingereichte Dateien). Nur mit submissions.read in Reichweite,
+    weil element_url den Link-Token der Abgabebox enthält."""
+
+    assignment_id: uuid.UUID
+    title: str
+    created_at: datetime
+    # Zustand des Elements der Pendenz: open (noch nichts), submitted (Dateien da), closed
+    element_status: str
+    submitted_at: datetime | None = None
+    # Öffentliche Abgabebox-URL des Elements (ohne Login nutzbar); None ohne erreichbaren Link
+    element_url: str | None = None
+    files: list[TodoSubmissionFile] = []
+    # «Beenden» möglich: Einzelabgabe mit nur diesem Element, noch nichts eingereicht, Recht dazu
+    can_stop: bool = False
+
+
 class TodoListItem(ProtocolTodoRead):
     protocol_id: uuid.UUID | None = None
     protocol_number: str | None = None

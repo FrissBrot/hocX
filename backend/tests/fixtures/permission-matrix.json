@@ -1606,6 +1606,22 @@
         "kassier"
       ]
     },
+    "POST /api/protocol-todos/{todo_id}/stop-submission": {
+      "handler": "todos.stop_submission_from_todo",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/protocol-todos/{todo_id}/submission": {
+      "handler": "todos.get_todo_submission",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
     "GET /api/protocols": {
       "handler": "protocols.list_protocols",
       "allowed": [

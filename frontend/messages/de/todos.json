@@ -7,7 +7,7 @@
   "appliedOnSaveHint": "Wird beim Speichern übernommen.",
   "assignedToLabel": "Zugewiesen an",
   "autoClosedBySubmission": "Wird automatisch durch Abgabe geschlossen",
-  "autoClosedHint": "Wird automatisch durch die Abgabe geschlossen.",
+  "autoClosedHint": "Wird automatisch erledigt, sobald die Datei eingereicht ist.",
   "chooseEventOption": "Termin wählen…",
   "clipboardUnavailable": "Zwischenablage nicht verfügbar",
   "colAssigned": "Zugewiesen",
@@ -207,7 +207,6 @@
   "createEyebrow": "Neue Pendenz",
   "toSubmission": {
     "button": "Als Abgabe einsammeln",
-    "hint": "Legt eine Einzelabgabe mit dieser Pendenz an. Sie wird erledigt, sobald die Datei eingereicht ist.",
     "created": "Abgabe «{title}» erstellt",
     "copyLink": "Link kopieren",
     "customize": "Anpassen",
@@ -224,6 +223,42 @@
       "submission_no_default_link": "Es gibt keinen Standard-Link für Abgaben. Bitte zuerst unter Abgaben einen Link anlegen.",
       "protocol_closed": "Das Protokoll ist abgeschlossen.",
       "submission_conflict": "Die Abgabe konnte nicht erstellt werden. Bitte erneut versuchen."
+    }
+  },
+  "filesCount": "{count, plural, one {# Datei} other {# Dateien}}",
+  "collect": {
+    "offerTitle": "Datei fehlt noch?",
+    "offerText": "Als Abgabe einsammeln. Die Pendenz erledigt sich, sobald die Datei da ist.",
+    "collect": "Einsammeln",
+    "badgeOpen": "Abgabe offen",
+    "badgeClosed": "Abgabe geschlossen",
+    "since": "seit {date}",
+    "noFileYet": "noch keine Datei",
+    "filesSubmitted": "{count, plural, one {# Datei eingereicht} other {# Dateien eingereicht}}",
+    "open": "Öffnen",
+    "cardTitle": "Einzelabgabe · {title}",
+    "responsibleSubmits": "{count, plural, one {{names} reicht ein, ohne Login} other {{names} reichen ein, ohne Login}}",
+    "anyoneSubmits": "Einreichen ohne Login",
+    "dueUntil": "bis {due}",
+    "linkLabel": "Link zur Abgabe",
+    "copyLink": "Link kopieren",
+    "copied": "Kopiert ✓",
+    "copyFailed": "Link konnte nicht kopiert werden",
+    "stop": "Beenden",
+    "stopConfirmTitle": "Einsammeln beenden?",
+    "stopConfirm": "Die Einzelabgabe wird gelöscht und der Link funktioniert nicht mehr. Die Pendenz bleibt mit ihrem Status, ihren Notizen und Dateien bestehen.",
+    "stopped": "Einsammeln beendet",
+    "stopFailed": "Einsammeln konnte nicht beendet werden",
+    "submittedBy": "Eingereicht von {name}",
+    "submittedViaBox": "Über die Abgabe eingereicht",
+    "openFile": "{name} öffnen",
+    "scanPending": "Wird auf Viren geprüft …",
+    "doneBanner": "Über die Abgabe eingereicht. Pendenz automatisch erledigt.",
+    "submittedBanner": "Über die Abgabe eingereicht.",
+    "errors": {
+      "submission_not_stoppable": "Diese Abgabe lässt sich hier nicht beenden (schon eingereicht oder mehrere Elemente). Bitte unter Abgaben bearbeiten.",
+      "protocol_closed": "Das Protokoll ist abgeschlossen.",
+      "todo_not_submission": "Diese Pendenz gehört zu keiner Abgabe."
     }
   }
 }

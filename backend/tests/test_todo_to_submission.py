@@ -209,3 +209,145 @@ def test_closed_protocol_is_rejected(db, org):
     _expect(db, org, todo, 409, "protocol_closed")
     db.expire_all()
     assert db.get(ProtocolTodo, todo.id).submission_assignment_id is None
+
+
+# --- Abschnitt «Dateien»: Stand lesen (GET …/submission) und «Beenden» (POST …/stop-submission) ---
+
+
+def _status(db, org, todo, user=None):
+    return todo_routes.get_todo_submission(todo.public_id, db=db, user=user or org["user"])
+
+
+def _stop(db, org, todo, user=None):
+    return todo_routes.stop_submission_from_todo(todo.public_id, db=db, user=user or org["user"])
+
+
+def _assignment_of(db, result) -> SubmissionAssignment:
+    return db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == result.assignment_id))
+
+
+def test_status_shows_link_and_files_until_done(db, org):
+    todo = _standalone_todo(db, org, due=date.today() + timedelta(days=5))
+    result = _convert(db, org, todo)
+
+    status = _status(db, org, todo)
+    assert status.assignment_id == result.assignment_id and status.title == "Bankvollmacht einreichen"
+    assert status.element_status == "open" and status.files == [] and status.created_at is not None
+    assert status.element_url == result.element_url and status.can_stop is True
+
+    _upload(db, org["tenant"].id, _assignment_of(db, result))
+    db.expire_all()
+    status = _status(db, org, db.get(ProtocolTodo, todo.id))
+    assert status.element_status == "submitted" and status.can_stop is False
+    [file] = status.files
+    assert file.original_name == "anmeldung.pdf" and file.scan_status == "clean"
+    assert file.content_url.startswith("/api/submission-uploads/")
+    assert db.get(ProtocolTodo, todo.id).todo_status_id == _status_id(db, "done")
+
+
+def test_status_needs_submissions_read_in_scope(db, org):
+    import dataclasses
+
+    todo = _standalone_todo(db, org)
+    _convert(db, org, todo)
+    # Pendenzen lesen allein reicht nicht (Antwort enthält den Link-Token)
+    reader = make_current_user(org["tenant"].id, permissions=frozenset({"meetings.read"}))
+    with pytest.raises(HTTPException) as denied:
+        _status(db, org, todo, user=reader)
+    assert denied.value.status_code == 403
+    # Abgaben lesen nur «zugewiesene», hier nicht zugewiesen: 404 wie unbekannt
+    scoped = dataclasses.replace(
+        make_current_user(org["tenant"].id, permissions=frozenset({"meetings.read", "submissions.read"})),
+        assigned_only=frozenset({"submissions.read"}),
+    )
+    with pytest.raises(HTTPException) as hidden:
+        _status(db, org, todo, user=scoped)
+    assert hidden.value.status_code == 404
+    # Nur lesen: «Beenden» nicht angeboten
+    plain_reader = make_current_user(org["tenant"].id, permissions=frozenset({"meetings.read", "submissions.read"}))
+    assert _status(db, org, todo, user=plain_reader).can_stop is False
+
+
+def test_status_foreign_tenant_and_unlinked_todo_are_404(db, org):
+    todo = _standalone_todo(db, org)
+    with pytest.raises(HTTPException) as unlinked:
+        _status(db, org, todo)
+    assert unlinked.value.status_code == 404
+    _convert(db, org, todo)
+    with pytest.raises(HTTPException) as foreign:
+        _status(db, org, todo, user=org["other_user"])
+    assert foreign.value.status_code == 404
+    with pytest.raises(HTTPException) as foreign_stop:
+        _stop(db, org, todo, user=org["other_user"])
+    assert foreign_stop.value.status_code == 404
+    db.expire_all()
+    assert db.get(ProtocolTodo, todo.id).submission_assignment_id is not None
+
+
+def test_stop_keeps_standalone_todo_and_its_status(db, org):
+    todo = _standalone_todo(db, org, status="in_progress")
+    result = _convert(db, org, todo)
+    assignment_id = _assignment_of(db, result).id
+
+    read = _stop(db, org, todo)
+
+    db.expire_all()
+    kept = db.get(ProtocolTodo, todo.id)
+    assert kept is not None, "Pendenz ohne Protokoll darf nicht per CASCADE mitgelöscht werden"
+    assert (kept.submission_assignment_id, kept.element_ref, kept.reference_link) == (None, None, None)
+    assert kept.todo_status_id == _status_id(db, "in_progress") and kept.notes == "Original beilegen"
+    assert db.get(SubmissionAssignment, assignment_id) is None
+    assert read.submission_assignment_id is None and read.id == todo.public_id
+    details = db.scalar(text(
+        "SELECT details_json FROM audit_log WHERE action = 'submission_assignment.deleted' AND entity_id = :id"
+    ), {"id": assignment_id})
+    assert details is not None and details["origin"] == "todo_stop"
+    # Danach lässt sie sich wieder einsammeln
+    assert _convert(db, org, kept).assignment_id is not None
+
+
+def test_stop_refused_after_a_submission_and_without_rights(db, org):
+    todo = _standalone_todo(db, org)
+    result = _convert(db, org, todo)
+    editor = make_current_user(org["tenant"].id, permissions=frozenset({"meetings.read", "meetings.edit", "submissions.read"}))
+    with pytest.raises(HTTPException) as denied:
+        _stop(db, org, todo, user=editor)
+    assert denied.value.status_code == 403
+
+    # Eingereicht (auch nur im Virenscan): nie löschen
+    _upload(db, org["tenant"].id, _assignment_of(db, result), scan_status="pending")
+    db.expire_all()
+    with pytest.raises(HTTPException) as refused:
+        _stop(db, org, db.get(ProtocolTodo, todo.id))
+    assert refused.value.status_code == 409 and refused.value.detail["code"] == "submission_not_stoppable"
+    db.expire_all()
+    assert _assignment_of(db, result) is not None
+    assert db.get(ProtocolTodo, todo.id).submission_assignment_id is not None
+
+
+def test_stop_in_closed_protocol_is_refused(db, org):
+    todo = _protocol_todo(db, org)
+    _convert(db, org, todo)
+    db.execute(text("UPDATE protocol SET status = 'abgeschlossen' WHERE id = (SELECT pe.protocol_id FROM protocol_element pe JOIN protocol_element_block b ON b.protocol_element_id = pe.id WHERE b.id = :block)"), {"block": todo.protocol_element_block_id})
+    db.expire_all()
+    with pytest.raises(HTTPException) as closed:
+        _stop(db, org, db.get(ProtocolTodo, todo.id))
+    assert closed.value.status_code == 409 and closed.value.detail["code"] == "protocol_closed"
+    assert _status(db, org, db.get(ProtocolTodo, todo.id)).can_stop is False
+
+
+def test_stop_refused_while_another_todo_hangs_on_the_submission(db, org):
+    """ON DELETE CASCADE löschte eine weitere verknüpfte Pendenz ohne Protokoll mit."""
+    todo = _standalone_todo(db, org)
+    result = _convert(db, org, todo)
+    assignment = _assignment_of(db, result)
+    history = _standalone_todo(db, org, task="Verlauf", status="done")
+    history.submission_assignment_id = assignment.id
+    history.element_ref = "alt"
+    db.flush()
+    assert _status(db, org, todo).can_stop is False
+    with pytest.raises(HTTPException) as refused:
+        _stop(db, org, todo)
+    assert refused.value.status_code == 409
+    db.expire_all()
+    assert db.get(ProtocolTodo, history.id) is not None

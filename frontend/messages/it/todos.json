@@ -7,7 +7,7 @@
   "appliedOnSaveHint": "Verrà applicato al salvataggio.",
   "assignedToLabel": "Assegnata a",
   "autoClosedBySubmission": "Chiusa automaticamente da una consegna",
-  "autoClosedHint": "Chiusa automaticamente dalla consegna.",
+  "autoClosedHint": "Completata automaticamente non appena il file viene consegnato.",
   "chooseEventOption": "Scegli un evento…",
   "clipboardUnavailable": "Appunti non disponibili",
   "colAssigned": "Assegnata",
@@ -207,7 +207,6 @@
   "createEyebrow": "Nuova attività",
   "toSubmission": {
     "button": "Raccogli come consegna",
-    "hint": "Crea una consegna singola con questa attività. Viene completata non appena il file è consegnato.",
     "created": "Consegna «{title}» creata",
     "copyLink": "Copia link",
     "customize": "Modifica",
@@ -224,6 +223,42 @@
       "submission_no_default_link": "Non esiste un link standard per le consegne. Crea prima un link nella sezione Consegne.",
       "protocol_closed": "Il verbale è chiuso.",
       "submission_conflict": "Impossibile creare la consegna. Riprova."
+    }
+  },
+  "filesCount": "{count, plural, one {# file} other {# file}}",
+  "collect": {
+    "offerTitle": "Manca ancora un file?",
+    "offerText": "Raccoglierlo come consegna. Il compito si completa non appena arriva il file.",
+    "collect": "Raccogli",
+    "badgeOpen": "Consegna aperta",
+    "badgeClosed": "Consegna chiusa",
+    "since": "dal {date}",
+    "noFileYet": "ancora nessun file",
+    "filesSubmitted": "{count, plural, one {# file consegnato} other {# file consegnati}}",
+    "open": "Apri",
+    "cardTitle": "Consegna singola · {title}",
+    "responsibleSubmits": "{count, plural, one {{names} consegna senza login} other {{names} consegnano senza login}}",
+    "anyoneSubmits": "Consegna senza login",
+    "dueUntil": "entro {due}",
+    "linkLabel": "Link alla consegna",
+    "copyLink": "Copia link",
+    "copied": "Copiato ✓",
+    "copyFailed": "Impossibile copiare il link",
+    "stop": "Termina",
+    "stopConfirmTitle": "Terminare la raccolta?",
+    "stopConfirm": "La consegna singola viene eliminata e il suo link non funzionerà più. Il compito mantiene stato, note e file.",
+    "stopped": "Raccolta terminata",
+    "stopFailed": "Impossibile terminare la raccolta",
+    "submittedBy": "Consegnato da {name}",
+    "submittedViaBox": "Consegnato tramite la casella di consegna",
+    "openFile": "Apri {name}",
+    "scanPending": "Controllo antivirus in corso …",
+    "doneBanner": "Consegnato tramite la casella di consegna. Compito completato automaticamente.",
+    "submittedBanner": "Consegnato tramite la casella di consegna.",
+    "errors": {
+      "submission_not_stoppable": "Questa consegna non può essere terminata qui (già consegnata o più elementi). Modificala in Consegne.",
+      "protocol_closed": "Il verbale è chiuso.",
+      "todo_not_submission": "Questo compito non appartiene a nessuna consegna."
     }
   }
 }

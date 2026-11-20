@@ -7,7 +7,7 @@
   "appliedOnSaveHint": "Will be applied when saving.",
   "assignedToLabel": "Assigned to",
   "autoClosedBySubmission": "Closed automatically by a submission",
-  "autoClosedHint": "Closed automatically by the submission.",
+  "autoClosedHint": "Completed automatically as soon as the file is submitted.",
   "chooseEventOption": "Choose an event…",
   "clipboardUnavailable": "Clipboard not available",
   "colAssigned": "Assigned",
@@ -207,7 +207,6 @@
   "createEyebrow": "New to-do",
   "toSubmission": {
     "button": "Collect as submission",
-    "hint": "Creates a single submission with this todo. It is completed as soon as the file is submitted.",
     "created": "Submission “{title}” created",
     "copyLink": "Copy link",
     "customize": "Customize",
@@ -224,6 +223,42 @@
       "submission_no_default_link": "There is no default link for submissions. Please create a link under Submissions first.",
       "protocol_closed": "The minutes are already closed.",
       "submission_conflict": "The submission could not be created. Please try again."
+    }
+  },
+  "filesCount": "{count, plural, one {# file} other {# files}}",
+  "collect": {
+    "offerTitle": "File still missing?",
+    "offerText": "Collect it as a submission. The task completes itself as soon as the file arrives.",
+    "collect": "Collect",
+    "badgeOpen": "Submission open",
+    "badgeClosed": "Submission closed",
+    "since": "since {date}",
+    "noFileYet": "no file yet",
+    "filesSubmitted": "{count, plural, one {# file submitted} other {# files submitted}}",
+    "open": "Open",
+    "cardTitle": "Single submission · {title}",
+    "responsibleSubmits": "{count, plural, one {{names} submits without login} other {{names} submit without login}}",
+    "anyoneSubmits": "Submit without login",
+    "dueUntil": "by {due}",
+    "linkLabel": "Link to the submission",
+    "copyLink": "Copy link",
+    "copied": "Copied ✓",
+    "copyFailed": "Link could not be copied",
+    "stop": "Stop",
+    "stopConfirmTitle": "Stop collecting?",
+    "stopConfirm": "The single submission will be deleted and its link will stop working. The task keeps its status, notes and files.",
+    "stopped": "Collecting stopped",
+    "stopFailed": "Collecting could not be stopped",
+    "submittedBy": "Submitted by {name}",
+    "submittedViaBox": "Submitted via the submission box",
+    "openFile": "Open {name}",
+    "scanPending": "Being scanned for viruses …",
+    "doneBanner": "Submitted via the submission box. Task completed automatically.",
+    "submittedBanner": "Submitted via the submission box.",
+    "errors": {
+      "submission_not_stoppable": "This submission cannot be stopped here (already submitted or several elements). Please edit it under Submissions.",
+      "protocol_closed": "The minutes are closed.",
+      "todo_not_submission": "This task does not belong to a submission."
     }
   }
 }
