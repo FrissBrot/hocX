@@ -269,6 +269,7 @@
     "endDateFormat": "Zeile {row}: Enddatum «{value}» hat ein unbekanntes Format",
     "endBeforeStart": "Zeile {row}: Enddatum liegt vor dem Startdatum",
     "participantCountInvalid": "Zeile {row}: Teilnehmerzahl ist keine ganze Zahl",
+    "participantCountTooLarge": "Zeile {row}: Teilnehmerzahl ist zu gross (höchstens {max, number})",
     "tagTooLong": "Zeile {row}: Tag ist länger als {max} Zeichen",
     "dateOutOfRange": "Zeile {row}: Datum «{value}» liegt ausserhalb von 1900–2999"
   }
