@@ -78,6 +78,18 @@ export async function syncAttendanceFine({
     return;
   }
   if (existingFine?.fine_type === wanted) return;
+  // Dieselbe Busse ist schon kassiert (z. B. Status weitergeklickt und zurück): keine zweite - das
+  // Backend lehnt sie als Duplikat ab (409), und der Status spränge zurück.
+  const collected = currentFines.some(
+    (fine) => fine.participant_id === participant.id && fine.fine_type === wanted && fine.status === "collected"
+  );
+  if (collected) {
+    if (existingFine) {
+      await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+      onRemoved(existingFine.id);
+    }
+    return;
+  }
   if (existingFine) {
     await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
     onRemoved(existingFine.id);

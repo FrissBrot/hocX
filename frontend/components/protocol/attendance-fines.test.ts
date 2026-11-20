@@ -107,4 +107,14 @@ describe("attendance-fines", () => {
     await expect(failed).rejects.toThrow("offline");
     await expect(next).resolves.toBe("ok");
   });
+
+  it("legt keine zweite Busse an, wenn dieselbe schon kassiert ist (Backend: 409 Duplikat)", async () => {
+    // Verspätet, Busse an der Sitzung kassiert, Status kurz weitergeklickt und zurück auf Verspätet:
+    // das Backend lehnt eine zweite Verspätungsbusse ab, der Status sprang deshalb zurück.
+    const collected: AttendanceFine = { ...fine("late"), status: "collected", collected_at: "2026-11-20T19:00:00Z" };
+    const onCreated = vi.fn();
+    await syncAttendanceFine({ protocolId: "pr", participant, status: "late", config, fines: [collected], onRemoved: vi.fn(), onCreated });
+    expect(api).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+  });
 });
