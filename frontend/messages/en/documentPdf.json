@@ -535,7 +535,8 @@
       "tariff": "Tariff",
       "completed_on": "Completed on",
       "fine_tariff": "Fine tariff",
-      "sent_at": "Sent at"
+      "sent_at": "Sent at",
+      "trashed_at": "In trash since"
     },
     "file": {
       "workbook": "Data report",

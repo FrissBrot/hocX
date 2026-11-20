@@ -213,12 +213,12 @@
       "status": "Stato",
       "tag": "Etichetta",
       "taken_at": "Scattata",
-      "trashed_at": "Nel cestino dal",
       "tariff": "Tariffa",
       "task": "Attività",
       "template": "Modello",
       "text": "Testo",
       "title": "Titolo",
+      "trashed_at": "Nel cestino dal",
       "type": "Tipo"
     },
     "file": {

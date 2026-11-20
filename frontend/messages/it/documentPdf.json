@@ -535,7 +535,8 @@
       "tariff": "Tariffa",
       "completed_on": "Completato il",
       "fine_tariff": "Tariffa multe",
-      "sent_at": "Inviato il"
+      "sent_at": "Inviato il",
+      "trashed_at": "Nel cestino dal"
     },
     "file": {
       "workbook": "Rapporto dati",

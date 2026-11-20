@@ -535,7 +535,8 @@
       "tariff": "Tarif",
       "completed_on": "Terminée le",
       "fine_tariff": "Tarif d'amendes",
-      "sent_at": "Envoyé le"
+      "sent_at": "Envoyé le",
+      "trashed_at": "Dans la corbeille depuis"
     },
     "file": {
       "workbook": "Rapport de données",

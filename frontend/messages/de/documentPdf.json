@@ -535,7 +535,8 @@
       "tariff": "Tarif",
       "completed_on": "Erledigt am",
       "fine_tariff": "Bussentarif",
-      "sent_at": "Versendet am"
+      "sent_at": "Versendet am",
+      "trashed_at": "Im Papierkorb seit"
     },
     "file": {
       "workbook": "Auskunft",

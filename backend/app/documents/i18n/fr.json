@@ -213,12 +213,12 @@
       "status": "Statut",
       "tag": "Étiquette",
       "taken_at": "Pris le",
-      "trashed_at": "Dans la corbeille depuis",
       "tariff": "Tarif",
       "task": "Tâche",
       "template": "Modèle",
       "text": "Texte",
       "title": "Titre",
+      "trashed_at": "Dans la corbeille depuis",
       "type": "Type"
     },
     "file": {
