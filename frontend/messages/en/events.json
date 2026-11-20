@@ -269,6 +269,7 @@
     "endDateFormat": "Row {row}: end date «{value}» has an unknown format",
     "endBeforeStart": "Row {row}: end date is before the start date",
     "participantCountInvalid": "Row {row}: participant count is not a whole number",
+    "participantCountTooLarge": "Row {row}: participant count is too large (at most {max, number})",
     "tagTooLong": "Row {row}: tag is longer than {max} characters",
     "dateOutOfRange": "Row {row}: date «{value}» is outside 1900–2999"
   }

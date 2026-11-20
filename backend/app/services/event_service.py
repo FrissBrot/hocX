@@ -13,7 +13,7 @@ from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle, SubmissionUpload, SubmissionUploadFile
 from app.repositories.event_repository import EventRepository
-from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN, EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
+from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN, EVENT_PARTICIPANT_COUNT_MAX, EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, lock_cycle_assignments, resolve_protocol_cycle
@@ -688,8 +688,16 @@ class EventService:
         if not normalized:
             return 0
         try:
-            return max(0, int(normalized))
+            count = max(0, int(normalized))
         except ValueError as exc:
             raise CsvRowError(
                 "participantCountInvalid", f"CSV row {row_number}: Teilnehmerzahl ist keine ganze Zahl", row=row_number
             ) from exc
+        if count > EVENT_PARTICIPANT_COUNT_MAX:
+            raise CsvRowError(
+                "participantCountTooLarge",
+                f"CSV row {row_number}: Teilnehmerzahl ist zu gross",
+                row=row_number,
+                max=EVENT_PARTICIPANT_COUNT_MAX,
+            )
+        return count

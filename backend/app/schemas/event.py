@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import object_session
 
 from app.models.entities import CycleConfig, Participant, Tenant
@@ -25,6 +25,10 @@ def check_event_tag_length(value: str | None) -> str | None:
 # Plausibler Bereich für Termindaten. Ohne Grenze nahm die API jedes ISO-Datum an (z. B.
 # 9999-12-31): Kalender-Abo (DTEND = Enddatum + 1 Tag), Zyklus (Jahr + 1) und Abgabe-Zeitfenster
 # rechnen damit über date.max hinaus und brechen mit OverflowError/ValueError ab.
+# event.participant_count ist INTEGER: grössere Werte scheiterten erst beim INSERT/UPDATE
+# (NumericValueOutOfRange) - mit Eintrag im Fehlerprotokoll bzw. Abbruch des ganzen CSV-Imports.
+EVENT_PARTICIPANT_COUNT_MAX = 2_147_483_647
+
 EVENT_DATE_MIN = date(1900, 1, 1)
 EVENT_DATE_MAX = date(2999, 12, 31)
 
@@ -72,7 +76,7 @@ class EventBase(BaseModel):
     tag: str | None = None
     title: str
     description: str | None = None
-    participant_count: int = 0
+    participant_count: int = Field(default=0, le=EVENT_PARTICIPANT_COUNT_MAX)
     is_cancelled: bool = False
     organizer_ids: list[uuid.UUID] | None = None
     leadership_ids: list[uuid.UUID] | None = None
@@ -111,7 +115,7 @@ class EventUpdate(BaseModel):
     tag: str | None = None
     title: str | None = None
     description: str | None = None
-    participant_count: int | None = None
+    participant_count: int | None = Field(default=None, le=EVENT_PARTICIPANT_COUNT_MAX)
     is_cancelled: bool | None = None
     organizer_ids: list[uuid.UUID] | None = None
     leadership_ids: list[uuid.UUID] | None = None
