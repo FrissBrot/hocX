@@ -251,3 +251,70 @@ def test_public_routers_limit_concurrent_requests_per_ip(db, monkeypatch, tmp_pa
     assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-backend"]["middlewares"]
     assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-public-get"]["middlewares"]
 
+
+
+# --- Wartungsseite (RUNBOOK Abschnitt 20) ------------------------------------------------------
+
+
+def _with_maintenance_file(tmp_path):
+    (tmp_path / "maintenance.yml").write_text("http: {}\n")
+
+
+def test_without_maintenance_file_no_maintenance_references(db, monkeypatch, tmp_path):
+    """Fehlt maintenance.yml im Verzeichnis, darf kein Router auf ihre Middlewares zeigen -
+    Traefik schaltete sonst jeden Router der Mandanten-Domains ab."""
+    tenant = make_tenant(db, "Ohne Wartungsseite Verein")
+    grant_tenant_feature(db, tenant.id)
+    _make_domain(db, tenant.id, "ohne.example.com", purpose="app")
+
+    config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
+
+    assert "maintenance" not in yaml.safe_dump(config)
+
+
+def test_maintenance_errors_and_fallbacks_for_every_domain_kind(db, monkeypatch, tmp_path):
+    tenant = make_tenant(db, "Wartungsseite Verein")
+    grant_tenant_feature(db, tenant.id)
+    grant_tenant_feature(db, tenant.id, "verify_domain")
+    app_row = _make_domain(db, tenant.id, "app.wartung.example.com", purpose="app")
+    box_row = _make_domain(db, tenant.id, "box.wartung.example.com", purpose="abgabebox")
+    verify_row = _make_domain(db, tenant.id, "verify.wartung.example.com", purpose="verify")
+    _with_maintenance_file(tmp_path)
+
+    routers = _regenerate_into_tmp(monkeypatch, tmp_path, db)["http"]["routers"]
+
+    expected_html = {
+        f"tenant-app-{app_row.id}": "maintenance-errors@file",
+        f"tenant-abgabebox-{box_row.id}": "maintenance-errors-abgabebox@file",
+        f"tenant-verify-{verify_row.id}": "maintenance-errors-abgabebox@file",
+    }
+    for base, html_errors in expected_html.items():
+        own = {name: router for name, router in routers.items() if name.startswith(base + "-")}
+        fallback, fallback_api = own.pop(f"{base}-fallback"), own.pop(f"{base}-fallback-api")
+        # errors-Middleware zuerst an jedem App-Router, HTML für Frontends, JSON für APIs
+        for name, router in own.items():
+            first = router["middlewares"][0]
+            is_html = router["service"].endswith("frontend@docker")
+            assert first == (html_errors if is_html else "maintenance-errors-api@file"), (name, first)
+            assert router["priority"] > fallback["priority"]
+            if not is_html:
+                assert router["priority"] > fallback_api["priority"], name
+        # Ausweich-Router: Dienst und Middlewares aus dem Dateiprovider, niedrigste Priorität
+        assert fallback["service"] == fallback_api["service"] == "maintenance-page@file"
+        assert fallback["priority"] == 1 and fallback_api["priority"] == 50
+        assert fallback_api["middlewares"] == ["maintenance-path-api@file"]
+        frontend_priorities = [r["priority"] for r in own.values() if r["service"].endswith("frontend@docker")]
+        assert max(frontend_priorities) < fallback_api["priority"]
+
+    assert routers[f"tenant-app-{app_row.id}-fallback"]["rule"] == "Host(`app.wartung.example.com`)"
+    assert routers[f"tenant-app-{app_row.id}-fallback"]["middlewares"] == ["maintenance-path-hocx@file"]
+    assert routers[f"tenant-abgabebox-{box_row.id}-fallback"]["middlewares"] == ["maintenance-path-abgabebox@file"]
+    # Prüf-Domain: nur die Pfade ihrer Router - andere Pfade bleiben im Normalbetrieb 404.
+    verify_fallback = routers[f"tenant-verify-{verify_row.id}-fallback"]["rule"]
+    assert verify_fallback.startswith("Host(`verify.wartung.example.com`) && (Path(`/`)")
+    assert "PathPrefix(`/verify`)" in verify_fallback
+    assert "/api/public/verify" in routers[f"tenant-verify-{verify_row.id}-fallback-api"]["rule"]
+    # Bestehende Middlewares bleiben erhalten (hinter der errors-Middleware)
+    prefix = traefik_config_service.settings.traefik_middleware_prefix
+    assert routers[f"tenant-app-{app_row.id}-frontend"]["middlewares"] == ["maintenance-errors@file", f"{prefix}web-inflight@docker"]
+

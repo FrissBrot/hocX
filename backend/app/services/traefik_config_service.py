@@ -215,6 +215,61 @@ def _verify_routers(domain: str, domain_id: int) -> dict:
     }
 
 
+# --- Wartungsseite (RUNBOOK Abschnitt 20) -------------------------------------------------------
+# Middlewares und Dienst stehen in infra/traefik/dynamic/maintenance.yml (Dateiprovider, gleiches
+# Verzeichnis wie diese Datei). Fehlt sie (älterer Deploy-Code, Entwicklungsumgebung), lässt
+# regenerate() alles Folgende weg - ein Verweis auf eine fehlende Middleware würde Traefik jeden
+# betroffenen Router abschalten.
+_MAINTENANCE_FILE_NAME = "maintenance.yml"
+_MAINTENANCE_SERVICE = "maintenance-page@file"
+_MAINTENANCE_ERRORS_API = "maintenance-errors-api@file"
+# Domain-Art -> (errors-Middleware der HTML-Router, replacePath-Middleware des Ausweich-Routers)
+_MAINTENANCE_HTML = {
+    "app": ("maintenance-errors@file", "maintenance-path-hocx@file"),
+    "abgabebox": ("maintenance-errors-abgabebox@file", "maintenance-path-abgabebox@file"),
+    "verify": ("maintenance-errors-abgabebox@file", "maintenance-path-abgabebox@file"),
+}
+_HTML_SERVICES = ("-frontend@docker", "-abgabebox-frontend@docker")
+_FALLBACK_PRIORITY = 1
+# Über den Frontend-Routern (10/20), unter allen API-Routern (100-300) - wie bei den Hauptdomains.
+_FALLBACK_API_PRIORITY = 50
+
+
+def maintenance_page_available(target_dir: str) -> bool:
+    return os.path.isfile(os.path.join(target_dir, _MAINTENANCE_FILE_NAME))
+
+
+def _fallback_rules(domain: str, purpose: str) -> tuple[str, str]:
+    """(HTML-Regel, API-Regel) des Ausweich-Routers: genau die Pfade der App-Router der Domain,
+    damit ein Pfad ohne Router auch im Normalbetrieb 404 bleibt statt die Wartungsseite zu zeigen."""
+    if purpose == "verify":
+        return (
+            f"Host(`{domain}`) && (Path(`/`) || PathPrefix(`/verify`) || PathPrefix(`/_next`) || Path(`/favicon.ico`))",
+            f"Host(`{domain}`) && (Path(`/api/public/verify`) || Path(`/api/public/maintenance-status`))",
+        )
+    return f"Host(`{domain}`)", f"Host(`{domain}`) && PathPrefix(`/api`)"
+
+
+def _with_maintenance(routers: dict, *, domain: str, purpose: str, base: str) -> dict:
+    """errors-Middleware als erste an jedem Router, dazu die Ausweich-Router der Domain (Dienst
+    aus dem Dateiprovider - bleibt gültig, auch wenn die App-Container fehlen)."""
+    html_errors, html_path = _MAINTENANCE_HTML[purpose]
+    for router in routers.values():
+        errors = html_errors if router["service"].endswith(_HTML_SERVICES) else _MAINTENANCE_ERRORS_API
+        router["middlewares"] = [errors, *router.get("middlewares", [])]
+    html_rule, api_rule = _fallback_rules(domain, purpose)
+    tls = {"certResolver": "letsencrypt"}
+    routers[f"{base}-fallback"] = {
+        "rule": html_rule, "entryPoints": ["websecure"], "service": _MAINTENANCE_SERVICE,
+        "priority": _FALLBACK_PRIORITY, "middlewares": [html_path], "tls": tls,
+    }
+    routers[f"{base}-fallback-api"] = {
+        "rule": api_rule, "entryPoints": ["websecure"], "service": _MAINTENANCE_SERVICE,
+        "priority": _FALLBACK_API_PRIORITY, "middlewares": ["maintenance-path-api@file"], "tls": tls,
+    }
+    return routers
+
+
 def regenerate(db: Session) -> None:
     """Rewrites the Traefik file-provider config from the active tenant_domain rows.
 
@@ -233,16 +288,20 @@ def regenerate(db: Session) -> None:
         .all()
     )
 
+    target_dir = settings.traefik_dynamic_config_dir
+    with_maintenance = maintenance_page_available(target_dir)
+    builders = {"app": _app_routers, "abgabebox": _abgabebox_routers, "verify": _verify_routers}
     routers: dict = {}
     has_verify = False
     for row in rows:
-        if row.purpose == "app":
-            routers.update(_app_routers(row.domain, row.id))
-        elif row.purpose == "abgabebox":
-            routers.update(_abgabebox_routers(row.domain, row.id))
-        elif row.purpose == "verify":
-            routers.update(_verify_routers(row.domain, row.id))
-            has_verify = True
+        builder = builders.get(row.purpose)
+        if builder is None:
+            continue
+        domain_routers = builder(row.domain, row.id)
+        if with_maintenance:
+            domain_routers = _with_maintenance(domain_routers, domain=row.domain, purpose=row.purpose, base=f"tenant-{row.purpose}-{row.id}")
+        routers.update(domain_routers)
+        has_verify = has_verify or row.purpose == "verify"
 
     # Traefik's file provider errors on an explicit-but-empty `http.routers: {}` (or `http: {}`)
     # map ("routers cannot be a standalone element") - an empty document is the only form it
@@ -253,7 +312,6 @@ def regenerate(db: Session) -> None:
             _VERIFY_ROOT_REDIRECT: {"redirectRegex": {"regex": r"^https://([^/]+)/?$", "replacement": "https://${1}/verify"}}
         }
 
-    target_dir = settings.traefik_dynamic_config_dir
     os.makedirs(target_dir, exist_ok=True)
     final_path = os.path.join(target_dir, _DYNAMIC_FILE_NAME)
     # Unique per call (pid + random suffix) - multiple uvicorn workers run this at startup

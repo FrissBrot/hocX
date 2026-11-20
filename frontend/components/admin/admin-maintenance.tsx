@@ -248,7 +248,7 @@ export function AdminMaintenance({ initialOverview }: Props) {
   );
 }
 
-const REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover", "backup_restore"]);
+const REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover", "backup_restore", "deploy"]);
 
 function knownReason(code: string): string {
   return REASONS.has(code) ? code : "other";

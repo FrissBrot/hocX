@@ -616,12 +616,14 @@ prepare_thumbnail_dir() {
   # infra/traefik/dynamic gehoert ebenfalls dazu: Git schreibt die versionierte security.yml bei
   # einem Deploy-Code-Update als hocx-deploy:hocx-deploy 0644 neu, Traefik liest sie aber nur
   # ueber die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
+  # infra/maintenance (Wartungsseite, ab 1.4.3) ebenso: nginx im Dienst maintenance-page (UID 101)
+  # liest es ueber group_add 5001.
   local base="$PROJECT_DIR/storage-local"
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
   for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work" \
-    "$PROJECT_DIR/infra/traefik/dynamic"; do
+    "$PROJECT_DIR/infra/traefik/dynamic" "$PROJECT_DIR/infra/maintenance"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1
@@ -766,7 +768,16 @@ capture_current_release() {
   echo "    Bestehendes Image-Set als Rollback-Ziel erfasst."
 }
 
+# Rollback beendet immer auch den Wartungsmodus des Updates: danach läuft wieder ein Release
+# (oder gar keins - dann hilft die Wartungsansicht auch nicht weiter).
 rollback_apps() {
+  local status=0
+  rollback_app_images || status=$?
+  end_deploy_maintenance rollback
+  return "$status"
+}
+
+rollback_app_images() {
   local current_manifest="$PROJECT_DIR/.releases/current.env"
   local -a services=(backend frontend abgabebox-backend abgabebox-frontend docs)
   echo "==> [$ENVIRONMENT] Automatischer App-Rollback"
@@ -863,16 +874,79 @@ service_exists() {
 # Traefik neu erstellt. Die dynamische Konfiguration (infra/traefik/dynamic) laedt Traefik
 # per watch selbst nach und braucht das nicht.
 sync_traefik_static_config() {
-  local config="$PROJECT_DIR/infra/traefik/traefik.yml"
-  local state="$PROJECT_DIR/.releases/traefik-static.sha256"
+  recreate_on_config_change traefik "$PROJECT_DIR/infra/traefik/traefik.yml" traefik-static Traefik
+}
+
+# Wartungsseite (ab 1.4.3): nginx liest infra/maintenance/nginx.conf nur beim Start, HTML/JSON
+# dagegen bei jeder Anfrage. Gleiches Muster wie sync_traefik_static_config.
+sync_maintenance_page_config() {
+  recreate_on_config_change maintenance-page "$PROJECT_DIR/infra/maintenance/nginx.conf" maintenance-nginx Wartungsseite
+}
+
+recreate_on_config_change() {
+  local service="$1" config="$2" name="$3" label="$4"
+  local state="$PROJECT_DIR/.releases/$name.sha256"
   local current
 
-  service_exists traefik || return 0
+  service_exists "$service" || return 0
   current="$(sha256sum "$config" | cut -d' ' -f1)"
   [ "$(cat "$state" 2> /dev/null)" != "$current" ] || return 0
-  echo "==> [$ENVIRONMENT] Traefik-Konfiguration geaendert - Traefik neu erstellen"
-  "${DC[@]}" up -d --no-deps --force-recreate --pull never traefik || return 1
+  echo "==> [$ENVIRONMENT] $label-Konfiguration geaendert - $service neu erstellen"
+  "${DC[@]}" up -d --no-deps --force-recreate --pull never "$service" || return 1
   printf '%s\n' "$current" > "$state"
+}
+
+# Wartungsmodus während des Updates (app/maintenance_cli.py, RUNBOOK Abschnitt 20): Zwischen
+# Migration und Neustart laufen die alten Container gegen ein geändertes Schema. Mit dem Fenster
+# sperrt das alte Backend die API (503 "maintenance"), das alte Frontend zeigt angemeldeten
+# Nutzern seine Wartungsansicht, die Abgabebox ihr Banner. Admin-API, Healthchecks und der
+# Wartungsstatus bleiben offen. Ein Fehler hier ist nur eine Warnung, nie ein Abbruch - das
+# Beenden aber darf nie fehlen: Rollback, EXIT-Trap und ein SQL-Rückfall ohne Backend-Image.
+# HOCX_DEPLOY_MAINTENANCE=0 schaltet es ab.
+DEPLOY_MAINTENANCE_ACTIVE=0
+DEPLOY_MAINTENANCE_IMAGE=""
+DEPLOY_MAINTENANCE_END_SQL="WITH ended AS (UPDATE public.maintenance_window SET state = 'completed', ended_at = now(), updated_at = now() WHERE source_job_type = 'deploy' AND state NOT IN ('completed', 'cancelled') RETURNING id) INSERT INTO public.maintenance_event (window_id, kind, actor_email, to_state, details) SELECT id, 'transition', 'system:deploy', 'completed', '{\"source\": \"deploy-sql\"}'::jsonb FROM ended"
+
+# Immer mit dem Backend-Image des neuen Releases (gemerkt bei begin): nach einem Rollback zeigt
+# HOCX_BACKEND_IMAGE auf das alte Release, das die CLI noch nicht kennen muss.
+deploy_maintenance_cli() {
+  HOCX_BACKEND_IMAGE="$DEPLOY_MAINTENANCE_IMAGE" "${DC[@]}" run --rm --no-deps --pull never backend \
+    python -m app.maintenance_cli "$@"
+}
+
+begin_deploy_maintenance() {
+  service_exists backend || return 0
+  if [ "${HOCX_DEPLOY_MAINTENANCE:-1}" = 0 ]; then
+    echo "==> [$ENVIRONMENT] Wartungsmodus für das Update übersprungen (HOCX_DEPLOY_MAINTENANCE=0)"
+    return 0
+  fi
+  echo "==> [$ENVIRONMENT] Wartungsmodus für das Update aktivieren"
+  DEPLOY_MAINTENANCE_IMAGE="${HOCX_BACKEND_IMAGE:-}"
+  # Schon vor dem Aufruf: auch ein halb gelungener Start wird am Ende sicher wieder beendet.
+  DEPLOY_MAINTENANCE_ACTIVE=1
+  if ! deploy_maintenance_cli begin-deploy --version "$HOCX_VERSION"; then
+    echo "    WARNUNG: Wartungsmodus nicht aktiviert - das Update läuft ohne weiter." >&2
+  fi
+}
+
+# end_deploy_maintenance <success|rollback|aborted>
+end_deploy_maintenance() {
+  [ "$DEPLOY_MAINTENANCE_ACTIVE" = 1 ] || return 0
+  echo "==> [$ENVIRONMENT] Wartungsmodus des Updates beenden ($1)"
+  if deploy_maintenance_cli end-deploy --outcome "$1"; then
+    DEPLOY_MAINTENANCE_ACTIVE=0
+    return 0
+  fi
+  echo "    Backend-CLI fehlgeschlagen - beende das Deploy-Fenster direkt in der Datenbank." >&2
+  if "${DC[@]}" exec -T db psql -v ON_ERROR_STOP=1 -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$DEPLOY_MAINTENANCE_END_SQL"; then
+    DEPLOY_MAINTENANCE_ACTIVE=0
+    echo "    Wartungsmodus beendet (SQL)."
+    return 0
+  fi
+  echo "    FEHLER: Wartungsmodus des Updates ist NOCH AKTIV - die App bleibt für Nutzer gesperrt." >&2
+  echo "    Manuell beenden: docker compose -p $PROJECT_NAME ... run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome $1" >&2
+  echo "    oder Admin-Portal -> System -> Wartung -> Freigeben (Fenster «Update»)." >&2
+  return 0
 }
 
 wait_for_exec() {
@@ -1046,7 +1120,19 @@ fi
 
 echo "==> [$ENVIRONMENT] Infrastruktur starten"
 "${DC[@]}" up -d --pull never db redis
+# Wartungsseite vor dem Austausch der App-Container: ihre Ausweich-Router übernehmen, sobald
+# Traefik einen App-Router entfernt (Container gestoppt oder noch nicht healthy). Läuft sie schon
+# mit unveränderter Konfiguration, ist das ein No-op. Ein Fehler hier stoppt das Update nicht.
+if service_exists maintenance-page; then
+  if ! "${DC[@]}" up -d --no-deps --pull never maintenance-page || ! sync_maintenance_page_config; then
+    echo "    WARNUNG: Wartungsseite nicht gestartet - während des Updates zeigt Traefik seine Fehlerseite." >&2
+  fi
+fi
 wait_for_exec db "Postgres" "pg_isready -U '$POSTGRES_USER' -d '$POSTGRES_DB'" 30 2
+
+begin_deploy_maintenance
+# Jeder Abbruch ab hier (exit 1) beendet die Wartung wieder; die Funktion ist idempotent.
+trap 'end_deploy_maintenance aborted' EXIT
 
 echo "==> [$ENVIRONMENT] Datenbankmigration"
 ALEMBIC_ARGS=()
@@ -1064,6 +1150,7 @@ esac
 if ! "${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head; then
   echo "Datenbankmigration fehlgeschlagen. Die laufende App wurde nicht veraendert." >&2
   restart_containers_stopped_for_pg_upgrade
+  end_deploy_maintenance aborted
   [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
   echo "Meldet die Migration 0078 Konten mit mehreren Mandanten oder ohne Mandant:" >&2
   echo "entweder bereinigen oder HOCX_SINGLE_TENANT_RESOLUTION=auto in .env setzen und erneut deployen." >&2
@@ -1085,6 +1172,11 @@ if ! run_smoke_checks; then
   rollback_apps || true
   exit 1
 fi
+
+# Vor den Prüfungen über Traefik: während voller Wartung sperrt die Abgabebox auch die
+# Prüfseite (POST /api/public/verify) - die Prüfung würde scheitern und ein Rollback auslösen.
+# Scheitern die Prüfungen danach, rollt rollback_apps zurück (die Wartung ist dann schon beendet).
+end_deploy_maintenance success
 
 # Von aussen über Traefik: jeder Router muss seinen Dienst erreichen (falsches Docker-Netz,
 # fehlende Middleware, Zertifikat). Die Smoke-Checks oben laufen in den Containern und sehen das

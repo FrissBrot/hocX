@@ -1,0 +1,77 @@
+# Wartungsseite bei Updates und Ausfällen (RUNBOOK Abschnitt 20). Der Dienst maintenance-page
+# (docker-compose.traefik.yml) liefert nur statische Dateien aus infra/maintenance/, jede Antwort
+# mit Status 503, Retry-After und Cache-Control: no-store.
+#
+# Bewusst im Dateiprovider und nicht als Labels am Dienst: die App-Router in
+# docker-compose.release.yml referenzieren diese Middlewares. Stünden sie als Labels am Container,
+# verschwänden sie mit ihm - Traefik deaktivierte dann jeden App-Router, der eine fehlende
+# Middleware nennt, und die ganze App wäre weg, nur weil die Wartungsseite fehlt. So bleibt die
+# Konfiguration immer da; ist der Container einmal weg, liefert die Middleware nur den
+# ursprünglichen Fehler (wie vor 1.4.3).
+#
+# Namen ohne ROUTER_PREFIX: der Dateiprovider gehört zu genau einer Traefik-Instanz, und die
+# Adresse maintenance-page löst Docker im Projektnetz dieser Instanz auf.
+#
+# Die Ausweich-Router (App-Container gestoppt, entfernt oder noch nicht healthy) stehen als Labels
+# am Dienst maintenance-page, weil sie die Domains aus .env brauchen.
+http:
+  middlewares:
+    # HTML-Seiten (Frontend). 502-504 = Traefik erreicht den Container nicht (Neustart, Absturz,
+    # Zeitüberschreitung). Status wird 503 mit Retry-After.
+    maintenance-errors:
+      errors:
+        status:
+          - "502-504"
+        statusRewrites:
+          "502-504": 503
+        service: maintenance-page
+        query: /_hocx
+    maintenance-errors-admin:
+      errors:
+        status:
+          - "502-504"
+        statusRewrites:
+          "502-504": 503
+        service: maintenance-page
+        query: /_admin
+    maintenance-errors-abgabebox:
+      errors:
+        status:
+          - "502-504"
+        statusRewrites:
+          "502-504": 503
+        service: maintenance-page
+        query: /_abgabebox
+    # API: JSON statt HTML. Nur 502 und 504 - ein 503 der Backends (Wartungsmodus "maintenance",
+    # Überlast "overloaded", "db_busy" …) trägt einen Code, den Frontend und Abgabebox auswerten,
+    # und bleibt unverändert.
+    maintenance-errors-api:
+      errors:
+        status:
+          - "502"
+          - "504"
+        statusRewrites:
+          "502": 503
+          "504": 503
+        service: maintenance-page
+        query: /_api
+
+    # Ausweich-Router: Pfad durch die Variante ersetzen (nginx sieht nie Nutzerpfade).
+    maintenance-path-hocx:
+      replacePath:
+        path: /_hocx
+    maintenance-path-admin:
+      replacePath:
+        path: /_admin
+    maintenance-path-abgabebox:
+      replacePath:
+        path: /_abgabebox
+    maintenance-path-api:
+      replacePath:
+        path: /_api
+
+  services:
+    maintenance-page:
+      loadBalancer:
+        servers:
+          - url: "http://maintenance-page:8080"

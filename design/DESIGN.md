@@ -15,7 +15,7 @@ Vor dem Commit: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok`
 
 ## 2. Tokens
 
-Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tokens.sh` (kopiert nach `frontend/app/tokens.css` und `abgabebox-frontend/app/tokens.css`, die Kopien nie von Hand editieren).
+Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tokens.sh` (kopiert nach `frontend/app/tokens.css`, `abgabebox-frontend/app/tokens.css` und `infra/maintenance/tokens.css` (Wartungsseite), die Kopien nie von Hand editieren).
 
 | Bereich | Tokens | Regel |
 |---|---|---|

@@ -1,0 +1,242 @@
+<!doctype html>
+<!--
+  Wartungsseite (RUNBOOK Abschnitt 20). nginx setzt per SSI die Variante (hocx, admin, abgabebox),
+  die Prüfadresse und die Design-Tokens (infra/maintenance/tokens.css, Kopie von design/tokens.css
+  via scripts/sync-design-tokens.sh) ein. Keine externen Ressourcen, keine Cookies, keine
+  Benutzerdaten. Nach einer Änderung am Skript den CSP-Hash in nginx.conf anpassen
+  (scripts/tests/test_maintenance_page.sh nennt den richtigen Wert).
+-->
+<html lang="de" data-variant="<!--# echo var="hocx_variant" default="hocx" -->" data-health="<!--# echo var="hocx_health" default="/api/health" -->">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<noscript><meta http-equiv="refresh" content="30"></noscript>
+<title>hocX wird aktualisiert</title>
+<style>
+<!--# include virtual="/tokens.css" -->
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5) var(--space-4);
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Avenir Next", system-ui, -apple-system, sans-serif;
+  font-size: var(--text-lg);
+  line-height: 1.5;
+}
+.maintenance-card {
+  width: 100%;
+  max-width: 520px;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: 40px var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.maintenance-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.maintenance-title {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.25;
+}
+.maintenance-status { display: grid; gap: var(--space-2); }
+.maintenance-status p { margin: 0; }
+.maintenance-hint { color: var(--muted); font-size: var(--text-base); }
+.maintenance-progress {
+  width: 120px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+.maintenance-progress::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  animation: maintenance-slide 1.6s var(--ease-out) infinite;
+}
+@keyframes maintenance-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-progress::after { animation: none; width: 100%; }
+}
+.maintenance-reload {
+  min-height: var(--button-height);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.maintenance-reload:hover { background: var(--primary-strong); }
+.maintenance-reload:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .maintenance-card { padding: var(--space-5) var(--space-4); }
+  .maintenance-reload { min-height: 44px; }
+}
+</style>
+</head>
+<body>
+<main class="maintenance-card" aria-labelledby="maintenance-title">
+  <div class="maintenance-mark" aria-hidden="true">hX</div>
+  <h1 class="maintenance-title" id="maintenance-title">hocX wird gerade aktualisiert</h1>
+  <div class="maintenance-status" role="status" aria-live="polite">
+    <p id="maintenance-message">hocX wird gerade aktualisiert und ist in wenigen Minuten wieder da.</p>
+    <p class="maintenance-hint" id="maintenance-hint">Diese Seite lädt sich automatisch neu, sobald hocX wieder erreichbar ist.</p>
+  </div>
+  <div class="maintenance-progress" aria-hidden="true"></div>
+  <button type="button" class="maintenance-reload" id="maintenance-reload">Jetzt neu laden</button>
+</main>
+<script>
+(function () {
+  "use strict";
+  // Alle Sprachen aus i18n/locales.json (scripts/tests/test_maintenance_page.sh prüft das).
+  var TEXTS = {
+    de: {
+      hocx: {
+        title: "hocX wird aktualisiert",
+        heading: "hocX wird gerade aktualisiert",
+        message: "hocX wird gerade aktualisiert und ist in wenigen Minuten wieder da.",
+        hint: "Diese Seite lädt sich automatisch neu, sobald hocX wieder erreichbar ist."
+      },
+      abgabebox: {
+        title: "Abgabebox wird aktualisiert",
+        heading: "Die Abgabebox wird gerade aktualisiert",
+        message: "Abgaben sind in wenigen Minuten wieder möglich.",
+        hint: "Diese Seite lädt sich automatisch neu, sobald du wieder etwas abgeben kannst."
+      },
+      reload: "Jetzt neu laden"
+    },
+    en: {
+      hocx: {
+        title: "hocX is being updated",
+        heading: "hocX is being updated",
+        message: "hocX is being updated and will be back in a few minutes.",
+        hint: "This page reloads automatically as soon as hocX is available again."
+      },
+      abgabebox: {
+        title: "Submission box is being updated",
+        heading: "The submission box is being updated",
+        message: "Submissions will be possible again in a few minutes.",
+        hint: "This page reloads automatically as soon as you can submit again."
+      },
+      reload: "Reload now"
+    },
+    fr: {
+      hocx: {
+        title: "Mise à jour de hocX",
+        heading: "hocX est en cours de mise à jour",
+        message: "hocX est en cours de mise à jour et sera de retour dans quelques minutes.",
+        hint: "Cette page se recharge automatiquement dès que hocX est à nouveau disponible."
+      },
+      abgabebox: {
+        title: "Mise à jour de la boîte de dépôt",
+        heading: "La boîte de dépôt est en cours de mise à jour",
+        message: "Les dépôts seront à nouveau possibles dans quelques minutes.",
+        hint: "Cette page se recharge automatiquement dès que tu peux à nouveau déposer des fichiers."
+      },
+      reload: "Recharger maintenant"
+    },
+    it: {
+      hocx: {
+        title: "Aggiornamento di hocX",
+        heading: "hocX è in fase di aggiornamento",
+        message: "hocX è in fase di aggiornamento e sarà di nuovo disponibile tra pochi minuti.",
+        hint: "Questa pagina si ricarica automaticamente non appena hocX sarà di nuovo raggiungibile."
+      },
+      abgabebox: {
+        title: "Aggiornamento della casella di consegna",
+        heading: "La casella di consegna è in fase di aggiornamento",
+        message: "Le consegne saranno di nuovo possibili tra pochi minuti.",
+        hint: "Questa pagina si ricarica automaticamente non appena potrai di nuovo consegnare."
+      },
+      reload: "Ricarica ora"
+    }
+  };
+  var DEFAULT_LOCALE = "de";
+  var CHECK_INTERVAL_MS = 10000;
+  var root = document.documentElement;
+
+  function pickLocale() {
+    var preferred = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+    for (var i = 0; i < preferred.length; i += 1) {
+      var code = String(preferred[i] || "").toLowerCase().split("-")[0];
+      if (Object.prototype.hasOwnProperty.call(TEXTS, code)) return code;
+    }
+    return DEFAULT_LOCALE;
+  }
+
+  var locale = pickLocale();
+  var variant = root.getAttribute("data-variant") === "abgabebox" ? "abgabebox" : "hocx";
+  var texts = TEXTS[locale][variant];
+  root.setAttribute("lang", locale);
+  document.title = texts.title;
+  document.getElementById("maintenance-title").textContent = texts.heading;
+  document.getElementById("maintenance-message").textContent = texts.message;
+  document.getElementById("maintenance-hint").textContent = texts.hint;
+  var reloadButton = document.getElementById("maintenance-reload");
+  reloadButton.textContent = TEXTS[locale].reload;
+  reloadButton.addEventListener("click", function () { window.location.reload(); });
+
+  // Nur eigene Pfade, keine Cookies. Neu geladen wird erst, wenn die Prüfadresse 200 liefert und
+  // die Seite selbst nicht mehr von hier kommt (Kennung X-Hocx-Maintenance-Page) - sonst zeigte
+  // ein Neuladen nur wieder diese Seite.
+  var healthPath = root.getAttribute("data-health") || "/api/health";
+  if (healthPath.charAt(0) !== "/" || healthPath.charAt(1) === "/") healthPath = "/api/health";
+  var request = { cache: "no-store", credentials: "omit" };
+
+  function schedule() { window.setTimeout(check, CHECK_INTERVAL_MS); }
+
+  function check() {
+    if (!window.fetch) return;
+    window.fetch(healthPath, request).then(function (health) {
+      if (health.status !== 200) return false;
+      return window.fetch(window.location.href, { method: "HEAD", cache: "no-store", credentials: "omit" }).then(function (page) {
+        return !page.headers.get("X-Hocx-Maintenance-Page");
+      });
+    }).then(function (ready) {
+      if (ready) window.location.reload();
+      else schedule();
+    }, schedule);
+  }
+
+  schedule();
+})();
+</script>
+</body>
+</html>

@@ -37,6 +37,8 @@ _traefik_curl_args() {
 
 # GET über Traefik; gibt die effektive URL (nach Redirects) aus. HTTP >= 400 und TLS-Fehler
 # lassen den Check scheitern.
+# Die Wartungsseite (Ausweich-Router, RUNBOOK Abschnitt 20) antwortet immer mit 503 und zählt so
+# nie als erreichbar - --fail nicht entfernen (scripts/tests/test_maintenance_page.sh).
 curl_via_traefik() {
   local url="$1"
   local -a extra

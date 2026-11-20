@@ -79,7 +79,8 @@
     "storage_initial_migration": "Erstmigration des Dateispeichers",
     "storage_cutover": "Speicher-Cutover",
     "other": "Systemjob",
-    "backup_restore": "Wiederherstellung aus dem Backup"
+    "backup_restore": "Wiederherstellung aus dem Backup",
+    "deploy": "Update"
   },
   "state": {
     "scheduled": "Geplant",

@@ -150,8 +150,9 @@ test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 13  # 
 # docker-compose.yml, so its dev-only hardening for these two never applied to prod) had no
 # resource limits or container-hardening at all. Assert both are present here so this class
 # of gap gets caught going forward.
-# Je Dienst einmal: traefik.yml hat seit MAIN-OPS-004 zwei Dienste (traefik, traefik-socket-proxy).
-for entry in docker-compose.traefik.yml:2 docker-compose.clamav.yml:1; do
+# Je Dienst einmal: traefik.yml hat seit MAIN-OPS-004 zwei Dienste (traefik, traefik-socket-proxy),
+# seit 1.4.3 drei (+ maintenance-page, weitere Prüfungen in test_maintenance_page.sh).
+for entry in docker-compose.traefik.yml:3 docker-compose.clamav.yml:1; do
   f="${entry%%:*}"; services="${entry##*:}"
   test "$(grep -c 'read_only: true' "$f")" -eq "$services"
   test "$(grep -c 'no-new-privileges:true' "$f")" -eq "$services"

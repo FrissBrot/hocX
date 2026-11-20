@@ -9,6 +9,8 @@ SRC="$ROOT/design/tokens.css"
 TARGETS=(
   "$ROOT/frontend/app/tokens.css"
   "$ROOT/abgabebox-frontend/app/tokens.css"
+  # Wartungsseite (Traefik-Stack, per SSI eingebettet): infra/maintenance/maintenance.html
+  "$ROOT/infra/maintenance/tokens.css"
 )
 
 status=0

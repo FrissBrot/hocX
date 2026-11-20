@@ -18,7 +18,7 @@ function localIsoDate(iso: string): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-const KNOWN_REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover"]);
+const KNOWN_REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover", "deploy"]);
 
 /** Wartungshinweis für Anmeldeseite und Wartungsseite. Die Freigabe hängt nie an der hier
  * angezeigten Schätzung - überschreitet sie ihr Ende, erscheint ein klarer Hinweis statt einer 0. */

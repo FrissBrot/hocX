@@ -6,7 +6,53 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [Unreleased]
+## [Unveröffentlicht]
+
+### Geändert
+
+- **Wartungsseite statt Traefik-Fehlerseite:** Während eines Updates oder wenn ein App-Container
+  nicht erreichbar ist, zeigen Hauptdomain, Admin-Zugang und Abgabebox eine Wartungsseite im
+  hocX-Look (Deutsch, Englisch, Französisch, Italienisch, hell/dunkel), die alle 10 Sekunden prüft,
+  ob hocX wieder da ist, und sich dann selbst neu lädt. API-Aufrufe bekommen ein JSON-503 mit
+  `Retry-After`; das Frontend zeigt seine normale Fehlermeldung, die Abgabebox wiederholt einen
+  Upload selbst. Ein 503 des Backends (Wartungsmodus, Überlast) bleibt unverändert, und
+  Healthchecks wie `/api/health` liefern während eines Ausfalls 503, nie 200. Neuer kleiner Dienst
+  `maintenance-page` im Traefik-Teil des Stacks (nginx, gleiches Image wie die Docs, nur statische
+  Dateien aus `infra/maintenance/`), Traefik-Konfiguration in
+  `infra/traefik/dynamic/maintenance.yml`, Ablauf und Tests in RUNBOOK Abschnitt 20.
+- **Eigene Domains der Mandanten** bekommen dieselbe Wartungsseite: die generierten Router in
+  `tenant-domains.yml` tragen die errors-Middleware (App-Domains: hocX-Seite, Abgabebox- und
+  Prüf-Domains: Abgabebox-Seite, APIs: JSON), dazu je Domain Ausweich-Router (Priorität 1 bzw. 50)
+  mit genau den Pfaden der Domain. Fehlt `maintenance.yml`, bleibt die Datei wie bisher.
+- **Wartungsmodus während des Updates:** `deploy.sh` startet vor der Datenbankmigration ein volles,
+  sofort aktives Wartungsfenster «Update» (neue CLI `python -m app.maintenance_cli begin-deploy`)
+  und beendet es nach den Smoke-Checks, bei jedem Rollback und bei jedem Abbruch wieder
+  (`end-deploy`; Rückfall direkt per SQL, falls die CLI scheitert). Solange es aktiv ist, sperren
+  die noch laufenden alten Container die API mit ihrem bestehenden Wartungsmodus: angemeldete
+  Nutzer sehen die Wartungsansicht statt Fehlern gegen ein halb migriertes Schema, die Abgabebox
+  ihr Wartungsbanner. Admin-API, Healthchecks und Wartungsstatus bleiben erreichbar. Von Admins
+  geplante oder Speicher-Wartungsfenster fasst das Update nie an. Abschalten:
+  `HOCX_DEPLOY_MAINTENANCE=0`. Neuer Wartungsgrund `deploy` in Wartungsansicht und Admin-Portal
+  (alle Sprachen).
+
+### Update
+
+- `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
+  `maintenance-page` (Image `nginxinc/nginx-unprivileged`, wird beim Pull geholt) vor den
+  Migrationen und härtet `infra/maintenance/` auf die Gruppe 5001. Traefik selbst wird nicht neu
+  erstellt: die neue Datei `infra/traefik/dynamic/maintenance.yml` lädt es ohne Neustart. Beim
+  Update auf diese Version selbst greift die Wartungsseite erst, sobald der Dienst läuft (also für
+  den Austausch der App-Container bereits).
+- Ab diesem Update ist hocX während der Datenbankmigration im Wartungsmodus (Fenster «Update» im
+  Admin-Portal unter System → Wartung, Audit `admin.maintenance_deploy_started/_ended`). Beim
+  Update **auf** 1.4.3 selbst gilt das schon: die CLI läuft mit dem neuen Backend-Image, das alte
+  Frontend zeigt dann den allgemeinen Wartungstext. Meldet das Deploy-Log «Wartungsmodus des
+  Updates ist NOCH AKTIV», das Fenster im Admin-Portal freigeben oder den im Log genannten Befehl
+  ausführen.
+- Eigene Domains der Mandanten: das Backend schreibt `tenant-domains.yml` beim Start neu, die
+  Wartungsseite gilt dort also nach dem Neustart des Backends automatisch.
+- Keine Migrationen, keine neuen Secrets. Neue, optionale Variable `HOCX_DEPLOY_MAINTENANCE`
+  (nur Shell, Standard an; `0` = ohne Wartungsmodus während des Updates).
 
 ## [1.4.1] - 2026-11-20
 

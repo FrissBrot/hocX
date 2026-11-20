@@ -4,7 +4,8 @@
     "manual": "Wir führen derzeit notwendige Wartungsarbeiten durch, um die Stabilität und Sicherheit der Plattform zu gewährleisten.",
     "storage_initial_migration": "Wir verlegen gerade alle Dateien in einen neuen, sichereren Speicher. Während dieser Zeit ist hocX nicht verfügbar.",
     "storage_cutover": "Wir schliessen gerade einen Speicherwechsel ab. Das dauert nur einen Moment.",
-    "backup_restore": "Wir stellen gerade einen gesicherten Stand von hocX wieder her. Während dieser Zeit ist hocX nicht verfügbar."
+    "backup_restore": "Wir stellen gerade einen gesicherten Stand von hocX wieder her. Während dieser Zeit ist hocX nicht verfügbar.",
+    "deploy": "hocX wird gerade auf eine neue Version aktualisiert. Das dauert meist nur wenige Minuten."
   },
   "partial": {
     "title": "Speichern ist kurz eingeschränkt",

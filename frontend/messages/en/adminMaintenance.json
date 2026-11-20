@@ -79,7 +79,8 @@
     "storage_initial_migration": "Initial file storage migration",
     "storage_cutover": "Storage cutover",
     "other": "System job",
-    "backup_restore": "Restore from backup"
+    "backup_restore": "Restore from backup",
+    "deploy": "Update"
   },
   "state": {
     "scheduled": "Scheduled",
