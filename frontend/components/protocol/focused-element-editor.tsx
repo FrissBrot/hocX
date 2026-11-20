@@ -3436,6 +3436,7 @@ function FocusedElementEditorImpl({
                     await saveAttendanceStatus(block.id, participant.id, participant.display_name, newStatus);
 
                     await syncAttendanceFine({
+                      canManage: canManageFinances,
                       protocolId: protocol.id,
                       participant,
                       status: newStatus,

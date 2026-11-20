@@ -87,6 +87,7 @@ export function MobileProtocolEditor({
   initialFinanceTransactions,
   initialPendingTodos,
   forceReadOnly,
+  canManageFines = false,
 }: {
   protocol: ProtocolSummary;
   initialElements: ProtocolElement[];
@@ -97,6 +98,8 @@ export function MobileProtocolEditor({
   initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos: TodoListItem[];
   forceReadOnly: boolean;
+  /** fines.manage: nur dann gleicht die Anwesenheit Bussen ab (POST/DELETE /api/fines). */
+  canManageFines?: boolean;
 }) {
   const t = useTranslations("mobile");
   const tProtocols = useTranslations("protocols");
@@ -482,6 +485,7 @@ export function MobileProtocolEditor({
           editable={blockEditable(attendanceSheetBlock)}
           fines={fines}
           setFines={setFines}
+          canManageFines={canManageFines}
           collab={collab}
           onBlockChange={(config) => updateBlock(attendanceSheetBlock.id, (block) => ({ ...block, configuration_snapshot_json: config }))}
           onSaving={() => setSaveState("saving")}
@@ -918,6 +922,7 @@ function AttendanceSheet({
   editable,
   fines,
   setFines,
+  canManageFines,
   collab,
   onBlockChange,
   onSaving,
@@ -930,6 +935,7 @@ function AttendanceSheet({
   editable: boolean;
   fines: AttendanceFine[];
   setFines: React.Dispatch<React.SetStateAction<AttendanceFine[]>>;
+  canManageFines: boolean;
   collab: Collab;
   onBlockChange: (config: Record<string, unknown>) => void;
   onSaving: () => void;
@@ -982,6 +988,7 @@ function AttendanceSheet({
       onBlockChange(updated.configuration_snapshot_json);
       collab.sendFieldUpdate(fieldKey, { configuration_snapshot_json: updated.configuration_snapshot_json });
       await syncAttendanceFine({
+        canManage: canManageFines,
         protocolId: protocol.id,
         participant,
         status,
