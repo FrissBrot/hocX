@@ -400,21 +400,41 @@
     "stepperIncrease": "Increase {label}",
     "page": {
       "title": "Building blocks",
-      "intro1": "Saved agenda items with their building blocks (text, tasks, tables, event lists …). Insert them with one click in the editor of a protocol template.",
-      "intro2": "In the editor, changes to a saved building block ask whether they should apply everywhere or only in one template.",
-      "newElement": "New building block",
+      "newElement": "+ Building block",
       "search": "Search building blocks",
       "colElement": "Building block",
       "colBlocks": "Content",
       "colActions": "Actions",
-      "blockCount": "{count, plural, one {# part} other {# parts}}",
       "duplicate": "Duplicate",
-      "duplicating": "Duplicating…"
+      "intro": "Saved agenda items with content – text, tasks, tables, event lists. Insert them with one click in the template editor.",
+      "footer": "Changes made here apply to every template that uses the building block. The template editor asks whether a change should apply everywhere or only in that template.",
+      "count": "{count, plural, one {# building block} other {# building blocks}}",
+      "colUsed": "Used",
+      "usedIn": "{count, plural, =0 {—} one {# template} other {# templates}}",
+      "empty": "No building blocks found.",
+      "placeholderHint": "Replaced when inserted",
+      "actionsFor": "Actions for “{title}”",
+      "changed": {
+        "today": "Changed today",
+        "yesterday": "Changed yesterday",
+        "daysAgo": "Changed {count, plural, one {# day} other {# days}} ago",
+        "on": "Changed on {date}"
+      }
     },
     "definition": {
-      "title": "Edit element",
       "titleNamed": "Edit element: {name}",
-      "description": "Element title and its blocks. Click a block to open it."
+      "eyebrow": "Edit building block",
+      "titlePlaceholder": "Element title",
+      "insertPlaceholder": "Insert placeholder",
+      "placeholderHint": "Replaced for each working year",
+      "footnote": "Blocks are saved immediately. “Save” applies the title.",
+      "blocksTitle": "Blocks",
+      "blocksCount": "{count, plural, one {# block} other {# blocks}} · click opens, drag sorts",
+      "heading": "Heading: {heading}",
+      "deleteBlockQuestion": "Delete block?",
+      "no": "No",
+      "deleteBlock": "Delete block",
+      "addBlock": "+ Add block"
     },
     "element": {
       "title": "Element",
@@ -423,16 +443,8 @@
       "titlePlaceholder": "e.g. Cooperation with partners"
     },
     "blockList": {
-      "title": "Blocks in {name}",
-      "description": "Drag to change the order.",
-      "newBlock": "New block",
-      "colBlock": "Block",
-      "colType": "Type",
-      "colHeading": "Heading in the protocol",
-      "colOrder": "Order",
-      "drag": "Drag",
       "edit": "Edit",
-      "noHeading": "No own heading",
+      "noHeading": "No heading of its own",
       "unnamed": "Unnamed",
       "unknownType": "Unknown type"
     },
@@ -922,8 +934,7 @@
       }
     },
     "confirm": {
-      "deleteElement": "Delete element permanently? This cannot be undone.",
-      "deleteBlock": "Delete block permanently? This cannot be undone."
+      "deleteNamed": "Delete building block “{title}”? This cannot be undone."
     },
     "toast": {
       "elementCreated": "Element “{title}” was created",
@@ -960,14 +971,14 @@
       "aliasOf": "Alias · {name}",
       "aliasNote": "Names marked «Alias» come from Organization settings › Event fields.",
       "eventRows": "Rows from the event",
-      "eventRowsCount": "{count, plural, one {# field} other {# fields}} · always on top",
+      "eventRowsCount": "{count, plural, one {# field} other {# fields}} · on top, drag to sort",
       "eventRowsEmpty": "No fields yet. «+ Field from event» adds e.g. the date or location to the table automatically.",
       "fromEvent": "from event · {field}",
       "emptyAtEvent": "empty for «{title}»",
       "eventFieldLabel": "Label in the table",
       "emptyUses": "Empty: «{name}».",
       "eventFieldPeopleNote": "Names of the people, separated by commas.",
-      "eventFieldNote": "Each block takes the value from its event, and in the minutes it stays linked to the event. If the field is empty for the event, the row is left out of the PDF. Event fields always come first, in a fixed order.",
+      "eventFieldNote": "Each block takes the value from its event, and in the minutes it stays linked to the event. If the field is empty for the event, the row is left out of the PDF. Event fields always come first.",
       "removeField": "Remove field",
       "ownRows": "Own rows",
       "dragHint": "Drag to reorder",
@@ -1018,7 +1029,7 @@
       "todoRows": "Rows from the to-do",
       "todoRowsEmpty": "No fields yet. «+ Field from to-do» adds e.g. Assigned to or Due to the table automatically.",
       "fromTodo": "from to-do · {field}",
-      "todoFieldNote": "Each block takes the value from its to-do. If the field is empty, the row is left out of the PDF. To-do fields always come first, in a fixed order."
+      "todoFieldNote": "Each block takes the value from its to-do. If the field is empty, the row is left out of the PDF. To-do fields always come first."
     },
     "todoField": {
       "task": "Task",

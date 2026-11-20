@@ -400,21 +400,41 @@
     "stepperIncrease": "{label} erhöhen",
     "page": {
       "title": "Bausteine",
-      "intro1": "Gespeicherte Traktanden mit ihren Bausteinen (Text, Aufgaben, Tabellen, Terminlisten …). Im Editor einer Protokollvorlage fügst du sie mit einem Klick ein.",
-      "intro2": "Änderungen an einem gespeicherten Baustein fragen im Editor, ob sie überall oder nur in einer Vorlage gelten sollen.",
-      "newElement": "Neuer Baustein",
+      "newElement": "+ Baustein",
       "search": "Bausteine durchsuchen",
       "colElement": "Baustein",
       "colBlocks": "Inhalt",
       "colActions": "Aktionen",
-      "blockCount": "{count, plural, one {# Teil} other {# Teile}}",
       "duplicate": "Duplizieren",
-      "duplicating": "Wird dupliziert…"
+      "intro": "Gespeicherte Traktanden mit Inhalt – Text, Aufgaben, Tabellen, Terminlisten. Im Vorlagen-Editor mit einem Klick einfügen.",
+      "footer": "Änderungen hier gelten in allen Vorlagen, die den Baustein verwenden. Im Vorlagen-Editor wird gefragt, ob eine Änderung überall oder nur in dieser Vorlage gelten soll.",
+      "count": "{count, plural, one {# Baustein} other {# Bausteine}}",
+      "colUsed": "Verwendet",
+      "usedIn": "{count, plural, =0 {—} one {# Vorlage} other {# Vorlagen}}",
+      "empty": "Keine Bausteine gefunden.",
+      "placeholderHint": "Wird beim Einfügen ersetzt",
+      "actionsFor": "Aktionen für «{title}»",
+      "changed": {
+        "today": "Heute geändert",
+        "yesterday": "Gestern geändert",
+        "daysAgo": "Geändert vor {count, plural, one {# Tag} other {# Tagen}}",
+        "on": "Geändert am {date}"
+      }
     },
     "definition": {
-      "title": "Element bearbeiten",
       "titleNamed": "Element bearbeiten: {name}",
-      "description": "Titel des Elements und seine Blöcke. Klick auf einen Block öffnet ihn."
+      "eyebrow": "Baustein bearbeiten",
+      "titlePlaceholder": "Titel des Elements",
+      "insertPlaceholder": "Platzhalter einfügen",
+      "placeholderHint": "Wird pro Arbeitsjahr ersetzt",
+      "footnote": "Blöcke werden sofort gespeichert. «Speichern» übernimmt den Titel.",
+      "blocksTitle": "Blöcke",
+      "blocksCount": "{count, plural, one {# Block} other {# Blöcke}} · Klick öffnet, Ziehen sortiert",
+      "heading": "Überschrift: {heading}",
+      "deleteBlockQuestion": "Block löschen?",
+      "no": "Nein",
+      "deleteBlock": "Block löschen",
+      "addBlock": "+ Block hinzufügen"
     },
     "element": {
       "title": "Element",
@@ -423,16 +443,8 @@
       "titlePlaceholder": "z. B. Zusammenarbeit mit Blauring"
     },
     "blockList": {
-      "title": "Blöcke in {name}",
-      "description": "Die Reihenfolge änderst du per Ziehen.",
-      "newBlock": "Neuer Block",
-      "colBlock": "Block",
-      "colType": "Typ",
-      "colHeading": "Überschrift im Protokoll",
-      "colOrder": "Reihenfolge",
-      "drag": "Ziehen",
       "edit": "Bearbeiten",
-      "noHeading": "Keine eigene Überschrift",
+      "noHeading": "Ohne eigene Überschrift",
       "unnamed": "Ohne Namen",
       "unknownType": "Unbekannter Typ"
     },
@@ -922,8 +934,7 @@
       }
     },
     "confirm": {
-      "deleteElement": "Element endgültig löschen? Das lässt sich nicht rückgängig machen.",
-      "deleteBlock": "Block endgültig löschen? Das lässt sich nicht rückgängig machen."
+      "deleteNamed": "Baustein «{title}» löschen? Das lässt sich nicht rückgängig machen."
     },
     "toast": {
       "elementCreated": "Element «{title}» wurde angelegt",
@@ -960,14 +971,14 @@
       "aliasOf": "Alias · {name}",
       "aliasNote": "Namen mit «Alias» kommen aus Mandant-Einstellungen › Terminfelder.",
       "eventRows": "Zeilen aus dem Termin",
-      "eventRowsCount": "{count, plural, one {# Feld} other {# Felder}} · immer zuoberst",
+      "eventRowsCount": "{count, plural, one {# Feld} other {# Felder}} · zuoberst, Ziehen sortiert",
       "eventRowsEmpty": "Noch keine Felder. «+ Feld aus Termin» übernimmt z. B. Datum oder Standort automatisch in die Tabelle.",
       "fromEvent": "aus Termin · {field}",
       "emptyAtEvent": "leer bei «{title}»",
       "eventFieldLabel": "Bezeichnung in der Tabelle",
       "emptyUses": "Leer: «{name}».",
       "eventFieldPeopleNote": "Namen der Personen, mit Komma getrennt.",
-      "eventFieldNote": "Der Wert kommt bei jedem Block aus seinem Termin und ist im Protokoll mit dem Termin verknüpft. Ist das Feld beim Termin leer, fällt die Zeile im PDF weg. Terminfelder stehen immer zuoberst, in fester Reihenfolge.",
+      "eventFieldNote": "Der Wert kommt bei jedem Block aus seinem Termin und ist im Protokoll mit dem Termin verknüpft. Ist das Feld beim Termin leer, fällt die Zeile im PDF weg. Terminfelder stehen immer zuoberst.",
       "removeField": "Feld entfernen",
       "ownRows": "Eigene Zeilen",
       "dragHint": "Ziehen zum Sortieren",
@@ -1018,7 +1029,7 @@
       "todoRows": "Zeilen aus der Pendenz",
       "todoRowsEmpty": "Noch keine Felder. «+ Feld aus Pendenz» übernimmt z. B. Zugewiesen an oder Fällig automatisch in die Tabelle.",
       "fromTodo": "aus Pendenz · {field}",
-      "todoFieldNote": "Der Wert kommt bei jedem Block aus seiner Pendenz. Ist das Feld leer, fällt die Zeile im PDF weg. Pendenzfelder stehen immer zuoberst, in fester Reihenfolge."
+      "todoFieldNote": "Der Wert kommt bei jedem Block aus seiner Pendenz. Ist das Feld leer, fällt die Zeile im PDF weg. Pendenzfelder stehen immer zuoberst."
     },
     "todoField": {
       "task": "Aufgabe",

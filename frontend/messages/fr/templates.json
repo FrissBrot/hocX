@@ -400,21 +400,41 @@
     "stepperIncrease": "Augmenter {label}",
     "page": {
       "title": "Blocs",
-      "intro1": "Points enregistrés avec leurs blocs (texte, tâches, tableaux, listes de rendez-vous …). Insère-les d’un clic dans l’éditeur d’un modèle de procès-verbal.",
-      "intro2": "Dans l’éditeur, les modifications d’un bloc enregistré demandent si elles valent partout ou dans un seul modèle.",
-      "newElement": "Nouveau bloc",
+      "newElement": "+ Bloc",
       "search": "Rechercher des blocs",
       "colElement": "Bloc",
       "colBlocks": "Contenu",
       "colActions": "Actions",
-      "blockCount": "{count, plural, one {# partie} other {# parties}}",
       "duplicate": "Dupliquer",
-      "duplicating": "Duplication…"
+      "intro": "Points enregistrés avec leur contenu – texte, tâches, tableaux, listes de rendez-vous. Insère-les d’un clic dans l’éditeur de modèles.",
+      "footer": "Les modifications faites ici valent pour tous les modèles qui utilisent le bloc. L’éditeur de modèles demande si une modification vaut partout ou seulement dans ce modèle.",
+      "count": "{count, plural, one {# bloc} other {# blocs}}",
+      "colUsed": "Utilisé",
+      "usedIn": "{count, plural, =0 {—} one {# modèle} other {# modèles}}",
+      "empty": "Aucun bloc trouvé.",
+      "placeholderHint": "Remplacé lors de l’insertion",
+      "actionsFor": "Actions pour « {title} »",
+      "changed": {
+        "today": "Modifié aujourd’hui",
+        "yesterday": "Modifié hier",
+        "daysAgo": "Modifié il y a {count, plural, one {# jour} other {# jours}}",
+        "on": "Modifié le {date}"
+      }
     },
     "definition": {
-      "title": "Modifier l’élément",
       "titleNamed": "Modifier l’élément : {name}",
-      "description": "Titre de l’élément et ses blocs. Cliquez sur un bloc pour l’ouvrir."
+      "eyebrow": "Modifier le bloc",
+      "titlePlaceholder": "Titre de l’élément",
+      "insertPlaceholder": "Insérer un espace réservé",
+      "placeholderHint": "Remplacé pour chaque année de travail",
+      "footnote": "Les blocs sont enregistrés immédiatement. « Enregistrer » applique le titre.",
+      "blocksTitle": "Blocs",
+      "blocksCount": "{count, plural, one {# bloc} other {# blocs}} · un clic ouvre, glisser pour trier",
+      "heading": "Titre : {heading}",
+      "deleteBlockQuestion": "Supprimer le bloc ?",
+      "no": "Non",
+      "deleteBlock": "Supprimer le bloc",
+      "addBlock": "+ Ajouter un bloc"
     },
     "element": {
       "title": "Élément",
@@ -423,16 +443,8 @@
       "titlePlaceholder": "p. ex. Collaboration avec les partenaires"
     },
     "blockList": {
-      "title": "Blocs dans {name}",
-      "description": "Faites glisser pour changer l’ordre.",
-      "newBlock": "Nouveau bloc",
-      "colBlock": "Bloc",
-      "colType": "Type",
-      "colHeading": "Titre dans le procès-verbal",
-      "colOrder": "Ordre",
-      "drag": "Glisser",
       "edit": "Modifier",
-      "noHeading": "Pas de titre propre",
+      "noHeading": "Sans titre propre",
       "unnamed": "Sans nom",
       "unknownType": "Type inconnu"
     },
@@ -922,8 +934,7 @@
       }
     },
     "confirm": {
-      "deleteElement": "Supprimer définitivement l’élément ? Action irréversible.",
-      "deleteBlock": "Supprimer définitivement le bloc ? Action irréversible."
+      "deleteNamed": "Supprimer le bloc « {title} » ? Action irréversible."
     },
     "toast": {
       "elementCreated": "L’élément « {title} » a été créé",
@@ -960,14 +971,14 @@
       "aliasOf": "Alias · {name}",
       "aliasNote": "Les noms marqués «Alias» viennent de Organisation › Champs d’événement.",
       "eventRows": "Lignes issues de l’événement",
-      "eventRowsCount": "{count, plural, one {# champ} other {# champs}} · toujours en haut",
+      "eventRowsCount": "{count, plural, one {# champ} other {# champs}} · en haut, glisser pour trier",
       "eventRowsEmpty": "Aucun champ pour l’instant. «+ Champ de l’événement» reprend par ex. la date ou le lieu automatiquement dans le tableau.",
       "fromEvent": "de l’événement · {field}",
       "emptyAtEvent": "vide pour «{title}»",
       "eventFieldLabel": "Libellé dans le tableau",
       "emptyUses": "Vide : «{name}».",
       "eventFieldPeopleNote": "Noms des personnes, séparés par des virgules.",
-      "eventFieldNote": "Chaque bloc reprend la valeur de son événement ; dans le procès-verbal, elle reste liée à l’événement. Si le champ est vide pour l’événement, la ligne est omise du PDF. Les champs d’événement figurent toujours en haut, dans un ordre fixe.",
+      "eventFieldNote": "Chaque bloc reprend la valeur de son événement ; dans le procès-verbal, elle reste liée à l’événement. Si le champ est vide pour l’événement, la ligne est omise du PDF. Les champs d’événement figurent toujours en haut.",
       "removeField": "Retirer le champ",
       "ownRows": "Lignes propres",
       "dragHint": "Glisser pour trier",
@@ -1018,7 +1029,7 @@
       "todoRows": "Lignes issues de la tâche",
       "todoRowsEmpty": "Aucun champ pour l’instant. «+ Champ de la tâche» reprend par ex. Attribuée à ou Échéance automatiquement dans le tableau.",
       "fromTodo": "de la tâche · {field}",
-      "todoFieldNote": "Chaque bloc reprend la valeur de sa tâche. Si le champ est vide, la ligne est omise du PDF. Les champs de tâche figurent toujours en haut, dans un ordre fixe."
+      "todoFieldNote": "Chaque bloc reprend la valeur de sa tâche. Si le champ est vide, la ligne est omise du PDF. Les champs de tâche figurent toujours en haut."
     },
     "todoField": {
       "task": "Tâche",

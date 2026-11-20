@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
+import { ActionMenu } from "@/components/ui/action-menu";
+import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -14,10 +16,12 @@ import { elementTypeLabels } from "@/lib/constants/element-types";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
-import { BlockEditor, SettingsSection, type BlockEditorData } from "./element-editor/block-editor";
+import { BlockEditor, type BlockEditorData } from "./element-editor/block-editor";
 import { blockFormFromBlock, blockPayload, changeElementType, newBlockForm, nextBlockId, type BlockForm } from "./element-editor/block-form";
 import { RowDesigner } from "./element-editor/row-designer";
 import { TypePickerModal } from "./element-editor/type-picker";
+import { ElementDefinitionDialog } from "./element-definition-dialog";
+import { changedLabel, contentTypeIds, titleSegments } from "./element-list-utils";
 
 type ElementDefinitionManagerProps = {
   initialDefinitions: ElementDefinition[];
@@ -62,6 +66,8 @@ export function ElementDefinitionManager({
   canConfigureFines = true,
 }: ElementDefinitionManagerProps) {
   const t = useTranslations("templates.elementEditor");
+  const tPage = useTranslations("templates.elementEditor.page");
+  const locale = useLocale();
   const tTypes = useTranslations("templates");
   const typeLabels = elementTypeLabels(tTypes);
   const { tagConfig } = useTagConfig();
@@ -76,7 +82,6 @@ export function ElementDefinitionManager({
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [designer, setDesigner] = useState<{ kind: "form" | "matrix"; rowId?: string } | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
-  const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [listEntries, setListEntries] = useState<Record<string, StructuredListEntry[]>>({});
@@ -273,7 +278,7 @@ export function ElementDefinitionManager({
   }
 
   async function deleteDefinition(definition: ElementDefinition) {
-    const ok = await confirm({ message: t("confirm.deleteElement"), tone: "danger", confirmLabel: t("delete") });
+    const ok = await confirm({ message: t("confirm.deleteNamed", { title: definition.title }), tone: "danger", confirmLabel: t("delete") });
     if (!ok) return;
     try {
       await browserApiFetch(`/api/element-definitions/${definition.id}`, { method: "DELETE" });
@@ -285,10 +290,9 @@ export function ElementDefinitionManager({
     }
   }
 
+  // Bestätigt wird inline in der Blockzeile (ElementDefinitionDialog)
   async function deleteBlock(block: ElementDefinitionBlock) {
     if (!selected) return;
-    const ok = await confirm({ message: t("confirm.deleteBlock"), tone: "danger", confirmLabel: t("delete") });
-    if (!ok) return;
     await saveBlocks(selected, sortedBlocks(selected.blocks).filter((entry) => entry.id !== block.id), t("toast.blockDeleted"));
   }
 
@@ -319,126 +323,96 @@ export function ElementDefinitionManager({
     setDesigner(null);
   }
 
-  const blockName = (block: ElementDefinitionBlock) =>
-    String(block.title ?? "").trim() || String(block.block_title ?? "").trim() || t("blockList.unnamed");
-
   return (
     <div className="grid">
-      <div className="page-header">
+      <div className="page-header element-library-header">
         <div>
           <h1 className="page-title">{t("page.title")}</h1>
-          <p className="muted">{t("page.intro1")}</p>
-          <p className="muted">{t("page.intro2")}</p>
+          <p className="muted">{t("page.intro")}</p>
         </div>
         <button type="button" className="button-primary" onClick={startNewElement}>{t("page.newElement")}</button>
       </div>
 
       <div className="list-filter-row">
-        <div />
-        <div className="list-filter-search">
+        <div className="list-filter-search element-library-search">
           <SearchInput value={search} onChange={setSearch} placeholder={t("page.search")} />
         </div>
+        <span className="muted element-library-count">{t("page.count", { count: filteredDefinitions.length })}</span>
       </div>
 
-      <DataTable className="data-table-lg" columns={[t("page.colElement"), t("page.colBlocks"), t("page.colActions")]}>
+      <DataTable
+        className="element-library-table"
+        columns={[
+          t("page.colElement"),
+          t("page.colBlocks"),
+          t("page.colUsed"),
+          { key: "actions", label: t("page.colActions"), header: <span className="element-library-sr-only">{t("page.colActions")}</span> },
+        ]}
+        emptyMessage={t("page.empty")}
+      >
         {filteredDefinitions.map((definition) => (
-          <tr key={definition.id} className={`table-row-clickable${selectedId === definition.id ? " table-row-active" : ""}`} onClick={() => openDefinition(definition)}>
+          <tr
+            key={definition.id}
+            className={`table-row-clickable${selectedId === definition.id ? " table-row-active" : ""}`}
+            onClick={() => openDefinition(definition)}
+          >
             <td>
-              {/* Als Button per Tastatur erreichbar; die Zeile bleibt für die Maus klickbar. */}
+              {/* Als Button per Tastatur erreichbar (Enter = Bearbeiten); die Zeile bleibt für die Maus klickbar. */}
               <button
                 type="button"
-                className="table-row-link"
+                className="table-row-link element-library-name"
+                aria-label={definition.title}
                 onClick={(event) => { event.stopPropagation(); openDefinition(definition); }}
               >
-                <strong>{definition.title}</strong>
+                {titleSegments(definition.title).map((segment, index) =>
+                  segment.placeholder ? (
+                    <code key={index} className="element-library-placeholder" title={t("page.placeholderHint")}>{segment.text}</code>
+                  ) : (
+                    <span key={index}>{segment.text}</span>
+                  )
+                )}
               </button>
+              <div className="element-library-changed muted">{changedLabel(definition.updated_at, tPage, locale)}</div>
             </td>
-            <td>{t("page.blockCount", { count: definition.blocks.length })}</td>
             <td>
-              <div className="table-actions">
-                <button
-                  type="button"
-                  className="button-secondary button-ghost"
-                  disabled={duplicatingId !== null}
-                  onClick={(event) => { event.stopPropagation(); void duplicateDefinition(definition); }}
-                >
-                  {duplicatingId === definition.id ? t("page.duplicating") : t("page.duplicate")}
-                </button>
-                <button type="button" className="button-secondary button-danger" onClick={(event) => { event.stopPropagation(); void deleteDefinition(definition); }}>
-                  {t("delete")}
-                </button>
+              <div className="element-library-chips">
+                {contentTypeIds(definition.blocks).map((typeId) => (
+                  <Badge key={typeId} variant="neutral">{typeLabels[typeId] ?? t("blockList.unknownType")}</Badge>
+                ))}
               </div>
+            </td>
+            <td className={definition.template_count ? undefined : "muted"}>
+              {t("page.usedIn", { count: definition.template_count ?? 0 })}
+            </td>
+            <td className="element-library-actions">
+              <ActionMenu
+                ariaLabel={t("page.actionsFor", { title: definition.title })}
+                items={[
+                  { label: t("blockList.edit"), onClick: () => openDefinition(definition) },
+                  { label: t("page.duplicate"), onClick: () => { void duplicateDefinition(definition); } },
+                  { label: t("delete"), danger: true, separatorBefore: true, onClick: () => { void deleteDefinition(definition); } },
+                ]}
+              />
             </td>
           </tr>
         ))}
       </DataTable>
 
-      <Modal
-        open={Boolean(selected) && !session}
-        onClose={() => setSelectedId(null)}
-        title={selected ? t("definition.titleNamed", { name: selected.title }) : t("definition.title")}
-        description={t("definition.description")}
-        size="wide"
-      >
-        {selected ? (
-          <div className="section-stack">
-            <ModalSaveForm id="element-definition-form" className="grid" onSubmit={saveDefinitionTitle}>
-              <SettingsSection title={t("element.title")} description={t("element.description")}>
-                <label className="field-stack">
-                  <span className="field-label">{t("element.titleLabel")}</span>
-                  <input value={definitionTitle} onChange={(event) => setDefinitionTitle(event.target.value)} required />
-                  <span className="field-help">{t("cycleTokens.inline", { tokens: "{cycle_name}, {cycle_year_start}, {cycle_year_end}" })}</span>
-                </label>
-              </SettingsSection>
-            </ModalSaveForm>
+      <p className="muted element-library-footer">{t("page.footer")}</p>
 
-            <SettingsSection
-              title={t("blockList.title", { name: selected.title })}
-              description={t("blockList.description")}
-              actions={<button type="button" className="button-secondary" onClick={startNewBlock}>{t("blockList.newBlock")}</button>}
-            >
-              <DataTable columns={[t("blockList.colBlock"), t("blockList.colType"), t("blockList.colHeading"), t("blockList.colOrder"), t("page.colActions")]}>
-                {sortedBlocks(selected.blocks).map((block) => (
-                  <tr
-                    key={block.id}
-                    draggable
-                    className={`table-row-clickable${draggedBlockId === block.id ? " table-row-dragging" : ""}`}
-                    onClick={() => startEditBlock(block)}
-                    onDragStart={() => setDraggedBlockId(block.id)}
-                    onDragEnd={() => setDraggedBlockId(null)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const sourceId = draggedBlockId;
-                      setDraggedBlockId(null);
-                      if (sourceId) void reorderBlocks(sourceId, block.id);
-                    }}
-                  >
-                    <td><strong>{blockName(block)}</strong></td>
-                    <td>{typeLabels[block.element_type_id] ?? t("blockList.unknownType")}</td>
-                    <td>{block.block_title?.trim() || <span className="muted">{t("blockList.noHeading")}</span>}</td>
-                    <td><span className="pill">{t("blockList.drag")}</span></td>
-                    <td>
-                      <div className="table-actions">
-                        <button type="button" className="button-secondary button-ghost" onClick={(event) => { event.stopPropagation(); startEditBlock(block); }}>
-                          {t("blockList.edit")}
-                        </button>
-                        <button type="button" className="button-secondary button-danger" onClick={(event) => { event.stopPropagation(); void deleteBlock(block); }}>
-                          {t("delete")}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            </SettingsSection>
-            <div className="modal-actions">
-              <button type="button" className="button-ghost" onClick={() => setSelectedId(null)}>{t("cancel")}</button>
-              <button data-modal-save type="submit" form="element-definition-form" className="button-primary">{t("save")}</button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+      <ElementDefinitionDialog
+        open={Boolean(selected) && !session}
+        definition={selected}
+        title={definitionTitle}
+        onTitleChange={setDefinitionTitle}
+        onSubmit={saveDefinitionTitle}
+        onClose={() => setSelectedId(null)}
+        onEditBlock={startEditBlock}
+        onNewBlock={startNewBlock}
+        onDeleteBlock={deleteBlock}
+        onReorder={reorderBlocks}
+        typeLabels={typeLabels}
+      />
 
       <Modal
         open={Boolean(session) && !typePickerOpen}

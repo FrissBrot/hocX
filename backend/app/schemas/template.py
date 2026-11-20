@@ -132,6 +132,8 @@ class ElementDefinitionRead(BaseModel):
     is_library: bool = True
     # In wie vielen Vorlagen-Traktanden die Definition steckt (Rückfrage «überall oder nur hier»)
     usage_count: int = 0
+    # In wie vielen verschiedenen Sitzungsvorlagen (Bausteinliste «Verwendet»)
+    template_count: int = 0
     blocks: list[ElementDefinitionBlockRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

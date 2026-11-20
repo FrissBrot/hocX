@@ -8,7 +8,7 @@ async function openNewElement(page: Page, typeName: string) {
   const picker = page.getByRole("dialog", { name: "Blocktyp auswählen" });
   // `next dev` kompiliert Routen nach und kann einen offenen Dialog per HMR schliessen.
   await expect(async () => {
-    if (!(await picker.isVisible())) await page.getByRole("button", { name: "Neuer Baustein", exact: true }).click();
+    if (!(await picker.isVisible())) await page.getByRole("button", { name: "+ Baustein", exact: true }).click();
     await expect(picker).toBeVisible({ timeout: 5_000 });
     await picker.getByRole("button", { name: new RegExp(`^${typeName}`) }).click({ timeout: 5_000 });
   }).toPass({ timeout: 30_000 });
@@ -61,7 +61,7 @@ test("Element-Editor: Anlegen, Bearbeiten und Matrix-Designer", async ({ page })
   const edit = page.getByRole("dialog", { name: /Block bearbeiten/ });
   await expect(async () => {
     await ensureDefinitionOpen();
-    if (!(await edit.isVisible())) await definition.getByRole("button", { name: "Bearbeiten" }).first().click({ timeout: 5_000 });
+    if (!(await edit.isVisible())) await definition.locator(".element-definition-block-main").first().click({ timeout: 5_000 });
     await expect(edit).toBeVisible({ timeout: 5_000 });
     // Gleiches Formular wie beim Anlegen: gespeicherter Zeitraum und (Seite «Verhalten») das Verhalten.
     await expect(edit.getByLabel("Welche Termine?")).toHaveValue("window", { timeout: 5_000 });
@@ -78,7 +78,7 @@ test("Element-Editor: Anlegen, Bearbeiten und Matrix-Designer", async ({ page })
     if (!(await designer.isVisible())) {
       if (!(await blockDialog.isVisible())) {
         await ensureDefinitionOpen();
-        await definition.getByRole("button", { name: "Neuer Block" }).click({ timeout: 5_000 });
+        await definition.getByRole("button", { name: "+ Block hinzufügen" }).click({ timeout: 5_000 });
         await picker.getByRole("button", { name: /^Matrix/ }).click({ timeout: 5_000 });
       }
       await blockDialog.getByRole("button", { name: "Matrix konfigurieren" }).click({ timeout: 5_000 });
@@ -91,6 +91,6 @@ test("Element-Editor: Anlegen, Bearbeiten und Matrix-Designer", async ({ page })
     await designer.getByRole("button", { name: "Übernehmen" }).click({ timeout: 5_000 });
     await expect(designer).toBeHidden({ timeout: 5_000 });
     await blockDialog.getByRole("button", { name: "Block anlegen" }).click({ timeout: 5_000 });
-    await expect(definition.getByText("Matrix", { exact: true })).toBeVisible({ timeout: 5_000 });
+    await expect(definition.locator(".element-definition-block .badge", { hasText: "Matrix" }).first()).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 90_000 });
 });

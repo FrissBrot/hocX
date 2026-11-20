@@ -400,21 +400,41 @@
     "stepperIncrease": "Aumenta {label}",
     "page": {
       "title": "Blocchi",
-      "intro1": "Punti salvati con i loro blocchi (testo, attività, tabelle, elenchi di appuntamenti …). Inseriscili con un clic nell’editor di un modello di verbale.",
-      "intro2": "Nell’editor, le modifiche a un blocco salvato chiedono se devono valere ovunque o solo in un modello.",
-      "newElement": "Nuovo blocco",
+      "newElement": "+ Blocco",
       "search": "Cerca blocchi",
       "colElement": "Blocco",
       "colBlocks": "Contenuto",
       "colActions": "Azioni",
-      "blockCount": "{count, plural, one {# parte} other {# parti}}",
       "duplicate": "Duplica",
-      "duplicating": "Duplicazione…"
+      "intro": "Punti salvati con contenuto – testo, attività, tabelle, elenchi di appuntamenti. Inseriscili con un clic nell’editor dei modelli.",
+      "footer": "Le modifiche fatte qui valgono per tutti i modelli che usano il blocco. L’editor dei modelli chiede se una modifica deve valere ovunque o solo in quel modello.",
+      "count": "{count, plural, one {# blocco} other {# blocchi}}",
+      "colUsed": "Usato",
+      "usedIn": "{count, plural, =0 {—} one {# modello} other {# modelli}}",
+      "empty": "Nessun blocco trovato.",
+      "placeholderHint": "Sostituito all’inserimento",
+      "actionsFor": "Azioni per «{title}»",
+      "changed": {
+        "today": "Modificato oggi",
+        "yesterday": "Modificato ieri",
+        "daysAgo": "Modificato {count, plural, one {# giorno} other {# giorni}} fa",
+        "on": "Modificato il {date}"
+      }
     },
     "definition": {
-      "title": "Modifica elemento",
       "titleNamed": "Modifica elemento: {name}",
-      "description": "Titolo dell’elemento e i suoi blocchi. Clicca su un blocco per aprirlo."
+      "eyebrow": "Modifica blocco",
+      "titlePlaceholder": "Titolo dell’elemento",
+      "insertPlaceholder": "Inserisci segnaposto",
+      "placeholderHint": "Sostituito per ogni anno di lavoro",
+      "footnote": "I blocchi vengono salvati subito. «Salva» applica il titolo.",
+      "blocksTitle": "Blocchi",
+      "blocksCount": "{count, plural, one {# blocco} other {# blocchi}} · clic apre, trascina per ordinare",
+      "heading": "Intestazione: {heading}",
+      "deleteBlockQuestion": "Eliminare il blocco?",
+      "no": "No",
+      "deleteBlock": "Elimina blocco",
+      "addBlock": "+ Aggiungi blocco"
     },
     "element": {
       "title": "Elemento",
@@ -423,16 +443,8 @@
       "titlePlaceholder": "p. es. Collaborazione con i partner"
     },
     "blockList": {
-      "title": "Blocchi in {name}",
-      "description": "Trascina per cambiare l’ordine.",
-      "newBlock": "Nuovo blocco",
-      "colBlock": "Blocco",
-      "colType": "Tipo",
-      "colHeading": "Titolo nel verbale",
-      "colOrder": "Ordine",
-      "drag": "Trascina",
       "edit": "Modifica",
-      "noHeading": "Nessun titolo proprio",
+      "noHeading": "Senza intestazione propria",
       "unnamed": "Senza nome",
       "unknownType": "Tipo sconosciuto"
     },
@@ -922,8 +934,7 @@
       }
     },
     "confirm": {
-      "deleteElement": "Eliminare definitivamente l’elemento? Non si può annullare.",
-      "deleteBlock": "Eliminare definitivamente il blocco? Non si può annullare."
+      "deleteNamed": "Eliminare il blocco «{title}»? Non si può annullare."
     },
     "toast": {
       "elementCreated": "Elemento «{title}» creato",
@@ -960,14 +971,14 @@
       "aliasOf": "Alias · {name}",
       "aliasNote": "I nomi con «Alias» provengono da Organizzazione › Campi evento.",
       "eventRows": "Righe dall’evento",
-      "eventRowsCount": "{count, plural, one {# campo} other {# campi}} · sempre in alto",
+      "eventRowsCount": "{count, plural, one {# campo} other {# campi}} · in alto, trascina per ordinare",
       "eventRowsEmpty": "Ancora nessun campo. «+ Campo dall’evento» riprende ad es. data o luogo automaticamente nella tabella.",
       "fromEvent": "dall’evento · {field}",
       "emptyAtEvent": "vuoto per «{title}»",
       "eventFieldLabel": "Etichetta nella tabella",
       "emptyUses": "Vuoto: «{name}».",
       "eventFieldPeopleNote": "Nomi delle persone, separati da virgola.",
-      "eventFieldNote": "Ogni blocco prende il valore dal proprio evento; nel verbale resta collegato all’evento. Se il campo è vuoto per l’evento, la riga viene omessa nel PDF. I campi evento stanno sempre in alto, in ordine fisso.",
+      "eventFieldNote": "Ogni blocco prende il valore dal proprio evento; nel verbale resta collegato all’evento. Se il campo è vuoto per l’evento, la riga viene omessa nel PDF. I campi evento stanno sempre in alto.",
       "removeField": "Rimuovi campo",
       "ownRows": "Righe proprie",
       "dragHint": "Trascina per ordinare",
@@ -1018,7 +1029,7 @@
       "todoRows": "Righe dall’attività",
       "todoRowsEmpty": "Ancora nessun campo. «+ Campo dall’attività» riprende ad es. Assegnato a o Scadenza automaticamente nella tabella.",
       "fromTodo": "dall’attività · {field}",
-      "todoFieldNote": "Ogni blocco prende il valore dalla propria attività. Se il campo è vuoto, la riga viene omessa nel PDF. I campi dell’attività stanno sempre in alto, in ordine fisso."
+      "todoFieldNote": "Ogni blocco prende il valore dalla propria attività. Se il campo è vuoto, la riga viene omessa nel PDF. I campi dell’attività stanno sempre in alto."
     },
     "todoField": {
       "task": "Compito",

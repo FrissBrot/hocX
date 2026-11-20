@@ -217,6 +217,21 @@ export function formatShortMonthDate(input: string | null | undefined, locale?: 
   return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", year: "numeric", timeZone: APP_TIME_ZONE }).format(parsed);
 }
 
+// Tag und abgekürzter Monat ohne Jahr ("12. Sept."), z. B. «Geändert 12. Sept.» in Listen.
+export function formatDayMonth(input: string | null | undefined, locale?: string) {
+  const parsed = input ? new Date(input) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", timeZone: APP_TIME_ZONE }).format(parsed);
+}
+
+// Kalendertag eines Zeitpunkts in der App-Zeitzone als ISO-Datum ("2026-11-20"), für
+// Tagesdifferenzen wie «vor 3 Tagen» unabhängig von der Zeitzone des Geräts.
+export function appCalendarDate(input: Date | string): string {
+  const parsed = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: APP_TIME_ZONE }).format(parsed);
+}
+
 // Monat und Jahr ("November 2026"), z. B. für den Termin eines Anliegens. `input` ist ein
 // ISO-Datum (Monatserster); gerechnet wird ohne Zeitzone, damit der Monat nie kippt.
 export function formatMonthYear(input: string | null | undefined, locale?: string) {

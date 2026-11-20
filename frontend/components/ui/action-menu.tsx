@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Popover } from "./popover";
 
@@ -8,6 +8,8 @@ export type ActionMenuItem = {
   label: string;
   onClick: () => void;
   danger?: boolean;
+  /** Trennlinie vor diesem Eintrag (z. B. vor «Löschen»). */
+  separatorBefore?: boolean;
 };
 
 export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; ariaLabel?: string }) {
@@ -24,8 +26,9 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
       <Popover open={open} onOpenChange={setOpen} anchorRef={wrapRef} align="end" className="action-menu">
         <>
           {items.map((item) => (
+            <Fragment key={item.label}>
+            {item.separatorBefore ? <div className="action-menu-separator" role="separator" /> : null}
             <button
-              key={item.label}
               type="button"
               role="menuitem"
               className={item.danger ? "action-menu-item action-menu-item-danger" : "action-menu-item"}
@@ -36,6 +39,7 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
             >
               {item.label}
             </button>
+            </Fragment>
           ))}
         </>
       </Popover>
