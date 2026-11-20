@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.base import reject_nul_characters
 
 
 class CalendarFeedUpsert(BaseModel):
@@ -14,6 +16,11 @@ class CalendarFeedUpsert(BaseModel):
     include_completed: bool = False
     # Datensparsam voreingestellt (PRIV-018): Kalenderanbieter speichern abonnierte Inhalte.
     hide_details: bool = True
+
+    @field_validator("*")
+    @classmethod
+    def _no_nul_characters(cls, value: Any) -> Any:
+        return reject_nul_characters(value)
 
 
 class CalendarFeedRead(BaseModel):

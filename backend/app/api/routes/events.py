@@ -6,12 +6,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, select, update
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
+from app.schemas.base import reject_nul_characters
 from app.schemas.event import EVENT_TAG_MAX_LENGTH, EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
 from app.services.event_service import EventService
@@ -222,6 +223,12 @@ class RenameTagPayload(BaseModel):
     new_tag: str = Field(max_length=MAX_TAG_LENGTH * 2)
     # Nur zählen (für die Rückfrage im Frontend), nichts ändern.
     dry_run: bool = False
+
+    @field_validator("old_tag", "new_tag")
+    @classmethod
+    def _no_nul_characters(cls, value: str) -> str:
+        # Sonst 500 (psycopg.DataError beim Vergleich in der WHERE-Klausel), siehe reject_nul_characters.
+        return reject_nul_characters(value)
 
 
 @router.post("/events/rename-tag", response_model=dict[str, int])

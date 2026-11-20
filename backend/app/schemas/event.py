@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlalchemy.orm import object_session
 
 from app.models.entities import CycleConfig, Participant, Tenant
-from app.schemas.base import PublicIdModel
+from app.schemas.base import PublicIdModel, reject_nul_characters
 from app.services import public_id_service
 
 # Gleiche Grenze wie POST /events/rename-tag für den neuen Tag. Ohne sie entstanden per API oder
@@ -98,6 +98,11 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     cycle_assignments: list[CycleAssignment] | None = None
 
+    @field_validator("*")
+    @classmethod
+    def _no_nul_characters(cls, value: Any) -> Any:
+        return reject_nul_characters(value)
+
     @field_validator("tag")
     @classmethod
     def _tag_length(cls, value: str | None) -> str | None:
@@ -138,6 +143,11 @@ class EventUpdate(BaseModel):
     # entfernt) auf den aktuellen Stand - zwei gleichzeitige Änderungen überschreiben sich nicht
     # mehr (Nachtlauf 2026-11-19). Ohne Angabe ersetzt die Liste wie bisher den Stand.
     role_ids_base: dict[str, list[uuid.UUID]] | None = None
+
+    @field_validator("*")
+    @classmethod
+    def _no_nul_characters(cls, value: Any) -> Any:
+        return reject_nul_characters(value)
 
     @field_validator("role_ids_base")
     @classmethod

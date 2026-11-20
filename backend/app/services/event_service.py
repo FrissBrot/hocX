@@ -470,6 +470,10 @@ class EventService:
         normalized = csv_text.lstrip("\ufeff").strip()
         if not normalized:
             return None
+        if "\x00" in normalized:
+            # PostgreSQL speichert kein NUL in Textfeldern: der Import scheiterte sonst erst beim
+            # INSERT (Fehlerprotokoll-Eintrag), obwohl die Vorschau die Zeilen als gültig zeigte.
+            raise ValueError("CSV file contains NUL characters")
 
         sample = normalized[:2048]
         try:
