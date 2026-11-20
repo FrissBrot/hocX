@@ -25,11 +25,17 @@ export default defineConfig({
   },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: [/auth\.setup\.ts/, /feature-gating\.spec\.ts/] },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: [/auth\.setup\.ts/, /feature-gating\.spec\.ts/, /storage-quota\.spec\.ts/, /storage-packages\.spec\.ts/] },
     // feature-gating.spec.ts schaltet alle Module des gemeinsamen Demo-Mandanten kurz ab. Parallel
     // zu anderen Specs liefen deren Abgabebox-/Finanz-Aufrufe dann zufaellig in 403 (z.B.
     // captcha-verify in abgabebox-photo-album-sync.spec.ts) - deshalb erst nach allen anderen.
     { name: "tenant-wide", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["chromium"], testMatch: /feature-gating\.spec\.ts/ },
+    // storage-quota.spec.ts setzt den Demo-Mandanten auf einen knappen Plan, storage-packages.spec.ts
+    // weist ihm Zusatzspeicher zu - beide ändern dasselbe Kontingent. Parallel zueinander (oder zu
+    // Upload-Specs) sah jede die Änderung der anderen (400 erwartet, 201 erhalten bzw. falsches
+    // Kontingent). Deshalb nacheinander und erst nach allen anderen.
+    { name: "tenant-quota", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["tenant-wide"], testMatch: /storage-quota\.spec\.ts/ },
+    { name: "tenant-packages", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["tenant-quota"], testMatch: /storage-packages\.spec\.ts/ },
   ],
   outputDir: "test-results/playwright",
 });

@@ -19,6 +19,9 @@ test("protected pages redirect anonymous visitors", async ({ browser }) => {
 });
 
 test("main navigation pages can be opened", async ({ page }) => {
+  // Neun Seiten, die der Dev-Server des E2E-Stacks beim ersten Aufruf je erst kompiliert:
+  // das 45-s-Standardlimit reichte auf einem ausgelasteten Host nicht immer (Timeout in page.goto).
+  test.setTimeout(180_000);
   for (const path of ["/", "/my-tasks", "/todos", "/events", "/participants", "/lists", "/users", "/templates", "/submission-assignments"]) {
     await page.goto(path);
     await expect(page).not.toHaveURL(/\/login/);
