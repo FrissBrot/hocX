@@ -7,6 +7,18 @@ from sqlalchemy.orm import Session
 from app.core.db import engine
 
 
+@pytest.fixture(autouse=True)
+def _forget_auth_events():
+    """Sicherheitsereignisse (auth_event) schreibt app/auth_security/events.py in einer eigenen
+    Transaktion - sie überleben das Zurückrollen der Testtransaktion. Nach jedem Test löschen,
+    damit Alarmregeln und Zählungen anderer Tests nicht davon abhängen."""
+    yield
+    from sqlalchemy import text
+
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM auth_event"))
+
+
 @pytest.fixture
 def db():
     """A session bound to a connection wrapped in an outer transaction that's always

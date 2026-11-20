@@ -21,10 +21,17 @@ def _request(host: str, origin: str | None = None) -> Request:
     return Request({"type": "http", "headers": headers, "method": "POST", "path": "/api/auth/bridge", "scheme": "https", "server": (host, 443)})
 
 
+def _parent(db, user):
+    """Ausgangs-Session im Register: ohne sie erzeugt die Bridge keine Session (Security-Review H1)."""
+    from app.auth_security import sessions
+
+    return sessions.create(db, user_id=user.id, tenant_id=user.tenant_id, mfa=False, amr=["pwd"])
+
+
 def _token(db):
     tenant = make_tenant(db, "Kunde")
     user = make_app_user(db, email="bridge@example.com", tenant_id=tenant.id, role_code="writer")
-    return domain_bridge_service.create_bridge_token(user.id, TARGET), user
+    return domain_bridge_service.create_bridge_token(user.id, TARGET, parent_sid=str(_parent(db, user).id)), user
 
 
 def test_get_link_only_redirects_to_the_confirmation_page(db):
@@ -87,7 +94,7 @@ def test_new_links_carry_the_token_only_in_the_fragment(db, monkeypatch):
     user = make_app_user(db, email="bridge-url@example.com", tenant_id=tenant.id, role_code="writer")
     monkeypatch.setattr(settings, "traefik_domain", "haupt.example.org")
 
-    url = domain_bridge_service.resolve_bridge_redirect(db, "anderer.example.org", user.id, tenant.id)
+    url = domain_bridge_service.resolve_bridge_redirect(db, "anderer.example.org", user.id, tenant.id, parent_sid=str(_parent(db, user).id))
 
     parts = urlsplit(url)
     assert (parts.scheme, parts.netloc, parts.path, parts.query) == ("https", "haupt.example.org", "/auth/bridge", "")

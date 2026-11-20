@@ -408,6 +408,41 @@
       "test": "L'invio funziona",
       "todos": "Attività"
     },
+    "login": {
+      "action": "Verifica la sicurezza",
+      "device": "Dispositivo: {device}",
+      "hint": "Non sei stato tu? Cambia subito la password e disconnetti tutte le sessioni in «Dispositivi connessi».",
+      "introAlert": "Sul tuo account presso {tenant} abbiamo notato quanto segue:",
+      "introNotice": "Il tuo account presso {tenant} è stato usato su un dispositivo che non conoscevamo ancora:",
+      "label": {
+        "afterLockout": "Accesso poco dopo un blocco per tentativi falliti",
+        "failedAttempts": "Molti tentativi di accesso falliti ({count})",
+        "newDevice": "Accesso da un nuovo dispositivo",
+        "suspicious": "Accesso con rischio elevato"
+      },
+      "reason": {
+        "account_failures": "molti tentativi falliti",
+        "attack_mode": "attacco in corso alla piattaforma",
+        "distributed_attempts": "tentativi da molte reti",
+        "invalid_tokens": "link di accesso non validi",
+        "mfa_failures": "codici errati",
+        "new_device": "nuovo dispositivo",
+        "new_network": "nuova rete",
+        "privileged_account": "account con diritti amministrativi",
+        "reset_requests": "molte richieste di password",
+        "source_failures": "connessione sospetta",
+        "spraying": "attacco contro molti account",
+        "unusual_hour": "orario insolito"
+      },
+      "subjectAlert": "{tenant}: avviso di sicurezza sul tuo account",
+      "subjectNotice": "{tenant}: accesso da un nuovo dispositivo"
+    },
+    "loginCode": {
+      "ignore": "Non stai cercando di accedere? Allora qualcuno conosce la tua password: cambiala subito.",
+      "intro": "Per accedere a {tenant} serve una conferma aggiuntiva. Inserisci questo codice nella pagina di accesso:",
+      "subject": "{tenant}: codice di conferma per il tuo accesso",
+      "validity": "Il codice è valido {minutes} minuti e una sola volta."
+    },
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
     "security": {
       "emailChanged": "E-mail di accesso modificata ({at})",
@@ -457,6 +492,9 @@
       "exportFailed": "Esportazione non riuscita",
       "exportReady": "La tua esportazione è pronta",
       "invite": "Benvenuto su hocX",
+      "loginAlert": "Accesso insolito al tuo account",
+      "loginCode": "Il tuo codice di conferma",
+      "loginNotice": "Nuovo accesso al tuo account",
       "reminder": "Le tue attività",
       "security": "Modifiche al tuo account",
       "submissionDone": "Consegna ricevuta",

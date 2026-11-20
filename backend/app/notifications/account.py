@@ -77,6 +77,11 @@ def request_password_reset(db: Session, email: str) -> None:
     _issue(db, user, "password_reset", created_by_user_id=None)
     db.commit()
     AuditService().log(db, action="user.password_reset_requested", tenant_id=user.tenant_id, actor_user_id=user.id, entity_type="app_user", entity_id=user.id)
+    from app.auth_security import events
+    from app.auth_security.guard import count_reset_request
+
+    count_reset_request(user.id)
+    events.record(event_type="reset.request", outcome="info", user_id=user.id, tenant_id=user.tenant_id)
 
 
 # ── Einladung ───────────────────────────────────────────────────────────
@@ -178,7 +183,15 @@ def complete_for_user(db: Session, token: str, password: str) -> tuple[str, AppU
     _revoke_open(db, user.id, "invite")
     if row.purpose == "password_reset":
         notify_security(db, user, "security.password_changed")
+        # Passwort vergessen = mögliche Übernahme: alle Sessions und bekannten Geräte vergessen
+        from app.auth_security import devices, sessions
+
+        sessions.revoke_all(db, user.id, reason="password_reset")
+        devices.revoke_all(db, user.id)
     db.commit()
+    from app.auth_security import events
+
+    events.record(event_type="reset.complete", outcome="success", user_id=user.id, tenant_id=user.tenant_id, details={"purpose": row.purpose})
     AuditService().log(
         db, action="user.password_reset" if row.purpose == "password_reset" else "user.invite_accepted",
         tenant_id=user.tenant_id, actor_user_id=user.id, entity_type="app_user", entity_id=user.id,
@@ -261,4 +274,21 @@ def email_changed_items_for(db: Session, notifications: list, recipient_id: int,
             items.pop(notification.id, None)
             continue
         items[notification.id]["to"] = old_email
+    return items
+
+
+def login_items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[int, dict]:
+    """Anmeldeschutz (app/auth_security/notify.py): Zeitpunkt, Gerät (grob, «Firefox · Windows»),
+    Gründe als Codes, Anzahl Fehlversuche. Keine IP, kein Ort (nicht gespeichert)."""
+    items: dict[int, dict] = {}
+    for notification in notifications:
+        payload = notification.payload or {}
+        at = payload.get("at")
+        items[notification.id] = {
+            "kind": notification.kind,
+            "at": datetime.fromisoformat(at) if at else notification.created_at,
+            "device": (payload.get("device") or "")[:64] or None,
+            "reasons": [str(reason)[:32] for reason in payload.get("reasons") or []][:8],
+            "count": int(payload.get("count") or 0),
+        }
     return items

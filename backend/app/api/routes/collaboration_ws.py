@@ -28,7 +28,8 @@ from app.core.security import (
     _requires_mfa,
     mfa_grace_until,
     build_current_user,
-    parse_session_token,
+    session_token_from_cookies,
+    validate_session_token,
 )
 from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, ListDefinition, Protocol, TenantDomain
@@ -80,18 +81,13 @@ def _authenticate(token: str | None) -> CurrentUser | None:
 
 
 def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
-    session_data = parse_session_token(token)
-    if session_data is None:
+    # Dieselbe Kontoprüfung wie REST (SEC-AUTH-014: früher eine eigene Kopie ohne has_left):
+    # aktiv, Login erlaubt, nicht ausgetreten, Widerruf, Session-Register.
+    validated = validate_session_token(db, token)
+    if validated is None:
         return None
-    user = db.get(AppUser, int(session_data["user_id"]))
-    # Wie get_optional_current_user: auch ein gesperrter Login beendet die Verbindung.
-    if user is None or not user.is_active or not user.login_enabled:
-        return None
-    if user.session_revoke_at is not None:
-        token_iat = int(session_data.get("iat", 0))
-        if int(user.session_revoke_at.timestamp()) > token_iat:
-            return None
-    current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
+    user = validated.user
+    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified)
     # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
     # without this, a user who becomes MFA-required (promoted to admin) or whose only
     # factor is administratively deleted keeps full read/write WebSocket access with
@@ -279,7 +275,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     if not await _origin_allowed(websocket):
         await websocket.close(code=4403)
         return
-    token = websocket.cookies.get(settings.auth_session_cookie)
+    token = session_token_from_cookies(websocket.cookies)
     user = await asyncio.to_thread(_authenticate, token)
     if user is None:
         await websocket.close(code=4401)

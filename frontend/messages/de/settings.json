@@ -52,9 +52,13 @@
         "exports": {
           "label": "Datenexport fertig",
           "hint": "Nur wenn du einen Gesamtexport bestellst: Mail, sobald er bereitliegt oder fehlgeschlagen ist."
+        },
+        "security_logins": {
+          "label": "Anmeldung von neuem Gerät",
+          "hint": "Wenn sich jemand mit deinem Konto auf einem Gerät anmeldet, das wir noch nicht kennen."
         }
       },
-      "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert) und Links zum Zurücksetzen des Passworts bekommst du immer."
+      "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert, verdächtige Anmeldungen, viele Fehlversuche) und Links zum Zurücksetzen des Passworts bekommst du immer."
     },
     "docs": {
       "notifications": "Mehr zu E-Mail-Benachrichtigungen",

@@ -112,7 +112,9 @@ def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int |
             admin = db.get(PlatformAdmin, int(admin_data["admin_id"]))
             return None, None, (admin.id if admin is not None else None)
 
-        user_token = request.cookies.get(settings.auth_session_cookie)
+        from app.core.security import session_token_from_cookies
+
+        user_token = session_token_from_cookies(request.cookies)
         user_data = parse_session_token(user_token)
         if user_data is not None:
             user = db.get(AppUser, int(user_data["user_id"]))

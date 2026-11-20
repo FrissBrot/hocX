@@ -48,7 +48,8 @@ def test_former_member_cannot_log_in_and_old_sessions_end(db):
     assert get_optional_current_user(request=None, db=db, session_cookie=token) is None
     with pytest.raises(HTTPException) as exc_info:
         AuthService().login(db, Response(), LoginRequest(email="ehemalig@example.com", password=PASSWORD), request_host=None)
-    assert exc_info.value.status_code == 403 and exc_info.value.detail["code"] == "login_disabled"
+    # Wie ein falsches Passwort (Auth-Audit 2026-11-20, SEC-AUTH-016: kein Passwort-Orakel)
+    assert exc_info.value.status_code == 401 and exc_info.value.detail["code"] == "invalid_credentials"
 
     # Austritt zurückgenommen: der Login gilt ohne weiteres Zutun wieder
     person.left_at = None

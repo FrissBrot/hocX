@@ -8,6 +8,7 @@ its roles (user_role), which is what these tests pin down:
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
@@ -17,6 +18,11 @@ from app.core.security import CurrentUser
 from app.schemas.user import UserCreate, UserPasswordChange, UserUpdate
 from app.services.user_service import _PASSWORD_CHANGE_ATTEMPT_LIMIT, UserService
 from tests.factories import make_app_user, make_current_user, make_participant, make_tenant, system_role_permissions
+
+import secrets as _secrets
+
+# Zur Laufzeit erzeugt (SECURITY-RULES 5.1), stark genug für app/core/password_policy.py
+STRONG_PASSWORD = f"Kiesel-Tanne-Wolke-{_secrets.randbelow(90) + 10}x"
 
 
 def _admin_actor(tenant, *, user_id: int = 999999) -> CurrentUser:
@@ -36,6 +42,8 @@ def _admin_actor(tenant, *, user_id: int = 999999) -> CurrentUser:
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=None,
         permissions=system_role_permissions("admin"),
+        # frisch angemeldet (Step-up SEC-AUTH-010)
+        auth_time=datetime.now(UTC),
     )
 
 
@@ -45,7 +53,7 @@ def _payload(email: str, **overrides) -> UserCreate:
         last_name="Person",
         display_name="New Person",
         email=email,
-        password="a-very-long-password-123",
+        password=STRONG_PASSWORD,
         **overrides,
     )
 

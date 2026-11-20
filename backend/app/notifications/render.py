@@ -510,6 +510,65 @@ SECURITY_KEYS = {
 }
 
 
+LOGIN_REASONS = (
+    "new_device", "new_network", "unusual_hour", "account_failures", "source_failures", "spraying",
+    "distributed_attempts", "mfa_failures", "invalid_tokens", "reset_requests", "privileged_account", "attack_mode",
+)
+LOGIN_KIND_KEYS = {
+    "security.login_new_device": "email.login.label.newDevice",
+    "security.login_suspicious": "email.login.label.suspicious",
+    "security.failed_attempts": "email.login.label.failedAttempts",
+    "security.login_after_lockout": "email.login.label.afterLockout",
+}
+
+
+def _security_url(base_url: str | None, can_login: bool) -> str | None:
+    # Profil › Sicherheit (app-shell.tsx öffnet den Reiter über ?profile=security)
+    return f"{base_url}/?profile=security" if base_url and can_login else None
+
+
+def _render_login(
+    *, lang: str, group: str, items: list[dict], greeting: str, tenant_name: str, base_url: str | None, can_login: bool, brand: Brand,
+) -> Rendered:
+    """Anmeldeschutz: neues Gerät (abschaltbar) bzw. verdächtige Anmeldung, viele Fehlversuche,
+    Anmeldung nach Sperre (Pflicht). Keine IP und kein Ort, nur das grobe Gerät."""
+    alert = group == "account.login_alert"
+    rows = []
+    plain_rows = []
+    for item in items:
+        title = text(lang, LOGIN_KIND_KEYS[item["kind"]], count=item.get("count") or 0)
+        details = []
+        if item.get("device"):
+            details.append(text(lang, "email.login.device", device=item["device"]))
+        reasons = [text(lang, f"email.login.reason.{reason}") for reason in item.get("reasons") or [] if reason in LOGIN_REASONS]
+        if reasons:
+            details.append(", ".join(reasons))
+        sub = " · ".join(details)
+        rows.append(Row(title=title, sub=sub, right=_local_time(item["at"]), marker="none", color=RED if alert else NAVY))
+        plain_rows.append(f"- {title} ({_local_time(item['at'])})" + (f": {sub}" if sub else ""))
+    intro = text(lang, "email.login.introAlert" if alert else "email.login.introNotice", tenant=tenant_name)
+    hint = text(lang, "email.login.hint")
+    html_parts = [
+        _kicker(text(lang, "email.kicker.security"), RED if alert else NAVY),
+        _title(text(lang, "email.title.loginAlert" if alert else "email.title.loginNotice")),
+        _greeting(greeting, intro),
+        _rows(rows),
+        _box(escape(hint), background=RED_SOFT, color=RED_DARK, weight=600) if alert else _box(escape(hint)),
+    ]
+    plain = [greeting, "", intro, "", *plain_rows, "", hint, ""]
+    url = _security_url(base_url, can_login)
+    if url:
+        action = text(lang, "email.login.action")
+        html_parts.append(_button(action, url))
+        plain += [f"{action}: {url}", ""]
+    extra = (text(lang, "email.security.mandatory"),) if alert else ()
+    return _finish(
+        subject=text(lang, "email.login.subjectAlert" if alert else "email.login.subjectNotice", tenant=tenant_name),
+        brand=brand, label=_via(lang), card=_card("".join(html_parts)),
+        footer=_footer(lang, tenant_name, base_url=base_url, can_login=can_login, extra=extra), plain=plain,
+    )
+
+
 def render_account(
     *, lang: str, group: str, items: list[dict], recipient_name: str, tenant_name: str, base_url: str | None, can_login: bool,
     brand: Brand | None = None,
@@ -564,11 +623,20 @@ def render_account(
             _box(escape(hint), background=RED_SOFT, color=RED_DARK, weight=600),
         ]
         plain = [greeting, "", intro, "", *[f"- {row.title} ({row.right})" for row in rows], "", hint, ""]
+        # «Warst du das nicht?» → Passwort ändern / Sitzungen beenden: Link nur in die App (Profil ›
+        # Sicherheit), nie mit Token. Nicht an die alte Adresse nach einer E-Mail-Änderung.
+        security_url = _security_url(base_url, can_login) if not changed else None
+        if security_url:
+            action = text(lang, "email.login.action")
+            html_parts.append(_button(action, security_url))
+            plain += [f"{action}: {security_url}", ""]
         return _finish(
             subject=subject, brand=brand, label=via, card=_card("".join(html_parts)),
             footer=_footer(lang, tenant_name, base_url=base_url, can_login=can_login, settings=False, extra=(text(lang, "email.security.mandatory"),)),
             plain=plain,
         )
+    if group in ("account.login_notice", "account.login_alert"):
+        return _render_login(lang=lang, group=group, items=items, greeting=greeting, tenant_name=tenant_name, base_url=base_url, can_login=can_login, brand=brand)
     # export
     item = items[-1]
     ready = item["kind"] == "export.ready"
@@ -646,6 +714,28 @@ def render(*, group: str, **kwargs) -> Rendered:
     if group in FINE_RENDERERS:
         return FINE_RENDERERS[group](**kwargs)
     return render_account(group=group, **kwargs)
+
+
+def render_login_code(*, lang: str, code: str, minutes: int, recipient_name: str, tenant_name: str) -> Rendered:
+    """Bestätigungscode für eine Anmeldung mit erhöhtem Risiko (Konto ohne zweiten Faktor,
+    app/auth_security/email_challenge.py). Der Code steht nur im Mailtext, nie in einem Link."""
+    greeting = text(lang, "email.greeting", name=recipient_name)
+    intro = text(lang, "email.loginCode.intro", tenant=tenant_name)
+    validity = text(lang, "email.loginCode.validity", minutes=minutes)
+    ignore = text(lang, "email.loginCode.ignore")
+    code_html = (
+        f'<p style="margin:0 0 16px;font-family:Menlo,Consolas,monospace;font-size:28px;letter-spacing:6px;'
+        f'font-weight:700;color:{INK}">{escape(code)}</p>'
+    )
+    html_parts = [
+        _kicker(text(lang, "email.kicker.security"), RED), _title(text(lang, "email.title.loginCode")), _greeting(greeting, intro),
+        code_html, _p(escape(validity), size=13, color=MUTED), _box(escape(ignore), background=RED_SOFT, color=RED_DARK, weight=600),
+    ]
+    plain = [greeting, "", intro, "", code, "", validity, "", ignore, ""]
+    return _finish(
+        subject=text(lang, "email.loginCode.subject", tenant=tenant_name), brand=Brand(tenant_name), label=_via(lang),
+        card=_card("".join(html_parts)), footer=_footer(lang, tenant_name, base_url=None, can_login=True, settings=False), plain=plain,
+    )
 
 
 def render_test(*, lang: str, base_url: str | None) -> Rendered:

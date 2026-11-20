@@ -249,6 +249,11 @@
         "title": "Admin-Passkeys",
         "detail": "{count, number} gesperrte Admin-Passkeys",
         "problem": "Admin-Passkey gesperrt (Zähler zurückgelaufen, möglicher Klon)"
+      },
+      "auth_protection": {
+        "title": "Anmeldeschutz",
+        "detail": "{limiterErrors, number} Limiter-Ausfälle (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} Sperren · {privateSourcePercent, number} % private Quellen",
+        "problem": "Anmeldeschutz gestört oder Redis fast voll"
       }
     },
     "problems": {
@@ -272,6 +277,18 @@
         "failing": "Job {subject} ist fehlgeschlagen",
         "overdue": "Job {subject} ist überfällig",
         "never_run": "Job {subject} ist noch nie gelaufen"
+      },
+      "auth": {
+        "stuffing": "Credential Stuffing: viele Fehlversuche aus vielen Netzen",
+        "spraying": "Password Spraying aus einem Netz",
+        "account_attack": "Konto unter Beschuss",
+        "admin_mfa": "Fehlgeschlagene Admin-MFA",
+        "admin_new_device": "Plattform-Anmeldung von neuem Gerät",
+        "blocks": "Viele IP-Sperren",
+        "network": "Viele Fehlversuche aus einem Netz",
+        "cross_tenant": "Angriffsmuster über mehrere Mandanten",
+        "tenant": "Viele Konten eines Mandanten mit Fehlversuchen",
+        "limiter": "Anmeldeschutz (Redis) gestört"
       }
     },
     "events": {
@@ -569,6 +586,10 @@
       "capture_date_file_sync": {
         "title": "Aufnahmedatum in Dateien schreiben",
         "description": "Schreibt korrigierte Aufnahmedaten in die Bilddateien und stellt beim Wiederherstellen das ursprüngliche Datum in der Datei wieder her."
+      },
+      "auth_security_maintenance": {
+        "title": "Anmeldeschutz aufräumen",
+        "description": "Stündlich: löscht Sicherheitsereignisse nach 90 Tagen, beendete Sitzungen und lange unbenutzte Geräte und repariert Zähler ohne Ablauf."
       }
     }
   },

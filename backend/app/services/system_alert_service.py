@@ -67,6 +67,7 @@ _CHECK_TITLES_DE = {
     "admin_passkeys": "Admin-Passkeys",
     "captcha_endpoint": "Captcha-Endpunkt",
     "security": "Sicherheitsereignisse",
+    "auth_protection": "Anmeldeschutz",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "runtime": "Auslastung der Dienstprozesse",
@@ -94,6 +95,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "admin_passkeys": "Admin-Passkey gesperrt (Zähler zurückgelaufen, möglicher Klon)",
     "captcha_endpoint": "Captcha-Endpunkt nicht erreichbar",
     "security": "Auffällige Sicherheitsereignisse",
+    "auth_protection": "Anmeldeschutz gestört oder Redis fast voll",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "runtime": "Dienstprozesse blockiert oder ausgelastet",
@@ -168,6 +170,16 @@ def _check_message(check) -> str:
             if params.get("adminLogins"):
                 parts.append(f"{params.get('adminLogins')} Plattform-Anmeldungen in der letzten Stunde")
             return "; ".join(parts) + " - siehe Adminportal, Audit-Log."
+        case "auth_protection":
+            parts = []
+            if params.get("limiterErrors") not in (None, "0"):
+                parts.append(f"{params.get('limiterErrors')} Ausfälle des Rate-Limiters in 5 Minuten (unbekannte Geräte werden abgewiesen)")
+            parts.append(f"Redis zu {params.get('redisMemoryPercent')} % belegt")
+            if params.get("lostEvents") not in (None, "0"):
+                parts.append(f"{params.get('lostEvents')} Sicherheitsereignisse nicht gespeichert")
+            if params.get("privateSourcePercent") not in (None, "0"):
+                parts.append(f"{params.get('privateSourcePercent')} % der Anmeldungen mit privater Quelladresse (IPv6/docker-proxy oder trusted_proxy_cidrs prüfen)")
+            return "; ".join(parts) + " - siehe RUNBOOK, Anmeldeschutz."
         case "orphaned_files":
             return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
         case "tenant_offboarding":
@@ -245,8 +257,12 @@ def derive_problems(
     *,
     now: datetime,
     restart_counts: dict[str, int] | None = None,
+    auth_threats: list | None = None,
 ) -> list[SystemProblemRead]:
     problems: list[SystemProblemRead] = []
+    # Anmeldeschutz (app/auth_security/threats.py): je Regel und Pseudonym ein Problem
+    for threat in auth_threats or []:
+        problems.append(_problem(threat.key, "auth", threat.rule, threat.rule, threat.severity, threat.title, threat.message))
 
     if system_health_service.is_stale(snapshot, now):
         problems.append(_problem(
@@ -351,10 +367,32 @@ def current_problems(db: Session, snapshot: SystemHealthSnapshot | None, *, now:
     """Live-Probleme mit first_seen_at aus system_alert_state (für Seite und Summary-Endpoint)."""
     now = now or datetime.now(timezone.utc)
     problems = derive_problems(
-        snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now)
+        snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now),
+        auth_threats=_auth_threats(db),
     )
     first_seen = {row.problem_key: row.first_seen_at for row in db.scalars(select(SystemAlertState))}
     return [problem.model_copy(update={"first_seen_at": first_seen.get(problem.key)}) for problem in problems]
+
+
+_reported_threat_error: str | None = None
+
+
+def _auth_threats(db: Session) -> list:
+    """Alarmregeln des Anmeldeschutzes; ein Fehler darf die übrigen Alarme nicht verhindern."""
+    global _reported_threat_error
+    from app.auth_security import threats
+
+    try:
+        result = threats.detect(db)
+    except Exception as exc:  # noqa: BLE001 - Bug in einer Regel: gedrosselt ins Fehlerprotokoll
+        db.rollback()
+        error = f"{type(exc).__name__}: {exc}"[:500]
+        if error != _reported_threat_error:
+            _reported_threat_error = error
+            record_system_error(db, exc=exc)
+        return []
+    _reported_threat_error = None
+    return result
 
 
 def _click_path(source: str) -> str:
@@ -378,7 +416,8 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
     reminder = timedelta(hours=notification_settings.reminder_hours) if notification_settings.reminder_hours else None
 
     problems = {problem.key: problem for problem in derive_problems(
-        snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now)
+        snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now),
+        auth_threats=_auth_threats(db),
     )}
     states = {row.problem_key: row for row in db.scalars(select(SystemAlertState))}
     # Nachrichten mit Titelpräfix für die in diesem Durchlauf neu angelegten Ereignisse.

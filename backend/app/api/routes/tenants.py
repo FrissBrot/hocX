@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.auth_security.step_up import ADMIN, require_recent_auth
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
@@ -190,6 +191,8 @@ def create_tenant_domain(
     # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
     # 403-Requests das Stundenkontingent des Mandanten.
     service.require_manageable(internal_id, user)
+    # Eigene Domain = Sicherheitskonfiguration (Anmeldung über diese Domain, SEC-AUTH-010)
+    require_recent_auth(user, kind=ADMIN, action="tenant.domain_create")
     enforce_rate_limit(f"tenant-domain-create:{internal_id}", limit=DOMAIN_CREATE_LIMIT_PER_HOUR, period_seconds=3600)
     return service.create_domain(db, internal_id, user, payload)
 
@@ -229,6 +232,7 @@ def delete_tenant_domain(
     # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
     # 403-Requests das Stundenkontingent des Mandanten.
     service.require_manageable(tenant_internal_id, user)
+    require_recent_auth(user, kind=ADMIN, action="tenant.domain_delete")
     enforce_rate_limit(f"tenant-domain-delete:{tenant_internal_id}", limit=DOMAIN_DELETE_LIMIT_PER_HOUR, period_seconds=3600)
     service.delete_domain(db, tenant_internal_id, user, domain_internal_id)
     return {"message": "Domain removed"}

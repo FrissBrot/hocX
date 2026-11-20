@@ -14,8 +14,9 @@ from app.schemas.user import UserRead
 
 
 class AdminLoginRequest(BaseModel):
-    email: str
-    password: str
+    # Längen wie LoginRequest (SEC-AUTH-002)
+    email: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class AdminSelfRead(BaseModel):
@@ -38,14 +39,14 @@ class AdminSessionRead(BaseModel):
 class PlatformAdminCreate(BaseModel):
     email: str
     display_name: str
-    password: str = Field(min_length=12)
+    password: str = Field(min_length=12, max_length=1024)
     is_active: bool = True
     role: Literal["owner", "support"] = "owner"
 
 
 class PlatformAdminUpdate(BaseModel):
     display_name: str | None = None
-    password: str | None = Field(default=None, min_length=12)
+    password: str | None = Field(default=None, min_length=12, max_length=1024)
     is_active: bool | None = None
     role: Literal["owner", "support"] | None = None
 

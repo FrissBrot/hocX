@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.auth_security.step_up import ADMIN, require_recent_auth
 from app.core.db import get_db
 from app.core.permissions import CATALOG, P
 from app.core.features_generated import F
@@ -51,6 +52,7 @@ def get_permission_catalog(user: CurrentUser = Depends(get_current_user)):
 @router.post("/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
 def create_role(payload: RoleCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_recent_auth(user, kind=ADMIN, action="role.create")
     require_feature(user, F.CUSTOM_ROLES, write=True)
     try:
         role = role_service.create_role(db, user, payload)
@@ -67,6 +69,7 @@ def create_role(payload: RoleCreate, db: Session = Depends(get_db), user: Curren
 @router.patch("/roles/{role_id}", response_model=RoleRead)
 def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_recent_auth(user, kind=ADMIN, action="role.update")
     require_feature(user, F.CUSTOM_ROLES, write=True)
     role = role_service.get_role(db, user.current_tenant_id, role_id)
     mfa_before = role.require_mfa
@@ -89,6 +92,7 @@ def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(g
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_recent_auth(user, kind=ADMIN, action="role.delete")
     role = role_service.get_role(db, user.current_tenant_id, role_id)
     role_internal_id, role_name = role.id, role.name
     try:
@@ -103,6 +107,7 @@ def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db), user: Current
 @router.put("/users/{user_id}/roles", response_model=list[RoleRef])
 def set_user_roles(user_id: uuid.UUID, payload: UserRolesUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_recent_auth(user, kind=ADMIN, action="user.roles")
     target = public_id_service.get_by_public_id(db, AppUser, user_id, tenant_id=user.current_tenant_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")

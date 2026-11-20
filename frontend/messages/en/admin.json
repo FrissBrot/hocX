@@ -249,6 +249,11 @@
         "title": "Admin passkeys",
         "detail": "{count, number} locked admin passkeys",
         "problem": "Admin passkey locked (counter went backwards, possible clone)"
+      },
+      "auth_protection": {
+        "title": "Sign-in protection",
+        "detail": "{limiterErrors, number} limiter failures (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocks · {privateSourcePercent, number} % private sources",
+        "problem": "Sign-in protection impaired or Redis almost full"
       }
     },
     "problems": {
@@ -272,6 +277,18 @@
         "failing": "Job {subject} failed",
         "overdue": "Job {subject} is overdue",
         "never_run": "Job {subject} has never run"
+      },
+      "auth": {
+        "stuffing": "Credential stuffing: many failures from many networks",
+        "spraying": "Password spraying from one network",
+        "account_attack": "Account under attack",
+        "admin_mfa": "Failed admin MFA",
+        "admin_new_device": "Platform sign-in from a new device",
+        "blocks": "Many IP blocks",
+        "network": "Many failures from one network",
+        "cross_tenant": "Attack pattern across several tenants",
+        "tenant": "Many accounts of one tenant with failures",
+        "limiter": "Sign-in protection (Redis) impaired"
       }
     },
     "events": {
@@ -569,6 +586,10 @@
       "capture_date_file_sync": {
         "title": "Write capture dates to files",
         "description": "Writes corrected capture dates into the image files and writes the original date back when it is restored."
+      },
+      "auth_security_maintenance": {
+        "title": "Sign-in protection cleanup",
+        "description": "Hourly: deletes security events after 90 days, ended sessions and long-unused devices, and repairs counters without expiry."
       }
     }
   },

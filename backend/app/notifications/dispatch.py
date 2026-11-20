@@ -39,6 +39,8 @@ ITEM_LOADERS = {
     "account.invite": account.link_items_for,
     "account.security": account.security_items_for,
     "account.email_changed": account.email_changed_items_for,
+    "account.login_notice": account.login_items_for,
+    "account.login_alert": account.login_items_for,
     "export": exports.items_for,
     "fine.upcoming": fines.upcoming_items_for,
     "fine.issued": fines.issued_items_for,

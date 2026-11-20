@@ -39,6 +39,11 @@ ALLOWED = {
     "tenants.tenant_profile_image": "Vereinslogo (auch für die Login-Seite)",
     # Eigene Daten (Ressourcenregel R4): ohne Permission, nur das eigene Konto.
     "users.get_me": "eigenes Konto",
+    "users.list_my_sessions": "eigene Sitzungen (Angemeldete Geräte)",
+    "users.list_my_devices": "eigene bekannte Geräte",
+    "users.revoke_my_device": "eigenes bekanntes Gerät vergessen, fremde ergeben 404",
+    "users.revoke_my_session": "eigene Sitzung beenden, fremde ergeben 404",
+    "users.revoke_my_other_sessions": "eigene übrige Sitzungen beenden",
     "users.patch_me": "eigenes Konto",
     "users.export_my_personal_data": "eigene Datenauskunft (rate-limitiert)",
     "users.get_my_mfa": "eigene MFA",

@@ -810,6 +810,9 @@ class AdminTenantService:
             "object_delete_errors": 0,
         }
         AuditService().forget_tenant(db, tenant_id)
+        from app.auth_security import events as auth_events
+
+        auth_events.forget_tenant(db, tenant_id)
         from app.services import erasure_journal
 
         erasure_journal.record(db, "tenant", tenant.public_id, tenant_public_id=tenant.public_id)

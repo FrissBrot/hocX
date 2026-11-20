@@ -62,7 +62,7 @@ def test_create_admin_requires_bound_step_up(db):
     body = {"email": f"neu-{uuid.uuid4().hex[:6]}@example.com", "display_name": "Neu", "password": secrets.token_urlsafe(18)}
 
     missing = _post_admin(client, body)
-    assert missing.status_code == 403 and missing.json()["detail"]["code"] == "step_up_required"
+    assert missing.status_code == 403 and missing.json()["detail"]["code"] == "admin_step_up_required"
     assert _post_admin(client, body, {"X-Hocx-Step-Up": "kaputt"}).status_code == 403
 
     # Bestätigung für einen anderen Body (anderes Konto) gilt nicht

@@ -408,6 +408,41 @@
       "test": "Versand funktioniert",
       "todos": "Aufgaben"
     },
+    "login": {
+      "action": "Sicherheit prüfen",
+      "device": "Gerät: {device}",
+      "hint": "Warst du das nicht? Ändere sofort dein Passwort und melde unter «Angemeldete Geräte» alle Sitzungen ab.",
+      "introAlert": "An deinem Konto bei {tenant} ist uns Folgendes aufgefallen:",
+      "introNotice": "Dein Konto bei {tenant} wurde auf einem Gerät verwendet, das wir noch nicht kannten:",
+      "label": {
+        "afterLockout": "Anmeldung kurz nach einer Sperre wegen Fehlversuchen",
+        "failedAttempts": "Viele fehlgeschlagene Anmeldeversuche ({count})",
+        "newDevice": "Anmeldung von einem neuen Gerät",
+        "suspicious": "Anmeldung mit erhöhtem Risiko"
+      },
+      "reason": {
+        "account_failures": "viele Fehlversuche",
+        "attack_mode": "laufender Angriff auf die Plattform",
+        "distributed_attempts": "Versuche aus vielen Netzwerken",
+        "invalid_tokens": "ungültige Anmeldelinks",
+        "mfa_failures": "falsche Codes",
+        "new_device": "neues Gerät",
+        "new_network": "neues Netzwerk",
+        "privileged_account": "Konto mit Verwaltungsrechten",
+        "reset_requests": "viele Passwort-Anfragen",
+        "source_failures": "auffällige Verbindung",
+        "spraying": "Angriffsmuster gegen viele Konten",
+        "unusual_hour": "ungewöhnliche Uhrzeit"
+      },
+      "subjectAlert": "{tenant}: Sicherheitswarnung zu deinem Konto",
+      "subjectNotice": "{tenant}: Anmeldung von einem neuen Gerät"
+    },
+    "loginCode": {
+      "ignore": "Hast du dich nicht gerade angemeldet? Dann kennt jemand dein Passwort - ändere es sofort.",
+      "intro": "Für die Anmeldung bei {tenant} brauchen wir eine zusätzliche Bestätigung. Gib diesen Code auf der Anmeldeseite ein:",
+      "subject": "{tenant}: Bestätigungscode für deine Anmeldung",
+      "validity": "Der Code gilt {minutes} Minuten und nur einmal."
+    },
     "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
     "security": {
       "emailChanged": "Login-E-Mail geändert ({at})",
@@ -457,6 +492,9 @@
       "exportFailed": "Export fehlgeschlagen",
       "exportReady": "Dein Export ist fertig",
       "invite": "Willkommen bei hocX",
+      "loginAlert": "Auffällige Anmeldung an deinem Konto",
+      "loginCode": "Dein Bestätigungscode",
+      "loginNotice": "Neue Anmeldung an deinem Konto",
       "reminder": "Deine Aufgaben",
       "security": "Änderungen an deinem Konto",
       "submissionDone": "Abgabe eingegangen",

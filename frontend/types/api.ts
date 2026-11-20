@@ -77,7 +77,8 @@ export type PendingMfaMethod = {
 };
 
 export type PendingMfaLogin = {
-  status: "setup_required" | "verification_required";
+  /** email_verification_required: erhöhtes Risiko, Konto ohne zweiten Faktor - Code per E-Mail */
+  status: "setup_required" | "verification_required" | "email_verification_required";
   ticket: string;
   required: boolean;
   /** Pflicht kommt aus der Einstellung «MFA für alle Logins» der Organisation */
@@ -2904,7 +2905,7 @@ export type EmailSettingsWrite = {
   email_link_base_url: string | null;
 };
 
-export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "fines" | "submission_changes" | "exports";
+export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "fines" | "submission_changes" | "exports" | "security_logins";
 
 export type NotificationPreferences = {
   preferences: { category: NotificationCategory; enabled: boolean }[];
@@ -2987,4 +2988,37 @@ export type SubmissionAccessView = {
   allowed_file_types: string[];
   max_file_size_mb: number;
   remaining_files: number | null;
+};
+
+// ── Anmeldeschutz (Auth-Audit 2026-11-20): Step-up und angemeldete Geräte ──
+
+export type StepUpMethod = "totp" | "passkey" | "password";
+
+export type StepUpOptions = {
+  methods: StepUpMethod[];
+  auth_time: string | null;
+};
+
+export type SessionDevice = {
+  id: string;
+  current: boolean;
+  user_agent_family: string | null;
+  host: string | null;
+  created_at: string;
+  last_seen_at: string;
+  mfa: boolean;
+  via_bridge: boolean;
+};
+
+export type SessionDeviceList = {
+  sessions: SessionDevice[];
+  legacy_session: boolean;
+};
+
+export type KnownDevice = {
+  id: string;
+  user_agent_family: string | null;
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
 };

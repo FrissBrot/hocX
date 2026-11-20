@@ -139,13 +139,71 @@
     "mfa_setup_required": "Your organisation requires MFA. Please sign in again and set up a second factor.",
     "last_passkey": "The last passkey cannot be removed. Add another one first.",
     "mfa_already_configured": "A second factor is already set up for this account. Please sign in with it.",
-    "step_up_required": "This action must be confirmed with your passkey.",
-    "step_up_mismatch": "The passkey confirmation belongs to a different action. Please try again."
+    "admin_step_up_required": "This action must be confirmed with your passkey.",
+    "step_up_mismatch": "The passkey confirmation belongs to a different action. Please try again.",
+    "step_up_required": "Please confirm your identity first.",
+    "step_up_method_unavailable": "This confirmation isn't available for your account.",
+    "email_code_invalid": "The code is not valid. Please check the email and try again.",
+    "verification_unavailable": "The code could not be sent. Please try again later.",
+    "login_denied": "Signing in from this connection is temporarily not possible. Please try later or from your usual device.",
+    "source_blocked": "Sign-ins from this connection are temporarily blocked.",
+    "auth_temporarily_unavailable": "Sign-in temporarily unavailable. Please try again in a few minutes.",
+    "rate_limiter_unavailable": "Sign-in protection is briefly unavailable. Please try again shortly.",
+    "mfa_locked": "Too many wrong codes. Please wait a minute and try again."
   },
   "grace": {
     "title": "Second factor becomes mandatory",
     "message": "Your organisation requires a second factor for your account. Set it up by {until} – after that you can only sign in with it.",
     "later": "Later",
     "setup": "Set up now"
+  },
+  "stepUp": {
+    "title": "Confirm your identity",
+    "description": "This change is security-relevant. Please briefly confirm that it's you.",
+    "methods": {
+      "totp": "App code",
+      "passkey": "Passkey",
+      "password": "Password"
+    },
+    "codeLabel": "Code from your authenticator app",
+    "passwordLabel": "Your password",
+    "passkeyHint": "Confirm with your passkey (fingerprint, face or device PIN).",
+    "loading": "Loading …",
+    "loadFailed": "The confirmation could not be prepared.",
+    "failed": "Confirmation failed.",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "checking": "Checking …"
+  },
+  "sessions": {
+    "title": "Signed-in devices",
+    "description": "You are currently signed in here. If you don't recognise a device, sign it out and change your password.",
+    "columns": {
+      "device": "Device",
+      "lastSeen": "Last active",
+      "since": "Signed in since",
+      "actions": "Action",
+      "knownSince": "Known since"
+    },
+    "current": "This device",
+    "unknownDevice": "Unknown device",
+    "viaBridge": "via {host}",
+    "empty": "No active sessions.",
+    "loading": "Loading …",
+    "loadFailed": "Sessions could not be loaded.",
+    "revoke": "Sign out",
+    "revokeConfirm": "Sign out this device?",
+    "revoked": "Device signed out.",
+    "revokeFailed": "Signing out failed.",
+    "revokeOthers": "Sign out all other devices",
+    "revokeOthersConfirm": "Sign out all other devices? This device stays signed in.",
+    "revokedOthers": "{count, plural, =0 {No other devices signed in.} one {One device signed out.} other {# devices signed out.}}",
+    "legacyHint": "Sign-ins from before the last update don't appear here; «Sign out all other devices» ends them too.",
+    "knownTitle": "Known devices",
+    "knownDescription": "You have signed in on these devices before. They are exempt from lockouts caused by other people's failed attempts. Forgetting a device also ends its sessions.",
+    "knownEmpty": "No known devices.",
+    "forget": "Forget",
+    "forgetConfirm": "Forget this device? Its sessions will be ended.",
+    "forgotten": "Device forgotten."
   }
 }

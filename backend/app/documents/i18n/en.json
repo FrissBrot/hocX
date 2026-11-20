@@ -408,6 +408,41 @@
       "test": "Sending works",
       "todos": "To-dos"
     },
+    "login": {
+      "action": "Review security",
+      "device": "Device: {device}",
+      "hint": "Wasn't you? Change your password right away and sign out all sessions under «Signed-in devices».",
+      "introAlert": "We noticed the following on your account at {tenant}:",
+      "introNotice": "Your account at {tenant} was used on a device we haven't seen before:",
+      "label": {
+        "afterLockout": "Sign-in shortly after a lockout due to failed attempts",
+        "failedAttempts": "Many failed sign-in attempts ({count})",
+        "newDevice": "Sign-in from a new device",
+        "suspicious": "Sign-in with elevated risk"
+      },
+      "reason": {
+        "account_failures": "many failed attempts",
+        "attack_mode": "ongoing attack on the platform",
+        "distributed_attempts": "attempts from many networks",
+        "invalid_tokens": "invalid sign-in links",
+        "mfa_failures": "wrong codes",
+        "new_device": "new device",
+        "new_network": "new network",
+        "privileged_account": "account with admin rights",
+        "reset_requests": "many password requests",
+        "source_failures": "suspicious connection",
+        "spraying": "attack pattern against many accounts",
+        "unusual_hour": "unusual time"
+      },
+      "subjectAlert": "{tenant}: security warning about your account",
+      "subjectNotice": "{tenant}: sign-in from a new device"
+    },
+    "loginCode": {
+      "ignore": "Didn't just try to sign in? Then someone knows your password - change it right away.",
+      "intro": "To sign in at {tenant} we need an extra confirmation. Enter this code on the sign-in page:",
+      "subject": "{tenant}: confirmation code for your sign-in",
+      "validity": "The code is valid for {minutes} minutes and only once."
+    },
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
     "security": {
       "emailChanged": "Login email changed ({at})",
@@ -457,6 +492,9 @@
       "exportFailed": "Export failed",
       "exportReady": "Your export is ready",
       "invite": "Welcome to hocX",
+      "loginAlert": "Unusual sign-in to your account",
+      "loginCode": "Your confirmation code",
+      "loginNotice": "New sign-in to your account",
       "reminder": "Your to-dos",
       "security": "Changes to your account",
       "submissionDone": "Submission received",

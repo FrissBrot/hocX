@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { MfaProfilePanel } from "@/components/security/mfa-profile-panel";
 import { PasswordChangePanel } from "@/components/security/password-change-panel";
+import { SessionsPanel } from "@/components/security/sessions-panel";
 import { DocsLink } from "@/components/ui/help-popover";
 import { NotificationPreferencesPanel } from "@/components/notifications/notification-preferences-panel";
 import { Modal } from "@/components/ui/modal";
@@ -136,6 +137,7 @@ export function ProfileModal({
               <div className="grid">
                 <PasswordChangePanel />
                 <MfaProfilePanel open={open && activeTab === "sicherheit"} />
+                <SessionsPanel open={open && activeTab === "sicherheit"} />
                 <DocsLink page="konto" anchor="mfa">{t("docs.security")}</DocsLink>
               </div>
             ),

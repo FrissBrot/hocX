@@ -471,7 +471,7 @@ def _check_security(db: Session) -> HealthCheckRead:
     from sqlalchemy import text
 
     failure_window = (
-        "outcome = 'failure' AND action IN ('user.login_failed', 'admin.login_failed', 'user.mfa_failed') "
+        "outcome = 'failure' AND action IN ('user.login_failed', 'admin.login_failed', 'user.mfa_failed', 'admin.mfa_failed', 'user.passkey_failed') "
         "AND created_at > now() - interval '15 minutes'"
     )
     total_failed = db.scalar(text("SELECT count(*) FROM audit_log WHERE " + failure_window)) or 0
@@ -516,6 +516,52 @@ def _check_security(db: Session) -> HealthCheckRead:
             "restores": int(restores),
             "adminChanges": int(admin_changes),
             "adminLogins": int(admin_logins),
+        },
+    )
+
+
+def _check_auth_protection(db: Session) -> HealthCheckRead:
+    """Anmeldeschutz (Auth-Audit 2026-11-20, Abschnitt 10.3/11): Ausfälle des Rate-Limiters
+    (Redis weg/voll), Redis-Speicher über ``auth_alert_redis_memory_ratio`` (noeviction: voll =
+    keine Zähler mehr), verlorene Sicherheitsereignisse, aktive IP-Sperren und der Anteil der
+    Anmeldungen mit privater Quelladresse (SEC-AUTH-019: IPv6 über docker-proxy oder falsche
+    trusted_proxy_cidrs - dann teilen sich alle Nutzer einen Zähler)."""
+    from sqlalchemy import text
+
+    from app.auth_security import blocks, events
+
+    limiter_errors = int(db.scalar(text(
+        "SELECT count(*) FROM auth_event WHERE event_type = 'ratelimit.backend_error' AND ts > now() - interval '5 minutes'"
+    )) or 0)
+    total, private = db.execute(text(
+        "SELECT count(*), count(*) FILTER (WHERE src_private) FROM auth_event WHERE event_type = 'login.success' AND ts > now() - interval '24 hours'"
+    )).one()
+    private_percent = round(private * 100 / total) if total else 0
+    memory_percent = 0
+    active_blocks = 0
+    try:
+        from app.core.redis_client import get_ratelimit_redis_sync
+
+        # Haupt-Redis und - falls getrennt (RATELIMIT_REDIS_URL) - das Zähler-Redis
+        for client in {id(c): c for c in (get_redis_sync(), get_ratelimit_redis_sync())}.values():
+            memory = client.info("memory")
+            used, maximum = memory.get("used_memory", 0), memory.get("maxmemory", 0)
+            memory_percent = max(memory_percent, round(used * 100 / maximum) if maximum else 0)
+        active_blocks = len(blocks.active_blocks(limit=1000))
+    except Exception:  # noqa: BLE001 - Redis weg: zählt der Limiter selbst (ratelimit.backend_error)
+        limiter_errors = max(limiter_errors, 1)
+    lost = events.lost_events()
+    status: HealthStatus = "ok"
+    if memory_percent >= round(settings.auth_alert_redis_memory_ratio * 100) or lost or (total >= 20 and private_percent >= 50):
+        status = "warning"
+    if limiter_errors:
+        status = "critical"
+    return HealthCheckRead(
+        key="auth_protection",
+        status=status,
+        params={
+            "limiterErrors": limiter_errors, "redisMemoryPercent": memory_percent, "lostEvents": lost,
+            "privateSourcePercent": private_percent, "activeBlocks": active_blocks,
         },
     )
 
@@ -817,6 +863,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db, report_errors=False)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("admin_passkeys", lambda: _check_admin_passkeys(db), failure_status="unknown", db=db)
+    checks += _run_check("auth_protection", lambda: _check_auth_protection(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)

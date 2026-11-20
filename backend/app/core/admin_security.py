@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.security import token_predates_revoke
 from app.core.security import verify_password  # noqa: F401  (re-exported for convenience)
 from app.models import PlatformAdmin
 
@@ -110,12 +111,9 @@ def get_optional_current_admin(
     admin = db.get(PlatformAdmin, int(session_data["admin_id"]))
     if admin is None or not admin.is_active:
         return None
-    if admin.session_revoke_at is not None:
-        # Ältere Tokens ohne iat_ms: Anfang ihrer Ausstellungssekunde - ein Widerruf in derselben
-        # Sekunde trifft sie dann sicher (>=), statt je nach Rundung nicht.
-        token_iat_ms = int(session_data.get("iat_ms") or int(session_data.get("iat", 0)) * 1000)
-        if int(admin.session_revoke_at.timestamp() * 1000) >= token_iat_ms:
-            return None
+    # Gleiche Widerrufsregel wie für Konten (app/core/security.py::token_predates_revoke)
+    if token_predates_revoke(admin.session_revoke_at, session_data):
+        return None
     # Audit finding, 2026-08-27: platform admins are the highest-privilege tier (full
     # cross-tenant access, backup export, admin management) but previously had no MFA
     # option at all - password-only login granted a full, unprotected session. Every

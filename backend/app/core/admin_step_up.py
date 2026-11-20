@@ -67,7 +67,7 @@ def step_up_binding(method: str, path: str, body: bytes) -> str:
 def _required() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail={"code": "step_up_required", "message": "Diese Aktion muss mit einem Passkey bestätigt werden"},
+        detail={"code": "admin_step_up_required", "message": "Diese Aktion muss mit einem Passkey bestätigt werden"},
     )
 
 

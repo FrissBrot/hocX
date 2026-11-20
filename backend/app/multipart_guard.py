@@ -21,7 +21,7 @@ from starlette.responses import JSONResponse
 
 from app.core.admin_security import parse_admin_session_token
 from app.core.config import settings
-from app.core.security import parse_session_token
+from app.core.security import parse_session_token, session_token_from_cookies
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH"}
 
@@ -68,7 +68,7 @@ class MultipartGuardMiddleware:
         cookies = self._cookies(headers)
         if path.startswith("/api/admin/"):
             return parse_admin_session_token(cookies.get(settings.admin_session_cookie)) is not None
-        return parse_session_token(cookies.get(settings.auth_session_cookie)) is not None
+        return parse_session_token(session_token_from_cookies(cookies)) is not None
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope.get("method") not in _MUTATING_METHODS:

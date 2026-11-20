@@ -1142,3 +1142,122 @@ löschen die Sperrzähler des Kontos und schreiben den Audit-Eintrag (`actor_ema
 derselben Transaktion. Nach `reset-passkeys` richtet das Konto beim nächsten Login nach dem Passwort
 einen neuen Passkey ein - wer in diesem Moment das Passwort kennt, kann das tun. Deshalb sofort
 selbst anmelden (bei Verdacht vorher `reset-password`).
+
+## 23. Anmeldeschutz (Auth-Audit 2026-11-20)
+
+Code: `backend/app/auth_security/` (Zähler und Schichten `guard.py`, Risk Engine `risk.py`,
+IP-Sperren `blocks.py`, Sessions `sessions.py`, Step-up `step_up.py`, Alarme `threats.py`,
+Ereignisse `events.py`), gemeinsame Zähler-Primitive `backend/app/core/rate_limit.py`.
+
+### Was passiert bei einer Anmeldung
+
+1. Quelle gesperrt (automatisch/manuell)? → 429 `source_blocked` (bekannte Geräte ausgenommen).
+2. Versuchsrate je Quelle (GCRA: IPv4 /32 und /24, IPv6 /64, /48 und /32) → 429 `rate_limited`.
+3. Zähler **vor** der Passwortprüfung (Lua, atomar): Konto+Quelle (`AUTH_ACCOUNT_IP_FAILURES`, 10/15 min,
+   hart), Konto (`AUTH_ACCOUNT_FAILURES_CHALLENGE` 30 → zusätzliche Prüfung,
+   `AUTH_ACCOUNT_FAILURES_KNOWN_ONLY` 100 → unbekannte Geräte nur noch mit Faktor/E-Mail-Code), Quelle
+   (`AUTH_IP_FAILURES_SOFT/HARD` 20/60), Netz (IPv4 /24, IPv6 /48 mit Faktor `AUTH_NET6_FACTOR` 4;
+   `AUTH_NET_FAILURES_SOFT` 60/15 min, `AUTH_NET_FAILURES_HARD_HOUR` 300/h), je Gerät (10/15 min,
+   danach verliert ein bekanntes Gerät seine Ausnahme), global (Angriffsmodus ab
+   `AUTH_GLOBAL_ATTACK_MIN` 100/15 min und 5 × gewohnte Rate; endet von selbst, sobald die
+   Fehlversuche im gleitenden 15-min-Fenster abklingen).
+4. Risk Engine (Score 0-100, Gründe im Ereignis): normal → wie bisher; moderat/hoch → zweiter Faktor,
+   ohne Faktor ein **Code per E-Mail**; kritisch → diese Verbindung 30 min abgewiesen.
+5. Erfolg: Gerät wird als bekannt gespeichert (Cookie `__Host-hocx_device`, 90 Tage), Session im Register
+   (`auth_session`), Ereignis `login.success`, ggf. Mail an die Person.
+
+**Bekannte Geräte** sind von der Kontosperre und den Quellgrenzen ausgenommen: ein Angreifer kann die
+Inhaberin nicht mehr aussperren. Eine Geräte-ID wird nur an ein Konto gebunden, wenn sie bei diesem Konto
+neu ausgestellt wurde; das Gerät, auf dem «Passwort vergessen» abgeschlossen wird, gilt danach als bekannt.
+
+**Ohne E-Mail-Versand** gilt: Konten mit zweitem Faktor werden nie abgewiesen (der Faktor ist die Prüfung).
+Konten ohne Faktor auf unbekanntem Gerät werden nur bei Quellsignalen (L1/L2) oder über L5 abgewiesen
+(429 `login_denied`, gleich für falsches und richtiges Passwort); der Angriffsmodus allein weist nie ab.
+**E-Mail-Versand einrichten** (Adminportal → Benachrichtigungen), dann bekommen diese Fälle einen Code.
+
+### Einstellungen (`.env`, Startwerte aus dem Audit)
+
+| Variable | Standard | Wirkung |
+|---|---|---|
+| `AUTH_RISK_MODE` | `enforce` | `monitor`: Risk Engine nur protokollieren (Zähler-Sperren gelten weiter) |
+| `AUTH_SESSION_IDLE_MINUTES` / `AUTH_SESSION_ABSOLUTE_HOURS` | 480 / 336 | Inaktivität / absolute Dauer einer Session |
+| `AUTH_STEP_UP_MFA_MINUTES` / `AUTH_STEP_UP_ADMIN_MINUTES` | 10 / 15 | Höchstalter der letzten starken Anmeldung für Faktor-Änderungen bzw. Rollen, Exporte, Sicherheitseinstellungen |
+| `AUTH_EVENT_RETENTION_DAYS` | 90 | Aufbewahrung `auth_event` |
+| `AUTH_ACCOUNT_IP_FAILURES`, `AUTH_ACCOUNT_FAILURES_CHALLENGE`, `AUTH_ACCOUNT_FAILURES_KNOWN_ONLY` | 10, 30, 100 | Konto-Schichten L4/L5 |
+| `AUTH_IP_FAILURES_SOFT/HARD`, `AUTH_NET_FAILURES_SOFT`, `AUTH_NET_FAILURES_HARD_HOUR` | 20/60, 60, 300 | Quell-Schichten L1/L2 |
+| `AUTH_GLOBAL_ATTACK_MIN` | 100 | Angriffsmodus (L7) |
+| `AUTH_BLOCK_STRIKES`, `AUTH_BLOCK_MINUTES` | 3, `60,360,1440` | Automatische Sperre nach Strikes in 24 h, Dauer je Wiederholung (max. 24 h) |
+| `AUTH_DEVICE_TTL_DAYS` | 90 | Lebensdauer «bekanntes Gerät» |
+| `AUTH_SECRET_PREVIOUS` | leer | Schlüsselrotation (unten) |
+| `AUTH_LEGACY_COOKIE_UNTIL` | leer (= Start + 72 h) | bis wann der bisherige Cookie-Name `hocx_session` noch gelesen wird |
+| `AUTH_NET6_FACTOR` | 4 | IPv6: L2-Grenzen je /48 = Netz-Grenzen × Faktor |
+| `SECURITY_ALERT_ADMIN_LOGINS` | `true` (neu) | jede Plattform-Anmeldung meldet sich im Check «security» |
+
+Weitere Werte (Body-Limit 16 KiB für `/api/auth/*`, GCRA-Raten, Alarmschwellen `AUTH_ALERT_*`) stehen in
+`backend/app/core/config.py` und können bei Bedarf ebenfalls gesetzt werden (Allowlist in
+`scripts/lib/env.sh` und `docker-compose.release.yml` ergänzen).
+
+### Notfallzugang und Entsperren
+
+Im Backend-Container (`docker compose exec backend …`):
+
+```bash
+python -m app.auth_security.cli list                    # aktive IP-Sperren (nur Pseudonyme)
+python -m app.auth_security.cli unblock-ip 203.0.113.7  # Sperre einer Adresse (und ihres /24) aufheben
+python -m app.auth_security.cli unblock <subject>       # Sperre per Pseudonym aus "list"
+python -m app.auth_security.cli reset-account person@example.org   # Fehlversuchszähler eines Kontos löschen
+python -m app.auth_security.cli attack-mode-off         # Angriffsmodus 1 h aussetzen
+```
+
+Dieselben Sperren sind über `/api/admin/auth-security/blocks` (Plattform-Admin, Schreibrecht) lesbar,
+setzbar (Stufe 5, Begründung + Ablauf, max. 30 Tage) und aufhebbar; jedes Setzen/Aufheben erzeugt ein
+Ereignis `block.set`/`block.clear` und einen Audit-Eintrag. Der Plattform-Login ist von den App-IP-Sperren
+ausgenommen (Ziti ist der stärkere Nachweis). Wer nicht mehr hineinkommt, obwohl das Konto in Ordnung
+ist: vom gewohnten Gerät anmelden (bekannte Geräte sind ausgenommen) oder `reset-account`.
+
+**Redis voll (noeviction):** Die Zählerschlüssel sind kurz und laufen nach höchstens 2 h ab; der Check
+`auth_protection` warnt ab 70 %. Optional kann ein eigenes Redis nur für die Zähler betrieben werden
+(`RATELIMIT_REDIS_URL` in `backend/app/core/config.py`, z. B. mit `maxmemory-policy volatile-lru`):
+unter einem Angriff werden dort Zähler verdrängt, statt dass das Haupt-Redis (Login-Tickets) volläuft.
+Der Release-Compose bringt diesen Dienst noch nicht mit (offen, Entscheid Betrieb).
+
+**Redis weg/voll:** bekannte Geräte melden sich weiter an (lokale Notgrenze je Prozess, 5/min/IP,
+20/min/Konto); unbekannte Geräte bekommen 503 `auth_temporarily_unavailable`; Konten mit zweitem Faktor
+brauchen Redis für das Login-Ticket. Bestehende Sessions laufen ohne Redis weiter. Der Check
+`auth_protection` wird kritisch (ntfy).
+
+### Alarme (ntfy, Systemstatus)
+
+Check `auth_protection`: Limiter-Ausfälle (kritisch), Redis über 70 % belegt, verlorene Ereignisse,
+Anteil Anmeldungen mit privater Quelladresse ≥ 50 % (SEC-AUTH-019: IPv6 über docker-proxy oder zu
+weite `TRUSTED_PROXY_CIDRS` - dann teilen sich alle Nutzer einen Zähler; Docker-IPv6 aktivieren bzw.
+`TRUSTED_PROXY_CIDRS` auf das Compose-Netz einengen). Probleme `auth:<regel>`: `stuffing` (kritisch),
+`spraying`, `account_attack` (Admin: kritisch), `admin_mfa` (kritisch), `admin_new_device`, `blocks`,
+`network`, `cross_tenant`, `tenant`, `limiter` (kritisch). Entprellung und «Behoben» wie bei allen
+anderen Problemen. Vorgehen bei Stuffing: Angriffsmodus läuft automatisch (unbekannte Geräte brauchen
+Code/Faktor); betroffene Konten mit Erfolg aus neuem Netz → Sessions der Person beenden
+(`/api/admin/auth-security/events?event_type=login.success`), Passwort zurücksetzen lassen.
+
+### Sessions und Schlüsselrotation
+
+- Profil › Sicherheit › «Angemeldete Geräte»: einzelne Sessions oder alle anderen abmelden. «Abmelden»
+  beendet nur die eigene Session, `/api/auth/logout-all` alle.
+- Passwort- oder Faktor-Änderung beendet alle **anderen** Sessions, ein Passwortwechsel vergisst zudem die
+  anderen bekannten Geräte; «Passwort vergessen» beendet alle Sessions und vergisst alle Geräte ausser dem,
+  auf dem der Reset abgeschlossen wird. Bekannte Geräte lassen sich im Profil einzeln vergessen.
+- Sessions auf einer Mandanten-Domain (Domain-Bridge) erben Frische und Ende der Ausgangs-Session und
+  enden mit ihr. Sessions von vor dem Update werden bei Passwort-/Faktorwechsel, «Alle anderen
+  abmelden» oder Step-up ins Register übernommen, ohne verlängert zu werden.
+- **Rotation von `AUTH_SECRET`:** alten Wert in `AUTH_SECRET_PREVIOUS`, neuen in `AUTH_SECRET`,
+  `./scripts/deploy.sh`. Sessions und Geräte-Cookies gelten weiter; nach `AUTH_SESSION_ABSOLUTE_HOURS`
+  (14 Tage) `AUTH_SECRET_PREVIOUS` leeren und erneut deployen. Pseudonyme (Zähler, Netz-Baselines)
+  beginnen nach der Rotation neu - kurz mehr «neues Netz»-Signale, keine Mails dadurch.
+
+### Wartungsjob
+
+«Passwort vergessen»: je Adresse gehen höchstens 3 Mails pro Stunde raus (auch je Quelle 3); weitere
+Anfragen bekommen 202 ohne Versand, 429 nur die anfragende Quelle (10 in 15 min).
+
+`auth_security_maintenance` (stündlich, `/admin/jobs`): löscht `auth_event` nach 90 Tagen, beendete
+Sessions nach 30 Tagen, Geräte nach 120 Tagen ohne Nutzung und repariert Zähler ohne Ablauf
+(`repaired_keys` > 0 im Lauf deutet auf einen Fehler).

@@ -358,6 +358,28 @@ async def storage_purge_loop() -> None:
     )
 
 
+async def auth_security_maintenance_loop() -> None:
+    """Anmeldeschutz (Auth-Audit 2026-11-20): Sicherheitsereignisse nach auth_event_retention_days
+    löschen (Datenschutz), abgelaufene/widerrufene Sessions und lange unbenutzte Geräte entfernen,
+    Zählerschlüssel ohne Ablauf reparieren (SEC-AUTH-005)."""
+    from app.auth_security import events, sessions
+    from app.core.rate_limit import repair_keys_without_ttl
+    from sqlalchemy import text
+
+    def _task(db) -> dict:
+        deleted_events = events.purge(db, retention_days=settings.auth_event_retention_days)
+        deleted_sessions = sessions.purge(db)
+        deleted_devices = db.execute(
+            text("DELETE FROM auth_known_device WHERE last_seen_at < now() - make_interval(days => :days) OR revoked_at < now() - interval '30 days'"),
+            {"days": settings.auth_device_ttl_days + 30},
+        ).rowcount or 0
+        db.commit()
+        repaired = repair_keys_without_ttl()
+        return {"events": deleted_events, "sessions": deleted_sessions, "devices": deleted_devices, "repaired_keys": repaired}
+
+    await run_advisory_locked_loop(name="auth_security_maintenance", interval_seconds=60 * 60, task=_task)
+
+
 LoopFactory = Callable[[], Coroutine[Any, Any, None]]
 
 # Leicht: Steuerung, Überwachung, kurze Abfragen - bleiben in den uvicorn-Workern.
@@ -373,6 +395,7 @@ BACKEND_LOOPS: tuple[LoopFactory, ...] = (
     storage_journal_cleanup_loop,
     document_sync_loop,
     storage_purge_loop,
+    auth_security_maintenance_loop,
 )
 
 # Schwer: CPU, Speicher, ClamAV, lange Transaktionen oder grosse Löschläufe - job-worker.

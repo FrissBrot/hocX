@@ -48,6 +48,20 @@ def get_redis_sync() -> redis_sync.Redis:
     return redis_sync.Redis(connection_pool=_sync_pool)
 
 
+_ratelimit_pool: redis_sync.ConnectionPool | None = None
+
+
+def get_ratelimit_redis_sync() -> redis_sync.Redis:
+    """Redis für die Zähler des Anmeldeschutzes (app/core/rate_limit.py). Mit RATELIMIT_REDIS_URL
+    ein eigenes (z. B. mit volatile-lru, Security-Review M5), sonst das Haupt-Redis."""
+    global _ratelimit_pool
+    if not settings.ratelimit_redis_url:
+        return get_redis_sync()
+    if _ratelimit_pool is None:
+        _ratelimit_pool = redis_sync.ConnectionPool.from_url(settings.ratelimit_redis_url, socket_timeout=_SOCKET_TIMEOUT_SECONDS, **_common())
+    return redis_sync.Redis(connection_pool=_ratelimit_pool)
+
+
 async def close_redis_pool() -> None:
     global _pool, _pubsub_pool, _sync_pool
     for pool in (_pool, _pubsub_pool):

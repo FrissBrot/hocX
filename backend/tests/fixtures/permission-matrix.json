@@ -73,6 +73,12 @@
         "writer"
       ]
     },
+    "GET /api/auth-security/activity": {
+      "handler": "auth_security.tenant_login_activity",
+      "allowed": [
+        "admin"
+      ]
+    },
     "PUT /api/calendar-feeds/{kind}": {
       "handler": "calendar_feeds.upsert_calendar_feed",
       "allowed": [

@@ -20,7 +20,7 @@ _INSECURE_DEFAULTS = {
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
     for variable in (
-        "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
+        "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "AUTH_SECRET_PREVIOUS", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
         "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY", "REDIS_PASSWORD",
         "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET",
     ):
@@ -145,7 +145,8 @@ class Settings(BaseSettings):
     security_failed_logins_critical: int = 200
     security_failed_logins_per_account: int = 20
     security_exports_per_hour: int = 3
-    security_alert_admin_logins: bool = False
+    # Auth-Audit 2026-11-20 (Abschnitt 12): Plattform-Anmeldungen sind selten, jede wird gemeldet.
+    security_alert_admin_logins: bool = True
     # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
     # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary
@@ -199,6 +200,84 @@ class Settings(BaseSettings):
     auth_session_cookie: str = "hocx_session"
     auth_session_ttl_hours: int = 72
     auth_secure_cookies: bool = True
+    # Schlüsselrotation der Sessions (SEC-AUTH-011): der bisherige AUTH_SECRET. Tokens und
+    # Geräte-Cookies, die damit signiert sind, gelten bis zu ihrem Ablauf weiter; neue werden nur
+    # mit AUTH_SECRET signiert. Leer = keine Rotation im Gang.
+    auth_secret_previous: str = ""
+    # Übergang auf den Cookie-Namen mit __Host- (SEC-AUTH-018): bis wann der bisherige Name noch
+    # gelesen wird (ISO-Datum). Leer = Prozessstart + auth_session_ttl_hours (≈ Deploy + 72 h).
+    auth_legacy_cookie_until: str = ""
+
+    # --- Login-Härtung (Auth-Audit 2026-11-20, docs: RUNBOOK «Anmeldeschutz») ----------------
+    # Body-Limit für /api/auth/* und /api/admin/auth/* (SEC-AUTH-002); Rest: max_request_body_bytes.
+    auth_max_request_body_bytes: int = 16 * 1024
+    auth_passkey_max_request_body_bytes: int = 64 * 1024
+    # Session-Register (SEC-AUTH-011): Inaktivität und absolute Lebensdauer einer Session;
+    # last_seen_at wird höchstens alle auth_session_touch_seconds geschrieben.
+    auth_session_idle_minutes: int = 8 * 60
+    auth_session_absolute_hours: int = 14 * 24
+    auth_session_touch_seconds: int = 300
+    # Bekannte Geräte (SEC-AUTH-006): signiertes Cookie nach erfolgreicher Anmeldung.
+    auth_device_cookie: str = "hocx_device"
+    auth_device_ttl_days: int = 90
+    # Schichten des Anmeldeschutzes (Audit Abschnitt 6.3). Fenster 15 min, sofern nicht anders genannt.
+    auth_ip_failures_soft: int = 20          # L1 IP exakt: ab hier Prüfung für unbekannte Geräte
+    auth_ip_failures_hard: int = 60          # L1: ab hier 429 für unbekannte Geräte dieser IP
+    auth_net_failures_soft: int = 60         # L2 /24 bzw. /64 (15 min)
+    auth_net_failures_hard_hour: int = 300   # L2 je Stunde: 429 für unbekannte Geräte
+    auth_wide_failures_alert_hour: int = 1000  # L3 IPv6 /48 je Stunde: nur Alarm
+    auth_account_ip_failures: int = 10       # L4 Konto + IP: 429 für diese Quelle
+    auth_account_failures_challenge: int = 30   # L5 Konto: unbekannte Geräte zusätzlich prüfen
+    auth_account_failures_known_only: int = 100  # L5 Konto: nur noch bekannte Geräte
+    auth_totp_account_limit: int = 10        # L6 TOTP je Konto (atomar)
+    auth_totp_drip_seconds: int = 60         # danach ein Versuch je Minute
+    auth_passkey_account_limit: int = 30     # L6 Passkey je Konto
+    auth_global_attack_min: int = 100        # L7 Angriffsmodus: mindestens so viele Fehlversuche
+    auth_global_attack_factor: float = 5.0   # ... und so viel mal die gewohnte Rate
+    auth_tenant_accounts_alert: int = 20     # L8 verschiedene Konten eines Mandanten mit Fehlversuchen
+    # Versuche je Quelle (unabhängig vom Ergebnis), GCRA in der App - gilt auch auf Mandanten-Domains.
+    auth_ip_attempts_per_minute: int = 30
+    auth_ip_attempts_burst: int = 15
+    auth_net_attempts_per_minute: int = 120
+    auth_net_attempts_burst: int = 60
+    # IPv6: L2 zählt je /48 (mit Faktor auf die Grenzen), Versuchsrate zusätzlich je /32
+    auth_net6_factor: int = 4
+    auth_wide_attempts_per_minute: int = 600
+    auth_wide_attempts_burst: int = 300
+    # Optional eigenes Redis nur für Zähler (z. B. mit maxmemory-policy volatile-lru): unter einem
+    # Angriff werden dort Zähler verdrängt statt dass das Haupt-Redis (Tickets, noeviction) volläuft.
+    # Leer = Haupt-Redis (REDIS_URL).
+    ratelimit_redis_url: str = ""
+    # Temporäre IP-Sperre (Stufe 4): nach so vielen Prüfstufen in 24 h, Dauer je Wiederholung.
+    auth_block_strikes: int = 3
+    auth_block_minutes: str = "60,360,1440"
+    # Risk Engine (Abschnitt 7): "enforce" setzt Massnahmen durch, "monitor" protokolliert nur.
+    auth_risk_mode: str = "enforce"
+    auth_risk_moderate: int = 30
+    auth_risk_high: int = 60
+    auth_risk_critical: int = 80
+    auth_critical_deny_minutes: int = 30
+    # Bestätigungscode per E-Mail für Konten ohne zweiten Faktor (moderates/hohes Risiko)
+    auth_email_code_ttl_minutes: int = 10
+    # Notbetrieb ohne Redis (Abschnitt 11): lokale Grenze je Worker
+    auth_emergency_ip_per_minute: int = 5
+    auth_emergency_account_per_minute: int = 20
+    # Step-up (SEC-AUTH-010): Höchstalter der letzten starken Anmeldung
+    auth_step_up_mfa_minutes: int = 10
+    auth_step_up_admin_minutes: int = 15
+    # Sicherheitsereignisse (auth_event): Aufbewahrung
+    auth_event_retention_days: int = 90
+    # Alarmregeln (Abschnitt 10.3)
+    auth_alert_stuffing_min: int = 100
+    auth_alert_stuffing_networks: int = 20
+    auth_alert_spraying_accounts: int = 10
+    auth_alert_account_failures: int = 30
+    auth_alert_account_networks: int = 3
+    auth_alert_admin_mfa_failures: int = 3
+    auth_alert_blocks_per_hour: int = 10
+    auth_alert_cross_tenant: int = 3
+    auth_alert_redis_memory_ratio: float = 0.7
+
     admin_auth_secret: str = "hocx-local-dev-admin-secret"
     admin_session_cookie: str = "hocx_admin_session"
     admin_session_ttl_hours: int = 12
@@ -340,6 +419,7 @@ class Settings(BaseSettings):
     def apply_process_kind(self) -> None:
         if self.is_sessionless_process:
             self.auth_secret = secrets.token_hex(32)
+            self.auth_secret_previous = ""
         if self.is_secretless_process:
             self.admin_auth_secret = secrets.token_hex(32)
 
@@ -351,6 +431,9 @@ class Settings(BaseSettings):
                 "Set a random value of at least 32 characters in .env.",
                 file=sys.stderr,
             )
+            sys.exit(1)
+        if self.auth_secret_previous and (self.auth_secret_previous in _INSECURE_DEFAULTS or len(self.auth_secret_previous) < 32):
+            print("FATAL: AUTH_SECRET_PREVIOUS must be empty or a random value of at least 32 characters.", file=sys.stderr)
             sys.exit(1)
         if not self.is_secretless_process and (
             self.admin_auth_secret in _INSECURE_DEFAULTS or len(self.admin_auth_secret) < 32

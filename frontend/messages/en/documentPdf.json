@@ -695,7 +695,10 @@
       "exportReady": "Your export is ready",
       "exportFailed": "Export failed",
       "test": "Test email",
-      "submissionWithdrawn": "Submission withdrawn"
+      "submissionWithdrawn": "Submission withdrawn",
+      "loginAlert": "Unusual sign-in to your account",
+      "loginNotice": "New sign-in to your account",
+      "loginCode": "Your confirmation code"
     },
     "weekday": {
       "0": "Monday",
@@ -741,6 +744,41 @@
       "withdrawnSubjectOther": "{tenant}: {count} submissions withdrawn",
       "filesOne": "1 file",
       "filesOther": "{count} files"
+    },
+    "login": {
+      "subjectAlert": "{tenant}: security warning about your account",
+      "subjectNotice": "{tenant}: sign-in from a new device",
+      "introAlert": "We noticed the following on your account at {tenant}:",
+      "introNotice": "Your account at {tenant} was used on a device we haven't seen before:",
+      "hint": "Wasn't you? Change your password right away and sign out all sessions under «Signed-in devices».",
+      "action": "Review security",
+      "device": "Device: {device}",
+      "label": {
+        "newDevice": "Sign-in from a new device",
+        "suspicious": "Sign-in with elevated risk",
+        "failedAttempts": "Many failed sign-in attempts ({count})",
+        "afterLockout": "Sign-in shortly after a lockout due to failed attempts"
+      },
+      "reason": {
+        "new_device": "new device",
+        "new_network": "new network",
+        "unusual_hour": "unusual time",
+        "account_failures": "many failed attempts",
+        "source_failures": "suspicious connection",
+        "spraying": "attack pattern against many accounts",
+        "distributed_attempts": "attempts from many networks",
+        "mfa_failures": "wrong codes",
+        "invalid_tokens": "invalid sign-in links",
+        "reset_requests": "many password requests",
+        "privileged_account": "account with admin rights",
+        "attack_mode": "ongoing attack on the platform"
+      }
+    },
+    "loginCode": {
+      "subject": "{tenant}: confirmation code for your sign-in",
+      "intro": "To sign in at {tenant} we need an extra confirmation. Enter this code on the sign-in page:",
+      "validity": "The code is valid for {minutes} minutes and only once.",
+      "ignore": "Didn't just try to sign in? Then someone knows your password - change it right away."
     }
   },
   "eventField": {

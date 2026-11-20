@@ -15,6 +15,7 @@ import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion }
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
+import { TotpCodeInputs } from "@/components/security/totp-code-inputs";
 import { MaintenanceNotice } from "@/components/maintenance/maintenance-notice";
 import { useMaintenanceStatus } from "@/lib/maintenance";
 
@@ -79,6 +80,7 @@ export default function LoginPage() {
   const [pendingMfa, setPendingMfa] = useState<PendingMfaLogin | null>(null);
   const [activeMethod, setActiveMethod] = useState<"totp" | "webauthn">("totp");
   const [totpCode, setTotpCode] = useState("");
+  const [emailCode, setEmailCode] = useState("");
   const [totpLabel, setTotpLabel] = useState("");
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
   const [passkeyLabel, setPasskeyLabel] = useState("");
@@ -263,6 +265,79 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Zusätzliche Prüfung per E-Mail-Code (erhöhtes Risiko, Konto ohne zweiten Faktor; Auth-Audit 2026-11-20)
+  async function verifyEmailCode() {
+    if (!pendingMfa) return;
+    setLoading(true);
+    setStatusMsg(t("status.codeChecking"));
+    try {
+      const session = await browserApiFetch<LoginResponse>("/api/auth/challenge/email/verify", {
+        method: "POST",
+        body: JSON.stringify({ ticket: pendingMfa.ticket, code: emailCode }),
+      });
+      setEmailCode("");
+      if (session.authenticated) {
+        finishLogin(session);
+        return;
+      }
+      if (session.mfa) {
+        setPendingMfa(session.mfa);
+        setStatusMsg("");
+        return;
+      }
+      setStatusMsg(t("status.loginIncomplete"));
+    } catch (error) {
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.codeCheckFailed")));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendEmailCode() {
+    if (!pendingMfa) return;
+    setLoading(true);
+    try {
+      await browserApiFetch<{ status: string }>("/api/auth/challenge/email/resend", {
+        method: "POST",
+        body: JSON.stringify({ ticket: pendingMfa.ticket }),
+      });
+      setStatusMsg(t("emailChallenge.resent"));
+    } catch (error) {
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("emailChallenge.resendFailed")));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderEmailStep() {
+    return (
+      <form
+        className="grid"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void verifyEmailCode();
+        }}
+      >
+        <div className="mfa-screen-header mfa-screen-header-left">
+          <h2>{t("emailChallenge.title")}</h2>
+          <p>{t("emailChallenge.subtitle")}</p>
+        </div>
+        <TotpCodeInputs code={emailCode} onChange={setEmailCode} digitLabel={(n) => t("emailChallenge.digitLabel", { n })} disabled={loading} autoFocus />
+        <button type="submit" className="button-primary" disabled={loading || emailCode.length !== 6}>
+          {t("emailChallenge.submit")}
+        </button>
+        <div className="mfa-footer-stack">
+          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={() => void resendEmailCode()} disabled={loading}>
+            {t("emailChallenge.resend")}
+          </button>
+          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
+            {t("mfa.backToLogin")}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   async function verifyTotp() {
@@ -805,7 +880,11 @@ export default function LoginPage() {
           </>
         ) : null}
 
-        {maintenanceActive ? null : !pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
+        {maintenanceActive ? null
+          : !pendingMfa ? renderPasswordStep()
+          : pendingMfa.status === "setup_required" ? renderSetupStep()
+          : pendingMfa.status === "email_verification_required" ? renderEmailStep()
+          : renderVerifyStep()}
 
         {pendingMfa?.status === "setup_required" ? (
           <div className="table-actions table-actions-start">

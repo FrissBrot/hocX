@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -33,7 +33,7 @@ from app.core.db_admission import (
 )
 from app.core.error_log import record_request_error
 from app.core.redis_client import close_redis_pool, get_redis
-from app.core.security import hash_password, parse_session_token
+from app.core.security import hash_password, parse_session_token, session_cookie_names
 from app.models import AppUser, ElementType, PlatformAdmin, Tenant
 from app.services import traefik_config_service
 from app.services.file_service import FileService, ThumbnailBusy
@@ -199,7 +199,7 @@ def _scope_cookie(scope, name: str) -> str | None:
 def _session_user_id(scope) -> int | None:
     """Nutzer aus dem signierten Session-Cookie, ohne Datenbank (nur für die Priorität bei
     Überlast - die eigentliche Prüfung samt Sperre/Widerruf macht get_current_user)."""
-    data = parse_session_token(_scope_cookie(scope, settings.auth_session_cookie))
+    data = parse_session_token(next((value for name in session_cookie_names() if (value := _scope_cookie(scope, name))), None))
     try:
         return int(data["user_id"]) if data else None
     except (KeyError, TypeError, ValueError):
@@ -311,6 +311,15 @@ app.add_middleware(
     RequestBodyLimitMiddleware,
     max_bytes=settings.max_request_body_bytes,
     skip_prefixes=("/api/files/gallery-uploads",),
+    # SEC-AUTH-002: Anmeldung (Mandant und Plattform) mit kleinem Body-Limit
+    # Passkey-Registrierung: Attestation mit Zertifikatskette (x5c) braucht mehr Platz
+    path_limits=(
+        ("/api/auth/mfa/passkeys/setup/", settings.auth_passkey_max_request_body_bytes),
+        # Admin-Login-Passkey (admin-isolation: Einrichtung beim ersten Login und Bestätigung)
+        ("/api/admin/auth/mfa/passkey/", settings.auth_passkey_max_request_body_bytes),
+        ("/api/auth/", settings.auth_max_request_body_bytes),
+        ("/api/admin/auth/", settings.auth_max_request_body_bytes),
+    ),
 )
 
 # Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last) und bei
@@ -511,3 +520,5 @@ app.include_router(admin_storage.router, prefix="/api/admin", tags=["admin-stora
 app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-maintenance"])
 app.include_router(admin_backups.router, prefix="/api/admin", tags=["admin-backups"])
 app.include_router(admin_cashflow.router, prefix="/api/admin", tags=["admin-cashflow"])
+app.include_router(admin_auth_security.router, prefix="/api/admin", tags=["admin-auth-security"])
+app.include_router(auth_security.router, prefix="/api", tags=["auth-security"])

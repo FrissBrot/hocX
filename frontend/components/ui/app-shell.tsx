@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/app-shell-nav";
 import { SettingsFrame, SettingsIcon, usesSettingsFrame } from "@/components/ui/settings-frame";
 import { NavIcon } from "@/components/ui/nav-icons";
+import { StepUpProvider } from "@/contexts/step-up-context";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
 import { clearSimilarityGroupsCache } from "@/components/photos/use-similarity-groups";
@@ -79,6 +80,8 @@ const PROFILE_LINK_KEY = "hocx.profileLink";
 
 /** Wert von ?profile= → Reiter-ID im Profil-Dialog (unbekannt: Profil). */
 export function profileTabFromLink(value: string): string {
+  // ?profile=security: Link «Sicherheit prüfen» aus den Sicherheitsmails (Auth-Audit 2026-11-20)
+  if (value === "security") return "sicherheit";
   return value === "notifications" ? "benachrichtigungen" : "profil";
 }
 
@@ -110,7 +113,9 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <AppShellInner initialSession={initialSession}>{children}</AppShellInner>
+        <StepUpProvider>
+          <AppShellInner initialSession={initialSession}>{children}</AppShellInner>
+        </StepUpProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

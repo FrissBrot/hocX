@@ -2,6 +2,8 @@
 (app/notifications/fines.py)."""
 from __future__ import annotations
 
+import re
+
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -78,11 +80,15 @@ def test_reminder_lists_overdue_first():
     assert mail.text.index("Spät") < mail.text.index("Bald")
 
 
-def test_security_mail_has_no_links_and_no_settings_hint():
+def test_security_mail_links_only_to_profile_security_and_has_no_settings_hint():
+    """Einziger Link: «Sicherheit prüfen» in die App (Profil › Sicherheit, Auth-Audit 2026-11-20),
+    ohne Token; kein Link zu den Benachrichtigungs-Einstellungen (Pflichtmitteilung)."""
     items = [{"kind": "security.password_changed", "by_admin": False, "at": datetime(2026, 11, 14, 20, 5, tzinfo=timezone.utc)}]
     mail = _render(group="account.security", items=items)
     assert "Passwort geändert" in mail.html and "14.11.2026 21:05" in mail.html
-    assert "http" not in mail.html.replace("<!doctype html>", "")
+    links = set(re.findall(r'href="([^"]+)"', mail.html))
+    assert all(link.endswith("/?profile=security") for link in links), links
+    assert "profile=notifications" not in mail.html and "#token" not in mail.html
     assert "lassen sich nicht abbestellen" in mail.html
 
 

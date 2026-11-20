@@ -139,13 +139,71 @@
     "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur.",
     "last_passkey": "La dernière clé d’accès ne peut pas être supprimée. Ajoutez-en d’abord une autre.",
     "mfa_already_configured": "Un second facteur est déjà configuré pour ce compte. Veuillez vous connecter avec celui-ci.",
-    "step_up_required": "Cette action doit être confirmée avec votre clé d’accès.",
-    "step_up_mismatch": "La confirmation par clé d’accès concerne une autre action. Veuillez réessayer."
+    "admin_step_up_required": "Cette action doit être confirmée avec votre clé d’accès.",
+    "step_up_mismatch": "La confirmation par clé d’accès concerne une autre action. Veuillez réessayer.",
+    "step_up_required": "Confirme d'abord ton identité.",
+    "step_up_method_unavailable": "Cette confirmation n'est pas possible pour ton compte.",
+    "email_code_invalid": "Le code n'est pas valable. Vérifie l'e-mail et réessaie.",
+    "verification_unavailable": "Le code n'a pas pu être envoyé. Réessaie plus tard.",
+    "login_denied": "La connexion depuis cette connexion est temporairement impossible. Réessaie plus tard ou depuis ton appareil habituel.",
+    "source_blocked": "Les connexions depuis cette connexion sont temporairement bloquées.",
+    "auth_temporarily_unavailable": "Connexion temporairement impossible. Réessaie dans quelques minutes.",
+    "rate_limiter_unavailable": "La protection des connexions est brièvement indisponible. Réessaie tout de suite.",
+    "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",
     "message": "Votre organisation exige un second facteur pour votre compte. Configurez-le d’ici le {until} – ensuite, la connexion ne sera possible qu’avec lui.",
     "later": "Plus tard",
     "setup": "Configurer maintenant"
+  },
+  "stepUp": {
+    "title": "Confirmer ton identité",
+    "description": "Cette modification touche à la sécurité. Confirme brièvement que c'est bien toi.",
+    "methods": {
+      "totp": "Code de l'app",
+      "passkey": "Passkey",
+      "password": "Mot de passe"
+    },
+    "codeLabel": "Code de l'app d'authentification",
+    "passwordLabel": "Ton mot de passe",
+    "passkeyHint": "Confirme avec ton passkey (empreinte, visage ou PIN de l'appareil).",
+    "loading": "Chargement …",
+    "loadFailed": "La confirmation n'a pas pu être préparée.",
+    "failed": "Échec de la confirmation.",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "checking": "Vérification …"
+  },
+  "sessions": {
+    "title": "Appareils connectés",
+    "description": "Tu es actuellement connecté·e ici. Si tu ne reconnais pas un appareil, déconnecte-le et change ton mot de passe.",
+    "columns": {
+      "device": "Appareil",
+      "lastSeen": "Dernière activité",
+      "since": "Connecté depuis",
+      "actions": "Action",
+      "knownSince": "Connu depuis"
+    },
+    "current": "Cet appareil",
+    "unknownDevice": "Appareil inconnu",
+    "viaBridge": "via {host}",
+    "empty": "Aucune session active.",
+    "loading": "Chargement …",
+    "loadFailed": "Les sessions n'ont pas pu être chargées.",
+    "revoke": "Déconnecter",
+    "revokeConfirm": "Déconnecter cet appareil ?",
+    "revoked": "Appareil déconnecté.",
+    "revokeFailed": "Échec de la déconnexion.",
+    "revokeOthers": "Déconnecter tous les autres appareils",
+    "revokeOthersConfirm": "Déconnecter tous les autres appareils ? Cet appareil reste connecté.",
+    "revokedOthers": "{count, plural, =0 {Aucun autre appareil connecté.} one {Un appareil déconnecté.} other {# appareils déconnectés.}}",
+    "legacyHint": "Les connexions antérieures à la dernière mise à jour n'apparaissent pas ici ; « Déconnecter tous les autres appareils » les termine aussi.",
+    "knownTitle": "Appareils connus",
+    "knownDescription": "Tu t'es déjà connecté·e sur ces appareils. Ils sont exemptés des blocages dus aux tentatives échouées d'autres personnes. Oublier un appareil met aussi fin à ses sessions.",
+    "knownEmpty": "Aucun appareil connu.",
+    "forget": "Oublier",
+    "forgetConfirm": "Oublier cet appareil ? Ses sessions seront terminées.",
+    "forgotten": "Appareil oublié."
   }
 }

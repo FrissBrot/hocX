@@ -59,33 +59,20 @@ def test_disabled_login_during_mfa_has_a_stable_code(db):
     assert _code(exc_info.value) == "login_disabled"
 
 
-def test_rate_limit_and_lockout_have_stable_codes(monkeypatch):
+def test_rate_limit_and_lockout_have_stable_codes():
+    import uuid
+
     from app.core import rate_limit
 
-    class _Redis:
-        def __init__(self):
-            self.values = {}
-
-        def incr(self, key):
-            self.values[key] = self.values.get(key, 0) + 1
-            return self.values[key]
-
-        def expire(self, key, seconds):
-            return True
-
-        def get(self, key):
-            return self.values.get(key)
-
-    fake = _Redis()
-    monkeypatch.setattr(rate_limit, "get_redis_sync", lambda: fake)
-    rate_limit.enforce_rate_limit("code-test", limit=1, period_seconds=60)
+    key = f"code-test:{uuid.uuid4().hex}"
+    rate_limit.enforce_rate_limit(key, limit=1, period_seconds=60)
     with pytest.raises(HTTPException) as limited:
-        rate_limit.enforce_rate_limit("code-test", limit=1, period_seconds=60)
+        rate_limit.enforce_rate_limit(key, limit=1, period_seconds=60)
     assert limited.value.status_code == 429
     assert _code(limited.value) == "rate_limited"
 
     with pytest.raises(HTTPException) as locked:
-        rate_limit.check_account_lockout("code-test", limit=1)
+        rate_limit.check_account_lockout(key, limit=1)
     assert locked.value.status_code == 429
     assert _code(locked.value) == "login_locked"
 

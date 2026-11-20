@@ -46,7 +46,10 @@ def test_failures_from_one_ip_do_not_lock_out_the_owner_on_another_ip(db):
 
 
 def test_account_wide_limit_stops_distributed_guessing(db, monkeypatch):
-    monkeypatch.setattr(rate_limit, "LOGIN_LOCKOUT_PER_ACCOUNT", 3)
+    # Kontoweite Grenze gilt seit dem Auth-Audit 2026-11-20 nur für unbekannte Geräte (SEC-AUTH-006)
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "auth_account_failures_known_only", 3)
     tenant = make_tenant(db)
     make_app_user(db, email=EMAIL, password="correct-password", tenant_id=tenant.id, role_code="writer")
 

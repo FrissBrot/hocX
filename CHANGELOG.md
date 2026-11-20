@@ -84,6 +84,28 @@ Installationen aktualisieren können.
   sortierbar. Im Element abgewählte Terminfelder erscheinen nicht mehr im Protokoll-PDF.
   Aktionsmenüs können Einträge mit einer Trennlinie absetzen.
 
+- Risk Engine v1 (deterministisch, versioniert, Score 0-100 mit Gründen) und Stufenmodell der
+  IP-Sperren mit Entsperren über CLI (`python -m app.auth_security.cli`) und Admin-API
+  (`/api/admin/auth-security/*`).
+- Bestätigungscode per E-Mail für riskante Anmeldungen von Konten ohne zweiten Faktor.
+- Sicherheitsmails: Anmeldung von neuem Gerät (abschaltbar, Kategorie «Anmeldung von neuem Gerät»),
+  verdächtige Anmeldung, viele Fehlversuche, Anmeldung nach Sperre (Pflicht), jeweils mit «Warst du
+  das nicht?» und Link auf Profil › Sicherheit; auch die bestehenden Hinweise zu Passwort/MFA haben
+  den Link.
+- Profil › Sicherheit › «Angemeldete Geräte»; Step-up-Dialog in der ganzen App.
+- Daten für die kommenden Sicherheits-Dashboards: `/api/admin/auth-security/summary|events|blocks`
+  (Plattform) und `/api/auth-security/activity` (Verein, `access.manage`, datensparsam).
+
+- «Abmelden» beendet nur noch die Session dieses Geräts (bisher alle); «Alle anderen Geräte abmelden»
+  im Profil bzw. `POST /api/auth/logout-all`.
+- Kontoweite Sperre: ab 30 Fehlversuchen/15 min brauchen unbekannte Geräte nach korrektem Passwort eine
+  zusätzliche Prüfung (zweiter Faktor oder E-Mail-Code); bekannte Geräte sind ausgenommen. Ohne
+  E-Mail-Versand werden Konten ohne Faktor auf unbekannten Geräten nur bei auffälliger Quelle oder über
+  100 Fehlversuchen abgewiesen; Konten mit Faktor nie.
+- «Passwort vergessen»: höchstens 3 Mails je Adresse und Stunde, weitere Anfragen ohne Versand (202).
+- TOTP: nach 10 Fehlversuchen in 15 min noch ein Versuch je Minute.
+- `SECURITY_ALERT_ADMIN_LOGINS` ist neu standardmässig `true`.
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt
@@ -133,6 +155,41 @@ Installationen aktualisieren können.
 - Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
   Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
   erreichbar sind; sonst Rollback.
+
+- **SEC-AUTH-002:** Längenlimits für E-Mail (320), Passwort (1024), Tickets und Codes in allen
+  Anmelde-Schemas; 16 KiB Body-Limit für `/api/auth/*` und `/api/admin/auth/*`; Zählerschlüssel in
+  Redis nur noch als HMAC-Pseudonym (keine E-Mail, keine IP, Länge fix). Redis voll/weg: definierte
+  Fail-Closed-Regeln (503 `rate_limiter_unavailable`/`auth_temporarily_unavailable`), bekannte Geräte
+  melden sich mit lokaler Notgrenze weiter an.
+- **SEC-AUTH-003/-005:** gemeinsame atomare Zähler-Primitive (Lua: Zählen und Ablauf in einem Schritt,
+  gleitendes Fenster, GCRA); Versuche werden **vor** der Passwort-/Code-Prüfung gezählt. Wartungsjob
+  repariert Zähler ohne Ablauf.
+- **SEC-AUTH-004:** TOTP-Code wird atomar beansprucht (`UPDATE … WHERE totp_last_counter < :c`),
+  derselbe Code gilt nie zweimal.
+- **SEC-AUTH-006:** bekannte Geräte (signiertes Cookie, serverseitig widerrufbar) sind von der
+  kontoweiten Sperre ausgenommen - Lockout-DoS gegen fremde Konten wirkt nicht mehr auf die Inhaberin.
+- **SEC-AUTH-007:** App-seitige Schichten je Quelle (IPv4 /32, IPv6 /64), Netz (IPv4 /24, IPv6 /48,
+  IPv6 /32 für Versuchsrate und Alarm), Konto+Quelle, Konto, Gerät, global (Angriffsmodus) und je
+  Mandant (Alarm); Versuchsrate je Quelle auch auf Mandanten-Domains; IP-Sperren für IPv6 je /48.
+- **SEC-AUTH-010:** Step-up (frische Bestätigung mit Faktor bzw. Passwort) für Faktor-Änderungen,
+  Passwortwechsel mit Faktor, Rollen/Rechte, Passwort/Login anderer Konten, fremde MFA-Resets,
+  Einladung von Admin-Konten, MFA-Pflicht abschalten, Vier-Augen-Einstellung, eigene Domains,
+  Gesamt- und Personendaten-Exporte.
+- **SEC-AUTH-011:** Session-Register (`auth_session`): Inaktivität 8 h, absolut 14 Tage, Einzel-
+  Widerruf, «Nur dieses Gerät» vs. «Überall abmelden», Logout-Kaskade über die Domain-Bridge,
+  Passwort-/MFA-Änderung beendet die anderen Sessions, Schlüsselrotation über `AUTH_SECRET_PREVIOUS`,
+  Widerruf in Millisekunden (Token aus derselben Sekunde wie der Widerruf gilt nicht mehr).
+- **SEC-AUTH-012:** einheitliches Ereignisschema `auth_event` für alle Anmeldephasen inkl. gesperrter
+  Versuche, Passkey-Fehlschlägen, eigener Faktor-Löschung, Logout; Alarmregeln (Stuffing, Spraying,
+  Konto unter Beschuss, Admin-MFA, Mandanten-übergreifend, IP-Sperren, Limiter-Ausfall) über ntfy;
+  Check `auth_protection` (Redis-Speicher, Limiter, private Quelladressen).
+- **SEC-AUTH-014:** WebSocket nutzt dieselbe Kontoprüfung wie REST (ausgetretene Mitglieder werden
+  abgewiesen).
+- **SEC-AUTH-015:** Passwortregel bei allen Setzpfaden (eigener Wechsel, Anlegen/Setzen durch Admins,
+  Plattform), erweitert um Folgen, Leetspeak und eine kleine Offline-Liste häufiger Passwörter.
+- **SEC-AUTH-016/017/018/020:** ausgetretene Konten erhalten die generische 401; Reset-Kontingent je
+  Adresse und Quelle getrennt; Session- und Geräte-Cookies mit `__Host-`-Präfix; Bridge-Tokens werden
+  je Session wiederverwendet; WebAuthn prüft Algorithmus, Kurve und RSA-Länge.
 
 ### Update
 
@@ -187,6 +244,23 @@ Installationen aktualisieren können.
   Mandanten verlangen jetzt ebenfalls eine Passkey-Bestätigung.
 - Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
 - Fehlerbilder und Ablauf: RUNBOOK Abschnitte 21 (Admin-Zugang) und 22 (Anmeldung, Notausgang).
+
+- **Migration `0206_auth_hardening`:** neue Tabellen `auth_event` (ohne Fremdschlüssel, RLS mit
+  nullbarem `tenant_id`), `auth_session` und `auth_known_device` (beide `tenant_id NOT NULL`, RLS).
+  Rein additiv, folgt auf `0205_admin_passkey_only`.
+- **Niemand muss sich neu anmelden:** bestehende Session-Cookies (ohne Session-ID, alter Cookie-Name
+  `hocx_session`) gelten bis zu ihrem Ablauf (höchstens 72 h; der alte Name wird bis
+  `AUTH_LEGACY_COOKIE_UNTIL`, sonst Start + 72 h, gelesen) weiter; auf eine Mandanten-Domain werden sie
+  nicht mehr weitergereicht; neue Anmeldungen bekommen
+  `__Host-hocx_session` mit Session-ID. Alte Sessions erscheinen nicht in «Angemeldete Geräte»;
+  «Alle anderen Geräte abmelden» beendet sie trotzdem. Laufende Bridge-Tokens (v3, 120 s) werden
+  weiter eingelöst. Alte Redis-Zähler laufen nach höchstens 15 min aus.
+- Neues optionales Secret `AUTH_SECRET_PREVIOUS` (leer lassen; nur für Rotation, RUNBOOK 20) -
+  `deploy.sh` schreibt die Secret-Datei auch leer. Neue optionale Variablen `AUTH_*` (RUNBOOK 20).
+- Neuer Hintergrundjob `auth_security_maintenance` (Backend, stündlich, Lock-ID 202600036).
+- Für die Prüfung riskanter Anmeldungen ohne zweiten Faktor sollte der E-Mail-Versand eingerichtet
+  sein.
+
 
 ## [1.4.2] - 2026-11-20
 
