@@ -95,6 +95,7 @@
     "syncTemplateDone": "Éléments rechargés depuis le modèle",
     "syncTemplateFailed": "Impossible de recharger les éléments",
     "alreadyFinalizedError": "Ce procès-verbal est déjà finalisé et figé. Rétrograde-le d’abord via le menu (« Revenir à … »).",
+    "deleteHasFinesError": "Ce procès-verbal comporte des amendes de présence. Seule une personne autorisée à gérer les amendes peut le supprimer – ou fais d’abord supprimer les amendes dans les finances.",
     "deleteFinalizedHint": "Un procès-verbal finalisé ne peut pas être supprimé. Rétrograde-le d’abord via « Revenir à … », puis supprime-le.",
     "searchFailed": "La recherche a échoué",
     "searching": "Recherche en cours …",

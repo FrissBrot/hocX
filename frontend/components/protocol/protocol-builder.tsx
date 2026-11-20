@@ -36,6 +36,9 @@ export function protocolActionError(error: unknown, t: (key: string) => string, 
   if (error instanceof ApiError && error.status === 409 && /already abgeschlossen/i.test(error.message)) {
     return t("alreadyFinalizedError");
   }
+  if (error instanceof ApiError && error.status === 409 && (error.detail as { code?: string } | undefined)?.code === "protocol_has_fines") {
+    return t("deleteHasFinesError");
+  }
   return error instanceof Error && error.message ? error.message : fallback;
 }
 

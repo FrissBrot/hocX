@@ -18,7 +18,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import type { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
@@ -77,7 +77,8 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
       setProtocols((list) => list.filter((item) => item.id !== protocol.id));
       showToast(t("deleted", { name: protocol.title ?? protocol.protocol_number }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
+      const hasFines = error instanceof ApiError && (error.detail as { code?: string } | undefined)?.code === "protocol_has_fines";
+      showToast(hasFines ? t("deleteHasFinesError") : error instanceof Error ? error.message : t("deleteFailed"), "error");
     }
   }
 
