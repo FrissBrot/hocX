@@ -79,7 +79,9 @@
     "rename": "Rename",
     "colorOrRename": "Color / rename",
     "addNewTag": "+ Add \"{tag}\"",
-    "createTag": "Create “{tag}”"
+    "createTag": "Create “{tag}”",
+    "addSuggestion": "Add tag {tag}",
+    "suggestionChip": "+ {tag}"
   },
   "connectivity": {
     "offlineWithPending": "{count, plural, one {Offline – # change saved locally} other {Offline – # changes saved locally}}",
@@ -322,5 +324,9 @@
       "media_previous": "Previous photo or file",
       "media_next": "Next photo or file"
     }
+  },
+  "numberStepper": {
+    "decrease": "Decrease {label}",
+    "increase": "Increase {label}"
   }
 }

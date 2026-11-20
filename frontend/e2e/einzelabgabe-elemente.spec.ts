@@ -41,7 +41,7 @@ test.describe("Einzelabgabe mit mehreren Elementen", () => {
     await dialog.getByRole("button", { name: "Weiter" }).click();
 
     // Schritt 2 «Elemente»: das erste Element trägt den Titel
-    await expect(dialog.getByRole("heading", { name: "Welche Elemente sollen abgegeben werden?" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Elemente" })).toBeVisible();
     const names = dialog.getByLabel("Name", { exact: true });
     await expect(names.first()).toHaveValue(title);
     await names.first().fill("Anmeldung");
@@ -50,21 +50,22 @@ test.describe("Einzelabgabe mit mehreren Elementen", () => {
     const end = dialog.getByLabel("Stichtag von Element 2");
     await end.fill("31.12.2030");
     await end.press("Tab");
+    // Verantwortliche je Element direkt in der Zeile des Elements
+    await dialog.getByRole("button", { name: "Verantwortliche für «Fotos»" }).click();
+    await page.getByRole("option", { name: new RegExp(personName) }).click();
+    await page.keyboard.press("Escape");
     await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente.png") });
     await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
     await page.screenshot({ path: testInfo.outputPath("einzelabgabe-elemente-dark.png") });
     await page.evaluate(() => { document.documentElement.dataset.theme = "light"; });
 
-    // Schritt 3: Verantwortliche je Element
+    // Schritt 3: mit Verantwortlichen gibt es den persönlichen Link
     await dialog.getByRole("button", { name: "Weiter" }).click();
-    await dialog.getByRole("button", { name: "Verantwortliche für «Fotos»" }).click();
-    await page.getByRole("option", { name: new RegExp(personName) }).click();
-    await page.keyboard.press("Escape");
-    await expect(dialog.getByRole("radiogroup", { name: "Persönlicher Link für Verantwortliche" })).toBeVisible();
+    await expect(dialog.getByRole("radiogroup", { name: "Persönlicher Link" })).toBeVisible();
 
     await dialog.getByRole("button", { name: "Weiter" }).click();
     await dialog.getByRole("button", { name: "Weiter" }).click();
-    await dialog.getByRole("button", { name: "Abgabe erstellen" }).click();
+    await dialog.getByRole("button", { name: "Abgabe speichern" }).click();
     await page.getByRole("dialog").filter({ hasText: "Abgabe ist bereit" }).getByRole("button", { name: "Fertig" }).click();
 
     // Gespeichert: zwei Elemente, Verantwortliche und Stichtag am zweiten

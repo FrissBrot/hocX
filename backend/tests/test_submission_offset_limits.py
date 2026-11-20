@@ -8,7 +8,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.submission import OFFSET_DAYS_MAX, SubmissionAssignmentCreate, SubmissionAssignmentUpdate
+from app.schemas.submission import MAX_FILES_PER_ELEMENT, OFFSET_DAYS_MAX, SubmissionAssignmentCreate, SubmissionAssignmentUpdate
 from app.services.submission_service import _shift_date
 
 
@@ -35,3 +35,16 @@ def test_existing_huge_offsets_no_longer_overflow():
     assert _shift_date(date(2026, 11, 19), 10**9) == date.max
     assert _shift_date(date(2026, 11, 19), -(10**9)) == date.min
     assert _shift_date(date(9999, 12, 1), 3650) == date.max
+
+
+def test_max_files_per_element_has_an_upper_limit():
+    """Höchstzahl Dateien je Feld: 1–MAX_FILES_PER_ELEMENT oder unbegrenzt (None)."""
+    assert _create(max_files_per_element=MAX_FILES_PER_ELEMENT).max_files_per_element == MAX_FILES_PER_ELEMENT
+    assert _create(max_files_per_element=None).max_files_per_element is None
+    with pytest.raises(ValidationError):
+        _create(max_files_per_element=MAX_FILES_PER_ELEMENT + 1)
+    with pytest.raises(ValidationError):
+        _create(max_files_per_element=0)
+    with pytest.raises(ValidationError):
+        SubmissionAssignmentUpdate(max_files_per_element=10**10)
+    assert SubmissionAssignmentUpdate(max_files_per_element=1).max_files_per_element == 1

@@ -100,10 +100,10 @@ describe("Automatisch schliessen im Formular", () => {
   it("deaktiviert «Maximum» ohne Maximum und fällt beim Leeren auf «Nie» zurück", () => {
     render(<Harness start={{ ...initialForm, auto_close: "max_files", max_files_per_element: 3 }} />);
     fireEvent.click(screen.getByRole("button", { name: /4\. Dateien/ }));
-    const maxOption = screen.getByRole("radio", { name: "Sobald Höchstzahl erreicht" });
+    const maxOption = screen.getByRole("radio", { name: "Bei Höchstzahl" });
     expect(maxOption.getAttribute("aria-checked")).toBe("true");
 
-    fireEvent.change(screen.getByPlaceholderText("unbegrenzt"), { target: { value: "" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Max. Dateien je Feld" }), { target: { value: "" } });
 
     expect(maxOption).toHaveProperty("disabled", true);
     expect(screen.getByRole("radio", { name: "Nie" }).getAttribute("aria-checked")).toBe("true");
@@ -189,66 +189,76 @@ const goTo = (name: RegExp) => fireEvent.click(screen.getByRole("button", { name
 describe("SubmissionAssignmentFormModal – Anlegen in fünf Schritten", () => {
   it("führt durch Grundlage, Zeitraum, Verantwortlich, Dateien und Zugriff", () => {
     render(<Harness />);
-    expect(screen.getByText("Schritt 1 von 5")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Was soll abgegeben werden?" })).toBeInTheDocument();
-    const radios = within(screen.getByRole("radiogroup", { name: "Wofür wird einzeln abgegeben?" })).getAllByRole("radio");
+    expect(screen.getByRole("button", { name: "1. Grundlage" })).toHaveAttribute("aria-current", "step");
+    expect(screen.getByRole("heading", { name: "Grundlage" })).toBeInTheDocument();
+    expect(screen.getByText("Was soll abgegeben werden?")).toBeInTheDocument();
+    const radios = within(screen.getByRole("radiogroup", { name: "Verknüpfung" })).getAllByRole("radio");
     expect(radios.map((r) => r.textContent)).toEqual([
       expect.stringContaining("Termine"),
       expect.stringContaining("Liste"),
       expect.stringContaining("Einzelabgabe"),
     ]);
     expect(radios[0]).toHaveAttribute("aria-checked", "true");
+    // Tastatur wie eine Radio-Gruppe: nur die gewählte Karte ist per Tab erreichbar, Pfeile wählen
+    expect(radios.map((radio) => radio.tabIndex)).toEqual([0, -1, -1]);
+    fireEvent.keyDown(radios[0], { key: "ArrowRight" });
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+    expect(radios[1]).toHaveFocus();
+    fireEvent.keyDown(radios[1], { key: "ArrowLeft" });
+    expect(radios[0]).toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-    expect(screen.getByRole("heading", { name: "Wann ist die Abgabe offen?" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Zeitraum" })).toBeInTheDocument();
+    expect(screen.getByText("Wann ist die Abgabe offen?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Zurück" }));
-    expect(screen.getByText("Schritt 1 von 5")).toBeInTheDocument();
-    // Ohne Erstellen-Knopf vor dem letzten Schritt
-    expect(screen.queryByRole("button", { name: "Abgabe erstellen" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1. Grundlage" })).toHaveAttribute("aria-current", "step");
+    // Ohne Speichern-Knopf vor dem letzten Schritt
+    expect(screen.queryByRole("button", { name: "Abgabe speichern" })).not.toBeInTheDocument();
   });
 
   it("«Weiter» im vorletzten Schritt erstellt nichts, erst der Knopf im letzten Schritt", () => {
     // Regression: React machte aus demselben <button> beim Klick einen Submit-Knopf; ein echter
     // Mausklick sendete das Formular dann noch im selben Klick ab (jsdom zeigt das nicht, weil ein
     // synthetischer Klick React erst nach der Aktivierung rendern lässt). Daher hier: «Abgabe
-    // erstellen» ist ein neues Element, der geklickte «Weiter»-Knopf ist danach nicht mehr im DOM.
+    // speichern» ist ein neues Element, der geklickte «Weiter»-Knopf ist danach nicht mehr im DOM.
     const onSubmit = vi.fn();
     render(<Harness start={{ ...initialForm, title: "Vereinsfotos", public_slug: "vereinsfotos" }} onSubmit={onSubmit} />);
     fireEvent.click(screen.getByRole("radio", { name: /Einzelabgabe/ }));
     goTo(/4\. Dateien/);
     const next = screen.getByRole("button", { name: "Weiter" });
     fireEvent.click(next);
-    expect(screen.getByText("Schritt 5 von 5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /5\. Zugriff/ })).toHaveAttribute("aria-current", "step");
     expect(next.isConnected).toBe(false);
     expect(onSubmit).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Abgabe erstellen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abgabe speichern" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
   it("wählt den Tag als Chip und erlaubt bei «Einzelabgabe» das Erstellen ohne Tag", () => {
     const onSubmit = vi.fn();
     render(<Harness start={{ ...initialForm, title: "Vereinsfotos", public_slug: "vereinsfotos" }} onSubmit={onSubmit} />);
-    expect(screen.getByRole("radiogroup", { name: "Tag-Filter" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Tag der Termine" })).toBeInTheDocument();
 
     goTo(/5\. Zugriff/);
-    const submit = screen.getByRole("button", { name: "Abgabe erstellen" });
+    const submit = screen.getByRole("button", { name: "Abgabe speichern" });
     expect(submit).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("Noch offen: Tag-Filter fehlt");
 
     goTo(/1\. Grundlage/);
     fireEvent.click(screen.getByRole("radio", { name: /Einzelabgabe/ }));
-    expect(screen.queryByText("Tag-Filter")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tag der Termine")).not.toBeInTheDocument();
 
     // Schritt 2 heisst bei Einzelabgaben «Elemente»; das erste Element trägt den Titel
     goTo(/2\. Elemente/);
-    expect(screen.getByRole("heading", { name: "Welche Elemente sollen abgegeben werden?" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Vereinsfotos")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Elemente" })).toBeInTheDocument();
+    expect(screen.getByText("Welche Elemente sollen abgegeben werden?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Vereinsfotos");
     goTo(/4\. Dateien/);
     expect(screen.queryByText("Sortierung")).not.toBeInTheDocument();
 
     goTo(/5\. Zugriff/);
-    expect(screen.getByRole("button", { name: "Abgabe erstellen" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Abgabe erstellen" }));
+    expect(screen.getByRole("button", { name: "Abgabe speichern" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Abgabe speichern" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
@@ -257,35 +267,43 @@ describe("SubmissionAssignmentFormModal – Anlegen in fünf Schritten", () => {
     expect(screen.getAllByText("Neue Abgabe").length).toBeGreaterThan(0);
     expect(screen.getByText("Verein Alpina")).toBeInTheDocument();
     goTo(/5\. Zugriff/);
-    expect(screen.getByText("bilder").tagName).toBe("STRONG");
-    expect(screen.getByText("Standard", { selector: "small" })).toBeInTheDocument();
+    // Jede Link-Karte zeigt die Adresse mit dem Slug; der Standard-Link trägt ein Badge
+    expect(screen.getAllByText("bilder").map((element) => element.tagName)).toEqual(["STRONG", "STRONG"]);
+    expect(screen.getByText("Standard", { selector: ".badge" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Standard.*verein-alpina/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Vorstand intern/ })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("übernimmt den Titel in die Überschrift", () => {
     render(<Harness />);
     fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Bilder Scharanlass" } });
     expect(screen.getByLabelText("Titel")).toHaveValue("Bilder Scharanlass");
-    expect(screen.getByRole("heading", { name: "Bilder Scharanlass" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Titel")).toHaveFocus();
   });
 
-  it("zählt gewählte Dateitypen und wechselt zwischen «Alle» und «Keine»", () => {
-    render(<Harness />);
+  it("wählt Dateitypen als Gruppe (Häkchen, Teilauswahl) oder einzeln", () => {
+    let latest: FormState = initialForm;
+    render(<Harness onChange={(form) => (latest = form)} />);
     goTo(/4\. Dateien/);
-    expect(screen.getByText("alle erlaubt")).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Alle" })[0]);
-    expect(screen.getByText("1 ausgewählt")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Keine" })).toBeInTheDocument();
+    const images = screen.getByRole("button", { name: "Bilddateien" });
+    expect(images).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(screen.getByRole("button", { name: ".png" }));
-    expect(screen.getByText("2 ausgewählt")).toBeInTheDocument();
+    expect(images).toHaveAttribute("aria-pressed", "mixed");
+    expect(latest.allowed_file_types).toEqual(["png"]);
+
+    fireEvent.click(images);
+    expect(images).toHaveAttribute("aria-pressed", "true");
+    expect(latest.allowed_file_types).toEqual(["jpg", "jpeg", "png", "gif", "webp"]);
+    fireEvent.click(images);
+    expect(latest.allowed_file_types).toEqual([]);
   });
 });
 
 describe("SubmissionAssignmentFormModal – Bearbeiten als Karten", () => {
   it("zeigt je Abschnitt eine Zusammenfassung und öffnet jeweils eine Karte", () => {
     render(<Harness editing start={{ ...initialForm, title: "Berichte", tag_filter: "Scharanlass", offset_days_before: 0, offset_days_after: 7, link_ids: ["link-1"] }} />);
-    expect(screen.queryByText(/Schritt 1 von 5/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1. Grundlage" })).not.toBeInTheDocument();
     expect(screen.getByText("Termine mit Tag «Scharanlass»")).toBeInTheDocument();
     expect(screen.getByText("ab 0 Tagen vorher, bis 7 Tage danach")).toBeInTheDocument();
 
@@ -347,6 +365,8 @@ describe("Einzelabgabe mit mehreren Elementen (Migration 0198)", () => {
     // Das letzte Element lässt sich nicht entfernen
     expect(screen.getByRole("button", { name: "Element «Anmeldung» entfernen" })).toBeDisabled();
 
+    // Verantwortliche stehen direkt in der Zeile des Elements
+    expect(screen.getByRole("button", { name: "Verantwortliche für «Anmeldung»" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "+ Element" }));
     const names = screen.getAllByLabelText("Name");
     expect(names).toHaveLength(2);
@@ -364,14 +384,17 @@ describe("Einzelabgabe mit mehreren Elementen (Migration 0198)", () => {
     expect(screen.getAllByLabelText("Name")).toHaveLength(2);
 
     goTo(/3\. Verantwortlich/);
-    expect(screen.queryByText(/keine verantwortliche Person/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Noch niemand bekommt eine Pendenz/)).toBeInTheDocument();
+    goTo(/2\. Elemente/);
     fireEvent.click(screen.getByRole("button", { name: "Verantwortliche für «Fotos»" }));
     fireEvent.click(screen.getByRole("option", { name: /Anna Muster/ }));
     // Inaktive Personen stehen nicht zur Wahl
     expect(screen.queryByRole("option", { name: /Ehemalig/ })).not.toBeInTheDocument();
     expect(latest.manual_elements[1].responsible_participant_ids).toEqual(["p-anna"]);
     // Mit Verantwortlichen erscheint der persönliche Link
-    expect(screen.getByRole("radiogroup", { name: "Persönlicher Link für Verantwortliche" })).toBeInTheDocument();
+    goTo(/3\. Verantwortlich/);
+    expect(screen.getByText("1 von 2 Elementen hat eine verantwortliche Person (unter «Elemente» festgelegt).")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Persönlicher Link" })).toBeInTheDocument();
 
     const payload = assignmentPayload(latest);
     expect(payload.deadline).toBeNull();
@@ -443,7 +466,42 @@ describe("Zeitfenster-Beispiel", () => {
   it("zeigt das Beispiel im Formular", () => {
     render(<Harness start={{ ...initialForm, tag_filter: "Scharanlass", offset_days_before: 0, offset_days_after: 2 }} />);
     fireEvent.click(screen.getByRole("button", { name: /2\. Zeitraum/ }));
-    expect(screen.getByText(/^Beispiel: Termin am/)).toBeInTheDocument();
+    expect(screen.getByText(/^Termin am .* → /)).toBeInTheDocument();
+    expect(screen.getByText("Beispiel")).toBeInTheDocument();
+  });
+
+  it("stellt das Zeitfenster mit «−»/«+» ein, leer heisst sofort bzw. nie", () => {
+    let latest: FormState = initialForm;
+    render(<Harness start={{ ...initialForm, tag_filter: "Scharanlass", offset_days_before: 0, offset_days_after: "" }} onChange={(form) => (latest = form)} />);
+    goTo(/2\. Zeitraum/);
+    expect(screen.getByRole("spinbutton", { name: "Tage nach dem Termin" })).toHaveAttribute("placeholder", "nie");
+    fireEvent.click(screen.getByRole("button", { name: "Tage vor dem Termin verringern" }));
+    expect(latest.offset_days_before).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Tage nach dem Termin erhöhen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tage nach dem Termin erhöhen" }));
+    expect(latest.offset_days_after).toBe(1);
+    expect(screen.getByText(/sofort offen bis/)).toBeInTheDocument();
+  });
+
+  it("fasst die Abgabe in der Fusszeile mit den Dateiregeln zusammen", () => {
+    render(<Harness start={{ ...initialForm, tag_filter: "Scharanlass", offset_days_before: 0, offset_days_after: 7, allowed_file_types: ["pdf"], max_files_per_element: 3 }} />);
+    expect(screen.getByText(/Jeder Termin mit dem Tag «Scharanlass».*Erlaubt: 1 Dateityp, max. 3 Dateien, je max. 20 MB\./)).toBeInTheDocument();
+  });
+
+  it("zeigt die Anzahl Termine je Tag, wenn Termine geladen sind", () => {
+    render(
+      <SubmissionAssignmentFormModal
+        open editing={false} tenantName={null} form={initialForm} setForm={vi.fn()} links={[]} availableLists={[]}
+        availableTags={["Scharanlass", "Hauptversammlung"]} availableCycleConfigs={[]}
+        availableEvents={[
+          { title: "A", event_date: "2026-01-01", event_end_date: null, tag: "Scharanlass" },
+          { title: "B", event_date: "2026-02-01", event_end_date: null, tag: "Scharanlass" },
+        ]}
+        onSubmit={vi.fn()} onClose={vi.fn()} onManageLinks={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("radio", { name: "Scharanlass, 2 Termine" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Hauptversammlung" })).toBeInTheDocument();
   });
 });
 
@@ -481,11 +539,14 @@ describe("Tags für die Pendenzen (Migration 0202)", () => {
     render(<Harness start={withPerson} onChange={(form) => (latest = form)} />);
     goTo(/3\. Verantwortlich/);
     expect(screen.getByText("Tags für die Pendenzen")).toBeInTheDocument();
-    const own = screen.getByRole("checkbox", { name: /Abgabe-Tag erstellen/ });
+    const own = screen.getByRole("switch", { name: /Abgabe-Tag ergänzen/ });
     expect(own).not.toBeChecked();
-    expect(screen.getByText(/zusätzlich das Tag «Sommerlager»/)).toBeInTheDocument();
+    expect(own).toHaveAccessibleDescription(/zusätzlich das Tag «Sommerlager»/);
+    expect(screen.queryByText("auto")).not.toBeInTheDocument();
     fireEvent.click(own);
     expect(latest.todo_own_tag).toBe(true);
+    // Eingeschaltet erscheint das Abgabe-Tag als Chip «auto» im Feld
+    expect(screen.getByText("auto")).toBeInTheDocument();
     expect(assignmentPayload({ ...latest, todo_tags: ["Lager"] })).toMatchObject({ todo_tags: ["Lager"], todo_own_tag: true });
   });
 

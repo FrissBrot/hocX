@@ -1,7 +1,7 @@
 import uuid
 from types import SimpleNamespace
 
-from sqlalchemy import case, select
+from sqlalchemy import case, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -97,6 +97,29 @@ def list_todo_blocks(
     Protokollliste - vorher sahen eingeschränkte Leser hier Titel aller Protokolle, S-3)."""
     require_permission(user, P.MEETINGS_READ)
     return service.list_todo_blocks(db, user.current_tenant_id, visible=access_service.protocol_visibility(db, user))
+
+
+@router.get("/todos/tags", response_model=list[str])
+def list_todo_tags(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Alle Tags, die Pendenzen des Mandanten tragen (Vorschläge, z. B. «Tags für die Pendenzen» im
+    Abgabe-Assistenten) - nicht die Termin- oder Datei-Tags. Eingeschränkte Leser bekommen keine
+    Vorschläge (sie sehen nicht alle Pendenzen)."""
+    require_permission(user, P.MEETINGS_READ)
+    if access_service._is_restricted_reader(db, user):
+        return []
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT tag FROM protocol_todo, jsonb_array_elements_text(tags) AS tag"
+            " WHERE tenant_id = :tenant_id AND jsonb_typeof(tags) = 'array' LIMIT 2000"
+        ),
+        {"tenant_id": user.current_tenant_id},
+    ).scalars().all()
+    seen: dict[str, str] = {}
+    for tag in rows:
+        value = str(tag).strip()
+        if value and value.lower() not in seen:
+            seen[value.lower()] = value
+    return sorted(seen.values(), key=str.casefold)
 
 
 @router.get("/todos", response_model=list[TodoListItem])

@@ -3344,6 +3344,12 @@
         "meetings.read"
       ]
     },
+    "GET /api/todos/tags": {
+      "handler": "todos.list_todo_tags",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "POST /api/tools/word-import/analyze": {
       "handler": "word_import.analyze_word_import",
       "requires": [

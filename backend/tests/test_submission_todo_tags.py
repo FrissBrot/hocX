@@ -72,3 +72,34 @@ def test_too_many_tags_are_rejected():
 
     with pytest.raises(ValidationError):
         SubmissionAssignmentCreate(title="x", public_slug="x", source_type="manual", todo_tags=[f"t{i}" for i in range(21)])
+
+
+def test_todo_tag_suggestions_list_todo_tags_not_event_tags(db, org):
+    """«Tags für die Pendenzen» schlägt die Tags der Pendenzen vor (dedupliziert, sortiert)."""
+    from app.api.routes import todos as todo_routes
+
+    read, assignment = _create(db, org, _element(org), title="Sommerlager", public_slug="sommerlager", todo_tags=["Lager", "eltern"])
+    todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id))
+    todo.tags = [*todo.tags, "Material"]
+    db.commit()
+    assert todo_routes.list_todo_tags(db=db, user=org["user"]) == ["eltern", "Lager", "Material"]
+
+
+def test_event_responsible_source_must_be_a_person_field():
+    from app.services.submission_service import EVENT_RESPONSIBLE_FIELDS, SubmissionService, _resolve_event_responsible
+
+    service = SubmissionService.__new__(SubmissionService)
+    base = {"source_type": "events", "tag_filter": "Hock"}
+    for field in EVENT_RESPONSIBLE_FIELDS:
+        service._validate_source_fields_dict({**base, "responsible_participant_source": field})
+    import pytest
+
+    with pytest.raises(ValueError):
+        service._validate_source_fields_dict({**base, "responsible_participant_source": "tenant_id"})
+
+    class _Event:
+        organizer_ids = [3, 3, 5]
+        tenant_id = 7
+
+    assert _resolve_event_responsible(_Event(), "organizer_ids") == [3, 5]
+    assert _resolve_event_responsible(_Event(), "tenant_id") == []

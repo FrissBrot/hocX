@@ -61,6 +61,12 @@ Installationen aktualisieren können.
   (`settings.manage`, nur Alben des eigenen Mandanten, Partner nur als Organisationsname, ohne IP-
   und E-Mail-Adressen). Keine Migration.
 
+- **Abgabe-Formular v6:** Anlegen und Bearbeiten einer Abgabe nach Design v6 mit neuen Bausteinen
+  Segment-Umschalter, Zahlenfeld mit −/+ und Schalter (alle per Tastatur bedienbar). Als
+  Verantwortliche lassen sich jetzt alle Personenfelder eines Termins bzw. einer Liste wählen.
+  «Tags für die Pendenzen» schlägt die vorhandenen Pendenz-Tags vor (neue Lese-Route
+  `GET /api/todos/tags`, `meetings.read`); ein Komma trennt Tags. Höchstens 999 Dateien je Element.
+
 ### Behoben
 
 - **Ohne Maus nicht bedienbar:** Einträge von Aktions-, Status- und Benutzermenüs (Fokus springt

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
-import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/components/submission-assignments/submission-assignment-form";
+import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/lib/utils/cycle-offsets";
 import type { CycleConfigSummary } from "@/types/api";
 
 type CycleSelection = { cycle_config_id?: string | null; cycle_offset?: number };

@@ -33,6 +33,9 @@ MAX_ELEMENT_RESPONSIBLE = 50
 # Tags für die Pendenzen einer Abgabe (Migration 0202)
 MAX_TODO_TAGS = 20
 TODO_TAG_MAX_LENGTH = 80
+# Höchstzahl Dateien je Abgabefeld: ohne Obergrenze konnte ein Wert über INTEGER hinaus erst in der
+# Datenbank scheitern (500). Das Formular zählt bis hier (frontend MAX_FILES_PER_ELEMENT).
+MAX_FILES_PER_ELEMENT = 999
 
 
 def clean_todo_tags(tags: list[str]) -> list[str]:
@@ -125,6 +128,8 @@ class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     public_slug: str = Field(pattern=SLUG_PATTERN)
     offset_days_before: OffsetDays | None = None
     offset_days_after: OffsetDays | None = None
+    # Obergrenze nur beim Schreiben; Lesen (SubmissionAssignmentRead) bleibt wie bei den Offsets offen
+    max_files_per_element: int | None = Field(default=5, ge=1, le=MAX_FILES_PER_ELEMENT)
     # Ueber welche Links die Abgabe erreichbar ist. None = die Standard-Links des Mandanten
     # (Verhalten fuer API-Clients ohne Link-Auswahl); [] = ueber keinen Link erreichbar.
     link_ids: list[uuid.UUID] | None = None
@@ -149,7 +154,7 @@ class SubmissionAssignmentUpdate(BaseModel):
     list_definition_id: uuid.UUID | None = None
     deadline: date | None = None
     allowed_file_types: list[str] | None = None
-    max_files_per_element: int | None = Field(default=None, ge=1)
+    max_files_per_element: int | None = Field(default=None, ge=1, le=MAX_FILES_PER_ELEMENT)
     max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
     sort_order: SubmissionSortOrder | None = None
     auto_close: SubmissionAutoClose | None = None
