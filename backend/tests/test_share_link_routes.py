@@ -671,3 +671,36 @@ def test_share_links_respect_the_split_between_documents_and_photos(db):
     with pytest.raises(HTTPException) as hidden:
         share_links_routes.revoke_share_link(document_link.id, db, photos_only)
     assert hidden.value.status_code == 404
+
+
+def test_expiry_date_from_the_date_field_keeps_the_link_open_through_that_swiss_day(db):
+    """Das Freigabe-Modal schickt das Ablaufdatum aus dem DateInput als reines Datum
+    ("JJJJ-MM-TT"); die öffentliche Seite zeigt «Link gültig bis <Datum>». Der Link muss also bis
+    zum Ende dieses Tages (Schweizer Zeit) offen bleiben, nicht schon um 00:00 UTC (= 01:00/02:00
+    Schweizer Zeit) desselben Tages ablaufen (Nachtlauf 2026-11-20)."""
+    from datetime import date
+    from zoneinfo import ZoneInfo
+
+    zurich = ZoneInfo("Europe/Zurich")
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    a = _make_file(db, tenant.id)
+
+    payload = ShareLinkCreate.model_validate_json(f'{{"name": "Sommerfest", "file_ids": ["{a.public_id}"], "expires_at": "2030-11-30"}}')
+    created = share_links_routes.create_share_link(payload, db, user)
+    expires_local = created.expires_at.astimezone(zurich)
+    assert expires_local.date() == date(2030, 11, 30)
+    assert expires_local >= datetime(2030, 11, 30, 23, 59, tzinfo=zurich)
+
+    # Heute als Ablaufdatum gewählt: der Link funktioniert heute noch.
+    today = datetime.now(zurich).date().isoformat()
+    payload = ShareLinkCreate.model_validate_json(f'{{"name": "Heute", "file_ids": ["{a.public_id}"], "expires_at": "{today}"}}')
+    created = share_links_routes.create_share_link(payload, db, user)
+    assert created.status == "active"
+    token = created.url.removeprefix("/share/")
+    assert public_share_routes.get_public_share(token, _FakeRequest(), db).name == "Heute"
+
+    # Ein vollständiger Zeitpunkt (andere Clients) bleibt unverändert.
+    moment = datetime(2030, 11, 30, 18, 0, tzinfo=UTC)
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="Y", file_ids=[a.public_id], expires_at=moment), db, user)
+    assert created.expires_at == moment
