@@ -17,17 +17,21 @@ const list = {
   legacy_session: false,
 };
 
+const devices = [
+  { id: "d1", user_agent_family: "Firefox · Linux", created_at: "2026-11-01T08:00:00Z", last_seen_at: "2026-11-20T09:00:00Z", current: true },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   confirm.mockResolvedValue(true);
   api.mockImplementation((url: string, init?: { method?: string }) =>
-    Promise.resolve(init?.method === "POST" ? { revoked: 1 } : init?.method === "DELETE" ? null : list));
+    Promise.resolve(init?.method === "POST" ? { revoked: 1 } : init?.method === "DELETE" ? null : url.endsWith("/devices") ? devices : list));
 });
 
 it("lists devices and signs out a single other device", async () => {
   render(<SessionsPanel open />);
   expect(await screen.findByText("Safari · iOS")).toBeInTheDocument();
-  expect(screen.getByText("Dieses Gerät")).toBeInTheDocument();
+  expect(screen.getAllByText("Dieses Gerät").length).toBeGreaterThan(0);
   // Nur das andere Gerät hat «Abmelden»
   const buttons = screen.getAllByRole("button", { name: "Abmelden" });
   expect(buttons).toHaveLength(1);
@@ -41,4 +45,11 @@ it("signs out all other devices after confirmation", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Alle anderen Geräte abmelden" }));
   await waitFor(() => expect(api).toHaveBeenCalledWith("/api/users/me/sessions/revoke-others", { method: "POST" }));
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: "danger" }));
+});
+
+it("forgets a known device", async () => {
+  render(<SessionsPanel open />);
+  await screen.findByText("Bekannte Geräte");
+  fireEvent.click(await screen.findByRole("button", { name: "Vergessen" }));
+  await waitFor(() => expect(api).toHaveBeenCalledWith("/api/users/me/devices/d1", { method: "DELETE" }));
 });

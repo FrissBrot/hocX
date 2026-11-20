@@ -2988,3 +2988,11 @@ export type SessionDeviceList = {
   sessions: SessionDevice[];
   legacy_session: boolean;
 };
+
+export type KnownDevice = {
+  id: string;
+  user_agent_family: string | null;
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
+};

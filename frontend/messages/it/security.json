@@ -178,7 +178,8 @@
       "device": "Dispositivo",
       "lastSeen": "Ultima attività",
       "since": "Connesso dal",
-      "actions": "Azione"
+      "actions": "Azione",
+      "knownSince": "Noto dal"
     },
     "current": "Questo dispositivo",
     "unknownDevice": "Dispositivo sconosciuto",
@@ -193,6 +194,12 @@
     "revokeOthers": "Disconnetti tutti gli altri dispositivi",
     "revokeOthersConfirm": "Disconnettere tutti gli altri dispositivi? Questo dispositivo resta connesso.",
     "revokedOthers": "{count, plural, =0 {Nessun altro dispositivo connesso.} one {Un dispositivo disconnesso.} other {# dispositivi disconnessi.}}",
-    "legacyHint": "Gli accessi precedenti all'ultimo aggiornamento non compaiono qui; «Disconnetti tutti gli altri dispositivi» termina anche quelli."
+    "legacyHint": "Gli accessi precedenti all'ultimo aggiornamento non compaiono qui; «Disconnetti tutti gli altri dispositivi» termina anche quelli.",
+    "knownTitle": "Dispositivi noti",
+    "knownDescription": "Hai già effettuato l'accesso su questi dispositivi. Sono esclusi dai blocchi causati dai tentativi falliti di altri. Dimenticando un dispositivo terminano anche le sue sessioni.",
+    "knownEmpty": "Nessun dispositivo noto.",
+    "forget": "Dimentica",
+    "forgetConfirm": "Dimenticare questo dispositivo? Le sue sessioni verranno terminate.",
+    "forgotten": "Dispositivo dimenticato."
   }
 }

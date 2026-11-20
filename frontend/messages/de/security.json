@@ -178,7 +178,8 @@
       "device": "Gerät",
       "lastSeen": "Zuletzt aktiv",
       "since": "Angemeldet seit",
-      "actions": "Aktion"
+      "actions": "Aktion",
+      "knownSince": "Bekannt seit"
     },
     "current": "Dieses Gerät",
     "unknownDevice": "Unbekanntes Gerät",
@@ -193,6 +194,12 @@
     "revokeOthers": "Alle anderen Geräte abmelden",
     "revokeOthersConfirm": "Alle anderen Geräte abmelden? Dieses Gerät bleibt angemeldet.",
     "revokedOthers": "{count, plural, =0 {Keine weiteren Geräte angemeldet.} one {Ein Gerät abgemeldet.} other {# Geräte abgemeldet.}}",
-    "legacyHint": "Anmeldungen von vor dem letzten Update erscheinen hier nicht; «Alle anderen Geräte abmelden» beendet auch sie."
+    "legacyHint": "Anmeldungen von vor dem letzten Update erscheinen hier nicht; «Alle anderen Geräte abmelden» beendet auch sie.",
+    "knownTitle": "Bekannte Geräte",
+    "knownDescription": "Auf diesen Geräten hast du dich schon angemeldet. Sie sind von Sperren nach Fehlversuchen anderer ausgenommen. Vergisst du ein Gerät, enden auch seine Sitzungen.",
+    "knownEmpty": "Keine bekannten Geräte.",
+    "forget": "Vergessen",
+    "forgetConfirm": "Dieses Gerät vergessen? Seine Sitzungen werden beendet.",
+    "forgotten": "Gerät vergessen."
   }
 }

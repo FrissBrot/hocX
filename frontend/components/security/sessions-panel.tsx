@@ -10,7 +10,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { formatDateTime } from "@/lib/utils/format";
-import type { SessionDeviceList } from "@/types/api";
+import type { KnownDevice, SessionDeviceList } from "@/types/api";
 
 /**
  * «Angemeldete Geräte» im Profil › Sicherheit (Auth-Audit 2026-11-20, SEC-AUTH-011): aktive
@@ -24,11 +24,17 @@ export function SessionsPanel({ open }: { open: boolean }) {
   const confirm = useConfirm();
   const showToast = useToast();
   const [data, setData] = useState<SessionDeviceList | null>(null);
+  const [devices, setDevices] = useState<KnownDevice[] | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setData(await browserApiFetch<SessionDeviceList>("/api/users/me/sessions"));
+      const [sessions, known] = await Promise.all([
+        browserApiFetch<SessionDeviceList>("/api/users/me/sessions"),
+        browserApiFetch<KnownDevice[]>("/api/users/me/devices"),
+      ]);
+      setData(sessions);
+      setDevices(known);
     } catch (error) {
       showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("loadFailed")), "error");
     }
@@ -46,6 +52,20 @@ export function SessionsPanel({ open }: { open: boolean }) {
     try {
       await browserApiFetch(`/api/users/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
       showToast(t("revoked"), "success");
+      await load();
+    } catch (error) {
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("revokeFailed")), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function forgetDevice(id: string) {
+    if (!(await confirm({ message: t("forgetConfirm"), tone: "danger", confirmLabel: t("forget") }))) return;
+    setBusy(true);
+    try {
+      await browserApiFetch(`/api/users/me/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+      showToast(t("forgotten"), "success");
       await load();
     } catch (error) {
       showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("revokeFailed")), "error");
@@ -99,6 +119,30 @@ export function SessionsPanel({ open }: { open: boolean }) {
         ))}
       </DataTable>
       {data?.legacy_session ? <p className="field-help">{t("legacyHint")}</p> : null}
+      <div>
+        <h4>{t("knownTitle")}</h4>
+        <p className="muted">{t("knownDescription")}</p>
+      </div>
+      <DataTable
+        emptyMessage={devices ? t("knownEmpty") : t("loading")}
+        columns={[t("columns.device"), t("columns.lastSeen"), t("columns.knownSince"), t("columns.actions")]}
+      >
+        {(devices ?? []).map((device) => (
+          <tr key={device.id}>
+            <td>
+              <strong>{device.user_agent_family ?? t("unknownDevice")}</strong>{" "}
+              {device.current ? <Badge variant="success">{t("current")}</Badge> : null}
+            </td>
+            <td>{formatDateTime(device.last_seen_at, locale)}</td>
+            <td>{formatDateTime(device.created_at, locale)}</td>
+            <td>
+              <button type="button" className="button-danger" onClick={() => void forgetDevice(device.id)} disabled={busy}>
+                {t("forget")}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </DataTable>
       <div className="table-actions table-actions-start">
         <button type="button" className="button-secondary" onClick={() => void revokeOthers()} disabled={busy || (others === 0 && !data?.legacy_session)}>
           {t("revokeOthers")}

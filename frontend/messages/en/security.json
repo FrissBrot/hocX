@@ -178,7 +178,8 @@
       "device": "Device",
       "lastSeen": "Last active",
       "since": "Signed in since",
-      "actions": "Action"
+      "actions": "Action",
+      "knownSince": "Known since"
     },
     "current": "This device",
     "unknownDevice": "Unknown device",
@@ -193,6 +194,12 @@
     "revokeOthers": "Sign out all other devices",
     "revokeOthersConfirm": "Sign out all other devices? This device stays signed in.",
     "revokedOthers": "{count, plural, =0 {No other devices signed in.} one {One device signed out.} other {# devices signed out.}}",
-    "legacyHint": "Sign-ins from before the last update don't appear here; «Sign out all other devices» ends them too."
+    "legacyHint": "Sign-ins from before the last update don't appear here; «Sign out all other devices» ends them too.",
+    "knownTitle": "Known devices",
+    "knownDescription": "You have signed in on these devices before. They are exempt from lockouts caused by other people's failed attempts. Forgetting a device also ends its sessions.",
+    "knownEmpty": "No known devices.",
+    "forget": "Forget",
+    "forgetConfirm": "Forget this device? Its sessions will be ended.",
+    "forgotten": "Device forgotten."
   }
 }

@@ -178,7 +178,8 @@
       "device": "Appareil",
       "lastSeen": "Dernière activité",
       "since": "Connecté depuis",
-      "actions": "Action"
+      "actions": "Action",
+      "knownSince": "Connu depuis"
     },
     "current": "Cet appareil",
     "unknownDevice": "Appareil inconnu",
@@ -193,6 +194,12 @@
     "revokeOthers": "Déconnecter tous les autres appareils",
     "revokeOthersConfirm": "Déconnecter tous les autres appareils ? Cet appareil reste connecté.",
     "revokedOthers": "{count, plural, =0 {Aucun autre appareil connecté.} one {Un appareil déconnecté.} other {# appareils déconnectés.}}",
-    "legacyHint": "Les connexions antérieures à la dernière mise à jour n'apparaissent pas ici ; « Déconnecter tous les autres appareils » les termine aussi."
+    "legacyHint": "Les connexions antérieures à la dernière mise à jour n'apparaissent pas ici ; « Déconnecter tous les autres appareils » les termine aussi.",
+    "knownTitle": "Appareils connus",
+    "knownDescription": "Tu t'es déjà connecté·e sur ces appareils. Ils sont exemptés des blocages dus aux tentatives échouées d'autres personnes. Oublier un appareil met aussi fin à ses sessions.",
+    "knownEmpty": "Aucun appareil connu.",
+    "forget": "Oublier",
+    "forgetConfirm": "Oublier cet appareil ? Ses sessions seront terminées.",
+    "forgotten": "Appareil oublié."
   }
 }
