@@ -83,7 +83,7 @@ run_tests() {
   local extra=()
   read -r -a extra <<< "${E2E_ARGS:-}"
   if [[ "${E2E_USE_HOST_PLAYWRIGHT:-0}" == "1" ]]; then
-    (cd "$REPO_DIR/frontend" && PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 E2E_USER_EMAIL=admin@hocx.local E2E_USER_PASSWORD='ChangeMe123!' npm run test:e2e -- "${extra[@]}")
+    (cd "$REPO_DIR/frontend" && E2E_WORKERS="${E2E_WORKERS:-2}" PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 E2E_USER_EMAIL=admin@hocx.local E2E_USER_PASSWORD='ChangeMe123!' npm run test:e2e -- "${extra[@]}")
   else
     # Image tag must match frontend/package.json's @playwright/test version (perf/version
     # audit 2026-10-05: this had drifted to v1.55.0 while package-lock.json had long since
@@ -93,6 +93,7 @@ run_tests() {
       -e CI="${CI:-}" -e PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 \
       -e E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 \
       -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' -e E2E_ARGS="${E2E_ARGS:-}" \
+      -e E2E_WORKERS="${E2E_WORKERS:-2}" \
       mcr.microsoft.com/playwright:v1.64.1-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
   fi
 }

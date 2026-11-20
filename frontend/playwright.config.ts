@@ -4,6 +4,11 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   timeout: 45_000,
+  // Lokal laufen Stack (Dev-Server mit Kompilierung, ClamAV, Worker) und Browser auf demselben Host:
+  // mit 4 Workern auf 8 Kernen stand der Renderer zeitweise >30 s still (Tastendruck kam nie an,
+  // Antworten über 15 s) - Fehler nur aus Zeitmangel. scripts/e2e.sh setzt E2E_WORKERS (Standard 2,
+  // wie ein GitHub-Runner mit 4 Kernen ohnehin bekommt); ohne Variable entscheidet Playwright.
+  workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
