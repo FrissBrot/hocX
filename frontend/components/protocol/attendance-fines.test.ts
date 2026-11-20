@@ -29,7 +29,7 @@ describe("attendance-fines", () => {
   it("legt fuer Unentschuldigt die Busse an", async () => {
     api.mockResolvedValueOnce(fine("absent"));
     const onCreated = vi.fn();
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "absent", config, fines: [], onRemoved: vi.fn(), onCreated });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "absent", config, fines: [], onRemoved: vi.fn(), onCreated });
     expect(api).toHaveBeenCalledWith("/api/fines", expect.objectContaining({ method: "POST" }));
     expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ fine_type: "absent", amount: 20, account_id: "acc" });
     expect(onCreated).toHaveBeenCalledWith(fine("absent"));
@@ -38,7 +38,7 @@ describe("attendance-fines", () => {
   it("laesst bei Tarif-Betraegen den Server den Betrag bestimmen", async () => {
     api.mockResolvedValueOnce(fine("late"));
     const tariffConfig = attendanceFineConfig({ fine_account_id: "acc", fine_amount_late: 5, fine_amount_absent: 20, fine_tariff_amounts: true });
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "late", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated: vi.fn() });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "late", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated: vi.fn() });
     const body = JSON.parse(api.mock.calls[0][1].body);
     expect(body).toMatchObject({ fine_type: "late", use_tariff: true });
     expect(body.amount).toBeUndefined();
@@ -49,27 +49,27 @@ describe("attendance-fines", () => {
     const onCreated = vi.fn();
     const tariffConfig = attendanceFineConfig({ fine_account_id: "acc", fine_amount_late: 0, fine_amount_absent: 0, fine_tariff_amounts: true });
     expect(tariffConfig.enabled).toBe(true);
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "absent", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "absent", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated });
     expect(onCreated).not.toHaveBeenCalled();
   });
 
   it("ersetzt eine andersartige offene Busse", async () => {
     api.mockResolvedValueOnce(undefined).mockResolvedValueOnce(fine("late"));
     const onRemoved = vi.fn();
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "late", config, fines: [fine("absent")], onRemoved, onCreated: vi.fn() });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "late", config, fines: [fine("absent")], onRemoved, onCreated: vi.fn() });
     expect(api.mock.calls[0]).toEqual(["/api/fines/f-absent", { method: "DELETE" }]);
     expect(onRemoved).toHaveBeenCalledWith("f-absent");
   });
 
   it("laesst eine passende Busse unveraendert", async () => {
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "late", config, fines: [fine("late")], onRemoved: vi.fn(), onCreated: vi.fn() });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "late", config, fines: [fine("late")], onRemoved: vi.fn(), onCreated: vi.fn() });
     expect(api).not.toHaveBeenCalled();
   });
 
   it("entfernt die Busse bei Anwesend", async () => {
     api.mockResolvedValueOnce(undefined);
     const onRemoved = vi.fn();
-    await syncAttendanceFine({ protocolId: "pr", participant, status: "present", config, fines: [fine("late")], onRemoved, onCreated: vi.fn() });
+    await syncAttendanceFine({ canManage: true, protocolId: "pr", participant, status: "present", config, fines: [fine("late")], onRemoved, onCreated: vi.fn() });
     expect(onRemoved).toHaveBeenCalledWith("f-late");
   });
 
@@ -85,7 +85,7 @@ describe("attendance-fines", () => {
     const change = (status: string) =>
       runAttendanceChangeSerialized("block:p1", () =>
         syncAttendanceFine({
-          protocolId: "pr", participant, status, config, fines: () => fines,
+          canManage: true, protocolId: "pr", participant, status, config, fines: () => fines,
           onRemoved: (id) => { fines = fines.filter((f) => f.id !== id); },
           onCreated: (created) => { fines = [...fines, created]; },
         })
@@ -106,5 +106,15 @@ describe("attendance-fines", () => {
     const next = runAttendanceChangeSerialized("block:p2", () => Promise.resolve("ok"));
     await expect(failed).rejects.toThrow("offline");
     await expect(next).resolves.toBe("ok");
+  });
+});
+
+describe("attendance-fines ohne Bussenrecht", () => {
+  beforeEach(() => api.mockReset());
+
+  it("fasst Bussen ohne fines.manage nicht an (POST/DELETE /fines verlangen das Recht)", async () => {
+    await syncAttendanceFine({ canManage: false, protocolId: "pr", participant, status: "absent", config, fines: [], onRemoved: vi.fn(), onCreated: vi.fn() });
+    await syncAttendanceFine({ canManage: false, protocolId: "pr", participant, status: "present", config, fines: [fine("absent")], onRemoved: vi.fn(), onCreated: vi.fn() });
+    expect(api).not.toHaveBeenCalled();
   });
 });

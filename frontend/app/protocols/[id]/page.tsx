@@ -130,6 +130,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
             initialFinanceTransactions={initialFinanceTransactions}
             initialPendingTodos={pendingTodos}
             forceReadOnly={isRestricted}
+            canManageFines={can(session, "fines.manage")}
           />
         }
         desktop={

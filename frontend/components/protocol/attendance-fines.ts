@@ -42,6 +42,7 @@ export function runAttendanceChangeSerialized<T>(key: string, change: () => Prom
  * dann den Anwesenheitsstatus zurueck.
  */
 export async function syncAttendanceFine({
+  canManage,
   protocolId,
   participant,
   status,
@@ -50,6 +51,10 @@ export async function syncAttendanceFine({
   onRemoved,
   onCreated,
 }: {
+  /** fines.manage: POST/DELETE /api/fines verlangen das Recht. Ohne es (z. B. Standardrolle
+   * «writer») bleibt die Anwesenheit gespeichert und die Bussen erfasst die Kasse - vorher
+   * scheiterte der Abgleich mit 403 und die Anwesenheit wurde zurückgesetzt. */
+  canManage: boolean;
   protocolId: string;
   participant: { id: string; display_name: string };
   status: string;
@@ -60,7 +65,7 @@ export async function syncAttendanceFine({
   onRemoved: (fineId: string) => void;
   onCreated: (fine: AttendanceFine) => void;
 }): Promise<void> {
-  if (!config.enabled) return;
+  if (!config.enabled || !canManage) return;
   const currentFines = typeof fines === "function" ? fines() : fines;
   const existingFine = currentFines.find(
     (fine) => fine.participant_id === participant.id && (fine.fine_type === "late" || fine.fine_type === "absent") && fine.status === "pending"
