@@ -289,6 +289,15 @@ def delete_document(db: Session, document: Document) -> None:
     und Exportdateien bleiben unangetastet - sie gehören ihrer Herkunft."""
     version_ids = list(db.scalars(select(DocumentVersion.id).where(DocumentVersion.document_id == document.id)))
     generated = _generated_file_ids(db, version_ids)
+    # Sperrreihenfolge wie der document-worker (_lock_owned_job: erst der Auftrag, dann Zeilen, die
+    # auf Version/Dokument zeigen). Sonst sperrt das Löschen zuerst das Dokument, die Kaskade danach
+    # den Auftrag, während der Worker es genau umgekehrt tut - Deadlock beim endgültigen Löschen
+    # einer Datei, deren PDF gerade erzeugt wird. So wartet eine Seite, und der Worker verwirft sein
+    # Ergebnis danach (Auftrag weg -> JobLeaseLost).
+    if version_ids:
+        db.execute(
+            select(DocumentJob.id).where(DocumentJob.document_version_id.in_(version_ids)).order_by(DocumentJob.id).with_for_update()
+        )
     db.execute(update(Document).where(Document.id == document.id).values(current_version_id=None))
     db.execute(delete(Document).where(Document.id == document.id))
     db.flush()

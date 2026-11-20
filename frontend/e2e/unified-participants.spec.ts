@@ -16,7 +16,8 @@ test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", 
     // Liste: Zeile öffnet die Personenseite
     await page.goto("/participants");
     await page.getByText(name, { exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/participants/${participant.id}$`));
+    // Erster Aufruf der Detailroute: der Dev-Server des E2E-Stacks kompiliert sie erst (> 5 s möglich)
+    await expect(page).toHaveURL(new RegExp(`/participants/${participant.id}$`), { timeout: 30_000 });
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 
     // Login per Passwort vergeben

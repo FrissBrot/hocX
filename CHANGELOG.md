@@ -75,6 +75,11 @@ Installationen aktualisieren können.
   (Dateien) legte die Abgabe sofort an, statt den Schritt «Zugriff» zu zeigen - der Knopf wurde noch
   im selben Klick zum Erstellen-Knopf. Jetzt erstellt nur «Abgabe erstellen» im letzten Schritt.
 
+- **«Endgültig löschen» im Papierkorb scheiterte gelegentlich** («Dateien konnten nicht endgültig
+  gelöscht werden»): lief für ein Dokument gerade die PDF-Erzeugung, sperrten Löschen und
+  Dokument-Worker dieselben Zeilen in umgekehrter Reihenfolge, die Datenbank brach mit einem
+  Deadlock ab. Das Löschen wartet jetzt auf den Worker.
+
 ### Update
 
 - `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
