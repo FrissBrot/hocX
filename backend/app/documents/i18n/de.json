@@ -463,7 +463,7 @@
         "passwordChanged": "Passwort geändert",
         "passwordChangedByAdmin": "Passwort durch die Verwaltung deiner Organisation neu gesetzt"
       },
-      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
+      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abschalten.",
       "mfaAdded": "Zweiter Faktor hinzugefügt ({at})",
       "mfaRemoved": "Zweiter Faktor entfernt ({at})",
       "mfaRemovedByAdmin": "Zweiter Faktor durch die Verwaltung deiner Organisation entfernt ({at})",

@@ -646,7 +646,7 @@
       "mfaRemoved": "Zweiter Faktor entfernt ({at})",
       "mfaRemovedByAdmin": "Zweiter Faktor durch die Verwaltung deiner Organisation entfernt ({at})",
       "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
-      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
+      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abschalten.",
       "emailChanged": "Login-E-Mail geändert ({at})",
       "emailChangedByAdmin": "Login-E-Mail durch die Verwaltung deiner Organisation geändert ({at})",
       "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
