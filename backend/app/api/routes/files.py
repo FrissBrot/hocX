@@ -1396,6 +1396,8 @@ def _capture_correction_audit(
             "skipped_no_date": len(outcome.skipped_no_date_ids),
             "invalid": len(outcome.invalid_ids),
             "not_found": len(outcome.not_found_ids),
+            "no_time_unchanged": len(outcome.no_time_unchanged_ids),
+            "date_only": len(outcome.date_only_ids),
             # Nur eigene, tatsächlich geänderte Bilder - nie IDs fremder Mandanten.
             "file_ids": [str(public_id) for public_id in outcome.updated_ids],
         },
@@ -1439,6 +1441,7 @@ def update_stored_file_capture_correction(
         details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]} if corrected else {}
         _capture_correction_audit(db, user, mode=mode, outcome=outcome, requested=1, entity_id=stored_file.id, details=details)
     db.commit()
+    service.recompute_capture_albums(db, outcome)
     db.refresh(stored_file)
     metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
     if metadata is None:
@@ -1496,12 +1499,15 @@ def bulk_update_capture_date(
         details = {"shift_days": payload.shift_days, "shift_hours": payload.shift_hours}
     _capture_correction_audit(db, user, mode=payload.mode, outcome=outcome, requested=len(ids), details=details)
     db.commit()
+    service.recompute_capture_albums(db, outcome)
     return FileBulkCaptureDateResult(
         updated_ids=outcome.updated_ids,
         unchanged_ids=outcome.unchanged_ids,
         skipped_no_date_ids=outcome.skipped_no_date_ids,
         invalid_ids=outcome.invalid_ids,
         not_found_ids=outcome.not_found_ids,
+        no_time_unchanged_ids=outcome.no_time_unchanged_ids,
+        date_only_ids=outcome.date_only_ids,
     )
 
 
@@ -2084,7 +2090,7 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
         # hochgeladene Fotos werden direkt nach dem Upload ins Album gelegt.
         raise HTTPException(status_code=422, detail="Gesperrte Fotos (Virenprüfung) können nicht in ein Album aufgenommen werden.")
     # Manuell hinzugefuegt = bewusst geteilt (das Frontend warnt vorher bei geteilten Alben).
-    photo_album_service.add_items(db, album, list(ids), release=True)
+    photo_album_service.add_items(db, album, list(ids), release=True, manual=True)
     db.commit()
     photo_album_service.recompute_best_of(db, service, album)
 

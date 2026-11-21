@@ -2016,6 +2016,8 @@ class TenantImportService:
                 is_best=bool(row.get("is_best")),
                 best_override=row.get("best_override"),
                 share_pending=bool(row.get("share_pending")),
+                # Nur bekannte Herkunft übernehmen (DB-CHECK), alles andere gilt als manuell.
+                auto_source="capture_date" if row.get("auto_source") == "capture_date" else None,
             ))
         self.db.commit()
         return album_map

@@ -2782,6 +2782,11 @@ class PhotoAlbumItem(Base):
     # der Besitzer-Mandant sieht das Foto im Album, Partner und Album-Links erst nach der
     # Freigabe (siehe photo_album_share_service.release_pending).
     share_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # Herkunft eines automatischen Eintrags (Migration 0218): "capture_date" = nur wegen des
+    # Aufnahmedatums in diesem Perioden-Album (Upload mit Ziel Zyklus), wird bei einer
+    # Datumskorrektur nachgezogen (photo_album_service.follow_capture_date_change). NULL =
+    # manuell oder nicht datumsabhängig - wird nie automatisch verschoben.
+    auto_source: Mapped[str | None] = mapped_column(Text)
 
 
 class PhotoAlbumTenantShare(Base, TimestampMixin):

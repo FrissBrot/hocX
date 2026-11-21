@@ -348,8 +348,8 @@ class FileBulkCaptureDate(BaseModel):
     """POST /files/bulk-capture-date - Mehrfachauswahl der Galerie.
 
     mode "set": alle auf corrected_date (+ optional corrected_time); "shift": um shift_days/
-    shift_hours verschieben (Bilder ohne Aufnahmedatum werden übersprungen); "reset":
-    Korrektur entfernen."""
+    shift_hours verschieben (Bilder ohne Aufnahmedatum werden übersprungen, bei Bildern ohne
+    Uhrzeit wirken nur die ganzen Tage des Gesamtversatzes); "reset": Korrektur entfernen."""
 
     file_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_CAPTURE_DATE_BULK)
     mode: Literal["set", "shift", "reset"]
@@ -382,6 +382,11 @@ class FileBulkCaptureDateResult(BaseModel):
     # Unbekannt, fremder Mandant (auch Partner-Fotos geteilter Alben) oder kein Bild -
     # bewusst nicht unterschieden (kein Existenz-Orakel).
     not_found_ids: list[uuid.UUID]
+    # Nur beim Verschieben, Fotos ohne Uhrzeit (es wirkt nur der Tagesanteil): unverändert, weil
+    # der Versatz keinen ganzen Tag enthält («unverändert - keine Uhrzeit») ...
+    no_time_unchanged_ids: list[uuid.UUID] = Field(default_factory=list)
+    # ... bzw. nur um die ganzen Tage verschoben, Stunden ignoriert (Teilmenge von updated_ids).
+    date_only_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class GpsMetadataRead(BaseModel):

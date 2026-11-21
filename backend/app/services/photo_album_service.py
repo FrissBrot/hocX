@@ -40,6 +40,7 @@ from app.models.entities import (
     SubmissionUploadFile,
 )
 from app.services import photo_album_share_service
+from app.services.capture_date import effective_capture_date
 from app.services.photo_quality import composite_quality_score
 from app.services.submission_service import SubmissionService, _element_ref, raw_element_key, raw_element_ref
 
@@ -124,21 +125,43 @@ def set_best_override(db: Session, file_service, album: PhotoAlbum, file_id: uui
     recompute_best_of(db, file_service, album)
 
 
-def add_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID], *, release: bool = False) -> None:
+# photo_album_item.auto_source (Migration 0218): das Foto steht nur wegen seines Aufnahmedatums
+# in diesem Album (Upload mit Ziel «Zyklus»: die Periode folgt aus dem Datum). Nur solche Einträge
+# zieht follow_capture_date_change nach einer Datumskorrektur in die neue Periode nach.
+AUTO_SOURCE_CAPTURE_DATE = "capture_date"
+
+
+def add_items(
+    db: Session,
+    album: PhotoAlbum,
+    file_ids: list[uuid.UUID],
+    *,
+    release: bool = False,
+    auto_source: str | None = None,
+    manual: bool = False,
+) -> None:
     """Automatisches Einsortieren (release=False): faellt ein Foto in ein gerade geteiltes
     Album, wird es nur vorgemerkt (share_pending) und erst nach manueller Freigabe geteilt.
     release=True (manuelles Hinzufuegen nach Warnhinweis, bestaetigter Upload) teilt sofort und
-    gibt dabei auch ein schon vorgemerktes Foto frei."""
+    gibt dabei auch ein schon vorgemerktes Foto frei.
+
+    auto_source markiert einen datumsabhaengigen Auto-Eintrag (AUTO_SOURCE_CAPTURE_DATE). Ein
+    schon vorhandener Eintrag behaelt seine Herkunft - ausser bei manual=True (Hinzufuegen von
+    Hand): dann wird er zur manuellen Zuordnung, die keine Datumskorrektur mehr verschiebt."""
     if not file_ids:
         return
     pending = not release and photo_album_share_service.is_album_shared(db, album.id)
     statement = insert(PhotoAlbumItem).values(
-        [{"album_id": album.id, "file_id": file_id, "share_pending": pending} for file_id in file_ids]
+        [
+            {"album_id": album.id, "file_id": file_id, "share_pending": pending, "auto_source": auto_source}
+            for file_id in file_ids
+        ]
     )
-    if release:
-        statement = statement.on_conflict_do_update(
-            index_elements=[PhotoAlbumItem.album_id, PhotoAlbumItem.file_id], set_={"share_pending": False}
-        )
+    if release or manual:
+        set_: dict = {"share_pending": False} if release else {}
+        if manual:
+            set_["auto_source"] = None
+        statement = statement.on_conflict_do_update(index_elements=[PhotoAlbumItem.album_id, PhotoAlbumItem.file_id], set_=set_)
     else:
         statement = statement.on_conflict_do_nothing()
     db.execute(statement)
@@ -539,12 +562,86 @@ def assign_uploaded_files(
             touched[album.id] = album
     elif cycle_config is not None:
         album = cycle_album_for_date(db, tenant_id=tenant_id, cycle_config=cycle_config, on_date=fallback_date or date.today())
-        add_items(db, album, stored_file_public_ids, release=release_shared)
+        # Die Periode folgt hier aus dem Aufnahmedatum - als solche markiert, damit eine spätere
+        # Datumskorrektur das Foto in die richtige Periode nachzieht (follow_capture_date_change).
+        add_items(db, album, stored_file_public_ids, release=release_shared, auto_source=AUTO_SOURCE_CAPTURE_DATE)
         touched[album.id] = album
 
     db.commit()
     for album in touched.values():
         recompute_best_of(db, file_service, album)
+
+
+def follow_capture_date_change(db: Session, *, tenant_id: int, stored_files: list[StoredFile]) -> set[uuid.UUID]:
+    """Zieht automatische, datumsabhängige Albumzuordnungen nach einer Datumskorrektur nach
+    (einzeln, Mehrfachauswahl, Verschieben, Zurücksetzen, Schätzdatum - User-Entscheid
+    «Nachziehen», 1.5.1).
+
+    Datumsabhängig ist heute genau ein Fall: ein Upload mit Ziel «Zyklus» landet im
+    Perioden-Album, das sein Aufnahmedatum ergibt (assign_uploaded_files, auto_source
+    capture_date). Fällt das Foto nach der Korrektur in eine andere Periode, wandert der Eintrag
+    aus dem alten in das neue Perioden-Album (bei Bedarf angelegt; in einem geteilten Album wie
+    jedes automatische Einsortieren nur vorgemerkt). Nie angefasst werden manuelle Zuordnungen
+    (auto_source NULL: von Hand hinzugefügt, Altbestand vor 0218), Abgabe-Alben und die
+    Zyklus-Alben eines bewusst gewählten Termins - die hängen nicht am Datum. Die Termin-Zuordnung
+    selbst (GalleryImage.event_id) zieht photo_event_link_service nach; auf diesem Weg kommt ein
+    Foto in kein Album.
+
+    Nur die übergebenen Fotos, eine Abfrage für alle; Mandant gebunden. Committet nicht.
+    Rückgabe: die geänderten Album-IDs - der Aufrufer berechnet nach dem Commit die Bestenauswahl
+    neu (recompute_best_of_for_albums)."""
+    if not stored_files:
+        return set()
+    by_public_id = {stored_file.public_id: stored_file for stored_file in stored_files if stored_file.tenant_id == tenant_id}
+    if not by_public_id:
+        return set()
+    rows = db.execute(
+        select(PhotoAlbumItem.album_id, PhotoAlbumItem.file_id, PhotoAlbum.cycle_config_id, PhotoAlbum.cycle_year)
+        .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+        .where(
+            PhotoAlbum.tenant_id == tenant_id,
+            PhotoAlbum.kind == "cycle",
+            PhotoAlbumItem.auto_source == AUTO_SOURCE_CAPTURE_DATE,
+            PhotoAlbumItem.file_id.in_(list(by_public_id)),
+        )
+    ).all()
+    if not rows:
+        return set()
+    configs = {
+        config.id: config
+        for config in db.scalars(
+            select(CycleConfig).where(CycleConfig.tenant_id == tenant_id, CycleConfig.id.in_({row.cycle_config_id for row in rows}))
+        )
+    }
+    touched: set[uuid.UUID] = set()
+    moves: dict[tuple[int, int], list[uuid.UUID]] = {}
+    for row in rows:
+        config = configs.get(row.cycle_config_id)
+        if config is None:
+            continue
+        # Gleiche Datumsquelle wie beim Upload (EXIF, sonst Schätzung, sonst Uploadtag) - nur
+        # mit der Korrektur davor.
+        new_year = get_cycle_year(effective_capture_date(by_public_id[row.file_id]), config.reset_month, config.reset_day)
+        if new_year == row.cycle_year:
+            continue
+        db.execute(delete(PhotoAlbumItem).where(PhotoAlbumItem.album_id == row.album_id, PhotoAlbumItem.file_id == row.file_id))
+        moves.setdefault((config.id, new_year), []).append(row.file_id)
+        touched.add(row.album_id)
+    for (config_id, cycle_year), file_ids in moves.items():
+        target = get_or_create_cycle_album(db, tenant_id=tenant_id, cycle_config=configs[config_id], cycle_year=cycle_year)
+        add_items(db, target, file_ids, auto_source=AUTO_SOURCE_CAPTURE_DATE)
+        touched.add(target.id)
+    db.flush()
+    return touched
+
+
+def recompute_best_of_for_albums(db: Session, file_service, album_ids: set[uuid.UUID]) -> None:
+    """Bestenauswahl der von follow_capture_date_change geänderten Alben neu berechnen
+    (committet je Album, deshalb erst nach dem Commit der Korrektur aufrufen)."""
+    for album_id in sorted(album_ids):
+        album = db.get(PhotoAlbum, album_id)
+        if album is not None:
+            recompute_best_of(db, file_service, album)
 
 
 def sync_submission_uploads(db: Session, file_service) -> None:
