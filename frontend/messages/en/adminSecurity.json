@@ -165,7 +165,8 @@
     "acknowledgeConfirm": "Acknowledge this warning as seen? It no longer counts as open until it subsides and occurs again. Blocks and notifications stay unchanged.",
     "acknowledgedToast": "Warning acknowledged",
     "reopenedToast": "Warning reopened",
-    "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again."
+    "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again.",
+    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event)."
   },
   "audit": {
     "title": "Audit log",

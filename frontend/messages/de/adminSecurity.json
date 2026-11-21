@@ -165,7 +165,8 @@
     "acknowledgeConfirm": "Warnung als gesehen quittieren? Sie zählt dann nicht mehr als offen, bis sie abklingt und erneut auftritt. Sperren und Benachrichtigungen bleiben unverändert.",
     "acknowledgedToast": "Warnung quittiert",
     "reopenedToast": "Warnung wieder offen",
-    "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen."
+    "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen.",
+    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis)."
   },
   "audit": {
     "title": "Audit-Log",

@@ -94,6 +94,33 @@ def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin =
     }
 
 
+def _ack_is_current(acknowledged_at, last_at) -> bool:
+    """Eine Quittung gilt nur bis zum nächsten auslösenden Ereignis: kommt nach dem Quittieren ein
+    neues (z. B. die nächste Anmeldung von einem neuen Gerät), ist die Warnung wieder offen."""
+    return acknowledged_at is not None and (last_at is None or acknowledged_at >= last_at)
+
+
+# Regeln, deren Subjekt eine interne ID ist (kein Pseudonym): für die Anzeige auflösen (nur owner sieht
+# die Warnungen). Konten-Pseudonyme bleiben Pseudonyme (Auflösung nur über resolve-subject).
+_ADMIN_SUBJECT_RULES = frozenset({"admin_mfa", "admin_new_device"})
+_TENANT_SUBJECT_RULES = frozenset({"tenant"})
+
+
+def _subject_labels(db: Session, alerts: list[dict]) -> dict[str, str]:
+    def ids(rules) -> list[int]:
+        return [int(alert["subject"]) for alert in alerts if alert["rule"] in rules and str(alert["subject"] or "").isdigit()]
+
+    labels: dict[str, str] = {}
+    admin_ids, tenant_ids = ids(_ADMIN_SUBJECT_RULES), ids(_TENANT_SUBJECT_RULES)
+    if admin_ids:
+        for admin_id, name in db.execute(text("SELECT id, display_name FROM platform_admin WHERE id = ANY(:ids)"), {"ids": admin_ids}):
+            labels[f"admin:{admin_id}"] = name
+    if tenant_ids:
+        for tenant_id, name in db.execute(text("SELECT id, name FROM tenant WHERE id = ANY(:ids)"), {"ids": tenant_ids}):
+            labels[f"tenant:{tenant_id}"] = name
+    return labels
+
+
 def _alerts_with_acks(db: Session) -> list[dict]:
     """Live-Alarmregeln plus Quittung aus system_alert_state (gleicher Schlüssel wie im Systemmonitor)."""
     alerts = read_service.platform_alerts(db)
@@ -111,15 +138,19 @@ def _alerts_with_acks(db: Session) -> list[dict]:
                 {"keys": keys},
             )
         }
+    labels = _subject_labels(db, alerts)
     result = []
     for alert in alerts:
         row = acks.get(alert["key"])
+        current = bool(row) and _ack_is_current(row.acknowledged_at, alert.get("last_at"))
+        kind = "admin" if alert["rule"] in _ADMIN_SUBJECT_RULES else "tenant" if alert["rule"] in _TENANT_SUBJECT_RULES else None
         result.append({
             **alert,
+            "subject_label": labels.get(f"{kind}:{alert['subject']}") if kind else None,
             "first_seen_at": row.first_seen_at if row else None,
-            "acknowledged_at": row.acknowledged_at if row else None,
-            "acknowledged_by": row.acknowledged_by if row and row.acknowledged_at else None,
-            "acknowledged_note": row.acknowledged_note if row and row.acknowledged_at else None,
+            "acknowledged_at": row.acknowledged_at if current else None,
+            "acknowledged_by": row.acknowledged_by if current else None,
+            "acknowledged_note": row.acknowledged_note if current else None,
         })
     return result
 

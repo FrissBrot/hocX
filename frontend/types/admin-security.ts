@@ -35,6 +35,12 @@ export type AuthAlert = {
   severity: "critical" | "warning";
   title: string;
   message: string;
+  /** Letztes auslösendes Ereignis, Fenster der Regel und wann sie ohne neues Ereignis abklingt (1.5.1) */
+  last_at?: string | null;
+  window_minutes?: number;
+  clears_at?: string | null;
+  /** Name statt interner ID bei Admin-/Mandanten-Regeln (nur owner sieht Warnungen) */
+  subject_label?: string | null;
   /** Quittung (1.5.1, system_alert_state) */
   first_seen_at?: string | null;
   acknowledged_at?: string | null;

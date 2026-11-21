@@ -395,3 +395,64 @@ def test_integration_hosts_never_carry_credentials(db):
     db.flush()
     body = _client(db, _admin(db)).get("/api/admin/settings/integrations").text
     assert "geheimes-token" not in body and "nutzer" not in body
+
+
+def test_admin_cli_create_user_reads_password_from_stdin(db, monkeypatch, capsys):
+    """Ersatz für das Passwort-Setzen im Panel (Testumgebungen, Notfall): nur auf dem Host."""
+    import io
+    from contextlib import contextmanager
+
+    from app import admin_cli
+    from app.core.security import verify_password
+    from app.models import AppUser
+
+    @contextmanager
+    def same_session():
+        yield db
+
+    monkeypatch.setattr(admin_cli, "SessionLocal", same_session)
+    tenant = make_tenant(db, "CLI Verein")
+    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
+    assert admin_cli.main(["create-user", "--tenant-name", "CLI Verein", "--email", "CLI-Person@example.com", "--role", "reader"]) == 0
+    user = db.scalar(select(AppUser).where(AppUser.email == "cli-person@example.com"))
+    assert user is not None and user.login_enabled and user.tenant_id == tenant.id and verify_password(PASSWORD, user.password_hash)
+    # zweiter Lauf ändert nichts
+    monkeypatch.setattr("sys.stdin", io.StringIO("anderes"))
+    assert admin_cli.main(["create-user", "--tenant-name", "CLI Verein", "--email", "cli-person@example.com"]) == 0
+    assert "existiert bereits" in capsys.readouterr().out
+    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD))
+    assert admin_cli.main(["create-user", "--tenant-name", "Gibt es nicht", "--email", "x@example.com"]) == 1
+
+
+def test_ack_reopens_on_new_event_and_shows_admin_name_and_clear_time(db, monkeypatch):
+    """Koordinator-Ergänzung: neue Auslösung öffnet die quittierte Warnung wieder; Admin-Regeln zeigen
+    den Namen statt #ID; «erledigt sich» aus dem Regelfenster (threats.RULE_WINDOW_MINUTES)."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth_security.threats import RULE_WINDOW_MINUTES
+
+    owner = _admin(db)
+    client = _client(db, owner)
+    key = f"auth:admin_new_device:{owner.admin_id}"
+    seen = datetime.now(timezone.utc) - timedelta(minutes=5)
+    alert = {"key": key, "rule": "admin_new_device", "subject": str(owner.admin_id), "severity": "warning", "title": "T", "message": "M",
+             "last_at": seen, "window_minutes": RULE_WINDOW_MINUTES["admin_new_device"], "clears_at": seen + timedelta(minutes=60)}
+    monkeypatch.setattr(read_service, "platform_alerts", lambda db: [dict(alert)])
+    listed = client.get("/api/admin/auth-security/alerts").json()[0]
+    assert listed["subject_label"] == owner.display_name
+    assert listed["window_minutes"] == 60 and listed["clears_at"]
+    assert client.post("/api/admin/auth-security/alerts/ack", json={"key": key}).status_code == 200
+    db.execute(text("UPDATE system_alert_state SET acknowledged_at = :at WHERE problem_key = :key"), {"at": seen + timedelta(minutes=1), "key": key})
+    assert client.get("/api/admin/auth-security/alerts").json()[0]["acknowledged_at"] is not None
+    alert["last_at"] = seen + timedelta(minutes=3)  # neue Anmeldung von einem neuen Gerät nach der Quittung
+    assert client.get("/api/admin/auth-security/alerts").json()[0]["acknowledged_at"] is None
+    assert client.get("/api/admin/auth-security/overview").json()["open_alerts"] == 1
+
+
+def test_threat_windows_cover_every_rule(db):
+    from app.auth_security import threats
+
+    assert set(threats.RULE_WINDOW_MINUTES) == {"stuffing", "spraying", "account_attack", "admin_mfa", "admin_new_device", "blocks", "network",
+                                                 "cross_tenant", "tenant", "limiter"}
+    for threat in threats.detect(db):
+        assert threat.window_minutes > 0

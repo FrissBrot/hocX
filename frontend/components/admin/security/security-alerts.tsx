@@ -32,15 +32,25 @@ export function SecurityAlertList({
   if (onToggleAck) columns.push(t("alerts.columns.actions"));
   return (
     <DataTable columns={columns} emptyMessage={loading ? undefined : t("alerts.empty")}>
-      {alerts.map((alert) => (
-        <tr key={alert.key}>
+      {/* Quittierte Warnungen abgesetzt am Ende, bis die Regel neu auslöst */}
+      {[...alerts].sort((a, b) => Number(Boolean(a.acknowledged_at)) - Number(Boolean(b.acknowledged_at))).map((alert) => (
+        <tr key={alert.key} className={alert.acknowledged_at ? "admin-alert-acknowledged" : undefined}>
           <td>
             <Badge variant={alert.severity === "critical" ? "danger" : "warning"} dot>
               {t(`severity.${alert.severity}`)}
             </Badge>
           </td>
           <td>{t(`alerts.rules.${KNOWN_RULES.has(alert.rule) ? alert.rule : "unknown"}`)}</td>
-          <td>{alert.subject ? <code>{alert.subject}</code> : null}</td>
+          <td>
+            {alert.subject_label ? (
+              <>
+                <span>{alert.subject_label}</span>
+                <div className="muted admin-cell-sub"><code>{alert.subject}</code></div>
+              </>
+            ) : alert.subject ? (
+              <code>{alert.subject}</code>
+            ) : null}
+          </td>
           <td>
             {alert.acknowledged_at ? (
               <>
@@ -52,6 +62,11 @@ export function SecurityAlertList({
             ) : (
               <Badge variant="warning">{t("alerts.open")}</Badge>
             )}
+            {alert.clears_at && alert.window_minutes ? (
+              <div className="muted admin-cell-sub">
+                {t("alerts.clearsAt", { time: formatDateTime(alert.clears_at, locale), minutes: alert.window_minutes })}
+              </div>
+            ) : null}
           </td>
           <td><code>{alert.key}</code></td>
           {onToggleAck ? (

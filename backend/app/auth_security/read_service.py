@@ -10,7 +10,7 @@ Pseudonyme und ohne Risikowert (nur die Klasse). Immer mit ``tenant_id``-Filter 
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -218,7 +218,12 @@ def platform_alerts(db: Session) -> list[dict]:
     if _alerts_cache is not None and now - _alerts_cache[0] < _ALERTS_CACHE_SECONDS:
         return [dict(item) for item in _alerts_cache[1]]
     alerts = [
-        {"key": threat.key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity, "title": threat.title, "message": threat.message}
+        {
+            "key": threat.key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity, "title": threat.title,
+            "message": threat.message, "last_at": threat.last_at, "window_minutes": threat.window_minutes,
+            # Ohne neues Ereignis klingt die Warnung von selbst ab (Fenster aus threats.RULE_WINDOW_MINUTES)
+            "clears_at": threat.last_at + timedelta(minutes=threat.window_minutes) if threat.last_at else None,
+        }
         for threat in threats.detect(db)
     ]
     _alerts_cache = (now, alerts)

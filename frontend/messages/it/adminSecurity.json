@@ -165,7 +165,8 @@
     "acknowledgeConfirm": "Confermare la presa visione di questo avviso? Non conta più come aperto finché non cessa e si ripresenta. Blocchi e notifiche restano invariati.",
     "acknowledgedToast": "Presa visione confermata",
     "reopenedToast": "Avviso riaperto",
-    "ackHelp": "Gli avvisi confermati restano visibili ma non contano più nella campanella e nella panoramica. Se un avviso si ripresenta dopo essere cessato, è di nuovo aperto."
+    "ackHelp": "Gli avvisi confermati restano visibili ma non contano più nella campanella e nella panoramica. Se un avviso si ripresenta dopo essere cessato, è di nuovo aperto.",
+    "clearsAt": "Si risolve da sé alle {time} se nel frattempo non succede nulla di nuovo (finestra di {minutes, plural, one {# minuto} other {# minuti}} dall'ultimo evento)."
   },
   "audit": {
     "title": "Registro di audit",

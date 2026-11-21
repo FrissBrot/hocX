@@ -165,7 +165,8 @@
     "acknowledgeConfirm": "Acquitter cet avertissement comme vu ? Il ne compte plus comme ouvert jusqu'à ce qu'il disparaisse et réapparaisse. Les blocages et notifications restent inchangés.",
     "acknowledgedToast": "Avertissement acquitté",
     "reopenedToast": "Avertissement rouvert",
-    "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert."
+    "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert.",
+    "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement)."
   },
   "audit": {
     "title": "Journal d’audit",
