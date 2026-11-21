@@ -23,7 +23,7 @@ from app.core.db import get_db, release_for_stream
 from app.core.offload import run_coroutine_in_thread
 from app.core.rate_limit import enforce_rate_limit
 from app.core.storage import ABGABEBOX, MAIN, object_response
-from app.models import StoredFile
+from app.models import GalleryImage, StoredFile
 from app.schemas.files import UploadFileResult
 from app.services import submission_access_service as access_service
 from app.services import submission_upload_rules
@@ -181,6 +181,8 @@ def _element_checksums(db: Session, assignment, element_ref: str, raw: dict) -> 
             StoredFile.tenant_id == assignment.tenant_id,
             StoredFile.scan_status.notin_(BLOCKED_SCAN_STATUSES),
             same_element,
+            # Clips von Live Photos zeigt die Ansicht des Links nicht - auch nicht als Treffer melden
+            ~select(GalleryImage.id).where(GalleryImage.live_video_stored_file_id == StoredFile.id).exists(),
         )
     )
     known: dict[str, uuid.UUID | None] = {}
