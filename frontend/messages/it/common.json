@@ -325,6 +325,8 @@
       "designer_deselect": "Annullare la selezione",
       "media_previous": "Foto o file precedente",
       "media_next": "Foto o file successivo",
+      "media_toggleBest": "Aggiungere o togliere la foto dalla selezione migliori",
+      "media_delete": "Spostare la foto nel cestino (con conferma)",
       "admin_toggleSidebar": "Mostra la barra laterale compatta o estesa"
     }
   },

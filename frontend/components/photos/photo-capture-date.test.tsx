@@ -10,8 +10,7 @@ vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
 }));
 
-const confirmMock = vi.fn();
-vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn() }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
 
 import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
@@ -75,83 +74,45 @@ describe("Datumskennzeichnung in der Galerie", () => {
   });
 });
 
-describe("Bilddetails: drei getrennte Datumsarten", () => {
+function renderViewer(item = makeItem({ id: "x" }), extra: Record<string, unknown> = {}) {
+  return render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} {...extra} />);
+}
+
+/** Antwortet auf die Metadaten-URL und die Gruppenabfrage; `handler` für alles andere. */
+function api(meta: () => StoredFileMetadata, handler?: (url: string, init?: { method?: string; body?: string }) => unknown) {
+  browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
+    if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve({ status: "ready", computed_at: null, groups: [] });
+    if (!init?.method || init.method === "GET") return Promise.resolve(meta());
+    return Promise.resolve(handler?.(url, init) ?? null);
+  });
+}
+
+describe("Foto-Ansicht: Aufnahmedatum", () => {
   beforeEach(() => {
     browserApiFetchMock.mockReset();
     vi.stubGlobal("Image", vi.fn(function () { return { src: "", decode: () => Promise.resolve() }; }));
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("zeigt echtes Datum in Kamerazeit (ohne Zeitzonenverschiebung) und Upload, aber kein überflüssiges Schätzdatum", async () => {
-    browserApiFetchMock.mockResolvedValue(
-      metadata({ exif_taken_at: "2023-07-14T10:30:00Z", exif_taken_offset: "+02:00", estimated_taken_on: "1999-01-01", date_source: "exif", gps: { latitude: -33.86882, longitude: -70.66933, altitude_m: 540, direction_deg: null, accuracy_m: null, timestamp: null, source: "server" } }),
-    );
-    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+  it("zeigt echtes Datum in Kamerazeit (ohne Zeitzonenverschiebung), Upload und Standort", async () => {
+    api(() => metadata({ exif_taken_at: "2023-07-14T10:30:00Z", exif_taken_offset: "+02:00", estimated_taken_on: "1999-01-01", date_source: "exif", uploaded_by_name: "Lara Meier", gps: { latitude: -33.86882, longitude: -70.66933, altitude_m: 540, direction_deg: null, accuracy_m: null, timestamp: null, source: "server" } }));
+    renderViewer();
     expect(await screen.findByText("14.07.2023, 10:30 (+02:00)")).toBeInTheDocument();
-    expect(screen.getByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
-    expect(screen.queryByText("Geschätztes Aufnahmedatum")).toBeNull();
-    expect(document.querySelector(".photo-viewer-estimate")).toBeNull();
-    expect(screen.getByText("Hochgeladen")).toBeInTheDocument();
+    expect(screen.getByText("Aus der Kamera (EXIF)")).toBeInTheDocument();
+    expect(screen.queryByText("Geschätzt")).toBeNull();
+    expect(screen.getByText(/Lara Meier/)).toBeInTheDocument();
     expect(screen.getByText("-33.86882, -70.66933 · 540 m ü. M.")).toBeInTheDocument();
   });
 
-  it("speichert, ändert und entfernt ein geschätztes Datum über den Bearbeitungsweg", async () => {
-    const onCaptureDateSaved = vi.fn();
-    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
-      if (init?.method === "PATCH") {
-        const { estimated_taken_on } = JSON.parse(init.body ?? "{}");
-        return Promise.resolve(metadata({ id: "x", estimated_taken_on, date_source: estimated_taken_on ? "estimated" : "upload", effective_date: estimated_taken_on ?? "2026-07-10" }));
-      }
-      return Promise.resolve(metadata({ id: "x" }));
-    });
-    const item = makeItem({ id: "x", date_source: "upload" });
-    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} onCaptureDateSaved={onCaptureDateSaved} />);
-    expect(await screen.findByText("Aufnahmedatum unbekannt")).toBeInTheDocument();
-    const input = document.querySelector(".photo-viewer-estimate input") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "01.08.1998" } });
-    fireEvent.blur(input);
-    await waitFor(() => expect(onCaptureDateSaved).toHaveBeenCalledWith("x", expect.objectContaining({ estimated_taken_on: "1998-08-01" })));
-    const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
-    expect(patch[0]).toBe("/api/stored-files/x/capture-date");
-
-    // Mit Schätzdatum: hervorgehobener Kasten, Bearbeiten über «Ändern»
-    expect(await screen.findByText("01.08.1998")).toBeInTheDocument();
-    expect(document.querySelector(".photo-date-box-estimated")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Entfernen" }));
-    await waitFor(() => expect(onCaptureDateSaved).toHaveBeenLastCalledWith("x", expect.objectContaining({ estimated_taken_on: null })));
-  });
-
-  it("bietet ohne Schreibrecht keine Bearbeitung an", async () => {
-    browserApiFetchMock.mockResolvedValue(metadata({ can_edit_capture_date: false, estimated_taken_on: "1999-05-05" }));
-    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
-    expect(await screen.findByText("05.05.1999")).toBeInTheDocument();
-    expect(document.querySelector(".photo-viewer-estimate input")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Ändern" })).toBeNull();
-  });
-});
-
-describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
-  beforeEach(() => {
-    browserApiFetchMock.mockReset();
-    confirmMock.mockReset();
-    vi.stubGlobal("Image", vi.fn(function () { return { src: "", decode: () => Promise.resolve() }; }));
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("korrigiert ein falsches EXIF-Datum nur nach Bestätigung und zeigt das Original", async () => {
-    confirmMock.mockResolvedValue(true);
+  it("korrigiert ein falsches EXIF-Datum erst nach der zweiten Bestätigung", async () => {
     const onCaptureDateSaved = vi.fn();
     const exif = { exif_taken_at: "2001-01-01T00:05:00Z", date_source: "exif" as const, effective_date: "2001-01-01" };
-    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
-      if (init?.method === "PATCH") {
-        const { corrected_date, corrected_time } = JSON.parse(init.body ?? "{}");
-        return Promise.resolve(metadata({ ...exif, capture_corrected_at: `${corrected_date}T${corrected_time}:00Z`, capture_corrected_has_time: true, date_source: "corrected", effective_date: corrected_date, capture_file_state: "pending" }));
-      }
-      return Promise.resolve(metadata(exif));
+    api(() => metadata(exif), (_url, init) => {
+      const { corrected_date, corrected_time } = JSON.parse(init?.body ?? "{}");
+      return metadata({ ...exif, capture_corrected_at: `${corrected_date}T${corrected_time}:00Z`, capture_corrected_has_time: true, date_source: "corrected", effective_date: corrected_date, capture_file_state: "pending" });
     });
-    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} onCaptureDateSaved={onCaptureDateSaved} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Korrigieren" }));
+    renderViewer(makeItem({ id: "x" }), { onCaptureDateSaved });
+    fireEvent.click(await screen.findByRole("button", { name: "Ändern" }));
     const date = screen.getByLabelText("Datum") as HTMLInputElement;
     expect(date.value).toBe("01.01.2001"); // vorbelegt mit dem gültigen Datum
     fireEvent.change(date, { target: { value: "14.07.2023" } });
@@ -159,64 +120,96 @@ describe("Bilddetails: korrigiertes Aufnahmedatum", () => {
     const time = screen.getByLabelText("Uhrzeit (optional)");
     fireEvent.change(time, { target: { value: "10:30" } });
     fireEvent.blur(time);
-    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+
+    // Erster Klick: nur der Hinweis, noch nichts gespeichert.
+    expect(screen.getByText("Datum auf 14.07.2023, 10:30 setzen?")).toBeInTheDocument();
+    expect(screen.getByText(/im Zeitstrahl neu einsortiert/)).toHaveTextContent("bleibt in hocX gespeichert");
+    expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Bestätigen" }));
 
     await waitFor(() => expect(onCaptureDateSaved).toHaveBeenCalledWith("x", expect.objectContaining({ date_source: "corrected" })));
-    expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 1 Bild wird auf 14.07.2023, 10:30 gesetzt.");
-    // Die Bestätigung sagt, dass das Datum auch in die Datei kommt und das Original in hocX bleibt.
-    expect(confirmMock.mock.calls[0][0].message).toContain("Das neue Datum wird auch in die Bilddateien geschrieben");
-    expect(confirmMock.mock.calls[0][0].message).toContain("bleibt in hocX gespeichert und lässt sich jederzeit wiederherstellen");
     const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
     expect(patch[0]).toBe("/api/stored-files/x/capture-correction");
     expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: "2023-07-14", corrected_time: "10:30" });
-    expect(await screen.findByText("Aufnahmedatum · korrigiert")).toBeInTheDocument();
+    expect(await screen.findByText("Korrigiert")).toBeInTheDocument();
     expect(screen.getByText("14.07.2023, 10:30")).toBeInTheDocument();
     expect(screen.getByText("Ursprünglich (EXIF): 01.01.2001, 00:05")).toBeInTheDocument();
-    // Die Anzeige gilt sofort; die Datei folgt im Hintergrund (nur ein Hinweis).
     expect(screen.getByText("Die Bilddatei wird im Hintergrund aktualisiert.")).toBeInTheDocument();
+  });
+
+  it("verschiebt um Tage und Stunden mit Vorschau über den Mehrfach-Endpunkt", async () => {
+    let shifted = false;
+    const exif = { exif_taken_at: "2001-01-01T00:05:00Z", date_source: "exif" as const };
+    api(
+      () => metadata(shifted ? { ...exif, capture_corrected_at: "2000-12-31T02:05:00Z", capture_corrected_has_time: true, date_source: "corrected" } : exif),
+      () => {
+        shifted = true;
+        return { updated_ids: ["x"], unchanged_ids: [], skipped_no_date_ids: [], invalid_ids: [], not_found_ids: [] };
+      }
+    );
+    renderViewer();
+    fireEvent.click(await screen.findByRole("button", { name: "Ändern" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Verschieben" }));
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "-1" } });
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "2" } });
+    expect(screen.getByText("Neu: 31.12.2000, 02:05")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    expect(screen.getByText("Datum auf 31.12.2000, 02:05 verschieben?")).toBeInTheDocument();
+    // Eingabe ändern verlangt eine neue Bestätigung
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "3" } });
+    expect(screen.queryByRole("button", { name: "Bestätigen" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bestätigen" }));
+    await waitFor(() => expect(screen.getByText("Korrigiert")).toBeInTheDocument());
+    const post = browserApiFetchMock.mock.calls.find(([url]) => url === "/api/files/bulk-capture-date")!;
+    expect(JSON.parse(post[1].body)).toEqual({ file_ids: ["x"], mode: "shift", shift_days: -1, shift_hours: 2 });
+  });
+
+  it("Verschieben ist ohne Aufnahmedatum nicht möglich", async () => {
+    api(() => metadata({ date_source: "upload" }));
+    renderViewer();
+    expect(await screen.findByText("Datum setzen, damit das Foto richtig einsortiert wird. Bis dahin gilt das Uploaddatum.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
+    expect(screen.getByRole("radio", { name: "Verschieben" })).toBeDisabled();
+  });
+
+  it("setzt eine Korrektur zurück, mit Hinweis auf das wieder gültige Datum", async () => {
+    const corrected = { exif_taken_at: "2001-01-01T00:05:00Z", capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false, date_source: "corrected" as const };
+    api(() => metadata(corrected), () => metadata({ exif_taken_at: corrected.exif_taken_at, date_source: "exif" }));
+    renderViewer();
+    expect(await screen.findByText("14.07.2023")).toBeInTheDocument(); // ohne Uhrzeit nur der Tag
+    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Zurücksetzen" }));
+    expect(screen.getByText("Die Korrektur wird entfernt – es gilt wieder das EXIF-Datum 01.01.2001, 00:05.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    expect(screen.getByText("Korrektur entfernen?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bestätigen" }));
+    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: null });
+    expect(await screen.findByText("Aus der Kamera (EXIF)")).toBeInTheDocument();
   });
 
   it("zeigt, ob die Datei das korrigierte Datum schon enthält oder das Format es nicht kann", async () => {
     const corrected = { exif_taken_at: null, capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false, date_source: "corrected" as const };
-    browserApiFetchMock.mockResolvedValueOnce(metadata({ ...corrected, capture_file_state: "written" }));
-    const { unmount } = render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    api(() => metadata({ ...corrected, capture_file_state: "written" }));
+    const { unmount } = renderViewer();
     expect(await screen.findByText("Das Datum ist auch in der Bilddatei gespeichert.")).toBeInTheDocument();
     expect(screen.getByText("Das Bild hatte ursprünglich kein Aufnahmedatum.")).toBeInTheDocument();
     unmount();
-    browserApiFetchMock.mockResolvedValueOnce(metadata({ ...corrected, capture_file_state: "unsupported" }));
-    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    api(() => metadata({ ...corrected, capture_file_state: "unsupported" }));
+    renderViewer();
     expect(await screen.findByText("Dieses Dateiformat kann das Datum nicht aufnehmen. Die Korrektur gilt nur in hocX.")).toBeInTheDocument();
   });
 
-  it("stellt das Original nach Bestätigung wieder her, ohne Bestätigung nicht", async () => {
-    const corrected = { exif_taken_at: "2001-01-01T00:05:00Z", capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false, date_source: "corrected" as const };
-    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string }) =>
-      Promise.resolve(init?.method === "PATCH" ? metadata({ exif_taken_at: corrected.exif_taken_at, date_source: "exif" }) : metadata(corrected)),
-    );
-    render(<PhotoViewer items={[makeItem({ id: "x" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
-    expect(await screen.findByText("14.07.2023")).toBeInTheDocument(); // ohne Uhrzeit nur der Tag
-    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
-
-    confirmMock.mockResolvedValueOnce(false);
-    fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
-    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
-    expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
-
-    confirmMock.mockResolvedValueOnce(true);
-    fireEvent.click(screen.getByRole("button", { name: "Original wiederherstellen" }));
-    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    expect(confirmMock.mock.calls[1][0].message).toContain("Bei 1 Bild wird die Korrektur entfernt");
-    expect(confirmMock.mock.calls[1][0].message).toContain("Auch die Bilddateien bekommen ihr ursprüngliches Datum zurück.");
-    const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
-    expect(JSON.parse(patch[1].body)).toEqual({ corrected_date: null });
-    expect(await screen.findByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
-  });
-
-  it("bietet ohne Schreibrecht (z. B. Partner-Foto) keine Korrektur an", async () => {
-    browserApiFetchMock.mockResolvedValue(metadata({ can_edit_capture_date: false, exif_taken_at: "2001-01-01T00:05:00Z", date_source: "exif" }));
-    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
-    expect(await screen.findByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Korrigieren" })).toBeNull();
+  it("bietet ohne Schreibrecht (z. B. Partner-Foto) keine Änderung an", async () => {
+    api(() => metadata({ can_edit_capture_date: false, estimated_taken_on: "1999-05-05", date_source: "estimated" }));
+    renderViewer();
+    expect(await screen.findByText("05.05.1999")).toBeInTheDocument();
+    expect(screen.getByText("Geschätzt")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ändern" })).toBeNull();
   });
 });
 

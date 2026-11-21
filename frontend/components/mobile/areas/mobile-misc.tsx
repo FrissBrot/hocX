@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useMobileSession, useOpenMore } from "@/components/mobile/mobile-shell";
 import { MobileDesktopHint, MobileSubHeader } from "@/components/mobile/mobile-ui";
 import { PhotosView } from "@/components/photos/photos-view";
+import { can, featureAccess } from "@/lib/permissions";
 
 /** Fotos: dieselbe Galerie wie am Desktop (Raster, Auswahl, Vollbild, Alben, Duplikate),
  * in der Mobile-Variante mit eigenem Kopf, Segment und Plus-Button. */
@@ -14,11 +15,17 @@ export function MobilePhotos() {
   const t = useTranslations("photos.view");
   const tMobile = useTranslations("mobile");
   const openMore = useOpenMore();
+  const session = useMobileSession();
   return (
     <div className="mobile-page mobile-page-list mobile-photos">
       <MobileSubHeader title={t("pageTitle")} subtitle={t("description")} backLabel={tMobile("tabs.more")} onBack={openMore} />
       <div className="mobile-section mobile-embedded">
-        <PhotosView mobile />
+        <PhotosView
+          mobile
+          canManage={can(session, "photos.manage")}
+          canShare={can(session, "sharing.public") && featureAccess(session, "photo_sharing") === "full"}
+          canManageSettings={can(session, "settings.manage")}
+        />
       </div>
     </div>
   );

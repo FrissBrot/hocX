@@ -7,6 +7,7 @@ import { AlbumPhotoPicker } from "./album-photo-picker";
 import { AlbumReleaseNotice } from "./album-share-release";
 import { AlbumShareModal } from "./album-share-modal";
 import { PhotosView } from "./photos-view";
+import type { ViewerPermissions } from "./photo-viewer";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { HelpPopover } from "@/components/ui/help-popover";
@@ -73,12 +74,15 @@ export function PhotoAlbums({
   openAlbumId,
   onOpenedAlbum,
   onReleaseChanged,
+  viewerPermissions,
 }: {
   // Von aussen (Hinweis auf der Fotos-Seite) direkt zu öffnendes Album.
   openAlbumId?: string | null;
   onOpenedAlbum?: () => void;
   // Freigaben haben sich geändert - der Hinweis auf der Fotos-Seite lädt neu.
   onReleaseChanged?: () => void;
+  // Rechte der Foto-Ansicht im geöffneten Album (Löschen, Teilen, Best-of).
+  viewerPermissions?: ViewerPermissions;
 } = {}) {
   const t = useTranslations("photos.albums");
   const toast = useToast();
@@ -300,6 +304,7 @@ export function PhotoAlbums({
           albumId={active.id}
           sharePendingOnly={pendingOnly && active.pending_share_count > 0}
           onReleased={handleReleased}
+          {...viewerPermissions}
         />
         {picking && (
           <AlbumPhotoPicker album={active} onClose={() => setPicking(false)} onAdded={() => setRevision((value) => value + 1)} />

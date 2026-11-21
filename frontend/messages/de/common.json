@@ -325,6 +325,8 @@
       "designer_deselect": "Auswahl aufheben",
       "media_previous": "Vorheriges Foto bzw. vorherige Datei",
       "media_next": "Nächstes Foto bzw. nächste Datei",
+      "media_toggleBest": "Foto ins Best-of aufnehmen oder entfernen",
+      "media_delete": "Foto in den Papierkorb (mit Rückfrage)",
       "admin_toggleSidebar": "Seitenleiste kompakt oder breit anzeigen"
     }
   },

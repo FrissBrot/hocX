@@ -325,6 +325,8 @@
       "designer_deselect": "Clear selection",
       "media_previous": "Previous photo or file",
       "media_next": "Next photo or file",
+      "media_toggleBest": "Add photo to or remove it from the best-of",
+      "media_delete": "Move photo to the trash (with confirmation)",
       "admin_toggleSidebar": "Show the sidebar compact or wide"
     }
   },

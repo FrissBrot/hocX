@@ -325,6 +325,8 @@
       "designer_deselect": "Annuler la sélection",
       "media_previous": "Photo ou fichier précédent",
       "media_next": "Photo ou fichier suivant",
+      "media_toggleBest": "Ajouter la photo à la sélection ou l’en retirer",
+      "media_delete": "Mettre la photo à la corbeille (avec confirmation)",
       "admin_toggleSidebar": "Afficher la barre latérale compacte ou large"
     }
   },
