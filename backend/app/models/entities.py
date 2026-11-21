@@ -17,6 +17,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     ForeignKeyConstraint,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -1522,6 +1523,9 @@ class StoredFile(Base, TimestampMixin):
     # see StoredFileRepository.list_tenant_files), which is computed on read rather than
     # stored here so it always reflects the current protocol number / assignment title.
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    # Keywords (Migration 0217): kurze Suchbegriffe, nur für die Suche (photo_search_doc), nirgends
+    # prominent angezeigt. Normalisiert über file_keywords.normalize_keywords.
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"), default=list)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     # Papierkorb (Migration 0199): gesetzt = gelöscht, aber noch nicht endgültig entfernt. Solche
     # Zeilen blendet app/core/trash_scope.py aus jeder ORM-Abfrage aus; endgültig löscht erst
@@ -2957,6 +2961,22 @@ class PhotoSearchTerm(Base):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
     term: Mapped[str] = mapped_column(Text(collation="C"), primary_key=True)
     sorted: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class SearchSynonymGroup(Base):
+    """Mandanteneigene Synonymgruppe für die Suche (Migration 0217, services/search_synonyms.py):
+    gleichbedeutende Wörter wie eingegeben (``words``) und normalisiert (``terms``)."""
+
+    __tablename__ = "search_synonym_group"
+    __table_args__ = (Index("idx_search_synonym_group_tenant", "tenant_id", "position"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    words: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    terms: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
 class GalleryUploadJob(Base, TimestampMixin):

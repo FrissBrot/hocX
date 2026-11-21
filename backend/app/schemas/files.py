@@ -4,11 +4,11 @@ import re
 import unicodedata
 import uuid
 from datetime import date, datetime, time
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from app.schemas.documents import DocumentSummary
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
@@ -606,6 +606,41 @@ class FileTrashActionResult(BaseModel):
 
 class FileTrashEmptyResult(BaseModel):
     purged: int
+
+
+class StoredFileKeywordsRead(BaseModel):
+    """Keywords einer Datei (nur Suche, Migration 0217) und ob die Person sie ändern darf."""
+
+    keywords: list[str]
+    can_edit: bool
+
+
+KeywordText = Annotated[str, StringConstraints(max_length=200)]
+
+
+class StoredFileKeywordsUpdate(BaseModel):
+    keywords: list[KeywordText] = Field(default_factory=list, max_length=100)
+
+
+class FileBulkKeywordsUpdate(BaseModel):
+    """Mehrfachbearbeitung (Fotos/Ablage): Keywords hinzufügen und/oder entfernen."""
+
+    file_ids: list[uuid.UUID] = Field(max_length=200)
+    add: list[KeywordText] = Field(default_factory=list, max_length=100)
+    remove: list[KeywordText] = Field(default_factory=list, max_length=100)
+
+
+class FileBulkKeywordsResult(BaseModel):
+    updated: int
+
+
+class FileKeywordsSummaryRequest(BaseModel):
+    file_ids: list[uuid.UUID] = Field(max_length=200)
+
+
+class FileKeywordCount(BaseModel):
+    keyword: str
+    count: int
 
 
 class FileBulkTagsUpdate(BaseModel):

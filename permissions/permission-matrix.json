@@ -935,6 +935,13 @@
         "writer"
       ]
     },
+    "POST /api/files/bulk-keywords": {
+      "handler": "files.bulk_update_file_keywords",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "POST /api/files/bulk-tags": {
       "handler": "files.bulk_update_file_tags",
       "allowed": [
@@ -965,6 +972,13 @@
     },
     "POST /api/files/gallery-uploads": {
       "handler": "files.upload_gallery_images",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/keywords-summary": {
+      "handler": "files.file_keywords_summary",
       "allowed": [
         "admin",
         "writer"
@@ -1946,6 +1960,18 @@
         "writer"
       ]
     },
+    "GET /api/search-synonyms": {
+      "handler": "search_synonyms.get_search_synonyms",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "PUT /api/search-synonyms": {
+      "handler": "search_synonyms.put_search_synonyms",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/share-links": {
       "handler": "share_links.list_share_links",
       "allowed": [
@@ -2015,6 +2041,20 @@
         "reader"
       ],
       "serves_files": true
+    },
+    "GET /api/stored-files/{stored_file_id}/keywords": {
+      "handler": "files.get_stored_file_keywords",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "PATCH /api/stored-files/{stored_file_id}/keywords": {
+      "handler": "files.update_stored_file_keywords",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
     },
     "GET /api/stored-files/{stored_file_id}/metadata": {
       "handler": "files.get_stored_file_metadata",

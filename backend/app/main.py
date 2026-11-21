@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -490,6 +490,7 @@ app.include_router(participants.router, prefix="/api", tags=["participants"])
 app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(tag_config.router, prefix="/api", tags=["tag-config"])
 app.include_router(event_field_config.router, prefix="/api", tags=["event-field-config"])
+app.include_router(search_synonyms.router, prefix="/api", tags=["search-synonyms"])
 app.include_router(lists.router, prefix="/api", tags=["lists"])
 app.include_router(protocols.router, prefix="/api", tags=["protocols"])
 app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elements"])
