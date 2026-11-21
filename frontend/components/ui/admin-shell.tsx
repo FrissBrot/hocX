@@ -14,11 +14,15 @@ import type { AdminSessionInfo } from "@/types/api";
 import type { AdminPaletteAction } from "@/components/admin/admin-command-palette";
 import { AdminNavIcon } from "@/components/ui/admin-nav-icons";
 import {
+  ADMIN_NAV_GROUP_KEY,
+  activeAdminGroupId,
   adminBreadcrumb,
   attentionItems,
   buildAdminNav,
   groupCount,
   linkCount,
+  resolveOpenAdminGroup,
+  toggleAdminGroup,
   type AdminNavCounts,
   type AdminNavLink,
 } from "@/components/ui/admin-shell-nav";
@@ -127,6 +131,31 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
   }, []);
   useShortcut("admin.toggleSidebar", toggleCompact);
 
+  // Einklappbare Bereiche (wie die Mandanten-Sidebar): aktiver Bereich offen, übrige zu
+  // Erster Render (auch auf dem Server): aktiver Bereich offen - kein Aufklappen nach dem Laden
+  const [openGroup, setOpenGroup] = useState<string | null>(() => activeAdminGroupId(navGroups, pathname));
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(ADMIN_NAV_GROUP_KEY);
+    } catch {
+      // ohne Speicher: nur der aktive Bereich
+    }
+    setOpenGroup(resolveOpenAdminGroup(navGroups, pathname, stored));
+  }, [navGroups, pathname]);
+  const toggleGroup = useCallback((groupId: string) => {
+    setOpenGroup((current) => {
+      const next = toggleAdminGroup(current, groupId);
+      try {
+        if (next) window.localStorage.setItem(ADMIN_NAV_GROUP_KEY, next);
+        else window.localStorage.removeItem(ADMIN_NAV_GROUP_KEY);
+      } catch {
+        // nur Komfort
+      }
+      return next;
+    });
+  }, []);
+
   // Zähler für Sidebar und Glocke: ein Request (GET /api/admin/nav-counts), jede Minute bei sichtbarem Tab
   const [counts, setCounts] = useState<AdminNavCounts | null>(null);
   const loadCounts = useCallback(() => {
@@ -213,24 +242,51 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
               <h2 className="sidebar-title">{t("title")}</h2>
             </div>
           </div>
-          {searchTrigger("admin-sidebar-search")}
+          {/* Suche steht in der Kopfleiste (Ctrl+K); in der Sidebar nicht doppelt, damit die Bereiche ohne Scrollen Platz haben (1.5.1) */}
           <nav className="sidebar-nav admin-sidebar-nav" aria-label={t("mainNav")}>
             {navGroups.map((group) => {
               const count = groupCount(group, counts);
+              if (!group.titleKey) {
+                return (
+                  <div className="admin-nav-group" key={group.id}>
+                    <div className="nav-links">{group.links.map(renderLink)}</div>
+                  </div>
+                );
+              }
+              // Kompaktmodus (nur Icons): alle Bereiche offen, die Köpfe sind dort nur Trennlinien
+              const expanded = compact || openGroup === group.id;
+              const listId = `admin-nav-group-${group.id}`;
               return (
-                <div className="admin-nav-group" key={group.id}>
-                  {group.titleKey ? (
+                <div className={`nav-group admin-nav-group${expanded ? " nav-group-expanded" : ""}`} key={group.id}>
+                  {compact ? (
                     <div className="admin-nav-group-title">
                       <span className="admin-nav-group-label">{t(group.titleKey)}</span>
                       {count !== null ? <span className="admin-nav-count admin-nav-count-alert">{count}</span> : null}
                     </div>
-                  ) : null}
-                  <div className="nav-links">{group.links.map(renderLink)}</div>
+                  ) : (
+                  <button
+                    type="button"
+                    className="nav-group-label admin-nav-group-title"
+                    aria-expanded={expanded}
+                    aria-controls={listId}
+                    onClick={() => toggleGroup(group.id)}
+                  >
+                    <span className="admin-nav-group-label">{t(group.titleKey)}</span>
+                    {count !== null ? <span className="admin-nav-count admin-nav-count-alert">{count}</span> : null}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                  )}
+                  <div className="nav-links" id={listId} hidden={!expanded}>
+                    {group.links.map(renderLink)}
+                  </div>
                 </div>
               );
             })}
           </nav>
           <div className="sidebar-footer">
+            <div className="admin-sidebar-footer-row">
             <div className="admin-identity">
               <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountMenu")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)} onKeyDown={menuButtonKeyDown(avatarMenuOpen, setAvatarMenuOpen)}>
                 <span className="identity-avatar admin-identity-avatar">{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
@@ -240,10 +296,10 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
                 <div className="identity-subtle">{role ? t(`roles.${role}`) : null}</div>
               </div>
             </div>
-            <button type="button" className="button-ghost admin-compact-toggle" onClick={toggleCompact} aria-pressed={compact} aria-label={compact ? t("expandSidebar") : t("compactSidebar")}>
+            <button type="button" className="button-icon admin-compact-toggle" onClick={toggleCompact} aria-pressed={compact} aria-label={compact ? t("expandSidebar") : t("compactSidebar")} title={compact ? t("expandSidebar") : t("compactSidebar")}>
               <span aria-hidden="true">{compact ? "»" : "«"}</span>
-              <span className="nav-link-label">{t("compactSidebar")}</span>
             </button>
+            </div>
             <CopyrightNotice />
           </div>
         </aside>

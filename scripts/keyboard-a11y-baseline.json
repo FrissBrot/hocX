@@ -1,9 +1,6 @@
 {
   "_comment": "Eingefrorener Altbestand von scripts/check-keyboard-a11y.py (Anzahl pro Datei und Regel). Nur verkleinern, nie erhöhen - siehe KEYBOARD_AUDIT.md.",
   "files": {
-    "frontend/components/admin/admin-user-management.tsx": {
-      "clickable-no-keyboard": 1
-    },
     "frontend/components/agenda/agenda-list-view.tsx": {
       "clickable-no-keyboard": 1
     },

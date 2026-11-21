@@ -8,7 +8,9 @@
       "email": "E-mail",
       "role": "Ruolo",
       "status": "Stato",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "passkeys": "Passkey",
+      "lastLogin": "Ultimo accesso"
     },
     "emptyAdmins": "Nessun account amministratore trovato.",
     "you": "Tu",
@@ -33,7 +35,9 @@
       "updated": "Account amministratore aggiornato",
       "updateFailed": "Impossibile aggiornare l'account amministratore",
       "deactivateConfirm": "Disattivare \"{name}\"? L'account perde immediatamente l'accesso al pannello di amministrazione della piattaforma."
-    }
+    },
+    "passkeyCount": "{count, plural, =0 {Nessuna passkey} one {# passkey} other {# passkey}}",
+    "neverLoggedIn": "Mai"
   },
   "uploadPipeline": {
     "title": "Pipeline file",
@@ -718,7 +722,8 @@
       "tenant": "Organizzazione",
       "role": "Ruolo",
       "login": "Accesso",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "mfa": "MFA"
     },
     "loading": "Caricamento…",
     "emptyUsers": "Nessun partecipante trovato.",
@@ -731,10 +736,6 @@
     "lastName": "Cognome",
     "displayName": "Nome visualizzato",
     "email": "E-mail",
-    "newPassword": "Nuova password",
-    "password": "Password",
-    "passwordHelpEdit": "Compila solo per cambiare la password. Almeno 12 caratteri.",
-    "passwordHelpCreate": "Impostata direttamente qui, almeno 12 caratteri. Non esiste un'e-mail di invito automatica - comunica la password all'partecipante separatamente.",
     "language": "Lingua",
     "active": "Attivo",
     "enableLogin": "Attiva accesso",
@@ -745,8 +746,24 @@
     "toasts": {
       "userSaved": "Partecipante salvato",
       "userCreated": "Partecipante creato",
-      "userSaveFailed": "Impossibile salvare l'partecipante"
-    }
+      "userSaveFailed": "Impossibile salvare l'partecipante",
+      "userInvited": "Utente creato, l'invito viene inviato"
+    },
+    "mfaOn": "Attivo",
+    "mfaOff": "Nessun fattore",
+    "allTenants": "Tutti i mandanti",
+    "loadFailed": "Impossibile caricare gli utenti.",
+    "accessLink": {
+      "reset": "Invia link di reimpostazione",
+      "invite": "Invia invito",
+      "confirmReset": "{name} riceverà via e-mail un link per impostare una nuova password (valido 60 minuti). Fino ad allora vale la password attuale.",
+      "confirmInvite": "{name} riceverà un invito via e-mail e configurerà l'accesso autonomamente (valido 7 giorni).",
+      "resetSent": "Il link di reimpostazione viene inviato",
+      "inviteSent": "L'invito viene inviato"
+    },
+    "loginViaInviteHelp": "Questo account non ha un accesso. La persona configura l'accesso autonomamente tramite «Invia invito».",
+    "sendInvite": "Invia invito di accesso via e-mail",
+    "noPasswordHelp": "Gli admin della piattaforma non impostano password: la persona imposta la propria password tramite un link di invito o di reimpostazione."
   },
   "tenantModal": {
     "close": "Chiudi",
@@ -1392,7 +1409,7 @@
   },
   "auditLog": {
     "title": "Registro di audit",
-    "description": "Eventi di sicurezza e di modifica di tutti i mandanti. La fonte è un'impronta hash della rete, non l'indirizzo IP.",
+    "description": "Eventi di sicurezza e di modifica di tutti i mandanti. La fonte è un'impronta di rete con hash, mai l'indirizzo IP.",
     "filterAll": "Tutti",
     "filterFailures": "Non riusciti",
     "tenant": "Mandante",
@@ -1408,6 +1425,101 @@
     "outcome": {
       "success": "Riuscito",
       "failure": "Non riuscito"
+    },
+    "loadFailed": "Impossibile caricare il registro di audit.",
+    "from": "Dal",
+    "to": "Al",
+    "actorKind": "Attore",
+    "actorKinds": {
+      "all": "Tutti",
+      "admin": "Admin della piattaforma",
+      "user": "Account utente",
+      "system": "Sistema"
+    },
+    "actorAdmin": "Admin della piattaforma",
+    "actorAdminAll": "Tutti gli admin della piattaforma",
+    "entityType": "Entità",
+    "entityTypeAll": "Tutte le entità",
+    "entityId": "ID entità",
+    "actorUserFilter": "Filtrato su un account utente (da un link).",
+    "colEntity": "Entità",
+    "detailEntity": "Entità",
+    "facts": {
+      "appendOnly": "Non modificabile: l'applicazione può solo aggiungere voci, non modificarle né eliminarle. Se una persona o un mandante viene eliminato, hocX rimuove e-mail e fonte dalle sue voci; l'evento resta.",
+      "retention": "Conservato {days, number} giorni, poi eliminato automaticamente",
+      "viewLogged": "La consultazione di questa pagina viene registrata"
+    },
+    "live": {
+      "on": "Live",
+      "off": "Live disattivato"
+    },
+    "filtersLabel": "Filtri",
+    "ranges": {
+      "24h": "24 h",
+      "7d": "7 giorni",
+      "30d": "30 giorni",
+      "90d": "90 giorni"
+    },
+    "areaLabel": "Ambito",
+    "areas": {
+      "auth": "Accesso",
+      "content": "Contenuti",
+      "finance": "Finanze",
+      "admin": "Amministrazione",
+      "privacy": "Protezione dei dati",
+      "other": "Altro"
+    },
+    "reset": "Reimposta filtri",
+    "emptyTitle": "Nessun evento per questi filtri",
+    "emptyHint": "Amplia il periodo o reimposta i filtri.",
+    "days": {
+      "today": "Oggi · {date}",
+      "yesterday": "Ieri · {date}"
+    },
+    "dayMeta": "{count, plural, one {# evento} other {# eventi}}{failures, plural, =0 {} other { · # non riusciti}}",
+    "openEntry": "Mostra voce {time}, {action}",
+    "platform": "Piattaforma",
+    "shown": "{shown, number} di {total, number} visualizzati",
+    "none": "0 voci",
+    "navigateHint": "navigare",
+    "loadMore": "Carica altri",
+    "active": {
+      "actorSelected": "Stessa persona",
+      "source": "Fonte {source}",
+      "entity": "Oggetto {entity}",
+      "remove": "Rimuovi filtro «{filter}»"
+    },
+    "stats": {
+      "events": "Eventi",
+      "failures": "Non riusciti · {share, number} %",
+      "persons": "Persone",
+      "sources": "Fonti"
+    },
+    "timelineSummary": "{events, number} eventi nel periodo, di cui {failures, number} non riusciti.",
+    "timelineLabel": "Cronologia degli eventi",
+    "barTitle": "{time}: {count, number} eventi, {failures, number} non riusciti",
+    "now": "ora",
+    "showTable": "Dati come tabella",
+    "detail": {
+      "previous": "Voce precedente",
+      "next": "Voce successiva",
+      "close": "Chiudi dettaglio",
+      "time": "Momento",
+      "email": "E-mail",
+      "change": "Modifica",
+      "before": "Prima:",
+      "after": "Dopo:",
+      "context": "Nel contesto · stessa persona",
+      "raw": "Dati grezzi",
+      "copyJson": "Copia JSON",
+      "jsonCopied": "JSON copiato",
+      "copyLink": "Copia link alla voce",
+      "linkCopied": "Link copiato"
+    },
+    "pivot": {
+      "person": "Tutto di questa persona",
+      "source": "Stessa fonte",
+      "action": "Stessa azione"
     }
   },
   "emailLog": {
@@ -1458,5 +1570,153 @@
       "obsolete": "superato (concluso, modificato o testo non più valido)",
       "email_disabled": "l'invio era disattivato"
     }
+  },
+  "settingsPages": {
+    "ownerOnly": "Queste informazioni sono visibili solo agli admin della piattaforma con accesso completo.",
+    "loadFailed": "Impossibile caricare le informazioni.",
+    "security": {
+      "title": "Sicurezza e accesso",
+      "description": "Come accedono gli admin della piattaforma e quali azioni richiedono una nuova conferma con passkey. Solo visualizzazione.",
+      "loginTitle": "Accesso degli admin della piattaforma",
+      "password": "Password",
+      "passkey": "Passkey",
+      "totp": "App di autenticazione (TOTP)",
+      "required": "Obbligatorio",
+      "notAllowed": "Non consentito",
+      "sessionTtl": "Durata della sessione",
+      "hours": "{count, plural, one {# ora} other {# ore}}",
+      "stepUpFlow": "Validità di una conferma",
+      "minutes": "{count, plural, one {# minuto} other {# minuti}}",
+      "policyHint": "Limiti della protezione dell'accesso per i mandanti:",
+      "policyLink": "Vedi direttive",
+      "stepUpTitle": "Azioni con conferma tramite passkey",
+      "stepUpDescription": "Ogni conferma vale per una sola richiesta (scopo, metodo, percorso e contenuto) e una sola volta.",
+      "columns": {
+        "purpose": "Scopo",
+        "actions": "Richieste"
+      },
+      "empty": "Nessuna azione trovata.",
+      "purposes": {
+        "passkey-manage": "Gestire le proprie passkey",
+        "admin-manage": "Gestire gli admin della piattaforma",
+        "tenant-delete": "Eliminare o ripulire un mandante",
+        "tenant-export": "Esportare o clonare un mandante",
+        "tenant-import": "Importare un mandante",
+        "storage-destructive": "Commutare o eliminare lo storage",
+        "backup-restore": "Ripristinare un backup",
+        "backup-settings": "Impostazioni di backup",
+        "catalog-change": "Modificare il catalogo",
+        "user-mfa-reset": "Eliminare il secondo fattore di un account",
+        "user-manage": "Gestire gli account utente",
+        "user-credentials": "Inviare link di reimpostazione o invito",
+        "platform-settings": "Impostazioni della piattaforma e credenziali",
+        "security-block": "Impostare o rimuovere blocchi di accesso",
+        "security-export": "Esportare dati di sicurezza",
+        "security-resolve": "Associare uno pseudonimo a un account"
+      }
+    },
+    "integrations": {
+      "title": "Integrazioni",
+      "description": "Servizi collegati con il loro stato dallo stato del sistema. Le credenziali non vengono mai mostrate.",
+      "collectedAt": "Stato del {time}",
+      "noSnapshot": "Nessuno stato del sistema disponibile.",
+      "columns": {
+        "service": "Servizio",
+        "configured": "Configurato",
+        "status": "Stato",
+        "details": "Dettagli"
+      },
+      "empty": "Nessuna integrazione.",
+      "services": {
+        "smtp": "E-mail (SMTP)",
+        "ntfy": "Notifiche (ntfy)",
+        "status_endpoint": "Endpoint di stato (uptime)",
+        "object_storage": "Archivio file (S3)",
+        "captcha": "Captcha (Friendly Captcha)",
+        "clamav": "Antivirus (ClamAV)",
+        "docker_proxy": "Proxy Docker",
+        "backup": "Backup"
+      },
+      "yes": "Sì",
+      "no": "No",
+      "off": "Disattivato",
+      "open": "Apri",
+      "details": {
+        "smtp": "{host}:{port} ({security})",
+        "ntfy": "Server {server}",
+        "objectStorage": "Profilo {profile} ({provider})",
+        "captchaEu": "Endpoint UE",
+        "captchaGlobal": "Endpoint globale"
+      }
+    },
+    "system": {
+      "title": "Tecnica",
+      "description": "Versione, ambiente, stato del database, cataloghi e domini della piattaforma. Solo visualizzazione.",
+      "versionTitle": "Versione e ambiente",
+      "version": "Versione",
+      "unknown": "Sconosciuta",
+      "environment": "Ambiente",
+      "location": "Ubicazione del server",
+      "migration": "Migrazione del database",
+      "postgres": "PostgreSQL",
+      "python": "Python",
+      "catalogTitle": "Cataloghi",
+      "permissions": "Autorizzazioni",
+      "features": "Funzionalità",
+      "featuresValue": "{catalog} nel catalogo, {database} nel database",
+      "featuresMismatch": "Discrepanza",
+      "locales": "Lingue",
+      "domainsTitle": "Domini della piattaforma",
+      "domains": {
+        "app": "Applicazione",
+        "admin": "Console di amministrazione",
+        "abgabebox": "Abgabebox",
+        "docs": "Documentazione",
+        "website": "Sito web"
+      },
+      "notSet": "Non impostato"
+    }
+  },
+  "metricHistory": {
+    "empty": "Ancora nessun valore in questo periodo.",
+    "summary": "Stato al {time}: {values}",
+    "showTable": "Dati come tabella"
+  },
+  "systemHistory": {
+    "title": "Andamento database e Redis",
+    "description": "Campioni circa ogni 5 minuti, conservati 14 giorni (dal {date}).",
+    "descriptionEmpty": "Campioni circa ogni 5 minuti, conservati 14 giorni. Ancora nessun valore.",
+    "range": {
+      "24h": "24 ore",
+      "7d": "7 giorni",
+      "14d": "14 giorni"
+    },
+    "loadFailed": "Impossibile caricare l'andamento.",
+    "loading": "Caricamento …",
+    "postgresTitle": "Database: tempo di risposta e connessioni",
+    "redisTitle": "Redis: tempo di risposta",
+    "sizeTitle": "Dimensione di database e Redis",
+    "bucket": "Momento",
+    "metrics": {
+      "postgresLatencyAvg": "Tempo di risposta medio",
+      "postgresLatencyMax": "Tempo di risposta max.",
+      "postgresConnections": "Connessioni max.",
+      "postgresSize": "Dimensione database",
+      "redisUsed": "Memoria Redis",
+      "redisLatencyAvg": "Tempo di risposta medio",
+      "redisLatencyMax": "Tempo di risposta max."
+    }
+  },
+  "storageOccupancy": {
+    "title": "Occupazione",
+    "description": "Spazio usato da tutti i mandanti secondo l'istantanea giornaliera (dal {date}), nessuna somma in tempo reale.",
+    "descriptionEmpty": "Spazio usato da tutti i mandanti secondo l'istantanea giornaliera. Ancora nessun valore.",
+    "loadFailed": "Impossibile caricare l'occupazione.",
+    "total": "Spazio totale",
+    "day": "Giorno",
+    "topTitle": "Mandanti più grandi (ultima istantanea)",
+    "tenant": "Mandante",
+    "storage": "Spazio",
+    "empty": "Ancora nessun valore."
   }
 }

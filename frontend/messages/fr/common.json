@@ -164,7 +164,8 @@
       "role": "Rôle",
       "public_link": "Lien public",
       "context_visibility": "Visibilité des fichiers",
-      "activity": "Historique"
+      "activity": "Historique",
+      "todo_fine": "Amende de tâche"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",
@@ -325,7 +326,9 @@
       "designer_deselect": "Annuler la sélection",
       "media_previous": "Photo ou fichier précédent",
       "media_next": "Photo ou fichier suivant",
-      "admin_toggleSidebar": "Afficher la barre latérale compacte ou large"
+      "admin_toggleSidebar": "Afficher la barre latérale compacte ou large",
+      "admin_auditNext": "Entrée suivante du journal d'audit",
+      "admin_auditPrevious": "Entrée précédente du journal d'audit"
     }
   },
   "numberStepper": {

@@ -92,6 +92,28 @@ def request_password_reset(db: Session, email: str) -> None:
     events.record(event_type="reset.request", outcome="info", user_id=user.id, tenant_id=user.tenant_id)
 
 
+def issue_by_platform_admin(db: Session, user: AppUser) -> str:
+    """Plattform-Admin (1.5.1, Plan §8.1 Nr. 6): statt ein Passwort zu setzen bekommt die Person
+    einen Link - Konto mit Login: «Passwort zurücksetzen», ohne Login: Einladung. Prüfungen von
+    Rolle, Bestätigung und Mailversand macht der Aufrufer. Mit Commit. Liefert den Zweck."""
+    from app.services import user_limit_service
+    from app.services.user_service import UserService
+
+    if not user.is_active or user.has_left:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "inactive_person", "message": "Inaktive oder ausgetretene Konten bekommen keinen Link."})
+    if not (user.email or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "email_required", "message": "Für einen Link braucht das Konto eine E-Mail-Adresse."})
+    if user.login_enabled:
+        purpose = "password_reset"
+    else:
+        purpose = "invite"
+        UserService().ensure_login_email_available(db, user.email, excluding_user_id=user.id)
+        user_limit_service.ensure_login_capacity(db, user.tenant_id, for_user_id=user.id)
+    _issue(db, user, purpose, created_by_user_id=None)
+    db.commit()
+    return purpose
+
+
 # ── Einladung ───────────────────────────────────────────────────────────
 
 

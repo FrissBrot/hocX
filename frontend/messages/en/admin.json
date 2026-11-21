@@ -8,7 +8,9 @@
       "email": "Email",
       "role": "Role",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "passkeys": "Passkeys",
+      "lastLogin": "Last sign-in"
     },
     "emptyAdmins": "No admin accounts found.",
     "you": "You",
@@ -33,7 +35,9 @@
       "updated": "Admin account updated",
       "updateFailed": "Admin account could not be updated",
       "deactivateConfirm": "Deactivate \"{name}\"? The account immediately loses access to the platform admin panel."
-    }
+    },
+    "passkeyCount": "{count, plural, =0 {No passkey} one {# passkey} other {# passkeys}}",
+    "neverLoggedIn": "Never"
   },
   "uploadPipeline": {
     "title": "File pipeline",
@@ -718,7 +722,8 @@
       "tenant": "Organization",
       "role": "Role",
       "login": "Login",
-      "actions": "Actions"
+      "actions": "Actions",
+      "mfa": "MFA"
     },
     "loading": "Loading…",
     "emptyUsers": "No participants found.",
@@ -731,10 +736,6 @@
     "lastName": "Last name",
     "displayName": "Display name",
     "email": "Email",
-    "newPassword": "New password",
-    "password": "Password",
-    "passwordHelpEdit": "Only fill in to change the password. At least 12 characters.",
-    "passwordHelpCreate": "Set directly here, at least 12 characters. There is no automatic invitation email - share the password with the participant separately.",
     "language": "Language",
     "active": "Active",
     "enableLogin": "Enable login",
@@ -745,8 +746,24 @@
     "toasts": {
       "userSaved": "Participant saved",
       "userCreated": "Participant created",
-      "userSaveFailed": "Participant could not be saved"
-    }
+      "userSaveFailed": "Participant could not be saved",
+      "userInvited": "User created, invitation is being sent"
+    },
+    "mfaOn": "Active",
+    "mfaOff": "No factor",
+    "allTenants": "All tenants",
+    "loadFailed": "Users could not be loaded.",
+    "accessLink": {
+      "reset": "Send reset link",
+      "invite": "Send invitation",
+      "confirmReset": "{name} will receive an email with a link to set a new password (valid for 60 minutes). The current password remains valid until then.",
+      "confirmInvite": "{name} will receive an email invitation and set up the login themselves (valid for 7 days).",
+      "resetSent": "Reset link is being sent",
+      "inviteSent": "Invitation is being sent"
+    },
+    "loginViaInviteHelp": "This account has no login. The person sets up a login themselves via «Send invitation».",
+    "sendInvite": "Send login invitation by email",
+    "noPasswordHelp": "Platform admins do not set passwords: the person sets their password via an invitation or reset link."
   },
   "tenantModal": {
     "close": "Close",
@@ -1392,7 +1409,7 @@
   },
   "auditLog": {
     "title": "Audit log",
-    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, not the IP address.",
+    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, never the IP address.",
     "filterAll": "All",
     "filterFailures": "Failed",
     "tenant": "Tenant",
@@ -1408,6 +1425,101 @@
     "outcome": {
       "success": "Successful",
       "failure": "Failed"
+    },
+    "loadFailed": "The audit log could not be loaded.",
+    "from": "From",
+    "to": "To",
+    "actorKind": "Actor",
+    "actorKinds": {
+      "all": "All",
+      "admin": "Platform admin",
+      "user": "User account",
+      "system": "System"
+    },
+    "actorAdmin": "Platform admin",
+    "actorAdminAll": "All platform admins",
+    "entityType": "Entity",
+    "entityTypeAll": "All entities",
+    "entityId": "Entity ID",
+    "actorUserFilter": "Filtered to one user account (from a link).",
+    "colEntity": "Entity",
+    "detailEntity": "Entity",
+    "facts": {
+      "appendOnly": "Immutable: the application can only append entries, not change or delete them. When a person or tenant is deleted, hocX removes email and source from their entries; the event itself remains.",
+      "retention": "Kept for {days, number} days, then deleted automatically",
+      "viewLogged": "Viewing this page is logged"
+    },
+    "live": {
+      "on": "Live",
+      "off": "Live off"
+    },
+    "filtersLabel": "Filters",
+    "ranges": {
+      "24h": "24 h",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days"
+    },
+    "areaLabel": "Area",
+    "areas": {
+      "auth": "Sign-in",
+      "content": "Content",
+      "finance": "Finance",
+      "admin": "Administration",
+      "privacy": "Privacy",
+      "other": "Other"
+    },
+    "reset": "Reset filters",
+    "emptyTitle": "No events for these filters",
+    "emptyHint": "Widen the period or reset the filters.",
+    "days": {
+      "today": "Today · {date}",
+      "yesterday": "Yesterday · {date}"
+    },
+    "dayMeta": "{count, plural, one {# event} other {# events}}{failures, plural, =0 {} other { · # failed}}",
+    "openEntry": "Show entry {time}, {action}",
+    "platform": "Platform",
+    "shown": "{shown, number} of {total, number} shown",
+    "none": "0 entries",
+    "navigateHint": "navigate",
+    "loadMore": "Load more",
+    "active": {
+      "actorSelected": "Same person",
+      "source": "Source {source}",
+      "entity": "Object {entity}",
+      "remove": "Remove filter «{filter}»"
+    },
+    "stats": {
+      "events": "Events",
+      "failures": "Failed · {share, number} %",
+      "persons": "People",
+      "sources": "Sources"
+    },
+    "timelineSummary": "{events, number} events in the period, {failures, number} of them failed.",
+    "timelineLabel": "Event timeline",
+    "barTitle": "{time}: {count, number} events, {failures, number} failed",
+    "now": "now",
+    "showTable": "Data as table",
+    "detail": {
+      "previous": "Previous entry",
+      "next": "Next entry",
+      "close": "Close details",
+      "time": "Time",
+      "email": "Email",
+      "change": "Change",
+      "before": "Before:",
+      "after": "After:",
+      "context": "In context · same person",
+      "raw": "Raw data",
+      "copyJson": "Copy JSON",
+      "jsonCopied": "JSON copied",
+      "copyLink": "Copy link to entry",
+      "linkCopied": "Link copied"
+    },
+    "pivot": {
+      "person": "All by this person",
+      "source": "Same source",
+      "action": "Same action"
     }
   },
   "emailLog": {
@@ -1458,5 +1570,153 @@
       "obsolete": "outdated (done, changed or text no longer valid)",
       "email_disabled": "delivery was turned off"
     }
+  },
+  "settingsPages": {
+    "ownerOnly": "This information is only visible to platform admins with full access.",
+    "loadFailed": "The information could not be loaded.",
+    "security": {
+      "title": "Security & sign-in",
+      "description": "How platform admins sign in and which actions require a fresh passkey confirmation. Display only.",
+      "loginTitle": "Platform admin sign-in",
+      "password": "Password",
+      "passkey": "Passkey",
+      "totp": "Authenticator app (TOTP)",
+      "required": "Required",
+      "notAllowed": "Not allowed",
+      "sessionTtl": "Session duration",
+      "hours": "{count, plural, one {# hour} other {# hours}}",
+      "stepUpFlow": "Confirmation validity",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "policyHint": "Sign-in protection limits for tenants:",
+      "policyLink": "View policies",
+      "stepUpTitle": "Actions requiring passkey confirmation",
+      "stepUpDescription": "Each confirmation is valid for exactly one request (purpose, method, path and content) and only once.",
+      "columns": {
+        "purpose": "Purpose",
+        "actions": "Requests"
+      },
+      "empty": "No actions found.",
+      "purposes": {
+        "passkey-manage": "Manage own passkeys",
+        "admin-manage": "Manage platform admins",
+        "tenant-delete": "Delete or clean up tenant",
+        "tenant-export": "Export or clone tenant",
+        "tenant-import": "Import tenant",
+        "storage-destructive": "Switch or delete storage",
+        "backup-restore": "Restore backup",
+        "backup-settings": "Backup settings",
+        "catalog-change": "Change catalogue",
+        "user-mfa-reset": "Delete an account's second factor",
+        "user-manage": "Manage user accounts",
+        "user-credentials": "Send reset link or invitation",
+        "platform-settings": "Platform settings and credentials",
+        "security-block": "Set or lift sign-in blocks",
+        "security-export": "Export security data",
+        "security-resolve": "Map pseudonym to an account"
+      }
+    },
+    "integrations": {
+      "title": "Integrations",
+      "description": "Connected services with their state from the system status. Credentials are never shown.",
+      "collectedAt": "State as of {time}",
+      "noSnapshot": "No system status available yet.",
+      "columns": {
+        "service": "Service",
+        "configured": "Configured",
+        "status": "State",
+        "details": "Details"
+      },
+      "empty": "No integrations.",
+      "services": {
+        "smtp": "Email (SMTP)",
+        "ntfy": "Notifications (ntfy)",
+        "status_endpoint": "Status endpoint (uptime)",
+        "object_storage": "File storage (S3)",
+        "captcha": "Captcha (Friendly Captcha)",
+        "clamav": "Virus scanner (ClamAV)",
+        "docker_proxy": "Docker proxy",
+        "backup": "Backup"
+      },
+      "yes": "Yes",
+      "no": "No",
+      "off": "Off",
+      "open": "Open",
+      "details": {
+        "smtp": "{host}:{port} ({security})",
+        "ntfy": "Server {server}",
+        "objectStorage": "Profile {profile} ({provider})",
+        "captchaEu": "EU endpoint",
+        "captchaGlobal": "Global endpoint"
+      }
+    },
+    "system": {
+      "title": "Technical",
+      "description": "Version, environment, database state, catalogues and domains of the platform. Display only.",
+      "versionTitle": "Version and environment",
+      "version": "Version",
+      "unknown": "Unknown",
+      "environment": "Environment",
+      "location": "Server location",
+      "migration": "Database migration",
+      "postgres": "PostgreSQL",
+      "python": "Python",
+      "catalogTitle": "Catalogues",
+      "permissions": "Permissions",
+      "features": "Features",
+      "featuresValue": "{catalog} in the catalogue, {database} in the database",
+      "featuresMismatch": "Mismatch",
+      "locales": "Languages",
+      "domainsTitle": "Platform domains",
+      "domains": {
+        "app": "Application",
+        "admin": "Admin console",
+        "abgabebox": "Abgabebox",
+        "docs": "Documentation",
+        "website": "Website"
+      },
+      "notSet": "Not set"
+    }
+  },
+  "metricHistory": {
+    "empty": "No values in this period yet.",
+    "summary": "As of {time}: {values}",
+    "showTable": "Data as table"
+  },
+  "systemHistory": {
+    "title": "Database and Redis history",
+    "description": "Samples about every 5 minutes, kept for 14 days (since {date}).",
+    "descriptionEmpty": "Samples about every 5 minutes, kept for 14 days. No values yet.",
+    "range": {
+      "24h": "24 hours",
+      "7d": "7 days",
+      "14d": "14 days"
+    },
+    "loadFailed": "History could not be loaded.",
+    "loading": "Loading …",
+    "postgresTitle": "Database: response time and connections",
+    "redisTitle": "Redis: response time",
+    "sizeTitle": "Database and Redis size",
+    "bucket": "Time",
+    "metrics": {
+      "postgresLatencyAvg": "Response time avg.",
+      "postgresLatencyMax": "Response time max.",
+      "postgresConnections": "Connections max.",
+      "postgresSize": "Database size",
+      "redisUsed": "Redis memory",
+      "redisLatencyAvg": "Response time avg.",
+      "redisLatencyMax": "Response time max."
+    }
+  },
+  "storageOccupancy": {
+    "title": "Usage",
+    "description": "Storage used by all tenants from the daily snapshot (since {date}), not a live sum.",
+    "descriptionEmpty": "Storage used by all tenants from the daily snapshot. No values yet.",
+    "loadFailed": "Usage could not be loaded.",
+    "total": "Total storage",
+    "day": "Day",
+    "topTitle": "Largest tenants (latest snapshot)",
+    "tenant": "Tenant",
+    "storage": "Storage",
+    "empty": "No values yet."
   }
 }

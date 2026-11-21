@@ -44,10 +44,35 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/audit-log/entries/{entry_id}": {
+      "handler": "admin.get_audit_log_entry",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/audit-log/filter-options": {
+      "handler": "admin.audit_log_filter_options",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/audit-log/timeline": {
+      "handler": "admin.audit_log_timeline",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/auth-security/alerts": {
       "handler": "admin_auth_security.auth_security_alerts",
       "platform": true,
       "admin_level": "O"
+    },
+    "POST /api/admin/auth-security/alerts/ack": {
+      "handler": "admin_auth_security.acknowledge_alert",
+      "platform": true,
+      "admin_level": "W"
+    },
+    "POST /api/admin/auth-security/alerts/unack": {
+      "handler": "admin_auth_security.unacknowledge_alert",
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.auth_security_blocks",
@@ -58,18 +83,31 @@
       "handler": "admin_auth_security.create_block",
       "platform": true,
       "admin_level": "W",
-      "step_up": "platform-settings"
+      "step_up": "security-block"
     },
     "DELETE /api/admin/auth-security/blocks/{subject}": {
       "handler": "admin_auth_security.delete_block",
       "platform": true,
       "admin_level": "W",
-      "step_up": "platform-settings"
+      "step_up": "security-block"
     },
     "GET /api/admin/auth-security/events": {
       "handler": "admin_auth_security.auth_security_events",
       "platform": true,
       "admin_level": "O"
+    },
+    "POST /api/admin/auth-security/events/{event_id}/resolve-subject": {
+      "handler": "admin_auth_security.resolve_event_subject",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "security-resolve"
+    },
+    "POST /api/admin/auth-security/export": {
+      "handler": "admin_auth_security.export_security_data",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "security-export",
+      "serves_files": true
     },
     "GET /api/admin/auth-security/overview": {
       "handler": "admin_auth_security.auth_security_overview",
@@ -473,6 +511,21 @@
       "platform": true,
       "admin_level": "A"
     },
+    "GET /api/admin/settings/integrations": {
+      "handler": "admin_console.settings_integrations",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/settings/security": {
+      "handler": "admin_console.settings_security",
+      "platform": true,
+      "admin_level": "A"
+    },
+    "GET /api/admin/settings/system": {
+      "handler": "admin_console.settings_system",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/storage-packages": {
       "handler": "admin.list_storage_packages",
       "platform": true,
@@ -610,6 +663,11 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/system-status/history": {
+      "handler": "admin_console.system_status_history",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/tenants": {
       "handler": "admin.list_tenants",
       "platform": true,
@@ -624,6 +682,12 @@
       "handler": "admin.import_tenant",
       "platform": true,
       "admin_level": "W"
+    },
+    "POST /api/admin/tenants/import/authorize": {
+      "handler": "admin.authorize_tenant_import",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "tenant-import"
     },
     "DELETE /api/admin/tenants/{tenant_id}": {
       "handler": "admin.delete_tenant",
@@ -665,6 +729,11 @@
       "step_up": "tenant-export",
       "serves_files": true
     },
+    "GET /api/admin/tenants/{tenant_id}/features": {
+      "handler": "admin_console.tenant_features",
+      "platform": true,
+      "admin_level": "A"
+    },
     "PUT /api/admin/tenants/{tenant_id}/features": {
       "handler": "admin.update_tenant_features",
       "platform": true,
@@ -695,6 +764,11 @@
       "platform": true,
       "admin_level": "A"
     },
+    "GET /api/admin/tenants/{tenant_id}/security": {
+      "handler": "admin_console.tenant_security",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/tenants/{tenant_id}/storage": {
       "handler": "admin.get_tenant_storage",
       "platform": true,
@@ -709,6 +783,11 @@
       "handler": "admin.update_tenant_subscription",
       "platform": true,
       "admin_level": "W"
+    },
+    "GET /api/admin/tenants/{tenant_id}/usage": {
+      "handler": "admin_console.tenant_usage",
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/tenants/{tenant_id}/users": {
       "handler": "admin.list_tenant_users",
@@ -769,6 +848,12 @@
       "platform": true,
       "admin_level": "W",
       "step_up": "user-mfa-reset"
+    },
+    "POST /api/admin/users/{user_id}/password-reset": {
+      "handler": "admin.send_user_password_reset",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-credentials"
     },
     "GET /api/agenda-items": {
       "handler": "agenda_items.list_agenda_items",

@@ -342,11 +342,26 @@ def nav_counts(db: Session, *, owner: bool) -> dict:
 
             now = datetime.now(UTC)
             problems = system_alert_service.current_problems(db, system_health_service.load_snapshot(), now=now)
-            result["security_alerts"] = sum(1 for problem in problems if problem.source == "auth")
+            # Quittierte Sicherheitswarnungen (0209_admin_alert_ack) zählen nicht mehr als offen
+            # (gilt nur bis zum nächsten auslösenden Ereignis, wie in /auth-security/alerts)
+            from app.auth_security import read_service
+
+            acked_at = dict(db.execute(text("SELECT problem_key, acknowledged_at FROM system_alert_state WHERE acknowledged_at IS NOT NULL")).all())
+            last_at = {alert["key"]: alert.get("last_at") for alert in read_service.platform_alerts(db)}
+            acknowledged = {key for key, at in acked_at.items() if last_at.get(key) is None or at >= last_at[key]}
+            result["security_alerts"] = sum(1 for problem in problems if problem.source == "auth" and problem.key not in acknowledged)
             result["operations_problems"] = sum(1 for problem in problems if problem.source != "auth")
         return result
 
     return _cached(f"admin-nav-counts:v1:{'owner' if owner else 'support'}", NAV_COUNTS_TTL_SECONDS, compute)
+
+
+def invalidate_nav_counts() -> None:
+    """Nach dem Quittieren einer Warnung: Zähler sofort neu rechnen statt bis zu 60 s alt zeigen."""
+    try:
+        get_redis_sync().delete("admin-nav-counts:v1:owner", "admin-nav-counts:v1:support")
+    except Exception:  # noqa: BLE001 - Cache ist optional
+        _logger.warning("Admin-Übersicht: Zähler-Cache nicht löschbar", exc_info=True)
 
 
 # ── Suche (Ctrl+K) ─────────────────────────────────────────────────────────

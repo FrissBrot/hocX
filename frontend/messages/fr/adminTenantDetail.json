@@ -19,7 +19,10 @@
     "verification": "Vérification",
     "storage": "Stockage",
     "activity": "Activité",
-    "technical": "Technique"
+    "technical": "Technique",
+    "features": "Fonctionnalités et modules",
+    "usage": "Utilisation",
+    "security": "Sécurité"
   },
   "header": {
     "eyebrow": "Client",
@@ -90,5 +93,83 @@
     "status_open": "Ouverte",
     "status_paid": "Payée",
     "status_waived": "Remise"
+  },
+  "features": {
+    "title": "Fonctionnalités et modules",
+    "description": "Quels modules le mandant peut utiliser.",
+    "summary": "{booked} fonctionnalités réservées sur {total}",
+    "edit": "Modifier dans l'abonnement",
+    "loadFailed": "Les fonctionnalités n'ont pas pu être chargées.",
+    "empty": "Aucune fonctionnalité dans le catalogue.",
+    "columns": {
+      "feature": "Fonctionnalité",
+      "access": "Accès",
+      "source": "Source",
+      "since": "Depuis"
+    },
+    "access": {
+      "full": "Complet",
+      "read_only": "Lecture seule",
+      "none": "Non réservé"
+    },
+    "source": {
+      "plan": "Plan",
+      "addon": "Option"
+    }
+  },
+  "usage": {
+    "title": "Utilisation",
+    "description": "Valeurs quotidiennes issues de l'agrégation des indicateurs (depuis le {date}), uniquement des comptages.",
+    "descriptionEmpty": "Valeurs quotidiennes issues de l'agrégation des indicateurs, uniquement des comptages. Pas encore de valeurs.",
+    "range": {
+      "30d": "30 jours",
+      "90d": "90 jours",
+      "12m": "12 mois"
+    },
+    "loadFailed": "L'utilisation n'a pas pu être chargée.",
+    "metrics": {
+      "logins": "Connexions",
+      "activeUsers": "Utilisateurs actifs",
+      "protocols": "Nouveaux procès-verbaux",
+      "events": "Nouveaux rendez-vous",
+      "files": "Nouveaux fichiers",
+      "storage": "Stockage"
+    },
+    "activityTitle": "Connexions et utilisateurs actifs",
+    "modulesTitle": "Utilisation des modules",
+    "storageTitle": "Stockage",
+    "day": "Jour",
+    "month": "Mois"
+  },
+  "security": {
+    "title": "Sécurité",
+    "description": "Tentatives échouées, blocages et avertissements des comptes de ce mandant. Sans réseaux ni adresses ; la consultation est journalisée.",
+    "loadFailed": "Les données de sécurité n'ont pas pu être chargées.",
+    "tiles": {
+      "failures": "Tentatives échouées 24 h",
+      "accounts": "Comptes avec échecs 24 h",
+      "blocked": "Tentatives bloquées 24 h",
+      "newDevices": "Connexions de nouveaux appareils 7 j"
+    },
+    "warningsTitle": "Avertissements (7 jours)",
+    "eventsTitle": "Derniers événements de connexion",
+    "columns": {
+      "warning": "Avertissement",
+      "account": "Compte",
+      "count": "Nombre",
+      "last": "Dernier",
+      "time": "Moment",
+      "type": "Événement",
+      "outcome": "Résultat",
+      "client": "Appareil"
+    },
+    "noWarnings": "Aucun avertissement.",
+    "noEvents": "Aucun événement.",
+    "warnings": {
+      "account_attack": "Compte attaqué",
+      "privileged_new_device": "Connexion admin depuis un nouvel appareil",
+      "mfa_removed": "Second facteur supprimé",
+      "account_locked": "Compte bloqué"
+    }
   }
 }

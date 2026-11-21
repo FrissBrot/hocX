@@ -164,7 +164,8 @@
       "role": "Role",
       "public_link": "Public link",
       "context_visibility": "File visibility",
-      "activity": "Activity log"
+      "activity": "Activity log",
+      "todo_fine": "Task fine"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",
@@ -325,7 +326,9 @@
       "designer_deselect": "Clear selection",
       "media_previous": "Previous photo or file",
       "media_next": "Next photo or file",
-      "admin_toggleSidebar": "Show the sidebar compact or wide"
+      "admin_toggleSidebar": "Show the sidebar compact or wide",
+      "admin_auditNext": "Next entry in the audit log",
+      "admin_auditPrevious": "Previous entry in the audit log"
     }
   },
   "numberStepper": {

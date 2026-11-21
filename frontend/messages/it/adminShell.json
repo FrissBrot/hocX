@@ -35,14 +35,20 @@
     "analytics": "Analisi",
     "notifications": "Notifiche ed e-mail",
     "documentTemplates": "Contenuti e modelli",
-    "account": "Profilo e passkey"
+    "account": "Profilo e passkey",
+    "settingsSecurity": "Sicurezza e accesso",
+    "settingsIntegrations": "Integrazioni",
+    "settingsSystem": "Tecnica"
   },
   "keywords": {
     "pricing": "prezzi piani funzionalità pacchetti di archiviazione cambio",
     "cashflow": "cashflow fatture costi MRR entrate",
     "notifications": "ntfy SMTP token di stato uptime",
     "account": "passkey profilo account",
-    "theme": "aspetto tema chiaro scuro"
+    "theme": "aspetto tema chiaro scuro",
+    "settingsSecurity": "passkey conferma sessione accesso",
+    "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker backup",
+    "settingsSystem": "versione ambiente migrazione database domini catalogo"
   },
   "actions": {
     "themeLight": "Aspetto: chiaro",
@@ -105,5 +111,9 @@
   "account": {
     "title": "Profilo e passkey",
     "description": "Gestisci le passkey del tuo account admin. Le modifiche richiedono la conferma con una passkey esistente."
+  },
+  "columns": {
+    "trigger": "Colonne",
+    "title": "Colonne visibili"
   }
 }

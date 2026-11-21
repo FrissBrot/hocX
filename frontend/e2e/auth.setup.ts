@@ -1,8 +1,7 @@
-import { randomBytes } from "node:crypto";
 import { test as setup, expect, request } from "@playwright/test";
 import fs from "node:fs/promises";
 import { authFiles, platformAdminPasskeyFile } from "./auth";
-import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
+import { SoftPasskey } from "./soft-passkey";
 import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 
 // Any user with an admin role in any tenant must have MFA before being considered
@@ -13,10 +12,9 @@ import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 // "verification_required" - remember each email's TOTP secret (and which 30s counter
 // it was last used for, so a later verify can wait out anti-replay) across calls.
 const tenantTwoEmail = "reader-regional@hocx.local";
-// Neue Konten unterliegen der Passwortregel (backend app/core/password_policy.py: «changeme» ist ein
-// häufiges Wort) - das Demo-Passwort der Seed-Konten taugt dafür nicht. Zur Laufzeit erzeugt
-// (SECURITY-RULES 5.1), alle vier Zeichenarten, nur innerhalb dieses Setups benutzt.
-const tenantTwoPassword = `Rl-${randomBytes(12).toString("base64url")}-9a`;
+// Das Konto legt scripts/e2e.sh nach dem Start über die Admin-CLI an (das Admin-Panel setzt seit
+// 1.5.1 keine Passwörter mehr); das zur Laufzeit erzeugte Passwort liegt in e2e/.auth (gitignored).
+const tenantTwoPasswordFile = "e2e/.auth/tenant-two-password";
 const totpFactors = new Map<string, { secret: string; lastCounter: number }>();
 
 async function authenticate(email: string, file: string, password = process.env.E2E_USER_PASSWORD ?? "ChangeMe123!") {
@@ -107,41 +105,13 @@ setup("creates reproducible role and tenant sessions", async () => {
   const platformAdmin = await authenticateAdmin("platform-admin@hocx.local", authFiles.platformAdmin);
 
   // Jedes Konto gehört genau einem Mandanten, ein Konto mit "zweitem Mandanten" gibt es nicht
-  // mehr. Für die Mandantengrenz-Specs (authFiles.tenantTwo) legt das Platform-Admin-Panel darum
-  // einen Leser im zweiten Demo-Mandanten an (idempotent: existiert er schon, schlägt nur das
-  // Anlegen fehl und der Login darunter beweist, dass das Konto brauchbar ist).
+  // mehr. Für die Mandantengrenz-Specs (authFiles.tenantTwo) gibt es einen Leser im zweiten
+  // Demo-Mandanten (angelegt von scripts/e2e.sh über die Admin-CLI).
   const tenants = await (await platformAdmin.get("/api/admin/tenants")).json();
   const regional = tenants.items.find((entry: { name: string }) => entry.name === "Regional Workspace");
   expect(regional, "Demo-Mandant 'Regional Workspace' fehlt").toBeTruthy();
-  // Konto anlegen braucht eine Passkey-Bestätigung (backend app/core/admin_step_up.py)
-  const userBody = JSON.stringify({
-    first_name: "Regional",
-    last_name: "Reader",
-    display_name: "Regional Reader",
-    email: tenantTwoEmail,
-    password: tenantTwoPassword,
-    tenant_id: regional.id,
-    system_role: "reader",
-    login_enabled: true,
-  });
-  const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
-  if (!adminPasskey) throw new Error("Software-Passkey des Plattform-Admins fehlt");
-  const adminOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
-  const created = await platformAdmin.post("/api/admin/users", {
-    data: userBody,
-    headers: {
-      "Content-Type": "application/json",
-      ...(await stepUpHeaders(platformAdmin, adminPasskey, adminOrigin, "user-manage", "POST", "/api/admin/users", userBody)),
-    },
-  });
-  // Idempotent: «existiert schon» ist in Ordnung, jeder andere Fehler soll hier sichtbar werden
-  // (vorher scheiterte erst der Login darunter mit «ungültig»).
-  if (!created.ok() && created.status() !== 409) {
-    const text = await created.text();
-    expect(created.status() === 400 && /could not be created|existiert|exist/i.test(text), `Konto anlegen: ${created.status()} ${text}`).toBeTruthy();
-  }
-  await adminPasskey.save(platformAdminPasskeyFile);
   await platformAdmin.dispose();
+  const tenantTwoPassword = (await fs.readFile(tenantTwoPasswordFile, "utf-8")).trim();
 
   const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo, tenantTwoPassword);
   const session = await (await tenantContext.get("/api/auth/session")).json();

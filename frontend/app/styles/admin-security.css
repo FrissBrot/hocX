@@ -90,3 +90,8 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Quittierte Warnung (1.5.1): abgesetzt, bleibt lesbar */
+.admin-alert-acknowledged td {
+  color: var(--muted);
+}

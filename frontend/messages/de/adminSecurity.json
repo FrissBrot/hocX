@@ -80,7 +80,8 @@
       "subject": "Konto",
       "network": "Netz",
       "risk": "Risiko",
-      "client": "Gerät"
+      "client": "Gerät",
+      "actions": "Aktionen"
     },
     "actorKinds": {
       "user": "Benutzer",
@@ -91,7 +92,9 @@
     "empty": "Keine Ereignisse für diese Auswahl.",
     "previous": "Neuere",
     "next": "Ältere",
-    "pageInfo": "Einträge {from, number}–{to, number}"
+    "pageInfo": "Einträge {from, number}–{to, number}",
+    "resolve": "Konto anzeigen",
+    "resolveConfirm": "Das Pseudonym dieses Ereignisses einem Konto zuordnen? Die Zuordnung braucht eine Passkey-Bestätigung und wird im Audit-Log festgehalten."
   },
   "blocks": {
     "title": "Sperren",
@@ -137,7 +140,9 @@
       "severity": "Schwere",
       "rule": "Regel",
       "subject": "Betroffen (Pseudonym)",
-      "key": "Schlüssel"
+      "key": "Schlüssel",
+      "status": "Status",
+      "actions": "Aktion"
     },
     "rules": {
       "stuffing": "Credential Stuffing: viele Fehlversuche aus vielen Netzen",
@@ -151,7 +156,17 @@
       "tenant": "Viele Konten eines Mandanten mit Fehlversuchen",
       "limiter": "Anmeldeschutz (Redis) gestört",
       "unknown": "Andere Regel"
-    }
+    },
+    "open": "Offen",
+    "acknowledged": "Quittiert",
+    "acknowledgedBy": "von {name}, {time}",
+    "acknowledge": "Quittieren",
+    "reopen": "Wieder öffnen",
+    "acknowledgeConfirm": "Warnung als gesehen quittieren? Sie zählt dann nicht mehr als offen, bis sie abklingt und erneut auftritt. Sperren und Benachrichtigungen bleiben unverändert.",
+    "acknowledgedToast": "Warnung quittiert",
+    "reopenedToast": "Warnung wieder offen",
+    "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen.",
+    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis)."
   },
   "audit": {
     "title": "Audit-Log",
@@ -172,6 +187,48 @@
       "step_up": "Bestätigung (Step-up)",
       "alerts": "Alarmregeln",
       "retention": "Aufbewahrung"
+    }
+  },
+  "export": {
+    "button": "Exportieren",
+    "title": "Sicherheitsdaten exportieren",
+    "description": "JSONL-Datei, verschlüsselt mit Ihrem Passwort. Der Export wird mit Passkey bestätigt und im Audit-Log festgehalten.",
+    "kind": "Inhalt",
+    "kinds": {
+      "auth_events": "Anmeldeereignisse",
+      "audit_log": "Audit-Log"
+    },
+    "from": "Von",
+    "to": "Bis",
+    "rangeHelp": "Höchstens {days} Tage pro Export.",
+    "password": "Passwort",
+    "passwordHelp": "Mindestens {min} Zeichen. Ohne dieses Passwort lässt sich die Datei nicht öffnen.",
+    "passwordConfirm": "Passwort bestätigen",
+    "mismatch": "Die Passwörter stimmen nicht überein.",
+    "cancel": "Abbrechen",
+    "submit": "Exportieren",
+    "busy": "Wird exportiert …",
+    "done": "Export heruntergeladen",
+    "failed": "Export fehlgeschlagen"
+  },
+  "subject": {
+    "title": "Konto zum Ereignis",
+    "description": "Die Zuordnung wurde im Audit-Log festgehalten. Netz und Adresse werden nie angezeigt.",
+    "unknown": "Kein Konto gefunden: die eingegebene Adresse gehört zu keinem Konto oder das Ereignis ist zu alt.",
+    "kind": "Art",
+    "kinds": {
+      "user": "Benutzerkonto",
+      "admin": "Plattform-Admin"
+    },
+    "name": "Name",
+    "email": "E-Mail",
+    "tenant": "Mandant",
+    "via": "Zugeordnet über",
+    "viaKinds": {
+      "event": "Ereignis selbst",
+      "related_event": "früheres Ereignis desselben Pseudonyms",
+      "hash": "Abgleich der Login-Adressen",
+      "none": "—"
     }
   }
 }

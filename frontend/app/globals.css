@@ -449,6 +449,8 @@ pre {
   min-width: 0;
   min-height: 0;
   display: grid;
+  /* Spalte nie breiter als der Platz: breite Tabellen scrollen in sich (390 px) */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-4);
 }
@@ -3440,7 +3442,8 @@ button.table-row-link.table-row-toggle {
 }
 
 .tabs-trigger-active {
-  color: var(--accent);
+  /* Text in --accent-strong: --accent erreicht auf --bg kein 4.5:1 (axe, 1.5.1) */
+  color: var(--accent-strong);
   border-bottom-color: var(--accent);
 }
 /* Sprungziel aus der Suche (Ctrl+K): Abstand unter der Kopfleiste */
@@ -3478,6 +3481,9 @@ button.table-row-link.table-row-toggle {
 
 .route-tabs {
   margin-bottom: var(--space-4);
+  /* Viele Reiter (z. B. Sicherheitsbereich) scrollen quer statt die Seite auf 390 px zu verbreitern */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .route-tabs .tabs-trigger {
@@ -6155,7 +6161,8 @@ button.table-row-link.table-row-toggle {
 
 @media (max-width: 1100px) {
   .shell {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): breite Inhalte (Tabellen, Reiter) scrollen in sich statt die Seite zu verbreitern */
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
@@ -13226,7 +13233,7 @@ a.mobile-list-row { color: var(--text); }
 .admin-status-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); }
 .admin-status-card-meta { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .admin-status-card-meta code { font-size: var(--text-xs); }
-.admin-status-card .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.admin-status-card .table-shell { max-width: 100%; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .admin-status-state { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--status-fg); font-size: var(--text-sm); }
 .admin-status-state .admin-status-dot { width: 7px; height: 7px; }
 .admin-status-memory { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }

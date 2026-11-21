@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { formatDateTime } from "@/lib/utils/format";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
@@ -19,6 +21,7 @@ type Props = {
 
 export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props) {
   const t = useTranslations("admin.accountManagement");
+  const locale = useLocale();
   const showToast = useToast();
   const confirm = useConfirm();
   const [admins, setAdmins] = useState(initialAdmins);
@@ -66,7 +69,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         method: "PATCH",
         body: JSON.stringify({ role: nextRole }),
       });
-      setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setAdmins((current) => current.map((item) => (item.id === updated.id ? { ...updated, passkey_count: item.passkey_count, last_login_at: item.last_login_at } : item)));
       showToast(t("toasts.updated"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
@@ -87,7 +90,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         method: "PATCH",
         body: JSON.stringify({ is_active: !admin.is_active }),
       });
-      setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setAdmins((current) => current.map((item) => (item.id === updated.id ? { ...updated, passkey_count: item.passkey_count, last_login_at: item.last_login_at } : item)));
       showToast(t("toasts.updated"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
@@ -106,7 +109,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         }
       />
 
-      <DataTable columns={[t("columns.name"), t("columns.email"), t("columns.role"), t("columns.status"), t("columns.actions")]} emptyMessage={t("emptyAdmins")}>
+      <DataTable columns={[t("columns.name"), t("columns.email"), t("columns.role"), t("columns.status"), t("columns.passkeys"), t("columns.lastLogin"), t("columns.actions")]} emptyMessage={t("emptyAdmins")}>
         {admins.map((admin) => (
           <tr key={admin.id}>
             <td>
@@ -116,6 +119,11 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
             <td>{admin.email}</td>
             <td>{admin.role === "owner" ? t("fullAccess") : t("readOnlyAccess")}</td>
             <td>{admin.is_active ? t("active") : t("deactivated")}</td>
+            <td>
+              {/* Ohne Passkey kann sich ein Admin nicht anmelden (Passkey-Pflicht) - als Warnung zeigen */}
+              <Badge variant={(admin.passkey_count ?? 0) > 0 ? "neutral" : "warning"}>{t("passkeyCount", { count: admin.passkey_count ?? 0 })}</Badge>
+            </td>
+            <td>{admin.last_login_at ? formatDateTime(admin.last_login_at, locale) : <span className="muted">{t("neverLoggedIn")}</span>}</td>
             <td>
               <div className="table-actions table-actions-start">
                 <button type="button" className="button-secondary" onClick={() => void toggleRole(admin)}>

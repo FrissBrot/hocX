@@ -80,7 +80,8 @@
       "subject": "Account",
       "network": "Network",
       "risk": "Risk",
-      "client": "Device"
+      "client": "Device",
+      "actions": "Actions"
     },
     "actorKinds": {
       "user": "User",
@@ -91,7 +92,9 @@
     "empty": "No events for this selection.",
     "previous": "Newer",
     "next": "Older",
-    "pageInfo": "Entries {from, number}–{to, number}"
+    "pageInfo": "Entries {from, number}–{to, number}",
+    "resolve": "Show account",
+    "resolveConfirm": "Map this event's pseudonym to an account? This requires a passkey confirmation and is recorded in the audit log."
   },
   "blocks": {
     "title": "Blocks",
@@ -137,7 +140,9 @@
       "severity": "Severity",
       "rule": "Rule",
       "subject": "Affected (pseudonym)",
-      "key": "Key"
+      "key": "Key",
+      "status": "Status",
+      "actions": "Action"
     },
     "rules": {
       "stuffing": "Credential stuffing: many failures from many networks",
@@ -151,7 +156,17 @@
       "tenant": "Many accounts of one tenant with failures",
       "limiter": "Sign-in protection (Redis) disrupted",
       "unknown": "Other rule"
-    }
+    },
+    "open": "Open",
+    "acknowledged": "Acknowledged",
+    "acknowledgedBy": "by {name}, {time}",
+    "acknowledge": "Acknowledge",
+    "reopen": "Reopen",
+    "acknowledgeConfirm": "Acknowledge this warning as seen? It no longer counts as open until it subsides and occurs again. Blocks and notifications stay unchanged.",
+    "acknowledgedToast": "Warning acknowledged",
+    "reopenedToast": "Warning reopened",
+    "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again.",
+    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event)."
   },
   "audit": {
     "title": "Audit log",
@@ -172,6 +187,48 @@
       "step_up": "Confirmation (step-up)",
       "alerts": "Alert rules",
       "retention": "Retention"
+    }
+  },
+  "export": {
+    "button": "Export",
+    "title": "Export security data",
+    "description": "JSONL file encrypted with your password. The export is confirmed with a passkey and recorded in the audit log.",
+    "kind": "Content",
+    "kinds": {
+      "auth_events": "Sign-in events",
+      "audit_log": "Audit log"
+    },
+    "from": "From",
+    "to": "To",
+    "rangeHelp": "At most {days} days per export.",
+    "password": "Password",
+    "passwordHelp": "At least {min} characters. The file cannot be opened without this password.",
+    "passwordConfirm": "Confirm password",
+    "mismatch": "The passwords do not match.",
+    "cancel": "Cancel",
+    "submit": "Export",
+    "busy": "Exporting …",
+    "done": "Export downloaded",
+    "failed": "Export failed"
+  },
+  "subject": {
+    "title": "Account for this event",
+    "description": "The lookup has been recorded in the audit log. Network and address are never shown.",
+    "unknown": "No account found: the entered address does not belong to any account or the event is too old.",
+    "kind": "Type",
+    "kinds": {
+      "user": "User account",
+      "admin": "Platform admin"
+    },
+    "name": "Name",
+    "email": "Email",
+    "tenant": "Tenant",
+    "via": "Matched via",
+    "viaKinds": {
+      "event": "the event itself",
+      "related_event": "an earlier event with the same pseudonym",
+      "hash": "comparison of login addresses",
+      "none": "—"
     }
   }
 }

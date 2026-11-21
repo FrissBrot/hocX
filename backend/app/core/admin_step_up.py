@@ -47,7 +47,15 @@ PURPOSES = frozenset({
     "user-mfa-reset",
     "user-manage",
     "platform-settings",
+    # 1.5.1 (Plan §8.2): eigene Zwecke statt Sammelzwecke - eine Bestätigung für «Sperre setzen»
+    # gilt so nie für «Export» oder «Person auflösen».
+    "user-credentials",   # Zurücksetzungslink/Einladung senden (ersetzt das Passwort-Setzen)
+    "tenant-import",      # Mandant aus Datei anlegen (bestätigt wird das Import-Ticket, s. admin.py)
+    "security-block",     # Anmeldeschutz: manuell sperren/entsperren
+    "security-export",    # Export von Anmeldeereignissen/Audit-Log
+    "security-resolve",   # pseudonymisiertes Subjekt eines Ereignisses einer Person zuordnen
 })
+
 
 # Alle Zwecke ausser der eigenen Passkey-Verwaltung gehören zu Owner-Aktionen: die Rolle wird geprüft,
 # BEVOR die Bestätigung verbraucht wird (ein Support-Admin verbraucht so nichts).

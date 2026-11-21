@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
-import { useMemo } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
@@ -11,8 +12,12 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useAdminResource } from "@/components/admin/security/use-admin-resource";
+import { Modal } from "@/components/ui/modal";
+import { useConfirm } from "@/contexts/confirm-context";
+import { useToast } from "@/contexts/toast-context";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { formatDateTime } from "@/lib/utils/format";
-import type { AuthEventRow, AuthOutcome } from "@/types/admin-security";
+import type { AuthEventRow, AuthOutcome, ResolvedSubject } from "@/types/admin-security";
 
 const PAGE_SIZE = 50;
 const OUTCOMES = ["all", "success", "failure", "blocked", "challenged", "info"] as const;
@@ -57,6 +62,20 @@ export function SecurityEvents() {
     return `/api/admin/auth-security/events?${query.toString()}`;
   }, [outcome, eventType, offset]);
   const events = useAdminResource<AuthEventRow[]>(path);
+  const confirm = useConfirm();
+  const showToast = useToast();
+  const [resolved, setResolved] = useState<ResolvedSubject | null>(null);
+
+  // Pseudonym einem Konto zuordnen (1.5.1): nur nach Rückfrage, mit Passkey-Bestätigung und auditiert.
+  async function resolveSubject(event: AuthEventRow) {
+    const ok = await confirm({ message: t("events.resolveConfirm"), confirmLabel: t("events.resolve") });
+    if (!ok) return;
+    try {
+      setResolved(await stepUpFetch<ResolvedSubject>("security-resolve", `/api/admin/auth-security/events/${encodeURIComponent(event.event_id)}/resolve-subject`, { method: "POST" }));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
+    }
+  }
 
   function update(next: { outcome?: OutcomeFilter; type?: string | null; offset?: number }) {
     const query = new URLSearchParams();
@@ -98,6 +117,7 @@ export function SecurityEvents() {
         columns={[
           t("events.columns.time"), t("events.columns.type"), t("events.columns.outcome"), t("events.columns.actor"),
           t("events.columns.tenant"), t("events.columns.subject"), t("events.columns.network"), t("events.columns.risk"), t("events.columns.client"),
+          t("events.columns.actions"),
         ]}
         emptyMessage={events.loading ? undefined : t("events.empty")}
       >
@@ -112,9 +132,17 @@ export function SecurityEvents() {
             <td>{event.src_net_hash ? <code>{event.src_net_hash}</code> : null}</td>
             <td>{event.risk_score ?? null}</td>
             <td>{event.user_agent_family ?? null}</td>
+            <td>
+              {event.subject_hash || event.actor_user_id || event.platform_admin_id ? (
+                <button type="button" className="button-secondary" onClick={() => void resolveSubject(event)}>
+                  {t("events.resolve")}
+                </button>
+              ) : null}
+            </td>
           </tr>
         ))}
       </DataTable>
+      <SubjectModal subject={resolved} onClose={() => setResolved(null)} />
       <div className="admin-security-pager">
         <button type="button" className="button-secondary" disabled={offset === 0} onClick={() => update({ offset: Math.max(0, offset - PAGE_SIZE) })}>
           {t("events.previous")}
@@ -125,5 +153,47 @@ export function SecurityEvents() {
         </button>
       </div>
     </section>
+  );
+}
+
+function SubjectModal({ subject, onClose }: { subject: ResolvedSubject | null; onClose: () => void }) {
+  const t = useTranslations("adminSecurity.subject");
+  return (
+    <Modal open={subject !== null} onClose={onClose} title={t("title")} description={t("description")}>
+      {subject ? (
+        subject.kind === "unknown" ? (
+          <StatusBanner tone="neutral" message={t("unknown")} />
+        ) : (
+          <dl className="admin-key-value">
+            <div>
+              <dt>{t("kind")}</dt>
+              <dd>{t(`kinds.${subject.kind}`)}</dd>
+            </div>
+            <div>
+              <dt>{t("name")}</dt>
+              <dd>{subject.display_name ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>{t("email")}</dt>
+              <dd>{subject.email ?? "—"}</dd>
+            </div>
+            {subject.kind === "user" ? (
+              <div>
+                <dt>{t("tenant")}</dt>
+                <dd>
+                  {subject.tenant_id ? (
+                    <Link href={`/admin/tenants/${subject.tenant_id}` as Route}>{subject.tenant_name ?? subject.tenant_id}</Link>
+                  ) : "—"}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>{t("via")}</dt>
+              <dd>{t(`viaKinds.${subject.via}`)}</dd>
+            </div>
+          </dl>
+        )
+      ) : null}
+    </Modal>
   );
 }

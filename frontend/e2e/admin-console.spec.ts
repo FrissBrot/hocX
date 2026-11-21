@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { test, expect, type Page } from "@playwright/test";
 import { authFiles } from "./auth";
 
@@ -29,6 +30,9 @@ const ADMIN_PAGES = [
   "/admin/maintenance",
   "/admin/analytics",
   "/admin/settings/notifications",
+  "/admin/settings/security",
+  "/admin/settings/integrations",
+  "/admin/settings/system",
   "/admin/document-templates",
   "/admin/account",
 ];
@@ -111,6 +115,51 @@ test.describe("Admin-Konsole", () => {
     expect(missing?.status()).toBe(404);
   });
 
+  test("Mandanten-Detail 1.5.1: Features, Nutzung und Sicherheit", async ({ page }) => {
+    const tenants = await (await page.request.get("/api/admin/tenants?limit=1&offset=0")).json();
+    const tenant = tenants.items[0] as { id: string };
+    for (const segment of ["features", "usage", "security"]) await expectHealthyPage(page, `/admin/tenants/${tenant.id}/${segment}`);
+    await expect(page.getByRole("tab", { name: "Sicherheit" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("Audit-Log: Filter stehen nur mit IDs/Codes in der URL", async ({ page }) => {
+    await expectHealthyPage(page, "/admin/security/audit?outcome=failure&actor_kind=system&from=2026-01-01");
+    await expect(page.getByRole("tab", { name: "Fehlgeschlagen" })).toHaveAttribute("aria-selected", "true");
+    await page.getByPlaceholder("Aktion, z. B. user.login").fill("admin.login");
+    await expect(page).toHaveURL(/action=admin\.login/);
+    expect(page.url()).not.toMatch(/%40|@/);
+  });
+
+  test("Audit-Log (Design): Bereiche, Zeitleiste, J/K-Detail und Link zum Eintrag", async ({ page }) => {
+    await expectHealthyPage(page, "/admin/security/audit?range=30d");
+    await expect(page.getByText("Das Ansehen dieser Seite wird protokolliert")).toBeVisible();
+    await expect(page.getByRole("img", { name: "Zeitleiste der Ereignisse" })).toBeVisible();
+    const firstRow = page.locator("tr.audit-row").first();
+    await expect(firstRow).toBeVisible();
+    await page.locator("main#main-content").focus();
+    await page.keyboard.press("j");
+    const detail = page.locator("aside.audit-detail");
+    await expect(detail).toBeVisible();
+    await expect(page).toHaveURL(/entry=\d+/);
+    const entryId = /entry=(\d+)/.exec(page.url())?.[1];
+    await page.keyboard.press("j");
+    await expect(page).not.toHaveURL(new RegExp(`entry=${entryId}(&|$)`));
+    await page.keyboard.press("k");
+    await expect(page).toHaveURL(new RegExp(`entry=${entryId}(&|$)`));
+    // Link zum Eintrag: öffnet direkt die Detail-Spalte
+    await expectHealthyPage(page, `/admin/security/audit?entry=${entryId}`);
+    await expect(page.locator("aside.audit-detail")).toBeVisible();
+    // Bereichs-Chip als Code in der URL
+    await page.getByRole("button", { name: /^Anmeldung/ }).click();
+    await expect(page).toHaveURL(/area=auth/);
+    expect(page.url()).not.toMatch(/%40|@/);
+    // 390 px: die Seite wird nicht breiter als der Viewport (Tabelle und Reiter scrollen in sich)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/admin/security/audit?range=30d");
+    await expect(page.locator("tr.audit-row").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
   test("Sicherheits-Dashboard liest nur Pseudonyme, Richtlinien ohne Geheimnisse", async ({ page }) => {
     await expectHealthyPage(page, "/admin/security");
     const policy = await page.request.get("/api/admin/auth-security/policy");
@@ -145,5 +194,60 @@ test.describe("Sicherheit & Anmeldungen (Verein)", () => {
     } finally {
       await context.close();
     }
+  });
+});
+
+// Smartphone (390 px): keine Admin-Seite wird breiter als der Viewport - breite Tabellen, Reiter und
+// Diagramme scrollen bzw. schrumpfen in sich.
+test.describe("Admin-Konsole: 390 px ohne horizontales Überlaufen", () => {
+  test.use({ storageState: authFiles.platformAdmin, viewport: { width: 390, height: 844 } });
+  test.setTimeout(480_000);
+
+  test("alle Admin-Seiten passen in 390 px", async ({ page }) => {
+    const tenants = await (await page.request.get("/api/admin/tenants?limit=1&offset=0")).json();
+    const tenantId = tenants.items?.[0]?.id as string | undefined;
+    const tenantTabs = ["", "/profile", "/subscription", "/features", "/users", "/domains", "/verification", "/storage", "/usage", "/activity", "/security", "/technical"];
+    const pages = tenantId ? [...ADMIN_PAGES, ...tenantTabs.map((tab) => `/admin/tenants/${tenantId}${tab}`)] : ADMIN_PAGES;
+    const tooWide: string[] = [];
+    for (const path of pages) {
+      await expectHealthyPage(page, path);
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      const width = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (width > 391) tooWide.push(`${path}: ${width}px`);
+    }
+    expect(tooWide, tooWide.join("\n")).toEqual([]);
+  });
+});
+
+// WCAG-Prüfung der Admin-Konsole (Plan Phase F): axe-core auf allen Bereichen, Regeln WCAG 2.1 A/AA.
+// Bekannte, bewusst offene Punkte stehen mit Begründung in AXE_DISABLED.
+const AXE_DISABLED: string[] = [
+  // Breite Tabellen scrollen auf schmalen Viewports in .table-shell; jede Zeile hat einen fokussierbaren
+  // Link/Knopf, der den Bereich per Tastatur mitscrollt. Ein tabIndex auf jedem Tabellen-Container
+  // würde überall zusätzliche Tab-Halte erzeugen - offen für eine eigene Entscheidung.
+  "scrollable-region-focusable",
+];
+
+test.describe("Admin-Konsole: Barrierefreiheit (axe)", () => {
+  test.use({ storageState: authFiles.platformAdmin });
+  test.setTimeout(480_000);
+
+  test("keine WCAG-A/AA-Verstösse auf den Admin-Seiten", async ({ page }) => {
+    const tenants = await (await page.request.get("/api/admin/tenants?limit=1&offset=0")).json();
+    const tenantId = tenants.items?.[0]?.id as string | undefined;
+    const pages = tenantId ? [...ADMIN_PAGES, `/admin/tenants/${tenantId}`, `/admin/tenants/${tenantId}/usage`, `/admin/tenants/${tenantId}/features`] : ADMIN_PAGES;
+    const findings: string[] = [];
+    for (const path of pages) {
+      await expectHealthyPage(page, path);
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      const result = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .disableRules(AXE_DISABLED)
+        .analyze();
+      for (const violation of result.violations) {
+        findings.push(`${path}: ${violation.id} (${violation.impact}) – ${violation.nodes.slice(0, 3).map((node) => node.target.join(" ")).join(" | ")}`);
+      }
+    }
+    expect(findings, findings.join("\n")).toEqual([]);
   });
 });

@@ -222,7 +222,9 @@ def test_platform_audit_log_filters_by_tenant_and_action(db):
     AuditService().log(db, action="protocol.deleted", tenant_id=tenant.id)
     admin = CurrentAdmin(admin_id=1, admin_public_id=None, email="owner@hocx.invalid", display_name="Owner", role="owner")
 
-    page = admin_routes.list_audit_log(tenant_id=tenant.public_id, action="user.login", outcome=None, limit=50, offset=0, db=db, current_admin=admin)
+    page = admin_routes.list_audit_log(
+        filters=admin_routes.AuditFilter(tenant_id=tenant.id, action="user.login"), limit=50, offset=0, db=db, current_admin=admin,
+    )
 
     assert [item.action for item in page.items] == ["user.login"]
     assert page.items[0].tenant_name == "Plattformsicht"

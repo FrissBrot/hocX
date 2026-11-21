@@ -29,7 +29,8 @@ export function CopyField({ label, value }: { label: string; value: string }) {
 
   return (
     <div className="wizard-dns-row">
-      <button type="button" className="wizard-dns-value wizard-dns-value-button" onClick={copy} aria-label={t("copyWithLabel", { label })} title={t("copy")}>
+      {/* Name = sichtbarer Wert (axe label-content-name-mismatch); die Aktion benennt der Knopf daneben */}
+      <button type="button" className="wizard-dns-value wizard-dns-value-button" onClick={copy} title={t("copy")}>
         {value}
       </button>
       <button type="button" className={`wizard-copy-button${copied ? " is-copied" : ""}`} onClick={copy} aria-label={t("copyWithLabel", { label })} title={t("copy")}>

@@ -1143,6 +1143,15 @@ derselben Transaktion. Nach `reset-passkeys` richtet das Konto beim nächsten Lo
 einen neuen Passkey ein - wer in diesem Moment das Passwort kennt, kann das tun. Deshalb sofort
 selbst anmelden (bei Verdacht vorher `reset-password`).
 
+**Benutzerkonto mit Login anlegen** (seit 1.5.1 setzt das Admin-Panel keine Passwörter mehr, dort
+gibt es «Einladung senden» bzw. «Zurücksetzungslink senden»; die CLI ist für Testumgebungen wie
+`scripts/e2e.sh` und Notfälle ohne Mailversand). Passwort nur über stdin, nie als Argument:
+
+```bash
+printf '%s' "$PASSWORT" | docker compose -p <projekt> exec -T backend python -m app.admin_cli \
+  create-user --tenant-name "<Mandant>" --email <adresse> --role reader
+```
+
 ## 23. Anmeldeschutz (Auth-Audit 2026-11-20)
 
 Code: `backend/app/auth_security/` (Zähler und Schichten `guard.py`, Risk Engine `risk.py`,

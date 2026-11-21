@@ -2506,6 +2506,11 @@ class SystemAlertState(Base):
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     notified_severity: Mapped[str | None] = mapped_column(Text)
     last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Quittung durch einen Plattform-Admin (0209_admin_alert_ack); verfällt mit der Zeile, wenn das
+    # Problem verschwindet.
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acknowledged_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    acknowledged_note: Mapped[str | None] = mapped_column(Text)
 
 
 class SystemHealthEvent(Base):

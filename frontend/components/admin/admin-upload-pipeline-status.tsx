@@ -7,12 +7,12 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TenantPicker } from "@/components/admin/tenant-picker";
 import { SOURCE_KEY } from "@/components/files/file-detail-modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
-  AdminTenantSummary,
   UploadPipelineFileEntry,
   UploadPipelineOverview,
   UploadPipelineSource,
@@ -20,7 +20,6 @@ import {
 
 type Props = {
   initialOverview: UploadPipelineOverview;
-  tenants: AdminTenantSummary[];
 };
 
 const PAGE_SIZE = 50;
@@ -47,7 +46,7 @@ function formatAge(seconds: number): string {
   return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min`;
 }
 
-export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
+export function AdminUploadPipelineStatus({ initialOverview }: Props) {
   const t = useTranslations("admin.uploadPipeline");
   // Dieselbe Herkunfts->Key-Zuordnung wie file-detail-modal.tsx (SOURCE_KEY), aber ueber den
   // "files"-Namespace uebersetzt - audit fix, 2026-09-17: eine Datei soll in der Admin-Pipeline
@@ -138,17 +137,10 @@ export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
       </article>
 
       <article className="card">
-        <div className="filter-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        <div className="admin-filter-grid">
           <label className="field-stack">
             <span className="field-label">{t("tenantLabel")}</span>
-            <SearchableSelect
-              options={tenants}
-              getId={(t) => String(t.id)}
-              getLabel={(t) => t.name}
-              value={tenantId || null}
-              onChange={(t) => resetAndSet(setTenantId)(t ? String(t.id) : "")}
-              nullLabel={t("all")}
-            />
+            <TenantPicker value={tenantId || null} onChange={(item) => resetAndSet(setTenantId)(item ? item.id : "")} nullLabel={t("all")} />
           </label>
           <label className="field-stack">
             <span className="field-label">{t("originLabel")}</span>

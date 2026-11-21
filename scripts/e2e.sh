@@ -75,6 +75,20 @@ start_stack() {
   wait_for_url http://127.0.0.1:18001/api/health
   wait_for_url http://127.0.0.1:13001/
   wait_for_clamav
+  seed_tenant_two_reader
+}
+
+# Leser im zweiten Demo-Mandanten für die Mandantengrenz-Specs (authFiles.tenantTwo). Seit 1.5.1
+# setzt das Admin-Panel keine Passwörter mehr; das Konto entsteht über die Admin-CLI im Container.
+# Passwort zur Laufzeit erzeugt (SECURITY-RULES 5.1), nur in frontend/e2e/.auth (gitignored).
+seed_tenant_two_reader() {
+  local file="$REPO_DIR/frontend/e2e/.auth/tenant-two-password"
+  mkdir -p "$(dirname "$file")"
+  if [[ ! -s "$file" ]]; then
+    printf 'Rl-%s-9a' "$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)" > "$file"
+  fi
+  "${DC[@]}" exec -T backend python -m app.admin_cli create-user --tenant-name "Regional Workspace" \
+    --email reader-regional@hocx.local --role reader --display-name "Regional Reader" < "$file"
 }
 
 # E2E_ARGS (optional): zusätzliche Playwright-Argumente, z. B. E2E_ARGS="rbac-roles.spec.ts"

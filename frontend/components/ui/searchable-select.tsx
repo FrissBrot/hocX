@@ -66,7 +66,16 @@ type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: T
   onChange: (option: T | null) => void;
   /** Label for a clearable "no selection" entry. Omit to make a selection required. */
   nullLabel?: string;
+  /** Remote-Modus: Treffer werden beim Öffnen und bei jeder Eingabe (verzögert) vom Server geladen,
+   * statt die ganze Liste vorab zu laden (`options` darf dann leer sein). Der Suchbegriff geht an
+   * die Funktion - die Seite entscheidet, wie er übertragen wird (nie mit Personendaten in die URL). */
+  loadOptions?: (query: string, signal: AbortSignal) => Promise<T[]>;
+  /** Im Remote-Modus: gewählte Option für die Beschriftung, solange sie nicht unter den Treffern ist. */
+  selectedOption?: T | null;
 };
+
+/** Verzögerung, bevor der Remote-Modus nach einer Eingabe lädt. */
+export const SEARCHABLE_SELECT_REMOTE_DEBOUNCE_MS = 250;
 
 // Generic searchable dropdown replacing a native <Select> whose options are loaded
 // dynamically (from an API/DB), so those pickers get the same Popover + search-filter
@@ -91,6 +100,8 @@ export function SearchableSelect<T, Id extends string | number>({
   disabled,
   className,
   triggerProps,
+  loadOptions,
+  selectedOption,
 }: SingleProps<T, Id>) {
   const t = useTranslations("common");
   const resolvedPlaceholder = placeholder ?? t("select");
@@ -104,11 +115,44 @@ export function SearchableSelect<T, Id extends string | number>({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listId = useId();
 
-  const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
-  const filtered = search.trim()
-    ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
-    : selectable;
-  const selected = options.find((o) => getId(o) === value) ?? null;
+  const [remoteOptions, setRemoteOptions] = useState<T[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const loadRef = useRef(loadOptions);
+  loadRef.current = loadOptions;
+  const remote = Boolean(loadOptions);
+
+  // Remote-Modus: beim Öffnen und nach jeder Eingabe (verzögert) laden; ältere Anfragen abbrechen.
+  useEffect(() => {
+    if (!remote || !open) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setRemoteLoading(true);
+      loadRef.current?.(search.trim(), controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) setRemoteOptions(result);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setRemoteOptions([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setRemoteLoading(false);
+        });
+    }, SEARCHABLE_SELECT_REMOTE_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [remote, open, search]);
+
+  const source = remote ? remoteOptions : options;
+  const selectable = isOptionSelectable ? source.filter(isOptionSelectable) : source;
+  const filtered = remote || !search.trim()
+    ? selectable
+    : selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()));
+  const selected =
+    options.find((o) => getId(o) === value) ??
+    remoteOptions.find((o) => getId(o) === value) ??
+    (selectedOption && getId(selectedOption) === value ? selectedOption : null);
   const triggerLabel = selected ? getLabel(selected) : nullLabel ?? resolvedPlaceholder;
 
   useEffect(() => {
@@ -201,9 +245,12 @@ export function SearchableSelect<T, Id extends string | number>({
               {value === null ? <span className="menu-item-check" aria-hidden="true">✓</span> : null}
             </button>
           ) : null}
-          {filtered.length === 0 && !nullLabel ? (
+          {remote && remoteLoading && filtered.length === 0 ? (
+            <span className="assignee-empty" role="status">{t("loading")}</span>
+          ) : filtered.length === 0 && (!nullLabel || remote) ? (
             <span className="assignee-empty">{resolvedEmptyLabel}</span>
-          ) : (
+          ) : null}
+          {filtered.length === 0 ? null : (
             filtered.map((option, index) => {
               const id = getId(option);
               const rowIndex = index + (nullLabel ? 1 : 0);

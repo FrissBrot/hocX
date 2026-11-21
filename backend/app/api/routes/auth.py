@@ -329,16 +329,32 @@ def _issue_password_reset_from_known_device(email: str, device_id: str) -> None:
             device = devices.known_device(db, user.id, device_id) if user is not None else None
             if device is None:
                 return
+            # Sicherheitsereignis (1.5.1): das Adress-Kontingent ist aufgebraucht und die Inhaberin
+            # kommt über ihr Gerät - ein Hinweis, dass Fremde für diese Adresse Links anfordern.
+            # Gemeldet wird auch, wenn das Gerätekontingent erschöpft ist (blocked).
             if not within_limit(f"password-reset-device:{user.id}|{device.id}", limit=PASSWORD_RESET_DEVICE_LIMIT, period_seconds=_HOUR):
+                _record_device_quota_event(user, "blocked", "device_limit")
                 return
             # Dach je Konto über alle Geräte (Security-Review): auch viele bekannte Geräte
             # ergeben nicht beliebig viele Mails
             if not within_limit(f"password-reset-device-user:{user.id}", limit=PASSWORD_RESET_DEVICE_ACCOUNT_LIMIT, period_seconds=_HOUR):
+                _record_device_quota_event(user, "blocked", "account_limit")
                 return
+            _record_device_quota_event(user, "info", "address_quota_exhausted")
             account_links.request_password_reset(db, email)
         except Exception as exc:  # noqa: BLE001 - ausserhalb des Requests: selbst ins Fehlerprotokoll
             db.rollback()
             record_system_error(db, exc=exc)
+
+
+def _record_device_quota_event(user, outcome: str, reason: str) -> None:
+    """auth_event «reset.request» mit layer=device (Anmeldeschutz-Ansicht, Export)."""
+    from app.auth_security import events as auth_events
+
+    auth_events.record(
+        event_type="reset.request", outcome=outcome, user_id=user.id, tenant_id=user.tenant_id,
+        details={"layer": "device", "reason": reason},
+    )
 
 
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED, response_model=dict[str, str])

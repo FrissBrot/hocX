@@ -80,7 +80,8 @@
       "subject": "Account",
       "network": "Rete",
       "risk": "Rischio",
-      "client": "Dispositivo"
+      "client": "Dispositivo",
+      "actions": "Azioni"
     },
     "actorKinds": {
       "user": "Utente",
@@ -91,7 +92,9 @@
     "empty": "Nessun evento per questa selezione.",
     "previous": "Più recenti",
     "next": "Meno recenti",
-    "pageInfo": "Voci {from, number}–{to, number}"
+    "pageInfo": "Voci {from, number}–{to, number}",
+    "resolve": "Mostra account",
+    "resolveConfirm": "Associare lo pseudonimo di questo evento a un account? Richiede una conferma con passkey e viene registrato nel registro di audit."
   },
   "blocks": {
     "title": "Blocchi",
@@ -137,7 +140,9 @@
       "severity": "Gravità",
       "rule": "Regola",
       "subject": "Interessato (pseudonimo)",
-      "key": "Chiave"
+      "key": "Chiave",
+      "status": "Stato",
+      "actions": "Azione"
     },
     "rules": {
       "stuffing": "Credential stuffing: molti tentativi falliti da molte reti",
@@ -151,7 +156,17 @@
       "tenant": "Molti account di un mandante con tentativi falliti",
       "limiter": "Protezione degli accessi (Redis) disturbata",
       "unknown": "Altra regola"
-    }
+    },
+    "open": "Aperto",
+    "acknowledged": "Confermato",
+    "acknowledgedBy": "da {name}, {time}",
+    "acknowledge": "Conferma presa visione",
+    "reopen": "Riapri",
+    "acknowledgeConfirm": "Confermare la presa visione di questo avviso? Non conta più come aperto finché non cessa e si ripresenta. Blocchi e notifiche restano invariati.",
+    "acknowledgedToast": "Presa visione confermata",
+    "reopenedToast": "Avviso riaperto",
+    "ackHelp": "Gli avvisi confermati restano visibili ma non contano più nella campanella e nella panoramica. Se un avviso si ripresenta dopo essere cessato, è di nuovo aperto.",
+    "clearsAt": "Si risolve da sé alle {time} se nel frattempo non succede nulla di nuovo (finestra di {minutes, plural, one {# minuto} other {# minuti}} dall'ultimo evento)."
   },
   "audit": {
     "title": "Registro di audit",
@@ -172,6 +187,48 @@
       "step_up": "Conferma (step-up)",
       "alerts": "Regole di allarme",
       "retention": "Conservazione"
+    }
+  },
+  "export": {
+    "button": "Esporta",
+    "title": "Esportare dati di sicurezza",
+    "description": "File JSONL cifrato con la tua password. L'esportazione viene confermata con passkey e registrata nel registro di audit.",
+    "kind": "Contenuto",
+    "kinds": {
+      "auth_events": "Eventi di accesso",
+      "audit_log": "Registro di audit"
+    },
+    "from": "Dal",
+    "to": "Al",
+    "rangeHelp": "Al massimo {days} giorni per esportazione.",
+    "password": "Password",
+    "passwordHelp": "Almeno {min} caratteri. Senza questa password il file non si può aprire.",
+    "passwordConfirm": "Conferma password",
+    "mismatch": "Le password non corrispondono.",
+    "cancel": "Annulla",
+    "submit": "Esporta",
+    "busy": "Esportazione in corso …",
+    "done": "Esportazione scaricata",
+    "failed": "Esportazione non riuscita"
+  },
+  "subject": {
+    "title": "Account dell'evento",
+    "description": "L'associazione è stata registrata nel registro di audit. Rete e indirizzo non vengono mai mostrati.",
+    "unknown": "Nessun account trovato: l'indirizzo inserito non appartiene a nessun account o l'evento è troppo vecchio.",
+    "kind": "Tipo",
+    "kinds": {
+      "user": "Account utente",
+      "admin": "Admin della piattaforma"
+    },
+    "name": "Nome",
+    "email": "E-mail",
+    "tenant": "Mandante",
+    "via": "Associato tramite",
+    "viaKinds": {
+      "event": "l'evento stesso",
+      "related_event": "un evento precedente con lo stesso pseudonimo",
+      "hash": "confronto degli indirizzi di accesso",
+      "none": "—"
     }
   }
 }

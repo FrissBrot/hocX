@@ -95,6 +95,10 @@ const NAV: AdminNavGroup[] = [
     links: [
       { href: "/admin/settings/notifications", labelKey: "nav.notifications", icon: "notifications", ownerOnly: true, keywordsKey: "keywords.notifications" },
       { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
+      // 1.5.1: read-only Einstellungsseiten
+      { href: "/admin/settings/security", labelKey: "nav.settingsSecurity", icon: "policy", keywordsKey: "keywords.settingsSecurity" },
+      { href: "/admin/settings/integrations", labelKey: "nav.settingsIntegrations", icon: "settings", ownerOnly: true, keywordsKey: "keywords.settingsIntegrations" },
+      { href: "/admin/settings/system", labelKey: "nav.settingsSystem", icon: "system", ownerOnly: true, keywordsKey: "keywords.settingsSystem" },
     ],
   },
 ];
@@ -163,4 +167,29 @@ export function attentionItems(counts: AdminNavCounts | null, role: AdminRole | 
   push("security_alerts", role === "owner" ? "/admin/security/alerts" : "/admin/security");
   push("operations_problems", role === "owner" ? "/admin/system" : "/admin");
   return items;
+}
+
+// ── Einklappbare Bereiche (1.5.1, wie die Mandanten-Sidebar app-shell.tsx) ─────────────────
+// Immer höchstens ein Bereich offen (Akkordeon), damit die Sidebar bei 1440×700 nicht scrollt.
+// Die aktive Seite öffnet ihren Bereich automatisch; ohne aktiven Bereich (Übersicht, Profil) bleibt
+// der zuletzt von Hand geöffnete offen (im Browser gemerkt, ADMIN_NAV_GROUP_KEY).
+
+export const ADMIN_NAV_GROUP_KEY = "hocx-admin-nav-group";
+
+/** Bereich der aktiven Seite (Gruppen ohne Titel, z. B. «Übersicht», sind nie einklappbar). */
+export function activeAdminGroupId(groups: AdminNavGroup[], pathname: string): string | null {
+  const active = findActiveAdminLink(groups, pathname);
+  return active?.group && active.group.titleKey ? active.group.id : null;
+}
+
+/** Offener Bereich nach einer Navigation: aktiver Bereich, sonst der gemerkte (falls es ihn gibt). */
+export function resolveOpenAdminGroup(groups: AdminNavGroup[], pathname: string, stored: string | null): string | null {
+  const active = activeAdminGroupId(groups, pathname);
+  if (active) return active;
+  return stored && groups.some((group) => group.id === stored && group.titleKey) ? stored : null;
+}
+
+/** Klick auf einen Bereichskopf: öffnen (andere schliessen) oder den offenen schliessen. */
+export function toggleAdminGroup(open: string | null, groupId: string): string | null {
+  return open === groupId ? null : groupId;
 }

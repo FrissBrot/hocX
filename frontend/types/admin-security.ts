@@ -28,7 +28,39 @@ export type AuthSecurityOverview = {
   active_blocks: number;
 };
 
-export type AuthAlert = { key: string; rule: string; subject: string | null; severity: "critical" | "warning"; title: string; message: string };
+export type AuthAlert = {
+  key: string;
+  rule: string;
+  subject: string | null;
+  severity: "critical" | "warning";
+  title: string;
+  message: string;
+  /** Letztes auslösendes Ereignis, Fenster der Regel und wann sie ohne neues Ereignis abklingt (1.5.1) */
+  last_at?: string | null;
+  window_minutes?: number;
+  clears_at?: string | null;
+  /** Name statt interner ID bei Admin-/Mandanten-Regeln (nur owner sieht Warnungen) */
+  subject_label?: string | null;
+  /** Quittung (1.5.1, system_alert_state) */
+  first_seen_at?: string | null;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+  acknowledged_note?: string | null;
+};
+
+/** POST /api/admin/auth-security/events/{id}/resolve-subject */
+export type ResolvedSubject = {
+  kind: "user" | "admin" | "unknown";
+  via: "event" | "related_event" | "hash" | "none";
+  user_id: string | null;
+  admin_id: string | null;
+  display_name: string | null;
+  email: string | null;
+  tenant_id: string | null;
+  tenant_name: string | null;
+  login_enabled: boolean | null;
+  is_active: boolean | null;
+};
 
 export type AuthEventRow = {
   event_id: string;
