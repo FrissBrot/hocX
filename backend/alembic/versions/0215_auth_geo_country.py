@@ -13,7 +13,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "0215_auth_geo_country"
-down_revision = "0208_platform_metrics"
+down_revision = "0214_template_content_version"
 branch_labels = None
 depends_on = None
 

@@ -7,7 +7,7 @@ ausschliesslich ein Deploy-Fenster sperrt, die öffentlichen Versionen (alt → 
 Keine internen Angaben (Notizen, Fehler, Job-IDs ausser der Zielversion).
 
 Revision ID: 0212_maintenance_public_update
-Revises: 0208_platform_metrics
+Revises: 0210_email_delivery_status
 Create Date: 2026-11-21
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "0212_maintenance_public_update"
-down_revision = "0208_platform_metrics"
+down_revision = "0210_email_delivery_status"
 branch_labels = None
 depends_on = None
 

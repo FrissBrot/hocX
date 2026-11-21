@@ -21,7 +21,7 @@
   danger_bg: rgb("#fee2e2"),
   danger_fg: rgb("#b42318"),
   neutral_bg: rgb("#f1f2f4"),
-  neutral_fg: rgb("#667085"),
+  neutral_fg: rgb("#596273"),
   chart_1: rgb("#6366f1"),
   chart_2: rgb("#06b6d4"),
   chart_3: rgb("#a855f7"),

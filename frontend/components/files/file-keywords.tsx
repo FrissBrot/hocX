@@ -24,7 +24,7 @@ export function FileKeywords({
   fileId: string;
   /** Zusätzlich gesperrt (z. B. Datei im Papierkorb). */
   readOnly?: boolean;
-  /** Klasse des umgebenden Abschnitts (z. B. «file-detail-section», «photo-viewer-section»). */
+  /** Klasse des umgebenden Abschnitts (z. B. der Abschnittsrahmen von Datei-Detail oder Foto-Ansicht). */
   className?: string;
   /** Klasse der Abschnittsüberschrift im jeweiligen Rahmen. */
   titleClassName?: string;

@@ -14,7 +14,7 @@ gespeichert; im Zweifel gilt er als manuell und wird nicht angefasst.
 Keine neue Tabelle, RLS unverändert (Policy über photo_album, 0134).
 
 Revision ID: 0218_album_item_auto_source
-Revises: 0208_platform_metrics
+Revises: 0217_file_keywords_synonyms
 Create Date: 2026-11-21
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0218_album_item_auto_source"
-down_revision = "0208_platform_metrics"
+down_revision = "0217_file_keywords_synonyms"
 branch_labels = None
 depends_on = None
 

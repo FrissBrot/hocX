@@ -15,7 +15,7 @@
   Repo (``app/services/search_synonyms_builtin.json``), nicht in der Datenbank.
 
 Revision ID: 0217_file_keywords_synonyms
-Revises: 0208_platform_metrics
+Revises: 0215_auth_geo_country
 Create Date: 2026-11-21
 """
 
@@ -27,7 +27,7 @@ from pathlib import Path
 from alembic import op
 
 revision = "0217_file_keywords_synonyms"
-down_revision = "0208_platform_metrics"
+down_revision = "0215_auth_geo_country"
 branch_labels = None
 depends_on = None
 

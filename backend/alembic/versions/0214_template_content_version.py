@@ -20,14 +20,14 @@ protocol.template_version (Version beim Erstellen bzw. letzten Abgleich) gibt es
 neue Spalte, keine neue Tabelle (RLS unverändert).
 
 Revision ID: 0214_template_content_version
-Revises: 0208_platform_metrics
+Revises: 0212_maintenance_public_update
 Create Date: 2026-11-21
 """
 
 from alembic import op
 
 revision = "0214_template_content_version"
-down_revision = "0208_platform_metrics"
+down_revision = "0212_maintenance_public_update"
 branch_labels = None
 depends_on = None
 
