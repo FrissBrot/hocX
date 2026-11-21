@@ -210,7 +210,8 @@ Update direkt von 1.4.1 mit `./scripts/deploy.sh <test|prod>`; sieben Migratione
 - Risk Engine v1 (deterministisch, versioniert, Score 0-100 mit Gründen) und Stufenmodell der
   IP-Sperren mit Entsperren über CLI (`python -m app.auth_security.cli`) und Admin-API
   (`/api/admin/auth-security/*`).
-- Bestätigungscode per E-Mail für riskante Anmeldungen von Konten ohne zweiten Faktor.
+- Bestätigungscode per E-Mail für riskante Anmeldungen von Konten ohne zweiten Faktor (Mail im
+  neuen Design, in der Sprache der Person).
 - Sicherheitsmails: Anmeldung von neuem Gerät (abschaltbar, Kategorie «Anmeldung von neuem Gerät»),
   verdächtige Anmeldung, viele Fehlversuche, Anmeldung nach Sperre (Pflicht), jeweils mit «Warst du
   das nicht?» und Link auf Profil › Sicherheit; auch die bestehenden Hinweise zu Passwort/MFA haben
@@ -313,6 +314,9 @@ Update direkt von 1.4.1 mit `./scripts/deploy.sh <test|prod>`; sieben Migratione
   andere Projekte auf dem Host bleiben unberührt.
 - **«Meine Aufgaben»** hat denselben Schalter «Alle/Meine» wie Aufgaben › Pendenzen; Abgabe-Pendenzen
   mit Fälligkeit zeigen in der Herkunftszeile «· erledigt sich mit der Abgabe».
+- **Fotos, Datei-Detail und Termin-Dialog:** Die Fotoseite nutzt die volle Breite. Im Datei-Detail
+  sind «PDF-Ansicht» und «Extrahierter Text» gleich hoch, und der Termin-Dialog behält auf dem Desktop
+  in allen Reitern dieselbe Höhe (nur der Inhalt scrollt), sodass beim Wechseln nichts springt.
 - **Aufgabenpakete bei Terminabsage:** Wird ein Termin abgesagt, werden noch offene Paket-Instanzen
   dieses Termins abgebrochen (keine Erinnerungen und Bussen mehr); wird er wieder aktiviert, gehen genau
   diese Instanzen auf ihren vorherigen Status zurück. Von Hand abgebrochene bleiben abgebrochen.
