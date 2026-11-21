@@ -137,8 +137,14 @@ def enrich_existing(
     return outcome
 
 
+def _may_manage(viewer, mime_type: str | None) -> bool:
+    from app.services.file_trash_service import may_manage
+
+    return may_manage(viewer, mime_type)
+
+
 def precheck(
-    db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None
+    db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None, viewer=None
 ) -> list[UploadPrecheckResult]:
     """Siehe Moduldocstring. Committet die ergänzten Metadaten selbst (eine Transaktion für
     den ganzen Batch, Zeilen gesperrt) - der Aufrufer muss nichts mehr tun.
@@ -152,6 +158,19 @@ def precheck(
     with_metadata = request.context == "gallery"
     estimated = metadata_service.valid_estimated_date(request.estimated_taken_on) if with_metadata else None
     existing = find_existing(db, tenant_id, [entry.sha256 for entry in request.files], lock=True)
+    if viewer is not None:
+        # Nur Dateien, die die Person sehen darf (Security-Review V-1): unsichtbare Treffer gelten
+        # als unbekannt - keine fremde ID, keine Metadaten-Ergänzung, der Upload wird eine eigene
+        # Kopie. Die Sichtbarkeitsabfrage läuft immer (gleiche Antwortzeit-Logik wie duplicate-check).
+        from app.services.file_service import FileService
+
+        candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+        visible = FileService().visible_overview_items(db, viewer, candidate_ids)
+        existing = {
+            checksum: kept
+            for checksum, rows in existing.items()
+            if (kept := [row for row in rows if row.public_id in visible])
+        }
     results: list[UploadPrecheckResult] = []
     # Dieselbe Aufnahme mehrfach in einem Batch: nur die erste Kopie wird als Upload gemeldet,
     # weitere als fallback_required (der Server überspringt sie beim Upload als Duplikat).
@@ -168,7 +187,9 @@ def precheck(
             outcome = MergeOutcome()
             if with_metadata:
                 incoming = metadata_service.metadata_from_client(entry.metadata.model_dump() if entry.metadata else None)
-                outcome = enrich_existing(db, matches, checksum, incoming=incoming, estimated=estimated, user_id=user_id)
+                # Ergänzen ist Schreiben: nur Dateien, die die Person auch verwalten darf (Regel 1.2)
+                manageable = matches if viewer is None else [row for row in matches if _may_manage(viewer, row.mime_type)]
+                outcome = enrich_existing(db, manageable, checksum, incoming=incoming, estimated=estimated, user_id=user_id)
             results.append(
                 UploadPrecheckResult(
                     client_id=entry.client_id,

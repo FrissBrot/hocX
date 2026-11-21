@@ -110,6 +110,7 @@ class WordImportQueueService:
         template_id: int,
         created_by: int | None,
         files: list[tuple[str, bytes]],
+        viewer=None,
     ) -> tuple[list[WordImportDocument], list[str]]:
         template = db.get(Template, template_id)
         if template is None or template.tenant_id != tenant_id:
@@ -121,7 +122,7 @@ class WordImportQueueService:
         for filename, content in files:
             try:
                 stored_file = self.file_service.save_word_import_document(
-                    db, tenant_id=tenant_id, filename=filename, content=content, created_by=created_by
+                    db, tenant_id=tenant_id, filename=filename, content=content, created_by=created_by, viewer=viewer
                 )
                 analysis = self.word_import_service.analyze(
                     db,

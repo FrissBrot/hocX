@@ -6,7 +6,7 @@ const api = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: (url: string, init?: unknown) => api(url, init) }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
-vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true), useChoice: () => vi.fn().mockResolvedValue("cancel") }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 // Tiptap rendert in jsdom nicht zuverlässig (wie in todo-edit-modal.test.tsx gemockt)
 vi.mock("@/components/ui/rich-text-editor", () => ({

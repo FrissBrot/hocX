@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import todos as todos_route
-from app.models.entities import StoredFile
+from app.models.entities import GalleryImage, StoredFile
 from app.schemas.protocol import ProtocolTodoCreate, TodoDetailsUpdate
 from app.services.protocol_todo_service import ProtocolTodoService
 
@@ -27,6 +27,10 @@ def _todo(db, tenant_id: int):
 def _file(db, tenant_id: int, name: str = "plan.pdf") -> StoredFile:
     row = StoredFile(tenant_id=tenant_id, original_name=name, mime_type="application/pdf", storage_path=f"test-todo/{name}")
     db.add(row)
+    db.flush()
+    # Wie ein Upload der Ablage: erst damit erscheint die Datei in der Dateisuche (GET /files),
+    # und nur solche Dateien lassen sich neu verknüpfen.
+    db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=row.id))
     db.flush()
     return row
 
@@ -103,7 +107,27 @@ def test_deleting_file_removes_link(db):
     writer = make_current_user(tenant.id)
     todos_route.put_todo_details(todo.public_id, TodoDetailsUpdate(file_ids=[stored.public_id]), db=db, user=writer)
 
+    db.query(GalleryImage).filter_by(stored_file_id=stored.id).delete()
     db.delete(stored)
     db.flush()
 
     assert todos_route.get_todo_details(todo.public_id, db=db, user=writer).files == []
+
+
+def test_new_link_requires_file_visible_in_file_search(db):
+    """Nur Foto-Leserecht: ein Dokument der Ablage ist unsichtbar und lässt sich nicht neu
+    verknüpfen (gleiche Antwort wie eine unbekannte Datei). Bereits verknüpfte bleiben erhalten."""
+    tenant = make_tenant(db)
+    todo = _todo(db, tenant.id)
+    stored = _file(db, tenant.id)
+    photos_only = make_current_user(tenant.id, permissions=frozenset({"meetings.read", "meetings.edit", "photos.read"}))
+
+    with pytest.raises(HTTPException) as error:
+        todos_route.put_todo_details(todo.public_id, TodoDetailsUpdate(file_ids=[stored.public_id]), db=db, user=photos_only)
+    assert error.value.status_code == 400
+
+    todos_route.put_todo_details(todo.public_id, TodoDetailsUpdate(file_ids=[stored.public_id]), db=db, user=make_current_user(tenant.id))
+    kept = todos_route.put_todo_details(
+        todo.public_id, TodoDetailsUpdate(notes="Notiz", file_ids=[stored.public_id]), db=db, user=photos_only,
+    )
+    assert [file.id for file in kept.files] == [stored.public_id]

@@ -260,5 +260,26 @@
       "protocol_closed": "The minutes are closed.",
       "todo_not_submission": "This task does not belong to a submission."
     }
+  },
+  "fileDrop": {
+    "searchHint": "or drag into the window",
+    "uploadOption": "Upload file …",
+    "overlayTitle": "Drop to attach",
+    "overlayText": "The file will be attached to this task under “Files”.",
+    "uploading": "Uploading …",
+    "uploaded": "“{name}” uploaded and attached.",
+    "uploadFailed": "“{name}” could not be uploaded.",
+    "duplicateTitle": "File already exists",
+    "duplicateMessage": "This file already exists: {name} ({place}, {date}).",
+    "duplicateMessageNoPlace": "This file already exists: {name} ({date}).",
+    "attachExisting": "Attach existing",
+    "uploadCopy": "Upload copy",
+    "attachedExisting": "Existing file “{name}” attached.",
+    "alreadyAttached": "“{name}” is already attached to this task.",
+    "discarded": "{count, plural, one {One uploaded file was} other {# uploaded files were}} moved to the trash (restorable).",
+    "gpsTitle": "Location data in image",
+    "gpsMessage": "“{name}” contains GPS data. Include it, as with photo uploads?",
+    "gpsInclude": "Include GPS",
+    "gpsStrip": "Upload without GPS"
   }
 }

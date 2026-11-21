@@ -18,29 +18,40 @@ export interface ConfirmOptions {
   tone?: ConfirmTone;
 }
 
-type ConfirmRequest = Required<Omit<ConfirmOptions, "title">> & { title: string; id: string };
+/** Rückfrage mit zwei gleichwertigen Wegen plus Abbrechen (z. B. «Bestehende anhängen» /
+ * «Kopie hochladen»). Reihenfolge: Abbrechen → alternative → confirm (primär, Startfokus). */
+export interface ChoiceOptions extends Omit<ConfirmOptions, "tone"> {
+  confirmLabel: string;
+  alternativeLabel: string;
+}
+
+export type ChoiceResult = "confirm" | "alternative" | "cancel";
+
+type ConfirmRequest = Required<Omit<ConfirmOptions, "title">> & { title: string; id: string; alternativeLabel?: string };
 
 type ConfirmFn = (options: ConfirmOptions | string) => Promise<boolean>;
+type ChoiceFn = (options: ChoiceOptions) => Promise<ChoiceResult>;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
+const ChoiceContext = createContext<ChoiceFn | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const t = useTranslations("common.confirm");
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
-  const resolver = useRef<((value: boolean) => void) | null>(null);
+  const resolver = useRef<((value: ChoiceResult) => void) | null>(null);
   // Element, das die Rückfrage ausgelöst hat (z. B. «Löschen»): bekommt den Fokus danach zurück.
   // Wurde es inzwischen entfernt (gelöschte Zeile), fällt restoreFocus auf den Hauptinhalt zurück.
   const openerRef = useRef<HTMLElement | null>(null);
 
-  const settle = useCallback((value: boolean) => {
+  const settle = useCallback((value: ChoiceResult) => {
     resolver.current?.(value);
     resolver.current = null;
     setRequest(null);
   }, []);
 
-  const confirm = useCallback<ConfirmFn>((options) => {
-    const normalized = typeof options === "string" ? { message: options } : options;
-    return new Promise<boolean>((resolve) => {
+  const ask = useCallback((options: ConfirmOptions & { alternativeLabel?: string }) => {
+    const normalized = options;
+    return new Promise<ChoiceResult>((resolve) => {
       if (!resolver.current && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
         openerRef.current = stableFocusTarget(document.activeElement);
       }
@@ -51,15 +62,24 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         message: normalized.message,
         confirmLabel: normalized.confirmLabel ?? (normalized.tone === "danger" ? t("deleteConfirmLabel") : t("confirmLabel")),
         cancelLabel: normalized.cancelLabel ?? t("cancelLabel"),
-        tone: normalized.tone ?? "default"
+        tone: normalized.tone ?? "default",
+        alternativeLabel: normalized.alternativeLabel,
       });
     });
   }, [t]);
 
+  const confirm = useCallback<ConfirmFn>(
+    (options) => ask(typeof options === "string" ? { message: options } : options).then((result) => result === "confirm"),
+    [ask],
+  );
+  const choose = useCallback<ChoiceFn>((options) => ask({ ...options, tone: "default" }), [ask]);
+
   return (
     <ConfirmContext.Provider value={confirm}>
-      {children}
-      {request ? <ConfirmDialog request={request} openerRef={openerRef} onCancel={() => settle(false)} onConfirm={() => settle(true)} /> : null}
+      <ChoiceContext.Provider value={choose}>
+        {children}
+        {request ? <ConfirmDialog request={request} openerRef={openerRef} onCancel={() => settle("cancel")} onAlternative={() => settle("alternative")} onConfirm={() => settle("confirm")} /> : null}
+      </ChoiceContext.Provider>
     </ConfirmContext.Provider>
   );
 }
@@ -68,11 +88,13 @@ function ConfirmDialog({
   request,
   openerRef,
   onCancel,
+  onAlternative,
   onConfirm
 }: {
   request: ConfirmRequest;
   openerRef: React.MutableRefObject<HTMLElement | null>;
   onCancel: () => void;
+  onAlternative: () => void;
   onConfirm: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -103,7 +125,7 @@ function ConfirmDialog({
       <div
         ref={shellRef}
         tabIndex={-1}
-        className={`confirm-shell confirm-${request.tone}`}
+        className={`confirm-shell confirm-${request.tone}${request.alternativeLabel ? " confirm-choice" : ""}`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -121,6 +143,11 @@ function ConfirmDialog({
           <button type="button" ref={cancelRef} className="button-ghost" onClick={onCancel} autoFocus={request.tone === "danger"}>
             {request.cancelLabel}
           </button>
+          {request.alternativeLabel && (
+            <button type="button" className="button-secondary" onClick={onAlternative}>
+              {request.alternativeLabel}
+            </button>
+          )}
           <button
             type="button"
             ref={confirmRef}
@@ -135,6 +162,13 @@ function ConfirmDialog({
     </div>,
     document.body
   );
+}
+
+/** Rückfrage mit zwei Wegen (siehe ChoiceOptions); Escape/Backdrop = "cancel". */
+export function useChoice() {
+  const ctx = useContext(ChoiceContext);
+  if (!ctx) throw new Error("useChoice must be used inside ConfirmProvider"); // i18n-ok: Entwicklerfehler
+  return ctx;
 }
 
 export function useConfirm() {

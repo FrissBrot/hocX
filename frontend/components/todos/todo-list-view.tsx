@@ -490,6 +490,8 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
 
       {showCreate && <TodoCreateModal
         participants={participants}
+        canUploadFiles={can(session, "files.manage")}
+        canUploadImages={can(session, "photos.manage")}
         todoBlocks={todoBlocks}
         tagSuggestions={allTagSuggestions}
         onClose={() => setShowCreate(false)}
@@ -508,6 +510,8 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
         showFine={finesEnabled}
         canCollectSubmission={canEdit && can(session, "submissions.manage")}
         canReadSubmission={can(session, "submissions.read")}
+        canUploadFiles={can(session, "files.manage")}
+        canUploadImages={can(session, "photos.manage")}
         onUpdated={(updated) => {
           setTodos((prev) => ({
             all: prev.all.map((t) => t.id === updated.id ? { ...t, ...updated } : t),

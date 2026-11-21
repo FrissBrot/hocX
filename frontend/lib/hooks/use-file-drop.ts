@@ -69,3 +69,86 @@ export function useFileDrop(onDrop: (files: File[]) => void, enabled = true): bo
 
   return isDragging;
 }
+
+/**
+ * Like useFileDrop, but only one element (e.g. a dialog) is the drop target: `isDragging` is true
+ * while files are dragged over that element, `onDrop` receives them. The drop is handled there and
+ * does not reach window-level dropzones underneath (useFileDrop of the page). While enabled, files
+ * dropped elsewhere in the window are swallowed instead of making the browser open them - that would
+ * navigate away from a dialog with unsaved input.
+ */
+export function useElementFileDrop(
+  getTarget: () => HTMLElement | null,
+  onDrop: (files: File[]) => void,
+  enabled = true,
+): boolean {
+  const [isDragging, setIsDragging] = useState(false);
+  const onDropRef = useRef(onDrop);
+  onDropRef.current = onDrop;
+  const getTargetRef = useRef(getTarget);
+  getTargetRef.current = getTarget;
+
+  useEffect(() => {
+    const target = enabled ? getTargetRef.current() : null;
+    if (!target) {
+      setIsDragging(false);
+      return;
+    }
+    // Counter instead of a flag: dragenter/dragleave fire for every child element.
+    let depth = 0;
+
+    function handleDragEnter(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      depth += 1;
+      setIsDragging(true);
+    }
+
+    function handleDragOver(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }
+
+    function handleDragLeave(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setIsDragging(false);
+    }
+
+    function handleDrop(event: DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      depth = 0;
+      setIsDragging(false);
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (files.length > 0) onDropRef.current(files);
+    }
+
+    // Outside the target: only keep the browser from opening the file.
+    function swallowOutside(event: DragEvent) {
+      if (!hasFiles(event) || target?.contains(event.target as Node)) return;
+      event.preventDefault();
+      if (event.type === "dragover" && event.dataTransfer) event.dataTransfer.dropEffect = "none";
+    }
+
+    target.addEventListener("dragenter", handleDragEnter);
+    target.addEventListener("dragover", handleDragOver);
+    target.addEventListener("dragleave", handleDragLeave);
+    target.addEventListener("drop", handleDrop);
+    window.addEventListener("dragover", swallowOutside);
+    window.addEventListener("drop", swallowOutside);
+    return () => {
+      target.removeEventListener("dragenter", handleDragEnter);
+      target.removeEventListener("dragover", handleDragOver);
+      target.removeEventListener("dragleave", handleDragLeave);
+      target.removeEventListener("drop", handleDrop);
+      window.removeEventListener("dragover", swallowOutside);
+      window.removeEventListener("drop", swallowOutside);
+      setIsDragging(false);
+    };
+  }, [enabled]);
+
+  return isDragging;
+}

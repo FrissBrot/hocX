@@ -260,5 +260,26 @@
       "protocol_closed": "Das Protokoll ist abgeschlossen.",
       "todo_not_submission": "Diese Pendenz gehört zu keiner Abgabe."
     }
+  },
+  "fileDrop": {
+    "searchHint": "oder ins Fenster ziehen",
+    "uploadOption": "Datei hochladen …",
+    "overlayTitle": "Loslassen zum Anhängen",
+    "overlayText": "Die Datei wird unter «Dateien» an diese Pendenz angehängt.",
+    "uploading": "Wird hochgeladen …",
+    "uploaded": "«{name}» hochgeladen und angehängt.",
+    "uploadFailed": "«{name}» konnte nicht hochgeladen werden.",
+    "duplicateTitle": "Datei bereits vorhanden",
+    "duplicateMessage": "Diese Datei gibt es schon: {name} ({place}, {date}).",
+    "duplicateMessageNoPlace": "Diese Datei gibt es schon: {name} ({date}).",
+    "attachExisting": "Bestehende anhängen",
+    "uploadCopy": "Kopie hochladen",
+    "attachedExisting": "Bestehende Datei «{name}» angehängt.",
+    "alreadyAttached": "«{name}» ist bereits an diese Pendenz angehängt.",
+    "discarded": "{count, plural, one {Eine hochgeladene Datei liegt} other {# hochgeladene Dateien liegen}} im Papierkorb (wiederherstellbar).",
+    "gpsTitle": "Standortdaten im Bild",
+    "gpsMessage": "«{name}» enthält GPS-Daten. Wie beim Foto-Upload mitsenden?",
+    "gpsInclude": "GPS mitsenden",
+    "gpsStrip": "Ohne GPS hochladen"
   }
 }

@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
+import { ConfirmProvider, useChoice, useConfirm, type ChoiceResult } from "@/contexts/confirm-context";
 import { getTabbables, MAIN_CONTENT_ID, wrapTab } from "@/lib/a11y/focus";
 
 import { ActionMenu } from "./action-menu";
@@ -143,6 +143,52 @@ describe("Rückfrage (useConfirm)", () => {
     });
     expect(onResult).toHaveBeenCalledWith(false);
     expect(opener).toHaveFocus();
+  });
+});
+
+describe("Rückfrage mit zwei Wegen (useChoice)", () => {
+  function Fixture({ onResult }: { onResult: (value: ChoiceResult) => void }) {
+    const choose = useChoice();
+    return (
+      <button type="button" onClick={async () => onResult(await choose({ message: "Datei gibt es schon", confirmLabel: "Bestehende anhängen", alternativeLabel: "Kopie hochladen" }))}>
+        Anhängen
+      </button>
+    );
+  }
+
+  async function open(onResult: (value: ChoiceResult) => void) {
+    render(
+      <ConfirmProvider>
+        <Fixture onResult={onResult} />
+      </ConfirmProvider>
+    );
+    const opener = screen.getByRole("button", { name: "Anhängen" });
+    opener.focus();
+    await act(async () => {
+      fireEvent.click(opener);
+    });
+    return { opener, dialog: screen.getByRole("alertdialog") };
+  }
+
+  it("Reihenfolge Abbrechen → Kopie → Bestehende (Startfokus), Escape = Abbrechen", async () => {
+    const onResult = vi.fn();
+    const { opener, dialog } = await open(onResult);
+    expect(within(dialog).getAllByRole("button").map((button) => button.textContent)).toEqual(["Abbrechen", "Kopie hochladen", "Bestehende anhängen"]);
+    expect(within(dialog).getByRole("button", { name: "Bestehende anhängen" })).toHaveFocus();
+    await act(async () => {
+      fireEvent.keyDown(dialog, { key: "Escape" });
+    });
+    expect(onResult).toHaveBeenCalledWith("cancel");
+    expect(opener).toHaveFocus();
+  });
+
+  it("liefert «alternative» für den zweiten Weg", async () => {
+    const onResult = vi.fn();
+    const { dialog } = await open(onResult);
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Kopie hochladen" }));
+    });
+    expect(onResult).toHaveBeenCalledWith("alternative");
   });
 });
 

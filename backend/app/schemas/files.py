@@ -4,7 +4,7 @@ import re
 import unicodedata
 import uuid
 from datetime import date, datetime, time
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from app.schemas.documents import DocumentSummary
@@ -299,6 +299,35 @@ class UploadPrecheckResult(BaseModel):
 
 class UploadPrecheckResponse(BaseModel):
     results: list[UploadPrecheckResult]
+
+
+# Duplikatprüfung vor dem Anhängen an eine Pendenz (POST /files/duplicate-check): höchstens so
+# viele Hashes wie ein Dokument-Upload Dateien hat.
+MAX_DUPLICATE_CHECK_HASHES = 20
+
+
+class FileDuplicateCheckRequest(BaseModel):
+    sha256: list[Annotated[str, Field(pattern=r"^[0-9a-fA-F]{64}$")]] = Field(min_length=1, max_length=MAX_DUPLICATE_CHECK_HASHES)
+
+
+class FileDuplicateMatch(BaseModel):
+    sha256: str
+    # Die vorhandene Datei, so wie sie die Dateisuche (GET /files) der Person zeigt.
+    file: FileOverviewItem
+
+
+class FileDuplicateCheckResponse(BaseModel):
+    matches: list[FileDuplicateMatch]
+
+
+class FileDiscardUploadsRequest(BaseModel):
+    """POST /files/discard-uploads: im Pendenz-Dialog hochgeladene, nicht verknüpfte Dateien."""
+
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_DUPLICATE_CHECK_HASHES * 5)
+
+
+class FileDiscardUploadsResult(BaseModel):
+    discarded: list[uuid.UUID]
 
 
 class CaptureDateUpdate(BaseModel):

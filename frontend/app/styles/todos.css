@@ -242,7 +242,34 @@
 
 .todo-file-picker { display: flex; flex-direction: column; gap: var(--space-1); }
 
-.todo-file-results { position: static; }
+/* Trefferliste als Portal (todo-file-picker.tsx): Position kommt inline aus computePopoverPosition,
+   die Liste liegt über dem Dialog und verändert dessen Höhe nicht mehr. */
+.todo-file-results { display: flex; flex-direction: column; }
+
+.todo-file-search { position: relative; }
+
+/* Ruhezustand: leiser Hinweis rechts im Suchfeld, dass man Dateien ins Popup ziehen kann */
+.todo-file-drop-hint { position: absolute; top: 50%; right: var(--space-3); transform: translateY(-50%); color: var(--muted); font-size: var(--text-xs); white-space: nowrap; pointer-events: none; }
+
+.todo-edit-modal .todo-file-picker-with-hint .dropdown-search-input { padding-right: calc(var(--space-3) + 13em); }
+
+.todo-file-upload-option { border-top: 1px solid var(--border); }
+
+.todo-file-upload-icon { display: grid; place-items: center; flex-shrink: 0; color: var(--accent); }
+
+.todo-upload-pending .todo-edit-file { border-style: dashed; color: var(--muted); }
+
+/* Datei wird über das Popup gezogen: Overlay über dem ganzen Dialog (liegt in .modal-shell,
+   position: relative). Rein optisch, pointer-events aus. */
+.todo-drop-overlay { position: absolute; inset: 0; z-index: 5; display: flex; padding: var(--space-4); border-radius: var(--radius-xl); background: color-mix(in srgb, var(--panel) 78%, transparent); backdrop-filter: blur(3px); pointer-events: none; }
+
+.todo-drop-overlay-frame { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-5); border: 2px dashed var(--accent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--accent-soft) 55%, transparent); text-align: center; }
+
+.todo-drop-overlay-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: var(--space-2); border-radius: var(--radius-md); background: var(--primary); color: var(--primary-contrast); box-shadow: var(--shadow-soft); }
+
+.todo-drop-overlay-title { margin: 0; color: var(--text); font: 600 var(--text-xl)/1.25 Georgia, serif; }
+
+.todo-drop-overlay-text { margin: 0; max-width: 360px; color: var(--muted); font-size: var(--text-sm); }
 
 .todo-file-option { display: flex; align-items: center; gap: var(--space-2); }
 

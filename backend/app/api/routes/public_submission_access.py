@@ -8,11 +8,13 @@
 """
 from __future__ import annotations
 
+import hashlib
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.client_ip import client_ip
@@ -21,7 +23,7 @@ from app.core.db import get_db, release_for_stream
 from app.core.offload import run_coroutine_in_thread
 from app.core.rate_limit import enforce_rate_limit
 from app.core.storage import ABGABEBOX, MAIN, object_response
-from app.models import StoredFile
+from app.models import GalleryImage, StoredFile
 from app.schemas.files import UploadFileResult
 from app.services import submission_access_service as access_service
 from app.services import submission_upload_rules
@@ -157,6 +159,63 @@ class AccessUploadResult(BaseModel):
     file_results: list[UploadFileResult]
 
 
+def _element_checksums(db: Session, assignment, element_ref: str, raw: dict) -> dict[str, uuid.UUID | None]:
+    """Hash -> Datei aller nicht zurückgezogenen Einreichungen DIESES Elements (Abgabebox und
+    Direkt-Uploads/Link mit Element-Bezug), wie list_checksums_for_element der Abgabebox."""
+    from app.services.context_visibility_service import abgabe_links
+    from app.services.file_service import BLOCKED_SCAN_STATUSES
+
+    links = abgabe_links(include_withdrawn=False)
+    same_element = or_(
+        links.c.element_ref == element_ref,
+        (links.c.element_ref.is_(None))
+        & links.c.event_id.is_not_distinct_from(raw["event_id"])
+        & links.c.list_entry_id.is_not_distinct_from(raw["list_entry_id"])
+        & links.c.manual_element_id.is_not_distinct_from(raw.get("manual_element_id")),
+    )
+    rows = db.execute(
+        select(StoredFile.checksum_sha256, StoredFile.source_checksum_sha256, StoredFile.public_id)
+        .join(links, links.c.stored_file_id == StoredFile.id)
+        .where(
+            links.c.assignment_id == assignment.id,
+            StoredFile.tenant_id == assignment.tenant_id,
+            StoredFile.scan_status.notin_(BLOCKED_SCAN_STATUSES),
+            same_element,
+            # Clips von Live Photos zeigt die Ansicht des Links nicht - auch nicht als Treffer melden
+            ~select(GalleryImage.id).where(GalleryImage.live_video_stored_file_id == StoredFile.id).exists(),
+        )
+    )
+    known: dict[str, uuid.UUID | None] = {}
+    for checksum, source_checksum, public_id in rows:
+        for value in (checksum, source_checksum):
+            if value:
+                known.setdefault(value, public_id)
+    return known
+
+
+def _merge_element_duplicates(
+    planned: list[tuple[str, str]], saved: list[tuple[str, bytes]], results: list[dict], known: dict[str, uuid.UUID | None]
+) -> list[dict]:
+    """Ergebnis je Datei in Eingangsreihenfolge; übergangene Element-Duplikate erscheinen wie ein
+    normaler Upload (Datei des Elements bzw. der gerade gespeicherten ersten Kopie)."""
+    by_hash: dict[str, dict] = {}
+    for (_name, content), result in zip(saved, results):
+        by_hash.setdefault(hashlib.sha256(content).hexdigest(), result)
+    merged: list[dict] = []
+    used: set[int] = set()
+    for name, checksum in planned:
+        result = by_hash.get(checksum)
+        if result is not None and id(result) not in used:
+            used.add(id(result))
+            merged.append(result)
+        elif result is not None:
+            merged.append({**result, "name": name})
+        else:
+            existing = known.get(checksum)
+            merged.append({"name": name, "status": "uploaded", "file_id": str(existing) if existing else None})
+    return merged
+
+
 @router.post("/public/submission-access/upload", response_model=AccessUploadResult)
 async def upload_submission(
     request: Request,
@@ -201,12 +260,30 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offl
     )
     if raw is None:
         raise HTTPException(status_code=404, detail={"code": "link_invalid", "message": INVALID})
+    # Exakte Duplikate nur innerhalb DIESES Elements still übergehen (wie die Abgabebox): die
+    # Antwort sieht aus wie ein normaler Upload; Dateien ausserhalb des Elements spielen keine
+    # Rolle (dort wird eine eigene Kopie gespeichert, kein Hinweis auf andere Dateien des Vereins).
+    known = _element_checksums(db, access.assignment, element_ref, raw)
+    to_save: list[tuple[str, bytes]] = []
+    planned: list[tuple[str, str]] = []  # (Name, Hash) in Eingangsreihenfolge
+    for name, content in staged:
+        checksum = hashlib.sha256(content).hexdigest()
+        planned.append((name, checksum))
+        if checksum not in known:
+            known[checksum] = None  # auch Duplikate innerhalb dieser Einreichung
+            to_save.append((name, content))
     file_results: list[dict] = []
-    _items, errors = await FileService().save_document_uploads(
-        db, tenant_id=access.assignment.tenant_id, files=staged, tags=[], created_by=access.person.id,
-        upload_event_id=raw["event_id"], upload_assignment=access.assignment, upload_element_ref=element_ref,
-        upload_element_label=raw["label"], file_results=file_results, allow_images=True,
-    )
+    errors: list[str] = []
+    if to_save:
+        _items, errors = await FileService().save_document_uploads(
+            db, tenant_id=access.assignment.tenant_id, files=to_save, tags=[], created_by=access.person.id,
+            upload_event_id=raw["event_id"], upload_assignment=access.assignment, upload_element_ref=element_ref,
+            upload_element_label=raw["label"], file_results=file_results, allow_images=True,
+            # Ohne Anmeldung: nie verraten, ob eine Datei im Verein schon existiert (kein «übersprungen»
+            # mit fremder ID, kein Duplikat-Text) - ausserhalb des Elements wird gespeichert.
+            allow_duplicates=True,
+        )
+    file_results = _merge_element_duplicates(planned, to_save, file_results, known)
     # Aufgabe nachführen (erledigt, sobald eine geprüfte Datei da ist; sonst erledigt der Scan sie)
     SubmissionService()._element_with_todo_sync(db, access.assignment, element_ref)
     return AccessUploadResult(view=_view(db, _resolve_or_404(db, token)), errors=errors, file_results=[UploadFileResult(**result) for result in file_results])

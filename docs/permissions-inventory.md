@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 629 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 385
+- Routen gesamt: 631 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 387
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 88
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 23
@@ -311,7 +311,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/files/bulk-capture-date` | photos.manage |
 | `POST /api/files/bulk-delete` | photos.manage |
 | `POST /api/files/bulk-tags` | photos.manage · je nach Fall: files.manage |
-| `POST /api/files/document-uploads` | files.manage · je nach Fall: submissions.manage |
+| `POST /api/files/discard-uploads` | files.manage oder photos.manage |
+| `POST /api/files/document-uploads` | files.manage · je nach Fall: photos.manage, submissions.manage |
+| `POST /api/files/duplicate-check` | files.read oder photos.read |
 | `GET /api/files/gallery-upload-jobs` | photos.manage |
 | `GET /api/files/gallery-upload-jobs/{job_id}` | photos.manage |
 | `POST /api/files/gallery-uploads` | photos.manage · je nach Fall: submissions.manage |

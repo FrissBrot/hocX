@@ -46,6 +46,11 @@ from app.schemas.files import (
     ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
+    FileDiscardUploadsRequest,
+    FileDiscardUploadsResult,
+    FileDuplicateCheckRequest,
+    FileDuplicateCheckResponse,
+    FileDuplicateMatch,
     FileBulkDeleteResult,
     FileBulkTagsUpdate,
     FileOverviewItem,
@@ -71,6 +76,7 @@ from app.schemas.files import (
     UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
+from app.services import upload_precheck_service
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
@@ -452,8 +458,37 @@ def precheck_uploads(
         raise HTTPException(status_code=400, detail="No active tenant")
     if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
-    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id)
+    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id, viewer=user)
     return UploadPrecheckResponse(results=results)
+
+
+@router.post("/files/duplicate-check", response_model=FileDuplicateCheckResponse)
+def check_file_duplicates(
+    payload: FileDuplicateCheckRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Gibt es Dateien mit diesem Inhalt (SHA-256) schon? Für die Rückfrage «Bestehende anhängen /
+    Kopie hochladen» beim Hochladen in eine Pendenz. Gemeldet werden nur Dateien des eigenen
+    Mandanten, die die Person auch in der Dateisuche (GET /files) sehen würde - gleiche Rechte,
+    gleiche Reichweite für Abgabe-Dateien, kein Papierkorb. Ein Hash eines fremden Mandanten oder
+    einer unsichtbaren Datei ergibt dieselbe Antwort wie ein unbekannter (kein Existenz-Orakel;
+    die Sichtbarkeitsabfrage läuft auch ohne Kandidaten, damit die Antwortzeit nichts verrät).
+    POST statt GET, damit die Hashes nicht in Logs/URLs landen; der Endpunkt ändert nichts."""
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    wanted = list(dict.fromkeys(checksum.lower() for checksum in payload.sha256))
+    existing = upload_precheck_service.find_existing(db, user.current_tenant_id, wanted)
+    candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+    visible = service.visible_overview_items(db, user, candidate_ids)
+    matches: list[FileDuplicateMatch] = []
+    for checksum in wanted:
+        # Älteste sichtbare Datei mit diesem Inhalt (find_existing sortiert nach id)
+        match = next((visible[row.public_id] for row in existing.get(checksum, []) if row.public_id in visible), None)
+        if match is not None:
+            matches.append(FileDuplicateMatch(sha256=checksum, file=match))
+    return FileDuplicateCheckResponse(matches=matches)
 
 
 @router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
@@ -667,6 +702,14 @@ async def upload_documents(
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
     cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Pendenz-Dialog: «Kopie hochladen» bzw. keine sichtbare Datei mit gleichem Inhalt - dann
+    # wird auch ein (evtl. für die Person unsichtbares) exaktes Duplikat neu gespeichert, statt
+    # es zu überspringen und dessen ID zurückzugeben.
+    allow_duplicates: Annotated[bool, Form()] = False,
+    # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
+    allow_images: Annotated[bool, Form()] = False,
+    # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -677,7 +720,7 @@ async def upload_documents(
     kommt direkt zurueck."""
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, db=db, user=user)
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, include_gps=include_gps, db=db, user=user)
 
 
 async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
@@ -690,6 +733,14 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
     cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Pendenz-Dialog: «Kopie hochladen» bzw. keine sichtbare Datei mit gleichem Inhalt - dann
+    # wird auch ein (evtl. für die Person unsichtbares) exaktes Duplikat neu gespeichert, statt
+    # es zu überspringen und dessen ID zurückzugeben.
+    allow_duplicates: Annotated[bool, Form()] = False,
+    # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
+    allow_images: Annotated[bool, Form()] = False,
+    # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -699,6 +750,9 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
     kommt direkt zurueck."""
     require_permission(user, P.FILES_MANAGE)
+    if allow_images is True:
+        # Bilder landen (nach MIME) auch in «Fotos» - dafür braucht es das Foto-Schreibrecht.
+        require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if len(files) > MAX_DOCUMENT_UPLOAD_BATCH_FILES:
@@ -767,6 +821,11 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
         upload_element_label=target.element_label,
         upload_cycle_config_id=target.cycle_config_id,
         file_results=file_results,
+        allow_images=allow_images is True,
+        allow_duplicates=allow_duplicates is True,
+        include_gps=include_gps is not False,
+        # Duplikate nur überspringen, wenn die Person sie sehen darf (Security-Review V-2)
+        viewer=user,
     )
     return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
 
@@ -945,6 +1004,7 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
             caption=caption,
             created_by=user.user_id,
             include_gps=include_gps,
+            viewer=user,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -1929,6 +1989,61 @@ def set_file_best_everywhere(
         raise HTTPException(
             status_code=422, detail="Dieses Foto gehört zu keinem Album – Best-of ist nur innerhalb eines Albums möglich."
         )
+
+
+# Höchstalter einer Datei, die «Abbrechen» im Pendenz-Dialog noch zurücknimmt (zusätzlich zur
+# Anmeldung der Session): ein Dialog bleibt nicht länger offen.
+DISCARD_UPLOAD_MAX_AGE = timedelta(hours=12)
+DISCARD_CLOCK_TOLERANCE = timedelta(minutes=5)
+
+
+def _discardable_upload_ids(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Nur frisch von dieser Person in dieser Sitzung hochgeladene Dateien ohne jeden Bezug:
+    eigener Mandant, created_by = Person, nach Anmeldung bzw. höchstens 12 h alt, keine
+    Pendenz-Verknüpfung, kein Termin/Zyklus/Abgabe-Bezug, in keinem Album, keinem Freigabelink. Alles andere wird
+    stillschweigend übergangen (gleiche Antwort wie eine unbekannte ID)."""
+    from app.models.entities import ProtocolTodoFile, ShareLinkFile
+
+    since = datetime.now(UTC) - DISCARD_UPLOAD_MAX_AGE
+    auth_time = user.auth_time
+    if auth_time is not None and auth_time.tzinfo is None:
+        auth_time = auth_time.replace(tzinfo=UTC)
+    if auth_time is not None and auth_time > since:
+        # Kleine Toleranz: created_at ist die DB-Zeit (Transaktionsbeginn), auth_time die App-Zeit
+        since = max(since, auth_time - DISCARD_CLOCK_TOLERANCE)
+    rows = db.execute(
+        select(StoredFile.public_id)
+        .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
+        .where(
+            StoredFile.tenant_id == user.current_tenant_id,
+            StoredFile.public_id.in_(public_ids),
+            StoredFile.created_by == user.user_id,
+            StoredFile.created_at >= since,
+            StoredFile.deleted_at.is_(None),
+            GalleryImage.event_id.is_(None),
+            GalleryImage.cycle_config_id.is_(None),
+            GalleryImage.submission_assignment_id.is_(None),
+            ~select(ProtocolTodoFile.stored_file_id).where(ProtocolTodoFile.stored_file_id == StoredFile.id).exists(),
+            ~select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.file_id == StoredFile.public_id).exists(),
+            ~select(ShareLinkFile.file_id).where(ShareLinkFile.file_id == StoredFile.public_id).exists(),
+        )
+    ).scalars()
+    return list(dict.fromkeys(rows))
+
+
+@router.post("/files/discard-uploads", response_model=FileDiscardUploadsResult)
+def discard_unlinked_uploads(payload: FileDiscardUploadsRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """«Abbrechen» im Pendenz-Dialog: dort hochgeladene, nicht mit «Speichern» verknüpfte Dateien
+    in den Papierkorb (wiederherstellbar, file_trash_service mit seinen Löschrechten). Nie schon
+    vorhandene, verknüpfte oder fremde Dateien - siehe _discardable_upload_ids."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = _discardable_upload_ids(db, user, list(dict.fromkeys(payload.file_ids)))
+    if not ids:
+        return FileDiscardUploadsResult(discarded=[])
+    trashed, _errors = file_trash_service.trash_files(db, user, ids, hidden_ids=_files_outside_scope(db, user, ids))
+    return FileDiscardUploadsResult(discarded=trashed)
 
 
 @router.post("/files/bulk-delete", response_model=FileBulkDeleteResult)

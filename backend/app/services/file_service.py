@@ -61,6 +61,7 @@ from app.services.apple_media import (
     pair_live_clips,
     transcode_live_clip,
 )
+from app.core.tenant_scope import bind_tenant_scope, tenant_scope_suspended
 from app.services import gps_strip, image_metadata_service, photo_event_link_service, upload_precheck_service
 from app.services.capture_date import effective_capture
 from app.services.photo_quality import compute_quality_scores
@@ -400,6 +401,35 @@ def _owner_image_mime(data: bytes) -> str | None:
 # Herkunft eines Fotos aus einem fremden Mandanten (geteiltes Album) - wie die übrigen
 # origin_tag-Werte ("Direkt hochgeladen") ein fester Text aus dem Backend.
 SHARED_ALBUM_ORIGIN_TAG = "Geteiltes Album"
+
+
+class _NoVisibility:
+    """Betrachter ohne Leserechte: jedes Duplikat gilt als unbekannt (eigene Kopie)."""
+
+    def __init__(self, tenant_id: int) -> None:
+        self.current_tenant_id = tenant_id
+
+    def can(self, _permission) -> bool:
+        return False
+
+
+def _gallery_job_viewer(db: Session, job: GalleryUploadJob):
+    """Sichtbarkeit wie beim Auftraggeber des Galerie-Jobs (Muster document_render_jobs): nur
+    dessen sichtbare Duplikate werden übersprungen. Konto weg, gesperrt, Sitzungen nach dem
+    Auftrag beendet oder anderer Mandant: niemand sieht etwas - alle Duplikate werden Kopien."""
+    from app.core.security import build_current_user
+
+    account = db.get(AppUser, job.requested_by) if job.requested_by is not None else None
+    if (
+        account is None
+        or account.tenant_id != job.tenant_id
+        or not account.is_active
+        or not account.login_enabled
+        or account.has_left
+        or (account.session_revoke_at is not None and account.session_revoke_at > job.created_at)
+    ):
+        return _NoVisibility(job.tenant_id)
+    return build_current_user(db, account, mfa_verified=True)
 
 
 def _hide_owner_context(item: FileOverviewItem) -> None:
@@ -1317,8 +1347,61 @@ class FileService:
         db.flush()
         return outcome
 
-    def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
-        return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)
+    def visible_overview_items(self, db: Session, user, public_ids: list[uuid.UUID]) -> dict[uuid.UUID, FileOverviewItem]:
+        """Die Dateien aus public_ids, die die Person in der Dateisuche (GET /files) sähe: eigener
+        Mandant, files.read/photos.read getrennt, Reichweite für Abgabe-Dateien, kein Papierkorb.
+        Fragt immer ab (auch mit leerer Liste), damit Aufrufer kein Zeit-Orakel bilden."""
+        from app.core.permissions import P
+        from app.services import context_visibility_service
+
+        if user.current_tenant_id is None:
+            return {}
+        if not user.can(P.FILES_READ) and not user.can(P.PHOTOS_READ):
+            return {}
+        only_images = not user.can(P.FILES_READ)
+        exclude_images = not only_images and not user.can(P.PHOTOS_READ)
+        items = self.list_tenant_files(
+            db,
+            user.current_tenant_id,
+            limit=max(len(public_ids), 1),
+            file_ids=list(public_ids),
+            only_images=only_images,
+            exclude_images=exclude_images,
+            readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        )
+        return {item.id: item for item in items}
+
+    def _similar_visible(self, db: Session, viewer):
+        """Prüfung für den Ähnlichkeitshinweis (ingest_file): sieht die Person mindestens eines der
+        ähnlichen Bilder? Fragt immer ab, auch ohne Treffer. Ohne viewer: bisheriges Verhalten."""
+        if viewer is None:
+            return None
+
+        def check(stored_file_ids: list[int]) -> bool:
+            public_ids = list(db.scalars(select(StoredFile.public_id).where(StoredFile.id.in_(stored_file_ids))))
+            return bool(self.visible_overview_items(db, viewer, public_ids))
+
+        return check
+
+    def visible_duplicate_ids(self, db: Session, viewer, tenant_id: int, checksums: list[str]) -> dict[str, uuid.UUID]:
+        """Je Hash die älteste Datei mit diesem Inhalt, die die Person sehen darf (siehe
+        visible_overview_items). Unsichtbare Treffer fehlen - für die Person ist der Inhalt dann
+        «unbekannt» (kein Existenz-Orakel, Security-Review V-1/V-2). Die Sichtbarkeitsabfrage läuft
+        immer, auch ohne Treffer (gleiche Antwortzeit-Logik wie POST /files/duplicate-check)."""
+        existing = upload_precheck_service.find_existing(db, tenant_id, checksums)
+        candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+        visible = self.visible_overview_items(db, viewer, candidate_ids)
+        result: dict[str, uuid.UUID] = {}
+        for checksum, rows in existing.items():
+            match = next((row.public_id for row in rows if row.public_id in visible), None)
+            if match is not None:
+                result[checksum] = match
+        return result
+
+    def precheck_uploads(
+        self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None, viewer=None
+    ) -> list[UploadPrecheckResult]:
+        return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id, viewer=viewer)
 
     def _filter_exact_duplicates(
         self,
@@ -1326,13 +1409,21 @@ class FileService:
         tenant_id: int,
         files: list[tuple[str, bytes]],
         duplicates_out: list[tuple[str, str]] | None = None,
+        viewer=None,
     ) -> tuple[list[tuple[str, bytes]], list[str]]:
         """One indexed lookup per batch, before scanning or decoding any file. duplicates_out
         (optional) receives (filename, sha256) of every skipped file, so a caller can still
-        enrich the existing image's metadata (see upload_precheck_service.enrich_existing)."""
+        enrich the existing image's metadata (see upload_precheck_service.enrich_existing).
+
+        viewer (Upload mit angemeldeter Person): nur Duplikate, die diese Person sehen darf,
+        werden übersprungen; ein unsichtbares gilt als unbekannt und wird als eigene Kopie
+        gespeichert (keine fremde ID, kein Duplikat-Text)."""
         checksums = [hashlib.sha256(content).hexdigest() for _, content in files]
         if not checksums:
             return [], []
+        if viewer is not None:
+            seen = set(self.visible_duplicate_ids(db, viewer, tenant_id, checksums))
+            return self._split_duplicates(files, checksums, seen, duplicates_out)
         rows = db.execute(
             select(StoredFile.checksum_sha256, StoredFile.source_checksum_sha256).where(
                 StoredFile.tenant_id == tenant_id,
@@ -1344,6 +1435,12 @@ class FileService:
             )
         )
         seen = {value for row in rows for value in row if value}
+        return self._split_duplicates(files, checksums, seen, duplicates_out)
+
+    @staticmethod
+    def _split_duplicates(
+        files: list[tuple[str, bytes]], checksums: list[str], seen: set[str], duplicates_out: list[tuple[str, str]] | None
+    ) -> tuple[list[tuple[str, bytes]], list[str]]:
         accepted, warnings = [], []
         for file, checksum in zip(files, checksums):
             if checksum in seen:
@@ -1365,6 +1462,7 @@ class FileService:
         caption: str | None = None,
         created_by: int | None = None,
         include_gps: bool = True,
+        viewer=None,
     ) -> ProtocolImageRead:
         self.ensure_storage()
 
@@ -1388,7 +1486,8 @@ class FileService:
             existing_block_images = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block.id)
             if any(row.StoredFile.checksum_sha256 == checksum for row in existing_block_images):
                 raise HTTPException(status_code=409, detail="Dieses Bild wurde bereits in diesen Block hochgeladen")
-            _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(file.filename or "Bild", content)])
+            # Mandantenweit nur sichtbare Duplikate melden; ein unsichtbares wird eigene Kopie
+            _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(file.filename or "Bild", content)], viewer=viewer)
             if duplicates:
                 raise HTTPException(status_code=409, detail=duplicates[0])
 
@@ -1444,6 +1543,7 @@ class FileService:
                 capture_quality_scores=True,
                 created_by=created_by,
                 stored_file_repository=self.stored_file_repository,
+                similar_visible=self._similar_visible(db, viewer),
             )
             stored_file = result.stored_file
             # Aufnahmedatum, GPS und Kamera wie beim Galerie-Upload festhalten - die Datei
@@ -1496,6 +1596,7 @@ class FileService:
         file_hints: dict[str, dict] | None = None,
         file_results: list[dict] | None = None,
         include_gps: bool = True,
+        viewer=None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
         "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
@@ -1547,7 +1648,9 @@ class FileService:
         # Vorfilter ohne Lock (bekannte Duplikate nicht scannen), dann der Virenscan - der
         # langsamste Schritt - ebenfalls ohne den Upload-Lock des Mandanten (Concurrency-Audit
         # CONC-008: vorher warteten alle anderen Uploads des Vereins inkl. Abgabebox so lange).
-        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        # viewer (Auftraggeber des Galerie-Jobs): nur sichtbare Duplikate überspringen/ergänzen,
+        # unsichtbare werden eigene Kopien (keine fremde ID, keine Metadaten - Security-Review V-2)
+        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
         live_clips = live_clips or {}
         clip_names = [filename for filename, _content in files if filename in live_clips]
         scan_results = await scanner.scan_many(
@@ -1560,14 +1663,15 @@ class FileService:
         # Ab hier bis zum Commit unter Lock: erneut auf Duplikate prüfen - ein paralleler Upload
         # desselben Bildes kann inzwischen gespeichert sein.
         await acquire_upload_lock(db, tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
-        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
         duplicate_errors += late_duplicate_errors
         keep = {id(file) for file in still_new}
         scanned = [(file, status) for file, status in scanned if id(file) in keep]
         files = [file for file, _status in scanned]
         scan_statuses = [status for _file, status in scanned]
         self._enrich_duplicates(
-            db, tenant_id, duplicates, file_hints=file_hints, estimated_taken_on=estimated_taken_on, user_id=created_by, results=results
+            db, tenant_id, duplicates, file_hints=file_hints, estimated_taken_on=estimated_taken_on, user_id=created_by, results=results,
+            viewer=viewer,
         )
         if not files:
             if before_commit:
@@ -1623,6 +1727,7 @@ class FileService:
                     infected_message="wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
                     stored_file_repository=self.stored_file_repository,
                     tenant_hashes=tenant_hashes,
+                    similar_visible=self._similar_visible(db, viewer),
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
@@ -1823,14 +1928,24 @@ class FileService:
         estimated_taken_on: date | None,
         user_id: int | None,
         results: list[dict],
+        viewer=None,
     ) -> None:
         """Exakte Duplikate eines Uploads: vorhandenes Bild mit fehlenden Metadaten ergaenzen
-        (gleiche Regeln wie der Vorab-Abgleich) und das Ergebnis je Datei festhalten."""
+        (gleiche Regeln wie der Vorab-Abgleich) und das Ergebnis je Datei festhalten.
+        Mit viewer nur Dateien, die die Person sieht (ID) bzw. verwalten darf (Ergänzen)."""
         if not duplicates:
             return
         existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates], lock=True)
+        if viewer is not None:
+            from app.services.file_trash_service import may_manage
+
+            candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+            visible = self.visible_overview_items(db, viewer, candidate_ids)
+            existing = {checksum: [row for row in rows if row.public_id in visible] for checksum, rows in existing.items()}
         for name, checksum in duplicates:
-            matches = existing.get(checksum, [])
+            shown = existing.get(checksum, [])
+            # Ergänzen ist Schreiben: nur verwaltbare Treffer (ohne viewer wie bisher alle)
+            matches = shown if viewer is None else [row for row in shown if may_manage(viewer, row.mime_type)]
             hint = file_hints.get(checksum) or {}
             outcome = upload_precheck_service.enrich_existing(
                 db,
@@ -1844,7 +1959,7 @@ class FileService:
                 {
                     "name": name,
                     "status": "metadata_updated" if outcome.applied else "skipped",
-                    "file_id": str(matches[0].public_id) if matches else None,
+                    "file_id": str(shown[0].public_id) if shown else None,
                     "applied": outcome.applied,
                     "conflicts": outcome.conflicts,
                 }
@@ -1921,6 +2036,9 @@ class FileService:
         upload_cycle_config_id: int | None = None,
         file_results: list[dict] | None = None,
         allow_images: bool = False,
+        allow_duplicates: bool = False,
+        viewer=None,
+        include_gps: bool = True,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -1943,21 +2061,41 @@ class FileService:
         duplicates: list[tuple[str, str]] = []
         # Vorfilter und Virenscan ohne den Upload-Lock des Mandanten (CONC-008), danach unter Lock
         # erneut auf Duplikate prüfen.
-        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        # allow_duplicates (Pendenz-Dialog, «Kopie hochladen»): kein Überspringen exakter Duplikate,
+        # jede Datei wird wie neu gespeichert (Virenscan, Magic-Byte, Quota gelten unverändert).
+        duplicate_errors: list[str] = []
+        if allow_images and not include_gps:
+            # Bilder ohne Standort wie beim Galerie-Upload (gps_strip, Datenschutz-Paket 9.3);
+            # Dokumente bleiben unverändert.
+            files = [
+                (name, await asyncio.to_thread(gps_strip.strip_gps, content, mime) if (mime := _owner_image_mime(content)) else content)
+                for name, content in files
+            ]
+        if not allow_duplicates:
+            files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
         scanned = list(zip(files, await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         ))) if files else []
         await acquire_upload_lock(db, tenant_id)
-        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
-        duplicate_errors += late_duplicate_errors
+        still_new = files
+        if not allow_duplicates:
+            still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
+            duplicate_errors += late_duplicate_errors
         keep = {id(file) for file in still_new}
         scanned = [(file, status) for file, status in scanned if id(file) in keep]
         files = [file for file, _status in scanned]
         scan_statuses = [status for _file, status in scanned]
-        existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
-        for name, checksum in duplicates:
-            match = existing.get(checksum)
-            results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
+        if viewer is not None:
+            # Nur sichtbare Treffer wurden übersprungen - deren ID meldet der Upload zurück
+            visible_ids = self.visible_duplicate_ids(db, viewer, tenant_id, [checksum for _, checksum in duplicates])
+            for name, checksum in duplicates:
+                match_id = visible_ids.get(checksum)
+                results.append({"name": name, "status": "skipped", "file_id": str(match_id) if match_id else None})
+        else:
+            existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
+            for name, checksum in duplicates:
+                match = existing.get(checksum)
+                results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
         if not files:
             return [], duplicate_errors
         if upload_assignment is not None and upload_element_ref is not None:
@@ -2070,6 +2208,7 @@ class FileService:
             interrupted.total_files = None
         db.commit()
         while True:
+            bind_tenant_scope(db, None)  # Auswahl des nächsten Jobs mandantenübergreifend
             job = self._next_fair_gallery_job(db)
             if job is None:
                 return
@@ -2079,6 +2218,9 @@ class FileService:
             # Zeitscheibe (Concurrency-Audit CONC-008): ein grosser ZIP gibt nach
             # GALLERY_INGEST_SLICE_SECONDS ab, sobald andere Mandanten warten.
             self._ingest_slice_deadline = time.monotonic() + self.GALLERY_INGEST_SLICE_SECONDS
+            # Zweites Sicherheitsnetz: der Job arbeitet nur im Mandanten des Auftrags (RLS, wie ein
+            # Request des Auftraggebers); Status-Updates danach wieder unbeschränkt.
+            bind_tenant_scope(db, job.tenant_id)
             try:
                 asyncio.run(self._run_gallery_upload_job(db, job))
             except _IngestYield:
@@ -2097,6 +2239,7 @@ class FileService:
                 db.refresh(job)
                 job.status = "queued"
                 db.commit()
+                bind_tenant_scope(db, None)
                 return
             except Exception as exc:
                 from app.core.error_log import record_system_error
@@ -2148,9 +2291,10 @@ class FileService:
         deadline = getattr(self, "_ingest_slice_deadline", None)
         if deadline is None or time.monotonic() < deadline:
             return
-        waiting = db.scalar(
-            select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "queued", GalleryUploadJob.tenant_id != job.tenant_id)
-        )
+        with tenant_scope_suspended(db):  # rls-ok: nur eine Anzahl wartender Jobs anderer Mandanten (Fairness)
+            waiting = db.scalar(
+                select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "queued", GalleryUploadJob.tenant_id != job.tenant_id)
+            )
         if waiting:
             raise _IngestYield()
 
@@ -2348,6 +2492,7 @@ class FileService:
             file_hints=dict(job.file_hints or {}),
             file_results=file_results,
             include_gps=job.include_gps,
+            viewer=_gallery_job_viewer(db, job),
         )
 
     def save_word_import_document(
@@ -2358,6 +2503,7 @@ class FileService:
         filename: str,
         content: bytes,
         created_by: int | None = None,
+        viewer=None,
     ) -> StoredFile:
         """Stays a plain synchronous method (unlike save_protocol_image/save_gallery_uploads):
         its caller, WordImportQueueService.ingest(), itself runs inside run_in_threadpool()
@@ -2365,7 +2511,8 @@ class FileService:
         no event loop to block here in the first place, so the plain blocking scanner.scan_bytes()
         is the right tool, not scan_many()."""
         acquire_upload_lock_sync(db, tenant_id)
-        _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(filename, content)])
+        # viewer: 409 nur für Dateien, die die Person sieht; sonst eigene Kopie (kein Orakel)
+        _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(filename, content)], viewer=viewer)
         if duplicates:
             raise HTTPException(status_code=409, detail=duplicates[0])
         self.ensure_storage()

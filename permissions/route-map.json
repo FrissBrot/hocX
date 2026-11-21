@@ -1807,13 +1807,32 @@
         "files.manage"
       ]
     },
+    "POST /api/files/discard-uploads": {
+      "handler": "files.discard_unlinked_uploads",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
     "POST /api/files/document-uploads": {
       "handler": "files.upload_documents",
       "requires": [
         "files.manage"
       ],
       "requires_if": [
+        "photos.manage",
         "submissions.manage"
+      ]
+    },
+    "POST /api/files/duplicate-check": {
+      "handler": "files.check_file_duplicates",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ]
     },
     "GET /api/files/gallery-upload-jobs": {
