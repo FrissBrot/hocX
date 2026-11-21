@@ -2174,6 +2174,10 @@ export type TaskPackageTodoDeleteMode = "all" | "future" | "none";
 export type PublicMaintenanceStatus = {
   active: boolean;
   partial: boolean;
+  /** update = nur das Deploy-Fenster sperrt (Update-Seite), maintenance = jede andere Sperre. */
+  kind?: "update" | "maintenance" | null;
+  from_version?: string | null;
+  to_version?: string | null;
   block_scope: "all" | "writes" | "uploads" | null;
   reason_code: string | null;
   messages: Record<string, string>;

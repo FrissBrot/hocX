@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import { remainingMinutes } from "@/lib/maintenance";
+import { maintenanceView, remainingMinutes } from "@/lib/maintenance";
 import { formatDateTime, formatTime, formatWeekdayDate } from "@/lib/utils/format";
 import { PublicMaintenanceStatus } from "@/types/api";
 
@@ -60,6 +60,16 @@ export function MaintenanceNotice({ status, variant = "inline" }: Props) {
 
   const minutes = remainingMinutes(status);
   const Heading = variant === "page" ? "h1" : "h2";
+  // Deploy-Fenster: dieselbe Update-Meldung wie die Update-Seite und die statische Traefik-Seite.
+  if (status.active && maintenanceView(status, Date.now(), Date.now()).mode === "update") {
+    return (
+      <div className="maintenance-notice" role="status" aria-live="polite">
+        <Heading className="maintenance-notice-title">{t("update.title")}</Heading>
+        <p>{t("update.message")}</p>
+        <p className="muted maintenance-notice-hint">{t("update.autoReload")}</p>
+      </div>
+    );
+  }
   return (
     <div className={`maintenance-notice${status.active ? "" : " maintenance-notice-partial"}`} role="status" aria-live="polite">
       <Heading className="maintenance-notice-title">{status.active ? t("title") : t("partial.title")}</Heading>

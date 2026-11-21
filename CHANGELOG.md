@@ -6,6 +6,22 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+### Geändert
+
+- **Gleiche Meldung während eines Updates:** Bisher wechselte die Anzeige beim Deploy zwischen der
+  In-App-Wartungsseite («hocX wird gerade gewartet», Deploy-Fenster) und der statischen
+  Traefik-Seite («hocX wird gerade aktualisiert», Neustart der Container). Jetzt zeigen beide Wege
+  während eines Updates dieselbe Update-Meldung im neuen Design: «hocX wird aktualisiert», alte →
+  neue Version, «Jetzt neu laden» (prüft sofort), automatisches Neuladen und nach 15 Minuten «Das
+  Update dauert länger». Anmeldeseite und Abgabebox-Banner ziehen mit. Geplante oder manuelle
+  Wartung zeigt die neue Wartungsseite mit voraussichtlichem Ende, Spanne, Fortschrittsbalken und
+  Countdown bis zur nächsten Prüfung (RUNBOOK Abschnitt 20).
+- Öffentlicher Wartungsstatus: neue Felder `kind` (`update`/`maintenance`), `from_version`,
+  `to_version`; Migration `0212_maintenance_public_update` (Funktion für die Abgabebox).
+- Optional `HOCX_STATUS_PAGE_URL` (https): Hinweis auf die Statusseite, wenn ein Update länger dauert.
+
 ## [1.5.0] - 2026-11-21
 
 Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).

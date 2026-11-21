@@ -240,6 +240,11 @@
     "uploadsTitle": "Uploading is briefly locked",
     "uploadsMessage": "Due to maintenance, files cannot be accepted right now. This usually only takes a few minutes.",
     "availableAt": "Expected to be available again at {time}",
-    "estimating": "The expected duration is being determined."
+    "estimating": "The expected duration is being determined.",
+    "updateTitle": "The submission box is being updated",
+    "updateMessage": "Submissions will be possible again in a few minutes. Files already submitted are safe.",
+    "updateSlowTitle": "The update is taking longer",
+    "updateSlowMessage": "The update needs more time than usual. Submitted files are safe, this page keeps checking.",
+    "updateHint": "This page checks automatically whether submissions are possible again."
   }
 }

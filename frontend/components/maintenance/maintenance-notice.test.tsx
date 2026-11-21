@@ -77,3 +77,11 @@ describe("remainingMinutes", () => {
     expect(remainingMinutes(status({ estimate_state: "overdue" }))).toBeNull();
   });
 });
+
+describe("MaintenanceNotice während eines Updates", () => {
+  it("zeigt auf der Anmeldeseite die Update-Meldung statt «Wartung»", () => {
+    render(<MaintenanceNotice status={status({ kind: "update", reason_code: "deploy" })} />);
+    expect(screen.getByText("hocX wird aktualisiert")).toBeTruthy();
+    expect(screen.queryByText("hocX wird gerade gewartet")).toBeNull();
+  });
+});
