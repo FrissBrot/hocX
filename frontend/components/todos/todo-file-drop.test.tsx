@@ -57,8 +57,8 @@ function fileTransfer(files: File[], types = ["Files"]) {
 }
 
 async function dialogShell() {
-  await screen.findByPlaceholderText("Hochgeladene Datei suchen …");
-  const shell = document.querySelector(".modal-shell");
+  // Shell des aktuellen Dialogs (nicht irgendein .modal-shell im Dokument)
+  const shell = (await screen.findByPlaceholderText("Hochgeladene Datei suchen …")).closest(".modal-shell");
   if (!(shell instanceof HTMLElement)) throw new Error("no modal shell");
   return shell;
 }

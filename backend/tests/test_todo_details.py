@@ -107,6 +107,7 @@ def test_deleting_file_removes_link(db):
     writer = make_current_user(tenant.id)
     todos_route.put_todo_details(todo.public_id, TodoDetailsUpdate(file_ids=[stored.public_id]), db=db, user=writer)
 
+    db.query(GalleryImage).filter_by(stored_file_id=stored.id).delete()
     db.delete(stored)
     db.flush()
 
