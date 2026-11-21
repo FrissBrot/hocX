@@ -7300,6 +7300,10 @@ button.table-row-link.table-row-toggle {
   box-shadow: var(--shadow);
   animation: confirm-shell-in var(--dur-base) cubic-bezier(0.25, 1.15, 0.5, 1) both;
 }
+/* Rückfrage mit zwei Wegen (useChoice): drei Knöpfe passen auf dem Desktop in eine Zeile */
+.confirm-shell.confirm-choice {
+  width: min(520px, 100%);
+}
 @keyframes confirm-shell-in {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }

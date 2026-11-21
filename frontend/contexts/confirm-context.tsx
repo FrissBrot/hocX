@@ -125,7 +125,7 @@ function ConfirmDialog({
       <div
         ref={shellRef}
         tabIndex={-1}
-        className={`confirm-shell confirm-${request.tone}`}
+        className={`confirm-shell confirm-${request.tone}${request.alternativeLabel ? " confirm-choice" : ""}`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

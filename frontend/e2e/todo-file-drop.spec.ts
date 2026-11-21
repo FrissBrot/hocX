@@ -138,9 +138,12 @@ test("Pendenz: Datei ins Popup ziehen, Duplikat-Rückfrage, Höhe der Dateisuche
   await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ["light", "dark"]) {
     await setTheme(page, theme);
-    await page.getByText(todo.task, { exact: true }).first().click({ timeout: 60_000 });
     const sheet = page.locator(".mobile-sheet").last();
-    await expect(sheet).toBeVisible();
+    // Erst nach der Hydrierung öffnet ein Tippen das Sheet - bis dahin wiederholen
+    await expect(async () => {
+      await page.getByText(todo.task, { exact: true }).first().click({ timeout: 5_000 });
+      await expect(sheet).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 60_000 });
     await sheet.screenshot({ path: `${SHOTS}-5-mobile-390-${theme}.png` });
     await page.keyboard.press("Escape");
   }
