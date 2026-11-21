@@ -113,7 +113,7 @@ export function SecurityOverview() {
             ))}
           </DataTable>
         ) : (
-          <div className="admin-security-chart" role="img" aria-describedby={summaryId}>
+          <div className="admin-security-chart" role="img" aria-label={t("overview.chartTitle")} aria-describedby={summaryId}>
             <SecurityTimeseriesChart data={points} />
           </div>
         )}

@@ -48,7 +48,7 @@
   --info-bg: var(--accent-soft);
   --info-fg: var(--accent-strong);
   --neutral-bg: #f1f2f4;
-  --neutral-fg: #667085;
+  --neutral-fg: #596273; /* 1.5.1: WCAG AA auf --neutral-bg (axe color-contrast), vorher #667085 */
 
   /* Sekundaerer Akzent fuer "bald verfuegbar"-Hinweise */
   --violet: #a78bfa;

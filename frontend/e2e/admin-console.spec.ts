@@ -169,7 +169,12 @@ test.describe("Sicherheit & Anmeldungen (Verein)", () => {
 
 // WCAG-Prüfung der Admin-Konsole (Plan Phase F): axe-core auf allen Bereichen, Regeln WCAG 2.1 A/AA.
 // Bekannte, bewusst offene Punkte stehen mit Begründung in AXE_DISABLED.
-const AXE_DISABLED: string[] = [];
+const AXE_DISABLED: string[] = [
+  // Breite Tabellen scrollen auf schmalen Viewports in .table-shell; jede Zeile hat einen fokussierbaren
+  // Link/Knopf, der den Bereich per Tastatur mitscrollt. Ein tabIndex auf jedem Tabellen-Container
+  // würde überall zusätzliche Tab-Halte erzeugen - offen für eine eigene Entscheidung.
+  "scrollable-region-focusable",
+];
 
 test.describe("Admin-Konsole: Barrierefreiheit (axe)", () => {
   test.use({ storageState: authFiles.platformAdmin });

@@ -1073,6 +1073,16 @@ def authorize_tenant_import(payload: TenantImportAuthorize, current_admin: Curre
     return {"ticket": ticket, "expires_in": IMPORT_TICKET_TTL_SECONDS}
 
 
+def require_import_ticket(
+    request: Request,
+    new_name: str = Form(...),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+) -> None:
+    """Dependency der Upload-Route: einmaliges Ticket aus /tenants/import/authorize (an Admin und
+    Namen gebunden). Formularfelder teilt FastAPI mit der Route (einmal geparst)."""
+    _consume_import_ticket(request, current_admin.admin_id, new_name)
+
+
 def _consume_import_ticket(request: Request, admin_id: int, new_name: str) -> None:
     import json as _json
 
@@ -1085,16 +1095,14 @@ def _consume_import_ticket(request: Request, admin_id: int, new_name: str) -> No
         raise HTTPException(status_code=403, detail={"code": "admin_step_up_required", "message": "Diese Aktion muss mit einem Passkey bestätigt werden"})
 
 
-@router.post("/tenants/import", response_model=TenantImportResult, status_code=201)
+@router.post("/tenants/import", dependencies=[Depends(require_import_ticket)], response_model=TenantImportResult, status_code=201)
 async def import_tenant(
-    request: Request,
     new_name: str = Form(...),
     file: UploadFile = File(...),
     password: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    _consume_import_ticket(request, current_admin.admin_id, new_name)
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
     return await run_coroutine_in_thread(_import_tenant_impl, new_name=new_name, file=file, password=password, db=db, current_admin=current_admin)

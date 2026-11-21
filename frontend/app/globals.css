@@ -3440,7 +3440,8 @@ button.table-row-link.table-row-toggle {
 }
 
 .tabs-trigger-active {
-  color: var(--accent);
+  /* Text in --accent-strong: --accent erreicht auf --bg kein 4.5:1 (axe, 1.5.1) */
+  color: var(--accent-strong);
   border-bottom-color: var(--accent);
 }
 /* Sprungziel aus der Suche (Ctrl+K): Abstand unter der Kopfleiste */
