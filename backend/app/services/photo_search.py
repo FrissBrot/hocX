@@ -13,7 +13,10 @@ Ablauf je Suchanfrage (``build_search_plan`` + ``search_scores_subquery``):
    (1.0), Präfix (≈0.8-0.9), Teilwort ab 3 Zeichen (≈0.6-0.7, «lager» in «Sommerlager»),
    Tippfehler ab 4 Zeichen (Levenshtein 1, Buchstabendreher, ab 7 Zeichen Levenshtein 2: 0.5-0.6,
    Trigramm-Ähnlichkeit × 0.6). Höchstens 40 Begriffe je Wort.
-4. **Dokumente bewerten**: je Suchwort zählt der beste Treffer, gewichtet nach Feld (Tags, Termin,
+   Synonyme (``services/search_synonyms.py``: eingebauter Grundstock + Liste des Mandanten) laufen
+   als zusätzliche Wörter desselben Suchworts mit (Gewicht 0.8, bei Tippfehler im Suchwort 0.6),
+   ohne eigene Tippfehler-Suche (kurze Synonyme nur exakt).
+4. **Dokumente bewerten**: je Suchwort zählt der beste Treffer, gewichtet nach Feld (Tags, Keywords, Termin,
    Abgabe, Album, Protokoll 1.0 · Dateiname 0.85 · Hochgeladen von, Kamera, Herkunft 0.6 ·
    Aufnahmedatum 1.0, Termin-/Protokolldatum 0.9). Enthält ein Dokument die ganze Eingabe als
    Teilstring (wie die frühere Suche), gelten alle Wörter als getroffen, plus Bonus.
@@ -38,11 +41,15 @@ from sqlalchemy import BigInteger, Float, Integer, text
 from sqlalchemy.orm import Session
 
 from app.core.sql_like import LIKE_ESCAPE, contains_pattern
+from app.services import search_synonyms
 
 MAX_QUERY_LENGTH = 200
 MAX_TEXT_TOKENS = 8
 MAX_DATE_TOKENS = 4
 MAX_EXPANSIONS_PER_TOKEN = 40
+# Obergrenze der Wörter, die gegen den Wortschatz aufgelöst werden (Suchwörter + Synonyme;
+# Security-Review F3: die Erweiterung darf die Abfrage nicht vervielfachen)
+MAX_LOOKUP_WORDS = 48
 MIN_QUALITY = 0.3
 PHRASE_BONUS = 1.5
 
@@ -209,16 +216,17 @@ class SearchPlan:
 _EXPANSION_SQL = text(
     """
     SELECT q.idx, x.term, x.quality
-      FROM unnest(CAST(:idxs AS int[]), CAST(:words AS text[])) AS q(idx, word)
+      FROM unnest(CAST(:idxs AS int[]), CAST(:words AS text[]), CAST(:factors AS float8[]), CAST(:modes AS int[]))
+           AS q(idx, word, factor, mode)
      CROSS JOIN LATERAL (
         SELECT s.term,
-               GREATEST(
+               q.factor * GREATEST(
                    CASE WHEN s.term = q.word THEN 1.0 ELSE 0 END,
-                   CASE WHEN length(q.word) >= 2 AND left(s.term, length(q.word)) = q.word
+                   CASE WHEN q.mode < 2 AND length(q.word) >= 2 AND left(s.term, length(q.word)) = q.word
                         THEN 0.75 + 0.15 * length(q.word)::float8 / length(s.term) ELSE 0 END,
-                   CASE WHEN length(q.word) >= 3 AND strpos(s.term, q.word) > 1
+                   CASE WHEN q.mode < 2 AND length(q.word) >= 3 AND strpos(s.term, q.word) > 1
                         THEN 0.55 + 0.15 * length(q.word)::float8 / length(s.term) ELSE 0 END,
-                   CASE WHEN length(q.word) >= 4 AND abs(length(s.term) - length(q.word)) <= 2 THEN
+                   CASE WHEN q.mode = 0 AND length(q.word) >= 4 AND abs(length(s.term) - length(q.word)) <= 2 THEN
                        CASE WHEN public.levenshtein_less_equal(s.term, q.word, 1) <= 1 THEN 0.6
                             WHEN length(s.term) = length(q.word)
                                  AND s.sorted = public.hocx_search_sorted(q.word)
@@ -226,15 +234,15 @@ _EXPANSION_SQL = text(
                             WHEN length(q.word) >= 7 AND public.levenshtein_less_equal(s.term, q.word, 2) <= 2 THEN 0.5
                             ELSE 0 END
                    ELSE 0 END,
-                   CASE WHEN length(q.word) >= 4 THEN public.similarity(s.term, q.word) * 0.6 ELSE 0 END
+                   CASE WHEN q.mode = 0 AND length(q.word) >= 4 THEN public.similarity(s.term, q.word) * 0.6 ELSE 0 END
                ) AS quality
           FROM photo_search_term s
          WHERE s.tenant_id = :tenant_id
            AND (
                 s.term = q.word
-                OR (length(q.word) >= 2 AND left(s.term, length(q.word)) = q.word)
-                OR (length(q.word) >= 3 AND strpos(s.term, q.word) > 0)
-                OR (length(q.word) >= 4 AND q.word !~ '^[0-9]+$' AND (
+                OR (q.mode < 2 AND length(q.word) >= 2 AND left(s.term, length(q.word)) = q.word)
+                OR (q.mode < 2 AND length(q.word) >= 3 AND strpos(s.term, q.word) > 0)
+                OR (q.mode = 0 AND length(q.word) >= 4 AND q.word !~ '^[0-9]+$' AND (
                         public.similarity(s.term, q.word) >= 0.3
                         OR (abs(length(s.term) - length(q.word)) <= 2
                             AND public.levenshtein_less_equal(s.term, q.word, 2) <= 2)))
@@ -252,11 +260,21 @@ _EXPANSION_SQL = text(
 EXPANSION_TIMEOUT_MS = 1500
 
 
-def _expand_terms(db: Session, tenant_id: int, idxs: list[int], words: list[str]) -> list:
+# Auflösungsart je Wort: 0 = voll (Suchwort), 1 = ohne Tippfehler/Trigramm (Synonym: der Tippfehler
+# des Suchworts wurde schon beim Synonym-Abgleich toleriert), 2 = nur exakt (kurzes Synonym).
+MODE_FULL, MODE_NO_TYPO, MODE_EXACT = 0, 1, 2
+
+
+def _expand_terms(
+    db: Session, tenant_id: int, idxs: list[int], words: list[str],
+    factors: list[float] | None = None, modes: list[int] | None = None,
+) -> list:
     from sqlalchemy.exc import OperationalError
 
+    factors = factors if factors is not None else [1.0] * len(words)
+    modes = modes if modes is not None else [MODE_FULL] * len(words)
     params = {
-        "idxs": idxs, "words": words, "tenant_id": tenant_id,
+        "idxs": idxs, "words": words, "factors": factors, "modes": modes, "tenant_id": tenant_id,
         "per_token": MAX_EXPANSIONS_PER_TOKEN, "min_quality": MIN_QUALITY,
     }
     # Schlichter SQL-Savepoint statt Session.begin_nested(): er greift nicht in die Transaktions-
@@ -270,7 +288,10 @@ def _expand_terms(db: Session, tenant_id: int, idxs: list[int], words: list[str]
         db.execute(text("ROLLBACK TO SAVEPOINT photo_search_expand"))
         db.execute(text("RELEASE SAVEPOINT photo_search_expand"))
         # Abbruch durch den Timeout: ohne Unschärfe weiter (jedes Wort nur exakt)
-        return [type("Row", (), {"idx": idx, "term": word, "quality": 1.0}) for idx, word in zip(idxs, words)]
+        return [
+            type("Row", (), {"idx": idx, "term": word, "quality": factor})
+            for idx, word, factor in zip(idxs, words, factors)
+        ]
     db.execute(text("SET LOCAL statement_timeout = DEFAULT"))
     db.execute(text("RELEASE SAVEPOINT photo_search_expand"))
     return rows
@@ -292,22 +313,37 @@ def build_search_plan(db: Session, tenant_id: int, raw: str | None) -> SearchPla
 
     idxs: list[int] = []
     lookup_words: list[str] = []
+    factors: list[float] = []
+    modes: list[int] = []
+    # Synonyme (Grundstock + eigene Liste des Mandanten): zählen für dasselbe Suchwort, tiefer gewichtet
+    synonyms = search_synonyms.synonyms_for(db, tenant_id, words)
     for index, word in enumerate(words, start=1):
         idxs.append(index)
         lookup_words.append(word)
+        factors.append(1.0)
+        modes.append(MODE_FULL)
+        for hit in synonyms.get(word, []):
+            if len(lookup_words) >= MAX_LOOKUP_WORDS - MAX_DATE_TOKENS:
+                break
+            idxs.append(index)
+            lookup_words.append(hit.term)
+            factors.append(hit.factor)
+            modes.append(MODE_NO_TYPO if len(hit.term) >= search_synonyms.MIN_FUZZY_SYNONYM_LENGTH else MODE_EXACT)
     dates: list[tuple[int, DateSpec]] = []
     for offset, spec in enumerate(parsed.dates, start=len(words) + 1):
         dates.append((offset, spec))
         if spec.text_word:
             idxs.append(offset)
             lookup_words.append(spec.text_word)
+            factors.append(1.0)
+            modes.append(MODE_FULL)
     token_count = len(words) + len(dates)
 
     expansion_idx: list[int] = []
     expansion_terms: list[str] = []
     expansion_quality: list[float] = []
     if lookup_words:
-        rows = _expand_terms(db, tenant_id, idxs, lookup_words)
+        rows = _expand_terms(db, tenant_id, idxs, lookup_words, factors, modes)
         for row in rows:
             expansion_idx.append(int(row.idx))
             expansion_terms.append(row.term)

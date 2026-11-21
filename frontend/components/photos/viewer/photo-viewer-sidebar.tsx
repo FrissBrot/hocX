@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { FileKeywords } from "@/components/files/file-keywords";
 import { SearchableMultiSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -60,6 +61,9 @@ export function PhotoViewerSidebar(props: Props) {
         </h2>
         <TagInput value={props.tagsValue} onChange={props.onTagsChange} placeholder={t("tagPlaceholder")} alwaysShowPlaceholder readOnly={!props.canManage} />
       </section>
+
+      {/* Keywords: eigenständiger Baustein (lädt/speichert selbst, Schreibrecht aus der API), nur für die Suche */}
+      <FileKeywords fileId={item.id} className="photo-viewer-section" titleClassName="photo-viewer-section-title" />
 
       <AnalysisSection item={item} />
       <DetailsSection item={item} metadata={metadata} albums={props.albums} />

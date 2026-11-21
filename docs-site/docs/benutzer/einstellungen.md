@@ -116,6 +116,14 @@ Im Tab **Datenschutz** legst du fest, wer welche Personendaten sieht (z. B. ob B
 Anwesenheit je Person in der Statistik für alle sichtbar sind), und erstellst den
 **Gesamtexport** mit allen Daten der Organisation.
 
+## Suche & Synonyme {#suche}
+
+Unter **Suche & Synonyme** ergänzt ihr den eingebauten Synonym-Grundstock um eigene Begriffe des
+Vereins: je Zeile eine Gruppe gleichbedeutender Wörter (z. B. «Grümpi», «Grümpelturnier»), ein
+Eintrag ist ein Wort. Die Suche in Fotos und Ablage findet dann mit jedem Wort der Gruppe auch die
+anderen. Die Liste gilt nur für eure Organisation; ändern braucht die Berechtigung
+«Einstellungen verwalten».
+
 ## Zugangslinks {#zugangslinks}
 
 Der Tab **Zugangslinks** zeigt alles, worüber jemand **ohne Anmeldung** an Daten eurer Organisation kommt:

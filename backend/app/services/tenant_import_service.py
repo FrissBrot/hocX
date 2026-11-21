@@ -105,6 +105,7 @@ from app.models import (
     WordImportSuggestionOutcome,
 )
 from app.models.entities import (
+    SearchSynonymGroup,
     CalendarFeed,
     PhotoAlbum,
     PhotoAlbumItem,
@@ -470,6 +471,7 @@ class TenantImportService:
             ),
         )
         self._restore_last_word_import_template(new_tenant, template_map)
+        self._import_search_synonyms(new_tenant.id)
         self._import_template_participants(template_map, participant_map)
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map, cycle_config_map)
         manual_element_map = self._import_submission_manual_elements(new_tenant.id, submission_assignment_map, participant_map)
@@ -1395,6 +1397,25 @@ class TenantImportService:
                 # Learned mappings point at participants/events/lists/template elements by id.
                 "mapping_config_json": remap_word_import_profile_config(row.get("mapping_config_json"), maps),
             }))
+        self.db.commit()
+
+    def _import_search_synonyms(self, new_tenant_id: int) -> None:
+        """Synonymgruppen (Migration 0217): normalisierte Begriffe werden aus den Wörtern neu
+        berechnet (nicht aus dem Archiv übernommen), mit denselben Grenzen wie in der Einstellung."""
+        from app.services import search_synonyms
+
+        total = 0
+        position = 0
+        for row in self._t("search_synonym_group")[: search_synonyms.MAX_TENANT_GROUPS]:
+            words = row.get("words") if isinstance(row.get("words"), list) else []
+            display, terms = search_synonyms.normalize_group([str(word) for word in words])
+            if len(terms) < 2 or total + len(terms) > search_synonyms.MAX_TENANT_TERMS:
+                continue
+            total += len(terms)
+            self.db.add(self._build(SearchSynonymGroup, row, {
+                "tenant_id": new_tenant_id, "position": position, "words": display, "terms": terms,
+            }))
+            position += 1
         self.db.commit()
 
     def _import_submission_assignments(

@@ -26,6 +26,14 @@ Ein Klick auf die Zeile öffnet die Details mit:
 Konnte ein Dokument nicht verarbeitet werden, zeigt der Status **Verarbeitung fehlgeschlagen**.
 Mit **Erneut verarbeiten** (Schreibrechte nötig) startet hocX einen neuen Versuch.
 
+## Suchen und Keywords {#suche}
+
+Die Suche der Ablage arbeitet wie die [Fotosuche](fotos.md#suche): tolerant gegenüber Tippfehlern
+und Umlauten, mit Synonymen, beste Treffer zuerst (solange du keine andere Sortierung wählst).
+In den Dokumentdetails setzt du unter **Keywords** zusätzliche Suchbegriffe, die nirgends angezeigt
+werden. Für mehrere Dateien: Kästchen in der Liste oder auf den Kacheln anwählen ›
+**Keywords bearbeiten**. Keywords ändern braucht bei Dateien die Berechtigung «Dateien & Fotos verwalten», bei Fotos «Fotos verwalten».
+
 ## Protokollexporte und Versionen
 
 Exportierst du ein Protokoll mehrmals, entsteht kein neuer Eintrag, sondern eine neue

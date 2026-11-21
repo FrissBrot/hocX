@@ -1798,6 +1798,19 @@
         "photos.manage"
       ]
     },
+    "POST /api/files/bulk-keywords": {
+      "handler": "files.bulk_update_file_keywords",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ],
+      "requires_if": [
+        "<P.FILES_MANAGE if write else P.FILES_READ>",
+        "<P.PHOTOS_MANAGE if write else P.PHOTOS_READ>"
+      ]
+    },
     "POST /api/files/bulk-tags": {
       "handler": "files.bulk_update_file_tags",
       "requires": [
@@ -1854,6 +1867,19 @@
       ],
       "requires_if": [
         "submissions.manage"
+      ]
+    },
+    "POST /api/files/keywords-summary": {
+      "handler": "files.file_keywords_summary",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
+      ],
+      "requires_if": [
+        "<P.FILES_MANAGE if write else P.FILES_READ>",
+        "<P.PHOTOS_MANAGE if write else P.PHOTOS_READ>"
       ]
     },
     "GET /api/files/similarity-groups": {
@@ -2892,6 +2918,18 @@
         "templates.edit"
       ]
     },
+    "GET /api/search-synonyms": {
+      "handler": "search_synonyms.get_search_synonyms",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PUT /api/search-synonyms": {
+      "handler": "search_synonyms.put_search_synonyms",
+      "requires": [
+        "settings.manage"
+      ]
+    },
     "GET /api/share-links": {
       "handler": "share_links.list_share_links",
       "requires": [
@@ -2971,6 +3009,35 @@
         "meetings.edit"
       ],
       "serves_files": true
+    },
+    "GET /api/stored-files/{stored_file_id}/keywords": {
+      "handler": "files.get_stored_file_keywords",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
+      ],
+      "requires_if": [
+        "files.read",
+        "photos.read"
+      ],
+      "branches": [
+        "<P.PHOTOS_MANAGE if _is_image(stored_file) else P.FILES_MANAGE>"
+      ]
+    },
+    "PATCH /api/stored-files/{stored_file_id}/keywords": {
+      "handler": "files.update_stored_file_keywords",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ],
+      "requires_if": [
+        "files.manage",
+        "photos.manage"
+      ]
     },
     "GET /api/stored-files/{stored_file_id}/metadata": {
       "handler": "files.get_stored_file_metadata",

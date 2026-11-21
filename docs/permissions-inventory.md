@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 632 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 387
+- Routen gesamt: 638 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 393
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -312,6 +312,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/files/analysis-progress` | photos.read |
 | `POST /api/files/bulk-capture-date` | photos.manage |
 | `POST /api/files/bulk-delete` | photos.manage |
+| `POST /api/files/bulk-keywords` | files.manage oder photos.manage · je nach Fall: <P.FILES_MANAGE if write else P.FILES_READ>, <P.PHOTOS_MANAGE if write else P.PHOTOS_READ> |
 | `POST /api/files/bulk-tags` | photos.manage · je nach Fall: files.manage |
 | `POST /api/files/discard-uploads` | files.manage oder photos.manage |
 | `POST /api/files/document-uploads` | files.manage · je nach Fall: photos.manage, submissions.manage |
@@ -319,6 +320,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/files/gallery-upload-jobs` | photos.manage |
 | `GET /api/files/gallery-upload-jobs/{job_id}` | photos.manage |
 | `POST /api/files/gallery-uploads` | photos.manage · je nach Fall: submissions.manage |
+| `POST /api/files/keywords-summary` | files.read oder photos.read · je nach Fall: <P.FILES_MANAGE if write else P.FILES_READ>, <P.PHOTOS_MANAGE if write else P.PHOTOS_READ> |
 | `GET /api/files/similarity-groups` | photos.read |
 | `GET /api/files/stats` | files.read oder photos.read |
 | `GET /api/files/tags` | files.read oder photos.read |
@@ -470,6 +472,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/roles/{role_id}` | access.manage |
 | `PATCH /api/roles/{role_id}` | access.manage · Feature custom_roles |
 | `POST /api/search` | files.read oder meetings.edit oder participants.read oder photos.read oder templates.edit |
+| `GET /api/search-synonyms` | settings.manage |
+| `PUT /api/search-synonyms` | settings.manage |
 | `GET /api/share-links` | sharing.public |
 | `POST /api/share-links` | sharing.public + files.read oder photos.read · je nach Fall: files.read, photos.read · Feature photo_sharing |
 | `DELETE /api/share-links/{share_link_id}` | sharing.public |
@@ -479,6 +483,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PATCH /api/stored-files/{stored_file_id}/capture-date` | photos.manage |
 | `GET /api/stored-files/{stored_file_id}/content` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/download` | meetings.read |
+| `GET /api/stored-files/{stored_file_id}/keywords` | files.read oder photos.read · je nach Fall: files.read, photos.read |
+| `PATCH /api/stored-files/{stored_file_id}/keywords` | files.manage oder photos.manage · je nach Fall: files.manage, photos.manage |
 | `GET /api/stored-files/{stored_file_id}/metadata` | meetings.read |
 | `PATCH /api/stored-files/{stored_file_id}/name` | <P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE> + files.manage oder photos.manage |
 | `PATCH /api/stored-files/{stored_file_id}/tags` | <P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE> + files.manage oder photos.manage |

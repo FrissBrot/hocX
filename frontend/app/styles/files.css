@@ -130,3 +130,25 @@
   .files-tile-preview { height: 150px; } /* design-ok: kleinere Seitenvorschau auf dem Handy */
   .files-tile-page { width: 120px; } /* design-ok: kleinere Seitenvorschau auf dem Handy */
 }
+
+/* Mehrfachauswahl der Ablage (Keywords bearbeiten) */
+.files-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+
+.files-bulk-count { flex: 1; min-width: 0; font-weight: 600; }
+
+.files-table-select { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+.files-data-table-selectable th:first-child,
+.files-table-select-cell { width: 40px; }
+
+.files-table-row-selected td { background: var(--accent-soft); }
+
+.files-tile-selected { outline: 2px solid var(--accent); outline-offset: -2px; }

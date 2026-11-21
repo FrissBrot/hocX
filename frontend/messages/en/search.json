@@ -69,7 +69,8 @@
     "organisationProfile": "organization profile general name logo settings configuration preferences club master data",
     "cycles": "workflows cycles Cycles",
     "myTasks": "My to-dos tasks submissions",
-    "settings": "settings configuration overview options preferences"
+    "settings": "settings configuration overview options preferences",
+    "tenant-settings-search": "search synonyms keywords search terms equivalent words"
   },
   "blockIn": "Block in «{element}»",
   "roleLabel": "Role",

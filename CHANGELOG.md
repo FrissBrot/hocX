@@ -92,6 +92,24 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
 - Öffentlicher Wartungsstatus: neue Felder `kind` (`update`/`maintenance`), `from_version`,
   `to_version`; Migration `0212_maintenance_public_update` (Funktion für die Abgabebox).
 - Optional `HOCX_STATUS_PAGE_URL` (https): Hinweis auf die Statusseite, wenn ein Update länger dauert.
+### Neu
+
+- **Keywords für Fotos und Dateien:** zusätzliche Suchbegriffe je Datei, «weniger verbindlich» als
+  Tags – nirgends angezeigt, nur für die Suche (Gewicht wie Tags, Tippfehler-tolerant). Bearbeiten in
+  der Foto-Ansicht (Seitenleiste), im Datei-Detail der Ablage und für mehrere auf einmal (Fotos:
+  Auswahl › Keywords; Ablage: neue Mehrfachauswahl › Keywords bearbeiten, hinzufügen/entfernen).
+  Rechte wie beim Taggen (Fotos: `photos.manage`, Dateien: `files.manage`, nur eigener Mandant).
+- **Synonyme in der Suche:** jedes Suchwort wird um gleichbedeutende Wörter erweitert (Gewicht 0.8,
+  auch bei Tippfehlern im Suchwort): eingebauter Grundstock mit Vereins- und Schweizer Begriffen in
+  de/en/fr/it (Velo↔Fahrrad, Hock↔Sitzung, Lager↔Zeltlager, Znüni↔Zvieri …) und eigene Gruppen je
+  Verein unter Einstellungen › **Suche & Synonyme** (`settings.manage`).
+- **Ablage:** mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
+
+### Update
+
+- Migration `0217_file_keywords_synonyms`: Spalte `stored_file.keywords` (leer, kein Backfill),
+  Tabelle `search_synonym_group` (`tenant_id`, RLS), Suchdokument und Trigger der Fotosuche nehmen
+  Keywords auf.
 
 ## [1.5.0] - 2026-11-21
 

@@ -534,5 +534,23 @@
     },
     "loadFailed": "The data could not be loaded.",
     "privacyHint": "To protect accounts, hocX stores the time, rough device, a pseudonym of the network and – if set up – the country of each sign-in (looked up locally with “IP to Country Lite” by DB-IP.com, CC BY 4.0), never the IP address; events are deleted after 90 days. New passwords are checked anonymously against known data breaches: only the first 5 characters of a hash are sent to “Have I Been Pwned”. Please mention both in your organisation's privacy notice (legitimate interest: account security)."
+  },
+  "searchSynonyms": {
+    "eyebrow": "Search",
+    "intro": "Searching photos and files also finds words with the same meaning. Define your own here, in addition to the built-in set.",
+    "ownTitle": "Your synonyms",
+    "ownIntro": "One group of words with the same meaning per row, e.g. «Grümpi», «Grümpelturnier». Each entry is one word.",
+    "empty": "No synonyms of your own yet.",
+    "groupLabel": "Synonym group {number}",
+    "groupPlaceholder": "Word, Enter",
+    "removeGroup": "Remove group {number}",
+    "needsTwo": "A group needs at least two words, otherwise it is not saved.",
+    "addGroup": "Add group",
+    "save": "Save",
+    "saving": "Saving …",
+    "savedToast": "Synonyms saved.",
+    "saveError": "Synonyms could not be saved.",
+    "builtinTitle": "Built-in set ({count, number} groups)",
+    "builtinIntro": "These synonyms always apply (club life, Swiss terms, German/English/French/Italian)."
   }
 }

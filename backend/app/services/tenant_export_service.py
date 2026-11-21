@@ -110,6 +110,7 @@ from app.models import (
     WordImportSuggestionOutcome,
 )
 from app.models.entities import (
+    SearchSynonymGroup,
     CalendarFeed,
     PhotoAlbum,
     PhotoAlbumItem,
@@ -396,6 +397,15 @@ class TenantExportService:
         tables["word_import_profile"] = self._rows(
             db.scalars(select(WordImportProfile).where(WordImportProfile.tenant_id == tenant_id)).all(),
             "word_import_profile",
+        )
+        # Synonyme der Suche (Migration 0217) sind Vereinskonfiguration: in jedes Struktur-Backup.
+        tables["search_synonym_group"] = self._rows(
+            db.scalars(
+                select(SearchSynonymGroup)
+                .where(SearchSynonymGroup.tenant_id == tenant_id)
+                .order_by(SearchSynonymGroup.position, SearchSynonymGroup.id)
+            ).all(),
+            "search_synonym_group",
         )
         # Aufgabenpakete sind Konfiguration (wie Vorlagen). responsible_json enthält interne
         # Listen-/Personen-IDs, die der Import umschlüsselt.

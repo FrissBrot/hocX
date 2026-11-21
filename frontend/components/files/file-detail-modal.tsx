@@ -21,6 +21,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { TagInput } from "@/components/ui/tag-input";
+import { FileKeywords } from "./file-keywords";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/contexts/toast-context";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
@@ -350,6 +351,8 @@ export function FileDetailModal({
           </div>
         ) : null}
       </section>
+
+      <FileKeywords fileId={item.id} readOnly={trashed} className="file-detail-section" titleClassName="file-detail-section-title" />
 
       {item.document ? (
         <DocumentStatusSection detail={detail} versionId={versionId} scanStatus={item.scan_status} onReload={documentState.reload} />

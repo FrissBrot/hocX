@@ -351,5 +351,10 @@
     "30d": "30 d",
     "90d": "90 d",
     "12m": "12 mo"
+  },
+  "keywordInput": {
+    "remove": "Remove {keyword}",
+    "placeholder": "Term, Enter",
+    "empty": "None"
   }
 }

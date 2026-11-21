@@ -132,7 +132,8 @@
     "selectionActions": "Actions de sélection",
     "downloadError": "Impossible de télécharger les photos.",
     "removeFromAlbum": "Retirer de l’album",
-    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo."
+    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo.",
+    "keywordsAction": "Mots-clés"
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# photo} other {# photos}}",

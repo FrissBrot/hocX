@@ -55,10 +55,13 @@ export function FilesGrid({
   items,
   onOpenDetail,
   actionsFor,
+  selection,
 }: {
   items: FileOverviewItem[];
   onOpenDetail: (item: FileOverviewItem) => void;
   actionsFor: (item: FileOverviewItem) => ActionMenuItem[];
+  /** Mehrfachauswahl (files.manage): Kästchen je Kachel. */
+  selection?: { selected: Set<string>; onToggle: (id: string) => void };
 }) {
   const t = useTranslations("files");
   if (items.length === 0) return <p className="muted files-grid-empty">{t("table.empty")}</p>;
@@ -69,7 +72,7 @@ export function FilesGrid({
         const document = item.document ?? null;
         const statusBadge = document && document.status !== "ready" && document.status !== "processing" ? document.status : null;
         return (
-          <li key={item.id} className="files-tile">
+          <li key={item.id} className={`files-tile${selection?.selected.has(item.id) ? " files-tile-selected" : ""}`}>
             <button type="button" className="files-tile-open" onClick={() => onOpenDetail(item)} aria-label={t("grid.openDetails", { name: display.name })}>
               <span className="files-tile-preview">
                 <TilePreview item={item} />
@@ -88,6 +91,15 @@ export function FilesGrid({
               </span>
             ) : null}
             <span className="files-tile-meta">
+              {selection ? (
+                <input
+                  type="checkbox"
+                  className="files-table-select"
+                  checked={selection.selected.has(item.id)}
+                  onChange={() => selection.onToggle(item.id)}
+                  aria-label={t("table.selectFile", { name: display.name })}
+                />
+              ) : null}
               <Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{t(`source.${SOURCE_KEY[item.source]}`)}</Badge>
               <span className="files-tile-date">
                 {formatDate(item.created_at)}

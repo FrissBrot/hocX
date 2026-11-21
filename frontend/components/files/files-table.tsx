@@ -20,25 +20,55 @@ export function FilesTable({
   onNavigate,
   onShare,
   actionsFor,
+  selection,
 }: {
   items: FileOverviewItem[];
   onOpenDetail: (item: FileOverviewItem) => void;
   onNavigate: (href: string) => void;
   onShare: (item: FileOverviewItem) => void;
   actionsFor: (item: FileOverviewItem) => ActionMenuItem[];
+  /** Mehrfachauswahl (files.manage): Kästchen je Zeile und «alle geladenen» im Kopf. */
+  selection?: { selected: Set<string>; onToggle: (id: string) => void; onToggleAll: () => void };
 }) {
   const t = useTranslations("files");
+  const allSelected = selection !== undefined && items.length > 0 && items.every((item) => selection.selected.has(item.id));
+  const selectColumn = selection
+    ? [{
+        key: "select",
+        label: t("table.selectAll"),
+        header: (
+          <input
+            type="checkbox"
+            className="files-table-select"
+            checked={allSelected}
+            onChange={selection.onToggleAll}
+            aria-label={t("table.selectAll")}
+          />
+        ),
+      }]
+    : [];
   return (
     <DataTable
-      className="files-data-table"
-      columns={[t("table.columnName"), t("table.columnSource"), t("table.columnReference"), t("table.columnUploaded"), t("table.columnSize"), ""]}
+      className={`files-data-table${selection ? " files-data-table-selectable" : ""}`}
+      columns={[...selectColumn, t("table.columnName"), t("table.columnSource"), t("table.columnReference"), t("table.columnUploaded"), t("table.columnSize"), ""]}
       emptyMessage={t("table.empty")}
     >
       {items.map((item) => {
         // PDF-Ansicht vor dem Word-Original: Name, Symbol und Öffnen zeigen das PDF
         const display = fileDisplay(item);
         return (
-          <tr key={item.id} className="table-row-clickable" onClick={() => onOpenDetail(item)}>
+          <tr key={item.id} className={`table-row-clickable${selection?.selected.has(item.id) ? " files-table-row-selected" : ""}`} onClick={() => onOpenDetail(item)}>
+            {selection ? (
+              <td className="files-table-select-cell" onClick={(event) => event.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  className="files-table-select"
+                  checked={selection.selected.has(item.id)}
+                  onChange={() => selection.onToggle(item.id)}
+                  aria-label={t("table.selectFile", { name: display.name })}
+                />
+              </td>
+            ) : null}
             <td>
               <span className="files-table-name">
                 <FileTypeIcon name={item.original_name} extension={display.extension} />

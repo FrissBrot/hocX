@@ -534,5 +534,23 @@
     },
     "loadFailed": "Impossibile caricare i dati.",
     "privacyHint": "Per la sicurezza degli account, hocX salva per ogni accesso l’ora, il dispositivo approssimativo, uno pseudonimo della rete e – se configurato – il paese (determinato localmente con «IP to Country Lite» di DB-IP.com, CC BY 4.0), mai l’indirizzo IP; gli eventi vengono eliminati dopo 90 giorni. Le nuove password vengono verificate in forma anonima rispetto alle fughe di dati note: solo i primi 5 caratteri di un hash vengono inviati a «Have I Been Pwned». Menziona entrambi nell’informativa sulla privacy della tua associazione (interesse legittimo: sicurezza degli account)."
+  },
+  "searchSynonyms": {
+    "eyebrow": "Ricerca",
+    "intro": "La ricerca in foto e archivio trova anche parole con lo stesso significato. Qui definite le vostre, oltre alla base integrata.",
+    "ownTitle": "Sinonimi propri",
+    "ownIntro": "Un gruppo di parole con lo stesso significato per riga, p. es. «Grümpi», «Grümpelturnier». Ogni voce è una parola.",
+    "empty": "Ancora nessun sinonimo proprio.",
+    "groupLabel": "Gruppo di sinonimi {number}",
+    "groupPlaceholder": "Parola, Invio",
+    "removeGroup": "Rimuovi gruppo {number}",
+    "needsTwo": "Un gruppo richiede almeno due parole, altrimenti non viene salvato.",
+    "addGroup": "Aggiungi gruppo",
+    "save": "Salva",
+    "saving": "Salvataggio …",
+    "savedToast": "Sinonimi salvati.",
+    "saveError": "Impossibile salvare i sinonimi.",
+    "builtinTitle": "Base integrata ({count, number} gruppi)",
+    "builtinIntro": "Questi sinonimi valgono sempre (vita associativa, termini svizzeri, tedesco/inglese/francese/italiano)."
   }
 }

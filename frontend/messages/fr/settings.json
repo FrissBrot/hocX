@@ -134,5 +134,10 @@
         "description": "Reprendre des procès-verbaux et données depuis Word et d'autres sources."
       }
     }
+  },
+  "cards": {
+    "searchSynonyms": {
+      "description": "Vos propres synonymes pour la recherche dans les photos et les fichiers."
+    }
   }
 }

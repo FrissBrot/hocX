@@ -52,7 +52,11 @@ from app.schemas.files import (
     FileDuplicateCheckResponse,
     FileDuplicateMatch,
     FileBulkDeleteResult,
+    FileBulkKeywordsResult,
+    FileBulkKeywordsUpdate,
     FileBulkTagsUpdate,
+    FileKeywordCount,
+    FileKeywordsSummaryRequest,
     FileOverviewItem,
     FileTrashAction,
     FileTrashActionResult,
@@ -70,6 +74,8 @@ from app.schemas.files import (
     MAX_STORED_FILE_NAME_LENGTH,
     StoredFileRename,
     StoredFileRenameResult,
+    StoredFileKeywordsRead,
+    StoredFileKeywordsUpdate,
     StoredFileTagsUpdate,
     UploadFileResult,
     UploadPrecheckRequest,
@@ -77,6 +83,7 @@ from app.schemas.files import (
 )
 from app.schemas.protocol import ProtocolImageRead
 from app.services import upload_precheck_service
+from app.services import file_keywords
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
@@ -1158,6 +1165,115 @@ def update_stored_file_tags(
     return service.update_stored_file_tags(db, stored_file, payload.tags)
 
 
+def _own_file_for_keywords(db: Session, user: CurrentUser, stored_file_id: uuid.UUID) -> StoredFile:
+    """Datei des eigenen Mandanten (nie ein Partner-Foto aus einem geteilten Album: Keywords gehören
+    dem Besitzer) und nicht im Papierkorb; fremd und unbekannt ergeben dasselbe 404."""
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
+    if stored_file is None or user.current_tenant_id is None or stored_file.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    return stored_file
+
+
+def _is_image(stored_file: StoredFile) -> bool:
+    return (stored_file.mime_type or "").startswith("image/")
+
+
+@router.get("/stored-files/{stored_file_id}/keywords", response_model=StoredFileKeywordsRead)
+def get_stored_file_keywords(
+    stored_file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Keywords einer Datei (nur für die Suche, Migration 0217) für Datei-Detail und Foto-Ansicht."""
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
+    stored_file = _own_file_for_keywords(db, user, stored_file_id)
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    if _is_image(stored_file):
+        require_permission(user, P.PHOTOS_READ)
+    else:
+        require_permission(user, P.FILES_READ)
+    _ensure_files_in_scope(db, user, [stored_file.public_id])
+    can_edit = user.can(P.PHOTOS_MANAGE if _is_image(stored_file) else P.FILES_MANAGE)
+    return StoredFileKeywordsRead(keywords=list(stored_file.keywords or []), can_edit=can_edit)
+
+
+@router.patch("/stored-files/{stored_file_id}/keywords", response_model=StoredFileKeywordsRead)
+def update_stored_file_keywords(
+    stored_file_id: uuid.UUID,
+    payload: StoredFileKeywordsUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Keywords ersetzen. Rechte wie beim Tag-Speichern: Bilder photos.manage, übrige Dateien
+    files.manage, nur eigener Mandant (Schreiben strenger als Lesen, SEC-003)."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    stored_file = _own_file_for_keywords(db, user, stored_file_id)
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)  # schreibt: nur Rollenrechte
+    if _is_image(stored_file):
+        require_permission(user, P.PHOTOS_MANAGE)
+    else:
+        require_permission(user, P.FILES_MANAGE)
+    _ensure_files_in_scope(db, user, [stored_file.public_id])
+    keywords = file_keywords.set_keywords(db, stored_file, payload.keywords)
+    return StoredFileKeywordsRead(keywords=keywords, can_edit=True)
+
+
+def _require_kind_permissions(db: Session, user: CurrentUser, ids: list[uuid.UUID], *, write: bool) -> None:
+    """Mehrfachaktion über Fotos und/oder Dateien: je Sorte das passende Recht. Alle IDs müssen
+    Dateien des eigenen Mandanten sein (sonst 404 ohne Hinweis, welche)."""
+    if not ids or len(ids) > file_keywords.MAX_BULK_FILES:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    mimes = db.execute(
+        select(StoredFile.public_id, StoredFile.mime_type).where(
+            StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)
+        )
+    ).all()
+    if len(mimes) != len(ids):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    _ensure_files_in_scope(db, user, ids)
+    # Wie die Einzelroute: Leserecht je Datei (z. B. Protokollbilder nur aus lesbaren Protokollen;
+    # Security-Review F2), beim Schreiben nur Rollenrechte. Nicht lesbar ergibt dasselbe 404.
+    if _readable_own_ids(db, user, ids, write=write) != set(ids):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    has_images = any((row.mime_type or "").startswith("image/") for row in mimes)
+    has_documents = any(not (row.mime_type or "").startswith("image/") for row in mimes)
+    if has_images:
+        require_permission(user, P.PHOTOS_MANAGE if write else P.PHOTOS_READ)
+    if has_documents:
+        require_permission(user, P.FILES_MANAGE if write else P.FILES_READ)
+
+
+@router.post("/files/bulk-keywords", response_model=FileBulkKeywordsResult)
+def bulk_update_file_keywords(
+    payload: FileBulkKeywordsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Mehrfachbearbeitung in Fotos und Ablage: Keywords hinzufügen und/oder entfernen."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    _require_kind_permissions(db, user, ids, write=True)
+    updated = file_keywords.bulk_update(db, user.current_tenant_id, ids, payload.add, payload.remove)
+    return FileBulkKeywordsResult(updated=updated)
+
+
+@router.post("/files/keywords-summary", response_model=list[FileKeywordCount])
+def file_keywords_summary(
+    payload: FileKeywordsSummaryRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Keywords der Auswahl mit Anzahl (Mehrfachbearbeitung «Entfernen»). POST, weil die Auswahl
+    bis zu 200 IDs umfasst; ändert nichts."""
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    _require_kind_permissions(db, user, ids, write=False)
+    return [
+        FileKeywordCount(keyword=keyword, count=count)
+        for keyword, count in file_keywords.summary(db, user.current_tenant_id, ids)
+    ]
+
+
 @router.patch("/stored-files/{stored_file_id}/name", response_model=StoredFileRenameResult)
 def rename_stored_file(
     stored_file_id: uuid.UUID,
@@ -1559,6 +1675,25 @@ def _ensure_files_in_scope(db: Session, user: CurrentUser, public_ids: list[uuid
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
 
 
+def _readable_own_ids(db: Session, user: CurrentUser, public_ids: list[uuid.UUID], *, write: bool) -> set[uuid.UUID]:
+    """Die IDs aus ``public_ids``, die Dateien des eigenen Mandanten sind und die das Konto lesen
+    darf wie im Einzelabruf (Protokollbilder nur aus lesbaren Protokollen); beim Schreiben zählen
+    nur Rollenrechte. Für Mehrfachaktionen, die nicht lesbare wie unbekannte behandeln."""
+    readable: set[uuid.UUID] = set()
+    rows = db.execute(
+        select(StoredFile.id, StoredFile.public_id).where(
+            StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(public_ids)
+        )
+    ).all()
+    for row in rows:
+        try:
+            access_service.ensure_can_read_stored_file(db, user, row.id, allow_context_grant=not write)
+        except HTTPException:
+            continue
+        readable.add(row.public_id)
+    return readable
+
+
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
     # Lesen; schreibende Album-Routen prüfen photos.manage zusätzlich selbst
     require_permission(user, P.PHOTOS_READ)
@@ -1939,6 +2074,10 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
     )
     if {photo.id for photo in photos} != ids:
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    # Leserecht je Foto wie im Einzelabruf (Protokollbilder nur aus lesbaren Protokollen): ein
+    # Album gibt seine Fotos weiter (Partner, Links), also nur Rollenrechte.
+    if _readable_own_ids(db, user, list(ids), write=True) != ids:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
     if any(photo.scan_status in BLOCKED_SCAN_STATUSES for photo in photos):
         # Gesperrte Fotos (Scan-Fehler) sieht im geteilten Album und im Link ohnehin niemand -
         # gar nicht erst aufnehmen (Audit Dateien/Fotos). "pending" bleibt erlaubt: frisch
@@ -2171,6 +2310,13 @@ def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
     _ensure_files_in_scope(db, user, ids)
+    # Wie das Einzel-Tag (Leserecht je Datei, nur Rollenrechte): nicht lesbare Dateien, z. B.
+    # Protokollbilder nicht lesbarer Protokolle, bleiben unverändert wie unbekannte IDs - vor der
+    # Dateiart-Prüfung, damit deren 403 die Existenz nicht verrät.
+    readable = _readable_own_ids(db, user, ids, write=True)
+    ids = [file_id for file_id in ids if file_id in readable]
+    if not ids:
+        return
     # Dokumente (keine Bilder) taggt nur, wer die Ablage verwalten darf (Phase 3, wie beim Einzel-Tag)
     mimes = db.scalars(select(StoredFile.mime_type).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)))
     if any(not (mime or "").startswith("image/") for mime in mimes):

@@ -116,7 +116,9 @@
       "scan": "Virus scan",
       "pdf": "PDF view",
       "text": "Text extraction"
-    }
+    },
+    "selectAll": "Select all loaded",
+    "selectFile": "Select {name}"
   },
   "view": {
     "title": "Files",
@@ -154,7 +156,8 @@
     "nameAsc": "Name (A-Z)",
     "nameDesc": "Name (Z-A)",
     "sizeDesc": "Size (large-small)",
-    "sizeAsc": "Size (small-large)"
+    "sizeAsc": "Size (small-large)",
+    "relevance": "Best matches"
   },
   "target": {
     "ruleType": "{filename}: file type '.{ext}' not allowed",
@@ -330,5 +333,37 @@
     "loading": "Loading trash …",
     "loadError": "The trash could not be loaded.",
     "actionError": "The action could not be completed."
+  },
+  "keywords": {
+    "title": "Keywords",
+    "saving": "saving …",
+    "inputLabel": "Keywords",
+    "placeholder": "+ Keyword",
+    "hint": "Only used for search, never displayed. Enter or comma separates.",
+    "saveError": "Keywords could not be saved.",
+    "bulk": {
+      "title": "{count, plural, one {Keywords for # file} other {Keywords for # files}}",
+      "description": "Keywords are search terms that are never displayed.",
+      "addLabel": "Add",
+      "addPlaceholder": "Term, Enter",
+      "removeLabel": "Remove",
+      "removeHelp": "Tap an existing keyword to mark it for removal.",
+      "loading": "Loading …",
+      "noneInSelection": "The selection has no keywords yet.",
+      "keep": "Keep",
+      "markRemove": "Mark for removal",
+      "countSuffix": "{count}×",
+      "cancel": "Cancel",
+      "apply": "Apply",
+      "doneToast": "{count, plural, =0 {No file changed} one {# file updated} other {# files updated}}",
+      "error": "Keywords could not be changed.",
+      "tooMany": "At most {max} files at once."
+    }
+  },
+  "bulk": {
+    "label": "Selection",
+    "selectedCount": "{count, plural, one {# file selected} other {# files selected}}",
+    "keywords": "Edit keywords",
+    "clear": "Clear selection"
   }
 }

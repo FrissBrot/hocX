@@ -52,6 +52,7 @@ Bausteine dokumentieren ihren Vertrag hier und testen ihn in `keyboard-contracts
 | `TimeInput` | Freie Eingabe, Enter/Verlassen korrigiert. Knopf: Pfeile öffnen und wählen, Enter übernimmt (Fokus bleibt auf dem Knopf, `aria-activedescendant`). |
 | `ColorInput` | Fläche und Farbton sind `slider` mit Pfeiltasten; Tab läuft durch Hex-Feld und Farbfelder, am Ende zurück hinter den Auslöser. |
 | `TagInput` | Tippen + Enter legt an, Rücktaste löscht das letzte Tag. Pfeil runter springt in die Vorschläge, Pfeile wandern, Enter/Leertaste wählt, Pfeil hoch aus dem ersten Vorschlag zurück ins Feld. Entfernen-Knöpfe der Tags sind Tab-Halte. Verlassen per Tab schliesst die Vorschläge. |
+| `KeywordInput` | Tippen + Enter oder Komma übernimmt den Begriff, Rücktaste im leeren Feld entfernt den letzten. Jeder Begriff hat einen Entfernen-Knopf (Tab-Halt), danach bleibt der Fokus im Feld. Verlassen per Tab übernimmt angefangenen Text. Test: `components/ui/keyword-input.test.tsx`. |
 | `HelpPopover` | Nicht-modaler Dialog: Fokus auf die Erklärung (wird vorgelesen), Tab zum Doku-Link und danach hinter dem «?» weiter, Escape zurück aufs «?». |
 | `ColumnFilter` | Dialog-Panel (`aria-haspopup="dialog"`), Optionen als Knöpfe mit `aria-pressed`. |
 | `Tabs` | APG Tabs mit automatischer Aktivierung: ein Tab-Halt (roving tabindex), Pfeile links/rechts, Pos1/Ende; Panel mit `aria-labelledby`. |
