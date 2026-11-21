@@ -1008,6 +1008,7 @@ async def _ingest_word_import_documents_impl(  # loop-ok: nur über run_coroutin
             template_id=internal_template_id,
             created_by=user.user_id,
             files=file_payloads,
+            viewer=user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -206,6 +206,9 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offl
         db, tenant_id=access.assignment.tenant_id, files=staged, tags=[], created_by=access.person.id,
         upload_event_id=raw["event_id"], upload_assignment=access.assignment, upload_element_ref=element_ref,
         upload_element_label=raw["label"], file_results=file_results, allow_images=True,
+        # Ohne Anmeldung: nie verraten, ob eine Datei im Verein schon existiert (kein «übersprungen»
+        # mit fremder ID, kein Duplikat-Text) - jede Einreichung wird gespeichert.
+        allow_duplicates=True,
     )
     # Aufgabe nachführen (erledigt, sobald eine geprüfte Datei da ist; sonst erledigt der Scan sie)
     SubmissionService()._element_with_todo_sync(db, access.assignment, element_ref)

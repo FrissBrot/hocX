@@ -1004,6 +1004,7 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
             caption=caption,
             created_by=user.user_id,
             include_gps=include_gps,
+            viewer=user,
         )
     except SQLAlchemyError as exc:
         db.rollback()
