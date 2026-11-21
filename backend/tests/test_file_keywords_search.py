@@ -400,3 +400,76 @@ def test_tenant_synonym_list_is_bounded_and_cheap_even_when_crafted(db):
     elapsed = time.perf_counter() - start
     assert hits  # trifft trotzdem
     assert elapsed < 1.0, elapsed
+
+
+def _protocol_image(db, tenant_id, *, tags=None):
+    from app.models.entities import ProtocolImage
+    from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template
+
+    template = make_template(db, tenant_id)
+    protocol = make_protocol(db, tenant_id, template.id, protocol_number=f"{uuid.uuid4().hex[:4]}/2026")
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
+    image = StoredFile(tenant_id=tenant_id, original_name="p.png", mime_type="image/png", storage_path=f"uploads/{uuid.uuid4().hex}.png", tags=tags or [])
+    db.add(image)
+    db.flush()
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=image.id, sort_index=0))
+    db.flush()
+    return image
+
+
+def test_bulk_tags_skip_files_the_account_cannot_read(db):
+    """Folgeauftrag: /files/bulk-tags prüft das Leserecht je Datei wie das Einzel-Tag."""
+    from app.schemas.files import FileBulkTagsUpdate
+
+    tenant = make_tenant(db)
+    image = _protocol_image(db, tenant.id, tags=["Alt"])
+    own = _photo(db, tenant.id, "frei.jpg")
+    photos_only = _user(tenant.id, frozenset({"photos.read", "photos.manage"}))
+    files_routes.bulk_update_file_tags(
+        FileBulkTagsUpdate(file_ids=[image.public_id, own.public_id], add_tags=["Neu"]), db=db, user=photos_only
+    )
+    db.refresh(image)
+    db.refresh(own)
+    assert image.tags == ["Alt"]
+    assert own.tags == ["Neu"]
+
+
+def test_album_items_reject_files_the_account_cannot_read(db):
+    from app.schemas.files import PhotoAlbumItemsUpdate
+
+    tenant = make_tenant(db)
+    image = _protocol_image(db, tenant.id)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
+    db.add(album)
+    db.flush()
+    photos_only = _user(tenant.id, frozenset({"photos.read", "photos.manage"}))
+    with pytest.raises(HTTPException) as exc:
+        files_routes.add_album_items(album.id, PhotoAlbumItemsUpdate(file_ids=[image.public_id]), db=db, user=photos_only)
+    assert exc.value.status_code == 404
+
+
+def test_synonym_groups_and_keywords_survive_tenant_export_and_import(db):
+    from tests.test_tenant_export_import import _export_import, _rewrite_manifest
+
+    tenant = make_tenant(db)
+    search_synonyms.replace_groups(db, tenant.id, [["Grümpi", "Grümpelturnier"], ["Stamm", "Beiz"]])
+    _photo(db, tenant.id, "a.jpg", keywords=["Gipfelkreuz"])
+    db.commit()
+
+    exported_keywords: list = []
+
+    def tamper(zip_path):
+        from tests.test_tenant_export_import import _read_manifest
+
+        # Keywords gehen als Spalte von stored_file mit (die Datei selbst fehlt im Testspeicher)
+        exported_keywords.extend(row.get("keywords") for row in _read_manifest(zip_path)["tables"]["stored_file"])
+        # Normalisierte Begriffe aus dem Archiv werden nie übernommen, sondern neu berechnet
+        _rewrite_manifest(zip_path, lambda manifest: [row.update(terms=["boese"]) for row in manifest["tables"]["search_synonym_group"]])
+
+    new_tenant, _warnings = _export_import(db, tenant.id, "full", new_name="Import Synonyme", before_import=tamper)
+    assert search_synonyms.list_groups(db, new_tenant.id) == [["Grümpi", "Grümpelturnier"], ["Stamm", "Beiz"]]
+    terms = {term for group in search_synonyms.tenant_groups(db, new_tenant.id) for term in group}
+    assert terms == {"grumpi", "grumpelturnier", "stamm", "beiz"}
+    assert exported_keywords == [["Gipfelkreuz"]]
+    assert search_synonyms.synonyms_for(db, new_tenant.id, ["grumpi"])
