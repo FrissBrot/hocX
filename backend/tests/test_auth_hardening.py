@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -555,7 +556,7 @@ def test_previous_secret_still_verifies_tokens_during_rotation(db, monkeypatch):
     user = make_app_user(db, email="rotation@example.com", tenant_id=make_tenant(db).id, role_code="writer")
     old_token = create_session_token(user.id)
     monkeypatch.setattr(settings, "auth_secret_previous", settings.auth_secret)
-    monkeypatch.setattr(settings, "auth_secret", "neuer-geheimer-schluessel-0123456789abcdef")
+    monkeypatch.setattr(settings, "auth_secret", secrets.token_hex(32))  # SECURITY-RULES 5.1: zur Laufzeit erzeugt
     assert get_optional_current_user(request=None, db=db, session_cookie=old_token) is not None
     monkeypatch.setattr(settings, "auth_secret_previous", "")
     assert get_optional_current_user(request=None, db=db, session_cookie=old_token) is None
