@@ -328,7 +328,9 @@
       "media_next": "Nächstes Foto bzw. nächste Datei",
       "admin_toggleSidebar": "Seitenleiste kompakt oder breit anzeigen",
       "admin_auditNext": "Nächster Eintrag im Audit-Log",
-      "admin_auditPrevious": "Vorheriger Eintrag im Audit-Log"
+      "admin_auditPrevious": "Vorheriger Eintrag im Audit-Log",
+      "media_toggleBest": "Foto ins Best-of aufnehmen oder entfernen",
+      "media_delete": "Foto in den Papierkorb (mit Rückfrage)"
     }
   },
   "numberStepper": {

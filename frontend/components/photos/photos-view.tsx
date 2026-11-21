@@ -38,7 +38,6 @@ import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacy
 import {
   AlbumPendingRelease,
   FileOverviewItem,
-  FileTrashActionResult,
   GalleryUploadJob,
   GalleryUploadJobDetail,
   StoredFileMetadata,
@@ -86,9 +85,13 @@ type Props = {
   canManage?: boolean;
   /** photos.manage oder files.manage: Papierkorb öffnen. */
   canOpenTrash?: boolean;
+  /** sharing.public + Abo «Fotos teilen»: Freigabelink für ein Foto in der Foto-Ansicht. */
+  canShare?: boolean;
+  /** settings.manage: Link «Verwalten» führt zu Einstellungen › Zugangslinks. */
+  canManageSettings?: boolean;
 };
 
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false, canShare = false, canManageSettings = false }: Props) {
   const t = useTranslations("photos.view");
   const tFiles = useTranslations("files");
   // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
@@ -478,22 +481,20 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
 
   const [trashOpen, setTrashOpen] = useState(false);
 
-  // Foto-Ansicht «In den Papierkorb»: nur Direkt-Uploads, danach zum nächsten Foto.
-  async function trashFromViewer(item: FileOverviewItem) {
-    const ok = await confirm({ tone: "danger", message: tFiles("trash.moveConfirm", { name: item.original_name }), confirmLabel: tFiles("trash.moveLabel") });
-    if (!ok) return;
-    try {
-      const result = await browserApiFetch<FileTrashActionResult>("/api/files/trash", { method: "POST", body: JSON.stringify({ file_ids: [item.id] }) });
-      if (result && result.file_ids.length > 0) {
-        const remaining = items.length - 1;
-        handleDeletedElsewhere([item.id]);
-        setViewerIndex((current) => (current === null || remaining <= 0 ? null : Math.min(current, remaining - 1)));
-        showToast(tFiles("trash.movedToast", { name: item.original_name }), "success");
-      }
-      if (result && result.errors.length > 0) showToast(result.errors.join(" · "), "error");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : tFiles("trash.actionError"), "error");
-    }
+  // Foto-Ansicht: Fotos liegen im Papierkorb (Einzelfoto oder «Vergleichen» anwenden). Die Ansicht
+  // springt auf das vorgeschlagene Foto bzw. bleibt an derselben Stelle; leer -> schliessen.
+  function handleViewerRemoved(ids: string[], nextId: string | null) {
+    const gone = new Set(ids);
+    const remaining = items.filter((item) => !gone.has(item.id));
+    handleDeletedElsewhere(ids);
+    const nextIndex = nextId ? remaining.findIndex((item) => item.id === nextId) : -1;
+    setViewerIndex((current) => (current === null || remaining.length === 0 ? null : nextIndex >= 0 ? nextIndex : Math.min(current, remaining.length - 1)));
+  }
+
+  // «Rückgängig» aus der Foto-Ansicht: neu geladen wird beim Schliessen (solange sie offen ist,
+  // darf sich die Reihenfolge unter ihr nicht ändern - wie beim Aufnahmedatum).
+  function handleViewerRestored() {
+    captureDateChangedRef.current = true;
   }
 
   function closeViewer() {
@@ -694,11 +695,12 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           openAlbumId={openAlbumId}
           onOpenedAlbum={() => setOpenAlbumId(null)}
           onReleaseChanged={loadPendingReleases}
+          viewerPermissions={{ canManage, canShare, canManageSettings }}
         />
       ) : tab === "duplicates" && !embedded ? (
-        <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
+        <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} viewerPermissions={{ canManage, canShare, canManageSettings }} />
       ) : tab === "series" && !embedded ? (
-        <PhotoSimilarGroups search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
+        <PhotoSimilarGroups search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} viewerPermissions={{ canManage, canShare, canManageSettings }} />
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
@@ -844,7 +846,12 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           onToggleBest={albumId ? handleAlbumScopedToggleBest : handleUnscopedToggleBest}
           onTagsSaved={handleTagsSaved}
           onCaptureDateSaved={handleCaptureDateSaved}
-          onTrash={canManage ? (item) => void trashFromViewer(item) : undefined}
+          canManage={canManage}
+          canShare={canShare}
+          canManageSettings={canManageSettings}
+          onRemoved={handleViewerRemoved}
+          onRestored={handleViewerRestored}
+          onAlbumsChanged={(id, albums) => setItems((current) => current.map((item) => (item.id === id ? { ...item, albums } : item)))}
         />
       )}
 

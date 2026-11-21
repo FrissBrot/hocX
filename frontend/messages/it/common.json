@@ -328,7 +328,9 @@
       "media_next": "Foto o file successivo",
       "admin_toggleSidebar": "Mostra la barra laterale compatta o estesa",
       "admin_auditNext": "Voce successiva del registro di audit",
-      "admin_auditPrevious": "Voce precedente del registro di audit"
+      "admin_auditPrevious": "Voce precedente del registro di audit",
+      "media_toggleBest": "Aggiungere o togliere la foto dalla selezione migliori",
+      "media_delete": "Spostare la foto nel cestino (con conferma)"
     }
   },
   "numberStepper": {

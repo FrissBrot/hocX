@@ -10,7 +10,12 @@ vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
 }));
 
+const showToastMock = vi.fn();
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToastMock }));
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
+
 import { PhotoViewer } from "./photo-viewer";
+import { clearSimilarityGroupsCache } from "./use-similarity-groups";
 
 function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   const id = overrides.id ?? `file-${Math.random().toString(36).slice(2)}`;
@@ -141,7 +146,7 @@ describe("PhotoViewer", () => {
     const onIndexChange = vi.fn();
     render(<PhotoViewer items={items} index={0} onIndexChange={onIndexChange} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
 
-    expect(screen.getByText(/1\/2/)).toBeInTheDocument();
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Nächstes Foto"));
     expect(onIndexChange).toHaveBeenCalledWith(1);
   });
@@ -223,15 +228,16 @@ describe("PhotoViewer Live Photo", () => {
     expect(screen.getByRole("menuitem", { name: "Bild und Video (ZIP)" })).toHaveAttribute("href", "/api/stored-files/live-1/download?part=both");
   });
 
-  it("offers no download choice for an ordinary photo", () => {
-    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+  it("downloads an ordinary photo directly, without a choice", () => {
+    render(<PhotoViewer items={[makeItem({ id: "plain" })]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /Herunterladen/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Herunterladen" })).toHaveAttribute("href", "/api/stored-files/plain/download?part=image");
   });
 
   it("navigates with arrow keys, but not while typing in the tag field (Audit MAIN-FE-006)", () => {
     const onIndexChange = vi.fn();
     const items = [makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })];
-    render(<PhotoViewer items={items} index={1} onIndexChange={onIndexChange} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    render(<PhotoViewer items={items} index={1} onIndexChange={onIndexChange} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} canManage />);
 
     const input = screen.getAllByRole("textbox")[0];
     input.focus();
@@ -257,5 +263,137 @@ describe("PhotoViewer Live Photo", () => {
 
     expect(screen.getByText("Kamera B")).toBeInTheDocument();
     expect(screen.queryByText("Kamera A")).not.toBeInTheDocument();
+  });
+});
+
+describe("Foto-Ansicht: Tastatur, Löschen und Vergleich", () => {
+  const items = [
+    makeItem({ id: "best", original_name: "best.jpg", sharpness_score: 1200, exposure_score: 0.97 }),
+    makeItem({ id: "blurry", original_name: "blurry.jpg", sharpness_score: 20 }),
+    makeItem({ id: "proto", original_name: "proto.jpg", source: "protocol_image", origin_tag: "Protokoll", context_label: "Lagerbericht", ref_href: "/protocols/p1" }),
+    makeItem({ id: "lonely", original_name: "lonely.jpg" }),
+  ];
+  const series = { best_id: "best", images: items.slice(0, 3) };
+
+  function mockApi(handler?: (url: string, init?: { method?: string; body?: string }) => unknown) {
+    browserApiFetchMock.mockImplementation((url: string, init?: { method?: string; body?: string }) => {
+      if (url.startsWith("/api/files/similarity-groups")) {
+        return Promise.resolve({ status: "ready", computed_at: null, groups: url.includes("kind=series") ? [series] : [] });
+      }
+      return Promise.resolve(handler?.(url, init) ?? null);
+    });
+  }
+
+  function renderViewer(index: number, extra: Record<string, unknown> = {}) {
+    const props = { onIndexChange: vi.fn(), onClose: vi.fn(), onToggleBest: vi.fn(), onTagsSaved: vi.fn(), onRemoved: vi.fn(), onRestored: vi.fn(), ...extra };
+    render(<PhotoViewer items={items} index={index} canManage {...props} />);
+    return props;
+  }
+
+  beforeEach(() => {
+    clearSimilarityGroupsCache();
+    browserApiFetchMock.mockReset();
+    showToastMock.mockReset();
+    vi.stubGlobal("Image", vi.fn(function () { return { src: "", decode: () => Promise.resolve() }; }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("B schaltet Best-of um, ←/→ blättern - nur mit Schreibrecht für B", () => {
+    mockApi();
+    const props = renderViewer(1);
+    fireEvent.keyDown(window, { key: "b" });
+    expect(props.onToggleBest).toHaveBeenCalledWith(items[1]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(props.onIndexChange).toHaveBeenLastCalledWith(2);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(props.onIndexChange).toHaveBeenLastCalledWith(0);
+    expect(screen.getByRole("button", { name: /Best-of/ })).toHaveAttribute("aria-keyshortcuts", "B");
+  });
+
+  it("ohne photos.manage keine Best-of-, Lösch- oder Vergleichsbedienung", async () => {
+    mockApi();
+    const onToggleBest = vi.fn();
+    render(<PhotoViewer items={items} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={onToggleBest} onTagsSaved={vi.fn()} />);
+    fireEvent.keyDown(window, { key: "b" });
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(onToggleBest).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Löschen/ })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "In den Papierkorb verschieben?" })).toBeNull();
+    expect(screen.queryByText("Doppelt & ähnlich")).toBeNull();
+  });
+
+  it("Entf öffnet die Rückfrage, Escape schliesst nur sie; bestätigt landet das Foto im Papierkorb mit Rückgängig", async () => {
+    mockApi((url) => {
+      if (url === "/api/files/trash") return { file_ids: ["lonely"], errors: [] };
+      if (url === "/api/files/trash/restore") return { file_ids: ["lonely"], errors: [] };
+      return null;
+    });
+    const props = renderViewer(3);
+    fireEvent.keyDown(window, { key: "Delete" });
+    const dialog = await screen.findByRole("dialog", { name: "In den Papierkorb verschieben?" });
+    expect(dialog).toHaveTextContent("«lonely.jpg» verschwindet aus Galerie und Alben");
+    // Start auf «Abbrechen» (Löschen-Rückfragen starten nie auf der zerstörerischen Aktion)
+    expect(document.activeElement).toHaveTextContent("Abbrechen");
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "In den Papierkorb verschieben?" })).toBeNull());
+    expect(props.onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Löschen/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "In den Papierkorb" }));
+    await waitFor(() => expect(props.onRemoved).toHaveBeenCalledWith(["lonely"], null));
+    expect(JSON.parse(browserApiFetchMock.mock.calls.find(([url]) => url === "/api/files/trash")![1].body)).toEqual({ file_ids: ["lonely"] });
+    const [message, tone, options] = showToastMock.mock.calls.at(-1)!;
+    expect(message).toBe("«lonely.jpg» in den Papierkorb verschoben");
+    expect(tone).toBe("success");
+    await act(async () => { options.action.onClick(); });
+    await waitFor(() => expect(props.onRestored).toHaveBeenCalledWith(["lonely"]));
+  });
+
+  it("ein Protokollfoto ist hier nicht löschbar und verweist auf die Herkunft", async () => {
+    mockApi();
+    renderViewer(2);
+    fireEvent.keyDown(window, { key: "Delete" });
+    const dialog = await screen.findByRole("dialog", { name: "Hier nicht löschbar" });
+    expect(dialog).toHaveTextContent("Dieses Foto gehört zu Lagerbericht");
+    expect(screen.getByRole("link", { name: "Zur Herkunft: Protokoll ›" })).toHaveAttribute("href", "/protocols/p1");
+    expect(screen.queryByRole("button", { name: "In den Papierkorb" })).toBeNull();
+  });
+
+  it("Vergleich: Vorschlag vorausgefüllt, gesperrte bleiben, Anwenden legt in den Papierkorb und markiert geprüft", async () => {
+    mockApi((url) => (url === "/api/files/bulk-delete" ? { deleted_ids: ["blurry"], errors: [] } : null));
+    const props = renderViewer(1);
+    // Hinweis auf der Bühne und Karte in der Seitenleiste
+    fireEvent.click(await screen.findByRole("button", { name: /2 ähnliche · Vergleichen/ }));
+    const region = screen.getByRole("region", { name: "Vergleich" });
+    expect(region).toHaveTextContent("2 behalten");
+    expect(region).toHaveTextContent("1 in den Papierkorb");
+    expect(screen.getByRole("button", { name: "«blurry.jpg» doch behalten" })).toHaveAttribute("aria-pressed", "true");
+    expect(region).toHaveTextContent("Bleibt – nur über «Protokoll» löschbar");
+
+    // Umschalten per Klick aufs Bild und zurück per Segment
+    fireEvent.click(screen.getByRole("button", { name: "«blurry.jpg» doch behalten" }));
+    expect(region).toHaveTextContent("3 behalten");
+    expect(screen.getByRole("button", { name: "Als geprüft markieren" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Nur das beste behalten" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 in den Papierkorb" }));
+
+    await waitFor(() => expect(props.onRemoved).toHaveBeenCalledWith(["blurry"], "best"));
+    expect(JSON.parse(browserApiFetchMock.mock.calls.find(([url]) => url === "/api/files/bulk-delete")![1].body)).toEqual({ file_ids: ["blurry"] });
+    expect(showToastMock.mock.calls.at(-1)![0]).toBe("1 Foto in den Papierkorb verschoben");
+    // Gruppe gilt als geprüft: kein Hinweis mehr
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Vergleich" })).toBeNull());
+    expect(screen.queryByRole("button", { name: /Vergleichen/ })).toBeNull();
+  });
+
+  it("Escape verlässt zuerst den Vergleich, dann die Ansicht", async () => {
+    mockApi();
+    const props = renderViewer(0);
+    fireEvent.click((await screen.findAllByRole("button", { name: /Vergleichen/ }))[0]);
+    expect(screen.getByRole("region", { name: "Vergleich" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Vergleich" })).toBeNull());
+    expect(props.onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(props.onClose).toHaveBeenCalled());
   });
 });

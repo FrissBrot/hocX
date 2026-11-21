@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { PhotosView } from "@/components/photos/photos-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { requireSession } from "@/lib/api/server";
-import { can } from "@/lib/permissions";
+import { can, featureAccess } from "@/lib/permissions";
 
 export default async function PhotosPage() {
   const session = await requireSession();
@@ -25,6 +25,8 @@ export default async function PhotosPage() {
             <PhotosView
               canManage={can(session, "photos.manage")}
               canOpenTrash={can(session, "photos.manage") || can(session, "files.manage")}
+              canShare={can(session, "sharing.public") && featureAccess(session, "photo_sharing") === "full"}
+              canManageSettings={can(session, "settings.manage")}
             />
           </section>
           </>

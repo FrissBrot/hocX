@@ -1,6 +1,6 @@
 "use client";
 
-import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { SimilarityGroup, SimilarityGroupList } from "@/types/api";
@@ -18,9 +18,59 @@ export const SIMILARITY_PENDING_POLL_MS = 10_000;
 
 const cache = new Map<string, Entry>();
 
+// Als geprüft markierte Gruppen («Serie behalten», «Als geprüft markieren» im Vergleich der
+// Foto-Ansicht): Schlüssel `<kind>:<best_id>` (viewer-logic.ts::groupKey). Gilt für die Sitzung im
+// Tab - die Tabs Duplikate/Ähnliche und die Foto-Ansicht teilen denselben Stand.
+let reviewed: ReadonlySet<string> = new Set();
+const reviewedListeners = new Set<() => void>();
+
+function setReviewed(next: ReadonlySet<string>) {
+  reviewed = next;
+  reviewedListeners.forEach((notify) => notify());
+}
+
+export function markSimilarityGroupReviewed(key: string): void {
+  if (!reviewed.has(key)) setReviewed(new Set(reviewed).add(key));
+}
+
+export function unmarkSimilarityGroupReviewed(key: string): void {
+  if (!reviewed.has(key)) return;
+  const next = new Set(reviewed);
+  next.delete(key);
+  setReviewed(next);
+}
+
+export function useReviewedSimilarityGroups(): ReadonlySet<string> {
+  return useSyncExternalStore(
+    (notify) => {
+      reviewedListeners.add(notify);
+      return () => reviewedListeners.delete(notify);
+    },
+    () => reviewed,
+    () => reviewed
+  );
+}
+
+/** Gelöschte Bilder aus allen zwischengespeicherten Gruppen nehmen (Gruppen mit weniger als zwei
+ * Bildern fallen weg) - sonst kehren sie beim nächsten Tabwechsel zurück. */
+export function removeFromSimilarityCache(ids: string[]): void {
+  const gone = new Set(ids);
+  for (const [key, entry] of cache) {
+    if (!entry.groups.some((group) => group.images.some((image) => gone.has(image.id)))) continue;
+    const groups = entry.groups
+      .map((group) => ({ ...group, images: group.images.filter((image) => !gone.has(image.id)) }))
+      .filter((group) => group.images.length >= 2 && group.images.some((image) => image.id === group.best_id));
+    cache.set(key, { ...entry, groups });
+  }
+  cacheListeners.forEach((notify) => notify());
+}
+
+const cacheListeners = new Set<() => void>();
+
 /** Beim Abmelden leeren - ein anderer Benutzer im selben Tab darf nichts davon sehen. */
 export function clearSimilarityGroupsCache(): void {
   cache.clear();
+  setReviewed(new Set());
 }
 
 function toEntry(data: SimilarityGroupList | null): Entry {
@@ -79,6 +129,18 @@ export function useSimilarityGroups(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, pollTick]);
+
+  // Löschen an anderer Stelle (Foto-Ansicht) schreibt in den Cache: hier nachziehen.
+  useEffect(() => {
+    const notify = () => setState((current) => {
+      const cached = cache.get(current.key) ?? null;
+      return cached && cached !== current.entry ? { ...current, entry: cached } : current;
+    });
+    cacheListeners.add(notify);
+    return () => {
+      cacheListeners.delete(notify);
+    };
+  }, []);
 
   const setGroups = useCallback<Dispatch<SetStateAction<SimilarityGroup[] | null>>>((action) => {
     setState((current) => {

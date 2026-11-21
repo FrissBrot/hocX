@@ -328,7 +328,9 @@
       "media_next": "Photo ou fichier suivant",
       "admin_toggleSidebar": "Afficher la barre latérale compacte ou large",
       "admin_auditNext": "Entrée suivante du journal d'audit",
-      "admin_auditPrevious": "Entrée précédente du journal d'audit"
+      "admin_auditPrevious": "Entrée précédente du journal d'audit",
+      "media_toggleBest": "Ajouter la photo à la sélection ou l’en retirer",
+      "media_delete": "Mettre la photo à la corbeille (avec confirmation)"
     }
   },
   "numberStepper": {

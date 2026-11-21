@@ -8,29 +8,33 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatTime } from "@/lib/utils/format";
 import { FileBulkDeleteResult, FileOverviewItem, SimilarityGroup } from "@/types/api";
-import { PhotoViewer } from "./photo-viewer";
+import { PhotoViewer, ViewerPermissions } from "./photo-viewer";
 import { SimilarityComputedAt, SimilarityState } from "./similarity-state";
-import { useSimilarityGroups } from "./use-similarity-groups";
+import { markSimilarityGroupReviewed, useReviewedSimilarityGroups, useSimilarityGroups } from "./use-similarity-groups";
+import { groupKey } from "./viewer/viewer-logic";
 
 export function PhotoSimilarSeries({
   search,
   tagFilter,
   onDeleted,
+  viewerPermissions,
 }: {
   search: string;
   tagFilter: string[];
   onDeleted?: (deletedIds: string[]) => void;
+  viewerPermissions?: ViewerPermissions;
 }) {
   const t = useTranslations("photos.similarSeries");
   const confirm = useConfirm();
   const showToast = useToast();
   const { groups, setGroups, status, computedAt, error } = useSimilarityGroups("duplicate", search, tagFilter, t("loadError"));
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // «Geprüft» gilt für die Sitzung und ist mit der Foto-Ansicht geteilt (Vergleichsmodus).
+  const reviewed = useReviewedSimilarityGroups();
   const [busyGroup, setBusyGroup] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ groupId: string; index: number } | null>(null);
 
   function keepSeries(group: SimilarityGroup) {
-    setDismissed((current) => new Set(current).add(group.best_id));
+    markSimilarityGroupReviewed(groupKey("duplicate", group));
   }
 
   function updateImage(id: string, changes: Partial<FileOverviewItem>) {
@@ -67,7 +71,7 @@ export function PhotoSimilarSeries({
         method: "POST",
         body: JSON.stringify({ file_ids: rest.map((image) => image.id) }),
       });
-      setDismissed((current) => new Set(current).add(group.best_id));
+      markSimilarityGroupReviewed(groupKey("duplicate", group));
       const deletedCount = result?.deleted_ids.length ?? 0;
       if (result && deletedCount > 0) {
         // Auch aus dem Cache entfernen - sonst kehrt die Gruppe beim nächsten Tabwechsel zurück.
@@ -91,7 +95,7 @@ export function PhotoSimilarSeries({
 
   if (!groups) return <SimilarityState status={status} error={error} loading={t("loading")} />;
 
-  const visible = groups.filter((group) => !dismissed.has(group.best_id));
+  const visible = groups.filter((group) => !reviewed.has(groupKey("duplicate", group)));
   const viewerGroup = visible.find((group) => group.best_id === viewer?.groupId);
 
   return (
@@ -168,6 +172,13 @@ export function PhotoSimilarSeries({
           onClose={() => setViewer(null)}
           onToggleBest={toggleBest}
           onTagsSaved={(id, tags) => updateImage(id, { tags })}
+          {...viewerPermissions}
+          onRemoved={(ids, nextId) => {
+            onDeleted?.(ids);
+            const rest = viewerGroup.images.filter((image) => !ids.includes(image.id));
+            const nextIndex = nextId ? rest.findIndex((image) => image.id === nextId) : -1;
+            setViewer(rest.length < 2 ? null : { groupId: viewer.groupId, index: nextIndex >= 0 ? nextIndex : Math.min(viewer.index, rest.length - 1) });
+          }}
         />
       )}
     </div>

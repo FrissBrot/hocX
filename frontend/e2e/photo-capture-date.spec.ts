@@ -6,7 +6,7 @@ import { uniquePng } from "./unique-fixture";
 
 // Korrigiertes Aufnahmedatum (Migration 0200): Mehrfachauswahl der Galerie «Aufnahmedatum» ->
 // Dialog -> Bestätigung mit Hinweis -> POST /api/files/bulk-capture-date. Danach Einzelbearbeitung
-// im Foto-Viewer: «Original wiederherstellen» entfernt die Korrektur wieder.
+// in der Foto-Ansicht: «Ändern › Zurücksetzen» entfernt die Korrektur wieder (zweistufige Bestätigung).
 test.use({ storageState: authFiles.admin });
 
 async function uploadPhoto(api: APIRequestContext, name: string): Promise<string> {
@@ -64,16 +64,17 @@ test("Aufnahmedatum per Mehrfachauswahl korrigieren und im Viewer wiederherstell
     await expect(page.locator(".photo-bulk-bar")).toHaveCount(0);
     await page.locator(".photo-tile", { has: select }).locator(".photo-tile-preview").click();
     const viewer = page.getByRole("dialog", { name });
-    await expect(viewer.getByText("Aufnahmedatum · korrigiert")).toBeVisible();
+    await expect(viewer.getByText("Korrigiert", { exact: true })).toBeVisible();
     await expect(viewer.getByText("Das Bild hatte ursprünglich kein Aufnahmedatum.")).toBeVisible();
     await viewer.getByRole("button", { name: "Ändern" }).click();
-    await viewer.getByRole("button", { name: "Original wiederherstellen" }).click();
-    const resetConfirm = page.getByRole("alertdialog", { name: "Aufnahmedatum ändern?" });
-    await expect(resetConfirm).toContainText("Bei 1 Bild wird die Korrektur entfernt");
+    await viewer.getByRole("radio", { name: "Zurücksetzen" }).click();
+    await viewer.getByRole("button", { name: "Übernehmen" }).click();
+    await expect(viewer.getByText("Korrektur entfernen?")).toBeVisible();
+    await expect(viewer.getByText(/im Zeitstrahl neu einsortiert/)).toBeVisible();
     const reset = page.waitForResponse((r) => r.url().endsWith(`/api/stored-files/${fileId}/capture-correction`) && r.request().method() === "PATCH");
-    await resetConfirm.getByRole("button", { name: "Datum ändern" }).click();
+    await viewer.getByRole("button", { name: "Bestätigen" }).click();
     expect((await reset).ok()).toBeTruthy();
-    await expect(viewer.getByText("Aufnahmedatum unbekannt")).toBeVisible();
+    await expect(viewer.getByText("Datum setzen, damit das Foto richtig einsortiert wird. Bis dahin gilt das Uploaddatum.")).toBeVisible();
     const after = await (await request.get(`/api/stored-files/${fileId}/metadata`)).json();
     expect(after.date_source).toBe("upload");
     expect(after.capture_corrected_at).toBeNull();

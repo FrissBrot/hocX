@@ -8,24 +8,28 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatTime } from "@/lib/utils/format";
 import { FileBulkDeleteResult, FileOverviewItem, SimilarityGroup } from "@/types/api";
-import { PhotoViewer } from "./photo-viewer";
+import { PhotoViewer, ViewerPermissions } from "./photo-viewer";
 import { SimilarityComputedAt, SimilarityState } from "./similarity-state";
-import { useSimilarityGroups } from "./use-similarity-groups";
+import { markSimilarityGroupReviewed, useReviewedSimilarityGroups, useSimilarityGroups } from "./use-similarity-groups";
+import { groupKey } from "./viewer/viewer-logic";
 
 export function PhotoSimilarGroups({
   search,
   tagFilter,
   onDeleted,
+  viewerPermissions,
 }: {
   search: string;
   tagFilter: string[];
   onDeleted?: (deletedIds: string[]) => void;
+  viewerPermissions?: ViewerPermissions;
 }) {
   const t = useTranslations("photos.similarGroups");
   const confirm = useConfirm();
   const showToast = useToast();
   const { groups, setGroups, status, computedAt, error } = useSimilarityGroups("series", search, tagFilter, t("loadError"));
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // «Geprüft» gilt für die Sitzung und ist mit der Foto-Ansicht geteilt (Vergleichsmodus).
+  const reviewed = useReviewedSimilarityGroups();
   // Which images stay when a group's selection is deleted - one Set per group (keyed by
   // best_id), seeded with just the best image once, then left to the user to extend. Deleting
   // never touches this set beyond removing gone ids - it's not re-seeded on every render, so a
@@ -46,7 +50,7 @@ export function PhotoSimilarGroups({
   }, [groups]);
 
   function dismissGroup(group: SimilarityGroup) {
-    setDismissed((current) => new Set(current).add(group.best_id));
+    markSimilarityGroupReviewed(groupKey("series", group));
   }
 
   function toggleKeep(groupId: string, imageId: string) {
@@ -124,7 +128,7 @@ export function PhotoSimilarGroups({
 
   if (!groups) return <SimilarityState status={status} error={error} loading={t("loading")} />;
 
-  const visible = groups.filter((group) => !dismissed.has(group.best_id));
+  const visible = groups.filter((group) => !reviewed.has(groupKey("series", group)));
   const viewerGroup = visible.find((group) => group.best_id === viewer?.groupId);
 
   return (
@@ -219,6 +223,13 @@ export function PhotoSimilarGroups({
           onClose={() => setViewer(null)}
           onToggleBest={toggleBest}
           onTagsSaved={(id, tags) => updateImage(id, { tags })}
+          {...viewerPermissions}
+          onRemoved={(ids, nextId) => {
+            onDeleted?.(ids);
+            const rest = viewerGroup.images.filter((image) => !ids.includes(image.id));
+            const nextIndex = nextId ? rest.findIndex((image) => image.id === nextId) : -1;
+            setViewer(rest.length < 2 ? null : { groupId: viewer.groupId, index: nextIndex >= 0 ? nextIndex : Math.min(viewer.index, rest.length - 1) });
+          }}
         />
       )}
     </div>

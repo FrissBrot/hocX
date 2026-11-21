@@ -109,6 +109,9 @@ export const SHORTCUTS = [
   // ── Fotos/Dateien ────────────────────────────────────────────────────────
   { id: "media.previous", keys: ["ArrowLeft", "J"], scope: "component", group: "media" },
   { id: "media.next", keys: ["ArrowRight", "L"], scope: "component", group: "media" },
+  // Foto-Ansicht: Best-of umschalten und Löschen-Rückfrage (Popover) öffnen. Nur im Viewer gebunden.
+  { id: "media.toggleBest", keys: ["B"], scope: "component", group: "media" },
+  { id: "media.delete", keys: ["Delete", "Backspace"], displayKeys: ["Delete"], scope: "component", group: "media" },
 ] as const satisfies readonly ShortcutDefinition[];
 
 export type ShortcutId = (typeof SHORTCUTS)[number]["id"];
