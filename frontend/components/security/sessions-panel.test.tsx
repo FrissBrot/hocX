@@ -53,3 +53,19 @@ it("forgets a known device", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Vergessen" }));
   await waitFor(() => expect(api).toHaveBeenCalledWith("/api/users/me/devices/d1", { method: "DELETE" }));
 });
+
+it("shows the translated country and the DB-IP attribution only when a country is known", async () => {
+  api.mockImplementation((url: string) =>
+    Promise.resolve(url.endsWith("/devices") ? devices : { ...list, sessions: [{ ...list.sessions[1], country: "CH" }] }));
+  render(<SessionsPanel open />);
+  expect(await screen.findByText("Land: Schweiz")).toBeInTheDocument();
+  const source = screen.getByRole("link", { name: /DB-IP\.com/ });
+  expect(source).toHaveAttribute("href", "https://db-ip.com");
+  expect(source).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+it("shows no attribution without any country", async () => {
+  render(<SessionsPanel open />);
+  await screen.findByText("Safari · iOS");
+  expect(screen.queryByRole("link", { name: /DB-IP\.com/ })).not.toBeInTheDocument();
+});

@@ -1,4 +1,5 @@
-"""Passwortregel für neue Passwörter (Einladung, Passwort vergessen).
+"""Passwortregel für neue Passwörter (alle Setzpfade: Einladung, Passwort vergessen, Profil,
+Verwaltung, Plattform-Admin-Konten).
 
 Dieselbe Regel steht im Frontend in ``frontend/lib/password-strength.ts`` (Live-Anzeige auf
 ``/auth/set-password``); beide Seiten prüfen sie mit denselben Beispielen
@@ -11,6 +12,9 @@ Regel: mindestens 12 Zeichen (Pflicht) und mindestens Stufe «Mittel» (2 von 4)
   reichen für «Mittel».
 - «Leicht zu erraten» (Name, E-Mail, Organisation, häufige Wörter, dreimal dasselbe Zeichen)
   deckelt die Stufe auf «Schwach».
+- Zusätzlich (nur im Backend): Passwort aus einem bekannten Leak → 400 ``password_leaked``
+  (``app/core/password_leak.py``, SEC-AUTH-015). Erst nach der Stärkeprüfung, damit ein schwaches
+  Passwort gar nicht erst abgefragt wird.
 """
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from fastapi import HTTPException, status
+
+from app.core.password_leak import check_password
 
 MIN_LENGTH = 12
 MIN_SCORE = 2
@@ -122,7 +128,8 @@ def evaluate_password(password: str, *, personal: Iterable[str | None] = ()) -> 
 
 
 def ensure_password_acceptable(password: str, *, personal: Iterable[str | None] = ()) -> None:
-    """400 ``password_weak``, wenn das Passwort die Regel nicht erfüllt."""
+    """400 ``password_weak``, wenn das Passwort die Regel nicht erfüllt, 400 ``password_leaked``,
+    wenn es in einem bekannten Leak vorkommt."""
     strength = evaluate_password(password, personal=personal)
     if not strength.acceptable:
         raise HTTPException(
@@ -130,5 +137,13 @@ def ensure_password_acceptable(password: str, *, personal: Iterable[str | None] 
             detail={
                 "code": "password_weak",
                 "message": "Das Passwort ist zu schwach: mindestens 12 Zeichen, ohne Name, E-Mail oder häufige Wörter.",
+            },
+        )
+    if check_password(password).leaked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "password_leaked",
+                "message": "Dieses Passwort ist aus einem Datenleck bekannt. Bitte wähle ein anderes.",
             },
         )

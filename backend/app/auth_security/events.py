@@ -7,7 +7,7 @@ Verlust wird gezählt und gedrosselt ins Fehlerprotokoll geschrieben (Abschnitt 
 kein DoS-Vektor werden»).
 
 Nie gespeichert: Passwörter, Codes, Tickets, Tokens, Session-Cookies, eingegebene E-Mails im
-Klartext, IP-Adressen im Klartext. ``details`` nimmt nur feste Kennungen/Zahlen auf
+Klartext, IP-Adressen im Klartext. Vom Standort nur der Ländercode (``src_country``, Migration 0215). ``details`` nimmt nur feste Kennungen/Zahlen auf
 (``_ALLOWED_DETAIL_KEYS``).
 """
 from __future__ import annotations
@@ -136,6 +136,7 @@ def record(
         "endpoint": (ctx.endpoint or "")[:128] or None,
         "host_kind": ctx.host_kind,
         "user_agent_family": ctx.user_agent_family,
+        "src_country": ctx.country,
         "details": _clean_details(details),
     }
     _write(params)
@@ -145,11 +146,11 @@ _INSERT = text(
     """
     INSERT INTO auth_event (event_type, outcome, actor_kind, actor_user_id, platform_admin_id, tenant_id, subject_hash,
         src_net_hash, src_ip_hash, src_private, device_hash, session_id, request_id, risk_score, risk_reasons,
-        enforcement, policy_version, endpoint, host_kind, user_agent_family, details)
+        enforcement, policy_version, endpoint, host_kind, user_agent_family, src_country, details)
     VALUES (:event_type, :outcome, :actor_kind, :actor_user_id, :platform_admin_id, :tenant_id, :subject_hash,
         :src_net_hash, :src_ip_hash, :src_private, :device_hash, :session_id, :request_id, :risk_score,
         CAST(:risk_reasons AS text[]), :enforcement, :policy_version, :endpoint, :host_kind, :user_agent_family,
-        CAST(:details AS jsonb))
+        :src_country, CAST(:details AS jsonb))
     """
 )
 

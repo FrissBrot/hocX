@@ -90,3 +90,6 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Ereignisse: Risikogründe unter dem Wert (Codes aus auth_event.risk_reasons, übersetzt) */
+.admin-security-reasons { display: block; }

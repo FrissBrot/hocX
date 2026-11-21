@@ -254,6 +254,16 @@
         "title": "Protezione accessi",
         "detail": "{limiterErrors, number} guasti del limitatore (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocchi · {privateSourcePercent, number} % fonti private",
         "problem": "Protezione accessi compromessa o Redis quasi pieno"
+      },
+      "password_leak": {
+        "title": "Controllo password trapelate",
+        "detail": "{state, select, hibp {API Range HIBP (k-anonimato) attiva} fallback {HIBP di recente non raggiungibile – elenco locale attivo} local {Solo elenco locale} missing {Né HIBP né elenco locale disponibili} off {Disattivato} other {{unchecked, number} nuove password accettate senza controllo in 24 h}}",
+        "problem": "Nuove password accettate senza controllo delle fughe"
+      },
+      "geoip": {
+        "title": "Geolocalizzazione per paese",
+        "detail": "{state, select, ok {DB-IP «IP to Country Lite», versione del {buildDate} ({ageDays, number} giorni)} other {Non configurata – segnale «nuovo paese» disattivato}}",
+        "problem": "Geolocalizzazione per paese compromessa"
       }
     },
     "problems": {
@@ -594,6 +604,10 @@
       "metrics_rollup": {
         "title": "Aggregazione indicatori",
         "description": "Calcola ogni giorno i conteggi per dashboard e analisi (mandanti, utenti attivi, accessi, errori, spazio, utilizzo per modulo). La prima esecuzione recupera 90 giorni."
+      },
+      "geoip_update": {
+        "title": "Aggiorna la geolocalizzazione per paese",
+        "description": "Scarica ogni mese il database «IP to Country Lite» di DB-IP (CC BY 4.0) per il segnale di accesso «nuovo paese», lo verifica e sostituisce il precedente. Esecuzione giornaliera, download solo se esiste una nuova edizione mensile."
       }
     }
   },

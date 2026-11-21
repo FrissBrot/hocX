@@ -1200,10 +1200,42 @@ Konten ohne Faktor auf unbekanntem Gerät werden nur bei Quellsignalen (L1/L2) o
 | `AUTH_LEGACY_COOKIE_UNTIL` | leer (= Start + 72 h) | bis wann der bisherige Cookie-Name `hocx_session` noch gelesen wird |
 | `AUTH_NET6_FACTOR` | 4 | IPv6: L2-Grenzen je /48 = Netz-Grenzen × Faktor |
 | `SECURITY_ALERT_ADMIN_LOGINS` | `true` (neu) | jede Plattform-Anmeldung meldet sich im Check «security» |
+| `PASSWORD_LEAK_CHECK` | `on` | Leak-Prüfung neuer Passwörter: `on` (HIBP-Range-API, Rückfall lokale Liste), `local-only`, `off` |
+| `PASSWORD_LEAK_MIN_COUNT` | 1 | ab so vielen Vorkommen in HIBP abgelehnt |
+| `GEOIP_AUTO_UPDATE` | `true` | Job `geoip_update` lädt DB-IP «IP to Country Lite» monatlich (`false`: kein Download) |
 
 Weitere Werte (Body-Limit 16 KiB für `/api/auth/*`, GCRA-Raten, Alarmschwellen `AUTH_ALERT_*`) stehen in
 `backend/app/core/config.py` und können bei Bedarf ebenfalls gesetzt werden (Allowlist in
 `scripts/lib/env.sh` und `docker-compose.release.yml` ergänzen).
+
+### Leak-Prüfung neuer Passwörter (SEC-AUTH-015)
+
+Jeder Setzpfad (Einladung, Passwort vergessen, Profil, Verwaltung, Plattform-Admin-Konten) prüft nach
+der Stärkeregel, ob das Passwort aus einem Datenleck bekannt ist (`backend/app/core/password_leak.py`,
+Antwort 400 `password_leaked`). Standard: Range-API von «Have I Been Pwned» mit k-Anonymität - nur die
+ersten **5 Hex-Zeichen** des SHA-1 gehen an `api.pwnedpasswords.com` (Header `Add-Padding: true`,
+User-Agent `hocx-password-check`, Timeout 2 s), Antwort je Präfix 1 h im Redis. Nicht erreichbar →
+lokale Liste im Image (`backend/app/core/leaked_passwords.bin`, rund 74 000 SHA-1-Präfixe der
+häufigsten geleakten Passwörter ab 12 Zeichen aus SecLists, MIT; neu erzeugen mit
+`python3 scripts/build-leaked-password-list.py`). Fehlt beides, wird das Passwort angenommen (Warnung im
+Log, Check `password_leak` im Systemmonitor). Anmeldungen prüfen nie gegen HIBP.
+
+Ausgehend braucht das Backend dafür HTTPS zu `api.pwnedpasswords.com`; ohne Internetzugang
+`PASSWORD_LEAK_CHECK=local-only` setzen.
+
+### Länder-Geolocation (Signal «neues Land»)
+
+Der job-worker lädt monatlich DB-IP «IP to Country Lite» (CC BY 4.0, ohne Konto,
+`https://download.db-ip.com/free/dbip-country-lite-JJJJ-MM.mmdb.gz`), prüft die Datei (Typ «Country»,
+IPv6-Baum, Grösse, Erstelldatum, Stichproben) und ersetzt die alte atomar im Volume `geoip_data`
+(`/var/lib/hocx/geoip`, Backend nur lesend). Job `geoip_update` unter `/admin/jobs` (täglicher Tick,
+Download nur bei neuer Monatsausgabe). Gespeichert wird nur der Ländercode (`auth_event.src_country`,
+`auth_session.country`, `auth_known_device.last_country`, Migration `0215_auth_geo_country`), nie die IP;
+Löschfristen wie die Anmeldeereignisse bzw. Sessions/Geräte. Risk Engine: Land in 90 Tagen erfolgreicher
+Anmeldungen nie gesehen → `new_country` (10 Punkte, allein nie entscheidend; ohne frühere Anmeldung mit
+Land kein Signal). Fehlt die Datei, entfällt das Signal still (Check `geoip`: «nicht eingerichtet», kein
+Alarm). Ohne Internetzugang `GEOIP_AUTO_UPDATE=false` und die MMDB-Datei bei Bedarf selbst ins Volume
+legen (`docker compose cp … job-worker:/var/lib/hocx/geoip/dbip-country-lite.mmdb`).
 
 ### Notfallzugang und Entsperren
 

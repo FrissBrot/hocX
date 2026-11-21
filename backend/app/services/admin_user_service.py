@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.schemas.admin import AdminUserPage, PlatformAdminCreate, PlatformAdminRead, PlatformAdminUpdate
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.user_service import UserService
+from app.core.password_policy import ensure_password_acceptable
 from app.core.security import hash_password
 from app.models import PlatformAdmin
 
@@ -65,6 +66,8 @@ class PlatformAdminService:
         return [self._read_model(admin) for admin in admins]
 
     def create_admin(self, db: Session, payload: PlatformAdminCreate) -> PlatformAdminRead:
+        # Dieselbe Passwortregel wie für Konten, inkl. Leak-Prüfung (SEC-AUTH-015)
+        ensure_password_acceptable(payload.password, personal=(payload.email, payload.display_name))
         admin = PlatformAdmin(
             email=payload.email,
             display_name=payload.display_name,
@@ -96,6 +99,7 @@ class PlatformAdminService:
         if payload.display_name is not None:
             admin.display_name = payload.display_name
         if payload.password:
+            ensure_password_acceptable(payload.password, personal=(admin.email, payload.display_name or admin.display_name))
             admin.password_hash = hash_password(payload.password)
             # Password change invalidates all existing sessions
             admin.session_revoke_at = datetime.now(UTC)

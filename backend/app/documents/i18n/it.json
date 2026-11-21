@@ -410,6 +410,8 @@
     },
     "login": {
       "action": "Verifica la sicurezza",
+      "country": "Paese: {country}",
+      "countrySource": "Paese: «IP to Country Lite» di DB-IP.com (CC BY 4.0), determinato localmente.",
       "device": "Dispositivo: {device}",
       "hint": "Non sei stato tu? Cambia subito la password e disconnetti tutte le sessioni in «Dispositivi connessi».",
       "introAlert": "Sul tuo account presso {tenant} abbiamo notato quanto segue:",
@@ -426,6 +428,7 @@
         "distributed_attempts": "tentativi da molte reti",
         "invalid_tokens": "link di accesso non validi",
         "mfa_failures": "codici errati",
+        "new_country": "nuovo paese",
         "new_device": "nuovo dispositivo",
         "new_network": "nuova rete",
         "privileged_account": "account con diritti amministrativi",

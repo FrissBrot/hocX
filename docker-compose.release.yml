@@ -290,6 +290,11 @@ services:
       AUTH_SECRET_PREVIOUS_FILE: /run/secrets/auth_secret_previous
       AUTH_LEGACY_COOKIE_UNTIL: ${AUTH_LEGACY_COOKIE_UNTIL:-}
       AUTH_NET6_FACTOR: ${AUTH_NET6_FACTOR:-4}
+      # Leak-Prüfung neuer Passwörter (SEC-AUTH-015): on | local-only | off
+      PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-on}
+      PASSWORD_LEAK_MIN_COUNT: ${PASSWORD_LEAK_MIN_COUNT:-1}
+      # Länder-Geolocation (Signal «neues Land»): Datei aus dem Volume geoip_data, nur lesend
+      GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-true}
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -337,6 +342,8 @@ services:
       - ./storage-local/work:/app/storage-local/work
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
+      # DB-IP-Länderdatenbank, nur lesend (schreibt der job-worker, Job geoip_update)
+      - geoip_data:/var/lib/hocx/geoip:ro
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -965,6 +972,8 @@ services:
       ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
       PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
       HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
+      # Job geoip_update: lädt DB-IP «IP to Country Lite» (CC BY 4.0) monatlich ins Volume geoip_data
+      GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-true}
     secrets:
       - app_database_url
       - admin_auth_secret
@@ -974,6 +983,8 @@ services:
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
       - ./storage-local/work:/app/storage-local/work
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      # Einziger Schreiber der GeoIP-Datei (Backend: nur lesend)
+      - geoip_data:/var/lib/hocx/geoip
     networks:
       - default
       - storage
@@ -1227,6 +1238,8 @@ networks:
     internal: true
 
 volumes:
+  # DB-IP-Länderdatenbank (app/core/geoip.py): job-worker schreibt, Backend liest
+  geoip_data:
   backend_upload_tmp:
   abgabebox_upload_tmp:
   postgres18_data:

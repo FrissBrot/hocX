@@ -41,6 +41,8 @@ class AuthEvent(Base):
     endpoint: Mapped[str | None] = mapped_column(Text)
     host_kind: Mapped[str | None] = mapped_column(Text)
     user_agent_family: Mapped[str | None] = mapped_column(Text)
+    # Ländercode der Quelle (Migration 0215, app/core/geoip.py), nie die IP
+    src_country: Mapped[str | None] = mapped_column(Text)
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
 
@@ -54,6 +56,7 @@ class AuthKnownDevice(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
     device_hash: Mapped[str] = mapped_column(Text, nullable=False)
     user_agent_family: Mapped[str | None] = mapped_column(Text)
+    last_country: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -79,3 +82,4 @@ class AuthSession(Base):
     host: Mapped[str | None] = mapped_column(Text)
     ip_net_hash: Mapped[str | None] = mapped_column(Text)
     user_agent_family: Mapped[str | None] = mapped_column(Text)
+    country: Mapped[str | None] = mapped_column(Text)

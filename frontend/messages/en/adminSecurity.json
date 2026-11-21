@@ -80,7 +80,8 @@
       "subject": "Account",
       "network": "Network",
       "risk": "Risk",
-      "client": "Device"
+      "client": "Device",
+      "country": "Country"
     },
     "actorKinds": {
       "user": "User",
@@ -91,7 +92,24 @@
     "empty": "No events for this selection.",
     "previous": "Newer",
     "next": "Older",
-    "pageInfo": "Entries {from, number}–{to, number}"
+    "pageInfo": "Entries {from, number}–{to, number}",
+    "countrySource": "Country data: <link>“IP to Country Lite” by DB-IP.com</link> (CC BY 4.0), looked up locally, no IP address stored.",
+    "reasons": {
+      "account_failures": "many failed attempts (account)",
+      "source_failures": "failed attempts from source",
+      "spraying": "spraying (many accounts)",
+      "distributed_attempts": "attempts from many networks",
+      "mfa_failures": "wrong codes",
+      "invalid_tokens": "invalid tickets/links",
+      "reset_requests": "many password requests",
+      "new_device": "new device",
+      "new_network": "new network",
+      "new_country": "new country",
+      "unusual_hour": "unusual time",
+      "privileged_account": "privileged account",
+      "attack_mode": "attack mode",
+      "degraded": "degraded mode (no Redis)"
+    }
   },
   "blocks": {
     "title": "Blocks",
@@ -171,7 +189,8 @@
       "risk": "Risk assessment",
       "step_up": "Confirmation (step-up)",
       "alerts": "Alert rules",
-      "retention": "Retention"
+      "retention": "Retention",
+      "passwords": "Passwords and geolocation"
     }
   }
 }

@@ -4,8 +4,15 @@ Jede Regel liefert ``(Gewicht, Grund)``; Score = min(100, Summe). Fehlende Daten
 Signal (kein Pauschalzuschlag ausser «unbekanntes Gerät»). Client-Merkmale (User-Agent) wiegen
 höchstens 5, weil sie fälschbar sind. Die Gründe stehen als Codes in ``auth_event.risk_reasons``.
 
+«Neues Land» (Gewicht 10): Land der Quelle kam in 90 Tagen erfolgreicher Anmeldungen des Kontos
+nie vor. Nur mit lokaler GeoIP-Datenbank (app/core/geoip.py, DB-IP «IP to Country Lite») und nur
+mit Baseline (mindestens eine frühere Anmeldung mit bekanntem Land); allein nie entscheidend
+(10 < ``auth_risk_moderate``). Bewusst: unbekanntes Gerät + neues Netz + neues Land = 30 erreicht
+«moderat» (zweiter Faktor bzw. E-Mail-Code) - genau die Lage eines Fremdzugriffs aus dem Ausland;
+auf einem bekannten Gerät bleibt eine Reise bei 20 (normal).
+
 Bewusst weggelassen (kein lokaler Datenbestand, externe Dienste nur nach Rückfrage):
-- neues Land / «Impossible Travel» (bräuchte eine GeoIP-Datenbank),
+- «Impossible Travel» (bräuchte Koordinaten statt nur des Landes),
 - Netz-Reputation/ASN (Abschnitt 8.4, CrowdSec erst später).
 
 Klassen und Massnahmen (Mandant):
@@ -23,6 +30,7 @@ from app.auth_security.events import POLICY_VERSION
 from app.core.config import settings
 
 NORMAL, MODERATE, HIGH, CRITICAL = "normal", "moderate", "high", "critical"
+NEW_COUNTRY_WEIGHT = 10
 
 
 @dataclass
@@ -38,6 +46,7 @@ class Signals:
     known_device: bool = False
     has_device_cookie: bool = False
     new_network: bool | None = None    # None = keine Baseline (erste Anmeldungen)
+    new_country: bool | None = None    # None = kein GeoIP oder keine Baseline mit Land
     unusual_hour: bool | None = None
     privileged: bool = False
     attack_mode: bool = False
@@ -95,6 +104,8 @@ def assess(signals: Signals) -> Assessment:
         add(10, "new_device")
     if signals.new_network:
         add(10, "new_network")
+    if signals.new_country:
+        add(NEW_COUNTRY_WEIGHT, "new_country")
     if signals.unusual_hour:
         add(3, "unusual_hour")
     if signals.privileged:

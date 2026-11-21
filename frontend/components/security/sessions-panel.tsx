@@ -9,13 +9,15 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
+import { COUNTRY_SOURCE_URL, countryName } from "@/lib/utils/country";
 import { formatDateTime } from "@/lib/utils/format";
 import type { KnownDevice, SessionDeviceList } from "@/types/api";
 
 /**
  * «Angemeldete Geräte» im Profil › Sicherheit (Auth-Audit 2026-11-20, SEC-AUTH-011): aktive
  * Sitzungen mit grobem Gerät und letzter Aktivität, einzelne Sitzung abmelden, alle anderen
- * abmelden. Keine IP-Adressen - das Backend speichert sie nicht.
+ * abmelden. Keine IP-Adressen - das Backend speichert sie nicht; nur das Land (Ländercode aus der
+ * lokalen GeoIP-Datenbank, mit Quellenangabe DB-IP, CC BY 4.0).
  */
 export function SessionsPanel({ open }: { open: boolean }) {
   const t = useTranslations("security.sessions");
@@ -89,6 +91,7 @@ export function SessionsPanel({ open }: { open: boolean }) {
   }
 
   const others = data?.sessions.filter((session) => !session.current).length ?? 0;
+  const hasCountry = Boolean(data?.sessions.some((session) => session.country) || devices?.some((device) => device.country));
   return (
     <div className="grid">
       <div>
@@ -105,6 +108,7 @@ export function SessionsPanel({ open }: { open: boolean }) {
               <strong>{session.user_agent_family ?? t("unknownDevice")}</strong>{" "}
               {session.current ? <Badge variant="success">{t("current")}</Badge> : null}
               {session.via_bridge ? <span className="field-help"> {t("viaBridge", { host: session.host ?? "" })}</span> : null}
+              {session.country ? <span className="field-help sessions-country">{t("country", { country: countryName(session.country, locale) ?? session.country })}</span> : null}
             </td>
             <td>{formatDateTime(session.last_seen_at, locale)}</td>
             <td>{formatDateTime(session.created_at, locale)}</td>
@@ -132,6 +136,7 @@ export function SessionsPanel({ open }: { open: boolean }) {
             <td>
               <strong>{device.user_agent_family ?? t("unknownDevice")}</strong>{" "}
               {device.current ? <Badge variant="success">{t("current")}</Badge> : null}
+              {device.country ? <span className="field-help sessions-country">{t("country", { country: countryName(device.country, locale) ?? device.country })}</span> : null}
             </td>
             <td>{formatDateTime(device.last_seen_at, locale)}</td>
             <td>{formatDateTime(device.created_at, locale)}</td>
@@ -143,6 +148,13 @@ export function SessionsPanel({ open }: { open: boolean }) {
           </tr>
         ))}
       </DataTable>
+      {hasCountry ? (
+        <p className="field-help">
+          {t.rich("countrySource", {
+            link: (chunks) => <a href={COUNTRY_SOURCE_URL} target="_blank" rel="noopener noreferrer">{chunks}</a>,
+          })}
+        </p>
+      ) : null}
       <div className="table-actions table-actions-start">
         <button type="button" className="button-secondary" onClick={() => void revokeOthers()} disabled={busy || (others === 0 && !data?.legacy_session)}>
           {t("revokeOthers")}

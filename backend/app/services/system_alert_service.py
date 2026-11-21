@@ -68,6 +68,8 @@ _CHECK_TITLES_DE = {
     "captcha_endpoint": "Captcha-Endpunkt",
     "security": "Sicherheitsereignisse",
     "auth_protection": "Anmeldeschutz",
+    "password_leak": "Leak-Prüfung neuer Passwörter",
+    "geoip": "Länder-Geolocation",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "runtime": "Auslastung der Dienstprozesse",
@@ -96,6 +98,8 @@ _CHECK_PROBLEM_TITLES_DE = {
     "captcha_endpoint": "Captcha-Endpunkt nicht erreichbar",
     "security": "Auffällige Sicherheitsereignisse",
     "auth_protection": "Anmeldeschutz gestört oder Redis fast voll",
+    "password_leak": "Neue Passwörter ohne Leak-Prüfung angenommen",
+    "geoip": "Länder-Geolocation gestört",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "runtime": "Dienstprozesse blockiert oder ausgelastet",
@@ -180,6 +184,15 @@ def _check_message(check) -> str:
             if params.get("privateSourcePercent") not in (None, "0"):
                 parts.append(f"{params.get('privateSourcePercent')} % der Anmeldungen mit privater Quelladresse (IPv6/docker-proxy oder trusted_proxy_cidrs prüfen)")
             return "; ".join(parts) + " - siehe RUNBOOK, Anmeldeschutz."
+        case "password_leak":
+            if params.get("state") == "missing":
+                return "HIBP nicht erreichbar und lokale Leak-Liste fehlt - Image prüfen (backend/app/core/leaked_passwords.bin)."
+            return (
+                f"{params.get('unchecked')} neue Passwörter in 24 Stunden ungeprüft angenommen (HIBP nicht erreichbar, "
+                "lokale Liste fehlt) - Netzwerk des Backends und Image prüfen."
+            )
+        case "geoip":
+            return "GeoIP-Datenbank nicht lesbar - Job geoip_update prüfen."
         case "orphaned_files":
             return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
         case "tenant_offboarding":

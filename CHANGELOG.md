@@ -6,6 +6,36 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+### Update
+
+- Migration `0215_auth_geo_country` (drei nullable Spalten mit Ländercode: `auth_event.src_country`,
+  `auth_session.country`, `auth_known_device.last_country`).
+- Neues Volume `geoip_data` (job-worker schreibt, Backend liest) für die DB-IP-Länderdatenbank; der Job
+  `geoip_update` lädt sie beim ersten Tick. Ausgehend braucht der job-worker HTTPS zu
+  `download.db-ip.com`, das Backend zu `api.pwnedpasswords.com`. Ohne Internet:
+  `PASSWORD_LEAK_CHECK=local-only` und `GEOIP_AUTO_UPDATE=false` (RUNBOOK Abschnitt 23).
+- Neue Einstellungen (kein Secret): `PASSWORD_LEAK_CHECK` (`on`/`local-only`/`off`),
+  `PASSWORD_LEAK_MIN_COUNT`, `GEOIP_AUTO_UPDATE`. Neue Abhängigkeit `maxminddb==3.2.0` (Apache-2.0).
+
+### Sicherheit
+
+- **Geleakte Passwörter werden abgelehnt (SEC-AUTH-015):** alle Setzpfade (Einladung, Passwort
+  vergessen, Profil, Verwaltung, Plattform-Admin-Konten) prüfen nach der Stärkeregel gegen die
+  Pwned-Passwords-Range-API (k-Anonymität: nur 5 Hex-Zeichen des SHA-1, mit Padding), Rückfall auf
+  eine lokale Liste (SecLists, MIT). Eigene Meldung «Dieses Passwort ist aus einem Datenleck bekannt»
+  in allen Sprachen. Plattform-Admin-Konten bekommen dabei dieselbe Stärkeregel wie Konten.
+- **Risikosignal «neues Land»:** Land der Anmeldung lokal aus DB-IP «IP to Country Lite» (CC BY 4.0);
+  Land in 90 Tagen erfolgreicher Anmeldungen nie gesehen → 10 Punkte, allein nie entscheidend, ohne
+  Baseline kein Signal. Gespeichert wird nur der Ländercode, nie die IP.
+
+### Neu
+
+- «Angemeldete Geräte», Mails «neues Gerät»/Sicherheitswarnung und die Ereignisliste im Admin-Panel
+  zeigen das Land (übersetzter Name, Quellenangabe DB-IP); die Ereignisliste zeigt zusätzlich die
+  Risikogründe. Systemmonitor: Checks `password_leak` und `geoip` («nicht eingerichtet» ohne Alarm).
+
 ## [1.5.0] - 2026-11-21
 
 Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).

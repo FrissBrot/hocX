@@ -149,7 +149,8 @@
     "source_blocked": "Gli accessi da questa connessione sono momentaneamente bloccati.",
     "auth_temporarily_unavailable": "Accesso momentaneamente non possibile. Riprova tra qualche minuto.",
     "rate_limiter_unavailable": "La protezione degli accessi non è disponibile per un attimo. Riprova subito.",
-    "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova."
+    "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova.",
+    "password_leaked": "Questa password è nota da una fuga di dati e quindi non è sicura. Scegline un’altra."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",
@@ -204,6 +205,8 @@
     "knownEmpty": "Nessun dispositivo noto.",
     "forget": "Dimentica",
     "forgetConfirm": "Dimenticare questo dispositivo? Le sue sessioni verranno terminate.",
-    "forgotten": "Dispositivo dimenticato."
+    "forgotten": "Dispositivo dimenticato.",
+    "country": "Paese: {country}",
+    "countrySource": "Il paese viene determinato sul server con <link>«IP to Country Lite» di DB-IP.com</link> (CC BY 4.0). Viene salvato solo il paese, mai l’indirizzo IP."
   }
 }

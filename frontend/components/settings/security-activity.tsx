@@ -125,6 +125,8 @@ export function SecurityActivity({ initial, canRevoke }: { initial: TenantSecuri
           ))}
         </DataTable>
       </section>
+      {/* Datenschutz-Hinweis für die Datenschutzerklärung der Organisation (Leak-Prüfung, Land) */}
+      <p className="field-help">{t("privacyHint")}</p>
     </div>
   );
 }

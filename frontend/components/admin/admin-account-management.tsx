@@ -7,6 +7,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { PlatformAdminSummary } from "@/types/api";
@@ -19,6 +20,8 @@ type Props = {
 
 export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props) {
   const t = useTranslations("admin.accountManagement");
+  // Passwortregel/Leak-Prüfung (password_weak, password_leaked) übersetzt aus security.apiErrors
+  const tSecurity = useTranslations("security");
   const showToast = useToast();
   const confirm = useConfirm();
   const [admins, setAdmins] = useState(initialAdmins);
@@ -43,7 +46,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       setRole("owner");
       showToast(t("toasts.created"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.createFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.createFailed")), "error");
     }
   }
 
@@ -69,7 +72,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       showToast(t("toasts.updated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.updateFailed")), "error");
     }
   }
 
@@ -90,7 +93,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       showToast(t("toasts.updated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.updateFailed")), "error");
     }
   }
 

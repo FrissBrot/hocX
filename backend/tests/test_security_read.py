@@ -129,7 +129,10 @@ def test_policy_has_no_secrets():
     names = [name for group in policy.values() for name in group]
     assert names, "Richtlinien leer"
     for name in names:
+        # Bekannte Nicht-Geheimnisse: Passkey-Grenzen und die Leak-Prüfung (Modus/Schwelle/Timeout)
         lowered = name.lower().replace("passkey", "")
+        if lowered in ("password_leak_check", "password_leak_min_count", "password_leak_timeout_seconds"):
+            lowered = "leak_check"
         for word in ("secret", "key", "token", "password", "cookie"):
             assert word not in lowered, name
     for group in policy.values():

@@ -410,6 +410,8 @@
     },
     "login": {
       "action": "Sicherheit prüfen",
+      "country": "Land: {country}",
+      "countrySource": "Länderangabe: «IP to Country Lite» von DB-IP.com (CC BY 4.0), lokal ermittelt.",
       "device": "Gerät: {device}",
       "hint": "Warst du das nicht? Ändere sofort dein Passwort und melde unter «Angemeldete Geräte» alle Sitzungen ab.",
       "introAlert": "An deinem Konto bei {tenant} ist uns Folgendes aufgefallen:",
@@ -426,6 +428,7 @@
         "distributed_attempts": "Versuche aus vielen Netzwerken",
         "invalid_tokens": "ungültige Anmeldelinks",
         "mfa_failures": "falsche Codes",
+        "new_country": "neues Land",
         "new_device": "neues Gerät",
         "new_network": "neues Netzwerk",
         "privileged_account": "Konto mit Verwaltungsrechten",

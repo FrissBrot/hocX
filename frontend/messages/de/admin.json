@@ -254,6 +254,16 @@
         "title": "Anmeldeschutz",
         "detail": "{limiterErrors, number} Limiter-Ausfälle (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} Sperren · {privateSourcePercent, number} % private Quellen",
         "problem": "Anmeldeschutz gestört oder Redis fast voll"
+      },
+      "password_leak": {
+        "title": "Leak-Prüfung neuer Passwörter",
+        "detail": "{state, select, hibp {HIBP-Range-API (k-Anonymität) aktiv} fallback {HIBP zuletzt nicht erreichbar – lokale Liste aktiv} local {Nur lokale Liste} missing {Weder HIBP noch lokale Liste verfügbar} off {Abgeschaltet} other {{unchecked, number} neue Passwörter in 24 h ungeprüft angenommen}}",
+        "problem": "Neue Passwörter ohne Leak-Prüfung angenommen"
+      },
+      "geoip": {
+        "title": "Länder-Geolocation",
+        "detail": "{state, select, ok {DB-IP «IP to Country Lite», Stand {buildDate} ({ageDays, number} Tage)} other {Nicht eingerichtet – Signal «neues Land» entfällt}}",
+        "problem": "Länder-Geolocation gestört"
       }
     },
     "problems": {
@@ -594,6 +604,10 @@
       "metrics_rollup": {
         "title": "Kennzahlen-Rollup",
         "description": "Rechnet täglich Zählwerte für Dashboard und Analysen (Mandanten, aktive Benutzer, Anmeldungen, Fehler, Speicher, Nutzung je Modul). Erster Lauf ergänzt 90 Tage rückwirkend."
+      },
+      "geoip_update": {
+        "title": "Länder-Geolocation aktualisieren",
+        "description": "Lädt monatlich die Datenbank «IP to Country Lite» von DB-IP (CC BY 4.0) für das Anmeldesignal «neues Land», prüft sie und ersetzt die alte. Täglicher Tick, Download nur bei neuer Monatsausgabe."
       }
     }
   },

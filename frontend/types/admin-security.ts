@@ -45,6 +45,8 @@ export type AuthEventRow = {
   risk_score: number | null;
   risk_reasons: string[];
   user_agent_family: string | null;
+  /** Ländercode der Quelle (lokale GeoIP-Datenbank), nie die IP */
+  src_country?: string | null;
 };
 
 export type AuthPolicy = Record<string, Record<string, number | string | boolean>>;

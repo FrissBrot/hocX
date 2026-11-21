@@ -293,6 +293,8 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
+      # DB-IP-Länderdatenbank (Signal «neues Land»), nur lesend - schreibt der job-worker
+      - geoip_data:/var/lib/hocx/geoip:ro
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
@@ -922,6 +924,8 @@ services:
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
       - ./storage-local/work:/app/storage-local/work
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      # Job geoip_update (app/core/geoip.py) legt hier die DB-IP-Länderdatenbank ab
+      - geoip_data:/var/lib/hocx/geoip
     networks:
       - default
       - storage
@@ -1061,6 +1065,8 @@ networks:
     internal: true
 
 volumes:
+  # DB-IP-Länderdatenbank (app/core/geoip.py): job-worker schreibt, Backend liest
+  geoip_data:
   postgres18_data:
   clamav_db:
   local_s3_data:

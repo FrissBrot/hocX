@@ -27,7 +27,8 @@ import { PasswordStrengthMeter } from "./password-strength-meter";
  * Faktor → Fertig. Nach dem Passwort liefert das Backend ein Login-Ticket (nur im Body); mit dem
  * bestätigten Faktor bzw. dem erlaubten «Später einrichten» ist die Person direkt angemeldet. Ob
  * der Faktor Pflicht ist, entscheidet das Backend (`mfa.required`, account_requires_mfa).
- * Passwortstärke: lib/password-strength.ts, dieselbe Regel prüft das Backend.
+ * Passwortstärke: lib/password-strength.ts, dieselbe Regel prüft das Backend. Zusätzlich prüft nur
+ * das Backend, ob das Passwort aus einem Datenleck bekannt ist (`password_leaked`, SEC-AUTH-015).
  */
 function readTokenFromFragment(): { token: string; invite: boolean } {
   const params = new URLSearchParams(window.location.hash.slice(1));
@@ -117,6 +118,7 @@ export default function SetPasswordPage() {
       const code = apiErrorCode(caught);
       if (code === "link_invalid") setStep("invalid");
       else if (code === "rate_limited") setStep("locked");
+      else if (code === "password_leaked") setError(t("passwordLeaked"));
       else setError(code === "password_weak" ? t("passwordWeak") : t("failed"));
     } finally {
       setBusy(false);

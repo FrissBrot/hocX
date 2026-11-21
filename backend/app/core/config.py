@@ -277,6 +277,18 @@ class Settings(BaseSettings):
     auth_alert_blocks_per_hour: int = 10
     auth_alert_cross_tenant: int = 3
     auth_alert_redis_memory_ratio: float = 0.7
+    # Prüfung neuer Passwörter auf bekannte Leaks (SEC-AUTH-015, app/core/password_leak.py):
+    # "on" = HIBP-Range-API (k-Anonymität, nur 5 Hex-Zeichen des SHA-1 gehen raus), Rückfall auf die
+    # lokale Liste; "local-only" = nur die lokale Liste im Image; "off" = keine Leak-Prüfung.
+    password_leak_check: str = "on"
+    # Ab so vielen Vorkommen in HIBP gilt ein Passwort als geleakt (lokale Liste: immer Treffer).
+    password_leak_min_count: int = 1
+    password_leak_timeout_seconds: float = 2.0
+    # Länder-Geolocation als Risikosignal (app/core/geoip.py): DB-IP «IP to Country Lite» (CC BY 4.0),
+    # lokal als MMDB, vom Job geoip_update (job-worker) monatlich geladen. Fehlt die Datei, entfällt
+    # das Signal still. GEOIP_AUTO_UPDATE=false: kein Download (Datei bei Bedarf selbst ablegen).
+    geoip_db_path: str = "/var/lib/hocx/geoip/dbip-country-lite.mmdb"
+    geoip_auto_update: bool = True
 
     admin_auth_secret: str = "hocx-local-dev-admin-secret"
     admin_session_cookie: str = "hocx_admin_session"

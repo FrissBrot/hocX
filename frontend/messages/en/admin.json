@@ -254,6 +254,16 @@
         "title": "Sign-in protection",
         "detail": "{limiterErrors, number} limiter failures (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocks · {privateSourcePercent, number} % private sources",
         "problem": "Sign-in protection impaired or Redis almost full"
+      },
+      "password_leak": {
+        "title": "Leaked-password check",
+        "detail": "{state, select, hibp {HIBP range API (k-anonymity) active} fallback {HIBP recently unreachable – local list active} local {Local list only} missing {Neither HIBP nor local list available} off {Disabled} other {{unchecked, number} new passwords accepted unchecked in 24 h}}",
+        "problem": "New passwords accepted without leak check"
+      },
+      "geoip": {
+        "title": "Country geolocation",
+        "detail": "{state, select, ok {DB-IP “IP to Country Lite”, built {buildDate} ({ageDays, number} days)} other {Not set up – “new country” signal disabled}}",
+        "problem": "Country geolocation impaired"
       }
     },
     "problems": {
@@ -594,6 +604,10 @@
       "metrics_rollup": {
         "title": "Metrics rollup",
         "description": "Computes daily counts for the dashboard and analytics (tenants, active users, sign-ins, errors, storage, usage per module). The first run backfills 90 days."
+      },
+      "geoip_update": {
+        "title": "Update country geolocation",
+        "description": "Downloads DB-IP’s “IP to Country Lite” database (CC BY 4.0) monthly for the “new country” login signal, validates it and replaces the old one. Daily tick, download only when a new monthly edition exists."
       }
     }
   },

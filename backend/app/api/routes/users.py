@@ -383,6 +383,7 @@ def list_my_sessions(db: Session = Depends(get_db), user: CurrentUser = Depends(
             SessionDeviceRead(
                 id=row.public_id, current=row.id == user.session_id, user_agent_family=row.user_agent_family, host=row.host,
                 created_at=row.created_at, last_seen_at=row.last_seen_at, mfa=row.mfa, via_bridge=row.parent_id is not None,
+                country=row.country,
             )
             for row in rows
         ],
@@ -399,7 +400,7 @@ def list_my_devices(request: Request, db: Session = Depends(get_db), user: Curre
     current_hashes = set(devices._hash_candidates(current)) if current else set()
     return [
         KnownDeviceRead(id=row.public_id, user_agent_family=row.user_agent_family, created_at=row.created_at,
-                        last_seen_at=row.last_seen_at, current=row.device_hash in current_hashes)
+                        last_seen_at=row.last_seen_at, current=row.device_hash in current_hashes, country=row.last_country)
         for row in devices.list_active(db, user.user_id)
     ]
 

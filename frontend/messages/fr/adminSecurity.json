@@ -80,7 +80,8 @@
       "subject": "Compte",
       "network": "Réseau",
       "risk": "Risque",
-      "client": "Appareil"
+      "client": "Appareil",
+      "country": "Pays"
     },
     "actorKinds": {
       "user": "Utilisateur",
@@ -91,7 +92,24 @@
     "empty": "Aucun événement pour cette sélection.",
     "previous": "Plus récents",
     "next": "Plus anciens",
-    "pageInfo": "Entrées {from, number}–{to, number}"
+    "pageInfo": "Entrées {from, number}–{to, number}",
+    "countrySource": "Pays : <link>« IP to Country Lite » de DB-IP.com</link> (CC BY 4.0), déterminé localement, sans adresse IP enregistrée.",
+    "reasons": {
+      "account_failures": "nombreux échecs (compte)",
+      "source_failures": "échecs de la source",
+      "spraying": "spraying (nombreux comptes)",
+      "distributed_attempts": "tentatives depuis de nombreux réseaux",
+      "mfa_failures": "codes erronés",
+      "invalid_tokens": "tickets/liens invalides",
+      "reset_requests": "nombreuses demandes de mot de passe",
+      "new_device": "nouvel appareil",
+      "new_network": "nouveau réseau",
+      "new_country": "nouveau pays",
+      "unusual_hour": "heure inhabituelle",
+      "privileged_account": "compte privilégié",
+      "attack_mode": "mode attaque",
+      "degraded": "mode dégradé (sans Redis)"
+    }
   },
   "blocks": {
     "title": "Blocages",
@@ -171,7 +189,8 @@
       "risk": "Évaluation du risque",
       "step_up": "Confirmation (step-up)",
       "alerts": "Règles d’alerte",
-      "retention": "Conservation"
+      "retention": "Conservation",
+      "passwords": "Mots de passe et géolocalisation"
     }
   }
 }

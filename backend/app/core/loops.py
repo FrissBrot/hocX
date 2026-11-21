@@ -388,6 +388,15 @@ async def metrics_rollup_loop() -> None:
     await run_advisory_locked_loop(name="metrics_rollup", interval_seconds=60 * 60, task=metrics_rollup_service.run_job)
 
 
+async def geoip_update_loop() -> None:
+    """DB-IP «IP to Country Lite» (CC BY 4.0) für das Risikosignal «neues Land» laden bzw.
+    monatlich ersetzen (app/core/geoip.py). Im job-worker, weil nur er das Volume beschreiben darf;
+    das Backend liest die Datei nur. GEOIP_AUTO_UPDATE=false: Tick ohne Download."""
+    from app.core import geoip
+
+    await run_advisory_locked_loop(name="geoip_update", interval_seconds=24 * 60 * 60, task=lambda _db: geoip.update_database())
+
+
 LoopFactory = Callable[[], Coroutine[Any, Any, None]]
 
 # Leicht: Steuerung, Überwachung, kurze Abfragen - bleiben in den uvicorn-Workern.
@@ -423,4 +432,5 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     file_trash_purge_loop,
     capture_date_file_sync_loop,
     metrics_rollup_loop,
+    geoip_update_loop,
 )

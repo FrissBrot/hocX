@@ -395,7 +395,8 @@ def account_link_complete(payload: AccountLinkComplete, request: Request, respon
         from app.auth_security.context import current as current_context
 
         device_id = devices.new_device_id()
-        devices.remember(db, user_id=user.id, tenant_id=user.tenant_id, device_id=device_id, user_agent_family=current_context().user_agent_family)
+        ctx = current_context()
+        devices.remember(db, user_id=user.id, tenant_id=user.tenant_id, device_id=device_id, user_agent_family=ctx.user_agent_family, country=ctx.country)
         db.commit()
         devices.set_cookie(response, device_id)
         return AccountLinkCompleteRead(purpose=purpose)

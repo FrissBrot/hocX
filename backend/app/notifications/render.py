@@ -19,6 +19,7 @@ from decimal import Decimal
 from html import escape
 from zoneinfo import ZoneInfo
 
+from app.core import geoip
 from app.documents.strings import text
 
 TZ = ZoneInfo("Europe/Zurich")
@@ -513,6 +514,7 @@ SECURITY_KEYS = {
 LOGIN_REASONS = (
     "new_device", "new_network", "unusual_hour", "account_failures", "source_failures", "spraying",
     "distributed_attempts", "mfa_failures", "invalid_tokens", "reset_requests", "privileged_account", "attack_mode",
+    "new_country",
 )
 LOGIN_KIND_KEYS = {
     "security.login_new_device": "email.login.label.newDevice",
@@ -531,8 +533,10 @@ def _render_login(
     *, lang: str, group: str, items: list[dict], greeting: str, tenant_name: str, base_url: str | None, can_login: bool, brand: Brand,
 ) -> Rendered:
     """Anmeldeschutz: neues Gerät (abschaltbar) bzw. verdächtige Anmeldung, viele Fehlversuche,
-    Anmeldung nach Sperre (Pflicht). Keine IP und kein Ort, nur das grobe Gerät."""
+    Anmeldung nach Sperre (Pflicht). Keine IP und kein Ort, nur das grobe Gerät und - falls die
+    GeoIP-Datenbank eingerichtet ist - das Land (übersetzter Name, mit Quellenangabe)."""
     alert = group == "account.login_alert"
+    with_country = False
     rows = []
     plain_rows = []
     for item in items:
@@ -540,6 +544,10 @@ def _render_login(
         details = []
         if item.get("device"):
             details.append(text(lang, "email.login.device", device=item["device"]))
+        country = geoip.country_name(item.get("country"), lang)
+        if country:
+            details.append(text(lang, "email.login.country", country=country))
+            with_country = True
         reasons = [text(lang, f"email.login.reason.{reason}") for reason in item.get("reasons") or [] if reason in LOGIN_REASONS]
         if reasons:
             details.append(", ".join(reasons))
@@ -562,6 +570,9 @@ def _render_login(
         html_parts.append(_button(action, url))
         plain += [f"{action}: {url}", ""]
     extra = (text(lang, "email.security.mandatory"),) if alert else ()
+    if with_country:
+        # Quellenangabe der Länderdaten (DB-IP «IP to Country Lite», CC BY 4.0) in der Fusszeile
+        extra = (*extra, text(lang, "email.login.countrySource"))
     return _finish(
         subject=text(lang, "email.login.subjectAlert" if alert else "email.login.subjectNotice", tenant=tenant_name),
         brand=brand, label=_via(lang), card=_card("".join(html_parts)),

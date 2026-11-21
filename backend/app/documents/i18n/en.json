@@ -410,6 +410,8 @@
     },
     "login": {
       "action": "Review security",
+      "country": "Country: {country}",
+      "countrySource": "Country data: “IP to Country Lite” by DB-IP.com (CC BY 4.0), looked up locally.",
       "device": "Device: {device}",
       "hint": "Wasn't you? Change your password right away and sign out all sessions under «Signed-in devices».",
       "introAlert": "We noticed the following on your account at {tenant}:",
@@ -426,6 +428,7 @@
         "distributed_attempts": "attempts from many networks",
         "invalid_tokens": "invalid sign-in links",
         "mfa_failures": "wrong codes",
+        "new_country": "new country",
         "new_device": "new device",
         "new_network": "new network",
         "privileged_account": "account with admin rights",

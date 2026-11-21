@@ -44,13 +44,14 @@ def create(
     ip_net_hash: str | None = None,
     user_agent_family: str | None = None,
     expires_at: datetime | None = None,
+    country: str | None = None,
 ) -> AuthSession:
     """Neue Session (ohne Commit)."""
     now = _now()
     row = AuthSession(
         tenant_id=tenant_id, user_id=user_id, mfa=mfa, amr=sorted(set(amr)), device_id=device_id, parent_id=parent_id,
         host=(host or "")[:255] or None, ip_net_hash=ip_net_hash, user_agent_family=user_agent_family,
-        created_at=now, last_seen_at=now, auth_time=now,
+        country=country, created_at=now, last_seen_at=now, auth_time=now,
         expires_at=expires_at or now + timedelta(hours=settings.auth_session_absolute_hours),
     )
     db.add(row)

@@ -116,7 +116,9 @@ def known_device(db: Session, user_id: int, device_id: str | None) -> AuthKnownD
     )
 
 
-def remember(db: Session, *, user_id: int, tenant_id: int, device_id: str, user_agent_family: str | None) -> tuple[AuthKnownDevice, bool]:
+def remember(
+    db: Session, *, user_id: int, tenant_id: int, device_id: str, user_agent_family: str | None, country: str | None = None,
+) -> tuple[AuthKnownDevice, bool]:
     """Gerät als bekannt speichern bzw. auffrischen (ohne Commit). Liefert (Gerät, neu?)."""
     existing = db.scalar(
         select(AuthKnownDevice).where(AuthKnownDevice.user_id == user_id, AuthKnownDevice.device_hash.in_(_hash_candidates(device_id)))
@@ -129,9 +131,11 @@ def remember(db: Session, *, user_id: int, tenant_id: int, device_id: str, user_
         existing.device_hash = device_hash(device_id)
         if user_agent_family:
             existing.user_agent_family = user_agent_family
+        if country:
+            existing.last_country = country
         db.flush()
         return existing, not was_usable
-    row = AuthKnownDevice(tenant_id=tenant_id, user_id=user_id, device_hash=device_hash(device_id), user_agent_family=user_agent_family, last_seen_at=now, created_at=now)
+    row = AuthKnownDevice(tenant_id=tenant_id, user_id=user_id, device_hash=device_hash(device_id), user_agent_family=user_agent_family, last_country=country, last_seen_at=now, created_at=now)
     db.add(row)
     db.flush()
     return row, True
