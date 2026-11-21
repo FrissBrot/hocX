@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.schemas.admin import AdminUserPage, PlatformAdminCreate, PlatformAdminRead, PlatformAdminUpdate
@@ -18,7 +20,9 @@ class AdminUserService:
     def __init__(self, user_service: UserService | None = None) -> None:
         self.user_service = user_service or UserService()
 
-    def list_users(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminUserPage:
+    def list_users(
+        self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None, tenant_public_id: uuid.UUID | None = None,
+    ) -> AdminUserPage:
         # list_all_users() already batch-loads everything in 3 queries total (see its
         # docstring) - offset/limit (and now q) are applied in Python rather than pushed
         # into that query so the existing N+1-avoidance logic doesn't need to change.
@@ -28,6 +32,8 @@ class AdminUserService:
         # current page, so a match on page 3 was invisible while browsing page 1 - mirrors
         # the same name/email/tenant/role substring match the frontend used to do locally.
         all_users = self.user_service.list_all_users(db)
+        if tenant_public_id is not None:
+            all_users = [user for user in all_users if user.tenant_id == tenant_public_id]
         if q:
             query = q.strip().lower()
             if query:
@@ -61,8 +67,44 @@ class PlatformAdminService:
         return PlatformAdminRead.model_validate(admin)
 
     def list_admins(self, db: Session) -> list[PlatformAdminRead]:
+        """Mit Passkey-Anzahl und letzter Anmeldung (1.5.1). Letzte Anmeldung aus auth_event
+        (Index idx_auth_event_admin_ts, je Admin ein Indexzugriff); ältere Anmeldungen, die vor
+        dem Anmeldeschutz oder ausserhalb der Aufbewahrung liegen, aus audit_log (admin.login)."""
         admins = db.query(PlatformAdmin).order_by(PlatformAdmin.email.asc()).all()
-        return [self._read_model(admin) for admin in admins]
+        if not admins:
+            return []
+        ids = [admin.id for admin in admins]
+        passkeys = dict(db.execute(
+            text(
+                "SELECT platform_admin_id, count(*) FROM user_mfa_factor WHERE platform_admin_id = ANY(:ids) "
+                "AND factor_type = 'webauthn' GROUP BY platform_admin_id"
+            ),
+            {"ids": ids},
+        ).all())
+        last_event = dict(db.execute(
+            text(
+                "SELECT a.id, (SELECT max(e.ts) FROM auth_event e WHERE e.platform_admin_id = a.id "
+                "AND e.event_type = 'admin.login.success') FROM platform_admin a WHERE a.id = ANY(:ids)"
+            ),
+            {"ids": ids},
+        ).all())
+        missing = [admin.email for admin in admins if last_event.get(admin.id) is None]
+        last_audit: dict[str, datetime] = {}
+        if missing:
+            last_audit = dict(db.execute(
+                text(
+                    "SELECT actor_email, max(created_at) FROM audit_log WHERE action = 'admin.login' "
+                    "AND actor_email = ANY(:emails) GROUP BY actor_email"
+                ),
+                {"emails": missing},
+            ).all())
+        return [
+            self._read_model(admin).model_copy(update={
+                "passkey_count": int(passkeys.get(admin.id, 0)),
+                "last_login_at": last_event.get(admin.id) or last_audit.get(admin.email),
+            })
+            for admin in admins
+        ]
 
     def create_admin(self, db: Session, payload: PlatformAdminCreate) -> PlatformAdminRead:
         admin = PlatformAdmin(

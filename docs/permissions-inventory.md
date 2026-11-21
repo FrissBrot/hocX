@@ -6,11 +6,11 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 613 (Plattform-Admin: 140)
+- Routen gesamt: 627 (Plattform-Admin: 154)
 - Mandanten-Routen mit Rechteprüfung: 385
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 88
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
-- Routen, die Dateiinhalt ausliefern: 22
+- Routen, die Dateiinhalt ausliefern: 23
 
 ## Lücken (Routen ohne Prüfung und ohne Begründung)
 
@@ -31,6 +31,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 
 | Route | Handler | Prüfung |
 |---|---|---|
+| `POST /api/admin/auth-security/export` | admin_auth_security.export_security_data | Plattform-Admin (W), Step-up security-export |
 | `GET /api/admin/storage/migrations/{migration_id}/report` | admin_storage.download_report | Plattform-Admin (O) |
 | `POST /api/admin/tenants/{tenant_id}/export` | admin.export_tenant | Plattform-Admin (W), Step-up tenant-export |
 | `GET /api/document-assets/{asset_id}/content` | document_studio.get_document_asset_content | meetings.read |

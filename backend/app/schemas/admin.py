@@ -5,12 +5,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.base import PublicIdModel
 from app.schemas.mfa import MfaPendingLoginRead
 from app.schemas.role import RoleRef
-from app.schemas.user import UserRead
+from app.schemas.user import SystemRoleKey, UserBase, UserRead, UserUpdate
 
 
 class AdminLoginRequest(BaseModel):
@@ -59,6 +59,40 @@ class PlatformAdminRead(PublicIdModel):
     role: Literal["owner", "support"]
     created_at: datetime
     updated_at: datetime
+    # Admin-Liste (1.5.1): Anzahl Passkeys und letzte erfolgreiche Anmeldung (auth_event, sonst
+    # audit_log). Nur in der Liste gefüllt.
+    passkey_count: int | None = None
+    last_login_at: datetime | None = None
+
+
+class AdminUserCreate(UserBase):
+    """Konto anlegen im Plattform-Admin (1.5.1): ohne Passwort. Ein Login entsteht nur über die
+    Einladung (``send_invite``), deren Link die Person selbst einlöst. ``password``/``login_enabled``
+    werden abgelehnt (extra=forbid) statt still ignoriert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    system_role: SystemRoleKey | None = None
+    tenant_id: uuid.UUID
+    send_invite: bool = False
+
+
+class AdminUserUpdate(UserUpdate):
+    """Wie UserUpdate, aber ohne Passwort: der Plattform-Admin sendet einen Zurücksetzungslink
+    (POST /api/admin/users/{id}/password-reset) statt ein Passwort zu kennen."""
+
+    @model_validator(mode="after")
+    def _no_password(self) -> "AdminUserUpdate":
+        if self.password is not None:
+            raise ValueError("Passwörter setzt der Plattform-Admin nicht mehr - Zurücksetzungslink senden")
+        return self
+
+
+class AdminAccessLinkRead(BaseModel):
+    """Ergebnis von POST /api/admin/users/{id}/password-reset: welcher Link verschickt wird."""
+
+    purpose: Literal["password_reset", "invite"]
 
 
 class AdminTenantCreate(BaseModel):

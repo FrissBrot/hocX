@@ -124,8 +124,14 @@ STEP_UP = {
     ("DELETE", "/api/admin/tenants/{tenant_id}/users/{user_id}"): "user-manage",
     ("DELETE", "/api/admin/users/{user_id}/mfa/factors/{factor_id}"): "user-mfa-reset",
     # Anmeldeschutz: Sperre aufheben hilft einer gestohlenen Session, sperren trifft Verfügbarkeit
-    ("POST", "/api/admin/auth-security/blocks"): "platform-settings",
-    ("DELETE", "/api/admin/auth-security/blocks/{subject}"): "platform-settings",
+    ("POST", "/api/admin/auth-security/blocks"): "security-block",
+    ("DELETE", "/api/admin/auth-security/blocks/{subject}"): "security-block",
+    # 1.5.1: Export und Subjekt-Auflösung (Personenbezug) mit eigenem Zweck
+    ("POST", "/api/admin/auth-security/export"): "security-export",
+    ("POST", "/api/admin/auth-security/events/{event_id}/resolve-subject"): "security-resolve",
+    # 1.5.1: Zurücksetzungslink statt Passwort setzen
+    ("POST", "/api/admin/users/{user_id}/password-reset"): "user-credentials",
+    ("POST", "/api/admin/tenants/import/authorize"): "tenant-import",
     ("PUT", "/api/admin/notifications"): "platform-settings",
     ("PUT", "/api/admin/notifications/email"): "platform-settings",
     ("POST", "/api/admin/notifications/status-token"): "platform-settings",
@@ -169,8 +175,10 @@ EXEMPT = {
     ("POST", "/api/admin/backups/{job_id}/verify"): _OPERATIONAL,
     ("POST", "/api/admin/backups/{job_id}/cancel"): _OPERATIONAL,
     ("POST", "/api/admin/tenants"): "legt einen leeren Mandanten an (Konten darin brauchen user-manage)",
-    ("POST", "/api/admin/tenants/import"): "legt einen neuen Mandanten aus einer Datei an, kein Zugriff auf bestehende Daten; "
-                                           "Body bis 2 GiB (Hash im Browser unpraktisch)",
+    ("POST", "/api/admin/tenants/import"): "verlangt ein Import-Ticket aus tenants/import/authorize (dort Passkey-Bestätigung, "
+                                           "an Admin und Namen gebunden, einmalig)",
+    ("POST", "/api/admin/auth-security/alerts/ack"): "Quittung einer Warnung (Markierung), ändert keine Sperre, Meldung oder Daten; Audit-Log",
+    ("POST", "/api/admin/auth-security/alerts/unack"): "nimmt nur die Quittung zurück; Audit-Log",
     ("PATCH", "/api/admin/tenants/{tenant_id}"): "nur Name und Profilbild",
     ("PUT", "/api/admin/tenants/{tenant_id}/website-listing"): "Anzeige auf der Website",
     ("PUT", "/api/admin/tenants/{tenant_id}/features"): _COMMERCIAL,
@@ -282,3 +290,38 @@ def test_step_up_with_encoded_path_over_http(db):
     assert ok.status_code not in (401, 403), ok.text
     other = client.put("/api/admin/features/anderes", content=body, headers={"Content-Type": "application/json", **header_for(encoded)})
     assert other.status_code == 401
+
+
+def test_step_up_start_schema_lists_every_purpose():
+    """Die Start-Route nimmt genau die Zwecke an, die das Backend kennt (sonst 422 im Browser)."""
+    from typing import get_args
+
+    from app.schemas.mfa import AdminStepUpStart
+
+    assert set(get_args(AdminStepUpStart.model_fields["purpose"].annotation)) == set(PURPOSES)
+
+
+def test_tenant_import_needs_single_use_ticket(db):
+    """Security-Review M2: Upload nur mit einmaligem Ticket aus der bestätigten authorize-Route."""
+    from app.core.admin_step_up import require_step_up
+
+    admin, passkey, actor = _owner(db)
+    client = _client(db, actor)
+    files = {"file": ("x.zip", b"PK", "application/zip")}
+    assert client.post("/api/admin/tenants/import", data={"new_name": "Neu"}, files=files).status_code == 403
+    client.app.dependency_overrides[require_step_up("tenant-import")] = lambda: actor
+    ticket = client.post("/api/admin/tenants/import/authorize", json={"new_name": "Neu"}).json()["ticket"]
+    # anderer Name: abgelehnt und Ticket verbraucht
+    assert client.post("/api/admin/tenants/import", data={"new_name": "Anders"}, files=files,
+                       headers={"X-Hocx-Import-Ticket": ticket}).status_code == 403
+    assert client.post("/api/admin/tenants/import", data={"new_name": "Neu"}, files=files,
+                       headers={"X-Hocx-Import-Ticket": ticket}).status_code == 403
+    ticket = client.post("/api/admin/tenants/import/authorize", json={"new_name": "Neu"}).json()["ticket"]
+    # Mit gültigem Ticket geht es bis zum eigentlichen Import (die Testdatei ist kein echtes Archiv)
+    import zipfile
+
+    try:
+        accepted = client.post("/api/admin/tenants/import", data={"new_name": "Neu"}, files=files, headers={"X-Hocx-Import-Ticket": ticket})
+    except zipfile.BadZipFile:
+        return
+    assert accepted.status_code != 403, accepted.text

@@ -1,12 +1,14 @@
 import tempfile
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -22,6 +24,9 @@ from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
+    AdminAccessLinkRead,
+    AdminUserCreate,
+    AdminUserUpdate,
     NotificationLogPage,
     AuditLogEntryRead,
     AuditLogPage,
@@ -75,12 +80,13 @@ from app.schemas.mfa import (
 )
 from app.schemas.catalog_config import CatalogImportPreview, CatalogImportRequest
 from app.schemas.storage import StorageUsageRead
-from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
+from app.schemas.user import TenantUpdate, UserCreate, UserRead
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services import ntfy_client, system_alert_service, system_health_service
 from app.core.sql_like import prefix_pattern
+from app.core.rate_limit import enforce_rate_limit
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.admin_upload_pipeline_status_service import AdminUploadPipelineStatusService
 from app.services.admin_tenant_service import AdminTenantService
@@ -233,24 +239,64 @@ def list_audit_log(
     tenant_id: uuid.UUID | None = None,
     action: str | None = Query(default=None, max_length=100),
     outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
+    actor_kind: Literal["admin", "user", "system"] | None = None,
+    actor_id: uuid.UUID | None = None,
+    entity_type: str | None = Query(default=None, max_length=64, pattern=r"^[a-z0-9_.]+$"),
+    entity_id: int | None = Query(default=None, ge=1),
     limit: int = Query(50, gt=0, le=200),
     offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
-    Präfix (``user.login`` trifft auch ``user.login_failed``)."""
+    Präfix (``user.login`` trifft auch ``user.login_failed``). 1.5.1: Zeitraum (``from``/``to``,
+    Kalendertage Europe/Zurich, inklusive), Akteur (Art und öffentliche ID - nie die E-Mail in der
+    URL) und Entität (Typ-Code und ID)."""
+    actor_email = None
+    actor_user_id = None
+    if actor_id is not None:
+        if actor_kind == "admin":
+            actor_email = db.scalar(select(PlatformAdmin.email).where(PlatformAdmin.public_id == actor_id))
+            if actor_email is None:
+                raise HTTPException(status_code=404, detail="Admin account not found")
+        elif actor_kind == "user":
+            actor_user_id = _resolve_user_id(db, actor_id)
+        else:
+            raise HTTPException(status_code=422, detail="actor_id braucht actor_kind admin oder user")
+    start = datetime.combine(date_from, datetime.min.time(), tzinfo=_ZURICH) if date_from else None
+    end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=_ZURICH) if date_to else None
     params = {
         "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
         "action": prefix_pattern(action) if action else None,
         "outcome": outcome,
+        "start": start,
+        "end": end,
+        "actor_kind": actor_kind,
+        "actor_email": actor_email,
+        "actor_user_id": actor_user_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
         "limit": limit,
         "offset": offset,
     }
+    # Akteur-Art: Plattform-Admins schreiben nur actor_email (ohne actor_user_id), Konten
+    # actor_user_id, System/Hintergrund keines von beiden.
     filters = """
         WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
           AND (CAST(:action AS text) IS NULL OR l.action LIKE :action ESCAPE '\\')
-          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)"""
+          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)
+          AND (CAST(:start AS timestamptz) IS NULL OR l.created_at >= :start)
+          AND (CAST(:end AS timestamptz) IS NULL OR l.created_at < :end)
+          AND (CAST(:actor_kind AS text) IS NULL
+               OR (:actor_kind = 'user' AND l.actor_user_id IS NOT NULL)
+               OR (:actor_kind = 'admin' AND l.actor_user_id IS NULL AND l.actor_email IS NOT NULL)
+               OR (:actor_kind = 'system' AND l.actor_user_id IS NULL AND l.actor_email IS NULL))
+          AND (CAST(:actor_email AS text) IS NULL OR l.actor_email = :actor_email)
+          AND (CAST(:actor_user_id AS bigint) IS NULL OR l.actor_user_id = :actor_user_id)
+          AND (CAST(:entity_type AS text) IS NULL OR l.entity_type = :entity_type)
+          AND (CAST(:entity_id AS bigint) IS NULL OR l.entity_id = :entity_id)"""
     rows = db.execute(
         text(
             """
@@ -285,6 +331,31 @@ def list_audit_log(
     # Admin in 10 Minuten. Erst am Ende, weil audit.log committet.
     _audit_audit_log_view(db, current_admin, params["tenant_id"])
     return page
+
+
+_ZURICH = ZoneInfo("Europe/Zurich")
+_AUDIT_FILTER_CACHE_SECONDS = 600
+_audit_entity_types_cache: tuple[float, list[str]] | None = None
+
+
+@router.get("/audit-log/filter-options")
+def audit_log_filter_options(db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Auswahllisten der Audit-Filter: Entitätstypen (Codes, 10 min zwischengespeichert) und
+    Plattform-Admins (öffentliche ID + Anzeigename - in die URL kommt nur die ID)."""
+    global _audit_entity_types_cache
+    import time as _time
+
+    now = _time.monotonic()
+    if _audit_entity_types_cache is None or now - _audit_entity_types_cache[0] > _AUDIT_FILTER_CACHE_SECONDS:
+        types = list(db.execute(text(
+            "SELECT DISTINCT entity_type FROM audit_log WHERE entity_type IS NOT NULL ORDER BY entity_type LIMIT 200"
+        )).scalars())
+        _audit_entity_types_cache = (now, types)
+    admins = db.execute(select(PlatformAdmin.public_id, PlatformAdmin.display_name).order_by(PlatformAdmin.display_name)).all()
+    return {
+        "entity_types": _audit_entity_types_cache[1],
+        "admins": [{"id": str(public_id), "display_name": name} for public_id, name in admins],
+    }
 
 
 AUDIT_VIEW_INTERVAL_MINUTES = 10
@@ -969,14 +1040,61 @@ def export_tenant(
 MAX_TENANT_IMPORT_UPLOAD_BYTES = 2000 * 1024 * 1024
 
 
+# ── Import-Ticket (1.5.1, Security-Review M2) ──────────────────────────────────────────────
+# Der Import lädt bis 2 GiB hoch; FastAPI liest das Formular, bevor Dependencies laufen. Die
+# Passkey-Bestätigung gilt deshalb nicht dem Upload selbst, sondern einem kleinen JSON-Aufruf, der ein
+# einmaliges Ticket (an Admin und Mandantennamen gebunden, 2 h gültig, nur im Header) ausstellt.
+IMPORT_TICKET_HEADER = "X-Hocx-Import-Ticket"
+IMPORT_TICKET_TTL_SECONDS = 2 * 60 * 60
+
+
+class TenantImportAuthorize(BaseModel):
+    new_name: str = Field(min_length=1, max_length=200)
+
+
+def _import_ticket_key(ticket: str) -> str:
+    import hashlib
+
+    return "admin-import-ticket:" + hashlib.sha256(ticket.encode()).hexdigest()
+
+
+@router.post("/tenants/import/authorize", dependencies=[Depends(require_step_up("tenant-import"))])
+def authorize_tenant_import(payload: TenantImportAuthorize, current_admin: CurrentAdmin = Depends(require_admin_write)):
+    import json as _json
+    import secrets as _secrets
+
+    from app.core.redis_client import get_redis_sync
+
+    ticket = _secrets.token_urlsafe(32)
+    get_redis_sync().set(
+        _import_ticket_key(ticket), _json.dumps({"admin_id": current_admin.admin_id, "new_name": payload.new_name.strip()}),
+        ex=IMPORT_TICKET_TTL_SECONDS,
+    )
+    return {"ticket": ticket, "expires_in": IMPORT_TICKET_TTL_SECONDS}
+
+
+def _consume_import_ticket(request: Request, admin_id: int, new_name: str) -> None:
+    import json as _json
+
+    from app.core.redis_client import get_redis_sync
+
+    ticket = request.headers.get(IMPORT_TICKET_HEADER) or ""
+    raw = get_redis_sync().getdel(_import_ticket_key(ticket)) if 16 <= len(ticket) <= 200 else None
+    data = _json.loads(raw) if raw else None
+    if not data or data.get("admin_id") != admin_id or data.get("new_name") != new_name.strip():
+        raise HTTPException(status_code=403, detail={"code": "admin_step_up_required", "message": "Diese Aktion muss mit einem Passkey bestätigt werden"})
+
+
 @router.post("/tenants/import", response_model=TenantImportResult, status_code=201)
 async def import_tenant(
+    request: Request,
     new_name: str = Form(...),
     file: UploadFile = File(...),
     password: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    _consume_import_ticket(request, current_admin.admin_id, new_name)
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
     return await run_coroutine_in_thread(_import_tenant_impl, new_name=new_name, file=file, password=password, db=db, current_admin=current_admin)
@@ -1107,30 +1225,91 @@ def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = D
 def list_users(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
-    q: str | None = Query(None),
+    q: str | None = Query(None, max_length=200),
+    tenant_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
-    audit.log(db, action="admin.users_viewed", actor_email=current_admin.email, details={"offset": offset, "search": bool(q)})
-    return user_service.list_users(db, limit=limit, offset=offset, q=q)
+    """1.5.1: optional auf einen Mandanten eingeschränkt (Remote-Mandanten-Picker, ID in der URL)."""
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    audit.log(db, action="admin.users_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              details={"offset": offset, "search": bool(q)})
+    return user_service.list_users(db, limit=limit, offset=offset, q=q, tenant_public_id=tenant_id)
 
 
 @router.post("/users", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead, status_code=201)
 def create_user(
-    payload: UserCreate,
+    payload: AdminUserCreate,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    """Konto ohne Passwort anlegen (1.5.1); mit ``send_invite`` bekommt die Person eine Einladung
+    und setzt ihr Passwort selbst. Die Einladung braucht eine eigene Bestätigung nicht: sie gehört
+    zur bestätigten Anlage (gleicher Body)."""
+    if payload.send_invite:
+        if not (payload.email or "").strip():
+            raise HTTPException(status_code=400, detail={"code": "email_required", "message": "Für eine Einladung braucht das Konto eine E-Mail-Adresse."})
+        _ensure_email_sending(db)
+        # Adresse vorab prüfen, damit nicht ein Konto entsteht und die Einladung danach scheitert
+        # (Security-Review N4); die Kapazität prüft die Einladung erst beim Einlösen erneut.
+        from app.services.user_service import UserService
+
+        UserService().ensure_login_email_available(db, payload.email, excluding_user_id=None)
     try:
-        result = user_service.create_user(db, payload)
+        result = user_service.create_user(db, UserCreate(**payload.model_dump(exclude={"send_invite"}), login_enabled=False))
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be created") from exc
+    internal_user_id = public_id_service.resolve_internal_id(db, AppUser, result.id)  # nosemgrep: public-id-lookup-without-tenant -- Plattform-Admin, eben angelegtes Konto
     audit.log(
         db, action="admin.user_created", actor_email=current_admin.email,
-        entity_type="user", entity_id=public_id_service.resolve_internal_id(db, AppUser, result.id),
+        entity_type="user", entity_id=internal_user_id, details={"invite": payload.send_invite},
     )
+    if payload.send_invite and internal_user_id is not None:
+        _send_access_link(db, internal_user_id, current_admin)
     return result
+
+
+def _ensure_email_sending(db: Session) -> None:
+    from app.models import PlatformNotificationSettings
+
+    row = db.get(PlatformNotificationSettings, 1)
+    if not (row and row.email_enabled and row.smtp_host and row.email_from_address):
+        raise HTTPException(status_code=409, detail={"code": "email_not_configured", "message": "Der E-Mail-Versand ist nicht eingerichtet."})
+
+
+def _send_access_link(db: Session, internal_user_id: int, current_admin: CurrentAdmin) -> str:
+    from app.notifications import account as account_links
+
+    user = db.get(AppUser, internal_user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Je Konto höchstens 5 Links pro Stunde (kein Mail-Bombing über das Admin-Panel)
+    enforce_rate_limit(f"admin-access-link:{internal_user_id}", limit=5, period_seconds=60 * 60)
+    purpose = account_links.issue_by_platform_admin(db, user)
+    audit.log(
+        db, action="admin.user_password_reset_sent" if purpose == "password_reset" else "admin.user_invited",
+        actor_email=current_admin.email, tenant_id=user.tenant_id, entity_type="user", entity_id=internal_user_id,
+    )
+    auth_events.record(
+        event_type="reset.request", outcome="info", user_id=user.id, tenant_id=user.tenant_id,
+        platform_admin_id=current_admin.admin_id, actor_kind="admin", details={"by_admin": True, "purpose": purpose},
+    )
+    return purpose
+
+
+@router.post("/users/{user_id}/password-reset", dependencies=[Depends(require_step_up("user-credentials"))], response_model=AdminAccessLinkRead)
+def send_user_password_reset(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    """Ersetzt das Passwort-Setzen durch den Admin (Plan §8.1 Nr. 6): Konto mit Login bekommt einen
+    Zurücksetzungslink (60 min), Konto ohne Login eine Einladung (7 Tage). Der Admin sieht weder
+    Link noch Passwort; Sitzungen enden erst, wenn die Person das neue Passwort setzt."""
+    internal_user_id = _resolve_user_id(db, user_id)
+    _ensure_email_sending(db)
+    return AdminAccessLinkRead(purpose=_send_access_link(db, internal_user_id, current_admin))
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
@@ -1150,11 +1329,12 @@ def get_user(
 @router.patch("/users/{user_id}", dependencies=[Depends(require_step_up("user-manage"))], response_model=UserRead)
 def update_user(
     user_id: uuid.UUID,
-    payload: UserUpdate,
+    payload: AdminUserUpdate,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     internal_user_id = _resolve_user_id(db, user_id)
+    old_email = db.scalar(select(AppUser.email).where(AppUser.id == internal_user_id))
     try:
         user = user_service.update_user(db, internal_user_id, payload)
     except SQLAlchemyError as exc:
@@ -1165,7 +1345,8 @@ def update_user(
     audit.log(
         db, action="admin.user_updated", actor_email=current_admin.email,
         entity_type="user", entity_id=internal_user_id,
-        details={"password_changed": bool(payload.password), "is_active": payload.is_active},
+        details={"is_active": payload.is_active, "login_enabled": payload.login_enabled,
+                 "email_changed": (user.email or "") != (old_email or ""), "roles_changed": payload.system_role is not None or payload.role_ids is not None},
     )
     return user
 
