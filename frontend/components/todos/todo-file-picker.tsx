@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { computePopoverPosition } from "@/components/ui/popover";
 import { browserApiFetch } from "@/lib/api/client";
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { formatFileSize } from "@/lib/utils/format";
 import type { FileOverviewItem, TodoDetailFile } from "@/types/api";
 
@@ -35,6 +36,9 @@ export function TodoFilePicker({ excludeIds, onPick, onUploadFiles }: {
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Escape schliesst zuerst die offene Liste, nicht den Pendenz-Dialog darunter (Popup-Stapel).
+  usePopupEscape(open, () => setOpen(false), panelRef);
 
   useEffect(() => {
     if (!open) return;
@@ -84,10 +88,7 @@ export function TodoFilePicker({ excludeIds, onPick, onUploadFiles }: {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Escape" && open) {
-      event.stopPropagation();
-      setOpen(false);
-    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setOpen(true);
       if (optionCount) setActive((activeIndex + (event.key === "ArrowDown" ? 1 : optionCount - 1)) % optionCount);
@@ -136,7 +137,7 @@ export function TodoFilePicker({ excludeIds, onPick, onUploadFiles }: {
       }}
     />}
     {open && typeof document !== "undefined" && createPortal(
-      <div id={listId} className="dropdown-panel todo-file-results" role="listbox" aria-label={t("filesLabel")} style={panelStyle}>
+      <div ref={panelRef} id={listId} className="dropdown-panel todo-file-results" role="listbox" aria-label={t("filesLabel")} style={panelStyle}>
         <div className="dropdown-panel-scroll">
           {results === null ? <div className="dropdown-empty">{t("filesLoading")}</div>
             : visible.length === 0 ? <div className="dropdown-empty">{t("filesNoMatches")}</div>

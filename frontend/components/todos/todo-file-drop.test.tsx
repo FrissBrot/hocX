@@ -159,6 +159,19 @@ describe("Pendenz-Dialog als Dropzone", () => {
 });
 
 describe("Dateisuche", () => {
+  it("Escape schliesst nur die Trefferliste, nicht den Dialog", async () => {
+    const onClose = vi.fn();
+    mount({ onClose });
+    const input = await screen.findByPlaceholderText("Hochgeladene Datei suchen …");
+    input.focus();
+    fireEvent.focus(input);
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+
   it("öffnet die Trefferliste als Portal ausserhalb des Feldes (Dialoghöhe bleibt)", async () => {
     const { container } = render(<TodoFilePicker excludeIds={[]} onPick={vi.fn()} onUploadFiles={vi.fn()} />);
     fireEvent.focus(screen.getByRole("combobox"));
