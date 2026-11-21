@@ -9,6 +9,7 @@ from app.core.client_ip import client_ip
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
 from app.core.rate_limit import enforce_rate_limit, within_limit
+from app.auth_security import devices
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
 from app.schemas.mfa import (
     EmailChallengeVerifyRequest,
@@ -311,20 +312,62 @@ def _issue_password_reset(email: str) -> None:
             record_system_error(db, exc=exc)
 
 
+# Eigenes Kontingent je bekanntem Gerät der Inhaberin (zusätzlich zum Adress-Kontingent)
+PASSWORD_RESET_DEVICE_LIMIT = 3
+PASSWORD_RESET_DEVICE_ACCOUNT_LIMIT = 6
+_HOUR = 60 * 60
+
+
+def _issue_password_reset_from_known_device(email: str, device_id: str) -> None:
+    """Wie _issue_password_reset, wenn das Adress-Kontingent aufgebraucht ist: sendet nur, wenn das
+    Gerät (signiertes Gerätecookie) DIESEM Konto bekannt ist, und dann höchstens
+    PASSWORD_RESET_DEVICE_LIMIT-mal pro Stunde je Gerät. Läuft wie dort erst nach der Antwort -
+    Kontosuche und Geräteprüfung verraten so weder über Antwort noch Zeit etwas."""
+    with SessionLocal() as db:
+        try:
+            user = account_links.password_reset_account(db, email)
+            device = devices.known_device(db, user.id, device_id) if user is not None else None
+            if device is None:
+                return
+            if not within_limit(f"password-reset-device:{user.id}|{device.id}", limit=PASSWORD_RESET_DEVICE_LIMIT, period_seconds=_HOUR):
+                return
+            # Dach je Konto über alle Geräte (Security-Review): auch viele bekannte Geräte
+            # ergeben nicht beliebig viele Mails
+            if not within_limit(f"password-reset-device-user:{user.id}", limit=PASSWORD_RESET_DEVICE_ACCOUNT_LIMIT, period_seconds=_HOUR):
+                return
+            account_links.request_password_reset(db, email)
+        except Exception as exc:  # noqa: BLE001 - ausserhalb des Requests: selbst ins Fehlerprotokoll
+            db.rollback()
+            record_system_error(db, exc=exc)
+
+
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED, response_model=dict[str, str])
 def request_password_reset(payload: PasswordResetRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
     """Antwortet immer gleich (202), ob es das Konto gibt oder nicht (kein Orakel). Je Quelle höchstens
     10 Anfragen in 15 Minuten (429 trifft nur die anfragende Quelle). Je Adresse werden höchstens
     drei Mails pro Stunde tatsächlich verschickt, und je Adresse und Quelle höchstens drei - darüber
     antwortet die Route weiter mit 202, ohne zu senden (Security-Review M6: kein Mail-Bombing, und
-    die Inhaberin bekommt nie 429 wegen fremder Anfragen)."""
+    die Inhaberin bekommt nie 429 wegen fremder Anfragen).
+
+    Ist das Adress- oder das Adress+Quelle-Kontingent aufgebraucht (z. B. durch Fremde), kommt die
+    Inhaberin von einem ihrer bekannten Geräte (signiertes Gerätecookie, ``auth_known_device``
+    dieses Kontos) trotzdem durch: eigenes Kontingent von drei Mails pro Stunde je Gerät, höchstens
+    sechs pro Stunde und Konto über alle Geräte. Ob Konto und Gerät passen, prüft erst die
+    Hintergrundaufgabe nach der Antwort - Antwort und Arbeit im Request sind für alle Fälle gleich
+    (Signaturprüfung des Cookies immer, keine Datenbankabfrage). Ein fremdes, gefälschtes oder
+    einem anderen Konto gehörendes Gerätecookie bekommt kein Zusatzkontingent."""
     source = source_address(client_ip(request)).exact
     enforce_rate_limit(f"password-reset-ip:{source}", limit=10, period_seconds=15 * 60)
     email = normalize_email(payload.email)
-    send = within_limit(f"password-reset-email-src:{email}|{source}", limit=3, period_seconds=60 * 60)
-    send = send and within_limit(f"password-reset-email:{email}", limit=3, period_seconds=60 * 60)
-    if send and _email_sending_enabled(db):
-        background.add_task(_issue_password_reset, payload.email)
+    # Immer auswerten (gleiche Arbeit für alle Anfragen), nur die Signatur - keine DB-Abfrage
+    device_id = devices.device_id_from_request(request)
+    send = within_limit(f"password-reset-email-src:{email}|{source}", limit=3, period_seconds=_HOUR)
+    send = send and within_limit(f"password-reset-email:{email}", limit=3, period_seconds=_HOUR)
+    if _email_sending_enabled(db):
+        if send:
+            background.add_task(_issue_password_reset, payload.email)
+        elif device_id is not None:
+            background.add_task(_issue_password_reset_from_known_device, payload.email, device_id)
     return {"status": "accepted"}
 
 
@@ -349,7 +392,6 @@ def account_link_complete(payload: AccountLinkComplete, request: Request, respon
         # Das Gerät, auf dem das Passwort zurückgesetzt wurde, gilt als bekannt (Security-Review M3):
         # sonst bliebe die Inhaberin nach dem Reset (der alle Geräte vergisst) unter einem laufenden
         # Angriff ausgesperrt.
-        from app.auth_security import devices
         from app.auth_security.context import current as current_context
 
         device_id = devices.new_device_id()

@@ -739,6 +739,87 @@ def test_password_reset_sends_at_most_three_mails_per_hour_and_never_429s_the_ow
         app.dependency_overrides.pop(get_db, None)
 
 
+class _SameSession:
+    """SessionLocal-Ersatz für die Hintergrundaufgabe: dieselbe Test-Session, nicht schliessen."""
+
+    def __init__(self, db) -> None:
+        self.db = db
+
+    def __call__(self):
+        return self
+
+    def __enter__(self):
+        return self.db
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+
+def test_password_reset_known_device_has_its_own_quota(db, monkeypatch):
+    """Fremde verbrauchen das Adress-Kontingent; die Inhaberin kommt von einem bekannten Gerät
+    ihres Kontos trotzdem durch (3/h je Gerät). Ohne, mit gefälschtem oder mit dem Gerätecookie
+    eines anderen Kontos gibt es kein Zusatzkontingent - die Antwort ist immer 202."""
+    from app.api.routes import auth as auth_route
+    from app.main import app
+    from app.notifications import account
+
+    tenant = make_tenant(db)
+    owner_user = make_app_user(db, email="geraet-opfer@example.com", tenant_id=tenant.id, role_code="writer")
+    other_user = make_app_user(db, email="geraet-andere@example.com", tenant_id=tenant.id, role_code="writer")
+    own_device = _known_device(db, owner_user)
+    foreign_device = _known_device(db, other_user)
+    name = devices.cookie_name()
+    forged = {name: own_device[name][:-4] + "AAAA"}
+
+    general: list[str] = []
+    via_device: list[str] = []
+    monkeypatch.setattr(auth_route, "_email_sending_enabled", lambda _db: True)
+    monkeypatch.setattr(auth_route, "_issue_password_reset", lambda email: general.append(email))
+    monkeypatch.setattr(auth_route, "SessionLocal", _SameSession(db))
+    monkeypatch.setattr(account, "request_password_reset", lambda _db, email: via_device.append(email))
+    app.dependency_overrides[get_db] = lambda: db
+
+    def post(client, cookies=None):
+        headers = {"cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())} if cookies else {}
+        response = client.post("/api/auth/password-reset/request", json={"email": owner_user.email}, headers=headers)
+        assert response.status_code == 202 and response.json() == {"status": "accepted"}
+
+    try:
+        strangers = [TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=(f"198.51.100.{n}", 40000)) for n in range(1, 3)]
+        owner = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=("203.0.113.9", 40000))
+        for client in strangers:
+            for _ in range(3):
+                post(client)
+        assert len(general) == 3 and via_device == []  # Kontingent der Adresse aufgebraucht
+
+        post(owner)  # ohne Gerätecookie: nichts
+        post(owner, forged)  # gefälschte Signatur: nichts
+        post(owner, foreign_device)  # Gerät eines anderen Kontos: nichts
+        assert len(general) == 3 and via_device == []
+
+        # Frische Quelle: nur das Adress-Kontingent ist erschöpft
+        owner_fresh = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False, client=("203.0.113.10", 40000))
+        for _ in range(4):
+            post(owner_fresh, own_device)  # bekanntes Gerät: eigenes Kontingent, 3 pro Stunde
+        assert via_device == [owner_user.email] * 3
+        assert len(general) == 3
+
+        # Widerrufenes Gerät bekommt nichts; ein zweites bekanntes Gerät wieder 3, danach Dach je Konto (6)
+        revoked = _known_device(db, owner_user)
+        devices.known_device(db, owner_user.id, devices.parse_cookie(revoked[name])).revoked_at = datetime.now(UTC)
+        db.flush()
+        post(owner_fresh, revoked)
+        assert len(via_device) == 3
+        second, third = _known_device(db, owner_user), _known_device(db, owner_user)
+        for _ in range(3):
+            post(owner_fresh, second)
+        assert len(via_device) == 6
+        post(owner_fresh, third)
+        assert len(via_device) == 6
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
 # ── SEC-AUTH-012 Telemetrie (T18) und Mandanten-Daten (T13) ─────────────
 
 # Keine Codes (6 Ziffern), keine E-Mails, keine Tokens/Tickets (lange Base64url-Folgen)
