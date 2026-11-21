@@ -438,10 +438,13 @@
       "subjectNotice": "{tenant}: accesso da un nuovo dispositivo"
     },
     "loginCode": {
-      "ignore": "Non stai cercando di accedere? Allora qualcuno conosce la tua password: cambiala subito.",
+      "changeLink": "cambiala subito",
+      "ignoreBody": "Allora qualcuno conosce la tua password – {link}. Non dare questo codice a nessuno.",
+      "ignoreLead": "Non stai cercando di accedere?",
       "intro": "Per accedere a {tenant} serve una conferma aggiuntiva. Inserisci questo codice nella pagina di accesso:",
-      "subject": "{tenant}: codice di conferma per il tuo accesso",
-      "validity": "Il codice è valido {minutes} minuti e una sola volta."
+      "subject": "{code} è il tuo codice di conferma per {tenant}",
+      "validUntil": "Valido fino alle {time}",
+      "validityShort": "{minutes} minuti · utilizzabile una sola volta"
     },
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
     "security": {

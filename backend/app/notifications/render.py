@@ -716,25 +716,61 @@ def render(*, group: str, **kwargs) -> Rendered:
     return render_account(group=group, **kwargs)
 
 
-def render_login_code(*, lang: str, code: str, minutes: int, recipient_name: str, tenant_name: str) -> Rendered:
+def _code_digits(code: str) -> str:
+    """Code als einzelne Kästchen (Design «Bestätigungscode»), nach drei Ziffern eine Lücke."""
+    cells = []
+    for index, digit in enumerate(code):
+        gap = 18 if index and index % 3 == 0 else 4
+        cells.append(
+            f'<td style="padding:0 4px 0 {gap}px"><div style="width:40px;height:50px;line-height:50px;border:1px solid #d5dbe5;'
+            f'border-radius:8px;background:#ffffff;font-family:{SANS};font-size:26px;font-weight:600;color:{NAVY};'
+            f'text-align:center">{escape(digit)}</div></td>'
+        )
+    return f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px -4px"><tr>{"".join(cells)}</tr></table>'
+
+
+def render_login_code(
+    *, lang: str, code: str, minutes: int, recipient_name: str, tenant_name: str, base_url: str | None = None,
+    now: datetime | None = None,
+) -> Rendered:
     """Bestätigungscode für eine Anmeldung mit erhöhtem Risiko (Konto ohne zweiten Faktor,
-    app/auth_security/email_challenge.py). Der Code steht nur im Mailtext, nie in einem Link."""
+    app/auth_security/email_challenge.py). Der Code steht im Betreff (damit er in der Mitteilung
+    sichtbar ist) und im Mailtext, nie in einem Link. «Ändere es sofort» führt ins Profil ›
+    Sicherheit, sofern eine Link-Basis eingerichtet ist."""
+    from datetime import UTC, timedelta
+
     greeting = text(lang, "email.greeting", name=recipient_name)
     intro = text(lang, "email.loginCode.intro", tenant=tenant_name)
-    validity = text(lang, "email.loginCode.validity", minutes=minutes)
-    ignore = text(lang, "email.loginCode.ignore")
-    code_html = (
-        f'<p style="margin:0 0 16px;font-family:Menlo,Consolas,monospace;font-size:28px;letter-spacing:6px;'
-        f'font-weight:700;color:{INK}">{escape(code)}</p>'
+    until = ((now or datetime.now(UTC)) + timedelta(minutes=minutes)).astimezone(TZ).strftime("%H:%M")
+    valid_until = text(lang, "email.loginCode.validUntil", time=until)
+    validity = text(lang, "email.loginCode.validityShort", minutes=minutes)
+    lead = text(lang, "email.loginCode.ignoreLead")
+    change = text(lang, "email.loginCode.changeLink")
+    url = _security_url(base_url, True)
+    change_html = (
+        f'<a href="{escape(url, quote=True)}" style="color:{RED_DARK};font-weight:700;text-decoration:underline">{escape(change)}</a>'
+        if url else f'<strong style="font-weight:700">{escape(change)}</strong>'
     )
+    body_html = escape(text(lang, "email.loginCode.ignoreBody", link="\x00")).replace("\x00", change_html)
+    code_panel = (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 16px">'
+        f'<tr><td style="background:#e9eef6;border-radius:10px;padding:18px 20px 14px">{_code_digits(code)}'
+        f'<div style="font-family:{SANS};font-size:13px;line-height:1.5;color:{MUTED}">'
+        f'<strong style="color:{INK};font-weight:600">{escape(valid_until)}</strong> · {escape(validity)}</div></td></tr></table>'
+    )
+    warning = _box(f'<strong style="font-weight:700">{escape(lead)}</strong> {body_html}', background=RED_SOFT, color=RED_DARK)
     html_parts = [
         _kicker(text(lang, "email.kicker.security"), RED), _title(text(lang, "email.title.loginCode")), _greeting(greeting, intro),
-        code_html, _p(escape(validity), size=13, color=MUTED), _box(escape(ignore), background=RED_SOFT, color=RED_DARK, weight=600),
+        code_panel, warning,
     ]
-    plain = [greeting, "", intro, "", code, "", validity, "", ignore, ""]
+    body_text = text(lang, "email.loginCode.ignoreBody", link=change)
+    plain = [greeting, "", intro, "", code, "", f"{valid_until} · {validity}", "", f"{lead} {body_text}"]
+    plain += [url, ""] if url else [""]
     return _finish(
-        subject=text(lang, "email.loginCode.subject", tenant=tenant_name), brand=Brand(tenant_name), label=_via(lang),
-        card=_card("".join(html_parts)), footer=_footer(lang, tenant_name, base_url=None, can_login=True, settings=False), plain=plain,
+        subject=text(lang, "email.loginCode.subject", code=code, tenant=tenant_name), brand=Brand(tenant_name), label=_via(lang),
+        card=_card("".join(html_parts)),
+        footer=_footer(lang, tenant_name, base_url=None, can_login=True, settings=False, extra=(text(lang, "email.security.mandatory"),)),
+        plain=plain,
     )
 
 

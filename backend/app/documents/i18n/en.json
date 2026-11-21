@@ -438,10 +438,13 @@
       "subjectNotice": "{tenant}: sign-in from a new device"
     },
     "loginCode": {
-      "ignore": "Didn't just try to sign in? Then someone knows your password - change it right away.",
+      "changeLink": "change it right away",
+      "ignoreBody": "Then someone knows your password – {link}. Never share this code with anyone.",
+      "ignoreLead": "Didn't just try to sign in?",
       "intro": "To sign in at {tenant} we need an extra confirmation. Enter this code on the sign-in page:",
-      "subject": "{tenant}: confirmation code for your sign-in",
-      "validity": "The code is valid for {minutes} minutes and only once."
+      "subject": "{code} is your confirmation code for {tenant}",
+      "validUntil": "Valid until {time}",
+      "validityShort": "{minutes} minutes · single use"
     },
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
     "security": {

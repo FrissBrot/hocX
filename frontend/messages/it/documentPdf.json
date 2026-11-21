@@ -776,10 +776,13 @@
       }
     },
     "loginCode": {
-      "subject": "{tenant}: codice di conferma per il tuo accesso",
+      "subject": "{code} è il tuo codice di conferma per {tenant}",
       "intro": "Per accedere a {tenant} serve una conferma aggiuntiva. Inserisci questo codice nella pagina di accesso:",
-      "validity": "Il codice è valido {minutes} minuti e una sola volta.",
-      "ignore": "Non stai cercando di accedere? Allora qualcuno conosce la tua password: cambiala subito."
+      "validUntil": "Valido fino alle {time}",
+      "validityShort": "{minutes} minuti · utilizzabile una sola volta",
+      "ignoreLead": "Non stai cercando di accedere?",
+      "ignoreBody": "Allora qualcuno conosce la tua password – {link}. Non dare questo codice a nessuno.",
+      "changeLink": "cambiala subito"
     }
   },
   "eventField": {

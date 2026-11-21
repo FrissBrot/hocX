@@ -776,10 +776,13 @@
       }
     },
     "loginCode": {
-      "subject": "{tenant}: Bestätigungscode für deine Anmeldung",
+      "subject": "{code} ist dein Bestätigungscode für {tenant}",
       "intro": "Für die Anmeldung bei {tenant} brauchen wir eine zusätzliche Bestätigung. Gib diesen Code auf der Anmeldeseite ein:",
-      "validity": "Der Code gilt {minutes} Minuten und nur einmal.",
-      "ignore": "Hast du dich nicht gerade angemeldet? Dann kennt jemand dein Passwort - ändere es sofort."
+      "validUntil": "Gültig bis {time} Uhr",
+      "validityShort": "{minutes} Minuten · nur einmal verwendbar",
+      "ignoreLead": "Hast du dich nicht gerade angemeldet?",
+      "ignoreBody": "Dann kennt jemand dein Passwort – {link}. Gib den Code niemandem weiter.",
+      "changeLink": "ändere es sofort"
     }
   },
   "eventField": {

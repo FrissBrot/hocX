@@ -53,6 +53,7 @@ def _send(db: Session, user: AppUser, code: str) -> None:
     rendered = render_login_code(
         lang=user.preferred_language, code=code, minutes=settings.auth_email_code_ttl_minutes,
         recipient_name=user.first_name or user.display_name, tenant_name=tenant.name if tenant else "hocX",
+        base_url=config.link_base_url,
     )
     try:
         email_transport.send(config, email_transport.OutgoingEmail(to=user.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html, images=rendered.images))

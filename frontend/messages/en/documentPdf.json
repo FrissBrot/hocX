@@ -776,10 +776,13 @@
       }
     },
     "loginCode": {
-      "subject": "{tenant}: confirmation code for your sign-in",
+      "subject": "{code} is your confirmation code for {tenant}",
       "intro": "To sign in at {tenant} we need an extra confirmation. Enter this code on the sign-in page:",
-      "validity": "The code is valid for {minutes} minutes and only once.",
-      "ignore": "Didn't just try to sign in? Then someone knows your password - change it right away."
+      "validUntil": "Valid until {time}",
+      "validityShort": "{minutes} minutes · single use",
+      "ignoreLead": "Didn't just try to sign in?",
+      "ignoreBody": "Then someone knows your password – {link}. Never share this code with anyone.",
+      "changeLink": "change it right away"
     }
   },
   "eventField": {

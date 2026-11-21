@@ -438,10 +438,13 @@
       "subjectNotice": "{tenant} : connexion depuis un nouvel appareil"
     },
     "loginCode": {
-      "ignore": "Tu n'essaies pas de te connecter ? Quelqu'un connaît alors ton mot de passe - change-le immédiatement.",
+      "changeLink": "change-le immédiatement",
+      "ignoreBody": "Quelqu'un connaît alors ton mot de passe – {link}. Ne transmets ce code à personne.",
+      "ignoreLead": "Tu n'essaies pas de te connecter ?",
       "intro": "Pour te connecter chez {tenant}, nous avons besoin d'une confirmation supplémentaire. Saisis ce code sur la page de connexion :",
-      "subject": "{tenant} : code de confirmation pour ta connexion",
-      "validity": "Le code est valable {minutes} minutes et une seule fois."
+      "subject": "{code} est ton code de confirmation pour {tenant}",
+      "validUntil": "Valable jusqu'à {time}",
+      "validityShort": "{minutes} minutes · utilisable une seule fois"
     },
     "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
     "security": {

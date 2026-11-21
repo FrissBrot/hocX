@@ -438,10 +438,13 @@
       "subjectNotice": "{tenant}: Anmeldung von einem neuen Gerät"
     },
     "loginCode": {
-      "ignore": "Hast du dich nicht gerade angemeldet? Dann kennt jemand dein Passwort - ändere es sofort.",
+      "changeLink": "ändere es sofort",
+      "ignoreBody": "Dann kennt jemand dein Passwort – {link}. Gib den Code niemandem weiter.",
+      "ignoreLead": "Hast du dich nicht gerade angemeldet?",
       "intro": "Für die Anmeldung bei {tenant} brauchen wir eine zusätzliche Bestätigung. Gib diesen Code auf der Anmeldeseite ein:",
-      "subject": "{tenant}: Bestätigungscode für deine Anmeldung",
-      "validity": "Der Code gilt {minutes} Minuten und nur einmal."
+      "subject": "{code} ist dein Bestätigungscode für {tenant}",
+      "validUntil": "Gültig bis {time} Uhr",
+      "validityShort": "{minutes} Minuten · nur einmal verwendbar"
     },
     "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
     "security": {

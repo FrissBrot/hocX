@@ -484,6 +484,23 @@ def test_new_device_mail_once_per_device_and_failed_attempts_mail_deduplicated(d
     assert kinds.count("security.failed_attempts") == 1
 
 
+def test_login_code_mail_renders_in_all_languages():
+    from app.core.locale_config_generated import SUPPORTED_LOCALES
+    from app.notifications.render import render_login_code
+
+    now = datetime(2026, 11, 21, 13, 42, tzinfo=UTC)
+    for lang in SUPPORTED_LOCALES:
+        rendered = render_login_code(lang=lang, code="482917", minutes=10, recipient_name="Anna", tenant_name="Verein", base_url="https://app.example.com", now=now)
+        # Code im Betreff (Mitteilung), Ablaufzeit in Zürcher Zeit, keine offenen Platzhalter
+        assert rendered.subject.startswith("482917") and "Verein" in rendered.subject
+        assert "14:52" in rendered.text and "14:52" in rendered.html
+        assert "{" not in rendered.text and "email." not in rendered.text and "email." not in rendered.html
+        assert "https://app.example.com/?profile=security" in rendered.text and "?profile=security" in rendered.html
+        assert "482917" not in rendered.html.split("href=")[-1].split(">")[0]  # der Code steht nie in einem Link
+    without_link = render_login_code(lang="de", code="000001", minutes=10, recipient_name="Anna", tenant_name="Verein", now=now)
+    assert "href=" not in without_link.html.split("Hast du dich")[1].split("</td>")[0]
+
+
 def test_login_mails_render_in_all_languages_without_secrets():
     from app.core.locale_config_generated import SUPPORTED_LOCALES
     from app.notifications.render import render
