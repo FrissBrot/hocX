@@ -224,6 +224,8 @@
     "openOriginalDocument": "Ouvrir le document original",
     "createdAtPill": "Créé le {date}",
     "templateVersionPill": "Version du modèle {version, number}",
+    "templateChangedHint": "Le modèle a été modifié",
+    "templateChangedReload": "Recharger depuis le modèle",
     "orderSaveFailed": "L'ordre n'a pas pu être enregistré",
     "otherEditorWarningDescription": "Au moins une autre personne modifie activement ce procès-verbal en ce moment. Le changement de statut s'appliquera immédiatement à tout le monde.",
     "otherEditorWarningTitle": "Une autre personne est en train de modifier",

@@ -205,3 +205,39 @@ def test_protocols_of_other_tenants_are_not_touched(db):
 
     assert [item.id for item in changed] == [own_block.id]
     assert _order(db.get(ProtocolElementBlock, foreign_block_id).configuration_snapshot_json) == ORIGINAL
+
+
+def test_route_broadcasts_the_new_field_order_to_open_editors(db, monkeypatch):
+    # PATCH /element-definitions/{id}: geänderte Protokollblöcke gehen als field_update an den
+    # Kanal ihres Protokolls - öffentliche Block-ID, ohne Nutzer-ID, mit neuer config_version.
+    import json
+
+    from app.api.routes import protocol_elements as protocol_element_routes
+    from app.api.routes import templates as template_routes
+    from app.services.collaboration_service import protocol_channel
+    from tests.factories import make_current_user
+
+    tenant, _, _, definition, protocol = _setup(db)
+    published: list[tuple[str, dict]] = []
+    monkeypatch.setattr(protocol_element_routes, "publish_best_effort", lambda channel, payload: published.append((channel, json.loads(payload))))
+    user = make_current_user(tenant.id, role="admin")
+
+    template_routes.patch_element_definition(
+        definition.public_id, ElementDefinitionUpdate(blocks=[_block(db, REORDERED)]), db=db, user=user
+    )
+
+    block = _protocol_block(db, protocol.id)
+    assert len(published) == 1
+    channel, message = published[0]
+    assert channel == protocol_channel(protocol.id)
+    assert message["field_key"] == f"block-{block.public_id}"
+    assert message["user_id"] is None
+    assert _order(message["patch"]["configuration_snapshot_json"]) == REORDERED
+    assert message["patch"]["config_version"] == block.config_version
+
+    # Unverändert gespeichert: nichts zu melden
+    published.clear()
+    template_routes.patch_element_definition(
+        definition.public_id, ElementDefinitionUpdate(blocks=[_block(db, REORDERED)]), db=db, user=user
+    )
+    assert published == []

@@ -155,6 +155,12 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
     import_by_protocol = {row.protocol_id: (row.original_filename, row.stored_file_public_id) for row in import_rows}
 
     cycle_by_template = _cycle_configs_by_template(db, {p.template_id for p in protocols})
+    # Gleicher Mandant wie das Protokoll (Vorlage und Protokoll gehören immer zusammen)
+    template_versions = dict(db.execute(
+        select(Template.id, Template.version)
+        .join(Protocol, (Protocol.template_id == Template.id) & (Protocol.tenant_id == Template.tenant_id))
+        .where(Protocol.id.in_(internal_ids))
+    ).all())
     ProtocolRead.prime_public_ids(db, protocols)
     # Aktueller Zyklus nach Schweizer Datum (sonst zwischen 00:00 und 02:00 der falsche).
     today = todo_fine_service.today()
@@ -163,6 +169,7 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
     for p in protocols:
         r = ProtocolRead.model_validate(p)
         r.cycle = _protocol_list_cycle(p.protocol_date, cycle_by_template.get(p.template_id), today=today)
+        r.template_latest_version = template_versions.get(p.template_id)
         if p.id in pdf_by_protocol:
             r.latest_pdf_url = f"/api/stored-files/{pdf_by_protocol[p.id]}/content"
         if p.id in import_by_protocol:

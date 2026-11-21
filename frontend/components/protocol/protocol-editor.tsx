@@ -39,6 +39,7 @@ import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
+import { templateChangedSinceSync, useTemplateSync } from "@/components/protocol/use-template-sync";
 import {
   AttendanceFine,
   AttendanceFineListItem,
@@ -433,6 +434,18 @@ export function ProtocolEditor({
   // Editing mode derived from status and role
   const forceEditable = !forceReadOnly && (protocolStatus === "geplant" || protocolStatus === "durchgeführt");
   const isReadOnly = forceReadOnly || protocolStatus === "abgeschlossen";
+  // Hinweis «Vorlage wurde geändert»: bestehenden Abgleich (Rückfrage mit Vorschau) auslösen,
+  // danach neu laden - Blöcke wurden ersetzt/ergänzt (wie beim Abgleich durch andere).
+  const runTemplateSync = useTemplateSync();
+  const [templateSyncing, setTemplateSyncing] = useState(false);
+  async function reloadFromTemplate() {
+    setTemplateSyncing(true);
+    try {
+      if (await runTemplateSync(protocol.id)) window.location.reload();
+    } finally {
+      setTemplateSyncing(false);
+    }
+  }
   // The icon/popup-driven planning UI (Tabelle-aus-Liste, Terminlisten, Termine-pro-Element,
   // Matrix-Auto-Spalten) is available in every status except "abgeschlossen", where isReadOnly
   // already blocks all editing.
@@ -2219,6 +2232,15 @@ export function ProtocolEditor({
         )}
         {protocol.template_version != null && (
           <span className="pill">{t("templateVersionPill", { version: protocol.template_version })}</span>
+        )}
+        {/* Vorlage seit Erstellen/letztem Abgleich geändert: nur solange noch nicht durchgeführt */}
+        {!isReadOnly && templateChangedSinceSync({ ...protocol, status: protocolStatus }) && (
+          <>
+            <Badge variant="warning">{t("templateChangedHint")}</Badge>
+            <button type="button" className="button-secondary" disabled={templateSyncing} onClick={() => void reloadFromTemplate()}>
+              {t("templateChangedReload")}
+            </button>
+          </>
         )}
         {protocol.import_source_url && (
           <a

@@ -224,6 +224,8 @@
     "openOriginalDocument": "Open original document",
     "createdAtPill": "Created {date}",
     "templateVersionPill": "Template version {version, number}",
+    "templateChangedHint": "Template has changed",
+    "templateChangedReload": "Reload from template",
     "orderSaveFailed": "Order could not be saved",
     "otherEditorWarningDescription": "At least one other person is actively editing these minutes right now. The status change will apply for everyone immediately.",
     "otherEditorWarningTitle": "Another person is currently editing",

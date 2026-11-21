@@ -1,4 +1,4 @@
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -32,6 +32,26 @@ SOURCE_FIELD_KEYS = {"event": "event_fields", "todo": "todo_fields"}
 # Protokolle, die eine geänderte Feldanordnung übernehmen: noch nicht durchgeführte. Durchgeführte
 # und abgeschlossene behalten ihren Stand (abgeschlossene sind eingefroren).
 SOURCE_FIELD_PROPAGATION_STATUSES = ("geplant", "vorbereitet")
+
+
+def _without_source_fields(blocks: list[dict]) -> list[dict]:
+    """Blöcke ohne event_fields/todo_fields - zum Erkennen, ob sich nur die Feldanordnung änderte.
+    Beide Seiten wie beim Speichern aufs aktuelle Schema heben, damit ein älter gespeichertes
+    Format nicht als inhaltliche Änderung zählt."""
+    result = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        element_type_id = int(block.get("element_type_id", 1))
+        upgraded = upgrade_definition_block({**block, "element_type_id": element_type_id})
+        upgraded["render_type_id"] = render_type_id(element_type_id)
+        upgraded["allows_multiple_values"] = allows_multiple_values(element_type_id)
+        upgraded["configuration_json"] = {
+            key: value for key, value in (upgraded.get("configuration_json") or {}).items()
+            if key not in SOURCE_FIELD_KEYS.values()
+        }
+        result.append(upgraded)
+    return result
 
 
 class FineListPermissionError(PermissionError):
@@ -282,6 +302,7 @@ class ElementDefinitionService:
             return None
 
         values = payload.model_dump(exclude_unset=True)
+        only_source_fields_changed = False
         if "blocks" in values:
             previous_blocks = (entity.configuration_json or {}).get("blocks") or []
             normalized_blocks = self._normalize_blocks(db, values.pop("blocks"), tenant_id=entity.tenant_id)
@@ -292,12 +313,48 @@ class ElementDefinitionService:
             changed_blocks = self.propagate_source_fields(db, entity, previous_blocks, normalized_blocks)
             if changed_protocol_blocks is not None:
                 changed_protocol_blocks.extend(changed_blocks)
+            only_source_fields_changed = (
+                _without_source_fields(previous_blocks) == _without_source_fields(normalized_blocks)
+                and all(values.get(key, getattr(entity, key)) == getattr(entity, key) for key in ("title", "description"))
+            )
         if "title" in values:
             values["display_title"] = values["title"]
         if not values:
             return self._read_model(db, entity)
+        if only_source_fields_changed:
+            self._keep_synced_protocols_current(db, entity, values)
         updated = self.repository.update(db, entity, values)
         return self._read_model(db, updated)
+
+    def _keep_synced_protocols_current(self, db: Session, entity: ElementDefinition, values: dict) -> None:
+        """Hat sich nur die Feldanordnung «aus Termin/Pendenz» geändert, ist sie mit
+        propagate_source_fields bereits in den offenen Protokollen angekommen. Die Vorlagenversion
+        steigt trotzdem (Trigger, Migration 0214); Protokolle, die vorher auf dem aktuellen Stand
+        waren, rücken mit, damit sie keinen Hinweis «Vorlage wurde geändert» zeigen."""
+        templates = select(Template.id, Template.version).join(
+            TemplateElement, TemplateElement.template_id == Template.id
+        ).where(TemplateElement.element_definition_id == entity.id, Template.tenant_id == entity.tenant_id).distinct()
+        before = dict(db.execute(templates).all())
+        if not before:
+            return
+        for key, value in values.items():
+            setattr(entity, key, value)
+        db.flush()  # Trigger zählt die Vorlagenversion hoch
+        after = dict(db.execute(templates).all())
+        for template_id, old_version in before.items():
+            new_version = after.get(template_id, old_version)
+            if new_version == old_version:
+                continue
+            db.execute(
+                update(Protocol)
+                .where(
+                    Protocol.template_id == template_id,
+                    Protocol.tenant_id == entity.tenant_id,
+                    Protocol.status.in_(SOURCE_FIELD_PROPAGATION_STATUSES),
+                    Protocol.template_version == old_version,
+                )
+                .values(template_version=new_version)
+            )
 
     def propagate_source_fields(
         self, db: Session, entity: ElementDefinition, previous_blocks: list[dict], blocks: list[dict]
@@ -346,8 +403,10 @@ class ElementDefinitionService:
                 ProtocolElementBlock.element_type_id.in_({element_type_id for _, element_type_id in targets}),
             )
             .order_by(ProtocolElementBlock.id)
-            # Zeilensperre wie beim Bearbeiten im Protokoll (CONC-005); config_version steigt per Trigger
-            .with_for_update(of=ProtocolElementBlock)
+            # Zeilensperre wie beim Bearbeiten im Protokoll (CONC-005); config_version steigt per
+            # Trigger. Das Protokoll mitsperren: wird es gleichzeitig abgeschlossen, prüft Postgres
+            # den Status nach dem Warten neu und der eingefrorene Block bleibt unberührt.
+            .with_for_update(of=(ProtocolElementBlock, Protocol))
         ).all()
         changed: list[ProtocolElementBlock] = []
         for protocol_block in candidates:
