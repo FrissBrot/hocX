@@ -1,6 +1,6 @@
 "use client";
 
-import { browserApiFetch, type BrowserApiFetchInit } from "@/lib/api/client";
+import { ApiError, browserApiBaseUrl, browserApiFetch, type BrowserApiFetchInit } from "@/lib/api/client";
 import { getPasskeyAssertion } from "@/lib/webauthn";
 import type { PasskeyAssertionStart } from "@/types/api";
 
@@ -19,7 +19,12 @@ export type StepUpPurpose =
   | "catalog-change"
   | "user-mfa-reset"
   | "user-manage"
-  | "platform-settings";
+  | "platform-settings"
+  | "user-credentials"
+  | "tenant-import"
+  | "security-block"
+  | "security-export"
+  | "security-resolve";
 
 export const STEP_UP_HEADER = "X-Hocx-Step-Up";
 
@@ -51,4 +56,35 @@ export async function stepUpFetch<T>(
 ): Promise<T> {
   const headers = await stepUpHeaders(purpose, init.method, path, init.body ?? "");
   return browserApiFetch<T>(path, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...headers } });
+}
+
+/** Datei-Download (POST) mit Passkey-Bestätigung: Antwort als Blob, Dateiname aus
+ * Content-Disposition. Fehlertext aus dem Backend (detail.message bzw. detail). */
+export async function stepUpDownload(purpose: StepUpPurpose, path: string, body: string, fallbackName: string): Promise<void> {
+  const headers = await stepUpHeaders(purpose, "POST", path, body);
+  const response = await fetch(`${browserApiBaseUrl}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...headers },
+    body,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    let message = `HTTP ${response.status}`;
+    try {
+      const detail = JSON.parse(text)?.detail;
+      message = typeof detail === "string" ? detail : typeof detail?.message === "string" ? detail.message : message;
+    } catch {
+      // kein JSON: Statuscode genügt
+    }
+    throw new ApiError(message, response.status === 403 || response.status === 401 ? "auth" : "backend", response.status);
+  }
+  const blob = await response.blob();
+  const match = /filename="?([^";]+)"?/i.exec(response.headers.get("content-disposition") ?? "");
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = match?.[1] ?? fallbackName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

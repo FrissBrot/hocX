@@ -19,7 +19,10 @@
     "verification": "Verification",
     "storage": "Storage",
     "activity": "Activity",
-    "technical": "Technical"
+    "technical": "Technical",
+    "features": "Features & modules",
+    "usage": "Usage",
+    "security": "Security"
   },
   "header": {
     "eyebrow": "Tenant",
@@ -90,5 +93,83 @@
     "status_open": "Open",
     "status_paid": "Paid",
     "status_waived": "Waived"
+  },
+  "features": {
+    "title": "Features & modules",
+    "description": "Which modules the tenant may use.",
+    "summary": "{booked} of {total} features booked",
+    "edit": "Change in subscription",
+    "loadFailed": "Features could not be loaded.",
+    "empty": "No features in the catalogue.",
+    "columns": {
+      "feature": "Feature",
+      "access": "Access",
+      "source": "Source",
+      "since": "Since"
+    },
+    "access": {
+      "full": "Full",
+      "read_only": "Read only",
+      "none": "Not booked"
+    },
+    "source": {
+      "plan": "Plan",
+      "addon": "Add-on"
+    }
+  },
+  "usage": {
+    "title": "Usage",
+    "description": "Daily values from the metrics rollup (since {date}), counts only.",
+    "descriptionEmpty": "Daily values from the metrics rollup, counts only. No values yet.",
+    "range": {
+      "30d": "30 days",
+      "90d": "90 days",
+      "12m": "12 months"
+    },
+    "loadFailed": "Usage could not be loaded.",
+    "metrics": {
+      "logins": "Sign-ins",
+      "activeUsers": "Active users",
+      "protocols": "New minutes",
+      "events": "New events",
+      "files": "New files",
+      "storage": "Storage"
+    },
+    "activityTitle": "Sign-ins and active users",
+    "modulesTitle": "Module usage",
+    "storageTitle": "Storage",
+    "day": "Day",
+    "month": "Month"
+  },
+  "security": {
+    "title": "Security",
+    "description": "Failed attempts, blocks and warnings for this tenant's accounts. Without networks or addresses; viewing is logged.",
+    "loadFailed": "Security data could not be loaded.",
+    "tiles": {
+      "failures": "Failed attempts 24 h",
+      "accounts": "Accounts with failures 24 h",
+      "blocked": "Blocked attempts 24 h",
+      "newDevices": "New-device sign-ins 7 d"
+    },
+    "warningsTitle": "Warnings (7 days)",
+    "eventsTitle": "Recent sign-in events",
+    "columns": {
+      "warning": "Warning",
+      "account": "Account",
+      "count": "Count",
+      "last": "Last",
+      "time": "Time",
+      "type": "Event",
+      "outcome": "Outcome",
+      "client": "Device"
+    },
+    "noWarnings": "No warnings.",
+    "noEvents": "No events.",
+    "warnings": {
+      "account_attack": "Account under attack",
+      "privileged_new_device": "Admin sign-in from new device",
+      "mfa_removed": "Second factor removed",
+      "account_locked": "Account locked"
+    }
   }
 }

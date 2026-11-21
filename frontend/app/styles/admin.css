@@ -662,11 +662,57 @@
   color: var(--muted);
 }
 
-.audit-log-details {
+/* Details als Schlüssel-Wert-Liste (1.5.1) - auch für die Subjekt-Auflösung */
+.audit-log-details-list,
+.admin-key-value {
+  display: grid;
+  gap: var(--space-2);
   margin: 0;
-  white-space: pre-wrap;
   font-size: var(--text-sm);
-  overflow-x: auto;
+}
+
+.audit-log-details-pair,
+.admin-key-value > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.audit-log-details-list dt,
+.admin-key-value dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.audit-log-details-list dd,
+.admin-key-value dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Liste ohne Aufzählungszeichen (Einstellungen › Sicherheit) */
+.admin-plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* Filterfelder der Admin-Tabellen (Audit-Log, Fehler, Benutzer) */
+.admin-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .audit-log-details-pair,
+  .admin-key-value > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
 }
 
 /* ── Admin-Konsole (Redesign Phase B): Sidebar A–G, Kompaktmodus, Kopfleiste ───────────── */

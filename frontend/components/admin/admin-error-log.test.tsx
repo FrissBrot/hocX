@@ -19,7 +19,7 @@ describe("AdminErrorLog", () => {
   });
 
   it("zeigt die Gruppenansicht und springt per Klick zu den Einträgen des Typs", async () => {
-    render(<AdminErrorLog initialPage={{ items: [], total: 0 }} initialFilterOptions={{ error_types: ["KeyError"], sources: ["backend"] }} tenants={[]} />);
+    render(<AdminErrorLog initialPage={{ items: [], total: 0 }} initialFilterOptions={{ error_types: ["KeyError"], sources: ["backend"] }} />);
     fireEvent.click(screen.getByRole("tab", { name: "Gruppiert" }));
     expect(await screen.findByText("7")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "KeyError" }));

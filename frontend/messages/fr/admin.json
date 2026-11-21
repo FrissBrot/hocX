@@ -8,7 +8,9 @@
       "email": "E-mail",
       "role": "Rôle",
       "status": "Statut",
-      "actions": "Actions"
+      "actions": "Actions",
+      "passkeys": "Passkeys",
+      "lastLogin": "Dernière connexion"
     },
     "emptyAdmins": "Aucun compte administrateur trouvé.",
     "you": "Vous",
@@ -33,7 +35,9 @@
       "updated": "Compte administrateur mis à jour",
       "updateFailed": "Le compte administrateur n'a pas pu être mis à jour",
       "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès au panneau d'administration de la plateforme."
-    }
+    },
+    "passkeyCount": "{count, plural, =0 {Aucune passkey} one {# passkey} other {# passkeys}}",
+    "neverLoggedIn": "Jamais"
   },
   "uploadPipeline": {
     "title": "Pipeline de fichiers",
@@ -718,7 +722,8 @@
       "tenant": "Organisation",
       "role": "Rôle",
       "login": "Connexion",
-      "actions": "Actions"
+      "actions": "Actions",
+      "mfa": "MFA"
     },
     "loading": "Chargement…",
     "emptyUsers": "Aucun participant trouvé.",
@@ -731,10 +736,6 @@
     "lastName": "Nom",
     "displayName": "Nom affiché",
     "email": "E-mail",
-    "newPassword": "Nouveau mot de passe",
-    "password": "Mot de passe",
-    "passwordHelpEdit": "Ne remplir que pour changer le mot de passe. Au moins 12 caractères.",
-    "passwordHelpCreate": "Défini directement ici, au moins 12 caractères. Il n'y a pas d'e-mail d'invitation automatique - communiquez le mot de passe séparément à l'participant.",
     "language": "Langue",
     "active": "Actif",
     "enableLogin": "Activer la connexion",
@@ -745,8 +746,24 @@
     "toasts": {
       "userSaved": "Participant enregistré",
       "userCreated": "Participant créé",
-      "userSaveFailed": "L'participant n'a pas pu être enregistré"
-    }
+      "userSaveFailed": "L'participant n'a pas pu être enregistré",
+      "userInvited": "Utilisateur créé, l'invitation est envoyée"
+    },
+    "mfaOn": "Actif",
+    "mfaOff": "Aucun facteur",
+    "allTenants": "Tous les mandants",
+    "loadFailed": "Les utilisateurs n'ont pas pu être chargés.",
+    "accessLink": {
+      "reset": "Envoyer un lien de réinitialisation",
+      "invite": "Envoyer une invitation",
+      "confirmReset": "{name} recevra par e-mail un lien pour définir un nouveau mot de passe (valable 60 minutes). L'ancien mot de passe reste valable jusque-là.",
+      "confirmInvite": "{name} recevra une invitation par e-mail et configurera son accès lui-même (valable 7 jours).",
+      "resetSent": "Le lien de réinitialisation est envoyé",
+      "inviteSent": "L'invitation est envoyée"
+    },
+    "loginViaInviteHelp": "Ce compte n'a pas d'accès. La personne configure son accès elle-même via « Envoyer une invitation ».",
+    "sendInvite": "Envoyer une invitation de connexion par e-mail",
+    "noPasswordHelp": "Les admins de plateforme ne définissent pas de mot de passe : la personne le définit via un lien d'invitation ou de réinitialisation."
   },
   "tenantModal": {
     "close": "Fermer",
@@ -1408,7 +1425,25 @@
     "outcome": {
       "success": "Réussi",
       "failure": "Échoué"
-    }
+    },
+    "loadFailed": "Le journal d'audit n'a pas pu être chargé.",
+    "from": "Du",
+    "to": "Au",
+    "actorKind": "Acteur",
+    "actorKinds": {
+      "all": "Tous",
+      "admin": "Admin de plateforme",
+      "user": "Compte utilisateur",
+      "system": "Système"
+    },
+    "actorAdmin": "Admin de plateforme",
+    "actorAdminAll": "Tous les admins de plateforme",
+    "entityType": "Entité",
+    "entityTypeAll": "Toutes les entités",
+    "entityId": "ID de l'entité",
+    "actorUserFilter": "Filtré sur un compte utilisateur (depuis un lien).",
+    "colEntity": "Entité",
+    "detailEntity": "Entité"
   },
   "emailLog": {
     "title": "Journal d'envoi",
@@ -1458,5 +1493,153 @@
       "obsolete": "obsolète (terminé, modifié ou texte plus valable)",
       "email_disabled": "l'envoi était désactivé"
     }
+  },
+  "settingsPages": {
+    "ownerOnly": "Ces informations ne sont visibles que pour les admins de plateforme avec accès complet.",
+    "loadFailed": "Les informations n'ont pas pu être chargées.",
+    "security": {
+      "title": "Sécurité et connexion",
+      "description": "Comment les admins de plateforme se connectent et quelles actions exigent une nouvelle confirmation par passkey. Affichage seulement.",
+      "loginTitle": "Connexion des admins de plateforme",
+      "password": "Mot de passe",
+      "passkey": "Passkey",
+      "totp": "Application d'authentification (TOTP)",
+      "required": "Obligatoire",
+      "notAllowed": "Non autorisé",
+      "sessionTtl": "Durée de session",
+      "hours": "{count, plural, one {# heure} other {# heures}}",
+      "stepUpFlow": "Validité d'une confirmation",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "policyHint": "Limites de la protection de connexion pour les mandants :",
+      "policyLink": "Voir les directives",
+      "stepUpTitle": "Actions avec confirmation par passkey",
+      "stepUpDescription": "Chaque confirmation vaut pour une seule requête (but, méthode, chemin et contenu) et une seule fois.",
+      "columns": {
+        "purpose": "But",
+        "actions": "Requêtes"
+      },
+      "empty": "Aucune action trouvée.",
+      "purposes": {
+        "passkey-manage": "Gérer ses propres passkeys",
+        "admin-manage": "Gérer les admins de plateforme",
+        "tenant-delete": "Supprimer ou nettoyer un mandant",
+        "tenant-export": "Exporter ou cloner un mandant",
+        "tenant-import": "Importer un mandant",
+        "storage-destructive": "Basculer ou supprimer le stockage",
+        "backup-restore": "Restaurer une sauvegarde",
+        "backup-settings": "Paramètres de sauvegarde",
+        "catalog-change": "Modifier le catalogue",
+        "user-mfa-reset": "Supprimer le second facteur d'un compte",
+        "user-manage": "Gérer les comptes utilisateurs",
+        "user-credentials": "Envoyer un lien de réinitialisation ou une invitation",
+        "platform-settings": "Paramètres de plateforme et accès",
+        "security-block": "Poser ou lever des blocages de connexion",
+        "security-export": "Exporter les données de sécurité",
+        "security-resolve": "Associer un pseudonyme à un compte"
+      }
+    },
+    "integrations": {
+      "title": "Intégrations",
+      "description": "Services connectés avec leur état issu de l'état du système. Les accès ne sont jamais affichés.",
+      "collectedAt": "État du {time}",
+      "noSnapshot": "Pas encore d'état du système.",
+      "columns": {
+        "service": "Service",
+        "configured": "Configuré",
+        "status": "État",
+        "details": "Détails"
+      },
+      "empty": "Aucune intégration.",
+      "services": {
+        "smtp": "E-mail (SMTP)",
+        "ntfy": "Notifications (ntfy)",
+        "status_endpoint": "Point d'état (uptime)",
+        "object_storage": "Stockage de fichiers (S3)",
+        "captcha": "Captcha (Friendly Captcha)",
+        "clamav": "Antivirus (ClamAV)",
+        "docker_proxy": "Proxy Docker",
+        "backup": "Sauvegarde"
+      },
+      "yes": "Oui",
+      "no": "Non",
+      "off": "Désactivé",
+      "open": "Ouvrir",
+      "details": {
+        "smtp": "{host}:{port} ({security})",
+        "ntfy": "Serveur {server}",
+        "objectStorage": "Profil {profile} ({provider})",
+        "captchaEu": "Point d'accès UE",
+        "captchaGlobal": "Point d'accès global"
+      }
+    },
+    "system": {
+      "title": "Technique",
+      "description": "Version, environnement, état de la base de données, catalogues et domaines de la plateforme. Affichage seulement.",
+      "versionTitle": "Version et environnement",
+      "version": "Version",
+      "unknown": "Inconnue",
+      "environment": "Environnement",
+      "location": "Emplacement du serveur",
+      "migration": "Migration de base de données",
+      "postgres": "PostgreSQL",
+      "python": "Python",
+      "catalogTitle": "Catalogues",
+      "permissions": "Autorisations",
+      "features": "Fonctionnalités",
+      "featuresValue": "{catalog} dans le catalogue, {database} dans la base de données",
+      "featuresMismatch": "Écart",
+      "locales": "Langues",
+      "domainsTitle": "Domaines de la plateforme",
+      "domains": {
+        "app": "Application",
+        "admin": "Console d'admin",
+        "abgabebox": "Abgabebox",
+        "docs": "Documentation",
+        "website": "Site web"
+      },
+      "notSet": "Non défini"
+    }
+  },
+  "metricHistory": {
+    "empty": "Pas encore de valeurs pour cette période.",
+    "summary": "État au {time} : {values}",
+    "showTable": "Données sous forme de tableau"
+  },
+  "systemHistory": {
+    "title": "Historique base de données et Redis",
+    "description": "Échantillons environ toutes les 5 minutes, conservés 14 jours (depuis le {date}).",
+    "descriptionEmpty": "Échantillons environ toutes les 5 minutes, conservés 14 jours. Pas encore de valeurs.",
+    "range": {
+      "24h": "24 heures",
+      "7d": "7 jours",
+      "14d": "14 jours"
+    },
+    "loadFailed": "L'historique n'a pas pu être chargé.",
+    "loading": "Chargement …",
+    "postgresTitle": "Base de données : temps de réponse et connexions",
+    "redisTitle": "Redis : temps de réponse",
+    "sizeTitle": "Taille de la base de données et de Redis",
+    "bucket": "Moment",
+    "metrics": {
+      "postgresLatencyAvg": "Temps de réponse moy.",
+      "postgresLatencyMax": "Temps de réponse max.",
+      "postgresConnections": "Connexions max.",
+      "postgresSize": "Taille de la base",
+      "redisUsed": "Mémoire Redis",
+      "redisLatencyAvg": "Temps de réponse moy.",
+      "redisLatencyMax": "Temps de réponse max."
+    }
+  },
+  "storageOccupancy": {
+    "title": "Occupation",
+    "description": "Stockage utilisé par tous les mandants selon l'instantané quotidien (depuis le {date}), pas de somme en direct.",
+    "descriptionEmpty": "Stockage utilisé par tous les mandants selon l'instantané quotidien. Pas encore de valeurs.",
+    "loadFailed": "L'occupation n'a pas pu être chargée.",
+    "total": "Stockage total",
+    "day": "Jour",
+    "topTitle": "Plus grands mandants (dernier instantané)",
+    "tenant": "Mandant",
+    "storage": "Stockage",
+    "empty": "Pas encore de valeurs."
   }
 }

@@ -19,6 +19,13 @@ describe("admin-shell-nav", () => {
     expect(buildAdminNav("support").map((group) => group.id)).not.toContain("access");
   });
 
+  it("führt die Einstellungsseiten (1.5.1); Integrationen und Technik nur für owner", () => {
+    expect(hrefs("owner")).toEqual(expect.arrayContaining(["/admin/settings/security", "/admin/settings/integrations", "/admin/settings/system"]));
+    expect(hrefs("support")).toContain("/admin/settings/security");
+    expect(hrefs("support")).not.toContain("/admin/settings/integrations");
+    expect(hrefs("support")).not.toContain("/admin/settings/system");
+  });
+
   it("erkennt den aktiven Eintrag über den längsten Pfad", () => {
     const nav = buildAdminNav("owner");
     expect(findActiveAdminLink(nav, "/admin/security/events")?.link.href).toBe("/admin/security/events");

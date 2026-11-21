@@ -95,6 +95,10 @@ const NAV: AdminNavGroup[] = [
     links: [
       { href: "/admin/settings/notifications", labelKey: "nav.notifications", icon: "notifications", ownerOnly: true, keywordsKey: "keywords.notifications" },
       { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
+      // 1.5.1: read-only Einstellungsseiten
+      { href: "/admin/settings/security", labelKey: "nav.settingsSecurity", icon: "policy", keywordsKey: "keywords.settingsSecurity" },
+      { href: "/admin/settings/integrations", labelKey: "nav.settingsIntegrations", icon: "settings", ownerOnly: true, keywordsKey: "keywords.settingsIntegrations" },
+      { href: "/admin/settings/system", labelKey: "nav.settingsSystem", icon: "system", ownerOnly: true, keywordsKey: "keywords.settingsSystem" },
     ],
   },
 ];

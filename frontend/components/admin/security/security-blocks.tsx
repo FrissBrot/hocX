@@ -23,7 +23,7 @@ function errorMessage(error: unknown): string {
 }
 
 /** /admin/security/blocks: aktive Sperren; Setzen und Entsperren mit Passkey-Bestätigung
- * (Zweck platform-settings, gebunden an Methode, Pfad und Body - backend admin_step_up.py). */
+ * (Zweck security-block, gebunden an Methode, Pfad und Body - backend admin_step_up.py). */
 export function SecurityBlocks({ canWrite }: { canWrite: boolean }) {
   const t = useTranslations("adminSecurity.blocks");
   const tRoot = useTranslations("adminSecurity");
@@ -48,7 +48,7 @@ export function SecurityBlocks({ canWrite }: { canWrite: boolean }) {
     if (!confirmed) return;
     const path = `/api/admin/auth-security/blocks/${encodeURIComponent(block.subject)}`;
     try {
-      await stepUpFetch("platform-settings", path, { method: "DELETE" });
+      await stepUpFetch("security-block", path, { method: "DELETE" });
       showToast(t("unblocked"), "success");
       blocks.reload();
     } catch (error) {
@@ -61,7 +61,7 @@ export function SecurityBlocks({ canWrite }: { canWrite: boolean }) {
     setBusy(true);
     const body = JSON.stringify({ ip: ip.trim(), scope, minutes: minutesValue, reason: reason.trim() });
     try {
-      await stepUpFetch("platform-settings", "/api/admin/auth-security/blocks", { method: "POST", body });
+      await stepUpFetch("security-block", "/api/admin/auth-security/blocks", { method: "POST", body });
       showToast(t("created"), "success");
       setCreateOpen(false);
       setIp("");

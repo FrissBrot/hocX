@@ -5,7 +5,12 @@ import { authFiles } from "./auth";
 // Läuft nur mit ADMIN_SHOTS_DIR (kein Teil des normalen E2E-Laufs).
 const dir = process.env.ADMIN_SHOTS_DIR;
 
-const ADMIN_PAGES = ["/admin", "/admin/tenants", "/admin/security", "/admin/analytics", "/admin/system", "/admin/security/events", "/admin/account"];
+const ADMIN_PAGES = [
+  "/admin", "/admin/tenants", "/admin/security", "/admin/analytics", "/admin/system", "/admin/security/events", "/admin/account",
+  // 1.5.1
+  "/admin/security/audit", "/admin/security/alerts", "/admin/users", "/admin/admins", "/admin/storage", "/admin/error-logs",
+  "/admin/settings/security", "/admin/settings/integrations", "/admin/settings/system",
+];
 
 async function shoot(browser: Browser, storageState: string, paths: string[], prefix: string) {
   for (const scheme of ["light", "dark"] as const) {
@@ -32,7 +37,7 @@ test.describe("Admin-Screenshots", () => {
     const tenants = await (await context.request.get("/api/admin/tenants?limit=1&offset=0")).json();
     await context.close();
     const tenantId = tenants.items?.[0]?.id as string | undefined;
-    await shoot(browser, authFiles.platformAdmin, tenantId ? [...ADMIN_PAGES, `/admin/tenants/${tenantId}`] : ADMIN_PAGES, "admin");
+    await shoot(browser, authFiles.platformAdmin, tenantId ? [...ADMIN_PAGES, `/admin/tenants/${tenantId}`, `/admin/tenants/${tenantId}/features`, `/admin/tenants/${tenantId}/usage`, `/admin/tenants/${tenantId}/security`] : ADMIN_PAGES, "admin");
   });
 
   test("Vereinsseite Sicherheit & Anmeldungen", async ({ browser }) => {

@@ -6,6 +6,41 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_admin_alert_ack`).
+
+### Geändert
+
+- **Plattform-Admins setzen keine Passwörter mehr:** statt eines Passworts verschickt die Benutzerverwaltung
+  einen Zurücksetzungslink (Konto mit Login) bzw. eine Einladung (Konto ohne Login), mit eigener
+  Passkey-Bestätigung (`user-credentials`), höchstens 5 Links pro Stunde und Konto, auditiert. Neue Konten
+  entstehen ohne Passwort, optional mit Einladung.
+- **Passkey-Bestätigung je Zweck:** neue Zwecke `user-credentials`, `tenant-import` (Mandant-Import,
+  nur an Methode und Pfad gebunden), `security-block` (Sperren statt bisher `platform-settings`),
+  `security-export`, `security-resolve`. Einstellungen › Sicherheit & Anmeldung listet alle Aktionen mit
+  Bestätigung (aus dem Code abgeleitet).
+- **Admin-Tabellen:** gemeinsamer Hook `useServerTable` (Filter/Seite/Sortierung in der URL, nur IDs und
+  Codes), Spaltenwahl je Admin, Mandanten-Auswahl per Remote-Suche statt kompletter Mandantenliste
+  (Audit-Log, Fehlerprotokoll, Uploads, Benutzer).
+- **Audit-Log:** Filter Zeitraum, Akteur (Art, Plattform-Admin) und Entität, Details als Schlüssel-Wert-Liste.
+- **Plattform-Admins:** Liste mit Anzahl Passkeys und letzter Anmeldung.
+
+### Neu
+
+- Sicherheitswarnungen quittieren (gilt, solange die Warnung offen ist; zählt nicht mehr in Glocke und
+  Übersicht).
+- Export von Anmeldeereignissen und Audit-Log (JSONL, mit Passwort verschlüsselt, höchstens 92 Tage,
+  Passkey-Bestätigung, auditiert).
+- «Konto anzeigen» zu einem Anmeldeereignis: ordnet das Pseudonym einem Konto zu (nur owner,
+  Passkey-Bestätigung, auditiert, nie Netz/Adresse).
+- Einstellungen › Sicherheit & Anmeldung, Integrationen, Technik (read-only).
+- Systemstatus: Verlauf Datenbank und Redis (24 h/7/14 Tage); Speicher: Belegung aus dem täglichen Snapshot.
+- Mandanten-Detail: Tabs Features & Module, Nutzung, Sicherheit.
+- Sicherheitsereignis `reset.request` (layer `device`), wenn ein Passwort-Reset über das Gerätekontingent
+  läuft oder es erschöpft ist.
+- E2E: axe-Prüfung (WCAG 2.1 A/AA) aller Admin-Seiten.
+
 ## [1.5.0] - 2026-11-21
 
 Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).

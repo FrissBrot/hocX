@@ -9,13 +9,13 @@ import { DateInput } from "@/components/ui/date-input";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TenantPicker } from "@/components/admin/tenant-picker";
 import { browserApiFetch } from "@/lib/api/client";
-import { AdminTenantSummary, SystemErrorLogEntry, SystemErrorLogFilterOptions, SystemErrorLogGroup, SystemErrorLogPage } from "@/types/api";
+import { SystemErrorLogEntry, SystemErrorLogFilterOptions, SystemErrorLogGroup, SystemErrorLogPage } from "@/types/api";
 
 type Props = {
   initialPage: SystemErrorLogPage;
   initialFilterOptions: SystemErrorLogFilterOptions;
-  tenants: AdminTenantSummary[];
 };
 
 const PAGE_SIZE = 50;
@@ -25,7 +25,7 @@ const SOURCE_LABELS: Record<string, string> = {
   "abgabebox-backend": "Abgabebox",
 };
 
-export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Props) {
+export function AdminErrorLog({ initialPage, initialFilterOptions }: Props) {
   const t = useTranslations("admin.errorLog");
   const [page, setPage] = useState(initialPage);
   const [filterOptions] = useState(initialFilterOptions);
@@ -107,14 +107,7 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
         <div className="admin-error-filters">
           <label className="field-stack">
             <span className="field-label">{t("tenant")}</span>
-            <SearchableSelect
-              options={tenants}
-              getId={(item) => String(item.id)}
-              getLabel={(item) => item.name}
-              value={tenantId || null}
-              onChange={(item) => resetAndSet(setTenantId)(item ? String(item.id) : "")}
-              nullLabel={t("all")}
-            />
+            <TenantPicker value={tenantId || null} onChange={(item) => resetAndSet(setTenantId)(item ? item.id : "")} nullLabel={t("all")} />
           </label>
           <label className="field-stack">
             <span className="field-label">{t("errorType")}</span>

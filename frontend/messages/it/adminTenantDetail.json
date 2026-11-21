@@ -19,7 +19,10 @@
     "verification": "Verifica",
     "storage": "Spazio",
     "activity": "Attività",
-    "technical": "Tecnica"
+    "technical": "Tecnica",
+    "features": "Funzionalità e moduli",
+    "usage": "Utilizzo",
+    "security": "Sicurezza"
   },
   "header": {
     "eyebrow": "Cliente",
@@ -90,5 +93,83 @@
     "status_open": "Aperta",
     "status_paid": "Pagata",
     "status_waived": "Condonata"
+  },
+  "features": {
+    "title": "Funzionalità e moduli",
+    "description": "Quali moduli può usare il mandante.",
+    "summary": "{booked} di {total} funzionalità prenotate",
+    "edit": "Modifica nell'abbonamento",
+    "loadFailed": "Impossibile caricare le funzionalità.",
+    "empty": "Nessuna funzionalità nel catalogo.",
+    "columns": {
+      "feature": "Funzionalità",
+      "access": "Accesso",
+      "source": "Origine",
+      "since": "Dal"
+    },
+    "access": {
+      "full": "Completo",
+      "read_only": "Solo lettura",
+      "none": "Non prenotata"
+    },
+    "source": {
+      "plan": "Piano",
+      "addon": "Opzione"
+    }
+  },
+  "usage": {
+    "title": "Utilizzo",
+    "description": "Valori giornalieri dall'aggregazione degli indicatori (dal {date}), solo conteggi.",
+    "descriptionEmpty": "Valori giornalieri dall'aggregazione degli indicatori, solo conteggi. Ancora nessun valore.",
+    "range": {
+      "30d": "30 giorni",
+      "90d": "90 giorni",
+      "12m": "12 mesi"
+    },
+    "loadFailed": "Impossibile caricare l'utilizzo.",
+    "metrics": {
+      "logins": "Accessi",
+      "activeUsers": "Utenti attivi",
+      "protocols": "Nuovi verbali",
+      "events": "Nuovi appuntamenti",
+      "files": "Nuovi file",
+      "storage": "Spazio"
+    },
+    "activityTitle": "Accessi e utenti attivi",
+    "modulesTitle": "Utilizzo dei moduli",
+    "storageTitle": "Spazio",
+    "day": "Giorno",
+    "month": "Mese"
+  },
+  "security": {
+    "title": "Sicurezza",
+    "description": "Tentativi falliti, blocchi e avvisi degli account di questo mandante. Senza reti né indirizzi; la consultazione viene registrata.",
+    "loadFailed": "Impossibile caricare i dati di sicurezza.",
+    "tiles": {
+      "failures": "Tentativi falliti 24 h",
+      "accounts": "Account con errori 24 h",
+      "blocked": "Tentativi bloccati 24 h",
+      "newDevices": "Accessi da nuovi dispositivi 7 g"
+    },
+    "warningsTitle": "Avvisi (7 giorni)",
+    "eventsTitle": "Ultimi eventi di accesso",
+    "columns": {
+      "warning": "Avviso",
+      "account": "Account",
+      "count": "Numero",
+      "last": "Ultimo",
+      "time": "Momento",
+      "type": "Evento",
+      "outcome": "Esito",
+      "client": "Dispositivo"
+    },
+    "noWarnings": "Nessun avviso.",
+    "noEvents": "Nessun evento.",
+    "warnings": {
+      "account_attack": "Account sotto attacco",
+      "privileged_new_device": "Accesso admin da nuovo dispositivo",
+      "mfa_removed": "Secondo fattore rimosso",
+      "account_locked": "Account bloccato"
+    }
   }
 }

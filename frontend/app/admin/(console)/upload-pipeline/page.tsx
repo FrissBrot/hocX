@@ -1,22 +1,13 @@
 import { AdminUploadPipelineStatus } from "@/components/admin/admin-upload-pipeline-status";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminTenantPage, UploadPipelineOverview } from "@/types/api";
+import { UploadPipelineOverview } from "@/types/api";
 
 export default async function AdminUploadPipelinePage() {
-  const [overview, tenants] = await Promise.all([
-    backendFetchWithSession<UploadPipelineOverview>("/api/admin/upload-pipeline-status"),
-    // No limit param -> full (unpaginated) list, needed here for the tenant filter dropdown.
-    backendFetchWithSession<AdminTenantPage>("/api/admin/tenants"),
-  ]);
-
+  // Mandantenfilter per Remote-Picker (1.5.1) - keine ganze Mandantenliste mehr.
+  const overview = await backendFetchWithSession<UploadPipelineOverview>("/api/admin/upload-pipeline-status");
   return (
-    <>
-      <section className="panel">
-        <AdminUploadPipelineStatus
-          initialOverview={overview ?? { summary: [], files: { items: [], total: 0 }, abgabebox_quarantine: [] }}
-          tenants={tenants?.items ?? []}
-        />
-      </section>
-    </>
+    <section className="panel">
+      <AdminUploadPipelineStatus initialOverview={overview ?? { summary: [], files: { items: [], total: 0 }, abgabebox_quarantine: [] }} />
+    </section>
   );
 }

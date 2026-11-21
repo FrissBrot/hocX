@@ -253,3 +253,9 @@ Regel unklar oder Wert fehlt? Nächstliegende Stufe nehmen und im Commit erwähn
   mit Personendaten nie in «Zuletzt geöffnet» speichern, Suchbegriffe nur im Request-Body.
 - Filter, Sortierung und Tabs stehen in der URL (nur IDs und Codes, keine Namen von Personen oder
   E-Mails); Bereichs-CSS in `app/styles/admin-<bereich>.css`.
+- Tabellen mit Server-Pagination nutzen `useServerTable` (`lib/admin/use-server-table.ts`: URL-Sync,
+  Debounce, Abbruch; Freitext nur mit `syncTextToUrl`, nie bei Personendaten) und optional die
+  Spaltenwahl `ColumnPicker`/`useColumnVisibility` (`components/admin/column-picker.tsx`, localStorage).
+  Mandanten werden nie als ganze Liste geladen: `TenantPicker` (`SearchableSelect` mit `loadOptions`).
+- Verläufe mit `MetricHistory` (`components/admin/metric-history.tsx`): Diagramm, Zusammenfassung und
+  Tabellenalternative in einem.

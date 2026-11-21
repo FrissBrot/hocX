@@ -22,11 +22,14 @@ export const TENANT_DETAIL_TABS = [
   { segment: "", key: "overview", owner: false },
   { segment: "profile", key: "profile", owner: false },
   { segment: "subscription", key: "subscription", owner: false },
+  { segment: "features", key: "features", owner: false },
   { segment: "users", key: "users", owner: true },
   { segment: "domains", key: "domains", owner: false },
   { segment: "verification", key: "verification", owner: false },
   { segment: "storage", key: "storage", owner: false },
+  { segment: "usage", key: "usage", owner: false },
   { segment: "activity", key: "activity", owner: true },
+  { segment: "security", key: "security", owner: true },
   { segment: "technical", key: "technical", owner: true },
 ] as const;
 

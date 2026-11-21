@@ -1384,6 +1384,9 @@ export type PlatformAdminSummary = {
   role: "owner" | "support";
   created_at: string;
   updated_at: string;
+  /** Nur in der Admin-Liste (1.5.1) */
+  passkey_count?: number | null;
+  last_login_at?: string | null;
 };
 
 export type TemplateSummary = {

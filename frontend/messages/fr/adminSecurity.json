@@ -80,7 +80,8 @@
       "subject": "Compte",
       "network": "Réseau",
       "risk": "Risque",
-      "client": "Appareil"
+      "client": "Appareil",
+      "actions": "Actions"
     },
     "actorKinds": {
       "user": "Utilisateur",
@@ -91,7 +92,9 @@
     "empty": "Aucun événement pour cette sélection.",
     "previous": "Plus récents",
     "next": "Plus anciens",
-    "pageInfo": "Entrées {from, number}–{to, number}"
+    "pageInfo": "Entrées {from, number}–{to, number}",
+    "resolve": "Afficher le compte",
+    "resolveConfirm": "Associer le pseudonyme de cet événement à un compte ? Cela exige une confirmation par passkey et est consigné dans le journal d'audit."
   },
   "blocks": {
     "title": "Blocages",
@@ -137,7 +140,9 @@
       "severity": "Gravité",
       "rule": "Règle",
       "subject": "Concerné (pseudonyme)",
-      "key": "Clé"
+      "key": "Clé",
+      "status": "Statut",
+      "actions": "Action"
     },
     "rules": {
       "stuffing": "Credential stuffing : nombreux échecs depuis de nombreux réseaux",
@@ -151,7 +156,16 @@
       "tenant": "Nombreux comptes d’un mandant avec des échecs",
       "limiter": "Protection des connexions (Redis) perturbée",
       "unknown": "Autre règle"
-    }
+    },
+    "open": "Ouverte",
+    "acknowledged": "Acquittée",
+    "acknowledgedBy": "par {name}, {time}",
+    "acknowledge": "Acquitter",
+    "reopen": "Rouvrir",
+    "acknowledgeConfirm": "Acquitter cet avertissement comme vu ? Il ne compte plus comme ouvert jusqu'à ce qu'il disparaisse et réapparaisse. Les blocages et notifications restent inchangés.",
+    "acknowledgedToast": "Avertissement acquitté",
+    "reopenedToast": "Avertissement rouvert",
+    "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert."
   },
   "audit": {
     "title": "Journal d’audit",
@@ -172,6 +186,48 @@
       "step_up": "Confirmation (step-up)",
       "alerts": "Règles d’alerte",
       "retention": "Conservation"
+    }
+  },
+  "export": {
+    "button": "Exporter",
+    "title": "Exporter les données de sécurité",
+    "description": "Fichier JSONL chiffré avec votre mot de passe. L'export est confirmé par passkey et consigné dans le journal d'audit.",
+    "kind": "Contenu",
+    "kinds": {
+      "auth_events": "Événements de connexion",
+      "audit_log": "Journal d'audit"
+    },
+    "from": "Du",
+    "to": "Au",
+    "rangeHelp": "Au maximum {days} jours par export.",
+    "password": "Mot de passe",
+    "passwordHelp": "Au moins {min} caractères. Sans ce mot de passe, le fichier ne peut pas être ouvert.",
+    "passwordConfirm": "Confirmer le mot de passe",
+    "mismatch": "Les mots de passe ne correspondent pas.",
+    "cancel": "Annuler",
+    "submit": "Exporter",
+    "busy": "Export en cours …",
+    "done": "Export téléchargé",
+    "failed": "L'export a échoué"
+  },
+  "subject": {
+    "title": "Compte de l'événement",
+    "description": "L'association a été consignée dans le journal d'audit. Le réseau et l'adresse ne sont jamais affichés.",
+    "unknown": "Aucun compte trouvé : l'adresse saisie n'appartient à aucun compte ou l'événement est trop ancien.",
+    "kind": "Type",
+    "kinds": {
+      "user": "Compte utilisateur",
+      "admin": "Admin de plateforme"
+    },
+    "name": "Nom",
+    "email": "E-mail",
+    "tenant": "Mandant",
+    "via": "Associé via",
+    "viaKinds": {
+      "event": "l'événement lui-même",
+      "related_event": "un événement antérieur du même pseudonyme",
+      "hash": "comparaison des adresses de connexion",
+      "none": "—"
     }
   }
 }

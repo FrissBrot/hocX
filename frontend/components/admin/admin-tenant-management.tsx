@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
+import { ColumnPicker, useColumnVisibility, type ColumnDef } from "@/components/admin/column-picker";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -16,6 +17,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { TenantCloneModal, TenantExportModal, useTenantDelete } from "@/components/admin/tenant-detail/tenant-action-modals";
 import { browserApiFetch } from "@/lib/api/client";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { useToast } from "@/contexts/toast-context";
 import { formatFileSize, formatPercentNumber } from "@/lib/utils/format";
 import {
@@ -144,6 +146,18 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewKey]);
 
+  // Spaltenwahl (1.5.1), je Admin im Browser gespeichert
+  const columnDefs: ColumnDef[] = [
+    { key: "image", label: t("colImage") },
+    { key: "name", label: t("colTenant"), required: true },
+    { key: "plan", label: t("colPlan") },
+    { key: "participants", label: t("colParticipants") },
+    { key: "users", label: t("colUsers") },
+    { key: "storage", label: t("colStorage") },
+    { key: "created", label: t("colCreatedAt") },
+  ];
+  const cols = useColumnVisibility("tenants", columnDefs);
+
   function sortColumn(key: TenantSortKey, label: string) {
     const active = view.sort === key;
     return {
@@ -249,12 +263,18 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       formData.append("new_name", importName);
       formData.append("file", importFile);
       if (importPassword) formData.append("password", importPassword);
+      const { ticket } = await stepUpFetch<{ ticket: string }>("tenant-import", "/api/admin/tenants/import/authorize", {
+        method: "POST",
+        body: JSON.stringify({ new_name: importName }),
+      });
       const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
         "/api/admin/tenants/import",
         // Uploads/entpackt/importiert bis zu MAX_TENANT_IMPORT_UPLOAD_BYTES (2 GB, siehe
         // backend/app/api/routes/admin.py) - browserApiFetch's Default-Timeout von 15s reicht
         // dafuer bei weitem nicht, was zuvor als "Zeitueberschreitung beim Server" fehlschlug.
-        { method: "POST", body: formData, signal: AbortSignal.timeout(600_000) }
+        // Passkey-Bestätigung (Zweck tenant-import) für ein einmaliges Import-Ticket, das an den
+        // Namen gebunden ist; der Upload (bis 2 GB) trägt nur das Ticket im Header (Security-Review M2).
+        { method: "POST", body: formData, signal: AbortSignal.timeout(600_000), headers: { "X-Hocx-Import-Ticket": ticket } }
       );
       await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setImportModalOpen(false);
@@ -283,6 +303,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
           <p className="muted">{t("description")}</p>
         </div>
         <div className="table-toolbar-actions">
+          <ColumnPicker columns={columnDefs} isVisible={cols.isVisible} onToggle={cols.toggle} />
           <button type="button" className="button-secondary" onClick={openImport}>
             {t("importTenant")}
           </button>
@@ -328,15 +349,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
 
       <DataTable
         columns={[
-          t("colImage"),
+          cols.isVisible("image") ? t("colImage") : null,
           sortColumn("name", t("colTenant")),
-          sortColumn("plan", t("colPlan")),
-          t("colParticipants"),
-          sortColumn("users", t("colUsers")),
-          sortColumn("storage", t("colStorage")),
-          sortColumn("created", t("colCreatedAt")),
+          cols.isVisible("plan") ? sortColumn("plan", t("colPlan")) : null,
+          cols.isVisible("participants") ? t("colParticipants") : null,
+          cols.isVisible("users") ? sortColumn("users", t("colUsers")) : null,
+          cols.isVisible("storage") ? sortColumn("storage", t("colStorage")) : null,
+          cols.isVisible("created") ? sortColumn("created", t("colCreatedAt")) : null,
           "",
-        ]}
+        ].filter((column) => column !== null)}
         emptyMessage={loading ? t("loading") : t("noTenantsFound")}
       >
         {visibleTenants.map((tenant) => {
@@ -345,9 +366,11 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
           const storageState = usageRatio > 1 ? "over" : usageRatio >= STORAGE_WARNING_RATIO ? "warning" : "ok";
           return (
             <tr key={tenant.id} className="table-row-clickable" onClick={() => openDetail(tenant)} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Name) */>
-              <td>
-                <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} />
-              </td>
+              {cols.isVisible("image") ? (
+                <td>
+                  <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} />
+                </td>
+              ) : null}
               <td>
                 {/* Tastatur: Name als Knopf, die Zeile bleibt für die Maus klickbar */}
                 <Link href={`/admin/tenants/${tenant.id}` as Route} className="table-row-link" onClick={(event) => event.stopPropagation()}>
@@ -355,7 +378,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 </Link>
                 <TenantStatusBadges tenant={tenant} compact />
               </td>
-              <td>
+              {cols.isVisible("plan") ? <td>
                 {tenant.plan_code ? (
                   <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone={tones.get(tenant.plan_code) ?? "neutral"} />
                 ) : (
@@ -367,10 +390,10 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                     <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(tenant.discount_percent, locale) })}</Badge>
                   </div>
                 ) : null}
-              </td>
-              <td className="admin-cell-number">{tenant.participant_count}</td>
-              <td className="admin-cell-number">{tenant.user_count}</td>
-              <td>
+              </td> : null}
+              {cols.isVisible("participants") ? <td className="admin-cell-number">{tenant.participant_count}</td> : null}
+              {cols.isVisible("users") ? <td className="admin-cell-number">{tenant.user_count}</td> : null}
+              {cols.isVisible("storage") ? <td>
                 {tenant.storage_quota_bytes ? (
                   <div className={`admin-storage-cell admin-storage-${storageState}`}>
                     <div className="admin-storage-bar">
@@ -386,8 +409,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                     <div className="admin-storage-label">{t("noLimitUsage", { used: formatFileSize(tenant.storage_used_bytes) })}</div>
                   </div>
                 )}
-              </td>
-              <td className="admin-cell-number">{new Date(tenant.created_at).toLocaleDateString(locale)}</td>
+              </td> : null}
+              {cols.isVisible("created") ? <td className="admin-cell-number">{new Date(tenant.created_at).toLocaleDateString(locale)}</td> : null}
               <td onClick={(event) => event.stopPropagation()}>
                 <ActionMenu
                   items={[

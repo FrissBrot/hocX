@@ -19,7 +19,10 @@
     "verification": "Verifizierung",
     "storage": "Speicher",
     "activity": "Aktivität",
-    "technical": "Technik"
+    "technical": "Technik",
+    "features": "Features & Module",
+    "usage": "Nutzung",
+    "security": "Sicherheit"
   },
   "header": {
     "eyebrow": "Mandant",
@@ -90,5 +93,83 @@
     "status_open": "Offen",
     "status_paid": "Bezahlt",
     "status_waived": "Erlassen"
+  },
+  "features": {
+    "title": "Features & Module",
+    "description": "Welche Module der Mandant nutzen darf.",
+    "summary": "{booked} von {total} Features gebucht",
+    "edit": "Im Abo ändern",
+    "loadFailed": "Features konnten nicht geladen werden.",
+    "empty": "Keine Features im Katalog.",
+    "columns": {
+      "feature": "Feature",
+      "access": "Zugriff",
+      "source": "Quelle",
+      "since": "Seit"
+    },
+    "access": {
+      "full": "Voll",
+      "read_only": "Nur lesen",
+      "none": "Nicht gebucht"
+    },
+    "source": {
+      "plan": "Plan",
+      "addon": "Zusatz"
+    }
+  },
+  "usage": {
+    "title": "Nutzung",
+    "description": "Tageswerte aus dem Kennzahlen-Rollup (seit {date}), nur Zählwerte.",
+    "descriptionEmpty": "Tageswerte aus dem Kennzahlen-Rollup, nur Zählwerte. Noch keine Werte.",
+    "range": {
+      "30d": "30 Tage",
+      "90d": "90 Tage",
+      "12m": "12 Monate"
+    },
+    "loadFailed": "Nutzung konnte nicht geladen werden.",
+    "metrics": {
+      "logins": "Anmeldungen",
+      "activeUsers": "Aktive Benutzer",
+      "protocols": "Neue Protokolle",
+      "events": "Neue Termine",
+      "files": "Neue Dateien",
+      "storage": "Speicher"
+    },
+    "activityTitle": "Anmeldungen und aktive Benutzer",
+    "modulesTitle": "Nutzung der Module",
+    "storageTitle": "Speicher",
+    "day": "Tag",
+    "month": "Monat"
+  },
+  "security": {
+    "title": "Sicherheit",
+    "description": "Fehlversuche, Sperren und Warnungen der Konten dieses Mandanten. Ohne Netze und Adressen; das Ansehen wird protokolliert.",
+    "loadFailed": "Sicherheitsdaten konnten nicht geladen werden.",
+    "tiles": {
+      "failures": "Fehlversuche 24 h",
+      "accounts": "Konten mit Fehlversuchen 24 h",
+      "blocked": "Gesperrte Versuche 24 h",
+      "newDevices": "Anmeldungen neuer Geräte 7 T"
+    },
+    "warningsTitle": "Warnungen (7 Tage)",
+    "eventsTitle": "Letzte Anmeldeereignisse",
+    "columns": {
+      "warning": "Warnung",
+      "account": "Konto",
+      "count": "Anzahl",
+      "last": "Zuletzt",
+      "time": "Zeitpunkt",
+      "type": "Ereignis",
+      "outcome": "Ergebnis",
+      "client": "Gerät"
+    },
+    "noWarnings": "Keine Warnungen.",
+    "noEvents": "Keine Ereignisse.",
+    "warnings": {
+      "account_attack": "Konto unter Beschuss",
+      "privileged_new_device": "Admin-Anmeldung von neuem Gerät",
+      "mfa_removed": "Zweiter Faktor entfernt",
+      "account_locked": "Konto gesperrt"
+    }
   }
 }

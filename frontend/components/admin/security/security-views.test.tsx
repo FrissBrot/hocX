@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserApiFetchMock = vi.fn();
@@ -17,6 +18,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ApiError } from "@/lib/api/client";
+import { ConfirmProvider } from "@/contexts/confirm-context";
+import { ToastProvider } from "@/contexts/toast-context";
+
+// Warnungen (Quittieren) und Ereignisse (Konto anzeigen) brauchen Rückfrage und Toast
+function render(ui: ReactElement) {
+  return rtlRender(
+    <ToastProvider>
+      <ConfirmProvider>{ui}</ConfirmProvider>
+    </ToastProvider>,
+  );
+}
 import { SecurityAlertsView } from "./security-alerts";
 import { SecurityEvents } from "./security-events";
 import { SecurityOverview } from "./security-overview";
@@ -59,6 +71,20 @@ describe("Sicherheitsbereich (Plattform)", () => {
     render(<SecurityEvents />);
     expect(await screen.findByText("Keine Ereignisse für diese Auswahl.")).toBeInTheDocument();
     expect(browserApiFetchMock.mock.calls[0][0]).toContain("outcome=failure");
+  });
+
+  it("Warnungen lassen sich nach Rückfrage quittieren (1.5.1)", async () => {
+    respond({
+      "/api/admin/auth-security/alerts": [{ key: "auth:spraying:abc", rule: "spraying", subject: "abc", severity: "warning", title: "x", message: "y", acknowledged_at: null }],
+      "/api/admin/auth-security/alerts/ack": { key: "auth:spraying:abc", acknowledged: true },
+    });
+    render(<SecurityAlertsView />);
+    fireEvent.click(await screen.findByRole("button", { name: "Quittieren" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Quittieren" }));
+    await waitFor(() =>
+      expect(browserApiFetchMock).toHaveBeenCalledWith("/api/admin/auth-security/alerts/ack", expect.objectContaining({ method: "POST", body: JSON.stringify({ key: "auth:spraying:abc" }) })),
+    );
   });
 
   it("Richtlinien zeigen Werte gruppiert", async () => {
