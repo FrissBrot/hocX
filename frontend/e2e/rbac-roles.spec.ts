@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
 
@@ -18,7 +19,8 @@ test("eigene Rolle anlegen, zuweisen und wieder entziehen", async () => {
   expect(created.status(), await created.text()).toBe(201);
   const role: Role = await created.json();
 
-  const password = `E2E-Rolle-${suffix}-Passwort`;
+  // Passwortregel (backend app/core/password_policy.py): zur Laufzeit, ohne häufige Wörter
+  const password = `Rolle-${randomBytes(12).toString("base64url")}-7q`;
   const email = `rbac-${suffix}@example.invalid`;
   const userResponse = await admin.post("/api/users", {
     data: { first_name: "Rollen", last_name: "Test", display_name: `Rollen Test ${suffix}`, email, password, login_enabled: true, role_ids: [role.id] },

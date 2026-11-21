@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.api.routes import files as files_routes
 from app.models.entities import PhotoAlbum, PhotoAlbumItem, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, WordImportDocument
 from app.services.file_service import FileService
+from app.services.capture_date import upload_day
 from tests.factories import (
     make_app_user,
     make_current_user,
@@ -510,7 +511,7 @@ def test_list_tenant_files_word_import_group_date_and_context_label(db):
     items = service.list_tenant_files(db, tenant.id)
 
     assert len(items) == 1
-    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].group_date == upload_day(stored_file.created_at)  # Schweizer Kalendertag, nicht UTC
     assert items[0].context_label == document.display_name
 
     document.protocol_date = date(2026, 10, 14)
@@ -527,7 +528,7 @@ def test_list_tenant_files_submission_upload_group_date_and_context_label(db):
     items = service.list_tenant_files(db, tenant.id)
 
     assert len(items) == 1
-    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].group_date == upload_day(stored_file.created_at)  # Schweizer Kalendertag, nicht UTC
     assert items[0].context_label == assignment.title
 
 
@@ -538,7 +539,7 @@ def test_list_tenant_files_gallery_upload_without_event_falls_back_to_created_at
     items = service.list_tenant_files(db, tenant.id)
 
     assert len(items) == 1
-    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].group_date == upload_day(stored_file.created_at)  # Schweizer Kalendertag, nicht UTC
     assert items[0].context_label is None
 
 
@@ -595,7 +596,7 @@ def test_list_tenant_files_gallery_upload_without_exif_falls_back_to_created_at_
     items = service.list_tenant_files(db, tenant.id)
 
     assert len(items) == 1
-    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].group_date == upload_day(stored_file.created_at)  # Schweizer Kalendertag, nicht UTC
     assert items[0].context_label == "Sommerlager"
 
 

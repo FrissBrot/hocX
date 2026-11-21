@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 // Konzept «Personen an einem Ort»: Login und Stammdaten einer Person auf der Personenseite.
@@ -23,7 +24,8 @@ test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", 
     // Login per Passwort vergeben
     await page.getByRole("button", { name: "Passwort setzen", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(/^Passwort/).fill("Secure-Participant-Password-123!");
+    // Passwortregel (backend app/core/password_policy.py): zur Laufzeit, ohne häufige Wörter
+    await dialog.getByLabel(/^Passwort/).fill(`Pers-${randomBytes(12).toString("base64url")}-7q`);
     await dialog.getByRole("button", { name: "Login aktivieren", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText("Login aktiv", { exact: true }).first()).toBeVisible();

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import fs from "node:fs/promises";
 
 import { authFiles } from "./auth";
 
@@ -16,17 +17,22 @@ test("Geräteliste zeigt die eigene Session und meldet ein anderes Gerät ab", a
   test.skip(!login.ok(), "Zweites Login im Stack nicht möglich");
 
   await page.goto("/?profile=security");
-  await expect(page.getByRole("heading", { name: "Angemeldete Geräte" })).toBeVisible();
-  await expect(page.getByText("Dieses Gerät")).toBeVisible();
-  const signOut = page.getByRole("button", { name: "Abmelden", exact: true });
+  // Texte in der Sprache des Kontos (der Demo-Writer hat Englisch, Cookie hocx_locale)
+  const locale = (await page.context().cookies()).find((cookie) => cookie.name === "hocx_locale")?.value ?? "de";
+  const t = JSON.parse(await fs.readFile(`messages/${locale}/security.json`, "utf8")).sessions;
+  // Erstes Öffnen des nachgeladenen Profil-Dialogs: der Dev-Server kompiliert ihn erst
+  await expect(page.getByRole("heading", { name: t.title })).toBeVisible({ timeout: 30_000 });
+  // «Dieses Gerät» steht bei der Sitzung und bei den bekannten Geräten
+  await expect(page.getByText(t.current).first()).toBeVisible();
+  const signOut = page.getByRole("button", { name: t.revoke, exact: true });
   await expect(signOut.first()).toBeVisible();
 
   // Einzeln abmelden (nicht «Alle anderen»: das beendete über session_revoke_at auch die
   // gespeicherten Sessions der übrigen Specs)
   for (let round = 0; round < 10 && (await signOut.count()) > 0; round++) {
     await signOut.first().click();
-    await page.getByRole("dialog").getByRole("button", { name: "Abmelden", exact: true }).click();
-    await expect(page.getByText("Gerät abgemeldet.")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: t.revoke, exact: true }).click();
+    await expect(page.getByText(t.revoked)).toBeVisible();
   }
   await expect(signOut).toHaveCount(0);
 

@@ -415,7 +415,8 @@ stub = {
     "tmpfs": ["/tmp"],
     "volumes": [{"type": "bind", "source": f"{work}/stub", "target": "/stub", "read_only": True}],
 }
-for name in ("frontend", "backend", "abgabebox-frontend", "abgabebox-backend"):
+# admin-frontend: eigener Dienst seit der Admin-Abschottung (gleiches Image wie frontend)
+for name in ("frontend", "admin-frontend", "backend", "abgabebox-frontend", "abgabebox-backend"):
     out["services"][name] = dict(stub, labels=services[name]["labels"])
 out["services"]["traefik"] = {
     "image": traefik_image,
@@ -537,7 +538,7 @@ else
 fi
 
 echo "==> Alle App-Container gestoppt"
-"${DC[@]}" stop frontend abgabebox-frontend abgabebox-backend > /dev/null 2>&1
+"${DC[@]}" stop frontend admin-frontend abgabebox-frontend abgabebox-backend > /dev/null 2>&1
 wait_status "https://$DOMAIN/login" 503 || true
 expect "Hauptdomain -> Wartungsseite 503 (Ausweich-Router)" 'maintenance_html hocx'
 request "https://$DOMAIN/" -I

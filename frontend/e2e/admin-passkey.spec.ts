@@ -65,11 +65,15 @@ test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit 
     const unconfirmedDelete = await context.request.delete(`/api/admin/mfa/factors/${overview.factors[0].id}`);
     expect(unconfirmedDelete.status()).toBe(403);
 
+    // Zweiter Schlüssel: derselbe virtuelle Authenticator lehnt einen zweiten Passkey für dasselbe
+    // Konto ab (excludeCredentials) - wie im echten Leben ein zweites Gerät anstecken.
+    const removeSecondKey = await addVirtualAuthenticator(page, "usb");
     await page.getByRole("button", { name: "Passkey hinzufügen" }).click();
     await expect(page.locator(".security-factor-card")).toHaveCount(2);
     await page.locator(".security-factor-card").first().getByRole("button", { name: "Entfernen" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Entfernen" }).click();
     await expect(page.locator(".security-factor-card")).toHaveCount(1);
+    await removeSecondKey();
   } finally {
     await removeAuthenticator();
     await context.close();

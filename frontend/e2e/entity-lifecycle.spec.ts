@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { test, expect, APIRequestContext } from "@playwright/test";
 
 async function json(request: APIRequestContext, method: "post" | "patch", path: string, data: unknown) {
@@ -23,7 +24,8 @@ test("creates, reads, edits and deletes core entities", async ({ request, page }
 
     const session = await (await request.get("/api/auth/session")).json();
     const tenantId = session.current_tenant.id;
-    const user = await json(request, "post", "/api/users", { first_name: "E2E", last_name: "User", display_name: `E2E User ${suffix}`, email: `user-${suffix}@example.invalid`, password: "E2E-Secure-Password-123!" });
+    // Passwortregel (backend app/core/password_policy.py): zur Laufzeit erzeugt, ohne häufige Wörter
+    const user = await json(request, "post", "/api/users", { first_name: "E2E", last_name: "User", display_name: `E2E User ${suffix}`, email: `user-${suffix}@example.invalid`, password: `Ent-${randomBytes(12).toString("base64url")}-7q` });
     cleanup.push(["user", user.id]);
 
     const templates = await (await request.get("/api/templates")).json();

@@ -204,6 +204,11 @@ Installationen aktualisieren können.
 
 ### Update
 
+- **Hosts mit dem 1.4.0-Hotfix** (`docker-compose.local.yml` mit nur
+  `traefik.docker.network=hocx_default` an `abgabebox-backend`): Traefik hängt ab dieser Version nur
+  noch im Netz `edge`; der Hotfix würde die Abgabebox unerreichbar machen. `deploy.sh` lädt ihn
+  deshalb nicht mehr (Hinweis im Log) und entfernt die Datei nach dem erfolgreichen Update
+  (Kopie unter `backups/`). Steht mehr in der Datei, bleibt sie - den Eintrag dann von Hand löschen.
 - Nach dem Update meldet der erste Admin-Login je Gerät einmal «Plattform-Anmeldung von neuem
   Gerät» (Warnung) - das Gerät wird erst ab dann wiedererkannt.
 - **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue

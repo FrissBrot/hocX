@@ -15,13 +15,13 @@ import type { Page } from "@playwright/test";
  * passkey ceremonies on this page (not strictly required - closing the page/context tears the
  * CDP session down anyway - but keeps a long-lived page's virtual authenticator list from
  * growing across multiple enrolments within the same test). */
-export async function addVirtualAuthenticator(page: Page): Promise<() => Promise<void>> {
+export async function addVirtualAuthenticator(page: Page, transport: "internal" | "usb" = "internal"): Promise<() => Promise<void>> {
   const client = await page.context().newCDPSession(page);
   await client.send("WebAuthn.enable");
   const { authenticatorId } = await client.send("WebAuthn.addVirtualAuthenticator", {
     options: {
       protocol: "ctap2",
-      transport: "internal",
+      transport,
       hasResidentKey: true,
       hasUserVerification: true,
       isUserVerified: true,

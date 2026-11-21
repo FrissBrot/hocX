@@ -124,7 +124,36 @@ append_local_compose_override() {
   # Bekannte Hotfixes bleiben bis zum erfolgreichen Update geladen (sie sind mit dem neuen Release
   # gleichwertig): ein Rollback auf das alte Release braucht sie noch. deploy.sh räumt sie erst
   # nach den Prüfungen über Traefik weg (retire_local_compose_hotfixes).
+  # Ausnahme ab 1.4.3 (Admin-Abschottung): Traefik hängt nur noch im Netz edge. Der 1.4.0-Hotfix
+  # (abgabebox-backend über hocx_default) würde die Abgabebox dann unerreichbar machen (504, Rollback
+  # bei jedem Update) - er wird nicht geladen, sobald das Release ein anderes Netz selbst setzt. Ein
+  # Rollback geht auf current.env (ab 1.4.1), die die Korrektur selbst enthält.
+  if _is_known_local_hotfix "$file" && [ "$(_release_abgabebox_network "$repo_dir")" = "edge" ]; then
+    echo "    Hinweis: $HOCX_LOCAL_COMPOSE_FILE (bekannter Hotfix traefik.docker.network=hocx_default) wird nicht geladen - das Release setzt das Netz edge selbst; die Datei wird nach dem Update entfernt." >&2
+    return 0
+  fi
   target_args+=(-f "$file")
+}
+
+# Netz, das docker-compose.release.yml für abgabebox-backend an Traefik meldet (default, edge oder leer).
+_release_abgabebox_network() {
+  local block
+  block="$(awk '/^  abgabebox-backend:/{f=1;next} /^  [a-z0-9-]+:/{f=0} f' "$1/docker-compose.release.yml" 2> /dev/null || true)"
+  # shellcheck disable=SC2016 # Literal aus der Compose-Datei, keine Shell-Variable
+  case "$block" in
+    *'traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge'*) echo edge ;;
+    *'traefik.docker.network=${COMPOSE_PROJECT_NAME}_default'*) echo default ;;
+  esac
+}
+
+# Datei besteht genau aus einem bekannten Hotfix (ohne Leerraum verglichen)?
+_is_known_local_hotfix() {
+  local normalized hotfix
+  normalized="$(tr -d '[:space:]' < "$1")"
+  for hotfix in "${HOCX_KNOWN_LOCAL_HOTFIXES[@]}"; do
+    [ "$normalized" = "$hotfix" ] && return 0
+  done
+  return 1
 }
 
 # Bekannte Hotfixes in docker-compose.local.yml, die ein späteres Release selbst enthält: liegt
@@ -144,10 +173,8 @@ retire_local_compose_hotfixes() {
   # (im Block des Dienstes abgabebox-backend - das Backend trägt dasselbe Label schon länger)
   # Erst den Block lesen, dann suchen: «awk | grep -q» scheiterte unter pipefail sporadisch, wenn
   # grep -q früh beendete und awk dabei SIGPIPE bekam (CI).
-  local block
-  block="$(awk '/^  abgabebox-backend:/{f=1;next} /^  [a-z0-9-]+:/{f=0} f' "$repo_dir/docker-compose.release.yml" 2> /dev/null || true)"
-  # shellcheck disable=SC2016 # Literal aus der Compose-Datei, keine Shell-Variable
-  [[ "$block" == *'traefik.docker.network=${COMPOSE_PROJECT_NAME}_default'* ]] || return 0
+  # (ab 1.4.1 _default, ab 1.4.3 _edge - beides heisst: das Release setzt das Netz selbst)
+  [ -n "$(_release_abgabebox_network "$repo_dir")" ] || return 0
   normalized="$(tr -d '[:space:]' < "$file")"
   for hotfix in "${HOCX_KNOWN_LOCAL_HOTFIXES[@]}"; do
     if [ "$normalized" = "$hotfix" ]; then
