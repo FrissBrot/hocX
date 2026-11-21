@@ -63,6 +63,11 @@ def _resolve_tenant_scoped_id_query(model: type, tenant_id: int) -> Select:
     return select(model.id).where(fk_column.in_(parent_ids))
 
 
+# Felder einer Listendefinition, die die Rekonstruktion aus dem (bearbeiteten) Entwurf übernimmt;
+# Spalten und Rollen-Spalten werden separat gegen bekannte Spalten aufgelöst.
+RECONSTRUCT_DEFINITION_FIELDS = ("name", "description", "is_active")
+
+
 class TableSnapshotService:
     def create_snapshot(
         self,
@@ -190,7 +195,11 @@ class TableSnapshotService:
                 "sort_index": (index + 1) * 10,
             })
         column_keys = {str(row["key"]) for row in column_rows}
-        plain_values = {key: value for key, value in definition_values.items() if key not in ("columns", "label_column_id", "responsible_column_id")}
+        # Nur bearbeitbare Felder übernehmen (Allowlist): id/public_id/tenant_id/created_at/
+        # updated_at und andere Systemfelder kommen ausschliesslich aus definition_identity,
+        # sonst liesse sich im Backup eine Zeile mit fremder interner id ablegen (Nachtlauf
+        # 2026-11-20, Listenstand-Rekonstruktion).
+        plain_values = {key: definition_values[key] for key in RECONSTRUCT_DEFINITION_FIELDS if key in definition_values}
         by_key = {str(row["key"]): row for row in column_rows}
         role = lambda key: by_key[str(key)].get("id") if key and str(key) in by_key else None  # noqa: E731
         definition_row = {
