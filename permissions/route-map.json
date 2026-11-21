@@ -3420,7 +3420,7 @@
     },
     "GET /api/tenants/{tenant_id}/profile-image": {
       "handler": "tenants.tenant_profile_image",
-      "note": "Vereinslogo (auch für die Login-Seite)"
+      "note": "Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404"
     },
     "GET /api/tenants/{tenant_id}/subscription": {
       "handler": "tenants.get_tenant_subscription",

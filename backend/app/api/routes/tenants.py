@@ -11,13 +11,21 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.client_ip import client_ip
+from app.core.security import CurrentUser, get_current_user, get_optional_current_user, require_permission
 from app.core.tenant_scope import tenant_scope_suspended
 from app.models import Participant, Tenant, TenantDomain
 from app.schemas.cashflow import TenantPortalCharges
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
-from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
+from app.services.tenant_service import (
+    TenantService,
+    build_tenant_profile_image_url,
+    can_view_tenant_logo,
+    tenant_logo_is_public,
+    tenant_profile_image_media_type,
+    tenant_profile_image_response,
+)
 from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
@@ -147,14 +155,49 @@ def get_tenant_charges(
     return result
 
 
+# Logos werden von der App-Shell auf jeder Seite geladen (Browser-Cache), Fehlversuche strenger.
+TENANT_LOGO_LIMIT_PER_MINUTE = 300
+TENANT_LOGO_MISS_LIMIT_PER_MINUTE = 30
+TENANT_LOGO_MAX_AGE = 3600
+
+
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    # Deliberately public (no auth) - this is an organisation logo, not sensitive data, and
-    # needs to be renderable on the login page before the visitor has authenticated at all.
-    tenant = public_id_service.get_by_public_id(db, Tenant, tenant_id)
-    if tenant is None or tenant.profile_image_path is None:
+def tenant_profile_image(
+    tenant_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    """Vereinslogo. Ohne Anmeldung nur, wo es ohnehin öffentlich gezeigt wird (Login-Branding der
+    eigenen App-Domain, Prüfseite mit freigegebener Identität, tenant_service.tenant_logo_is_public);
+    angemeldet für den eigenen Mandanten und vertraute Partner. Alles andere - unbekannt, fremd,
+    kein Logo, kein Rasterbild - ergibt dieselbe 404."""
+    ip = client_ip(request)
+    enforce_rate_limit(f"tenant-logo:{ip}", limit=TENANT_LOGO_LIMIT_PER_MINUTE, period_seconds=60, fail_open=True)
+    try:
+        public_id = uuid.UUID(tenant_id)
+    except ValueError:
+        public_id = None
+    tenant = (
+        public_id_service.get_by_public_id(db, Tenant, public_id)  # nosemgrep: public-id-lookup-without-tenant -- mandantenübergreifend gewollt, Zugriff prüft can_view_tenant_logo
+        if public_id is not None
+        else None
+    )
+    key = tenant.profile_image_path if tenant is not None else None
+    if (
+        tenant is None
+        or key is None
+        or tenant_profile_image_media_type(key) is None  # Altbestand ohne Rasterendung (z. B. SVG) nie ausliefern
+        or not can_view_tenant_logo(db, tenant, user)
+    ):
+        enforce_rate_limit(f"tenant-logo:miss:{ip}", limit=TENANT_LOGO_MISS_LIMIT_PER_MINUTE, period_seconds=60, fail_open=True)
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    return tenant_profile_image_response(request, tenant.profile_image_path)
+    if tenant_logo_is_public(db, tenant):
+        cache = {"Cache-Control": f"public, max-age={TENANT_LOGO_MAX_AGE}"}
+    else:
+        # Nur für Angemeldete: nie in geteilten Caches ablegen
+        cache = {"Cache-Control": f"private, max-age={TENANT_LOGO_MAX_AGE}", "Vary": "Cookie"}
+    return tenant_profile_image_response(request, key, extra_headers=cache)
 
 
 # Getrennte Stundenkontingente je Mandant für die Domain-Routen (Audit 08, 2026-11).

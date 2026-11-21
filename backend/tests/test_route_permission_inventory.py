@@ -37,7 +37,7 @@ ALLOWED = {
     "maintenance_public.*": "öffentlicher Wartungsstatus",
     "system_status.*": "Status-Token (kein Benutzer)",
     "calendar_feeds.get_calendar_feed": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve",
-    "tenants.tenant_profile_image": "Vereinslogo (auch für die Login-Seite)",
+    "tenants.tenant_profile_image": "Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404",
     # Eigene Daten (Ressourcenregel R4): ohne Permission, nur das eigene Konto.
     "users.get_me": "eigenes Konto",
     "users.list_my_sessions": "eigene Sitzungen (Angemeldete Geräte)",

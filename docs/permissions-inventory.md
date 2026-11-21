@@ -119,7 +119,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/tenants/{tenant_id}/domains` | TenantService.require_manageable (settings.manage) |
 | `DELETE /api/tenants/{tenant_id}/domains/{domain_id}` | TenantService.require_manageable (settings.manage) |
 | `POST /api/tenants/{tenant_id}/domains/{domain_id}/verify` | TenantService.require_manageable (settings.manage) |
-| `GET /api/tenants/{tenant_id}/profile-image` | Vereinslogo (auch für die Login-Seite) |
+| `GET /api/tenants/{tenant_id}/profile-image` | Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404 |
 | `GET /api/tenants/{tenant_id}/subscription` | TenantService (settings.manage) |
 | `GET /api/todo-fines` | eigene Pendenzen-Bussen; alle nur mit reports.personal (im Rumpf) |
 | `GET /api/users` | UserService (access.manage) |
@@ -558,7 +558,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/tenants/{tenant_id}/domains` | TenantService.require_manageable (settings.manage) |
 | `DELETE /api/tenants/{tenant_id}/domains/{domain_id}` | TenantService.require_manageable (settings.manage) |
 | `POST /api/tenants/{tenant_id}/domains/{domain_id}/verify` | TenantService.require_manageable (settings.manage) |
-| `GET /api/tenants/{tenant_id}/profile-image` | Vereinslogo (auch für die Login-Seite) |
+| `GET /api/tenants/{tenant_id}/profile-image` | Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404 |
 | `GET /api/tenants/{tenant_id}/subscription` | TenantService (settings.manage) |
 | `GET /api/todo-fines` | eigene Pendenzen-Bussen; alle nur mit reports.personal (im Rumpf) · Feature todo_fines (lesen) |
 | `GET /api/todo-fines/filter-options` | fines.manage · Feature todo_fines |
