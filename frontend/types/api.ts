@@ -661,6 +661,9 @@ export type FileBulkCaptureDateResult = {
   skipped_no_date_ids: string[];
   invalid_ids: string[];
   not_found_ids: string[];
+  // Verschieben, Fotos ohne Uhrzeit (nur ganze Tage wirken): unverändert bzw. nur um Tage verschoben.
+  no_time_unchanged_ids?: string[];
+  date_only_ids?: string[];
 };
 
 // Papierkorb (Migration 0199): GET /api/files/trash

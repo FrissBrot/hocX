@@ -15,7 +15,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToastMock }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
 
-import { MAX_CAPTURE_DATE_BULK, PhotoCaptureDateDialog, describeOffset } from "./photo-capture-date-dialog";
+import { MAX_CAPTURE_DATE_BULK, PhotoCaptureDateDialog, describeOffset, noTimeShiftNote, wholeShiftDays } from "./photo-capture-date-dialog";
 
 const emptyResult = { updated_ids: [], unchanged_ids: [], skipped_no_date_ids: [], invalid_ids: [], not_found_ids: [] };
 
@@ -97,6 +97,35 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     expect(showToastMock).toHaveBeenCalledWith("1 Bild ohne Aufnahmedatum übersprungen.", "info");
   });
 
+  it("weist bei Stunden darauf hin, dass bei Bildern ohne Uhrzeit nur ganze Tage wirken, und meldet sie", async () => {
+    confirmMock.mockResolvedValue(true);
+    browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a"], no_time_unchanged_ids: ["b", "c"] });
+    renderDialog();
+    fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "2" } });
+    expect(screen.queryByText(/Bilder ohne Uhrzeit/)).not.toBeInTheDocument(); // reine Tage wirken überall
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-13" } });
+    expect(screen.getByText("Bilder ohne Uhrzeit bleiben unverändert: bei ihnen wirken nur ganze Tage.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+
+    await waitFor(() => expect(lastPost()).toEqual({ file_ids: ["a", "b", "c"], mode: "shift", shift_days: 0, shift_hours: -13 }));
+    expect(confirmMock.mock.calls[0][0].message).toContain("Bilder ohne Uhrzeit bleiben unverändert");
+    expect(showToastMock).toHaveBeenCalledWith("2 Bilder unverändert – keine Uhrzeit.", "info");
+  });
+
+  it("meldet Bilder ohne Uhrzeit, die nur um ganze Tage verschoben wurden", async () => {
+    confirmMock.mockResolvedValue(true);
+    browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a", "b"], date_only_ids: ["b"] });
+    renderDialog(["a", "b"]);
+    fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "-1" } });
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-5" } });
+    expect(screen.getByText("Bilder ohne Uhrzeit werden nur um 1 Tag verschoben: bei ihnen wirken nur ganze Tage.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("1 Bild ohne Uhrzeit nur um ganze Tage verschoben.", "info"));
+  });
+
   it("verlangt beim Verschieben einen Versatz", () => {
     renderDialog();
     fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
@@ -140,5 +169,25 @@ describe("describeOffset", () => {
     expect(describeOffset(1, -2, t)).toEqual({ offset: "22 Stunden", direction: "later" });
     expect(describeOffset(-2, 0, t)).toEqual({ offset: "2 Tage", direction: "earlier" });
     expect(describeOffset(0, 25, t)).toEqual({ offset: "1 Tag und 1 Stunde", direction: "later" });
+  });
+});
+
+describe("wholeShiftDays / noTimeShiftNote (wie image_metadata_service.whole_shift_days)", () => {
+  const t = createTranslator({ locale: "de", messages: { photos: dePhotos }, namespace: "photos.captureCorrection" });
+
+  it("rundet den Gesamtversatz gegen null auf ganze Tage", () => {
+    expect(wholeShiftDays(0, -13)).toBe(0);
+    expect(wholeShiftDays(0, 13)).toBe(0);
+    expect(wholeShiftDays(1, -2)).toBe(0);
+    expect(wholeShiftDays(0, -30)).toBe(-1);
+    expect(wholeShiftDays(-2, -5)).toBe(-2);
+    expect(wholeShiftDays(3, 0)).toBe(3);
+  });
+
+  it("hat nur bei Stundenanteil einen Hinweis", () => {
+    expect(noTimeShiftNote(2, 0, t)).toBeNull();
+    expect(noTimeShiftNote(0, 48, t)).toBeNull();
+    expect(noTimeShiftNote(0, -13, t)).toContain("bleiben unverändert");
+    expect(noTimeShiftNote(3, 4, t)).toContain("nur um 3 Tage");
   });
 });

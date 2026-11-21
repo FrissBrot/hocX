@@ -44,6 +44,20 @@ export function describeOffset(days: number, hours: number, t: TFunc): { offset:
   };
 }
 
+/** Ganze Tage des Gesamtversatzes, gegen null gerundet - wie das Backend
+ * (`image_metadata_service.whole_shift_days`): Bei Fotos ohne Uhrzeit wirkt nur dieser Teil,
+ * Stunden werden ignoriert (−13 h → 0, 1 Tag − 2 h → 0, −30 h → −1). */
+export function wholeShiftDays(days: number, hours: number): number {
+  return Math.trunc((days * 24 + hours) / 24) || 0; // kein -0
+}
+
+/** Hinweis für Fotos ohne Uhrzeit, wenn der Versatz Stunden enthält, die bei ihnen nicht wirken:
+ * null bei reinen Tagen (dann wirkt alles). */
+export function noTimeShiftNote(days: number, hours: number, t: TFunc): string | null {
+  if ((days * 24 + hours) % 24 === 0) return null;
+  return t("shiftNoTimeNote", { days: Math.abs(wholeShiftDays(days, hours)) });
+}
+
 export function captureCorrectionPayload(request: CaptureCorrectionRequest) {
   if (request.mode === "set") return { mode: "set", corrected_date: request.date, corrected_time: request.time || null };
   if (request.mode === "shift") return { mode: "shift", shift_days: request.days, shift_hours: request.hours };
@@ -62,6 +76,8 @@ export function useCaptureCorrectionConfirm() {
       message = t("confirmSet", { count, date });
     } else if (request.mode === "shift") {
       message = t("confirmShift", { count, ...describeOffset(request.days, request.hours, t) });
+      const note = noTimeShiftNote(request.days, request.hours, t);
+      if (note) message = `${message} ${note}`;
     } else {
       message = t("confirmReset", { count });
     }
@@ -102,6 +118,7 @@ export function PhotoCaptureDateDialog({
   const shiftDays = parseWholeNumber(days);
   const shiftHours = parseWholeNumber(hours);
   const shiftValid = shiftDays !== null && shiftHours !== null && (shiftDays !== 0 || shiftHours !== 0);
+  const noTimeNote = shiftDays !== null && shiftHours !== null ? noTimeShiftNote(shiftDays, shiftHours, t) : null;
   const valid = !tooMany && count > 0 && (mode === "set" ? Boolean(date) : mode === "shift" ? shiftValid : true);
 
   function buildRequest(): CaptureCorrectionRequest {
@@ -124,6 +141,8 @@ export function PhotoCaptureDateDialog({
       const notes = [
         result?.unchanged_ids.length ? t("resultUnchanged", { count: result.unchanged_ids.length }) : null,
         result?.skipped_no_date_ids.length ? t("resultSkipped", { count: result.skipped_no_date_ids.length }) : null,
+        result?.no_time_unchanged_ids?.length ? t("resultNoTimeUnchanged", { count: result.no_time_unchanged_ids.length }) : null,
+        result?.date_only_ids?.length ? t("resultDateOnly", { count: result.date_only_ids.length }) : null,
         result?.invalid_ids.length ? t("resultInvalid", { count: result.invalid_ids.length }) : null,
         result?.not_found_ids.length ? t("resultNotFound", { count: result.not_found_ids.length }) : null,
       ].filter((note): note is string => Boolean(note));
@@ -178,6 +197,7 @@ export function PhotoCaptureDateDialog({
               </label>
             </div>
             <p className="field-help">{t("shiftHelp")}</p>
+            {shiftValid && noTimeNote ? <StatusBanner tone="neutral" message={noTimeNote} /> : null}
           </>
         ) : null}
         {mode === "reset" ? <p className="field-help">{t("resetHelp")}</p> : null}

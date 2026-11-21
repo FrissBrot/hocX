@@ -208,6 +208,13 @@ class CaptureCorrectionOutcome:
     skipped_no_date_ids: list[uuid.UUID] = field(default_factory=list)
     invalid_ids: list[uuid.UUID] = field(default_factory=list)
     not_found_ids: list[uuid.UUID] = field(default_factory=list)
+    # Verschieben, Fotos ohne Uhrzeit (nur der Tagesanteil wirkt, 1.5.1): unverändert, weil der
+    # Versatz keinen ganzen Tag enthält ...
+    no_time_unchanged_ids: list[uuid.UUID] = field(default_factory=list)
+    # ... bzw. geändert, aber nur um die ganzen Tage (Stunden ignoriert; Teilmenge von updated_ids).
+    date_only_ids: list[uuid.UUID] = field(default_factory=list)
+    # Von follow_capture_date_change geänderte Alben (Bestenauswahl nach dem Commit neu berechnen).
+    touched_album_ids: set[uuid.UUID] = field(default_factory=set)
 
 
 @dataclass
@@ -1248,8 +1255,12 @@ class FileService:
             raise ValueError("Nur Bilder haben ein Aufnahmedatum")
         changed = image_metadata_service.set_estimated_date(stored_file, estimated, user_id=user_id)
         if changed:
+            from app.services import photo_album_service  # Importzyklus, siehe save_gallery_uploads
+
             photo_event_link_service.resync_photo_after_date_change(db, stored_file)
+            touched = photo_album_service.follow_capture_date_change(db, tenant_id=stored_file.tenant_id, stored_files=[stored_file])
             db.commit()
+            photo_album_service.recompute_best_of_for_albums(db, self, touched)
         return changed
 
     def correct_capture_dates(
@@ -1269,9 +1280,16 @@ class FileService:
         anderer Mandanten (auch Partner-Fotos geteilter Alben) und Nicht-Bilder landen
         gleichermassen in not_found. Das EXIF-Datum bleibt als Original gespeichert; die Datei
         selbst zieht der Job capture_date_file_sync nach (capture_file_state, Migration 0203). Danach
-        werden automatische Termin-Verknüpfungen neu bewertet. Committet NICHT - der Aufrufer
-        schreibt den Audit-Eintrag in dieselbe Transaktion."""
+        werden automatische Termin-Verknüpfungen neu bewertet und datumsabhängige Auto-Alben
+        nachgezogen (photo_album_service.follow_capture_date_change). Verschieben bei Fotos ohne
+        Uhrzeit: nur der Tagesanteil wirkt (no_time_unchanged_ids/date_only_ids). Committet NICHT -
+        der Aufrufer schreibt den Audit-Eintrag in dieselbe Transaktion und ruft danach
+        recompute_capture_albums(outcome) auf."""
+        from app.services import photo_album_service  # Importzyklus, siehe save_gallery_uploads
+
         outcome = CaptureCorrectionOutcome()
+        changed_files: list[StoredFile] = []
+        shift_whole_days = shift is None or image_metadata_service.shift_is_whole_days(shift)
         requested = list(dict.fromkeys(file_ids))
         found = {
             stored_file.public_id: stored_file
@@ -1299,6 +1317,11 @@ class FileService:
                 if target is None:
                     outcome.skipped_no_date_ids.append(public_id)
                     continue
+                if not target[1] and image_metadata_service.whole_shift_days(shift or timedelta()) == 0:
+                    # Ohne Uhrzeit und ohne ganzen Tag im Versatz: nichts schreiben (auch keine
+                    # Korrektur gleich der Schätzung anlegen, kein Datei-Sync).
+                    outcome.no_time_unchanged_ids.append(public_id)
+                    continue
             try:
                 changed = image_metadata_service.set_capture_correction(
                     stored_file,
@@ -1312,10 +1335,21 @@ class FileService:
             if changed:
                 photo_event_link_service.resync_photo_after_date_change(db, stored_file)
                 outcome.updated_ids.append(public_id)
+                changed_files.append(stored_file)
+                if mode == "shift" and target is not None and not target[1] and not shift_whole_days:
+                    outcome.date_only_ids.append(public_id)
             else:
                 outcome.unchanged_ids.append(public_id)
         db.flush()
+        outcome.touched_album_ids = photo_album_service.follow_capture_date_change(db, tenant_id=tenant_id, stored_files=changed_files)
         return outcome
+
+    def recompute_capture_albums(self, db: Session, outcome: CaptureCorrectionOutcome) -> None:
+        """Nach dem Commit von correct_capture_dates: Bestenauswahl der nachgezogenen Alben."""
+        if outcome.touched_album_ids:
+            from app.services import photo_album_service
+
+            photo_album_service.recompute_best_of_for_albums(db, self, outcome.touched_album_ids)
 
     def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
         return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)

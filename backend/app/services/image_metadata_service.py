@@ -21,6 +21,7 @@ Grundregeln (siehe backend/UPLOAD_DUPLICATES.md):
 from __future__ import annotations
 
 import io
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -634,17 +635,32 @@ def shift_base(stored_file: Any) -> tuple[datetime, bool] | None:
     return None
 
 
+def whole_shift_days(delta: timedelta) -> int:
+    """Ganze Tage eines Versatzes, gegen null gerundet (wie die Anzeige «1 Tag und 2 Stunden»):
+    +26 h -> 1, -13 h -> 0, 1 Tag - 2 h (= 22 h) -> 0, -49 h -> -2."""
+    return math.trunc(delta.total_seconds() / 86400)
+
+
+def shift_is_whole_days(delta: timedelta) -> bool:
+    return delta == timedelta(days=whole_shift_days(delta))
+
+
 def shifted_correction(stored_file: Any, delta: timedelta) -> tuple[datetime, bool] | None:
     """Neues korrigiertes Datum nach Verschieben um `delta` oder None (kein Aufnahmedatum).
-    Ohne Uhrzeit zählt nur der neue Kalendertag."""
+
+    Ohne Uhrzeit (geschätztes Datum oder Korrektur ohne Uhrzeit) wirkt nur der Tagesanteil
+    (whole_shift_days); Stunden/Minuten werden ignoriert. Früher galt technisch 12:00, sodass
+    z. B. -13 h ein Foto ohne Uhrzeit auf den Vortag kippte (User-Entscheid «Nur Tage wirken»,
+    1.5.1). Ohne Tagesanteil kommt der Ausgangstag unverändert zurück - der Aufrufer meldet
+    das als «unverändert - keine Uhrzeit» (FileService.correct_capture_dates)."""
     base = shift_base(stored_file)
     if base is None:
         return None
     moment, has_time = base
-    shifted = moment + delta
-    if not has_time:
-        shifted = datetime.combine(shifted.date(), CORRECTED_DATE_ONLY_TIME)
-    return shifted, has_time
+    if has_time:
+        return moment + delta, True
+    day = moment.date() + timedelta(days=whole_shift_days(delta))
+    return datetime.combine(day, CORRECTED_DATE_ONLY_TIME), False
 
 
 def set_capture_correction(
