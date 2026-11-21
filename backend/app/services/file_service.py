@@ -61,6 +61,7 @@ from app.services.apple_media import (
     pair_live_clips,
     transcode_live_clip,
 )
+from app.core.tenant_scope import bind_tenant_scope, tenant_scope_suspended
 from app.services import gps_strip, image_metadata_service, photo_event_link_service, upload_precheck_service
 from app.services.capture_date import effective_capture
 from app.services.photo_quality import compute_quality_scores
@@ -1370,6 +1371,18 @@ class FileService:
         )
         return {item.id: item for item in items}
 
+    def _similar_visible(self, db: Session, viewer):
+        """Prüfung für den Ähnlichkeitshinweis (ingest_file): sieht die Person mindestens eines der
+        ähnlichen Bilder? Fragt immer ab, auch ohne Treffer. Ohne viewer: bisheriges Verhalten."""
+        if viewer is None:
+            return None
+
+        def check(stored_file_ids: list[int]) -> bool:
+            public_ids = list(db.scalars(select(StoredFile.public_id).where(StoredFile.id.in_(stored_file_ids))))
+            return bool(self.visible_overview_items(db, viewer, public_ids))
+
+        return check
+
     def visible_duplicate_ids(self, db: Session, viewer, tenant_id: int, checksums: list[str]) -> dict[str, uuid.UUID]:
         """Je Hash die älteste Datei mit diesem Inhalt, die die Person sehen darf (siehe
         visible_overview_items). Unsichtbare Treffer fehlen - für die Person ist der Inhalt dann
@@ -1530,6 +1543,7 @@ class FileService:
                 capture_quality_scores=True,
                 created_by=created_by,
                 stored_file_repository=self.stored_file_repository,
+                similar_visible=self._similar_visible(db, viewer),
             )
             stored_file = result.stored_file
             # Aufnahmedatum, GPS und Kamera wie beim Galerie-Upload festhalten - die Datei
@@ -1713,6 +1727,7 @@ class FileService:
                     infected_message="wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
                     stored_file_repository=self.stored_file_repository,
                     tenant_hashes=tenant_hashes,
+                    similar_visible=self._similar_visible(db, viewer),
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
@@ -2193,6 +2208,7 @@ class FileService:
             interrupted.total_files = None
         db.commit()
         while True:
+            bind_tenant_scope(db, None)  # Auswahl des nächsten Jobs mandantenübergreifend
             job = self._next_fair_gallery_job(db)
             if job is None:
                 return
@@ -2202,6 +2218,9 @@ class FileService:
             # Zeitscheibe (Concurrency-Audit CONC-008): ein grosser ZIP gibt nach
             # GALLERY_INGEST_SLICE_SECONDS ab, sobald andere Mandanten warten.
             self._ingest_slice_deadline = time.monotonic() + self.GALLERY_INGEST_SLICE_SECONDS
+            # Zweites Sicherheitsnetz: der Job arbeitet nur im Mandanten des Auftrags (RLS, wie ein
+            # Request des Auftraggebers); Status-Updates danach wieder unbeschränkt.
+            bind_tenant_scope(db, job.tenant_id)
             try:
                 asyncio.run(self._run_gallery_upload_job(db, job))
             except _IngestYield:
@@ -2220,6 +2239,7 @@ class FileService:
                 db.refresh(job)
                 job.status = "queued"
                 db.commit()
+                bind_tenant_scope(db, None)
                 return
             except Exception as exc:
                 from app.core.error_log import record_system_error
@@ -2271,9 +2291,10 @@ class FileService:
         deadline = getattr(self, "_ingest_slice_deadline", None)
         if deadline is None or time.monotonic() < deadline:
             return
-        waiting = db.scalar(
-            select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "queued", GalleryUploadJob.tenant_id != job.tenant_id)
-        )
+        with tenant_scope_suspended(db):  # rls-ok: nur eine Anzahl wartender Jobs anderer Mandanten (Fairness)
+            waiting = db.scalar(
+                select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "queued", GalleryUploadJob.tenant_id != job.tenant_id)
+            )
         if waiting:
             raise _IngestYield()
 

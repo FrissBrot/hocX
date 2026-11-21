@@ -236,3 +236,130 @@ def test_word_import_409_only_for_visible_duplicates(db, monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         service.save_word_import_document(db, tenant_id=tenant.id, filename="import2.pdf", content=PDF, viewer=make_current_user(tenant.id))
     assert exc_info.value.status_code == 409
+
+
+def test_personal_link_silently_skips_duplicate_within_the_same_element(db, box, monkeypatch):
+    async def clean_scan(contents, **kwargs):
+        return ["clean"] * len(contents)
+
+    monkeypatch.setattr(file_service_module.scanner, "scan_many", clean_scan)
+    from app.services.submission_service import local_today
+
+    box["event"].event_date = local_today()
+    _manage(box)
+    token = _issue(db, box)
+    client = _client(db)
+    content = b"%PDF-1.7\n%element-duplikat\n%%EOF\n"
+
+    def upload():
+        return client.post(
+            "/api/public/submission-access/upload",
+            headers={access_route.TOKEN_HEADER: token},
+            files=[("files", ("bericht.pdf", content, "application/pdf"))],
+        )
+
+    first, second = upload(), upload()
+
+    assert first.status_code == second.status_code == 200
+    a, b = first.json(), second.json()
+    # Gleiche Antwort wie ein normaler Upload: keine Fehler, Status «uploaded», kein Duplikat-Text
+    assert a["errors"] == b["errors"] == []
+    assert [entry["status"] for entry in b["file_results"]] == ["uploaded"]
+    assert b["file_results"][0]["file_id"] == a["file_results"][0]["file_id"]
+    assert "Duplikat" not in second.text
+    assert db.query(StoredFile).filter_by(tenant_id=box["tenant"].id, checksum_sha256=_sha(content)).count() == 1
+
+
+# --- Ähnlichkeitshinweis nur für sichtbare Bilder ---------------------------------------------
+
+
+def _similar_pair():
+    from tests.test_protocol_image_duplicate_check import _circle_png_bytes
+
+    return _circle_png_bytes((200, 150), 100, 75, 50), _circle_png_bytes((196, 148), 98, 74, 49)
+
+
+def _circle_variant() -> bytes:
+    from tests.test_protocol_image_duplicate_check import _circle_png_bytes
+
+    return _circle_png_bytes((198, 149), 99, 74, 50)
+
+
+def test_gallery_similarity_hint_only_for_visible_images(db):
+    tenant = make_tenant(db)
+    original, similar = _similar_pair()
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", original)], tags=[], created_by=None))
+
+    _items, hidden_errors = asyncio.run(
+        service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("b.png", similar)], tags=[], created_by=None, viewer=_without_photos_read(tenant.id))
+    )
+    _items, visible_errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("c.png", _circle_variant())], tags=[], created_by=None,
+            viewer=make_current_user(tenant.id, role="writer"),
+        )
+    )
+
+    assert not any("ähnelt" in error for error in hidden_errors)
+    assert any("ähnelt" in error for error in visible_errors)
+
+
+def test_protocol_image_similarity_hint_only_for_visible_images(db):
+    from tests.test_protocol_image_duplicate_check import _make_block, _make_tenant_with_protocol
+
+    tenant, protocol = _make_tenant_with_protocol(db)
+    original, similar = _similar_pair()
+    asyncio.run(service.save_protocol_image(db, protocol_element_block=_make_block(db, protocol.id), file=_upload_file(original, "a.png")))
+
+    hidden = asyncio.run(
+        service.save_protocol_image(
+            db, protocol_element_block=_make_block(db, protocol.id), file=_upload_file(similar, "b.png"), viewer=_without_photos_read(tenant.id)
+        )
+    )
+    assert hidden.duplicate_warning is None
+
+    from tests.test_protocol_image_duplicate_check import _circle_png_bytes
+
+    visible = asyncio.run(
+        service.save_protocol_image(
+            db, protocol_element_block=_make_block(db, protocol.id), file=_upload_file(_circle_png_bytes((198, 149), 99, 74, 50), "c.png"),
+            viewer=make_current_user(tenant.id),
+        )
+    )
+    assert visible.duplicate_warning is not None
+
+
+def test_similarity_visibility_query_runs_without_similar_images(db, monkeypatch):
+    tenant = make_tenant(db)
+    calls = []
+    original = FileService.visible_overview_items
+    monkeypatch.setattr(FileService, "visible_overview_items", lambda self, *args: calls.append(args) or original(self, *args))
+
+    asyncio.run(
+        service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png((1, 99, 200)))], tags=[], created_by=None, viewer=make_current_user(tenant.id))
+    )
+
+    assert any(args[2] == [] for args in calls)
+
+
+# --- Galerie-Job: RLS an den Mandanten des Auftrags gebunden ---------------------------------
+
+
+def test_gallery_job_runs_bound_to_its_tenant(db, monkeypatch):
+    from app.core.tenant_scope import bound_tenant_id
+
+    tenant = make_tenant(db)
+    job = _job(db, tenant.id, None)
+    db.commit()
+    seen = []
+
+    async def fake_run(self, session, running_job):
+        seen.append((running_job.id, bound_tenant_id(session)))
+
+    monkeypatch.setattr(FileService, "_run_gallery_upload_job", fake_run)
+    monkeypatch.setattr(FileService, "cleanup_gallery_staging", lambda self, session: None)
+
+    service.process_pending_gallery_upload_jobs(db)
+
+    assert (job.id, tenant.id) in seen
+    assert bound_tenant_id(db) is None

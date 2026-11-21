@@ -452,6 +452,19 @@ def perceptual_hash_of_image(image: Image.Image) -> imagehash.ImageHash:
     return imagehash.phash(_crop_uniform_border(ImageOps.exif_transpose(image)))
 
 
+def _perceptual_matches(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> list[int]:
+    """Alle stored_file_ids innerhalb PERCEPTUAL_DUPLICATE_THRESHOLD (für die Sichtbarkeitsprüfung
+    des Ähnlichkeitshinweises: das nächste Bild kann unsichtbar sein, ein anderes sichtbar)."""
+    if perceptual_hash is None:
+        return []
+    this_hash = imagehash.hex_to_hash(perceptual_hash)
+    return [
+        candidate_id
+        for candidate_id, candidate_hash in candidates
+        if this_hash - imagehash.hex_to_hash(candidate_hash) <= PERCEPTUAL_DUPLICATE_THRESHOLD
+    ]
+
+
 def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> int | None:
     """Returns the stored_file_id of the closest candidate within PERCEPTUAL_DUPLICATE_THRESHOLD,
     or None if there's no hash to compare or nothing close enough."""
@@ -626,6 +639,7 @@ def ingest_file(
     infected_message: str = "Datei wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
     stored_file_repository: StoredFileRepository | None = None,
     tenant_hashes: list[tuple[int, str]] | None = None,
+    similar_visible: Callable[[list[int]], bool] | None = None,
 ) -> UploadPipelineResult:
     """Validate -> (caller already scanned; here we only act on the verdict) -> write under
     upload_root/storage_subdir_parts/<uuid4><suffix> -> checksum -> optional pHash dedupe
@@ -684,7 +698,12 @@ def ingest_file(
         perceptual_hash = _compute_perceptual_hash(content, mime)
         if perceptual_hash is not None:
             candidates = tenant_hashes if tenant_hashes is not None else repo.list_tenant_image_hashes(db, tenant_id)
-            if _closest_perceptual_match(perceptual_hash, candidates) is not None:
+            if similar_visible is not None:
+                # Nur ähnliche Bilder, die die Person sehen darf (similar_visible fragt immer ab,
+                # auch ohne Treffer - kein Orakel über unsichtbare Bilder, auch nicht über die Zeit)
+                if similar_visible(_perceptual_matches(perceptual_hash, candidates)):
+                    duplicate_warning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild."
+            elif _closest_perceptual_match(perceptual_hash, candidates) is not None:
                 duplicate_warning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild."
 
     stored_file = StoredFile(
