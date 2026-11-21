@@ -52,6 +52,7 @@
     "absent": "Unentschuldigt"
   },
   "fineTransaction": "Busse {type}: {name}",
+  "todoFineTransaction": "Busse Pendenz: {name} - {task}",
   "col": {
     "status": "Status",
     "task": "Aufgabe",

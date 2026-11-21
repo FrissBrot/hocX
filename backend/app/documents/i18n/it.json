@@ -800,6 +800,7 @@
     "status": "Stato",
     "task": "Compito"
   },
+  "todoFineTransaction": "Multa compito: {name} - {task}",
   "todoStatus": {
     "cancelled": "Annullato",
     "done": "Completato",

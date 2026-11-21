@@ -800,6 +800,7 @@
     "status": "Status",
     "task": "Task"
   },
+  "todoFineTransaction": "Task fine: {name} - {task}",
   "todoStatus": {
     "cancelled": "Cancelled",
     "done": "Done",

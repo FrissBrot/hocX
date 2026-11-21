@@ -543,6 +543,16 @@ def _locked(db: Session, fine_id: int, tenant_id: int) -> TodoFine | None:
     ).scalar_one_or_none()
 
 
+def _todo_fine_transaction_text(db: Session, tenant_id: int, fine: TodoFine) -> str:
+    """Buchungstext in der Dokumentsprache des Vereins (wie bei Anwesenheitsbussen,
+    ``fines_repository._fine_transaction_text``), nicht fest Deutsch."""
+    from app.documents.strings import text
+    from app.models.entities import Tenant
+
+    language = db.scalar(select(Tenant.document_language).where(Tenant.id == tenant_id))
+    return text(language, "todoFineTransaction", name=fine.participant_name_snapshot or "", task=fine.task_snapshot or "")
+
+
 def collect(db: Session, fine_id: int, tenant_id: int, actor_user_id: int) -> TodoFine | None:
     fine = _locked(db, fine_id, tenant_id)
     if fine is None or fine.status != "pending":
@@ -557,7 +567,7 @@ def collect(db: Session, fine_id: int, tenant_id: int, actor_user_id: int) -> To
         raise TodoFineError("no_account", "Kein Konto für diese Busse festgelegt")
     now = datetime.now(timezone.utc)
     tx = FinanceTransaction(
-        account_id=account.id, amount=fine.amount, description=f"Busse Pendenz: {fine.participant_name_snapshot} - {fine.task_snapshot}"[:500],
+        account_id=account.id, amount=fine.amount, description=_todo_fine_transaction_text(db, tenant_id, fine)[:500],
         transaction_date=local_date(now),
     )
     db.add(tx)
