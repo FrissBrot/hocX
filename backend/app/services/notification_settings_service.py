@@ -209,17 +209,14 @@ class NotificationSettingsService:
         config = email_transport.load_config(db, require_enabled=False)
         if config is None:
             raise ValueError("SMTP-Server und Absenderadresse sind nicht konfiguriert")
+        from app.notifications import delivery_status
+
         rendered = render_test(lang="de", base_url=config.link_base_url)
-        row = self.get_row(db)
-        now = datetime.now(timezone.utc)
+        self.get_row(db)
         try:
             email_transport.send(config, email_transport.OutgoingEmail(to=to, subject=rendered.subject, text=rendered.text, html=rendered.html))
         except email_transport.EmailError as exc:
-            row.email_last_error = str(exc)[:500]
-            row.email_last_error_at = now
-            db.commit()
+            # Zentraler Versandstatus (auch /admin/system) + gedrosselt ins Fehlerprotokoll
+            delivery_status.record_failure(db, exc, kind="test")
             raise
-        row.email_last_sent_at = now
-        row.email_last_error = None
-        row.email_last_error_at = None
-        db.commit()
+        delivery_status.record_success(db)

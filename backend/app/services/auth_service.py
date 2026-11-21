@@ -17,7 +17,6 @@ from app.auth_security.guard import (
     mark_locked,
     pop_locked,
     tenant_accounts_observe,
-    unavailable,
 )
 from app.core.auth_pseudonym import normalize_email
 from app.core.config import settings
@@ -34,6 +33,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import AppUser, AuthKnownDevice, Tenant
+from app.notifications import delivery_status
 from app.schemas.mfa import (
     EmailChallengeVerifyRequest,
     LoginResponse,
@@ -185,10 +185,28 @@ class AuthService:
             )
             raise _login_denied()
         if needs_verification and not has_factor and smtp:
+            # Versand gestört (notifications/delivery_status.py): gar nicht erst versuchen, sondern
+            # sofort klar melden - höchstens ein Login je Minute versucht es echt (Erholung).
+            if delivery_status.login_blocked(db):
+                events.record(
+                    ctx=ctx,
+                    event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
+                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                    details={"reason": "email_unavailable"},
+                )
+                raise email_challenge.email_unavailable()
             try:
                 ticket = email_challenge.start(db, user=user, request_host=request_host, context=risk_context)
-            except email_challenge.ChallengeUnavailable as exc:
-                raise unavailable() from exc
+            except email_challenge.ChallengeUnavailable:
+                # Erwartet und bereits erfasst (Versandstatus + gedrosseltes Fehlerprotokoll in
+                # email_challenge._send) - nicht je Anmeldung nochmals über den HTTPException-Handler.
+                events.record(
+                    ctx=ctx,
+                    event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
+                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                    details={"reason": "email_unavailable"},
+                )
+                raise email_challenge.email_unavailable() from None
             events.record(
                 ctx=ctx,
                 event_type="login.password", outcome="challenged", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,

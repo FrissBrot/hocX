@@ -137,7 +137,8 @@
     "badge": "Eingeladen",
     "mailOff": "Einladungen per E-Mail sind nicht möglich, weil der E-Mail-Versand nicht eingerichtet ist.",
     "afterCreate": "Nach dem Erfassen per E-Mail einladen",
-    "saveEmailFirst": "Die E-Mail-Adresse wurde geändert: zuerst speichern, dann einladen."
+    "saveEmailFirst": "Die E-Mail-Adresse wurde geändert: zuerst speichern, dann einladen.",
+    "mailDisturbed": "Der E-Mail-Versand ist zurzeit gestört. Einladungen werden zugestellt, sobald er wieder funktioniert."
   },
   "deleteDialog": {
     "title": "«{name}» endgültig löschen?",

@@ -148,6 +148,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
   const [tariffFilter, setTariffFilter] = useState(() =>
     initialTariffFilter && tariffs.some((tariff) => tariff.id === initialTariffFilter) ? initialTariffFilter : "all");
   const [inviteAvailable, setInviteAvailable] = useState(false);
+  // Versand eingerichtet, aber gestört (Backend notifications/delivery_status.py): nur ein Hinweis -
+  // Einladungen bleiben möglich und gehen raus, sobald der Versand wieder funktioniert.
+  const [mailDisturbed, setMailDisturbed] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [newMember, setNewMember] = useState<NewMemberForm | null>(null);
   const [creating, setCreating] = useState(false);
@@ -193,8 +196,12 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
   useEffect(() => {
     if (!permissions.access) return;
     let cancelled = false;
-    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
-      .then((result) => { if (!cancelled) setInviteAvailable(Boolean(result?.enabled)); })
+    browserApiFetch<{ enabled: boolean; disturbed?: boolean }>("/api/auth/password-reset/available")
+      .then((result) => {
+        if (cancelled) return;
+        setInviteAvailable(Boolean(result?.enabled));
+        setMailDisturbed(Boolean(result?.disturbed));
+      })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [permissions.access]);
@@ -754,6 +761,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
               </label>
             ) : null}
             {permissions.access && !inviteAvailable ? <span className="field-help">{t("invite.mailOff")}</span> : null}
+            {permissions.access && inviteAvailable && mailDisturbed ? <span className="field-help">{t("invite.mailDisturbed")}</span> : null}
             {permissions.access && newMember.invite ? (
               <label className="field-stack">
                 <span className="field-label">{t("newMember.role")}</span>

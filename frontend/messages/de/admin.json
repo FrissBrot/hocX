@@ -258,6 +258,11 @@
         "title": "Anmeldeschutz",
         "detail": "{limiterErrors, number} Limiter-Ausfälle (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} Sperren · {privateSourcePercent, number} % private Quellen",
         "problem": "Anmeldeschutz gestört oder Redis fast voll"
+      },
+      "email": {
+        "title": "E-Mail-Versand",
+        "detail": "{state, select, disabled {Nicht eingerichtet – hocX versendet keine Mails} never {Eingerichtet, noch keine Mail versendet} ok {{lastSuccessAt, select, none {Noch keine Mail erfolgreich versendet} other {Letzter Versand {lastSuccessAt}}}} other {Gestört seit {failingSince}: {failures, number} Fehler in Folge ({reason, select, connection {SMTP-Server nicht erreichbar} timeout {SMTP-Server antwortet nicht} tls {TLS-Verbindung scheitert} auth {Anmeldung am SMTP-Server abgelehnt} sender_rejected {Absenderadresse abgelehnt} recipient_rejected {Empfängeradressen abgelehnt} message_rejected {Mails abgelehnt} rejected {SMTP-Server lehnt Mails ab} other {anderer Fehler}}) · letzter Fehler {lastFailureAt} · {lastSuccessAt, select, none {noch nie erfolgreich} other {letzter Erfolg {lastSuccessAt}}}}}",
+        "problem": "E-Mail-Versand gestört"
       }
     },
     "problems": {
@@ -293,6 +298,17 @@
         "cross_tenant": "Angriffsmuster über mehrere Mandanten",
         "tenant": "Viele Konten eines Mandanten mit Fehlversuchen",
         "limiter": "Anmeldeschutz (Redis) gestört"
+      },
+      "email": {
+        "connection": "E-Mail-Versand gestört: SMTP-Server nicht erreichbar",
+        "timeout": "E-Mail-Versand gestört: SMTP-Server antwortet nicht",
+        "tls": "E-Mail-Versand gestört: TLS-Verbindung scheitert",
+        "auth": "E-Mail-Versand gestört: Anmeldung am SMTP-Server abgelehnt",
+        "sender_rejected": "E-Mail-Versand gestört: Absenderadresse abgelehnt",
+        "recipient_rejected": "E-Mail-Versand gestört: Empfängeradressen abgelehnt",
+        "message_rejected": "E-Mail-Versand: SMTP-Server lehnt einzelne Mails ab",
+        "rejected": "E-Mail-Versand gestört: SMTP-Server lehnt Mails ab",
+        "other": "E-Mail-Versand gestört"
       }
     },
     "events": {
@@ -333,7 +349,8 @@
       "jobs": "Jobs →",
       "storage": "Storage →",
       "backups": "Backups →",
-      "containers": "Container →"
+      "containers": "Container →",
+      "notifications": "Benachrichtigungen →"
     },
     "containerStates": {
       "exitedOk": "beendet (Init)"

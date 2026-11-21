@@ -258,6 +258,11 @@
         "title": "Protezione accessi",
         "detail": "{limiterErrors, number} guasti del limitatore (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocchi · {privateSourcePercent, number} % fonti private",
         "problem": "Protezione accessi compromessa o Redis quasi pieno"
+      },
+      "email": {
+        "title": "Invio e-mail",
+        "detail": "{state, select, disabled {Non configurato – hocX non invia e-mail} never {Configurato, nessuna e-mail ancora inviata} ok {{lastSuccessAt, select, none {Nessuna e-mail ancora inviata con successo} other {Ultimo invio {lastSuccessAt}}}} other {Non funzionante da {failingSince}: {failures, number} errori consecutivi ({reason, select, connection {server SMTP non raggiungibile} timeout {il server SMTP non risponde} tls {la connessione TLS non riesce} auth {accesso al server SMTP rifiutato} sender_rejected {indirizzo mittente rifiutato} recipient_rejected {indirizzi destinatari rifiutati} message_rejected {e-mail rifiutate} rejected {il server SMTP rifiuta le e-mail} other {altro errore}}) · ultimo errore {lastFailureAt} · {lastSuccessAt, select, none {mai riuscito} other {ultimo successo {lastSuccessAt}}}}}",
+        "problem": "Invio e-mail non funzionante"
       }
     },
     "problems": {
@@ -293,6 +298,17 @@
         "cross_tenant": "Attacco su più mandanti",
         "tenant": "Molti account di un mandante con tentativi falliti",
         "limiter": "Protezione accessi (Redis) compromessa"
+      },
+      "email": {
+        "connection": "Invio e-mail non funzionante: server SMTP non raggiungibile",
+        "timeout": "Invio e-mail non funzionante: il server SMTP non risponde",
+        "tls": "Invio e-mail non funzionante: la connessione TLS non riesce",
+        "auth": "Invio e-mail non funzionante: accesso al server SMTP rifiutato",
+        "sender_rejected": "Invio e-mail non funzionante: indirizzo mittente rifiutato",
+        "recipient_rejected": "Invio e-mail non funzionante: indirizzi destinatari rifiutati",
+        "message_rejected": "Invio e-mail: il server SMTP rifiuta singole e-mail",
+        "rejected": "Invio e-mail non funzionante: il server SMTP rifiuta le e-mail",
+        "other": "Invio e-mail non funzionante"
       }
     },
     "events": {
@@ -333,7 +349,8 @@
       "jobs": "Job →",
       "storage": "Storage →",
       "backups": "Backup →",
-      "containers": "Container →"
+      "containers": "Container →",
+      "notifications": "Notifiche →"
     },
     "containerStates": {
       "exitedOk": "terminato (init)"

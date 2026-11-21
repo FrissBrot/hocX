@@ -115,6 +115,41 @@ describe("AdminSystemStatus", () => {
     expect(screen.getByText("Container frontend wurde neu gestartet")).toBeInTheDocument();
   });
 
+  it("zeigt den E-Mail-Versand mit Fehlern, letztem Erfolg und Problem-Link", () => {
+    const status = makeStatus({
+      problems: [
+        { key: "email:smtp:auth", source: "email", subject: "smtp", reason: "auth", severity: "critical", title: "x", message: "y", first_seen_at: null },
+      ],
+    });
+    status.snapshot!.checks.push({
+      key: "email",
+      status: "critical",
+      params: {
+        state: "failing", failures: 3, reason: "auth", lastSuccessAt: null,
+        lastFailureAt: "2026-10-11T11:30:00Z", failingSince: "2026-10-11T11:00:00Z",
+      },
+      error: null,
+    });
+    render(<AdminSystemStatus initialStatus={status} />);
+
+    expect(screen.getByText("E-Mail-Versand")).toBeInTheDocument();
+    expect(screen.getByText(/^Gestört seit .+: 3 Fehler in Folge \(Anmeldung am SMTP-Server abgelehnt\) · letzter Fehler .+ · noch nie erfolgreich$/)).toBeInTheDocument();
+    expect(screen.getByText("E-Mail-Versand gestört: Anmeldung am SMTP-Server abgelehnt")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Benachrichtigungen →" })).toHaveAttribute("href", "/admin/settings/notifications");
+  });
+
+  it("zeigt nicht eingerichteten E-Mail-Versand ruhig als eigenen Zustand", () => {
+    const status = makeStatus();
+    status.snapshot!.checks.push({
+      key: "email", status: "unknown",
+      params: { state: "disabled", failures: 0, reason: null, lastSuccessAt: null, lastFailureAt: null, failingSince: null },
+      error: null,
+    });
+    render(<AdminSystemStatus initialStatus={status} />);
+
+    expect(screen.getByText("Nicht eingerichtet – hocX versendet keine Mails")).toBeInTheDocument();
+  });
+
   it("warnt bei veraltetem Stand und fehlender Container-Übersicht", () => {
     const status = makeStatus({ stale: true });
     status.snapshot = { ...status.snapshot!, docker_configured: false, containers: [] };

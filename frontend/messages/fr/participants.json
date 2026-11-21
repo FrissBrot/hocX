@@ -137,7 +137,8 @@
     "badge": "Invité·e",
     "mailOff": "Les invitations par e-mail ne sont pas possibles car l'envoi d'e-mails n'est pas configuré.",
     "afterCreate": "Inviter par e-mail après l'ajout",
-    "saveEmailFirst": "L'adresse e-mail a été modifiée : enregistrez d'abord, puis invitez."
+    "saveEmailFirst": "L'adresse e-mail a été modifiée : enregistrez d'abord, puis invitez.",
+    "mailDisturbed": "L’envoi d’e-mails est actuellement perturbé. Les invitations seront envoyées dès qu’il fonctionnera à nouveau."
   },
   "deleteDialog": {
     "title": "Supprimer définitivement « {name} » ?",

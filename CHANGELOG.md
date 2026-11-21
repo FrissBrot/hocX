@@ -40,6 +40,18 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
 - Sicherheitsereignis `reset.request` (layer `device`), wenn ein Passwort-Reset über das Gerätekontingent
   läuft oder es erschöpft ist.
 - E2E: axe-Prüfung (WCAG 2.1 A/AA) aller Admin-Seiten.
+### Neu
+
+- **Maildienst-Ausfall wird erkannt:** Jeder Versandversuch (Benachrichtigungen, Login-Code,
+  Test-Mail) meldet sein Ergebnis an einen zentralen Versandstatus (Migration
+  `0210_email_delivery_status`). Ist der Versand gestört, zeigt die Anmeldung statt «Code
+  versendet» sofort «Anmeldung aktuell nicht möglich, wende dich an deinen Administrator» (nur für
+  Anmeldungen, die einen Mailcode brauchen; bekannte Geräte und Konten mit zweitem Faktor sind nicht
+  betroffen). «Passwort vergessen» und Einladungen weisen auf die Störung hin.
+- **Systemmonitoring:** neue Prüfung «E-Mail-Versand» unter `/admin/system` (letzter Erfolg, letzter
+  Fehler, Fehler in Folge, Fehlerklasse) mit ntfy-Alarm `email:smtp:<grund>`; nicht eingerichteter
+  Versand erscheint ruhig als eigener Zustand. Versandfehler landen gedrosselt im Fehlerprotokoll
+  (ohne Empfängeradressen).
 
 ## [1.5.0] - 2026-11-21
 

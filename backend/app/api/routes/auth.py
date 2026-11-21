@@ -298,7 +298,10 @@ def _email_sending_enabled(db: Session) -> bool:
 @router.get("/password-reset/available", response_model=PasswordResetAvailableRead)
 def password_reset_available(request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(f"password-reset-available:{client_ip(request)}", limit=60, period_seconds=60, fail_open=True)
-    return PasswordResetAvailableRead(enabled=_email_sending_enabled(db))
+    from app.notifications import delivery_status
+
+    status_now = delivery_status.read(db)
+    return PasswordResetAvailableRead(enabled=status_now.state != "disabled", disturbed=status_now.blocks_login)
 
 
 def _issue_password_reset(email: str) -> None:

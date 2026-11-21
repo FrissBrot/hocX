@@ -38,6 +38,17 @@ class ChallengeUnavailable(Exception):
     """E-Mail-Versand nicht eingerichtet oder fehlgeschlagen."""
 
 
+def email_unavailable() -> HTTPException:
+    """Antwort, wenn eine Anmeldung einen Mailcode bräuchte, der Versand aber gestört ist
+    (delivery_status) oder gerade scheitert. Kommt erst nach korrektem Passwort - wie die Aufforderung
+    zur Codeeingabe selbst, also kein zusätzliches Orakel. Kein Retry-After: Abhilfe schafft der
+    Administrator, nicht Warten."""
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={"code": "auth_email_unavailable", "message": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator"},
+    )
+
+
 def _code_hash(ticket: str, code: str) -> str:
     return pseudonym("email-challenge", f"{ticket}:{code}", length=40)
 
@@ -55,10 +66,15 @@ def _send(db: Session, user: AppUser, code: str) -> None:
         recipient_name=user.first_name or user.display_name, tenant_name=tenant.name if tenant else "hocX",
         base_url=config.link_base_url,
     )
+    from app.notifications import delivery_status
+
     try:
         email_transport.send(config, email_transport.OutgoingEmail(to=user.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html, images=rendered.images))
     except email_transport.EmailError as exc:
+        # Zentraler Versandstatus + gedrosselt ins Fehlerprotokoll (delivery_status)
+        delivery_status.record_failure(db, exc, kind="login_code", tenant_id=user.tenant_id)
         raise ChallengeUnavailable(str(exc)) from exc
+    delivery_status.record_success(db)
 
 
 def available(db: Session) -> bool:
@@ -111,8 +127,10 @@ def resend(db: Session, ticket: str) -> None:
     data["attempts"] = 0
     try:
         _send(db, user, code)
-    except ChallengeUnavailable as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "verification_unavailable", "message": "Code konnte nicht verschickt werden"}) from exc
+    except ChallengeUnavailable:
+        # Erwartet und bereits erfasst (Versandstatus + Fehlerprotokoll in _send): kein zweiter
+        # Eintrag über den HTTPException-Handler.
+        raise email_unavailable() from None
     get_redis_sync().set(f"{FLOW_PREFIX}{ticket}", json.dumps(data), ex=ttl)
 
 

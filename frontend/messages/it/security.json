@@ -149,7 +149,8 @@
     "source_blocked": "Gli accessi da questa connessione sono momentaneamente bloccati.",
     "auth_temporarily_unavailable": "Accesso momentaneamente non possibile. Riprova tra qualche minuto.",
     "rate_limiter_unavailable": "La protezione degli accessi non è disponibile per un attimo. Riprova subito.",
-    "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova."
+    "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova.",
+    "auth_email_unavailable": "Accesso attualmente non possibile, rivolgiti al tuo amministratore."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",

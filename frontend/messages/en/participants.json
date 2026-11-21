@@ -137,7 +137,8 @@
     "badge": "Invited",
     "mailOff": "Email invitations are not possible because email sending is not set up.",
     "afterCreate": "Invite by email after adding",
-    "saveEmailFirst": "The email address was changed: save first, then invite."
+    "saveEmailFirst": "The email address was changed: save first, then invite.",
+    "mailDisturbed": "Email delivery is currently disrupted. Invitations will be delivered once it works again."
   },
   "deleteDialog": {
     "title": "Permanently delete «{name}»?",

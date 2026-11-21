@@ -149,7 +149,8 @@
     "source_blocked": "Sign-ins from this connection are temporarily blocked.",
     "auth_temporarily_unavailable": "Sign-in temporarily unavailable. Please try again in a few minutes.",
     "rate_limiter_unavailable": "Sign-in protection is briefly unavailable. Please try again shortly.",
-    "mfa_locked": "Too many wrong codes. Please wait a minute and try again."
+    "mfa_locked": "Too many wrong codes. Please wait a minute and try again.",
+    "auth_email_unavailable": "Sign-in is currently not possible. Please contact your administrator."
   },
   "grace": {
     "title": "Second factor becomes mandatory",
