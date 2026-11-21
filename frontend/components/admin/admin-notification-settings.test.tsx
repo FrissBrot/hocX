@@ -89,7 +89,7 @@ describe("AdminNotificationSettings", () => {
     confirmMock.mockResolvedValue(false);
     render(
       <AdminNotificationSettings
-        initialSettings={makeSettings({ status_token: "tok", status_url: "https://hocx.example/api/system-status/summary?token=tok" })}
+        initialSettings={makeSettings({ status_token: "tok", status_token_set: true, status_token_hint: "…tok", status_url: "https://hocx.example/api/system-status/summary?token=tok" })}
       />,
     );
 
@@ -98,5 +98,11 @@ describe("AdminNotificationSettings", () => {
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalled());
     expect(browserApiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("zeigt einen gesetzten Token nach dem Neuladen nur maskiert", () => {
+    render(<AdminNotificationSettings initialSettings={makeSettings({ status_token_set: true, status_token_hint: "ab12" })} />);
+    expect(screen.queryByText(/summary\?token=/)).toBeNull();
+    expect(screen.getByText(/ab12/)).toBeInTheDocument();
   });
 });
