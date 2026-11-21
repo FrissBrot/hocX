@@ -149,7 +149,8 @@
     "source_blocked": "Les connexions depuis cette connexion sont temporairement bloquées.",
     "auth_temporarily_unavailable": "Connexion temporairement impossible. Réessaie dans quelques minutes.",
     "rate_limiter_unavailable": "La protection des connexions est brièvement indisponible. Réessaie tout de suite.",
-    "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie."
+    "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie.",
+    "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",

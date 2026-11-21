@@ -232,7 +232,7 @@ def test_public_endpoints_answer_without_revealing_accounts(db, club, monkeypatc
     monkeypatch.setattr(auth, "_issue_password_reset", issued.append)
     monkeypatch.setattr(auth, "enforce_rate_limit", lambda *args, **kwargs: None)
     client = _client(db)
-    assert client.get("/api/auth/password-reset/available").json() == {"enabled": True}
+    assert client.get("/api/auth/password-reset/available").json() == {"enabled": True, "disturbed": False}
     known = client.post("/api/auth/password-reset/request", json={"email": "anna@example.com"})
     unknown = client.post("/api/auth/password-reset/request", json={"email": "niemand@example.com"})
     assert known.status_code == unknown.status_code == 202 and known.json() == unknown.json()

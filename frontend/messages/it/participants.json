@@ -137,7 +137,8 @@
     "badge": "Invitato",
     "mailOff": "Gli inviti via e-mail non sono possibili perché l'invio di e-mail non è configurato.",
     "afterCreate": "Invita via e-mail dopo l'aggiunta",
-    "saveEmailFirst": "L'indirizzo e-mail è stato modificato: salva prima, poi invita."
+    "saveEmailFirst": "L'indirizzo e-mail è stato modificato: salva prima, poi invita.",
+    "mailDisturbed": "L’invio di e-mail è al momento disturbato. Gli inviti verranno recapitati appena funzionerà di nuovo."
   },
   "deleteDialog": {
     "title": "Eliminare definitivamente «{name}»?",

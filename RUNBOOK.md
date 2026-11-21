@@ -1183,6 +1183,18 @@ Konten ohne Faktor auf unbekanntem Gerät werden nur bei Quellsignalen (L1/L2) o
 (429 `login_denied`, gleich für falsches und richtiges Passwort); der Angriffsmodus allein weist nie ab.
 **E-Mail-Versand einrichten** (Adminportal → Benachrichtigungen), dann bekommen diese Fälle einen Code.
 
+**E-Mail-Versand gestört** (ab 1.5.1, `app/notifications/delivery_status.py`): Jeder Versandversuch
+(Benachrichtigungen, Login-Code, Test-Mail) meldet Erfolg/Fehler zentral. Ab dem ersten Fehler seit dem
+letzten Erfolg gilt der Versand als gestört (Ausnahme: einzelne abgelehnte Empfängeradressen erst ab drei
+in Folge, und dann nur als Warnung). Solange er gestört ist, bekommen Anmeldungen, die einen Mailcode
+bräuchten, sofort 503 `auth_email_unavailable` («Anmeldung aktuell nicht möglich, wende dich an deinen
+Administrator»); höchstens ein Login je Minute versucht den Versand echt. Bekannte Geräte und Konten mit
+zweitem Faktor sind nicht betroffen. `/admin/system` zeigt die Prüfung «E-Mail-Versand» (kritisch, ntfy-
+Problem `email:smtp:<grund>`), das Fehlerprotokoll den ersten Fehler je Fehlerklasse (danach stündlich).
+Behebung: Adminportal → Einstellungen → Benachrichtigungen, SMTP prüfen, Test-Mail senden; der erste
+Erfolg hebt die Störung auf. Bei Verbindungs-, TLS- und Anmeldefehlern prüft zusätzlich der Loop
+`notification_dispatch` jede Minute die Verbindung (ohne Mail) und hebt die Störung selbst auf.
+
 ### Einstellungen (`.env`, Startwerte aus dem Audit)
 
 | Variable | Standard | Wirkung |

@@ -78,3 +78,20 @@ it("shows a disabled login in the UI language", async () => {
 
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Die Anmeldung ist für dieses Konto deaktiviert."));
 });
+
+it("shows a clear message when sign-in needs an email code but email delivery is down", async () => {
+  api.mockImplementation((url: string) => {
+    if (url === "/api/auth/login") {
+      return Promise.reject(new ApiError("ROHER BACKEND-TEXT", "auth", 503, { code: "auth_email_unavailable", message: "ROHER BACKEND-TEXT" }));
+    }
+    return Promise.resolve(null);
+  });
+
+  render(<LoginPage />);
+  fireEvent.change(screen.getByLabelText("E-Mail"), { target: { value: "person@example.com" } });
+  fireEvent.change(screen.getByLabelText("Passwort"), { target: { value: "ein-langes-passwort" } });
+  fireEvent.click(screen.getByRole("button", { name: "Einloggen" }));
+
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Anmeldung aktuell nicht möglich, wende dich an deinen Administrator."));
+  expect(screen.queryByText("ROHER BACKEND-TEXT")).not.toBeInTheDocument();
+});

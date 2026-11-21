@@ -1305,7 +1305,7 @@ export type SystemHealthSnapshot = {
 
 export type SystemProblem = {
   key: string;
-  source: "monitor" | "container" | "check" | "job";
+  source: "monitor" | "container" | "check" | "job" | "email";
   subject: string;
   reason: string;
   severity: "warning" | "critical";

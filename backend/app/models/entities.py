@@ -2540,6 +2540,10 @@ class PlatformNotificationSettings(Base):
         CheckConstraint("reminder_hours BETWEEN 0 AND 168", name="ck_platform_notification_settings_reminder_hours"),
         CheckConstraint("smtp_security IN ('starttls', 'ssl', 'none')", name="ck_platform_notification_settings_smtp_security"),
         CheckConstraint("smtp_port BETWEEN 1 AND 65535", name="ck_platform_notification_settings_smtp_port"),
+        CheckConstraint(
+            "email_failure_reason IS NULL OR email_failure_reason IN ('connection', 'timeout', 'tls', 'auth', 'sender_rejected', 'recipient_rejected', 'message_rejected', 'rejected', 'other')",
+            name="ck_platform_notification_settings_email_failure_reason",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -2568,6 +2572,10 @@ class PlatformNotificationSettings(Base):
     email_last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email_last_error: Mapped[str | None] = mapped_column(Text)
     email_last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Versandstatus (Migration 0210, notifications/delivery_status.py): Fehler seit dem letzten Erfolg
+    email_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    email_failure_reason: Mapped[str | None] = mapped_column(Text)
+    email_failing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Notification(Base):

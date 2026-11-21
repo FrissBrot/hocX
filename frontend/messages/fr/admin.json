@@ -254,6 +254,11 @@
         "title": "Protection des connexions",
         "detail": "{limiterErrors, number} pannes du limiteur (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocages · {privateSourcePercent, number} % sources privées",
         "problem": "Protection des connexions perturbée ou Redis presque plein"
+      },
+      "email": {
+        "title": "Envoi d’e-mails",
+        "detail": "{state, select, disabled {Non configuré – hocX n’envoie aucun e-mail} never {Configuré, aucun e-mail envoyé pour l’instant} ok {{lastSuccessAt, select, none {Aucun e-mail envoyé avec succès pour l’instant} other {Dernier envoi {lastSuccessAt}}}} other {Perturbé depuis {failingSince} : {failures, number} erreurs consécutives ({reason, select, connection {serveur SMTP injoignable} timeout {le serveur SMTP ne répond pas} tls {la connexion TLS échoue} auth {connexion au serveur SMTP refusée} sender_rejected {adresse d’expéditeur refusée} recipient_rejected {adresses de destinataires refusées} message_rejected {e-mails refusés} rejected {le serveur SMTP refuse les e-mails} other {autre erreur}}) · dernière erreur {lastFailureAt} · {lastSuccessAt, select, none {jamais réussi} other {dernier succès {lastSuccessAt}}}}}",
+        "problem": "Envoi d’e-mails perturbé"
       }
     },
     "problems": {
@@ -289,6 +294,17 @@
         "cross_tenant": "Attaque sur plusieurs mandants",
         "tenant": "Nombreux comptes d'un mandant avec des échecs",
         "limiter": "Protection des connexions (Redis) perturbée"
+      },
+      "email": {
+        "connection": "Envoi d’e-mails perturbé : serveur SMTP injoignable",
+        "timeout": "Envoi d’e-mails perturbé : le serveur SMTP ne répond pas",
+        "tls": "Envoi d’e-mails perturbé : la connexion TLS échoue",
+        "auth": "Envoi d’e-mails perturbé : connexion au serveur SMTP refusée",
+        "sender_rejected": "Envoi d’e-mails perturbé : adresse d’expéditeur refusée",
+        "recipient_rejected": "Envoi d’e-mails perturbé : adresses de destinataires refusées",
+        "message_rejected": "Envoi d’e-mails : le serveur SMTP refuse certains e-mails",
+        "rejected": "Envoi d’e-mails perturbé : le serveur SMTP refuse les e-mails",
+        "other": "Envoi d’e-mails perturbé"
       }
     },
     "events": {
@@ -329,7 +345,8 @@
       "jobs": "Jobs →",
       "storage": "Stockage →",
       "backups": "Sauvegardes →",
-      "containers": "Conteneurs →"
+      "containers": "Conteneurs →",
+      "notifications": "Notifications →"
     },
     "containerStates": {
       "exitedOk": "terminé (init)"

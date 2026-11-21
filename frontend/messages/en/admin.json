@@ -254,6 +254,11 @@
         "title": "Sign-in protection",
         "detail": "{limiterErrors, number} limiter failures (5 min) · Redis {redisMemoryPercent, number} % · {activeBlocks, number} blocks · {privateSourcePercent, number} % private sources",
         "problem": "Sign-in protection impaired or Redis almost full"
+      },
+      "email": {
+        "title": "Email delivery",
+        "detail": "{state, select, disabled {Not configured – hocX sends no email} never {Configured, no email sent yet} ok {{lastSuccessAt, select, none {No email sent successfully yet} other {Last sent {lastSuccessAt}}}} other {Failing since {failingSince}: {failures, number} errors in a row ({reason, select, connection {SMTP server unreachable} timeout {SMTP server not responding} tls {TLS connection fails} auth {SMTP login rejected} sender_rejected {sender address rejected} recipient_rejected {recipient addresses rejected} message_rejected {messages rejected} rejected {SMTP server rejects mail} other {other error}}) · last error {lastFailureAt} · {lastSuccessAt, select, none {never successful} other {last success {lastSuccessAt}}}}}",
+        "problem": "Email delivery failing"
       }
     },
     "problems": {
@@ -289,6 +294,17 @@
         "cross_tenant": "Attack pattern across several tenants",
         "tenant": "Many accounts of one tenant with failures",
         "limiter": "Sign-in protection (Redis) impaired"
+      },
+      "email": {
+        "connection": "Email delivery failing: SMTP server unreachable",
+        "timeout": "Email delivery failing: SMTP server not responding",
+        "tls": "Email delivery failing: TLS connection fails",
+        "auth": "Email delivery failing: SMTP login rejected",
+        "sender_rejected": "Email delivery failing: sender address rejected",
+        "recipient_rejected": "Email delivery failing: recipient addresses rejected",
+        "message_rejected": "Email delivery: SMTP server rejects individual messages",
+        "rejected": "Email delivery failing: SMTP server rejects mail",
+        "other": "Email delivery failing"
       }
     },
     "events": {
@@ -329,7 +345,8 @@
       "jobs": "Jobs →",
       "storage": "Storage →",
       "backups": "Backups →",
-      "containers": "Containers →"
+      "containers": "Containers →",
+      "notifications": "Notifications →"
     },
     "containerStates": {
       "exitedOk": "exited (init)"

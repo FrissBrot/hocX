@@ -15,8 +15,8 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
-from app.models import AccountToken, Notification, NotificationPreference, Participant, PlatformNotificationSettings, Tenant
-from app.notifications import account, email_transport, exports, fines, submissions, todos
+from app.models import AccountToken, Notification, NotificationPreference, Participant, Tenant
+from app.notifications import account, delivery_status, email_transport, exports, fines, submissions, todos
 from app.notifications.catalog import CATEGORIES, GROUPS_WITHOUT_LOGIN, KINDS
 from app.notifications.render import Brand, render
 
@@ -93,7 +93,10 @@ def _skip(rows: list[Notification], reason: str) -> None:
         row.skip_reason = reason
 
 
-def _fail(db: Session, rows: list[Notification], error: str, *, smtp_status: bool = True) -> None:
+def _fail(rows: list[Notification], error: str) -> None:
+    """Fehlversuch je Eintrag zählen. Den Versandstatus (letzter Fehler in den Mail-Einstellungen,
+    /admin/system) meldet nur ein echter Versandfehler über delivery_status - ein Fehler vor dem
+    Versand (Laden/Rendern) gehört nur ins Fehlerprotokoll."""
     now = datetime.now(timezone.utc)
     for row in rows:
         row.attempts += 1
@@ -102,12 +105,6 @@ def _fail(db: Session, rows: list[Notification], error: str, *, smtp_status: boo
             row.status = "failed"
         else:
             row.deliver_after = now + timedelta(minutes=RETRY_MINUTES[min(row.attempts, len(RETRY_MINUTES)) - 1])
-    # Der «letzte Fehler» in den Mail-Einstellungen beschreibt den Versand - ein Fehler vor dem
-    # Versand (Laden/Rendern) gehört nur ins Fehlerprotokoll.
-    settings_row = db.get(PlatformNotificationSettings, 1) if smtp_status else None
-    if settings_row is not None:
-        settings_row.email_last_error = error[:500]
-        settings_row.email_last_error_at = now
 
 
 def _due_rows(db: Session, tenant_id: int, recipient_id: int, group: str) -> list[Notification]:
@@ -128,7 +125,7 @@ def _count_failed_attempt(db: Session, tenant_id: int, recipient_id: int, group:
     endete nie als «failed». Ist die Datenbank selbst weg, scheitert auch das - dann zählt der
     Versuch eben nicht."""
     try:
-        _fail(db, _due_rows(db, tenant_id, recipient_id, group), type(exc).__name__, smtp_status=False)
+        _fail(_due_rows(db, tenant_id, recipient_id, group), type(exc).__name__)
         db.commit()
     except Exception:  # noqa: BLE001 - der ursprüngliche Fehler ist bereits protokolliert
         db.rollback()
@@ -180,24 +177,22 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
             to=target or person.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html, images=rendered.images,
         ))
     except email_transport.EmailError as exc:
-        _fail(db, rows, str(exc))
+        _fail(rows, str(exc))
+        # Versandstatus + gedrosselt ins Fehlerprotokoll; committet (mit den Fehlversuchen oben)
+        delivery_status.record_failure(db, exc, kind="dispatch", tenant_id=tenant_id)
         return "failed"
     except Exception as exc:  # unerwartet (z. B. ungültige Adresse): ins Fehlerprotokoll, als Versuch zählen
         _logger.exception("Mail an Empfänger %s nicht versendbar", recipient_id)
         record_system_error(db, exc=exc, tenant_id=tenant_id)
-        _fail(db, rows, type(exc).__name__)
+        _fail(rows, type(exc).__name__)
         return "error"
     now = datetime.now(timezone.utc)
     for row in rows:
         row.status = "sent"
         row.sent_at = now
         row.last_error = None
-    settings_row = db.get(PlatformNotificationSettings, 1)
-    if settings_row is not None:
-        # Wie bei der Test-Mail: ein erfolgreicher Versand löst den letzten Fehler ab.
-        settings_row.email_last_sent_at = now
-        settings_row.email_last_error = None
-        settings_row.email_last_error_at = None
+    # Wie bei der Test-Mail: ein erfolgreicher Versand hebt Störung und letzten Fehler auf.
+    delivery_status.record_success(db)
     return "sent"
 
 
@@ -246,4 +241,16 @@ def run(db: Session) -> dict[str, int]:
             record_system_error(db, exc=exc, tenant_id=tenant_id)
             counts["error"] += 1
             _count_failed_attempt(db, tenant_id, recipient_id, group, exc)
+    if not counts.get("sent") and not counts.get("failed"):
+        # Nichts versucht: bei gestörter Verbindung/Anmeldung die Verbindung prüfen, damit sich der
+        # Status auch ohne Mailverkehr erholt (delivery_status.probe_if_idle).
+        try:
+            probe = delivery_status.probe_if_idle(db, config)
+            if probe:
+                counts[f"probe_{probe}"] += 1
+        except Exception as exc:
+            db.rollback()
+            _logger.exception("Verbindungsprobe des Mailversands fehlgeschlagen")
+            record_system_error(db, exc=exc)
+            counts["error"] += 1
     return dict(counts)

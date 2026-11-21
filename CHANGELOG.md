@@ -6,6 +6,21 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **Maildienst-Ausfall wird erkannt:** Jeder Versandversuch (Benachrichtigungen, Login-Code,
+  Test-Mail) meldet sein Ergebnis an einen zentralen Versandstatus (Migration
+  `0210_email_delivery_status`). Ist der Versand gestört, zeigt die Anmeldung statt «Code
+  versendet» sofort «Anmeldung aktuell nicht möglich, wende dich an deinen Administrator» (nur für
+  Anmeldungen, die einen Mailcode brauchen; bekannte Geräte und Konten mit zweitem Faktor sind nicht
+  betroffen). «Passwort vergessen» und Einladungen weisen auf die Störung hin.
+- **Systemmonitoring:** neue Prüfung «E-Mail-Versand» unter `/admin/system` (letzter Erfolg, letzter
+  Fehler, Fehler in Folge, Fehlerklasse) mit ntfy-Alarm `email:smtp:<grund>`; nicht eingerichteter
+  Versand erscheint ruhig als eigener Zustand. Versandfehler landen gedrosselt im Fehlerprotokoll
+  (ohne Empfängeradressen).
+
 ## [1.5.0] - 2026-11-21
 
 Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).

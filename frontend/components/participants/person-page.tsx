@@ -122,6 +122,9 @@ export function PersonPage({
   const [justSaved, setJustSaved] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
   const [inviteAvailable, setInviteAvailable] = useState(false);
+  // Versand eingerichtet, aber gestört (Backend notifications/delivery_status.py): nur ein Hinweis -
+  // Einladungen bleiben möglich und gehen raus, sobald der Versand wieder funktioniert.
+  const [mailDisturbed, setMailDisturbed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -147,8 +150,12 @@ export function PersonPage({
   useEffect(() => {
     if (!permissions.access) return;
     let cancelled = false;
-    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
-      .then((result) => { if (!cancelled) setInviteAvailable(Boolean(result?.enabled)); })
+    browserApiFetch<{ enabled: boolean; disturbed?: boolean }>("/api/auth/password-reset/available")
+      .then((result) => {
+        if (cancelled) return;
+        setInviteAvailable(Boolean(result?.enabled));
+        setMailDisturbed(Boolean(result?.disturbed));
+      })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [permissions.access]);
@@ -574,6 +581,7 @@ export function PersonPage({
                 </div>
               ) : null}
               {permissions.access && !inviteAvailable ? <span className="field-help">{t("invite.mailOff")}</span> : null}
+            {permissions.access && inviteAvailable && mailDisturbed ? <span className="field-help">{t("invite.mailDisturbed")}</span> : null}
               {permissions.access && emailChanged ? <span className="field-help">{t("invite.saveEmailFirst")}</span> : null}
               {permissions.access && !person.email && !emailChanged ? <span className="field-help">{t("invite.needsEmail")}</span> : null}
             </>

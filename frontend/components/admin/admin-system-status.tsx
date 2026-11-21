@@ -28,7 +28,7 @@ const STATUS_ORDER: Record<HealthStatus, number> = { critical: 0, warning: 1, un
 // Fachliche Gruppen der Dienstprüfungen (Schlüssel aus system_health_service.collect_checks).
 // Unbekannte Schlüssel landen in "other", damit eine neue Prüfung nie verschwindet.
 const CHECK_GROUPS: { key: string; checks: string[] }[] = [
-  { key: "infrastructure", checks: ["postgres", "redis", "storage", "object_storage", "storage_migration", "deploy_maintenance", "local_s3", "orphaned_files"] },
+  { key: "infrastructure", checks: ["postgres", "redis", "email", "storage", "object_storage", "storage_migration", "deploy_maintenance", "local_s3", "orphaned_files"] },
   { key: "security", checks: ["clamav", "clamav_signatures", "scan_backlog", "document_verification", "security"] },
   { key: "processing", checks: ["runtime", "overload", "photo_queue", "document_queue", "render_queue", "error_rate"] },
   { key: "backup", checks: ["backup", "backup_repository", "backup_verification"] },
@@ -42,6 +42,9 @@ function problemLink(problem: SystemProblem): { href: Route | "#containers"; lab
   }
   if (problem.source === "check" && problem.subject.startsWith("backup")) return { href: "/admin/backups", label: "backups" };
   if (problem.source === "container") return { href: "#containers", label: "containers" };
+  if (problem.source === "email" || (problem.source === "check" && problem.subject === "email")) {
+    return { href: "/admin/settings/notifications", label: "notifications" };
+  }
   return null;
 }
 
@@ -86,6 +89,20 @@ function checkUsage(check: HealthCheckEntry): number | null {
   if (check.key === "storage" && typeof freePercent === "number") return Math.min(100, Math.max(0, 100 - freePercent));
   if (check.key === "backup_repository" && quota === "yes" && typeof usedPercent === "number") return Math.min(100, Math.max(0, usedPercent));
   return null;
+}
+
+/**
+ * Parameter für den Detailtext: Zeitpunkte (Schlüssel auf «At»/«Since», ISO vom Backend) in der
+ * UI-Sprache formatieren, fehlende Zeitpunkte als "none" (für ICU-select, z. B. «noch nie erfolgreich»).
+ */
+function checkDetailParams(check: HealthCheckEntry, locale: string): Record<string, string | number> {
+  const result: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(check.params)) {
+    const isTime = key.endsWith("At") || key.endsWith("Since");
+    if (isTime) result[key] = typeof value === "string" && value ? formatDateTime(value, locale) : "none";
+    else result[key] = value as string | number;
+  }
+  return result;
 }
 
 function localDay(iso: string): string {
@@ -378,6 +395,7 @@ function ProblemList({ problems }: { problems: SystemProblem[] }) {
 
 function CheckRow({ check }: { check: HealthCheckEntry }) {
   const t = useTranslations("admin.system");
+  const locale = useLocale();
   const hasDetail = check.status !== "unknown" || Object.keys(check.params).length > 0;
   const usage = check.error ? null : checkUsage(check);
   return (
@@ -389,7 +407,7 @@ function CheckRow({ check }: { check: HealthCheckEntry }) {
           <span className="admin-status-label">{t(`status.${check.status}`)}</span>
         </div>
         <p className="muted admin-status-small">
-          {check.error ? t("checkError", { error: check.error }) : hasDetail && t.has(`checks.${check.key}.detail`) ? t(`checks.${check.key}.detail`, check.params as Record<string, string | number>) : t("noDetails")}
+          {check.error ? t("checkError", { error: check.error }) : hasDetail && t.has(`checks.${check.key}.detail`) ? t(`checks.${check.key}.detail`, checkDetailParams(check, locale)) : t("noDetails")}
         </p>
         {usage !== null && (
           <span className="admin-status-bar" aria-hidden="true">

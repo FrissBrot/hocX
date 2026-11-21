@@ -1,14 +1,16 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 
 /**
  * «Passwort vergessen» (Benachrichtigungen Phase 3): fordert einen Einmal-Link per E-Mail an.
  * Die Antwort ist immer dieselbe, ob es das Konto gibt oder nicht - deshalb zeigt die Seite nach
- * dem Absenden immer denselben Hinweis.
+ * dem Absenden immer denselben Hinweis. Ist der E-Mail-Versand gestört (plattformweiter Zustand,
+ * unabhängig vom Konto - kein Orakel), steht ein Hinweis darüber.
  */
 export default function ForgotPasswordPage() {
   const t = useTranslations("auth.forgotPassword");
@@ -16,6 +18,15 @@ export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [mailDisturbed, setMailDisturbed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    browserApiFetch<{ enabled: boolean; disturbed?: boolean }>("/api/auth/password-reset/available")
+      .then((result) => { if (!cancelled) setMailDisturbed(Boolean(result?.disturbed)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -38,6 +49,7 @@ export default function ForgotPasswordPage() {
           <h1>{t("title")}</h1>
           <p className="login-subtitle">{sent ? t("sent") : t("intro")}</p>
         </div>
+        {mailDisturbed ? <StatusBanner tone="warning" message={t("mailDisturbed")} /> : null}
         {sent ? (
           <div className="table-actions table-actions-start">
             <a className="button-primary" href="/login">{t("toLogin")}</a>

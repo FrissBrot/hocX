@@ -32,6 +32,9 @@ class NotificationPreferencesWrite(BaseModel):
 class PasswordResetAvailableRead(BaseModel):
     # Nur ob der Versand eingerichtet ist (Login-Seite blendet «Passwort vergessen» sonst aus).
     enabled: bool
+    # Versand eingerichtet, aber gestört (notifications/delivery_status.py): Hinweis auf
+    # «Passwort vergessen» und bei Einladungen. Plattformweiter Zustand, sagt nichts über Konten.
+    disturbed: bool = False
 
 
 class PasswordResetRequest(BaseModel):

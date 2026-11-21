@@ -81,6 +81,7 @@ _CHECK_TITLES_DE = {
     "backup": "Backup",
     "backup_repository": "Backup-Repository (Storage Box)",
     "backup_verification": "Backup-Prüfungen",
+    "email": "E-Mail-Versand",
 }
 # Titel, wenn die Prüfung lief, aber einen Schwellwert reisst (sonst "<Name> nicht erreichbar").
 _CHECK_PROBLEM_TITLES_DE = {
@@ -109,6 +110,19 @@ _CHECK_PROBLEM_TITLES_DE = {
     "backup": "Backup überfällig oder nicht eingerichtet",
     "backup_repository": "Backup-Repository gestört oder voll",
     "backup_verification": "Backup-Prüfung oder Restore-Test überfällig",
+    "email": "E-Mail-Versand gestört",
+}
+# E-Mail-Versand (Problem «email:smtp:<reason>», notifications/delivery_status.py): Titel je Fehlerklasse
+_EMAIL_REASONS_DE = {
+    "connection": "E-Mail-Versand gestört: SMTP-Server nicht erreichbar",
+    "timeout": "E-Mail-Versand gestört: SMTP-Server antwortet nicht",
+    "tls": "E-Mail-Versand gestört: TLS-Verbindung zum SMTP-Server scheitert",
+    "auth": "E-Mail-Versand gestört: Anmeldung am SMTP-Server abgelehnt",
+    "sender_rejected": "E-Mail-Versand gestört: Absenderadresse abgelehnt",
+    "recipient_rejected": "E-Mail-Versand: SMTP-Server lehnt Empfänger ab",
+    "message_rejected": "E-Mail-Versand: SMTP-Server lehnt einzelne Mails ab",
+    "rejected": "E-Mail-Versand gestört: SMTP-Server lehnt Mails ab",
+    "other": "E-Mail-Versand gestört",
 }
 _JOB_REASONS_DE = {
     "failing": "ist fehlgeschlagen",
@@ -248,7 +262,25 @@ def _check_message(check) -> str:
             )
         case "local_s3":
             return f"{params.get('objects')} Objekte, {params.get('gb')} GB - siehe Adminportal, Storage."
+        case "email":
+            return _email_message(check)
     return "Siehe Systemstatus."
+
+
+def _email_message(check) -> str:
+    params = check.params
+    since = params.get("failingSince")
+    success = params.get("lastSuccessAt")
+    parts = [f"{params.get('failures')} Fehler in Folge" + (f" seit {format_local(datetime.fromisoformat(since))}" if since else "")]
+    parts.append(f"letzter erfolgreicher Versand {format_local(datetime.fromisoformat(success))}" if success else "noch nie erfolgreich versendet")
+    if params.get("state") == "failing":
+        impact = "hocX kann keine Mails versenden: Anmeldungen, die einen Bestätigungscode per Mail brauchen, werden abgewiesen, Benachrichtigungen bleiben liegen."
+    else:
+        impact = (
+            "Der Server lehnt mehrere Mails bzw. Empfängeradressen in Folge ab (Adressen, Grösse, Relay- und "
+            "Absender-Einstellungen prüfen); Anmeldungen anderer sind nicht gesperrt."
+        )
+    return f"{'; '.join(parts)}. {impact} Adminportal → Einstellungen → Benachrichtigungen: SMTP-Einstellungen prüfen und Test-Mail senden."
 
 
 def derive_problems(
@@ -315,6 +347,16 @@ def derive_problems(
                     f"Prüfung {_CHECK_TITLES_DE.get(check.key, check.key)} schlägt fehl",
                     f"{_check_message(check)} - Details im Fehlerprotokoll.",
                 ))
+                continue
+            if check.key == "email":
+                # Eigener Schlüssel je Fehlerklasse (CLAUDE.md «Systemmonitoring»); «nicht
+                # eingerichtet» (unknown ohne Fehler) bleibt bewusst ohne Alarm.
+                if check.status in ("warning", "critical"):
+                    reason = str(check.params.get("reason") or "other")
+                    problems.append(_problem(
+                        f"email:smtp:{reason}", "email", "smtp", reason, check.status,
+                        _EMAIL_REASONS_DE.get(reason, _EMAIL_REASONS_DE["other"]), _check_message(check),
+                    ))
                 continue
             if check.status not in ("warning", "critical"):
                 continue

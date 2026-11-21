@@ -796,6 +796,34 @@ def overload_by_tenant(db: Session, now: datetime) -> list[OverloadTenantRead]:
     ]
 
 
+_EMAIL_CHECK_STATUS: dict[str, HealthStatus] = {
+    # Nicht eingerichtet ist ein bewusster Zustand: sichtbar (grau), aber kein Alarm.
+    "disabled": "unknown", "never": "ok", "ok": "ok", "failing": "critical", "rejecting": "warning",
+}
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _check_email(db: Session) -> HealthCheckRead:
+    """E-Mail-Versand (1.5.1): Ergebnis der letzten echten Versandversuche aus
+    notifications/delivery_status.py (Loop, Login-Code, Test-Mail, Verbindungsprobe) - nicht nur,
+    ob der Loop läuft. «failing» ist kritisch, weil Anmeldungen mit Mailcode dann scheitern."""
+    from app.notifications import delivery_status
+
+    current = delivery_status.read(db)
+    return HealthCheckRead(
+        key="email",
+        status=_EMAIL_CHECK_STATUS[current.state],
+        params={
+            "state": current.state, "failures": current.failures, "reason": current.reason,
+            "lastSuccessAt": _iso(current.last_success_at), "lastFailureAt": _iso(current.last_failure_at),
+            "failingSince": _iso(current.failing_since),
+        },
+    )
+
+
 # Teure Vollzählungen (verwaiste Dateien über alle Referenzen, Belegung des lokalen S3) ändern sich
 # langsam - je Prozess höchstens stündlich rechnen statt bei jedem 30-s-Tick (Concurrency-Audit
 # CONC-024: mit wachsendem Bestand näherten sie sich dem statement_timeout).
@@ -874,6 +902,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("deploy_maintenance", lambda: _check_deploy_maintenance(db, now), failure_status="unknown", db=db)
     checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
+    checks += _run_check("email", lambda: _check_email(db), failure_status="unknown", db=db)
     return checks
 
 
