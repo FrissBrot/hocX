@@ -92,7 +92,11 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       const params = tenantListQuery({ ...view, q: query }, plan);
       // Zustand in der URL (teilen, Zurück-Taste): nur Mandantenname, Plan- und Filter-Codes.
       const urlQuery = params.toString();
-      router.replace((urlQuery ? `${pathname}?${urlQuery}` : pathname) as Route, { scroll: false });
+      // Nur ersetzen, wenn sich die Adresse wirklich ändert und die Liste noch angezeigt wird: ein
+      // verspätetes replace (Such-Debounce) überschrieb sonst den Klick auf einen Mandanten.
+      if (window.location.pathname === pathname && window.location.search.replace(/^\?/, "") !== urlQuery) {
+        router.replace((urlQuery ? `${pathname}?${urlQuery}` : pathname) as Route, { scroll: false });
+      }
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(nextOffset));
       const result = await browserApiFetch<AdminTenantPage>(`/api/admin/tenants?${params.toString()}`);
@@ -163,7 +167,13 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
 
   // Debounced re-fetch from offset 0 whenever the search text changes - see the identical
   // pattern in admin-user-management.tsx.
+  const firstSearchRender = useRef(true);
   useEffect(() => {
+    // Beim Laden lädt schon der offset-Effekt oben - kein zweiter Abruf
+    if (firstSearchRender.current) {
+      firstSearchRender.current = false;
+      return;
+    }
     const timer = window.setTimeout(() => {
       if (offset !== 0) {
         setOffset(0);

@@ -127,6 +127,9 @@
       "activity": {
         "description": "Qui a modifié quoi, et quand."
       },
+      "securityLogins": {
+        "description": "Alertes, connexions et sessions des comptes."
+      },
       "import": {
         "description": "Reprendre des procès-verbaux et données depuis Word et d'autres sources."
       }
