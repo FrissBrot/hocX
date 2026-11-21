@@ -220,6 +220,7 @@ pg_upgrade_major_if_needed() {
 
   local legacy_state
   docker stop -t 60 "$old_container" > /dev/null || { pg_upgrade_fail "alter Server liess sich nicht sauber beenden"; return 1; }
+  # shellcheck disable=SC2015 # gewollt: Fehler, wenn der Aufruf scheitert ODER nichts liefert
   legacy_state="$(pg_upgrade_legacy_state "$legacy")" && [ -n "$legacy_state" ] ||
     { pg_upgrade_fail "Zustand des alten Clusters (pg_controldata)"; return 1; }
   docker exec "$new_container" sh -c "printf 'from=%s\nlegacy=%s\nat=%s\n' '$legacy_version' '$legacy_state' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > /var/lib/postgresql/$PG_UPGRADE_MARKER" ||

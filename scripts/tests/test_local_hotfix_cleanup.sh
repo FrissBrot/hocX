@@ -15,6 +15,7 @@ grep -v 'traefik.docker.network=${COMPOSE_PROJECT_NAME}_' "$REPO_DIR/docker-comp
 printf '%b' "$HOTFIX" > "$WORK/docker-compose.local.yml"
 args=(); append_local_compose_override "$WORK" args
 retire_local_compose_hotfixes "$WORK" 2> /dev/null || true
+# shellcheck disable=SC2015 # gewollt: Fehler, wenn eine der beiden Bedingungen nicht gilt
 [ "${args[*]}" = "-f $WORK/docker-compose.local.yml" ] && [ -e "$WORK/docker-compose.local.yml" ] || { echo "Fall 1: Hotfix fälschlich entfernt" >&2; exit 1; }
 
 # 2. Release mit Korrektur im Standardnetz (1.4.1/1.4.2): Laden lässt die Datei unangetastet
