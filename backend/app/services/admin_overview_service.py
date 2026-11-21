@@ -271,7 +271,7 @@ def build_overview(db: Session, *, owner: bool, now: datetime | None = None) -> 
         "status": status,
         "kpis": {
             "tenants": {"value": tenants_total, "new_30d": tenants_new},
-            "active_users_30d": _active_users(db),
+            "active_users_30d": _active_users(db),  # bewusst A: reine Anzahl ohne Personenbezug (Security-Review N1)
             "mrr": mrr,
             "errors_24h": errors,
             "login_failures_24h": login_failures,

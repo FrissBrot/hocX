@@ -10,6 +10,32 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Plattform-Admin neu gegliedert (Admin-Redesign):** Konsole mit einmal geladener Shell und sieben
+  Bereichen (Übersicht, Mandanten, Benutzer & Zugänge, Sicherheit, Betrieb, Analysen, Einstellungen),
+  Kompaktmodus der Seitenleiste («[»), Brotkrumen, Glocke für offene Prüfungen/Warnungen/Probleme und
+  Umgebungs-Badge (Test/Dev). Ctrl+K/⌘K durchsucht Seiten, Aktionen, Mandanten und Domains (owner
+  zusätzlich Benutzer mit maskierter E-Mail, Jobs, Checks, Audit-Codes; Begriff nie in der URL).
+  Neues Dashboard mit Plattformstatus, Kennzahlen, «Zu erledigen», Anmelde-/Fehlerverlauf und
+  Aktivitätsfeed; es lädt keine Benutzerlisten mehr. Mandanten haben eine eigene Detailseite
+  (`/admin/tenants/<id>/…`) statt des grossen Dialogs; die Liste sortiert und filtert (Status,
+  Speicher ≥85 %) mit Zustand in der URL. Profil & Passkeys als Seite `/admin/account`; alte Adressen
+  (`/admin/audit`, `/admin/notifications`) leiten weiter.
+- **Sicherheitsbereich im Plattform-Admin:** Übersicht (Fehlversuche 48 h, Warnungen, Sperren),
+  Anmeldeereignisse, Sperren (setzen/entsperren mit Passkey), Warnungen, Audit-Log, Richtlinien
+  (wirksame Anmeldeschutz-Werte, ohne Geheimnisse). Das Ansehen des Audit-Logs wird protokolliert.
+- **Sicherheit & Anmeldungen für Vereins-Admins:** neue Seite unter Einstellungen › Organisation mit
+  Warnungen (Konto unter Angriff, privilegierte Anmeldung auf neuem Gerät, MFA entfernt, Konto
+  gesperrt), Anmeldeaktivität je Konto (ohne IP) und «Sitzungen beenden». Neue Berechtigung
+  `security.read`, nur für die Standardrolle «Administrator»; die Anmeldeaktivität verlangt sie jetzt
+  statt «Zugänge verwalten» – eigene Rollen mit «Zugänge verwalten» sehen sie erst, wenn das neue Recht
+  zugewiesen wird. «Sitzungen beenden» gilt nur für Konten mit höchstens den eigenen Rechten, nicht
+  für das eigene Konto (dafür «Andere Sitzungen abmelden» im Profil). Anmeldeereignisse, Sperren und
+  die Sicherheitsübersicht im Plattform-Admin sind nur noch für owner lesbar.
+- **Analysen:** täglicher Rollup (Job `metrics_rollup`, 90 Tage rückwirkend) für Wachstum, Nutzung,
+  Feature-Buchungen, Umsatz, Auslastung, Speicher und Fehler; Fehlerprotokoll mit Zeitraum und
+  gruppierter Ansicht.
+- **Status-Token der Uptime-Überwachung** wird nur noch einmal direkt nach dem Erzeugen angezeigt.
+
 - **Tastaturbedienung:** «?» öffnet eine Übersicht aller gerade gültigen Tastenkürzel (auch im
   Benutzermenü › Tastenkürzel), erster Tab-Halt jeder Seite ist «Zum Inhalt springen». Kürzel laufen
   zentral über eine Registry (keine Auslösung beim Tippen oder in offenen Dialogen, Strg und ⌘,

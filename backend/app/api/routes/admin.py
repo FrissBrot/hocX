@@ -283,23 +283,26 @@ def list_audit_log(
     )
     # Ansehen protokollieren (Admin-Redesign §8.1 Nr. 3), gedrosselt: höchstens ein Eintrag pro
     # Admin in 10 Minuten. Erst am Ende, weil audit.log committet.
-    _audit_audit_log_view(db, current_admin)
+    _audit_audit_log_view(db, current_admin, params["tenant_id"])
     return page
 
 
 AUDIT_VIEW_INTERVAL_MINUTES = 10
 
 
-def _audit_audit_log_view(db: Session, current_admin: CurrentAdmin) -> None:
+def _audit_audit_log_view(db: Session, current_admin: CurrentAdmin, tenant_id: int | None) -> None:
+    """Gedrosselt pro Admin und Mandant (bzw. globaler Ansicht), damit sichtbar bleibt, wessen
+    Verlauf gelesen wurde (Security-Review N3)."""
     recent = db.scalar(
         text(
-            "SELECT 1 FROM audit_log WHERE tenant_id IS NULL AND action = 'admin.audit_log_viewed'"
-            " AND actor_email = :email AND created_at > now() - make_interval(mins => :minutes) LIMIT 1"
+            "SELECT 1 FROM audit_log WHERE tenant_id IS NOT DISTINCT FROM CAST(:tenant_id AS bigint)"
+            " AND action = 'admin.audit_log_viewed' AND actor_email = :email"
+            " AND created_at > now() - make_interval(mins => :minutes) LIMIT 1"
         ),
-        {"email": current_admin.email, "minutes": AUDIT_VIEW_INTERVAL_MINUTES},
+        {"tenant_id": tenant_id, "email": current_admin.email, "minutes": AUDIT_VIEW_INTERVAL_MINUTES},
     )
     if recent is None:
-        audit.log(db, action="admin.audit_log_viewed", actor_email=current_admin.email, entity_type="audit_log")
+        audit.log(db, action="admin.audit_log_viewed", actor_email=current_admin.email, tenant_id=tenant_id, entity_type="audit_log")
 
 
 @router.get("/error-logs/filter-options", response_model=SystemErrorLogFilterOptions)

@@ -173,8 +173,11 @@ def tenant_warnings(db: Session, tenant_id: int) -> list[dict]:
             "ev AS (SELECT coalesce(ev0.actor_user_id, (SELECT max(x.actor_user_id) FROM auth_event x WHERE x.tenant_id = :tenant_id "
             " AND x.subject_hash = ev0.subject_hash AND x.actor_user_id IS NOT NULL)) AS actor_user_id, ev0.event_type, ev0.outcome, ev0.ts, ev0.details "
             " FROM ev0 WHERE ev0.actor_user_id IS NOT NULL OR ev0.event_type = 'login.locked'), "
+            # Privilegiert = Standardrolle admin (alle Rechte) oder eigene Rolle mit access.manage/settings.manage
+            # (wie role_service.count_capable_admins; Security-Review N2)
             "admins AS (SELECT ur.user_id FROM user_role ur JOIN tenant_role r ON r.id = ur.role_id "
-            " WHERE r.tenant_id = :tenant_id AND r.system_key = 'admin'), "
+            " WHERE r.tenant_id = :tenant_id AND (r.system_key = 'admin' OR EXISTS (SELECT 1 FROM tenant_role_permission p "  # rbac-ok: Standardrolle admin hat all_permissions ohne Einzelzeilen
+            " WHERE p.role_id = r.id AND p.permission_key IN ('access.manage', 'settings.manage')))), "
             "w AS ("
             " SELECT 'account_attack' AS kind, actor_user_id, count(*) AS count, max(ts) AS last_at FROM ev "
             "  WHERE outcome = 'failure' AND ts > now() - interval '24 hours' GROUP BY actor_user_id HAVING count(*) >= :attack "
@@ -198,14 +201,28 @@ def tenant_warnings(db: Session, tenant_id: int) -> list[dict]:
 # ── Plattform: Warnungen (Alarmregeln live) ─────────────────────────────
 
 
+_ALERTS_CACHE_SECONDS = 30
+_alerts_cache: tuple[float, list[dict]] | None = None
+
+
 def platform_alerts(db: Session) -> list[dict]:
-    """Aktuell ausgelöste Alarmregeln (``threats.detect``), dieselben Schlüssel wie im Systemmonitor."""
+    """Aktuell ausgelöste Alarmregeln (``threats.detect``), dieselben Schlüssel wie im Systemmonitor.
+    30 s im Prozess zwischengespeichert: Übersicht und Warnungsseite fragen kurz nacheinander, die
+    Erkennung läuft über mehrere Abfragen auf auth_event (Security-Review N4)."""
+    global _alerts_cache
+    import time
+
     from app.auth_security import threats
 
-    return [
+    now = time.monotonic()
+    if _alerts_cache is not None and now - _alerts_cache[0] < _ALERTS_CACHE_SECONDS:
+        return [dict(item) for item in _alerts_cache[1]]
+    alerts = [
         {"key": threat.key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity, "title": threat.title, "message": threat.message}
         for threat in threats.detect(db)
     ]
+    _alerts_cache = (now, alerts)
+    return [dict(item) for item in alerts]
 
 
 def platform_counters(db: Session) -> dict:

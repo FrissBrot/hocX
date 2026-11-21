@@ -235,3 +235,19 @@ Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon
 6. Token geändert → `./scripts/sync-design-tokens.sh`.
 
 Regel unklar oder Wert fehlt? Nächstliegende Stufe nehmen und im Commit erwähnen. Kein Sonderwert.
+
+## 11. Plattform-Admin (Konsole)
+
+- Seiten liegen unter `frontend/app/admin/(console)/` und liefern nur ihren Inhalt; die Shell
+  (`components/ui/admin-shell.tsx`) mountet das Layout einmal. Neue Seite = Eintrag in
+  `components/ui/admin-shell-nav.ts` (Bereich, Icon aus `admin-nav-icons.tsx`, `ownerOnly`, wenn die Daten
+  `require_admin_owner` verlangen) und Übersetzung `adminShell.nav.*`; Sidebar, Brotkrumen und Ctrl+K
+  folgen daraus.
+- Kennzahlen als `StatTile`, Status als `HealthBadge` (Text + Punkt, nie nur Farbe), Zeitraum mit
+  `TimeRangeTabs`, Verläufe mit `Sparkline` oder Recharts (lazy, Farben aus `lib/constants/chart-colors.ts`).
+  Jedes Diagramm hat eine Tabellenalternative («Daten als Tabelle») und eine Zusammenfassung über
+  `aria-describedby`.
+- Ctrl+K: `components/search/command-palette.tsx` ist der gemeinsame Baustein (Mandant und Admin); Treffer
+  mit Personendaten nie in «Zuletzt geöffnet» speichern, Suchbegriffe nur im Request-Body.
+- Filter, Sortierung und Tabs stehen in der URL (nur IDs und Codes, keine Namen von Personen oder
+  E-Mails); Bereichs-CSS in `app/styles/admin-<bereich>.css`.

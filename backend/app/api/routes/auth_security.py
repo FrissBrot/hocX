@@ -23,7 +23,7 @@ from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import AppUser
-from app.services import public_id_service
+from app.services import public_id_service, role_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -52,6 +52,11 @@ def revoke_account_sessions(user_id: uuid.UUID, db: Session = Depends(get_db), u
     target = public_id_service.get_by_public_id(db, AppUser, user_id, tenant_id=user.current_tenant_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.id == user.user_id:
+        # Eigene Sitzungen: über «Andere Sitzungen abmelden» im Profil (behält die aktuelle Sitzung)
+        raise HTTPException(status_code=400, detail="own_account_use_revoke_others")
+    # Schutzregel 1 (wie MFA-Reset, Passwort): nur Konten mit Teilmenge der eigenen Rechte
+    role_service.ensure_can_manage_account(db, user, target.id)
     require_recent_auth(user, kind=ADMIN, action="sessions.revoke_user")
     revoked = session_register.revoke_all(db, target.id, reason="tenant_admin_revoked")
     # Sessions von vor dem Session-Register (stateless Cookies) über session_revoke_at mit beenden

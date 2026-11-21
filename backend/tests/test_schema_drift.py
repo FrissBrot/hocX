@@ -34,6 +34,10 @@ _KNOWN_UNMAPPED_TABLES = {
     "document_style_legacy",
     "document_recipe_legacy",
     "document_studio_legacy_ref",
+    # Kennzahlen-Aggregation (0208): nur per SQL (services/metrics_rollup_service.py, admin_analytics)
+    "platform_metric_daily",
+    "tenant_metric_daily",
+    "system_metric_sample",
 }
 # Feste Listenspalten vor 0186: bleiben in der Datenbank (nullable, ohne Dual-Write), damit der
 # Downgrade von 0186 sie aus den ersten zwei Spalten wieder füllen kann; das Modell kennt sie nicht

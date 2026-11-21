@@ -14,7 +14,7 @@ from app.core.admin_security import require_admin_owner
 from app.core.permissions import P, SYSTEM_ROLE_PERMISSIONS
 from app.models import Permission, TenantRolePermission
 from app.models.auth_security_entities import AuthEvent
-from tests.factories import make_app_user, make_current_user, make_tenant, system_role
+from tests.factories import assign_roles, make_app_user, make_current_user, make_tenant, system_role
 
 FORBIDDEN_FIELDS = ("ip", "src_ip_hash", "src_net_hash", "device_hash", "subject_hash", "risk_score")
 
@@ -108,6 +108,22 @@ def test_revoke_sessions_needs_access_manage_and_own_tenant(db):
     assert target_own.session_revoke_at is not None
 
 
+def test_revoke_sessions_respects_protection_rule_and_not_self(db):
+    """Security-Review M1: access.manage allein genügt nicht, um einen Admin abzumelden (Schutzregel 1),
+    und das eigene Konto geht über «Andere Sitzungen abmelden» (behält die aktuelle Sitzung)."""
+    tenant = make_tenant(db, "Revoke Schutz")
+    admin_target = assign_roles(db, make_app_user(db, f"a-{uuid.uuid4().hex[:6]}@example.com", tenant_id=tenant.id), "admin")
+    limited = make_current_user(tenant.id, permissions=frozenset({"access.manage"}))
+    with pytest.raises(HTTPException) as exc:
+        auth_security.revoke_account_sessions(admin_target.public_id, db=db, user=limited)
+    assert exc.value.status_code == 403
+
+    me = make_current_user(tenant.id, "admin", user_id=admin_target.id)
+    with pytest.raises(HTTPException) as exc:
+        auth_security.revoke_account_sessions(admin_target.public_id, db=db, user=me)
+    assert exc.value.status_code == 400
+
+
 def test_policy_has_no_secrets():
     policy = admin_auth_security.auth_security_policy(_admin=None)
     names = [name for group in policy.values() for name in group]
@@ -124,10 +140,10 @@ def test_policy_has_no_secrets():
 def test_new_platform_endpoints_are_owner_only():
     from fastapi.routing import APIRoute
 
-    owner_only = {"/auth-security/overview", "/auth-security/alerts", "/auth-security/policy"}
+    owner_only = {"/auth-security/overview", "/auth-security/alerts", "/auth-security/policy", "/auth-security/summary", "/auth-security/events", "/auth-security/blocks"}
     found = set()
     for route in admin_auth_security.router.routes:
-        if isinstance(route, APIRoute) and route.path in owner_only:
+        if isinstance(route, APIRoute) and route.path in owner_only and "GET" in route.methods:
             calls = {dep.call for dep in route.dependant.dependencies}
             assert require_admin_owner in calls, route.path
             found.add(route.path)

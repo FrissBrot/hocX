@@ -52,7 +52,7 @@
     "GET /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.auth_security_blocks",
       "platform": true,
-      "admin_level": "A"
+      "admin_level": "O"
     },
     "POST /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.create_block",
@@ -69,7 +69,7 @@
     "GET /api/admin/auth-security/events": {
       "handler": "admin_auth_security.auth_security_events",
       "platform": true,
-      "admin_level": "A"
+      "admin_level": "O"
     },
     "GET /api/admin/auth-security/overview": {
       "handler": "admin_auth_security.auth_security_overview",
@@ -84,7 +84,7 @@
     "GET /api/admin/auth-security/summary": {
       "handler": "admin_auth_security.auth_security_summary",
       "platform": true,
-      "admin_level": "A"
+      "admin_level": "O"
     },
     "GET /api/admin/auth/health": {
       "handler": "admin_auth.health",

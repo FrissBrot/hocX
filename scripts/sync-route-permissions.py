@@ -297,8 +297,9 @@ def build() -> dict[str, dict]:
                         # W = require_admin_write, O = require_admin_owner, dazu der Step-up-Zweck -
                         # damit eine abgeschwächte Prüfung im Diff dieser Datei auffällt.
                         whole = ast.unparse(node)
-                        owner = "require_admin_owner" in whole
-                        write = "require_admin_write" in whole
+                        # nur echte Abhängigkeiten zählen (Depends(...)), keine Erwähnung in Docstrings
+                        owner = re.search(r"Depends\(\s*require_admin_owner\s*\)", whole) is not None
+                        write = re.search(r"Depends\(\s*require_admin_write\s*\)", whole) is not None
                         entry["admin_level"] = "O+W" if owner and write else "O" if owner else "W" if write else "A"
                         purposes = sorted(set(re.findall(r"(?:require_step_up|step_up_proof)\(['\"]([\w-]+)['\"]\)", whole)))
                         if purposes:

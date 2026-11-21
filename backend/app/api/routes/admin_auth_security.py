@@ -1,7 +1,8 @@
 """Plattform-Admin: Anmeldeschutz (Auth-Audit 2026-11-20) - Daten für das Sicherheits-Dashboard
 (zweiter Schritt) und Verwaltung der IP-Sperren (Stufe 5, Entsperren).
 
-Lesen: jeder Plattform-Admin. Sperren setzen/aufheben: require_admin_write, auditiert. Adressen
+Lesen: nur owner (require_admin_owner; Anmeldeereignisse sind Personenbezug, Security-Review
+Admin-Redesign M2). Sperren setzen/aufheben: require_admin_write, auditiert. Adressen
 erscheinen nie im Klartext - nur gekürzte Pseudonyme; eine manuelle Sperre per IP wird beim Setzen
 gehasht."""
 
@@ -33,7 +34,7 @@ class BlockCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=200)
 
 
-@router.get("/auth-security/summary")
+@router.get("/auth-security/summary", dependencies=[Depends(require_admin_owner)])
 def auth_security_summary(db: Session = Depends(get_db)):
     return read_service.platform_summary(db)
 
@@ -88,7 +89,7 @@ def auth_security_policy(_admin: CurrentAdmin = Depends(require_admin_owner)):
     return {group: {name: getattr(settings, name) for name in names} for group, names in POLICY_SETTINGS.items()}
 
 
-@router.get("/auth-security/events")
+@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
 def auth_security_events(
     db: Session = Depends(get_db),
     event_type: str | None = Query(None, max_length=64),
@@ -99,7 +100,7 @@ def auth_security_events(
     return read_service.recent_events(db, limit=limit, offset=offset, event_type=event_type, outcome=outcome)
 
 
-@router.get("/auth-security/blocks")
+@router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])
 def auth_security_blocks():
     return read_service.active_blocks()
 
