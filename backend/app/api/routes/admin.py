@@ -1,8 +1,8 @@
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
@@ -55,6 +55,7 @@ from app.schemas.admin import (
     PlatformAdminRead,
     PlatformAdminUpdate,
     SystemErrorLogFilterOptions,
+    SystemErrorLogGroup,
     SystemErrorLogPage,
     SystemHealthEventRead,
     SystemStatusRead,
@@ -148,9 +149,16 @@ def list_tenants(
     q: str | None = Query(None),
     plan: Annotated[str | None, Query()] = None,
     needs_rebooking: Annotated[bool, Query()] = False,
+    sort: Annotated[Literal["name", "created", "users", "storage", "plan"], Query()] = "name",
+    dir: Annotated[Literal["asc", "desc"], Query()] = "asc",
+    status: Annotated[Literal["read_only", "contract_ending", "unverified"] | None, Query()] = None,
+    storage_min_ratio: Annotated[float | None, Query(ge=0, le=10)] = None,
     db: Session = Depends(get_db),
 ):
-    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan, needs_rebooking=needs_rebooking)
+    return tenant_service.list_tenants(
+        db, limit=limit, offset=offset, q=q, plan_code=plan, needs_rebooking=needs_rebooking,
+        sort=sort, descending=dir == "desc", status=status, storage_min_ratio=storage_min_ratio,
+    )
 
 
 @router.get("/domains", response_model=AdminDomainPage)
@@ -158,9 +166,11 @@ def list_domains(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     q: str | None = Query(None),
+    tenant_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
-    return domain_service.list_domains(db, limit=limit, offset=offset, q=q)
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    return domain_service.list_domains(db, limit=limit, offset=offset, q=q, tenant_id=internal_tenant_id)
 
 
 @router.delete("/domains/{domain_id}", status_code=204)
@@ -186,6 +196,8 @@ def list_error_logs(
     tenant_id: uuid.UUID | None = None,
     error_type: str | None = None,
     source: str | None = None,
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
     limit: int = Query(50, gt=0),
     offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     db: Session = Depends(get_db),
@@ -196,8 +208,24 @@ def list_error_logs(
     audit.log(db, action="admin.error_logs_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
               details={"offset": offset})
     return error_log_service.list_errors(
-        db, tenant_id=internal_tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+        db, tenant_id=internal_tenant_id, error_type=error_type, source=source, date_from=date_from, date_to=date_to,
+        limit=min(limit, 200), offset=offset,
     )
+
+
+@router.get("/error-logs/groups", response_model=list[SystemErrorLogGroup])
+def list_error_log_groups(
+    tenant_id: uuid.UUID | None = None,
+    source: str | None = None,
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Fehler gruppiert nach Typ (Anzahl, betroffene Mandanten, erstes/letztes Auftreten) - nur
+    Zählwerte, keine Meldungen oder Tracebacks; darum ohne eigenes Ansichts-Audit."""
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    return error_log_service.group_errors(db, tenant_id=internal_tenant_id, source=source, date_from=date_from, date_to=date_to)
 
 
 @router.get("/audit-log", response_model=AuditLogPage)
@@ -241,7 +269,7 @@ def list_audit_log(
         params,
     ).all()
     total = db.scalar(text("SELECT count(*) FROM audit_log l" + filters), params) or 0
-    return AuditLogPage(
+    page = AuditLogPage(
         items=[
             AuditLogEntryRead(
                 id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
@@ -253,6 +281,25 @@ def list_audit_log(
         ],
         total=total,
     )
+    # Ansehen protokollieren (Admin-Redesign §8.1 Nr. 3), gedrosselt: höchstens ein Eintrag pro
+    # Admin in 10 Minuten. Erst am Ende, weil audit.log committet.
+    _audit_audit_log_view(db, current_admin)
+    return page
+
+
+AUDIT_VIEW_INTERVAL_MINUTES = 10
+
+
+def _audit_audit_log_view(db: Session, current_admin: CurrentAdmin) -> None:
+    recent = db.scalar(
+        text(
+            "SELECT 1 FROM audit_log WHERE tenant_id IS NULL AND action = 'admin.audit_log_viewed'"
+            " AND actor_email = :email AND created_at > now() - make_interval(mins => :minutes) LIMIT 1"
+        ),
+        {"email": current_admin.email, "minutes": AUDIT_VIEW_INTERVAL_MINUTES},
+    )
+    if recent is None:
+        audit.log(db, action="admin.audit_log_viewed", actor_email=current_admin.email, entity_type="audit_log")
 
 
 @router.get("/error-logs/filter-options", response_model=SystemErrorLogFilterOptions)

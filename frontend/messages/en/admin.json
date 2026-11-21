@@ -590,6 +590,10 @@
       "auth_security_maintenance": {
         "title": "Sign-in protection cleanup",
         "description": "Hourly: deletes security events after 90 days, ended sessions and long-unused devices, and repairs counters without expiry."
+      },
+      "metrics_rollup": {
+        "title": "Metrics rollup",
+        "description": "Computes daily counts for the dashboard and analytics (tenants, active users, sign-ins, errors, storage, usage per module). The first run backfills 90 days."
       }
     }
   },
@@ -666,7 +670,9 @@
       "lastError": "Last error ({date}): {error}",
       "queue": "Waiting: {pending} · Failed: {failed}"
     },
-    "reminderPopover": "If a problem stays open, the reminder «Still: …» is sent after this many hours. 0 turns reminders off. If ntfy could not deliver a message, hocX resends it for up to 24 hours."
+    "reminderPopover": "If a problem stays open, the reminder «Still: …» is sent after this many hours. 0 turns reminders off. If ntfy could not deliver a message, hocX resends it for up to 24 hours.",
+    "statusTokenOnce": "This URL with the status token is shown only now. Copy it into Uptime Kuma; after reloading it is no longer visible.",
+    "statusTokenMasked": "A status token is set (ends in “{hint}”). It is only shown right after it is created – if lost, create a new one."
   },
   "login": {
     "title": "Admin sign-in",
@@ -693,13 +699,6 @@
     "passkeyUnsupported": "This browser does not support passkeys. Admin sign-in is only possible with a passkey.",
     "passkeyVerifyHint": "Confirm the sign-in with your passkey.",
     "verifyWithPasskey": "Confirm with passkey"
-  },
-  "dashboard": {
-    "eyebrow": "Overview",
-    "title": "Dashboard",
-    "tenants": "Organizations",
-    "totalUsers": "Total users",
-    "activeLogins": "With active login"
   },
   "roleOptions": {
     "reader": "Reader",
@@ -927,7 +926,9 @@
       "roleChangeFailed": "Role could not be changed",
       "userDeleteConfirm": "Permanently delete user \"{name}\"? The account belongs only to this organization and will be gone afterwards.",
       "userDeleted": "User deleted",
-      "userDeleteFailed": "User could not be deleted"
+      "userDeleteFailed": "User could not be deleted",
+      "roleChangeConfirm": "{name} will get the role “{role}”. Permissions change immediately.",
+      "roleChangeConfirmLabel": "Change role"
     }
   },
   "plans": {
@@ -957,7 +958,15 @@
     "colMessage": "Message",
     "loading": "Loading…",
     "noErrorsFound": "No errors found.",
-    "triggeredBy": "Triggered by: {email}"
+    "triggeredBy": "Triggered by: {email}",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "viewEntries": "Entries",
+    "viewGrouped": "Grouped",
+    "colCount": "Count",
+    "colTenants": "Tenants",
+    "colFirst": "First seen",
+    "colLast": "Last seen"
   },
   "domains": {
     "title": "Domains",
@@ -1092,7 +1101,8 @@
     "importPasswordLabel": "Export password",
     "importPasswordHelp": "Only needed if a password was set during export.",
     "exportCredentials": "Include credentials",
-    "exportCredentialsHint": "Password hashes, MFA secrets and link and calendar tokens. Only for a move in which all logins and links must keep working. Without this option, imported accounts get a random password and links get a new URL."
+    "exportCredentialsHint": "Password hashes, MFA secrets and link and calendar tokens. Only for a move in which all logins and links must keep working. Without this option, imported accounts get a random password and links get a new URL.",
+    "cloneDefaultName": "{name} (copy)"
   },
   "pricing": {
     "title": "Pricing",

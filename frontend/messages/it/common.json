@@ -331,5 +331,20 @@
   "numberStepper": {
     "decrease": "Diminuisci {label}",
     "increase": "Aumenta {label}"
+  },
+  "health": {
+    "ok": "OK",
+    "healthy": "In ordine",
+    "degraded": "Limitato",
+    "warning": "Avviso",
+    "critical": "Critico",
+    "unknown": "Sconosciuto"
+  },
+  "timeRange": {
+    "24h": "24 h",
+    "7d": "7 g",
+    "30d": "30 g",
+    "90d": "90 g",
+    "12m": "12 mesi"
   }
 }

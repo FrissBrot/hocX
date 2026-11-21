@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -521,4 +521,6 @@ app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-m
 app.include_router(admin_backups.router, prefix="/api/admin", tags=["admin-backups"])
 app.include_router(admin_cashflow.router, prefix="/api/admin", tags=["admin-cashflow"])
 app.include_router(admin_auth_security.router, prefix="/api/admin", tags=["admin-auth-security"])
+app.include_router(admin_analytics.router, prefix="/api/admin", tags=["admin-analytics"])
+app.include_router(admin_overview.router, prefix="/api/admin", tags=["admin-overview"])
 app.include_router(auth_security.router, prefix="/api", tags=["auth-security"])

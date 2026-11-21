@@ -15718,3 +15718,118 @@ a.export-step-meta {
 :where([role="dialog"], [role="alertdialog"])[tabindex="-1"]:focus {
   outline: none; /* a11y-ok: Container-Fokus beim Öffnen, Bedienelemente zeigen ihren eigenen Fokus */
 }
+
+/* ── Kennzahlen-Bausteine (StatTile, Sparkline, Skeleton; components/ui/) ───────────────────── */
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.stat-tile-link {
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.stat-tile-link:hover {
+  border-color: var(--accent);
+}
+
+.stat-tile-label {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.stat-tile-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile-unavailable,
+.stat-tile-hint {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.stat-tile-delta {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.stat-tile-delta-good {
+  color: var(--success-fg);
+}
+
+.stat-tile-delta-bad {
+  color: var(--danger-fg);
+}
+
+.sparkline {
+  display: block;
+}
+
+.sparkline-accent polyline {
+  stroke: var(--accent);
+}
+
+.sparkline-success polyline {
+  stroke: var(--success);
+}
+
+.sparkline-warning polyline {
+  stroke: var(--warning);
+}
+
+.sparkline-danger polyline {
+  stroke: var(--danger);
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--radius-xs);
+  background: var(--border);
+  animation: skeleton-pulse 1.2s var(--ease-out) infinite alternate;
+}
+
+.skeleton-line {
+  height: 12px;
+  width: 100%;
+}
+
+.skeleton-block {
+  height: 160px;
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-tile {
+  height: 96px;
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

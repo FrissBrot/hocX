@@ -207,6 +207,7 @@ EXEMPT = {
     ("POST", "/api/admin/storage/migrations/{migration_id}/cancel"): _OPERATIONAL,
     ("POST", "/api/admin/storage/migrations/{migration_id}/retry-failed"): _OPERATIONAL,
     ("POST", "/api/admin/storage/migrations/{migration_id}/acknowledge-rollback"): _OPERATIONAL,
+    ("POST", "/api/admin/search"): "liest nur (Ctrl+K-Suche); POST, damit der Begriff nicht in URL/Logs steht",
 }
 
 

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -111,7 +113,7 @@ export function AdminDomainOverview({ initialPage }: Props) {
       >
         {visibleDomains.map((d) => (
           <tr key={d.id}>
-            <td>{d.tenant_name}</td>
+            <td><Link href={`/admin/tenants/${d.tenant_id}/domains` as Route}>{d.tenant_name}</Link></td>
             <td>{d.purpose === "app" ? t("purposeApp") : t("purposeAbgabebox")}</td>
             <td className="domain-row-domain">{d.domain}</td>
             <td>

@@ -1,40 +1,10 @@
-import { getTranslations } from "next-intl/server";
-
+import { AdminOverview } from "@/components/admin/admin-overview";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminTenantPage, AdminUserPage } from "@/types/api";
+import type { AdminOverview as Overview } from "@/types/admin-overview";
 
+// Übersicht (Plan §3): ein Request für Status, Kennzahlen, «Zu erledigen» und Feed - nur Aggregate,
+// serverseitig 60 s gecacht. Diagramme lädt die Client-Komponente nach.
 export default async function AdminDashboardPage() {
-  const t = await getTranslations("admin.dashboard");
-  // No limit param -> full (unpaginated) lists, needed here to compute accurate totals.
-  const [tenants, users] = await Promise.all([
-    backendFetchWithSession<AdminTenantPage>("/api/admin/tenants"),
-    backendFetchWithSession<AdminUserPage>("/api/admin/users"),
-  ]);
-
-  const tenantCount = tenants?.total ?? 0;
-  const userCount = users?.total ?? 0;
-  const activeLoginCount = (users?.items ?? []).filter((user) => user.login_enabled).length;
-
-  return (
-    <>
-      <section className="panel">
-        <div className="eyebrow">{t("eyebrow")}</div>
-        <h1>{t("title")}</h1>
-        <div className="three-col">
-          <div className="card">
-            <div className="eyebrow">{t("tenants")}</div>
-            <strong style={{ fontSize: "var(--text-3xl)" }}>{tenantCount}</strong>
-          </div>
-          <div className="card">
-            <div className="eyebrow">{t("totalUsers")}</div>
-            <strong style={{ fontSize: "var(--text-3xl)" }}>{userCount}</strong>
-          </div>
-          <div className="card">
-            <div className="eyebrow">{t("activeLogins")}</div>
-            <strong style={{ fontSize: "var(--text-3xl)" }}>{activeLoginCount}</strong>
-          </div>
-        </div>
-      </section>
-    </>
-  );
+  const overview = await backendFetchWithSession<Overview>("/api/admin/overview");
+  return <AdminOverview initial={overview} />;
 }

@@ -331,5 +331,20 @@
   "numberStepper": {
     "decrease": "Diminuer {label}",
     "increase": "Augmenter {label}"
+  },
+  "health": {
+    "ok": "OK",
+    "healthy": "En ordre",
+    "degraded": "Dégradé",
+    "warning": "Avertissement",
+    "critical": "Critique",
+    "unknown": "Inconnu"
+  },
+  "timeRange": {
+    "24h": "24 h",
+    "7d": "7 j",
+    "30d": "30 j",
+    "90d": "90 j",
+    "12m": "12 mois"
   }
 }

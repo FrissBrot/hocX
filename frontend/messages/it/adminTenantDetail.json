@@ -1,1 +1,94 @@
-{}
+{
+  "loadFailed": "Impossibile caricare i dati.",
+  "status": {
+    "active": "Attivo",
+    "readOnly": "Sola lettura",
+    "contractEnding": "Contratto in scadenza",
+    "unverified": "Non verificato"
+  },
+  "statusFilter": {
+    "all": "Tutti gli stati",
+    "storageFull": "Spazio ≥ 85%"
+  },
+  "tabs": {
+    "overview": "Panoramica",
+    "profile": "Dati di base",
+    "subscription": "Abbonamento e fatturazione",
+    "users": "Utenti",
+    "domains": "Domini",
+    "verification": "Verifica",
+    "storage": "Spazio",
+    "activity": "Attività",
+    "technical": "Tecnica"
+  },
+  "header": {
+    "eyebrow": "Cliente",
+    "created": "Creato il {date}",
+    "edit": "Modifica",
+    "actions": "Altre azioni",
+    "clone": "Clona",
+    "export": "Esporta",
+    "cleanup": "Pulisci",
+    "delete": "Elimina",
+    "id": "ID cliente"
+  },
+  "overview": {
+    "users": "Utenti",
+    "usersOfLimit": "{count} / {limit}",
+    "participants": "Partecipanti",
+    "storage": "Spazio",
+    "storageOfQuota": "{used} / {quota}",
+    "storageUnlimited": "{used} (senza limite)",
+    "openCharges": "Fatture aperte",
+    "overdue": "{count, plural, one {# scaduta} other {# scadute}}",
+    "details": "Dettagli",
+    "recentActivity": "Attività recente",
+    "allActivity": "Tutte le voci",
+    "noActivity": "Ancora nessuna voce.",
+    "failure": "Non riuscito"
+  },
+  "domains": {
+    "title": "Domini",
+    "description": "Domini propri di questo cliente e loro raggiungibilità.",
+    "empty": "Nessun dominio proprio.",
+    "allDomains": "Tutti i domini"
+  },
+  "activity": {
+    "title": "Attività",
+    "description": "Voci di audit di questo cliente (azioni di admin e membri).",
+    "time": "Ora",
+    "action": "Azione",
+    "outcome": "Esito",
+    "actor": "Eseguito da",
+    "loading": "Caricamento …",
+    "empty": "Nessuna voce.",
+    "success": "Riuscito",
+    "failure": "Non riuscito"
+  },
+  "technical": {
+    "errorsTitle": "Errori",
+    "errorsDescription": "Errori imprevisti verificatisi per questo cliente.",
+    "allErrors": "Registro errori",
+    "time": "Ora",
+    "type": "Errore",
+    "request": "Richiesta",
+    "status": "Stato",
+    "loading": "Caricamento …",
+    "errorsEmpty": "Nessun errore registrato."
+  },
+  "charges": {
+    "title": "Fatture",
+    "description": "Crediti verso questo cliente.",
+    "allCharges": "Tutte le fatture",
+    "period": "Periodo",
+    "amount": "Importo",
+    "status": "Stato",
+    "due": "Scadenza",
+    "loading": "Caricamento …",
+    "empty": "Nessuna fattura.",
+    "overdue": "Scaduta",
+    "status_open": "Aperta",
+    "status_paid": "Pagata",
+    "status_waived": "Condonata"
+  }
+}

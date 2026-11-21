@@ -1,1 +1,94 @@
-{}
+{
+  "loadFailed": "Daten konnten nicht geladen werden.",
+  "status": {
+    "active": "Aktiv",
+    "readOnly": "Nur-Lesen",
+    "contractEnding": "Vertrag endet",
+    "unverified": "Nicht verifiziert"
+  },
+  "statusFilter": {
+    "all": "Alle Status",
+    "storageFull": "Speicher ≥ 85 %"
+  },
+  "tabs": {
+    "overview": "Übersicht",
+    "profile": "Stammdaten",
+    "subscription": "Abo & Abrechnung",
+    "users": "Benutzer",
+    "domains": "Domains",
+    "verification": "Verifizierung",
+    "storage": "Speicher",
+    "activity": "Aktivität",
+    "technical": "Technik"
+  },
+  "header": {
+    "eyebrow": "Mandant",
+    "created": "Erstellt am {date}",
+    "edit": "Bearbeiten",
+    "actions": "Weitere Aktionen",
+    "clone": "Klonen",
+    "export": "Exportieren",
+    "cleanup": "Aufräumen",
+    "delete": "Löschen",
+    "id": "Mandanten-ID"
+  },
+  "overview": {
+    "users": "Benutzer",
+    "usersOfLimit": "{count} / {limit}",
+    "participants": "Teilnehmende",
+    "storage": "Speicher",
+    "storageOfQuota": "{used} / {quota}",
+    "storageUnlimited": "{used} (ohne Limit)",
+    "openCharges": "Offene Rechnungen",
+    "overdue": "{count, plural, one {# überfällig} other {# überfällig}}",
+    "details": "Details",
+    "recentActivity": "Letzte Aktivität",
+    "allActivity": "Alle Einträge",
+    "noActivity": "Noch keine Einträge.",
+    "failure": "Fehlgeschlagen"
+  },
+  "domains": {
+    "title": "Domains",
+    "description": "Eigene Domains dieses Mandanten mit Erreichbarkeit.",
+    "empty": "Keine eigenen Domains.",
+    "allDomains": "Alle Domains"
+  },
+  "activity": {
+    "title": "Aktivität",
+    "description": "Audit-Einträge dieses Mandanten (Aktionen von Admins und Mitgliedern).",
+    "time": "Zeit",
+    "action": "Aktion",
+    "outcome": "Ergebnis",
+    "actor": "Ausgeführt von",
+    "loading": "Lädt …",
+    "empty": "Keine Einträge.",
+    "success": "Erfolgreich",
+    "failure": "Fehlgeschlagen"
+  },
+  "technical": {
+    "errorsTitle": "Fehler",
+    "errorsDescription": "Unerwartete Fehler, die bei diesem Mandanten aufgetreten sind.",
+    "allErrors": "Fehlerprotokoll",
+    "time": "Zeit",
+    "type": "Fehler",
+    "request": "Anfrage",
+    "status": "Status",
+    "loading": "Lädt …",
+    "errorsEmpty": "Keine Fehler erfasst."
+  },
+  "charges": {
+    "title": "Rechnungen",
+    "description": "Forderungen an diesen Mandanten.",
+    "allCharges": "Alle Rechnungen",
+    "period": "Periode",
+    "amount": "Betrag",
+    "status": "Status",
+    "due": "Fällig am",
+    "loading": "Lädt …",
+    "empty": "Keine Rechnungen.",
+    "overdue": "Überfällig",
+    "status_open": "Offen",
+    "status_paid": "Bezahlt",
+    "status_waived": "Erlassen"
+  }
+}

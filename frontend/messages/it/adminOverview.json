@@ -1,1 +1,96 @@
-{}
+{
+  "title": "Panoramica",
+  "subtitle": "Stato della piattaforma, indicatori e attività aperte a colpo d’occhio.",
+  "loadFailed": "Impossibile caricare la panoramica.",
+  "refreshFailed": "Aggiornamento non riuscito – viene mostrato l’ultimo stato noto.",
+  "noPermission": "Nessuna autorizzazione",
+  "refresh": {
+    "pause": "Sospendi aggiornamento",
+    "resume": "Riprendi aggiornamento"
+  },
+  "status": {
+    "platform": "Piattaforma",
+    "states": {
+      "healthy": "In ordine",
+      "degraded": "Limitato",
+      "warning": "Avviso",
+      "critical": "Critico",
+      "unknown": "Sconosciuto"
+    },
+    "rules": {
+      "noData": "Nessun dato di monitoraggio attuale (snapshot mancante, obsoleto o Docker non raggiungibile).",
+      "critical": "Almeno un problema critico.",
+      "warning": "Almeno un avviso, nulla di critico.",
+      "maintenance": "Nessun problema, ma è in corso una manutenzione.",
+      "runtime": "Nessun problema, ma il controllo di runtime segnala un avviso (pool o ritardo).",
+      "overload": "Nessun problema, ma negli ultimi 5 minuti sono state respinte richieste per sovraccarico.",
+      "none": "Nessun problema."
+    },
+    "asOf": "Stato al {time}",
+    "maintenanceActive": "Manutenzione attiva – dettagli",
+    "changed": "Stato della piattaforma: {status}"
+  },
+  "kpis": {
+    "title": "Indicatori",
+    "platform": "Stato della piattaforma",
+    "platformHint": "{critical, plural, one {# critico} other {# critici}} · {warning, plural, one {# avviso} other {# avvisi}}",
+    "tenants": "Organizzazioni",
+    "tenantsNew": "{count, plural, =0 {nessuna nuova in 30 giorni} one {+# nuova in 30 giorni} other {+# nuove in 30 giorni}}",
+    "activeUsers": "Utenti attivi (30 g)",
+    "activeUsersHint": "con accesso negli ultimi 30 giorni",
+    "vsPrevious30d": "{percent} % rispetto ai 30 giorni precedenti",
+    "mrr": "Entrate mensili (run rate)",
+    "vsPreviousMonth": "{percent} % rispetto al mese precedente",
+    "payingTenants": "{count, plural, one {# organizzazione pagante} other {# organizzazioni paganti}}",
+    "overdue": "{count, plural, one {# fattura scaduta} other {# fatture scadute}}",
+    "errors": "Errori (24 h)",
+    "vsPrevious24h": "{percent} % rispetto alle 24 h precedenti",
+    "loginFailures": "Accessi non riusciti (24 h)"
+  },
+  "todos": {
+    "title": "Da fare",
+    "empty": "Niente in sospeso.",
+    "items": {
+      "verifications": "{count, plural, one {# verifica d’identità aperta} other {# verifiche d’identità aperte}}",
+      "rebooking": "{count, plural, one {# organizzazione da riassegnare} other {# organizzazioni da riassegnare}}",
+      "overdueCharges": "{count, plural, one {# fattura scaduta} other {# fatture scadute}}",
+      "unhealthyDomains": "{count, plural, one {# dominio non raggiungibile} other {# domini non raggiungibili}}",
+      "storageHot": "{count, plural, one {# organizzazione all’85 % di spazio o più} other {# organizzazioni all’85 % di spazio o più}}",
+      "jobs": "{count, plural, one {# job in background in errore o in ritardo} other {# job in background in errore o in ritardo}}",
+      "backups": "I backup segnalano un problema"
+    }
+  },
+  "charts": {
+    "range": "Periodo",
+    "success": "Riusciti",
+    "failure": "Non riusciti",
+    "errors": "Errori",
+    "loginsTitle": "Accessi",
+    "errorsTitle": "Errori",
+    "loginsSummary": "{range}: {success, number} accessi riusciti e {failure, number} non riusciti.",
+    "errorsSummary": "{range}: {count, number} errori.",
+    "loadFailed": "Impossibile caricare il grafico.",
+    "asTable": "Dati come tabella",
+    "time": "Ora"
+  },
+  "ranges": {
+    "24h": "Ultime 24 ore",
+    "7d": "Ultimi 7 giorni",
+    "30d": "Ultimi 30 giorni",
+    "90d": "Ultimi 90 giorni"
+  },
+  "feed": {
+    "title": "Attività",
+    "empty": "Nessuna voce.",
+    "filters": {
+      "all": "Tutte",
+      "admin": "Admin",
+      "system": "Sistema"
+    },
+    "systemKinds": {
+      "problem": "Problema: {subject}",
+      "resolved": "Risolto: {subject}",
+      "container_restart": "Container riavviato: {subject}"
+    }
+  }
+}
