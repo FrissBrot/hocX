@@ -1,9 +1,13 @@
 <!doctype html>
 <!--
-  Wartungsseite (RUNBOOK Abschnitt 20). nginx setzt per SSI die Variante (hocx, admin, abgabebox),
-  die Prüfadresse und die Design-Tokens (infra/maintenance/tokens.css, Kopie von design/tokens.css
-  via scripts/sync-design-tokens.sh) ein. Keine externen Ressourcen, keine Cookies, keine
-  Benutzerdaten. Nach einer Änderung am Skript den CSP-Hash in nginx.conf anpassen
+  Wartungsseite (RUNBOOK Abschnitt 20). Erscheint nur, wenn ein App-Container nicht erreichbar ist
+  (Neustart beim Update, Ausfall) - deshalb immer die Update-Meldung, gleich wie die In-App-Seite
+  während des Deploy-Fensters (frontend/components/maintenance/maintenance-screen.tsx).
+  nginx setzt per SSI die Variante (hocx, admin, abgabebox), die Prüfadresse, die Design-Tokens
+  (infra/maintenance/tokens.css, Kopie von design/tokens.css via scripts/sync-design-tokens.sh)
+  und die Update-Info ein (update-info.json, schreibt deploy.sh: Versionen, Beginn, optional
+  Statusseite; fehlt sie, gilt {}). Keine externen Ressourcen, keine Cookies, keine Benutzerdaten.
+  Nach einer Änderung am Skript den CSP-Hash in nginx.conf anpassen
   (scripts/tests/test_maintenance_page.sh nennt den richtigen Wert).
 -->
 <html lang="de" data-variant="<!--# echo var="hocx_variant" default="hocx" -->" data-health="<!--# echo var="hocx_health" default="/api/health" -->">
@@ -27,67 +31,81 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", "Avenir Next", system-ui, -apple-system, sans-serif;
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   line-height: 1.5;
 }
-.maintenance-card {
-  width: 100%;
-  max-width: 520px;
+.maint-page { width: 100%; max-width: 420px; display: grid; gap: var(--space-4); }
+.maint-card {
   display: grid;
-  justify-items: center;
   gap: var(--space-4);
-  padding: 40px var(--space-6);
-  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
   background: var(--panel);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
-  text-align: center;
 }
-.maintenance-mark {
+.maint-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.maint-brand { display: flex; align-items: center; gap: var(--space-2); }
+.maint-logo {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-md);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   color: var(--primary-contrast);
-  font-size: var(--text-xl);
+  font-size: var(--text-sm);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
-.maintenance-title {
+.maint-brand-name { color: var(--muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.14em; }
+.maint-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.maint-pill[hidden], .maint-status-line[hidden], .maint-version[hidden] { display: none; }
+.maint-body { display: grid; gap: var(--space-2); }
+.maint-title {
   margin: 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   font-size: var(--text-2xl);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
 }
-.maintenance-status { display: grid; gap: var(--space-2); }
-.maintenance-status p { margin: 0; }
-.maintenance-hint { color: var(--muted); font-size: var(--text-base); }
-.maintenance-progress {
-  width: 120px;
-  height: 4px;
+.maint-text { margin: 0; color: var(--muted); font-size: var(--text-base); }
+.maint-progress {
+  height: 5px;
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
   overflow: hidden;
 }
-.maintenance-progress::after {
+.maint-progress::after {
   content: "";
   display: block;
-  width: 40%;
+  width: 35%;
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--accent);
-  animation: maintenance-slide 1.6s var(--ease-out) infinite;
+  animation: maint-slide 1.6s var(--ease-out) infinite;
 }
-@keyframes maintenance-slide {
+@keyframes maint-slide {
   from { transform: translateX(-100%); }
-  to { transform: translateX(250%); }
+  to { transform: translateX(300%); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .maintenance-progress::after { animation: none; width: 100%; }
-}
-.maintenance-reload {
+.maint-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.maint-reload {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   min-height: var(--button-height);
   padding: 0 var(--space-4);
   border: 0;
@@ -100,97 +118,182 @@ body {
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
 }
-.maintenance-reload:hover { background: var(--primary-strong); }
-.maintenance-reload:focus-visible {
-  outline: 2px solid var(--focus-ring-color);
-  outline-offset: 2px;
+.maint-reload:hover { background: var(--primary-strong); }
+.maint-reload:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; }
+.maint-reload svg { flex: none; }
+.maint-reload[aria-busy="true"] svg { animation: maint-spin 0.9s linear infinite; }
+@keyframes maint-spin { to { transform: rotate(360deg); } }
+.maint-hint { flex: 1 1 160px; margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.maint-status-line {
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.maint-status-line a { color: var(--accent); font-weight: 600; }
+.maint-status-line a:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; border-radius: var(--radius-xs); }
+.maint-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.maint-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); animation: maint-pulse 1.8s ease-in-out infinite; }
+@keyframes maint-pulse { 50% { opacity: 0.35; } }
+.maint-version { font-family: var(--font-mono); }
+@media (prefers-reduced-motion: reduce) {
+  .maint-progress::after { animation: none; width: 100%; opacity: 0.6; }
+  .maint-dot, .maint-reload[aria-busy="true"] svg { animation: none; }
 }
 @media (max-width: 640px) {
-  .maintenance-card { padding: var(--space-5) var(--space-4); }
-  .maintenance-reload { min-height: 44px; }
+  .maint-card { padding: var(--space-5) var(--space-4); }
+  .maint-reload { min-height: 44px; }
 }
 </style>
 </head>
 <body>
-<main class="maintenance-card" aria-labelledby="maintenance-title">
-  <div class="maintenance-mark" aria-hidden="true">hX</div>
-  <h1 class="maintenance-title" id="maintenance-title">hocX wird gerade aktualisiert</h1>
-  <div class="maintenance-status" role="status" aria-live="polite">
-    <p id="maintenance-message">hocX wird gerade aktualisiert und ist in wenigen Minuten wieder da.</p>
-    <p class="maintenance-hint" id="maintenance-hint">Diese Seite lädt sich automatisch neu, sobald hocX wieder erreichbar ist.</p>
+<!--# block name="no_info" -->{}<!--# endblock -->
+<script type="application/json" id="maintenance-info"><!--# include virtual="/update-info.json" stub="no_info" --></script>
+<div class="maint-page">
+<main class="maint-card" aria-labelledby="maintenance-title">
+  <div class="maint-head">
+    <div class="maint-brand"><span class="maint-logo" aria-hidden="true">hX</span><span class="maint-brand-name">HOCX</span></div>
+    <span class="maint-pill" id="maintenance-versions" hidden></span>
   </div>
-  <div class="maintenance-progress" aria-hidden="true"></div>
-  <button type="button" class="maintenance-reload" id="maintenance-reload">Jetzt neu laden</button>
+  <div class="maint-body" role="status" aria-live="polite">
+    <h1 class="maint-title" id="maintenance-title">hocX wird aktualisiert</h1>
+    <p class="maint-text" id="maintenance-message">In wenigen Minuten ist hocX wieder da. Deine Daten sind sicher.</p>
+  </div>
+  <div class="maint-progress" aria-hidden="true"></div>
+  <div class="maint-actions">
+    <button type="button" class="maint-reload" id="maintenance-reload">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+      <span id="maintenance-reload-label">Jetzt neu laden</span>
+    </button>
+    <p class="maint-hint" id="maintenance-hint">Lädt automatisch neu, sobald hocX bereit ist.</p>
+  </div>
+  <p class="maint-status-line" id="maintenance-status" hidden></p>
 </main>
+<p class="maint-footer"><span class="maint-dot" aria-hidden="true"></span><span class="maint-version" id="maintenance-version" hidden></span><span id="maintenance-copyright">© hocX Project · Alle Rechte vorbehalten.</span></p>
+</div>
 <script>
 (function () {
   "use strict";
   // Alle Sprachen aus i18n/locales.json (scripts/tests/test_maintenance_page.sh prüft das).
+  // Gleiche Texte wie die In-App-Update-Seite (frontend/messages/<locale>/maintenance.json, update.*).
   var TEXTS = {
     de: {
       hocx: {
         title: "hocX wird aktualisiert",
-        heading: "hocX wird gerade aktualisiert",
-        message: "hocX wird gerade aktualisiert und ist in wenigen Minuten wieder da.",
-        hint: "Diese Seite lädt sich automatisch neu, sobald hocX wieder erreichbar ist."
+        heading: "hocX wird aktualisiert",
+        message: "In wenigen Minuten ist hocX wieder da. Deine Daten sind sicher.",
+        slowHeading: "Das Update dauert länger",
+        slowMessage: "Das Update braucht mehr Zeit als üblich. Deine Daten sind sicher, die Seite versucht es weiter.",
+        hint: "Lädt automatisch neu, sobald hocX bereit ist."
       },
       abgabebox: {
         title: "Abgabebox wird aktualisiert",
-        heading: "Die Abgabebox wird gerade aktualisiert",
-        message: "Abgaben sind in wenigen Minuten wieder möglich.",
-        hint: "Diese Seite lädt sich automatisch neu, sobald du wieder etwas abgeben kannst."
+        heading: "Die Abgabebox wird aktualisiert",
+        message: "In wenigen Minuten sind Abgaben wieder möglich. Bereits abgegebene Dateien sind sicher.",
+        slowHeading: "Das Update dauert länger",
+        slowMessage: "Das Update braucht mehr Zeit als üblich. Abgegebene Dateien sind sicher, die Seite versucht es weiter.",
+        hint: "Lädt automatisch neu, sobald die Abgabebox bereit ist."
       },
-      reload: "Jetzt neu laden"
+      reload: "Jetzt neu laden",
+      checking: "Prüfe …",
+      statusBefore: "Hält das länger als 15 Minuten an, schau auf ",
+      statusLink: "der Statusseite",
+      statusAfter: " nach.",
+      copyright: "© {year} hocX Project · Alle Rechte vorbehalten."
     },
     en: {
       hocx: {
         title: "hocX is being updated",
         heading: "hocX is being updated",
-        message: "hocX is being updated and will be back in a few minutes.",
-        hint: "This page reloads automatically as soon as hocX is available again."
+        message: "hocX will be back in a few minutes. Your data is safe.",
+        slowHeading: "The update is taking longer",
+        slowMessage: "The update needs more time than usual. Your data is safe, this page keeps trying.",
+        hint: "Reloads automatically as soon as hocX is ready."
       },
       abgabebox: {
         title: "Submission box is being updated",
         heading: "The submission box is being updated",
-        message: "Submissions will be possible again in a few minutes.",
-        hint: "This page reloads automatically as soon as you can submit again."
+        message: "Submissions will be possible again in a few minutes. Files already submitted are safe.",
+        slowHeading: "The update is taking longer",
+        slowMessage: "The update needs more time than usual. Submitted files are safe, this page keeps trying.",
+        hint: "Reloads automatically as soon as the submission box is ready."
       },
-      reload: "Reload now"
+      reload: "Reload now",
+      checking: "Checking …",
+      statusBefore: "If this lasts longer than 15 minutes, check ",
+      statusLink: "the status page",
+      statusAfter: ".",
+      copyright: "© {year} hocX Project · All rights reserved."
     },
     fr: {
       hocx: {
         title: "Mise à jour de hocX",
         heading: "hocX est en cours de mise à jour",
-        message: "hocX est en cours de mise à jour et sera de retour dans quelques minutes.",
-        hint: "Cette page se recharge automatiquement dès que hocX est à nouveau disponible."
+        message: "hocX sera de retour dans quelques minutes. Tes données sont en sécurité.",
+        slowHeading: "La mise à jour prend plus de temps",
+        slowMessage: "La mise à jour prend plus de temps que d'habitude. Tes données sont en sécurité, la page continue d'essayer.",
+        hint: "Se recharge automatiquement dès que hocX est prêt."
       },
       abgabebox: {
         title: "Mise à jour de la boîte de dépôt",
         heading: "La boîte de dépôt est en cours de mise à jour",
-        message: "Les dépôts seront à nouveau possibles dans quelques minutes.",
-        hint: "Cette page se recharge automatiquement dès que tu peux à nouveau déposer des fichiers."
+        message: "Les dépôts seront à nouveau possibles dans quelques minutes. Les fichiers déjà déposés sont en sécurité.",
+        slowHeading: "La mise à jour prend plus de temps",
+        slowMessage: "La mise à jour prend plus de temps que d'habitude. Les fichiers déposés sont en sécurité, la page continue d'essayer.",
+        hint: "Se recharge automatiquement dès que la boîte de dépôt est prête."
       },
-      reload: "Recharger maintenant"
+      reload: "Recharger maintenant",
+      checking: "Vérification …",
+      statusBefore: "Si cela dure plus de 15 minutes, consulte ",
+      statusLink: "la page d'état",
+      statusAfter: ".",
+      copyright: "© {year} hocX Project · Tous droits réservés."
     },
     it: {
       hocx: {
         title: "Aggiornamento di hocX",
         heading: "hocX è in fase di aggiornamento",
-        message: "hocX è in fase di aggiornamento e sarà di nuovo disponibile tra pochi minuti.",
-        hint: "Questa pagina si ricarica automaticamente non appena hocX sarà di nuovo raggiungibile."
+        message: "hocX sarà di nuovo disponibile tra pochi minuti. I tuoi dati sono al sicuro.",
+        slowHeading: "L'aggiornamento richiede più tempo",
+        slowMessage: "L'aggiornamento richiede più tempo del solito. I tuoi dati sono al sicuro, la pagina continua a riprovare.",
+        hint: "Si ricarica automaticamente non appena hocX è pronto."
       },
       abgabebox: {
         title: "Aggiornamento della casella di consegna",
         heading: "La casella di consegna è in fase di aggiornamento",
-        message: "Le consegne saranno di nuovo possibili tra pochi minuti.",
-        hint: "Questa pagina si ricarica automaticamente non appena potrai di nuovo consegnare."
+        message: "Le consegne saranno di nuovo possibili tra pochi minuti. I file già consegnati sono al sicuro.",
+        slowHeading: "L'aggiornamento richiede più tempo",
+        slowMessage: "L'aggiornamento richiede più tempo del solito. I file consegnati sono al sicuro, la pagina continua a riprovare.",
+        hint: "Si ricarica automaticamente non appena la casella di consegna è pronta."
       },
-      reload: "Ricarica ora"
+      reload: "Ricarica ora",
+      checking: "Verifica …",
+      statusBefore: "Se dura più di 15 minuti, consulta ",
+      statusLink: "la pagina di stato",
+      statusAfter: ".",
+      copyright: "© {year} hocX Project · Tutti i diritti riservati."
     }
   };
   var DEFAULT_LOCALE = "de";
   var CHECK_INTERVAL_MS = 10000;
+  // Wie UPDATE_SLOW_AFTER_MS in frontend/lib/maintenance.ts.
+  var SLOW_AFTER_MS = 15 * 60 * 1000;
+  // Ältere Update-Info (z. B. von einem abgebrochenen Lauf) zählt nicht mehr als laufendes Update.
+  var INFO_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+  var VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/;
+  var STATUS_URL_RE = /^https:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~\/-]*)?$/;
   var root = document.documentElement;
+  var loadedAt = Date.now();
 
   function pickLocale() {
     var preferred = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
@@ -201,17 +304,75 @@ body {
     return DEFAULT_LOCALE;
   }
 
+  function readInfo() {
+    try {
+      var parsed = JSON.parse(document.getElementById("maintenance-info").textContent || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  // «1.5.0» -> «v1.5.0»; Test-Images («test-…») ohne Präfix.
+  function label(version) {
+    return /^[0-9]/.test(version) ? "v" + version : version;
+  }
+
   var locale = pickLocale();
   var variant = root.getAttribute("data-variant") === "abgabebox" ? "abgabebox" : "hocx";
-  var texts = TEXTS[locale][variant];
+  var common = TEXTS[locale];
+  var texts = common[variant];
+  var info = readInfo();
+  var since = typeof info.since === "number" ? info.since * 1000 : null;
+  var fresh = info.update === true && since !== null && Date.now() - since < INFO_MAX_AGE_MS;
+  var fromVersion = fresh && typeof info.from === "string" && VERSION_RE.test(info.from) ? info.from : null;
+  var toVersion = fresh && typeof info.to === "string" && VERSION_RE.test(info.to) ? info.to : null;
+  var statusUrl = typeof info.status_url === "string" && STATUS_URL_RE.test(info.status_url) ? info.status_url : null;
+  var startedAt = fresh ? Math.min(since, loadedAt) : loadedAt;
+
   root.setAttribute("lang", locale);
   document.title = texts.title;
-  document.getElementById("maintenance-title").textContent = texts.heading;
-  document.getElementById("maintenance-message").textContent = texts.message;
+  var title = document.getElementById("maintenance-title");
+  var message = document.getElementById("maintenance-message");
   document.getElementById("maintenance-hint").textContent = texts.hint;
-  var reloadButton = document.getElementById("maintenance-reload");
-  reloadButton.textContent = TEXTS[locale].reload;
-  reloadButton.addEventListener("click", function () { window.location.reload(); });
+  document.getElementById("maintenance-copyright").textContent = common.copyright.replace("{year}", String(new Date().getFullYear()));
+
+  var pill = document.getElementById("maintenance-versions");
+  if (fromVersion && toVersion && fromVersion !== toVersion) {
+    pill.textContent = label(fromVersion) + " → " + label(toVersion);
+    pill.hidden = false;
+  } else if (toVersion || fromVersion) {
+    pill.textContent = label(toVersion || fromVersion);
+    pill.hidden = false;
+  }
+  var footerVersion = document.getElementById("maintenance-version");
+  if (toVersion) {
+    footerVersion.textContent = label(toVersion);
+    footerVersion.hidden = false;
+  }
+
+  var statusLine = document.getElementById("maintenance-status");
+  var slowShown = null;
+  function render() {
+    var slow = Date.now() - startedAt > SLOW_AFTER_MS;
+    if (slow === slowShown) return;
+    slowShown = slow;
+    title.textContent = slow ? texts.slowHeading : texts.heading;
+    message.textContent = slow ? texts.slowMessage : texts.message;
+    if (slow && statusUrl && !statusLine.firstChild) {
+      var link = document.createElement("a");
+      link.href = statusUrl;
+      link.rel = "noopener noreferrer";
+      link.target = "_blank";
+      link.textContent = common.statusLink;
+      statusLine.appendChild(document.createTextNode(common.statusBefore));
+      statusLine.appendChild(link);
+      statusLine.appendChild(document.createTextNode(common.statusAfter));
+    }
+    statusLine.hidden = !(slow && statusUrl);
+  }
+  render();
+  window.setInterval(render, 30000);
 
   // Nur eigene Pfade, keine Cookies. Neu geladen wird erst, wenn die Prüfadresse 200 liefert und
   // die Seite selbst nicht mehr von hier kommt (Kennung X-Hocx-Maintenance-Page) - sonst zeigte
@@ -219,22 +380,48 @@ body {
   var healthPath = root.getAttribute("data-health") || "/api/health";
   if (healthPath.charAt(0) !== "/" || healthPath.charAt(1) === "/") healthPath = "/api/health";
   var request = { cache: "no-store", credentials: "omit" };
+  var reloadButton = document.getElementById("maintenance-reload");
+  var reloadLabel = document.getElementById("maintenance-reload-label");
+  reloadLabel.textContent = common.reload;
+  var timer = null;
+  var checking = false;
 
-  function schedule() { window.setTimeout(check, CHECK_INTERVAL_MS); }
-
-  function check() {
-    if (!window.fetch) return;
-    window.fetch(healthPath, request).then(function (health) {
+  function ready() {
+    if (!window.fetch) return Promise.resolve(false);
+    return window.fetch(healthPath, request).then(function (health) {
       if (health.status !== 200) return false;
       return window.fetch(window.location.href, { method: "HEAD", cache: "no-store", credentials: "omit" }).then(function (page) {
         return !page.headers.get("X-Hocx-Maintenance-Page");
       });
-    }).then(function (ready) {
-      if (ready) window.location.reload();
-      else schedule();
-    }, schedule);
+    }).catch(function () { return false; });
   }
 
+  function schedule() {
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(check, CHECK_INTERVAL_MS);
+  }
+
+  function check(manual) {
+    if (checking) return;
+    checking = true;
+    if (manual) {
+      reloadButton.setAttribute("aria-busy", "true");
+      reloadLabel.textContent = common.checking;
+    }
+    ready().then(function (isReady) {
+      if (isReady) {
+        window.location.reload();
+        return;
+      }
+      checking = false;
+      reloadButton.removeAttribute("aria-busy");
+      reloadLabel.textContent = common.reload;
+      render();
+      schedule();
+    });
+  }
+
+  reloadButton.addEventListener("click", function () { check(true); });
   schedule();
 })();
 </script>
