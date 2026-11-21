@@ -263,6 +263,16 @@
         "title": "E-Mail-Versand",
         "detail": "{state, select, disabled {Nicht eingerichtet – hocX versendet keine Mails} never {Eingerichtet, noch keine Mail versendet} ok {{lastSuccessAt, select, none {Noch keine Mail erfolgreich versendet} other {Letzter Versand {lastSuccessAt}}}} other {Gestört seit {failingSince}: {failures, number} Fehler in Folge ({reason, select, connection {SMTP-Server nicht erreichbar} timeout {SMTP-Server antwortet nicht} tls {TLS-Verbindung scheitert} auth {Anmeldung am SMTP-Server abgelehnt} sender_rejected {Absenderadresse abgelehnt} recipient_rejected {Empfängeradressen abgelehnt} message_rejected {Mails abgelehnt} rejected {SMTP-Server lehnt Mails ab} other {anderer Fehler}}) · letzter Fehler {lastFailureAt} · {lastSuccessAt, select, none {noch nie erfolgreich} other {letzter Erfolg {lastSuccessAt}}}}}",
         "problem": "E-Mail-Versand gestört"
+      },
+      "password_leak": {
+        "title": "Leak-Prüfung neuer Passwörter",
+        "detail": "{state, select, hibp {HIBP-Range-API (k-Anonymität) aktiv} fallback {HIBP zuletzt nicht erreichbar – lokale Liste aktiv} local {Nur lokale Liste} missing {Weder HIBP noch lokale Liste verfügbar} off {Abgeschaltet} other {{unchecked, number} neue Passwörter in 24 h ungeprüft angenommen}}",
+        "problem": "Neue Passwörter ohne Leak-Prüfung angenommen"
+      },
+      "geoip": {
+        "title": "Länder-Geolocation",
+        "detail": "{state, select, ok {DB-IP «IP to Country Lite», Stand {buildDate} ({ageDays, number} Tage)} other {Nicht eingerichtet – Signal «neues Land» entfällt}}",
+        "problem": "Länder-Geolocation gestört"
       }
     },
     "problems": {
@@ -615,6 +625,10 @@
       "metrics_rollup": {
         "title": "Kennzahlen-Rollup",
         "description": "Rechnet täglich Zählwerte für Dashboard und Analysen (Mandanten, aktive Benutzer, Anmeldungen, Fehler, Speicher, Nutzung je Modul). Erster Lauf ergänzt 90 Tage rückwirkend."
+      },
+      "geoip_update": {
+        "title": "Länder-Geolocation aktualisieren",
+        "description": "Lädt monatlich die Datenbank «IP to Country Lite» von DB-IP (CC BY 4.0) für das Anmeldesignal «neues Land», prüft sie und ersetzt die alte. Täglicher Tick, Download nur bei neuer Monatsausgabe."
       }
     }
   },

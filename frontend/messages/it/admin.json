@@ -263,6 +263,16 @@
         "title": "Invio e-mail",
         "detail": "{state, select, disabled {Non configurato – hocX non invia e-mail} never {Configurato, nessuna e-mail ancora inviata} ok {{lastSuccessAt, select, none {Nessuna e-mail ancora inviata con successo} other {Ultimo invio {lastSuccessAt}}}} other {Non funzionante da {failingSince}: {failures, number} errori consecutivi ({reason, select, connection {server SMTP non raggiungibile} timeout {il server SMTP non risponde} tls {la connessione TLS non riesce} auth {accesso al server SMTP rifiutato} sender_rejected {indirizzo mittente rifiutato} recipient_rejected {indirizzi destinatari rifiutati} message_rejected {e-mail rifiutate} rejected {il server SMTP rifiuta le e-mail} other {altro errore}}) · ultimo errore {lastFailureAt} · {lastSuccessAt, select, none {mai riuscito} other {ultimo successo {lastSuccessAt}}}}}",
         "problem": "Invio e-mail non funzionante"
+      },
+      "password_leak": {
+        "title": "Controllo password trapelate",
+        "detail": "{state, select, hibp {API Range HIBP (k-anonimato) attiva} fallback {HIBP di recente non raggiungibile – elenco locale attivo} local {Solo elenco locale} missing {Né HIBP né elenco locale disponibili} off {Disattivato} other {{unchecked, number} nuove password accettate senza controllo in 24 h}}",
+        "problem": "Nuove password accettate senza controllo delle fughe"
+      },
+      "geoip": {
+        "title": "Geolocalizzazione per paese",
+        "detail": "{state, select, ok {DB-IP «IP to Country Lite», versione del {buildDate} ({ageDays, number} giorni)} other {Non configurata – segnale «nuovo paese» disattivato}}",
+        "problem": "Geolocalizzazione per paese compromessa"
       }
     },
     "problems": {
@@ -615,6 +625,10 @@
       "metrics_rollup": {
         "title": "Aggregazione indicatori",
         "description": "Calcola ogni giorno i conteggi per dashboard e analisi (mandanti, utenti attivi, accessi, errori, spazio, utilizzo per modulo). La prima esecuzione recupera 90 giorni."
+      },
+      "geoip_update": {
+        "title": "Aggiorna la geolocalizzazione per paese",
+        "description": "Scarica ogni mese il database «IP to Country Lite» di DB-IP (CC BY 4.0) per il segnale di accesso «nuovo paese», lo verifica e sostituisce il precedente. Esecuzione giornaliera, download solo se esiste una nuova edizione mensile."
       }
     }
   },

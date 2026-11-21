@@ -7,7 +7,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useAdminResource } from "@/components/admin/security/use-admin-resource";
 import type { AuthPolicy } from "@/types/admin-security";
 
-const GROUPS = ["sessions", "limits", "blocks", "risk", "step_up", "alerts", "retention"] as const;
+const GROUPS = ["sessions", "limits", "blocks", "risk", "step_up", "alerts", "retention", "passwords"] as const;
 
 /** Wirksame Anmeldeschutz-Einstellungen, nur Anzeige. Der technische Name ist bewusst sichtbar: er ist
  * der Schlüssel in der Server-Konfiguration (Umgebungsvariable in Grossbuchstaben). */

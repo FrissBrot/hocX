@@ -47,6 +47,21 @@ zweimal das neue (mindestens 12 Zeichen) eingeben.
 Du bleibst auf dem aktuellen Gerät angemeldet; alle anderen Sitzungen (zum Beispiel auf dem
 Handy) werden beendet. Du bekommst einen Sicherheitshinweis per E-Mail.
 
+## Passwortregel {#passwortregel}
+
+Ein neues Passwort braucht mindestens 12 Zeichen und darf nicht leicht zu erraten sein (kein Name,
+keine E-Mail-Adresse, keine häufigen Wörter). Zusätzlich lehnt hocX Passwörter ab, die aus einem
+bekannten **Datenleck** stammen («Dieses Passwort ist aus einem Datenleck bekannt»), auch wenn sie
+sonst stark aussehen – solche Passwörter probieren Angreifer zuerst. Wähle dann ein anderes, am besten
+eine Passphrase aus mehreren Wörtern oder ein Passwort aus einem Passwort-Manager.
+
+**Datenschutz:** Dein Passwort verlässt den Server nie. hocX berechnet einen Hash (SHA-1) und schickt
+nur dessen **erste 5 Zeichen** an den Dienst «Have I Been Pwned» (Pwned Passwords, k-Anonymität). Der
+Dienst antwortet mit allen bekannten Einträgen, die so beginnen, ergänzt um Fülleinträge; verglichen
+wird nur auf dem Server. Ist der Dienst nicht erreichbar, prüft hocX gegen eine Liste häufiger
+geleakter Passwörter, die auf dem Server liegt. Geprüft wird nur beim Festlegen eines neuen
+Passworts, nicht bei jeder Anmeldung.
+
 ## Zweiter Faktor (MFA) {#mfa}
 
 Ein zweiter Faktor schützt dein Konto, auch wenn jemand dein Passwort kennt. Pflicht ist er, wenn
@@ -86,6 +101,22 @@ Alle Sitzungen eines Kontos enden sofort, wenn
 - die Verwaltung das Konto auf **Inaktiv** setzt oder den **Login entzieht**.
 
 Rechteänderungen (andere Rollen) wirken sofort, ohne neue Anmeldung.
+
+## Angemeldete Geräte und Land {#geraete}
+
+Unter **Profil** → **Sicherheit** → **Angemeldete Geräte** siehst du deine aktiven Sitzungen und
+bekannten Geräte mit grober Gerätebeschreibung («Firefox · Windows») und – falls eingerichtet – dem
+**Land** der Anmeldung. Hinweis-Mails zu einer Anmeldung von einem neuen Gerät oder mit erhöhtem
+Risiko nennen ebenfalls das Land.
+
+**Datenschutz:** Das Land ermittelt der Server selbst aus der IP-Adresse, mit der Datenbank
+«IP to Country Lite» von [DB-IP.com](https://db-ip.com) (Lizenz CC BY 4.0), die auf dem Server liegt –
+es geht keine Anfrage an einen fremden Dienst. Gespeichert wird nur das Land, nie die IP-Adresse, und
+nur so lange wie die übrigen Anmeldeereignisse (90 Tage) bzw. die Sitzung oder das Gerät. Zweck ist
+allein die Sicherheit deines Kontos (berechtigtes Interesse): Eine erfolgreiche Anmeldung aus einem
+Land, aus dem du dich in den letzten 90 Tagen nie angemeldet hast, erhöht die Risikobewertung leicht.
+Allein führt das nie zu einer Sperre; zusammen mit anderen Auffälligkeiten (neues Gerät, neues Netz)
+kann hocX einen zweiten Faktor oder einen Bestätigungscode per E-Mail verlangen.
 
 ## Eigene Daten herunterladen {#daten}
 

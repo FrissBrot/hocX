@@ -150,7 +150,8 @@
     "auth_temporarily_unavailable": "Sign-in temporarily unavailable. Please try again in a few minutes.",
     "rate_limiter_unavailable": "Sign-in protection is briefly unavailable. Please try again shortly.",
     "mfa_locked": "Too many wrong codes. Please wait a minute and try again.",
-    "auth_email_unavailable": "Sign-in is currently not possible. Please contact your administrator."
+    "auth_email_unavailable": "Sign-in is currently not possible. Please contact your administrator.",
+    "password_leaked": "This password is known from a data breach and therefore unsafe. Please choose a different one."
   },
   "grace": {
     "title": "Second factor becomes mandatory",
@@ -205,6 +206,8 @@
     "knownEmpty": "No known devices.",
     "forget": "Forget",
     "forgetConfirm": "Forget this device? Its sessions will be ended.",
-    "forgotten": "Device forgotten."
+    "forgotten": "Device forgotten.",
+    "country": "Country: {country}",
+    "countrySource": "The country is determined on the server using <link>“IP to Country Lite” by DB-IP.com</link> (CC BY 4.0). Only the country is stored, never the IP address."
   }
 }

@@ -2282,6 +2282,9 @@ input[type="color"]::-moz-color-swatch {
   line-height: 1.5;
 }
 
+/* «Angemeldete Geräte»: Land der Anmeldung unter dem Gerätenamen (sessions-panel.tsx) */
+.sessions-country { display: block; }
+
 .info-note {
   padding: var(--space-4) var(--space-4);
   border-radius: var(--radius-xl);

@@ -49,7 +49,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 5001 hocx-storage \
-    && useradd --create-home --uid 5000 --gid 5001 hocx
+    && useradd --create-home --uid 5000 --gid 5001 hocx \
+    && install -d -m 2770 -o hocx -g hocx-storage /var/lib/hocx/geoip
+# /var/lib/hocx/geoip: Mountpunkt des Volumes geoip_data (DB-IP-Länderdatenbank, app/core/geoip.py).
+# Docker übernimmt Besitzer und Rechte dieses Verzeichnisses beim ersten Anlegen des Volumes - so
+# kann der job-worker (uid 5000) dort schreiben, ohne dass deploy.sh Rechte setzen muss.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -81,7 +81,8 @@
       "network": "Netz",
       "risk": "Risiko",
       "client": "Gerät",
-      "actions": "Aktionen"
+      "actions": "Aktionen",
+      "country": "Land"
     },
     "actorKinds": {
       "user": "Benutzer",
@@ -94,7 +95,24 @@
     "next": "Ältere",
     "pageInfo": "Einträge {from, number}–{to, number}",
     "resolve": "Konto anzeigen",
-    "resolveConfirm": "Das Pseudonym dieses Ereignisses einem Konto zuordnen? Die Zuordnung braucht eine Passkey-Bestätigung und wird im Audit-Log festgehalten."
+    "resolveConfirm": "Das Pseudonym dieses Ereignisses einem Konto zuordnen? Die Zuordnung braucht eine Passkey-Bestätigung und wird im Audit-Log festgehalten.",
+    "countrySource": "Länderangaben: <link>«IP to Country Lite» von DB-IP.com</link> (CC BY 4.0), lokal ermittelt, ohne gespeicherte IP-Adresse.",
+    "reasons": {
+      "account_failures": "viele Fehlversuche (Konto)",
+      "source_failures": "Fehlversuche der Quelle",
+      "spraying": "Spraying (viele Konten)",
+      "distributed_attempts": "Versuche aus vielen Netzen",
+      "mfa_failures": "falsche Codes",
+      "invalid_tokens": "ungültige Tickets/Links",
+      "reset_requests": "viele Passwort-Anfragen",
+      "new_device": "neues Gerät",
+      "new_network": "neues Netz",
+      "new_country": "neues Land",
+      "unusual_hour": "ungewöhnliche Uhrzeit",
+      "privileged_account": "Konto mit Verwaltungsrechten",
+      "attack_mode": "Angriffsmodus",
+      "degraded": "Notbetrieb (ohne Redis)"
+    }
   },
   "blocks": {
     "title": "Sperren",
@@ -186,7 +204,8 @@
       "risk": "Risikobewertung",
       "step_up": "Bestätigung (Step-up)",
       "alerts": "Alarmregeln",
-      "retention": "Aufbewahrung"
+      "retention": "Aufbewahrung",
+      "passwords": "Passwörter und Geolocation"
     }
   },
   "export": {

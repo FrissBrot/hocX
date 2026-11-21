@@ -95,3 +95,5 @@
 .admin-alert-acknowledged td {
   color: var(--muted);
 }
+/* Ereignisse: Risikogründe unter dem Wert (Codes aus auth_event.risk_reasons, übersetzt) */
+.admin-security-reasons { display: block; }

@@ -3026,6 +3026,8 @@ export type SessionDevice = {
   last_seen_at: string;
   mfa: boolean;
   via_bridge: boolean;
+  /** Ländercode (ISO 3166-1 alpha-2) aus der lokalen GeoIP-Datenbank, nie die IP */
+  country?: string | null;
 };
 
 export type SessionDeviceList = {
@@ -3039,4 +3041,5 @@ export type KnownDevice = {
   created_at: string;
   last_seen_at: string;
   current: boolean;
+  country?: string | null;
 };

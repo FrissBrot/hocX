@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { stepUpFetch } from "@/lib/admin-step-up";
+import { COUNTRY_SOURCE_URL, countryName } from "@/lib/utils/country";
 import { formatDateTime } from "@/lib/utils/format";
 import type { AuthEventRow, AuthOutcome, ResolvedSubject } from "@/types/admin-security";
 
@@ -116,7 +117,7 @@ export function SecurityEvents() {
       <DataTable
         columns={[
           t("events.columns.time"), t("events.columns.type"), t("events.columns.outcome"), t("events.columns.actor"),
-          t("events.columns.tenant"), t("events.columns.subject"), t("events.columns.network"), t("events.columns.risk"), t("events.columns.client"),
+          t("events.columns.tenant"), t("events.columns.subject"), t("events.columns.network"), t("events.columns.country"), t("events.columns.risk"), t("events.columns.client"),
           t("events.columns.actions"),
         ]}
         emptyMessage={events.loading ? undefined : t("events.empty")}
@@ -130,7 +131,15 @@ export function SecurityEvents() {
             <td>{event.tenant_id ?? null}</td>
             <td>{event.subject_hash ? <code>{event.subject_hash}</code> : null}</td>
             <td>{event.src_net_hash ? <code>{event.src_net_hash}</code> : null}</td>
-            <td>{event.risk_score ?? null}</td>
+            <td>{event.src_country ? <span title={event.src_country}>{countryName(event.src_country, locale)}</span> : null}</td>
+            <td>
+              {event.risk_score ?? null}
+              {event.risk_reasons.length > 0 ? (
+                <span className="field-help admin-security-reasons">
+                  {event.risk_reasons.map((reason) => (t.has(`events.reasons.${reason}`) ? t(`events.reasons.${reason}`) : reason)).join(", ")}
+                </span>
+              ) : null}
+            </td>
             <td>{event.user_agent_family ?? null}</td>
             <td>
               {event.subject_hash || event.actor_user_id || event.platform_admin_id ? (
@@ -143,6 +152,13 @@ export function SecurityEvents() {
         ))}
       </DataTable>
       <SubjectModal subject={resolved} onClose={() => setResolved(null)} />
+      {rows.some((event) => event.src_country) ? (
+        <p className="field-help">
+          {t.rich("events.countrySource", {
+            link: (chunks) => <a href={COUNTRY_SOURCE_URL} target="_blank" rel="noopener noreferrer">{chunks}</a>,
+          })}
+        </p>
+      ) : null}
       <div className="admin-security-pager">
         <button type="button" className="button-secondary" disabled={offset === 0} onClick={() => update({ offset: Math.max(0, offset - PAGE_SIZE) })}>
           {t("events.previous")}

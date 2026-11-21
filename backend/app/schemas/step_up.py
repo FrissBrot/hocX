@@ -38,6 +38,8 @@ class SessionDeviceRead(BaseModel):
     mfa: bool
     # Session auf einer Mandanten-Domain, die über die Domain-Bridge aus einer anderen entstand
     via_bridge: bool = False
+    # Ländercode bei der Anmeldung (lokale GeoIP-Datenbank), nie die IP
+    country: str | None = None
 
 
 class SessionListRead(BaseModel):
@@ -57,3 +59,5 @@ class KnownDeviceRead(BaseModel):
     created_at: datetime
     last_seen_at: datetime
     current: bool = False
+    # Land der letzten Anmeldung mit diesem Gerät (Ländercode)
+    country: str | None = None

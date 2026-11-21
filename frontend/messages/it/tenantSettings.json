@@ -532,6 +532,7 @@
       "high": "Alto",
       "critical": "Critico"
     },
-    "loadFailed": "Impossibile caricare i dati."
+    "loadFailed": "Impossibile caricare i dati.",
+    "privacyHint": "Per la sicurezza degli account, hocX salva per ogni accesso l’ora, il dispositivo approssimativo, uno pseudonimo della rete e – se configurato – il paese (determinato localmente con «IP to Country Lite» di DB-IP.com, CC BY 4.0), mai l’indirizzo IP; gli eventi vengono eliminati dopo 90 giorni. Le nuove password vengono verificate in forma anonima rispetto alle fughe di dati note: solo i primi 5 caratteri di un hash vengono inviati a «Have I Been Pwned». Menziona entrambi nell’informativa sulla privacy della tua associazione (interesse legittimo: sicurezza degli account)."
   }
 }

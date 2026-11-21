@@ -77,6 +77,8 @@ POLICY_SETTINGS: dict[str, tuple[str, ...]] = {
                "auth_alert_account_networks", "auth_alert_admin_mfa_failures", "auth_alert_blocks_per_hour", "auth_alert_cross_tenant",
                "auth_alert_redis_memory_ratio"),
     "retention": ("auth_event_retention_days",),
+    # Leak-Prüfung neuer Passwörter (SEC-AUTH-015) und Länder-Geolocation (Signal «neues Land»)
+    "passwords": ("password_leak_check", "password_leak_min_count", "password_leak_timeout_seconds", "geoip_auto_update"),
 }
 
 

@@ -323,33 +323,40 @@ class LoginGuard:
         signals.mfa_failures = self._peek_one(SlidingCounter("mfa-account", str(user_id), WINDOW))
         signals.reset_requests = self._peek_one(SlidingCounter("reset-account", str(user_id), HOUR))
         ctx = request_context.current(result.ip)
-        new_network, unusual_hour = baseline_signals(db, user_id=user_id, net_hash=ctx.net_hash)
+        new_network, unusual_hour, new_country = baseline_signals(db, user_id=user_id, net_hash=ctx.net_hash, country=ctx.country)
         signals.new_network = new_network
         signals.unusual_hour = unusual_hour
+        signals.new_country = new_country
         return risk.assess(signals)
 
 
-def baseline_signals(db: Session, *, user_id: int, net_hash: str | None) -> tuple[bool | None, bool | None]:
-    """«Neues Netz» (Netz in 90 Tagen nie erfolgreich für das Konto) und «ungewöhnliche Uhrzeit»
-    (keine Anmeldung ±1 h in 90 Tagen bei mindestens 10 Anmeldungen) aus ``auth_event``.
-    None = noch keine Baseline (erste Anmeldungen nach dem Update oder neues Konto)."""
+def baseline_signals(
+    db: Session, *, user_id: int, net_hash: str | None, country: str | None = None,
+) -> tuple[bool | None, bool | None, bool | None]:
+    """«Neues Netz» (Netz in 90 Tagen nie erfolgreich für das Konto), «ungewöhnliche Uhrzeit»
+    (keine Anmeldung ±1 h in 90 Tagen bei mindestens 10 Anmeldungen) und «neues Land» (Land in
+    90 Tagen nie bei einer erfolgreichen Anmeldung) aus ``auth_event``.
+    None = noch keine Baseline (erste Anmeldungen nach dem Update oder neues Konto; beim Land:
+    keine frühere Anmeldung mit bekanntem Land, oder das aktuelle Land ist unbekannt)."""
     rows = db.execute(
         text(
-            "SELECT src_net_hash, extract(hour FROM ts AT TIME ZONE 'Europe/Zurich')::int AS hour FROM auth_event "
+            "SELECT src_net_hash, src_country, extract(hour FROM ts AT TIME ZONE 'Europe/Zurich')::int AS hour FROM auth_event "
             "WHERE actor_user_id = :user_id AND event_type = 'login.success' AND outcome = 'success' "
             "AND ts > now() - interval '90 days' ORDER BY ts DESC LIMIT 500"
         ),
         {"user_id": user_id},
     ).all()
     if not rows:
-        return None, None
+        return None, None, None
     new_network = None if not net_hash else net_hash not in {row.src_net_hash for row in rows}
+    known_countries = {row.src_country for row in rows if row.src_country}
+    new_country = None if not country or not known_countries else country not in known_countries
     unusual = None
     if len(rows) >= 10:
         hour = datetime.now(UTC).astimezone(ZoneInfo("Europe/Zurich")).hour
         hours = {row.hour for row in rows}
         unusual = not any(((hour + delta) % 24) in hours for delta in (-1, 0, 1))
-    return new_network, unusual
+    return new_network, unusual, new_country
 
 
 def device_failures(device_hash: str | None) -> int:

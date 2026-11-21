@@ -115,6 +115,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("auth_security_maintenance", "cleanup", 60),
     # Kennzahlen-Rollup (Dashboard/Analysen): tickt stündlich, rechnet nur fehlende Tage.
     _loop("metrics_rollup", "maintenance", 60, service="job-worker"),
+    # Länder-Geolocation (Signal «neues Land»): prüft täglich, lädt die DB-IP-Datei nur, wenn eine
+    # neuere Monatsausgabe da ist (also etwa monatlich). Ein paar Tage Ausfall sind harmlos.
+    _loop("geoip_update", "maintenance", 24 * 60, max_silence_seconds=4 * 24 * 60 * 60, service="job-worker"),
     # Takt kommt aus abgabebox-backend/app/config.py (ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES,
     # Default 30) - das Backend kennt die Einstellung nicht, darum hier mit Reserve.
     JobDefinition(

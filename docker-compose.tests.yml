@@ -115,6 +115,8 @@ services:
       # `tests` profile could only ever pass by pointing at an ad-hoc container
       # started by hand outside the compose file.
       REDIS_URL: redis://test-redis:6379/0
+      # Leak-Prüfung ohne Netz (SEC-AUTH-015): Tests prüfen HIBP nur gemockt
+      PASSWORD_LEAK_CHECK: local-only
       # Objektspeicher-Tests (tests/test_object_storage*.py, test_storage_migration_e2e.py) gegen
       # das isolierte test-s3 - nie gegen produktive Buckets.
       TEST_S3_ENDPOINT: http://test-s3:3900

@@ -263,6 +263,16 @@
         "title": "Email delivery",
         "detail": "{state, select, disabled {Not configured – hocX sends no email} never {Configured, no email sent yet} ok {{lastSuccessAt, select, none {No email sent successfully yet} other {Last sent {lastSuccessAt}}}} other {Failing since {failingSince}: {failures, number} errors in a row ({reason, select, connection {SMTP server unreachable} timeout {SMTP server not responding} tls {TLS connection fails} auth {SMTP login rejected} sender_rejected {sender address rejected} recipient_rejected {recipient addresses rejected} message_rejected {messages rejected} rejected {SMTP server rejects mail} other {other error}}) · last error {lastFailureAt} · {lastSuccessAt, select, none {never successful} other {last success {lastSuccessAt}}}}}",
         "problem": "Email delivery failing"
+      },
+      "password_leak": {
+        "title": "Leaked-password check",
+        "detail": "{state, select, hibp {HIBP range API (k-anonymity) active} fallback {HIBP recently unreachable – local list active} local {Local list only} missing {Neither HIBP nor local list available} off {Disabled} other {{unchecked, number} new passwords accepted unchecked in 24 h}}",
+        "problem": "New passwords accepted without leak check"
+      },
+      "geoip": {
+        "title": "Country geolocation",
+        "detail": "{state, select, ok {DB-IP “IP to Country Lite”, built {buildDate} ({ageDays, number} days)} other {Not set up – “new country” signal disabled}}",
+        "problem": "Country geolocation impaired"
       }
     },
     "problems": {
@@ -615,6 +625,10 @@
       "metrics_rollup": {
         "title": "Metrics rollup",
         "description": "Computes daily counts for the dashboard and analytics (tenants, active users, sign-ins, errors, storage, usage per module). The first run backfills 90 days."
+      },
+      "geoip_update": {
+        "title": "Update country geolocation",
+        "description": "Downloads DB-IP’s “IP to Country Lite” database (CC BY 4.0) monthly for the “new country” login signal, validates it and replaces the old one. Daily tick, download only when a new monthly edition exists."
       }
     }
   },

@@ -150,7 +150,8 @@
     "auth_temporarily_unavailable": "Anmeldung vorübergehend nicht möglich. Bitte in einigen Minuten erneut versuchen.",
     "rate_limiter_unavailable": "Der Anmeldeschutz ist kurz nicht verfügbar. Bitte gleich nochmals versuchen.",
     "mfa_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es erneut.",
-    "auth_email_unavailable": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator."
+    "auth_email_unavailable": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator.",
+    "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
@@ -205,6 +206,8 @@
     "knownEmpty": "Keine bekannten Geräte.",
     "forget": "Vergessen",
     "forgetConfirm": "Dieses Gerät vergessen? Seine Sitzungen werden beendet.",
-    "forgotten": "Gerät vergessen."
+    "forgotten": "Gerät vergessen.",
+    "country": "Land: {country}",
+    "countrySource": "Das Land wird auf dem Server mit <link>«IP to Country Lite» von DB-IP.com</link> (CC BY 4.0) ermittelt. Gespeichert wird nur das Land, nie die IP-Adresse."
   }
 }

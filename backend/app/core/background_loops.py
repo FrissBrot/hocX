@@ -74,6 +74,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "auth_security_maintenance": 202600036,
     # Admin-Redesign Phase D: täglicher Kennzahlen-Rollup (Migration 0208_platform_metrics).
     "metrics_rollup": 202600037,
+    # Länder-Geolocation: DB-IP-Datenbank laden/aktualisieren (app/core/geoip.py, Migration 0215).
+    # 202600045 statt der nächsten freien ID: 038-044 bleiben für parallel entwickelte Jobs frei.
+    "geoip_update": 202600045,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

@@ -580,6 +580,39 @@ def _check_orphaned_files(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
 
 
+def _check_password_leak() -> HealthCheckRead:
+    """Leak-Prüfung neuer Passwörter (SEC-AUTH-015, app/core/password_leak.py). Warnung nur, wenn
+    in 24 h ein Passwort ungeprüft angenommen werden musste (weder HIBP noch lokale Liste); ein
+    HIBP-Ausfall mit lokaler Liste ist kein Problem. Abgeschaltet = grau, kein Alarm."""
+    from app.core import password_leak
+
+    info = password_leak.status()
+    if info["mode"] == "off":
+        return HealthCheckRead(key="password_leak", status="unknown", params={"state": "off", "unchecked": 0})
+    if info["unchecked_24h"]:
+        return HealthCheckRead(key="password_leak", status="warning", params={"state": "unchecked", "unchecked": info["unchecked_24h"]})
+    if info["mode"] == "local-only":
+        state = "local" if info["local_list"] else "missing"
+    elif (info["last_failure"] or 0) > (info["last_success"] or 0):
+        state = "fallback" if info["local_list"] else "missing"
+    else:
+        state = "hibp"
+    return HealthCheckRead(key="password_leak", status="warning" if state == "missing" else "ok", params={"state": state, "unchecked": 0})
+
+
+def _check_geoip() -> HealthCheckRead:
+    """Länder-Geolocation (Signal «neues Land»). Fehlt die Datenbank, ist das kein Alarm: das Signal
+    entfällt still, die Seite zeigt «nicht eingerichtet» (Status unknown ohne Fehler)."""
+    from app.core import geoip
+
+    info = geoip.status()
+    if not info["available"]:
+        return HealthCheckRead(key="geoip", status="unknown", params={"state": "not_configured", "ageDays": 0, "buildDate": ""})
+    return HealthCheckRead(
+        key="geoip", status="ok", params={"state": "ok", "ageDays": info.get("age_days", 0), "buildDate": info.get("build_date", "")},
+    )
+
+
 def _check_captcha_endpoint() -> HealthCheckRead:
     """Friendly Captcha der Abgabebox: EU-Endpunkt (Verarbeitung in der EU) oder globaler Endpunkt.
     Nur ein Hinweis - beides funktioniert, der EU-Endpunkt setzt einen passenden Plan voraus."""
@@ -892,6 +925,9 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("admin_passkeys", lambda: _check_admin_passkeys(db), failure_status="unknown", db=db)
     checks += _run_check("auth_protection", lambda: _check_auth_protection(db), failure_status="unknown", db=db)
+    # Lokale Prüfungen ohne Netz (Status aus Redis bzw. Datei): Ausfall = Bug, kein Alarm
+    checks += _run_check("password_leak", _check_password_leak, failure_status="unknown", db=db)
+    checks += _run_check("geoip", _check_geoip, failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)

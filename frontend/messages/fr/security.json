@@ -150,7 +150,8 @@
     "auth_temporarily_unavailable": "Connexion temporairement impossible. Réessaie dans quelques minutes.",
     "rate_limiter_unavailable": "La protection des connexions est brièvement indisponible. Réessaie tout de suite.",
     "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie.",
-    "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur."
+    "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur.",
+    "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",
@@ -205,6 +206,8 @@
     "knownEmpty": "Aucun appareil connu.",
     "forget": "Oublier",
     "forgetConfirm": "Oublier cet appareil ? Ses sessions seront terminées.",
-    "forgotten": "Appareil oublié."
+    "forgotten": "Appareil oublié.",
+    "country": "Pays : {country}",
+    "countrySource": "Le pays est déterminé sur le serveur avec <link>« IP to Country Lite » de DB-IP.com</link> (CC BY 4.0). Seul le pays est enregistré, jamais l’adresse IP."
   }
 }

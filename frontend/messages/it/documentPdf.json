@@ -772,8 +772,11 @@
         "invalid_tokens": "link di accesso non validi",
         "reset_requests": "molte richieste di password",
         "privileged_account": "account con diritti amministrativi",
-        "attack_mode": "attacco in corso alla piattaforma"
-      }
+        "attack_mode": "attacco in corso alla piattaforma",
+        "new_country": "nuovo paese"
+      },
+      "country": "Paese: {country}",
+      "countrySource": "Paese: «IP to Country Lite» di DB-IP.com (CC BY 4.0), determinato localmente."
     },
     "loginCode": {
       "subject": "{code} è il tuo codice di conferma per {tenant}",

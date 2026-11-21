@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.core import geoip
 from app.core.audit_context import current_client_ip, current_request_meta
 from app.core.auth_pseudonym import net_hash, rotating_source_hash, source_address
 
@@ -59,6 +60,8 @@ class RequestContext:
     host: str | None
     host_kind: str | None
     endpoint: str | None
+    # Ländercode (app/core/geoip.py, lokal), None ohne GeoIP-Datenbank oder bei privater Adresse
+    country: str | None = None
 
 
 def current(ip: str | None = None) -> RequestContext:
@@ -75,4 +78,5 @@ def current(ip: str | None = None) -> RequestContext:
         host=host,
         host_kind=host_kind(host),
         endpoint=meta.get("path"),
+        country=geoip.country_for(address),
     )

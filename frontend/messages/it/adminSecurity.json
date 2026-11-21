@@ -81,7 +81,8 @@
       "network": "Rete",
       "risk": "Rischio",
       "client": "Dispositivo",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "country": "Paese"
     },
     "actorKinds": {
       "user": "Utente",
@@ -94,7 +95,24 @@
     "next": "Meno recenti",
     "pageInfo": "Voci {from, number}–{to, number}",
     "resolve": "Mostra account",
-    "resolveConfirm": "Associare lo pseudonimo di questo evento a un account? Richiede una conferma con passkey e viene registrato nel registro di audit."
+    "resolveConfirm": "Associare lo pseudonimo di questo evento a un account? Richiede una conferma con passkey e viene registrato nel registro di audit.",
+    "countrySource": "Paesi: <link>«IP to Country Lite» di DB-IP.com</link> (CC BY 4.0), determinati localmente, senza indirizzo IP salvato.",
+    "reasons": {
+      "account_failures": "molti tentativi falliti (account)",
+      "source_failures": "tentativi falliti dalla fonte",
+      "spraying": "spraying (molti account)",
+      "distributed_attempts": "tentativi da molte reti",
+      "mfa_failures": "codici errati",
+      "invalid_tokens": "ticket/link non validi",
+      "reset_requests": "molte richieste di password",
+      "new_device": "nuovo dispositivo",
+      "new_network": "nuova rete",
+      "new_country": "nuovo paese",
+      "unusual_hour": "orario insolito",
+      "privileged_account": "account con privilegi",
+      "attack_mode": "modalità attacco",
+      "degraded": "modalità ridotta (senza Redis)"
+    }
   },
   "blocks": {
     "title": "Blocchi",
@@ -186,7 +204,8 @@
       "risk": "Valutazione del rischio",
       "step_up": "Conferma (step-up)",
       "alerts": "Regole di allarme",
-      "retention": "Conservazione"
+      "retention": "Conservazione",
+      "passwords": "Password e geolocalizzazione"
     }
   },
   "export": {

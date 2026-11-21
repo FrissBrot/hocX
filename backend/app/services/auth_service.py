@@ -328,6 +328,7 @@ class AuthService:
         record = session_register.create(
             db, user_id=user.id, tenant_id=user.tenant_id, mfa=bridge.mfa_verified, amr=["bridge"], parent_id=parent.id if parent else None,
             device_id=parent.device_id if parent else None, host=request_host, ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family,
+            country=ctx.country,
             # Ende der Eltern-Session, nie verlängert; v3-Altlast: wie die bisherigen Tokens
             expires_at=parent.expires_at if parent else datetime.now(timezone.utc) + timedelta(hours=settings.auth_session_ttl_hours),
         )
@@ -543,21 +544,23 @@ class AuthService:
             AuthKnownDevice.user_id == user.id, AuthKnownDevice.revoked_at.is_(None),
             AuthKnownDevice.device_hash != devices.device_hash(device_id),
         ))))
-        device, _created = devices.remember(db, user_id=user.id, tenant_id=user.tenant_id, device_id=device_id, user_agent_family=ctx.user_agent_family)
+        device, _created = devices.remember(
+            db, user_id=user.id, tenant_id=user.tenant_id, device_id=device_id, user_agent_family=ctx.user_agent_family, country=ctx.country,
+        )
         record = session_register.create(
             db, user_id=user.id, tenant_id=user.tenant_id, mfa=mfa_verified, amr=amr or ["pwd"], device_id=device.id,
-            host=request_host, ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family,
+            host=request_host, ip_net_hash=ctx.net_hash, user_agent_family=ctx.user_agent_family, country=ctx.country,
         )
         level = risk_context.get("level")
         reasons = list(risk_context.get("reasons") or [])
         # Hinweis «neues Gerät» erst, wenn das Konto schon andere Geräte kennt - sonst bekäme nach
         # dem Update jede Person bei der ersten Anmeldung eine Mail.
         if not known_before and had_other_devices and not first_login:
-            notify.new_device(db, user, device_hash=device.device_hash, device=ctx.user_agent_family)
+            notify.new_device(db, user, device_hash=device.device_hash, device=ctx.user_agent_family, country=ctx.country)
         if level in (risk.HIGH, risk.CRITICAL):
-            notify.suspicious_login(db, user, net_hash=ctx.net_hash, device=ctx.user_agent_family, reasons=reasons)
+            notify.suspicious_login(db, user, net_hash=ctx.net_hash, device=ctx.user_agent_family, reasons=reasons, country=ctx.country)
         if pop_locked(user.id):
-            notify.login_after_lockout(db, user, device=ctx.user_agent_family)
+            notify.login_after_lockout(db, user, device=ctx.user_agent_family, country=ctx.country)
         db.commit()
         if response is not None:
             devices.set_cookie(response, device_id)

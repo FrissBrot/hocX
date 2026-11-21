@@ -52,6 +52,33 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
   Fehler, Fehler in Folge, Fehlerklasse) mit ntfy-Alarm `email:smtp:<grund>`; nicht eingerichteter
   Versand erscheint ruhig als eigener Zustand. Versandfehler landen gedrosselt im Fehlerprotokoll
   (ohne Empfängeradressen).
+### Update
+
+- Migration `0215_auth_geo_country` (drei nullable Spalten mit Ländercode: `auth_event.src_country`,
+  `auth_session.country`, `auth_known_device.last_country`).
+- Neues Volume `geoip_data` (job-worker schreibt, Backend liest) für die DB-IP-Länderdatenbank; der Job
+  `geoip_update` lädt sie beim ersten Tick. Ausgehend braucht der job-worker HTTPS zu
+  `download.db-ip.com`, das Backend zu `api.pwnedpasswords.com`. Ohne Internet:
+  `PASSWORD_LEAK_CHECK=local-only` und `GEOIP_AUTO_UPDATE=false` (RUNBOOK Abschnitt 23).
+- Neue Einstellungen (kein Secret): `PASSWORD_LEAK_CHECK` (`on`/`local-only`/`off`),
+  `PASSWORD_LEAK_MIN_COUNT`, `GEOIP_AUTO_UPDATE`. Neue Abhängigkeit `maxminddb==3.2.0` (Apache-2.0).
+
+### Sicherheit
+
+- **Geleakte Passwörter werden abgelehnt (SEC-AUTH-015):** alle Setzpfade (Einladung, Passwort
+  vergessen, Profil, Verwaltung, Plattform-Admin-Konten) prüfen nach der Stärkeregel gegen die
+  Pwned-Passwords-Range-API (k-Anonymität: nur 5 Hex-Zeichen des SHA-1, mit Padding), Rückfall auf
+  eine lokale Liste (SecLists, MIT). Eigene Meldung «Dieses Passwort ist aus einem Datenleck bekannt»
+  in allen Sprachen. Plattform-Admin-Konten bekommen dabei dieselbe Stärkeregel wie Konten.
+- **Risikosignal «neues Land»:** Land der Anmeldung lokal aus DB-IP «IP to Country Lite» (CC BY 4.0);
+  Land in 90 Tagen erfolgreicher Anmeldungen nie gesehen → 10 Punkte, allein nie entscheidend, ohne
+  Baseline kein Signal. Gespeichert wird nur der Ländercode, nie die IP.
+
+### Neu
+
+- «Angemeldete Geräte», Mails «neues Gerät»/Sicherheitswarnung und die Ereignisliste im Admin-Panel
+  zeigen das Land (übersetzter Name, Quellenangabe DB-IP); die Ereignisliste zeigt zusätzlich die
+  Risikogründe. Systemmonitor: Checks `password_leak` und `geoip` («nicht eingerichtet» ohne Alarm).
 
 ## [1.5.0] - 2026-11-21
 
