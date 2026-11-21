@@ -310,6 +310,14 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
         </div>
       </div>
 
+      {hasNoTodos && personal ? (
+        // Ohne eigene Pendenzen bleibt auf «Meine Aufgaben» der Schalter, sonst führt kein Weg zu «Alle».
+        <div className="list-filter-row todo-v2-filters">
+          <div className="table-toolbar-actions">
+            <FilterTabs options={scopeOptions} value="my" onChange={(value) => value === "all" && router.push("/todos")} />
+          </div>
+        </div>
+      ) : null}
       {hasNoTodos ? null : (
       <div className="list-filter-row todo-v2-filters">
         <div className="table-toolbar-actions">
