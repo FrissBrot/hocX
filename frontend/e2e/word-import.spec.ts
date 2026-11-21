@@ -184,11 +184,6 @@ test.describe("Word import testbook", () => {
     await page.getByPlaceholder("dd.mm.yyyy").press("Tab");
     const rescanned = page.waitForResponse((r) => r.url().endsWith(`/documents/${document.id}/reanalyze`));
     await page.getByRole("button", { name: "Übernehmen & neu scannen" }).click();
-    // Im Dev-Server (React StrictMode: Effekte laufen doppelt) hält der Wizard den frisch geladenen
-    // Stand manchmal für Prüffortschritt und fragt nach - dann bestätigen (offener Punkt,
-    // word-import-wizard.tsx hasReviewProgressRef).
-    const confirmDialog = page.getByRole("alertdialog");
-    await confirmDialog.getByRole("button", { name: "Neu analysieren" }).click({ timeout: 3_000 }).catch(() => undefined);
     expect((await rescanned).ok()).toBeTruthy();
     await expect(page.getByRole("button", { name: "01.08.2024", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Weiter zu den Daten/ }).click();
