@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -33,6 +34,35 @@ class State:
     uploads_blocked: bool = False
     estimated_end_at: datetime | None = None
     loaded_at: float = 0.0
+    # Update statt Wartung (nur das Deploy-Fenster sperrt, Migration 0212) - nur für die Anzeige.
+    update_active: bool = False
+    from_version: str | None = None
+    to_version: str | None = None
+    started_at: datetime | None = None
+
+
+# Wie backend maintenance_service.clean_version: nur kurze, harmlose Versionskennungen.
+_VERSION_RE = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")
+
+
+def _clean_version(value: object) -> str | None:
+    return value if isinstance(value, str) and _VERSION_RE.fullmatch(value) else None
+
+
+def _load_update_info(conn) -> dict:
+    """Nur während voller Wartung abgefragt. Fehlt die Funktion (Release vor Migration 0212 bzw.
+    während des Updates, das sie anlegt), gilt «Wartung» - bewusst nur protokolliert (reine
+    Anzeige, der Sperrzustand selbst hängt nicht daran)."""
+    try:
+        with conn.begin_nested():
+            row = conn.execute(text("SELECT * FROM maintenance_public_update()")).one()._mapping
+    except Exception:  # noqa: BLE001 - Best Effort für die Anzeige, siehe Docstring
+        _logger.info("Update-Status nicht ladbar - Anzeige «Wartung»", exc_info=True)
+        return {}
+    if not row["update_active"]:
+        return {}
+    return {"update_active": True, "from_version": _clean_version(row["from_version"]),
+            "to_version": _clean_version(row["to_version"]), "started_at": row["started_at"]}
 
 
 _lock = threading.Lock()
@@ -63,7 +93,9 @@ def current_state() -> State:
     try:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT * FROM maintenance_effective_state()")).one()._mapping
-        state = State(bool(row["full_active"]), bool(row["writes_blocked"]), bool(row["uploads_blocked"]), row["estimated_end_at"], time.monotonic())
+            update = _load_update_info(conn) if row["full_active"] else {}
+        state = State(bool(row["full_active"]), bool(row["writes_blocked"]), bool(row["uploads_blocked"]), row["estimated_end_at"],
+                      time.monotonic(), **update)
     except Exception:
         _logger.warning("Wartungszustand nicht ladbar - letzter Stand gilt", exc_info=True)
         with _lock:

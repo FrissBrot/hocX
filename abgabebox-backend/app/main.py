@@ -277,10 +277,16 @@ app.include_router(verify.router, prefix="/api", tags=["verify"])
 
 @app.get("/api/public/maintenance-status")
 def maintenance_status() -> JSONResponse:
-    """Minimaler Status für die Abgabebox-Seite: gesperrt ja/nein und voraussichtliches Ende."""
+    """Minimaler Status für die Abgabebox-Seite: gesperrt ja/nein, Art (Update/Wartung), beim
+    Update die öffentlichen Versionen und der Beginn, voraussichtliches Ende."""
     state = current_state()
+    update = state.full_active and state.update_active
     return JSONResponse(
         {"active": state.full_active, "uploads_blocked": state.full_active or state.writes_blocked or state.uploads_blocked,
+         "kind": ("update" if update else "maintenance") if (state.full_active or state.writes_blocked or state.uploads_blocked) else None,
+         "from_version": state.from_version if update else None,
+         "to_version": state.to_version if update else None,
+         "started_at": state.started_at.isoformat() if update and state.started_at else None,
          "estimated_end_at": state.estimated_end_at.isoformat() if state.estimated_end_at else None},
         headers={"Cache-Control": "no-store, max-age=0"},
     )

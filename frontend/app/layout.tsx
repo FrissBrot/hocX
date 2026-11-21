@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
+import { cleanStatusPageUrl } from "@/lib/status-page-url";
 import { ClientMessagesBridge } from "@/components/i18n/client-messages-bridge";
 import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
 import { isMobileUserAgent } from "@/lib/utils/viewport";
@@ -57,6 +58,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const runtimeConfig = {
     mainAppDomain: process.env.TRAEFIK_DOMAIN || null,
     docsDomain: process.env.TRAEFIK_DOCS_DOMAIN || null,
+    statusPageUrl: cleanStatusPageUrl(process.env.HOCX_STATUS_PAGE_URL),
     ...getServerVersion()
   };
 

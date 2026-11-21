@@ -1,7 +1,7 @@
 {
   "title": "hocX è in manutenzione",
   "reasons": {
-    "manual": "Stiamo eseguendo interventi di manutenzione necessari per garantire la stabilità e la sicurezza della piattaforma.",
+    "manual": "Stiamo eseguendo lavori di manutenzione necessari affinché hocX resti stabile e sicuro.",
     "storage_initial_migration": "Stiamo trasferendo tutti i file in un nuovo archivio più sicuro. Durante questo periodo hocX non è disponibile.",
     "storage_cutover": "Stiamo completando un cambio di archivio. Ci vorrà solo un momento.",
     "backup_restore": "Stiamo ripristinando hocX da un backup. Durante questo tempo hocX non è disponibile.",
@@ -30,5 +30,31 @@
     "whenRange": "{start} – ca. {end}"
   },
   "ended": "La manutenzione è terminata. Reindirizzamento …",
-  "checking": "Verifica dello stato di manutenzione …"
+  "checking": "Verifica dello stato di manutenzione …",
+  "screen": {
+    "pill": "Manutenzione in corso",
+    "etaLabel": "Ritorno previsto",
+    "etaTime": "<clock>{time}</clock>",
+    "etaUnknown": "Ancora nessun orario preciso",
+    "etaOverdue": "Più lungo del previsto",
+    "remainingRange": "ancora {low}–{high} min",
+    "remainingAbout": "ancora circa {count} min",
+    "remainingHours": "ancora {low}–{high} h",
+    "progressLabel": "Avanzamento della manutenzione",
+    "autoCheck": "La pagina verifica automaticamente e mostra l'accesso non appena hocX è di nuovo pronto.",
+    "countdown": "tra {seconds} s",
+    "countdownNow": "ora"
+  },
+  "update": {
+    "title": "hocX è in fase di aggiornamento",
+    "message": "hocX sarà di nuovo disponibile tra pochi minuti. I tuoi dati sono al sicuro.",
+    "slowTitle": "L'aggiornamento richiede più tempo",
+    "slowMessage": "L'aggiornamento richiede più tempo del solito. I tuoi dati sono al sicuro, la pagina continua a riprovare.",
+    "statusPage": "Se dura più di 15 minuti, consulta <link>la pagina di stato</link>.",
+    "reload": "Ricarica ora",
+    "checking": "Verifica …",
+    "autoReload": "Si ricarica automaticamente non appena hocX è pronto.",
+    "versions": "Aggiornamento da {from} a {to}",
+    "version": "Versione {version}"
+  }
 }

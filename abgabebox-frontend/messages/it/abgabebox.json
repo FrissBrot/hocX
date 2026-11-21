@@ -240,6 +240,11 @@
     "uploadsTitle": "Il caricamento è temporaneamente bloccato",
     "uploadsMessage": "A causa della manutenzione, al momento non è possibile accettare file. Di solito ci vogliono solo pochi minuti.",
     "availableAt": "Di nuovo disponibile verso le {time}",
-    "estimating": "La durata prevista è in fase di calcolo."
+    "estimating": "La durata prevista è in fase di calcolo.",
+    "updateTitle": "La casella di consegna è in fase di aggiornamento",
+    "updateMessage": "Le consegne saranno di nuovo possibili tra pochi minuti. I file già consegnati sono al sicuro.",
+    "updateSlowTitle": "L'aggiornamento richiede più tempo",
+    "updateSlowMessage": "L'aggiornamento richiede più tempo del solito. I file consegnati sono al sicuro, la pagina continua a verificare.",
+    "updateHint": "La pagina verifica automaticamente se le consegne sono di nuovo possibili."
   }
 }

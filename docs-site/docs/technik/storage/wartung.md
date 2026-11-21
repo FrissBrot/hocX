@@ -71,7 +71,9 @@ zählt nur die Unterbrechung.
 
 `GET /api/public/maintenance-status` (`Cache-Control: no-store`): aktiv, teilweise, Sperrumfang,
 Grund-Code, Meldungen, betroffene Bereiche, Beginn, Schätzstatus, geschätztes Ende, gerundete
-Restspanne, Ankündigungen, Zeitstempel. Keine Job-IDs, Profil-/Bucket-Namen oder Fehlertexte.
+Restspanne, Ankündigungen, Zeitstempel. Dazu `kind`: `update`, wenn ausschliesslich das
+Deploy-Fenster sperrt (die Seite zeigt dann die Update-Meldung mit `from_version` → `to_version`),
+sonst `maintenance`. Keine Job-IDs, Profil-/Bucket-Namen oder Fehlertexte.
 
 ## Verwaltung (System → Wartung)
 

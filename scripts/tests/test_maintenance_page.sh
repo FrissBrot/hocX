@@ -174,7 +174,15 @@ script = re.search(r"<script>(.*?)</script>", html, re.S).group(1)
 digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
 assert f"'sha256-{digest}'" in conf, f"CSP-Hash in nginx.conf veraltet, richtig: 'sha256-{digest}'"
 assert "unsafe-inline" not in conf.split("script-src", 1)[1].split(";", 1)[0]
-assert html.count("<script") == 1, "nur ein Inline-Skript (CSP-Hash)"
+# Genau ein ausführbares Inline-Skript (CSP-Hash) und der Datenblock der Update-Info (wird nie
+# ausgeführt, braucht keinen Hash).
+assert html.count("<script>") == 1, "nur ein Inline-Skript (CSP-Hash)"
+assert html.count("<script") == 2 and '<script type="application/json" id="maintenance-info"><!--# include virtual="/update-info.json" stub="no_info" --></script>' in html
+assert '<!--# block name="no_info" -->{}<!--# endblock -->' in html
+info = conf.split("location = /update-info.json", 1)[1].split("}", 1)[0]
+assert "internal;" in info, "update-info.json nur per SSI"
+# Update-Info: nur geprüfte Werte, Link nur per DOM (kein innerHTML).
+assert "innerHTML" not in script and "VERSION_RE.test" in script and "STATUS_URL_RE.test" in script
 # Keine externen Ressourcen, keine Cookies.
 assert not re.search(r"(src|href)=\"(https?:)?//", html), "externe Ressource"
 assert "@import" not in html and "url(" not in html.split("<!--# include")[0]
@@ -191,13 +199,15 @@ assert isinstance(api["detail"], str) and api["detail"]
 locales = list(json.load(open("i18n/locales.json"))["locales"])
 default = json.load(open("i18n/locales.json"))["defaultLocale"]
 literal = re.search(r"var TEXTS = (\{.*?\n  \});", script, re.S).group(1)
-texts = json.loads(re.sub(r"(?m)^(\s*)([a-z]+):", r'\1"\2":', literal))
+texts = json.loads(re.sub(r"(?m)^(\s*)([A-Za-z]+):", r'\1"\2":', literal))
 assert sorted(texts) == sorted(locales), f"Sprachen der Wartungsseite {sorted(texts)} != i18n/locales.json {sorted(locales)}"
 for locale, entry in texts.items():
-    assert entry.get("reload"), locale
+    for key in ("reload", "checking", "statusBefore", "statusLink", "statusAfter", "copyright"):
+        assert isinstance(entry.get(key), str) and entry[key].strip(), (locale, key)
+    assert "{year}" in entry["copyright"], locale
     for variant in ("hocx", "abgabebox"):
         keys = entry.get(variant) or {}
-        assert sorted(keys) == ["heading", "hint", "message", "title"], (locale, variant, keys)
+        assert sorted(keys) == ["heading", "hint", "message", "slowHeading", "slowMessage", "title"], (locale, variant, keys)
         assert all(isinstance(v, str) and v.strip() for v in keys.values()), (locale, variant)
 assert f'var DEFAULT_LOCALE = "{default}";' in script
 print("maintenance page: ok")
@@ -245,7 +255,7 @@ def first(pattern, start=0):
             return index
     raise AssertionError(f"nicht gefunden: {pattern}")
 begin = first(r"^begin_deploy_maintenance$")
-trap = first(r"^trap 'end_deploy_maintenance aborted \|\| true' EXIT$")
+trap = first(r"^trap 'end_deploy_maintenance aborted \|\| true; clear_maintenance_info' EXIT$")
 alembic = first(r'run --rm --no-deps backend alembic')
 migration_failed = first(r"Datenbankmigration fehlgeschlagen")
 migration_end = first(r"^  end_deploy_maintenance aborted \|\| true$", migration_failed)
@@ -254,7 +264,7 @@ smoke = first(r"^if ! run_smoke_checks; then$")
 success = first(r"^if ! end_deploy_maintenance success; then$")
 success_exit = first(r"^  exit 1$", success)
 assert "rollback_apps" not in "\n".join(lines[success:success_exit]), "Wartung nicht beendbar: kein Rollback"
-trap_line = first(r"^trap 'end_deploy_maintenance aborted \|\| true' EXIT$")
+trap_line = trap
 assert trap_line < first(r"^begin_deploy_maintenance$"), "EXIT-Trap vor begin_deploy_maintenance"
 route_checks = first(r"^if ! traefik_route_checks; then$")
 assert trap < begin < alembic, "Trap, dann begin-deploy, beides vor der Migration"
@@ -274,8 +284,56 @@ assert "audit_log" in text.split("DEPLOY_MAINTENANCE_END_SQL=", 1)[1].split("\n"
 begin_fn = text.split("begin_deploy_maintenance() {", 1)[1].split("\n}\n", 1)[0]
 assert "return 1" not in begin_fn and "exit" not in begin_fn, "begin_deploy_maintenance darf nie abbrechen"
 assert begin_fn.index("DEPLOY_MAINTENANCE_ACTIVE=1") < begin_fn.index("begin-deploy")
+# Update-Info der statischen Seite: vor begin-deploy geschrieben, am Ende (EXIT-Trap) geleert,
+# nur geprüfte Werte, laufende Version nie per source gelesen.
+info_write = first(r'^write_maintenance_info "\$DEPLOY_FROM_VERSION" "\$HOCX_VERSION" update')
+assert trap < info_write < begin, "Update-Info nach dem Trap, vor begin-deploy"
+from_version = first(r'^DEPLOY_FROM_VERSION="\$\(read_running_version\)"$')
+assert from_version < first(r"^create_release_manifest$"), "laufende Version vor dem neuen Manifest lesen"
+write_fn = text.split("write_maintenance_info() {", 1)[1].split("\n}\n", 1)[0]
+assert "clean_deploy_version" in write_fn and "DEPLOY_STATUS_URL_RE" in write_fn and "mv -f" in write_fn
+assert "exit" not in write_fn, "write_maintenance_info darf nie abbrechen"
+read_fn = text.split("read_running_version() {", 1)[1].split("\n}\n", 1)[0]
+assert "source" not in read_fn and "load_env_file" not in read_fn
+assert '--from-version "$DEPLOY_FROM_VERSION"' in begin_fn
 print("deploy maintenance order: ok")
 PY
+
+# Update-Info: Funktionen aus deploy.sh in einem Wegwerf-Verzeichnis ausführen.
+INFO_DIR="$(mktemp -d)"
+mkdir -p "$INFO_DIR/infra/maintenance" "$INFO_DIR/.releases"
+sed -n '/^DEPLOY_VERSION_RE=/,/^clear_maintenance_info() {/p' scripts/deploy.sh > "$INFO_DIR/fns.sh"
+printf '  write_maintenance_info "" "" "" || true\n}\n' >> "$INFO_DIR/fns.sh"
+info_case() {
+  PROJECT_DIR="$INFO_DIR" bash -c 'set -euo pipefail; source "$1"; shift; "$@"' _ "$INFO_DIR/fns.sh" "$@"
+}
+printf "HOCX_VERSION='1.5.0'\nHOCX_BACKEND_IMAGE='x'\n" > "$INFO_DIR/.releases/current.env"
+[ "$(info_case read_running_version)" = 1.5.0 ] || { echo "read_running_version liest current.env nicht" >&2; exit 1; }
+printf "HOCX_VERSION='\$(touch /tmp/pwned)<b>'\n" > "$INFO_DIR/.releases/current.env"
+[ -z "$(info_case read_running_version)" ] || { echo "read_running_version: ungültige Version nicht verworfen" >&2; exit 1; }
+rm "$INFO_DIR/.releases/current.env"
+[ -z "$(info_case read_running_version)" ] || { echo "read_running_version ohne current.env nicht leer" >&2; exit 1; }
+HOCX_STATUS_PAGE_URL="https://status.example.test/hocx" info_case write_maintenance_info 1.5.0 1.5.1 update
+python3 -c '
+import json, sys
+info = json.load(open(sys.argv[1]))
+assert info["update"] is True and info["from"] == "1.5.0" and info["to"] == "1.5.1", info
+assert info["status_url"] == "https://status.example.test/hocx" and isinstance(info["since"], int), info
+' "$INFO_DIR/infra/maintenance/update-info.json"
+[ "$(stat -c %a "$INFO_DIR/infra/maintenance/update-info.json")" = 640 ] || { echo "update-info.json: Rechte nicht 640" >&2; exit 1; }
+HOCX_STATUS_PAGE_URL='https://x.test/"><script>' info_case write_maintenance_info '1.5.0"<x' '1.5.1' update 2> /dev/null
+python3 -c '
+import json, sys
+info = json.load(open(sys.argv[1]))
+assert "from" not in info and "status_url" not in info and info["to"] == "1.5.1", info
+' "$INFO_DIR/infra/maintenance/update-info.json"
+HOCX_STATUS_PAGE_URL="https://status.example.test" info_case clear_maintenance_info
+[ "$(cat "$INFO_DIR/infra/maintenance/update-info.json")" = '{"status_url":"https://status.example.test"}' ] || { echo "clear_maintenance_info: nur Statusseite erwartet" >&2; exit 1; }
+info_case clear_maintenance_info
+[ ! -e "$INFO_DIR/infra/maintenance/update-info.json" ] || { echo "clear_maintenance_info: Datei nicht entfernt" >&2; exit 1; }
+! ls "$INFO_DIR/infra/maintenance/".update-info.* > /dev/null 2>&1 || { echo "Temporärdatei liegen geblieben" >&2; exit 1; }
+rm -rf "$INFO_DIR"
+echo "maintenance update info: ok"
 
 echo "maintenance static tests: ok"
 
@@ -309,6 +367,8 @@ openssl x509 -req -in "$WORK/tls.csr" -CA "$WORK/ca.crt" -CAkey "$WORK/ca.key" -
   -extfile "$WORK/san.ext" -out "$WORK/tls.crt" 2> /dev/null
 
 mkdir -p "$WORK/dynamic" "$WORK/certs" "$WORK/stub"
+cp -r infra/maintenance "$WORK/maintenance"
+rm -f "$WORK/maintenance/update-info.json"
 cp infra/traefik/dynamic/security.yml infra/traefik/dynamic/maintenance.yml "$WORK/dynamic/"
 # Die Admin-Router verweisen auf admin-gate@file (Admin-Abschottung, deploy.sh schreibt die Datei).
 # Hier nur der Header ohne Quellbeschränkung: die Abschottung selbst prüft
@@ -408,6 +468,8 @@ services = json.load(sys.stdin)["services"]
 page = services["maintenance-page"]
 out = {"name": project, "services": {}, "networks": {"default": {}, "maintenance": {"internal": True}}}
 out["services"]["maintenance-page"] = {k: v for k, v in page.items() if k not in ("depends_on",)}
+# Kopie von infra/maintenance: der Test schreibt dort eine Update-Info wie deploy.sh.
+out["services"]["maintenance-page"]["volumes"] = [dict(page["volumes"][0], source=f"{work}/maintenance")]
 stub = {
     "image": page["image"],
     "entrypoint": ["nginx", "-c", "/stub/nginx.conf", "-g", "daemon off;"],
@@ -512,6 +574,17 @@ expect "Wartungsseite: CSP mit Skript-Hash" '[[ "$(header Content-Security-Polic
 expect "Wartungsseite: Tokens eingebettet" 'grep -q -- "--accent:" <<< "$BODY" && ! grep -q "<!--#" <<< "$BODY"'
 expect "Wartungsseite: HSTS vom Entrypoint" '[ -n "$(header Strict-Transport-Security)" ]'
 expect "Wartungsseite: setzt keine Cookies" '[ -z "$(header Set-Cookie)" ]'
+expect "Wartungsseite: ohne Update-Info leerer Datenblock" 'grep -q "id=\"maintenance-info\">{}</script>" <<< "$BODY"'
+printf '{"update":true,"since":%s,"from":"1.5.0","to":"1.5.1","status_url":"https://status.example.test"}\n' "$(date +%s)" > "$WORK/maintenance/update-info.json"
+chmod a+r "$WORK/maintenance/update-info.json"
+request "https://$DOMAIN/fail-502"
+expect "Wartungsseite: Update-Info eingebettet" 'maintenance_html hocx && grep -q "\"from\":\"1.5.0\",\"to\":\"1.5.1\"" <<< "$BODY" && ! grep -q "<!--#" <<< "$BODY"'
+if "${DC[@]}" exec -T maintenance-page wget -qO- http://127.0.0.1:8080/update-info.json 2> /dev/null | grep -q status.example.test; then
+  echo "    FEHLER: update-info.json direkt abrufbar" >&2
+  failures=$((failures + 1))
+else
+  echo "    ok: update-info.json nur per SSI (direkt nicht abrufbar)"
+fi
 request "https://$ADMIN_DOMAIN/fail-502"
 expect "Admin-Frontend 502 -> Wartungsseite (admin)" 'maintenance_html admin && grep -q "data-health=\"/api/admin/auth/health\"" <<< "$BODY"'
 request "https://$ABG_DOMAIN/fail-502"

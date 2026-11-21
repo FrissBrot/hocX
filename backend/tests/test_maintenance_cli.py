@@ -142,3 +142,87 @@ def test_health_check_reports_long_running_deploy_window(db):
     db.commit()
     assert system_health_service._check_deploy_maintenance(db, admin_window.started_at + timedelta(hours=3)).status == "ok"
     assert "deploy_maintenance" in [c.key for c in system_health_service.collect_checks(db, now)]
+
+
+# --- Öffentlicher Status während eines Updates (Update-Seite statt Wartung) ---------------------
+
+
+def test_public_status_reports_update_with_versions(db):
+    maintenance_cli.begin_deploy(db, version="1.5.1", from_version="1.5.0")
+    status = maintenance_service.public_status(db)
+    assert (status["kind"], status["from_version"], status["to_version"]) == ("update", "1.5.0", "1.5.1")
+    assert status["active"] is True and status["started_at"] is not None
+    assert status["estimate_state"] in ("estimated", "estimating")
+    # Gleiche Sicht für die Abgabebox (SECURITY-DEFINER-Funktion, Migration 0212).
+    row = db.execute(text("SELECT * FROM maintenance_public_update()")).one()
+    assert (row.update_active, row.from_version, row.to_version) == (True, "1.5.0", "1.5.1")
+    # Über die öffentliche Route: nur die Schema-Felder, keine internen Angaben.
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api.routes import maintenance_public
+    from app.core.db import get_db
+
+    app = FastAPI()
+    app.include_router(maintenance_public.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    body = TestClient(app).get("/api/public/maintenance-status").json()
+    assert (body["kind"], body["from_version"], body["to_version"]) == ("update", "1.5.0", "1.5.1")
+    for internal in ("source_job_id", "source_job_type", "internal_note", "last_error", "progress", "estimate"):
+        assert internal not in body
+
+
+def test_public_status_drops_invalid_versions(db):
+    maintenance_cli.begin_deploy(db, version="1.5.1<script>", from_version="../../etc/passwd")
+    status = maintenance_service.public_status(db)
+    assert status["kind"] == "update"
+    assert status["from_version"] is None and status["to_version"] is None
+    [window] = _deploy_windows(db)
+    assert window.progress == {}
+
+
+def test_rerun_updates_versions_of_an_open_deploy_window(db):
+    maintenance_cli.begin_deploy(db, version="1.5.1", from_version="1.5.0")
+    maintenance_cli.begin_deploy(db, version="1.5.2", from_version="1.5.0")
+    assert maintenance_service.public_status(db)["to_version"] == "1.5.2"
+
+
+def test_public_status_prefers_maintenance_when_an_admin_window_is_also_active(db):
+    maintenance_cli.begin_deploy(db, version="1.5.1", from_version="1.5.0")
+    admin_window = maintenance_service.create_window(db, kind="full", reason_code="manual", state="preparing", actor_email="owner@example.com")
+    maintenance_service.transition(db, admin_window, "active")
+    db.commit()
+    status = maintenance_service.public_status(db)
+    assert status["kind"] == "maintenance" and status["from_version"] is None and status["to_version"] is None
+    assert db.execute(text("SELECT update_active FROM maintenance_public_update()")).scalar() is False
+
+
+def test_public_status_kind_for_manual_partial_and_idle(db):
+    assert maintenance_service.public_status(db)["kind"] is None
+    maintenance_service.create_window(
+        db, kind="partial", block_scope="writes", reason_code="storage_cutover", state="preparing",
+        source_job_type="storage_cutover", source_job_id="00000000-0000-0000-0000-000000000000",
+    )
+    db.commit()
+    status = maintenance_service.public_status(db)
+    assert (status["kind"], status["partial"], status["to_version"]) == ("maintenance", True, None)
+
+
+def test_cli_passes_from_version(monkeypatch):
+    seen = {}
+
+    def fake_begin(_db, **kwargs):
+        seen.update(kwargs)
+        return "ok"
+
+    class Session:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(maintenance_cli, "begin_deploy", fake_begin)
+    monkeypatch.setattr("app.core.db.SessionLocal", Session)
+    assert maintenance_cli.main(["begin-deploy", "--version", "1.5.1", "--from-version", "1.5.0"]) == 0
+    assert seen == {"version": "1.5.1", "from_version": "1.5.0"}

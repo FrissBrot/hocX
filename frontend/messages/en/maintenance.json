@@ -1,7 +1,7 @@
 {
   "title": "hocX is currently under maintenance",
   "reasons": {
-    "manual": "We are carrying out necessary maintenance to keep the platform stable and secure.",
+    "manual": "We are carrying out necessary maintenance to keep hocX stable and secure.",
     "storage_initial_migration": "We are moving all files to a new, more secure storage. hocX is unavailable during this time.",
     "storage_cutover": "We are completing a storage switch. This only takes a moment.",
     "backup_restore": "We are restoring hocX from a backup. hocX is unavailable during this time.",
@@ -30,5 +30,31 @@
     "whenRange": "{start} – approx. {end}"
   },
   "ended": "Maintenance has ended. Redirecting …",
-  "checking": "Checking maintenance status …"
+  "checking": "Checking maintenance status …",
+  "screen": {
+    "pill": "Maintenance in progress",
+    "etaLabel": "Expected back",
+    "etaTime": "<clock>{time}</clock>",
+    "etaUnknown": "No exact time yet",
+    "etaOverdue": "Taking longer than planned",
+    "remainingRange": "{low}–{high} min left",
+    "remainingAbout": "about {count} min left",
+    "remainingHours": "{low}–{high} h left",
+    "progressLabel": "Maintenance progress",
+    "autoCheck": "This page checks automatically and shows the sign-in as soon as hocX is ready again.",
+    "countdown": "in {seconds} s",
+    "countdownNow": "now"
+  },
+  "update": {
+    "title": "hocX is being updated",
+    "message": "hocX will be back in a few minutes. Your data is safe.",
+    "slowTitle": "The update is taking longer",
+    "slowMessage": "The update needs more time than usual. Your data is safe, this page keeps trying.",
+    "statusPage": "If this lasts longer than 15 minutes, check <link>the status page</link>.",
+    "reload": "Reload now",
+    "checking": "Checking …",
+    "autoReload": "Reloads automatically as soon as hocX is ready.",
+    "versions": "Update from {from} to {to}",
+    "version": "Version {version}"
+  }
 }

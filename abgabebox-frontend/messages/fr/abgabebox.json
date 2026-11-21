@@ -240,6 +240,11 @@
     "uploadsTitle": "Le téléversement est brièvement bloqué",
     "uploadsMessage": "En raison de travaux de maintenance, aucun fichier ne peut être accepté pour le moment. Cela ne dure généralement que quelques minutes.",
     "availableAt": "Disponible à nouveau vers {time}",
-    "estimating": "La durée prévue est en cours de calcul."
+    "estimating": "La durée prévue est en cours de calcul.",
+    "updateTitle": "La boîte de dépôt est en cours de mise à jour",
+    "updateMessage": "Les dépôts seront à nouveau possibles dans quelques minutes. Les fichiers déjà déposés sont en sécurité.",
+    "updateSlowTitle": "La mise à jour prend plus de temps",
+    "updateSlowMessage": "La mise à jour prend plus de temps que d'habitude. Les fichiers déposés sont en sécurité, la page continue de vérifier.",
+    "updateHint": "La page vérifie automatiquement si les dépôts sont à nouveau possibles."
   }
 }

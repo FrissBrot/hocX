@@ -240,6 +240,11 @@
     "uploadsTitle": "Hochladen ist kurz gesperrt",
     "uploadsMessage": "Wegen Wartungsarbeiten können gerade keine Dateien angenommen werden. Das dauert in der Regel nur wenige Minuten.",
     "availableAt": "Voraussichtlich wieder verfügbar: {time} Uhr",
-    "estimating": "Die voraussichtliche Dauer wird ermittelt."
+    "estimating": "Die voraussichtliche Dauer wird ermittelt.",
+    "updateTitle": "Die Abgabebox wird aktualisiert",
+    "updateMessage": "In wenigen Minuten sind Abgaben wieder möglich. Bereits abgegebene Dateien sind sicher.",
+    "updateSlowTitle": "Das Update dauert länger",
+    "updateSlowMessage": "Das Update braucht mehr Zeit als üblich. Abgegebene Dateien sind sicher, die Seite prüft weiter.",
+    "updateHint": "Die Seite prüft automatisch, ob Abgaben wieder möglich sind."
   }
 }

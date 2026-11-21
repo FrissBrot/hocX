@@ -79,6 +79,19 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
 - «Angemeldete Geräte», Mails «neues Gerät»/Sicherheitswarnung und die Ereignisliste im Admin-Panel
   zeigen das Land (übersetzter Name, Quellenangabe DB-IP); die Ereignisliste zeigt zusätzlich die
   Risikogründe. Systemmonitor: Checks `password_leak` und `geoip` («nicht eingerichtet» ohne Alarm).
+### Geändert
+
+- **Gleiche Meldung während eines Updates:** Bisher wechselte die Anzeige beim Deploy zwischen der
+  In-App-Wartungsseite («hocX wird gerade gewartet», Deploy-Fenster) und der statischen
+  Traefik-Seite («hocX wird gerade aktualisiert», Neustart der Container). Jetzt zeigen beide Wege
+  während eines Updates dieselbe Update-Meldung im neuen Design: «hocX wird aktualisiert», alte →
+  neue Version, «Jetzt neu laden» (prüft sofort), automatisches Neuladen und nach 15 Minuten «Das
+  Update dauert länger». Anmeldeseite und Abgabebox-Banner ziehen mit. Geplante oder manuelle
+  Wartung zeigt die neue Wartungsseite mit voraussichtlichem Ende, Spanne, Fortschrittsbalken und
+  Countdown bis zur nächsten Prüfung (RUNBOOK Abschnitt 20).
+- Öffentlicher Wartungsstatus: neue Felder `kind` (`update`/`maintenance`), `from_version`,
+  `to_version`; Migration `0212_maintenance_public_update` (Funktion für die Abgabebox).
+- Optional `HOCX_STATUS_PAGE_URL` (https): Hinweis auf die Statusseite, wenn ein Update länger dauert.
 
 ## [1.5.0] - 2026-11-21
 

@@ -954,6 +954,34 @@ sonst Deutsch), folgt Hell/Dunkel des Systems, prüft alle 10 s `/api/health` (A
 Seite selbst nicht mehr von der Wartungsseite stammt (Kopfzeile `X-Hocx-Maintenance-Page`). Ohne
 JavaScript lädt sie alle 30 s neu.
 
+**Welche Meldung wann (ab 1.5.1)**
+
+| Situation | Ausgeliefert von | Meldung |
+|---|---|---|
+| Update: Deploy-Fenster offen, alte bzw. neue App läuft | In-App `/maintenance` (angemeldete Nutzer), Hinweis auf `/login`, Banner der Abgabebox | **Update** («hocX wird aktualisiert», `vX → vY`, «Jetzt neu laden», nach 15 min «Das Update dauert länger») |
+| Update: Container werden neu gestartet (502–504 bzw. kein Router) | statische Seite `maintenance.html` (hier) | **Update**, dieselben Texte |
+| Ausfall ausserhalb eines Updates | statische Seite | **Update** ohne Versionen (die Seite weiss nicht, warum der Container fehlt) |
+| Geplante/manuelle Wartung, Speicher, Wiederherstellung | In-App `/maintenance` | **Wartung** (Pill «Wartung läuft», voraussichtliches Ende mit Spanne und Balken bzw. «Noch kein genauer Zeitpunkt», Countdown bis zur nächsten Prüfung) |
+| Deploy-Fenster **und** Admin-Wartung gleichzeitig | In-App | **Wartung** (nach dem Update kommt hocX nicht zurück) |
+
+Die öffentliche Statusroute `/api/public/maintenance-status` liefert dafür `kind`
+(`update`/`maintenance`) und beim Update `from_version`/`to_version` (nur Zeichen
+`0-9A-Za-z._+-`, `maintenance_service.clean_version`); die Abgabebox liest dasselbe über
+`maintenance_public_update()` (Migration 0212). Die Versionen schreibt `begin-deploy
+--version <neu> --from-version <laufend>` ins Deploy-Fenster (`progress`).
+
+Für die statische Seite schreibt `deploy.sh` vor `begin-deploy` die Datei
+`infra/maintenance/update-info.json` (`write_maintenance_info`: Versionen, Beginn, optional
+Statusseite; nicht im Repo, `.gitignore`), nginx bettet sie per SSI als JSON-Datenblock ein
+(`location = /update-info.json` nur `internal`). Am Ende des Deploys (EXIT-Trap, auch bei Abbruch
+oder Rollback) bleibt davon nur der Statusseiten-Link (`clear_maintenance_info`). Eine Info, die
+älter als 6 Stunden ist, ignoriert die Seite.
+
+**Statusseite (optional):** `HOCX_STATUS_PAGE_URL=https://…` in `.env` (nur einfache
+https-Adressen, sonst ignoriert). Die Update-Seite (In-App und statisch) zeigt dann nach 15 Minuten
+«Hält das länger als 15 Minuten an, schau auf der Statusseite nach.»; ohne Wert entfällt der Satz.
+Die statische Seite übernimmt den Wert erst mit dem nächsten Deploy.
+
 **Testen**
 
 - Statisch (auch in der CI): `bash scripts/tests/test_maintenance_page.sh`.
@@ -965,7 +993,8 @@ JavaScript lädt sie alle 30 s neu.
 
 **Anpassen**
 
-- Texte: `infra/maintenance/maintenance.html` (Objekt `TEXTS`, alle Sprachen vollständig). Danach
+- Texte: `infra/maintenance/maintenance.html` (Objekt `TEXTS`, alle Sprachen vollständig; gleiche
+  Wortwahl wie `frontend/messages/<locale>/maintenance.json` → `update.*`). Danach
   `bash scripts/tests/test_maintenance_page.sh` – er nennt den neuen CSP-Hash des Skripts, der in
   `infra/maintenance/nginx.conf` (`script-src 'sha256-…'`) eingetragen werden muss. Änderungen an
   HTML/JSON wirken sofort nach dem Deploy-Code-Update, eine geänderte `nginx.conf` erstellt
@@ -981,12 +1010,12 @@ Prüfseite und ihre API). Sie zeigen auf `maintenance-page@file`. Fehlt
 
 **Wartungsmodus während des Updates** (`deploy.sh`, `backend/app/maintenance_cli.py`):
 
-1. Vor `alembic upgrade`: `python -m app.maintenance_cli begin-deploy --version <v>` (per
+1. Vor `alembic upgrade`: `python -m app.maintenance_cli begin-deploy --version <v> --from-version <laufend>` (per
    `docker compose run --rm --no-deps backend`, mit dem Backend-Image des neuen Releases) legt ein
    volles Wartungsfenster an (`reason_code=deploy`, `source_job_type=deploy`) und setzt es sofort
    aktiv. Die noch laufenden alten Container sperren damit die API (503 `maintenance`); das
-   Frontend leitet angemeldete Nutzer auf seine Wartungsansicht, die Anmeldeseite zeigt den
-   Hinweis, die Abgabebox ihr Banner. Offen bleiben Admin-API, `/api/health`,
+   Frontend leitet angemeldete Nutzer auf seine Update-Ansicht, die Anmeldeseite zeigt den
+   Hinweis, die Abgabebox ihr Banner (ab 1.5.1 überall die Update-Meldung, siehe oben). Offen bleiben Admin-API, `/api/health`,
    `/api/system-status/summary` und der Wartungsstatus. Idempotent: ein offenes Deploy-Fenster wird
    wiederverwendet. Erste Installation (Tabelle fehlt): übersprungen.
 2. Nach den Smoke-Checks, **vor** den Prüfungen über Traefik: `end-deploy --outcome success`. Vorher

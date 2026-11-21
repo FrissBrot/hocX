@@ -1019,6 +1019,65 @@ DEPLOY_MAINTENANCE_IMAGE=""
 # Statisches SQL ohne Variablen: Fenster beenden, Verlauf und Audit-Eintrag wie die CLI.
 DEPLOY_MAINTENANCE_END_SQL="WITH ended AS (UPDATE public.maintenance_window SET state = 'completed', ended_at = now(), updated_at = now() WHERE source_job_type = 'deploy' AND state NOT IN ('completed', 'cancelled') RETURNING id), events AS (INSERT INTO public.maintenance_event (window_id, kind, actor_email, to_state, details) SELECT id, 'transition', 'system:deploy', 'completed', '{\"source\": \"deploy-sql\"}'::jsonb FROM ended) INSERT INTO public.audit_log (actor_email, action, entity_type, details_json) SELECT 'system:deploy', 'admin.maintenance_deploy_ended', 'maintenance_window', jsonb_build_object('window_ids', jsonb_agg(id), 'outcome', 'sql-fallback') FROM ended HAVING count(*) > 0"
 
+# Versionen für die Update-Seite (In-App und statisch, RUNBOOK Abschnitt 20): nur harmlose
+# Kennungen, sonst leer. Laufende Version aus dem Rollback-Ziel (.releases/current.env), gelesen
+# als Daten - nie per source.
+DEPLOY_VERSION_RE='^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$'
+DEPLOY_STATUS_URL_RE='^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$'
+DEPLOY_FROM_VERSION=""
+
+clean_deploy_version() {
+  if [[ "$1" =~ $DEPLOY_VERSION_RE ]]; then printf '%s' "$1"; fi
+}
+
+read_running_version() {
+  local manifest="$PROJECT_DIR/.releases/current.env" value
+  [ -f "$manifest" ] || return 0
+  value="$(sed -n "s/^HOCX_VERSION='\{0,1\}\([^']*\)'\{0,1\}\$/\1/p" "$manifest" | head -n 1)"
+  [ "$value" = unknown ] || clean_deploy_version "$value"
+}
+
+# Kleine Datei für die statische Wartungsseite (nginx bettet sie per SSI ein): Versionen und Beginn
+# des Updates, optional der Link zur Statusseite (HOCX_STATUS_PAGE_URL). Keine Benutzerdaten.
+# Nur geprüfte Werte (kein «<», «"» oder «\»), atomar ersetzt, Gruppe 5001 nur lesend (setgid
+# des Verzeichnisses, prepare_maintenance_dir). Ein Fehler ist nur eine Warnung.
+MAINTENANCE_INFO_FILE="$PROJECT_DIR/infra/maintenance/update-info.json"
+
+write_maintenance_info() {
+  local from to url="" since="" tmp fields=()
+  from="$(clean_deploy_version "${1:-}")"
+  to="$(clean_deploy_version "${2:-}")"
+  [ -z "${3:-}" ] || since="$(date +%s)"
+  if [[ "${HOCX_STATUS_PAGE_URL:-}" =~ $DEPLOY_STATUS_URL_RE ]]; then
+    url="$HOCX_STATUS_PAGE_URL"
+  elif [ -n "${HOCX_STATUS_PAGE_URL:-}" ]; then
+    echo "    WARNUNG: HOCX_STATUS_PAGE_URL ist keine einfache https-Adresse - ohne Link auf der Wartungsseite." >&2
+  fi
+  [ -d "$PROJECT_DIR/infra/maintenance" ] || return 0
+  if [ -z "$from$to$since$url" ]; then
+    rm -f -- "$MAINTENANCE_INFO_FILE"
+    return 0
+  fi
+  [ -z "$since" ] || fields+=("\"update\":true" "\"since\":$since")
+  [ -z "$from" ] || fields+=("\"from\":\"$from\"")
+  [ -z "$to" ] || fields+=("\"to\":\"$to\"")
+  [ -z "$url" ] || fields+=("\"status_url\":\"$url\"")
+  tmp="$(mktemp "$PROJECT_DIR/infra/maintenance/.update-info.XXXXXX")" || return 0
+  # Halbe Datei (z. B. Platte voll) nie aktivieren.
+  if ! (IFS=,; printf '{%s}\n' "${fields[*]}") > "$tmp" || ! chmod 640 "$tmp"; then
+    rm -f -- "$tmp"
+    echo "    WARNUNG: Update-Info für die Wartungsseite nicht geschrieben." >&2
+    return 0
+  fi
+  chgrp 5001 "$tmp" 2> /dev/null || true
+  mv -f -- "$tmp" "$MAINTENANCE_INFO_FILE" || { rm -f -- "$tmp"; echo "    WARNUNG: Update-Info für die Wartungsseite nicht geschrieben." >&2; }
+}
+
+# Nach dem Update (Erfolg, Rollback, Abbruch): nur noch der Statusseiten-Link bleibt stehen.
+clear_maintenance_info() {
+  write_maintenance_info "" "" "" || true
+}
+
 # Immer mit dem Backend-Image des neuen Releases (gemerkt bei begin): nach einem Rollback zeigt
 # HOCX_BACKEND_IMAGE auf das alte Release, das die CLI noch nicht kennen muss.
 deploy_maintenance_cli() {
@@ -1036,7 +1095,9 @@ begin_deploy_maintenance() {
   DEPLOY_MAINTENANCE_IMAGE="${HOCX_BACKEND_IMAGE:-}"
   # Schon vor dem Aufruf: auch ein halb gelungener Start wird am Ende sicher wieder beendet.
   DEPLOY_MAINTENANCE_ACTIVE=1
-  if ! deploy_maintenance_cli begin-deploy --version "$HOCX_VERSION"; then
+  local from_args=()
+  [ -z "$DEPLOY_FROM_VERSION" ] || from_args=(--from-version "$DEPLOY_FROM_VERSION")
+  if ! deploy_maintenance_cli begin-deploy --version "$HOCX_VERSION" ${from_args[@]+"${from_args[@]}"}; then
     echo "    WARNUNG: Wartungsmodus nicht aktiviert - das Update läuft ohne weiter." >&2
   fi
 }
@@ -1171,6 +1232,8 @@ run_preflight
 write_secret_files
 prepare_runtime_permissions
 capture_current_release
+# Vor create_release_manifest (das HOCX_VERSION neu lädt): laufendes Release für die Update-Seite.
+DEPLOY_FROM_VERSION="$(read_running_version)"
 
 BACKUP_DIR="$PROJECT_DIR/backups"
 BACKUP_FILE=""
@@ -1249,7 +1312,11 @@ wait_for_exec db "Postgres" "pg_isready -U '$POSTGRES_USER' -d '$POSTGRES_DB'" 3
 
 # Jeder Abbruch ab hier (exit 1) beendet die Wartung wieder; die Funktion ist idempotent und
 # ohne aktive Wartung ein No-op. Vor begin gesetzt: auch ein Abbruch mitten im Start wird erfasst.
-trap 'end_deploy_maintenance aborted || true' EXIT
+trap 'end_deploy_maintenance aborted || true; clear_maintenance_info' EXIT
+# Vor begin-deploy: zeigt die statische Wartungsseite während des Neustarts dieselbe
+# Update-Meldung («vX → vY») wie die In-App-Seite des Deploy-Fensters.
+write_maintenance_info "$DEPLOY_FROM_VERSION" "$HOCX_VERSION" update ||
+  echo "    WARNUNG: Update-Info für die Wartungsseite nicht geschrieben." >&2
 begin_deploy_maintenance
 
 echo "==> [$ENVIRONMENT] Datenbankmigration"

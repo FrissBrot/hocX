@@ -1355,6 +1355,8 @@ input[type="file"] {
   color: var(--warning-fg);
 }
 .box-maintenance p { margin: 0; }
+.box-maintenance-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.box-maintenance-version { padding: 1px var(--space-2); border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-strong); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
 
 /* ── Felder und Auswahllisten wie in der Hauptanwendung (frontend/app/globals.css) ───────────
    Grundoptik für Felder ohne eigene Klasse (Spezifität 0, Feature-Klassen gewinnen) und die

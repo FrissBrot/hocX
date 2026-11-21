@@ -100,3 +100,7 @@ loadtest/tokens.json
 loadtest/results/
 loadtest/fixtures/*.jpg
 loadtest/fixtures/*.zip
+
+# Von deploy.sh geschrieben (Update-Info der Wartungsseite, RUNBOOK Abschnitt 20)
+infra/maintenance/update-info.json
+infra/maintenance/.update-info.*
