@@ -1,1 +1,59 @@
-{}
+{
+  "title": "Analytics",
+  "subtitle": "Trends from the daily metrics rollup – counts only, no personal data.",
+  "range": {
+    "30d": "30 days",
+    "90d": "90 days",
+    "12m": "12 months"
+  },
+  "tabs": {
+    "growth": "Growth",
+    "usage": "Usage",
+    "features": "Features",
+    "revenue": "Revenue",
+    "load": "Load",
+    "storage": "Storage",
+    "errors": "Errors"
+  },
+  "loading": "Loading data …",
+  "loadFailed": "Analytics could not be loaded.",
+  "collectingSince": "History has been collected since {date} (daily rollup).",
+  "noData": "No data yet – the history starts with the first run of the metrics rollup.",
+  "emptyTitle": "No values in this period",
+  "emptyDescription": "There are no daily values for this period yet.",
+  "summary": "As of {date}: {values}",
+  "showTable": "Show data as table",
+  "loadRetention": "Resource samples are kept for 14 days; longer periods only show these days.",
+  "columns": {
+    "day": "Day",
+    "month": "Month"
+  },
+  "metrics": {
+    "tenants_total": "Tenants",
+    "tenants_new": "New tenants",
+    "users_total": "Users",
+    "users_active_30d": "Active users (30 d)",
+    "logins_success": "Sign-ins",
+    "logins_failure": "Failed attempts",
+    "mrr_rp": "MRR (run rate)",
+    "storage_bytes_total": "Total storage",
+    "errors_total": "Errors",
+    "postgres_latency_ms_avg": "Postgres latency (avg)",
+    "postgres_latency_ms_max": "Postgres latency (max)",
+    "postgres_connections_max": "DB connections (max)",
+    "redis_used_mb_max": "Redis memory (max)",
+    "runtime_loop_lag_ms_max": "Event loop lag (max)"
+  },
+  "topTenants": {
+    "title": "Largest tenants by storage",
+    "tenant": "Tenant",
+    "storage": "Storage"
+  },
+  "features": {
+    "title": "Booked features on {date} ({total} tenants)",
+    "titleNoDate": "Booked features",
+    "feature": "Feature",
+    "tenants": "Tenants",
+    "share": "Share"
+  }
+}

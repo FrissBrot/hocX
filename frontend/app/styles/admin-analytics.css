@@ -1,1 +1,72 @@
 /* Admin-Redesign: Klassen fuer den Bereich analytics (nur Tokens, Light/Dark). */
+
+.admin-analytics-note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.admin-analytics-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-analytics-heading {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.admin-analytics-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.admin-analytics-chart {
+  width: 100%;
+  min-height: 260px;
+}
+
+.admin-analytics-table > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-analytics-table[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
+.admin-analytics-share {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-analytics-meter {
+  width: 120px;
+  height: 8px;
+}
+
+@media (max-width: 640px) {
+  .admin-analytics-meter {
+    width: 64px;
+  }
+}
+
+/* Fehlerprotokoll (Betrieb › Fehler): Filterzeile und aufgeklappte Details ohne Inline-Styles. */
+.admin-error-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.admin-error-details {
+  gap: var(--space-2);
+}
+
+.admin-error-traceback {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  font-size: var(--text-sm);
+}

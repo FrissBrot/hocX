@@ -1,1 +1,59 @@
-{}
+{
+  "title": "Analysen",
+  "subtitle": "Verläufe aus dem täglichen Kennzahlen-Rollup – nur Zählwerte, keine Personendaten.",
+  "range": {
+    "30d": "30 Tage",
+    "90d": "90 Tage",
+    "12m": "12 Monate"
+  },
+  "tabs": {
+    "growth": "Wachstum",
+    "usage": "Nutzung",
+    "features": "Features",
+    "revenue": "Umsatz",
+    "load": "Auslastung",
+    "storage": "Speicher",
+    "errors": "Fehler"
+  },
+  "loading": "Daten werden geladen …",
+  "loadFailed": "Analysen konnten nicht geladen werden.",
+  "collectingSince": "Verlauf wird seit {date} gesammelt (täglicher Rollup).",
+  "noData": "Noch keine Daten – der Verlauf entsteht mit dem ersten Lauf des Kennzahlen-Rollups.",
+  "emptyTitle": "Keine Werte im Zeitraum",
+  "emptyDescription": "Für diesen Zeitraum liegen noch keine Tageswerte vor.",
+  "summary": "Stand {date}: {values}",
+  "showTable": "Daten als Tabelle",
+  "loadRetention": "Ressourcen-Stichproben werden 14 Tage aufbewahrt; längere Zeiträume zeigen nur diese Tage.",
+  "columns": {
+    "day": "Tag",
+    "month": "Monat"
+  },
+  "metrics": {
+    "tenants_total": "Mandanten",
+    "tenants_new": "Neue Mandanten",
+    "users_total": "Benutzer",
+    "users_active_30d": "Aktive Benutzer (30 T)",
+    "logins_success": "Anmeldungen",
+    "logins_failure": "Fehlversuche",
+    "mrr_rp": "MRR (Run-Rate)",
+    "storage_bytes_total": "Speicher gesamt",
+    "errors_total": "Fehler",
+    "postgres_latency_ms_avg": "Postgres-Latenz (Mittel)",
+    "postgres_latency_ms_max": "Postgres-Latenz (Max.)",
+    "postgres_connections_max": "DB-Verbindungen (Max.)",
+    "redis_used_mb_max": "Redis-Speicher (Max.)",
+    "runtime_loop_lag_ms_max": "Event-Loop-Verzögerung (Max.)"
+  },
+  "topTenants": {
+    "title": "Grösste Mandanten nach Speicher",
+    "tenant": "Mandant",
+    "storage": "Speicher"
+  },
+  "features": {
+    "title": "Gebuchte Features am {date} ({total} Mandanten)",
+    "titleNoDate": "Gebuchte Features",
+    "feature": "Feature",
+    "tenants": "Mandanten",
+    "share": "Anteil"
+  }
+}

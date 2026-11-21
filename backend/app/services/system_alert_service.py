@@ -581,6 +581,10 @@ def run_monitor_tick(db: Session) -> None:
     """Task des Loops system_monitor (main.py): sammeln, speichern, auswerten, benachrichtigen."""
     snapshot = system_health_service.run_collection(db)
     evaluate_and_notify(db, snapshot)
+    # Ressourcen-Verlauf für Betrieb/Analysen (Migration 0208), höchstens alle ~5 min.
+    from app.services import metrics_rollup_service
+
+    metrics_rollup_service.maybe_write_samples(db, snapshot)
 
 
 def cleanup_old_events(db: Session, *, retention_days: int) -> dict:
