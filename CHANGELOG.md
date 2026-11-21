@@ -32,7 +32,16 @@ Update direkt von 1.4.1 mit `./scripts/deploy.sh <test|prod>`; sieben Migratione
 - **Neuer Dienst `admin-frontend`** und **neues Netz `edge`:** Traefik und die angesprochenen Dienste
   werden beim Update neu erstellt (kurze Unterbrechung). Ein lokaler 1.4.0-Hotfix
   (`docker-compose.local.yml` mit `traefik.docker.network=hocx_default`) wird nicht mehr geladen und
-  nach dem Update entfernt.
+  nach dem Update entfernt. Hängen in einer host-eigenen `docker-compose.local.yml` Netz-Aliase für
+  Traefik (z. B. `.ziti`-Namen), müssen sie vor dem Update ins Netz `edge` statt `default` – sonst lässt
+  das Admin-Gate nur Anfragen über `edge` durch und Admin antwortet mit 403.
+- **Host-eigene Traefik-Dateien** in `infra/traefik/dynamic/` (z. B. `test-ziti-tls.yml` für ein eigenes
+  Zertifikat) müssen in `.env` freigegeben werden: `TRAEFIK_HOST_DYNAMIC_FILES="test-ziti-tls.yml"`
+  (Dateinamen, Leerzeichen/Komma getrennt). Sonst bricht die Prüfung über Traefik das Update ab.
+- **Kein Rollback mehr nach Migrationen:** Scheitert ein Update, nachdem seine Migrationen gelaufen sind,
+  bleibt das neue Release aktiv und wird Rollback-Ziel (ein altes Release startet gegen die migrierte
+  Datenbank nicht, 1.5.0 entfernt mit `0205` Admin-Spalten). Besteht es die Smoke-Checks nicht, bleibt die
+  Wartungsseite aktiv. `deploy.sh` nennt das Backup dieses Laufs für einen bewussten Weg zurück.
 - **`INTERNAL_API_URL`** wird automatisch auf das interne `http://backend:8000` umgeschrieben.
 - **Neue optionale Variablen:** `AUTH_SECRET_PREVIOUS`, `AUTH_LEGACY_COOKIE_UNTIL`, `AUTH_NET6_FACTOR`,
   `HOCX_ADMIN_SOURCE_CIDRS`, `HOCX_VERIFY_TENANT_DOMAIN_LIMIT`, `HOCX_DEPLOY_MAINTENANCE`,

@@ -176,16 +176,52 @@ admin_isolation_checks() {
 # Ein eigenes Unterverzeichnis ginge nicht: Traefik lädt Unterverzeichnisse zwar, beobachtet sie aber
 # nicht (live geprüft) - neue Mandanten-Domains würden erst nach einem Traefik-Neustart aktiv.
 # Stattdessen: jede andere Konfigurationsdatei dort lässt Deploy und verify_release.sh scheitern.
+# Erlaubt sind: alle im Repo versionierten Dateien des Verzeichnisses (git ls-files - so kann eine
+# neue versionierte Datei wie maintenance.yml in 1.5.0 die Prüfung nicht mehr sprengen), die beiden
+# generierten Dateien (tenant-domains.yml vom Backend, admin-gate.yml vom Deploy) und host-eigene
+# Dateien, die der Betreiber in .env ausdrücklich nennt (TRAEFIK_HOST_DYNAMIC_FILES, Dateinamen mit
+# Leerzeichen/Komma getrennt, z. B. test-ziti-tls.yml für das Zertifikat des Test-Hosts). Eine
+# Host-Datei muss eine normale Datei sein (kein Symlink, kein Verzeichnis).
+dynamic_config_allowed_names() {
+  local repo="${REPO_DIR:-.}" name
+  git -C "$repo" ls-files -- infra/traefik/dynamic | sed 's#.*/##' || return 1
+  printf '%s\n' tenant-domains.yml admin-gate.yml
+  for name in $(tr ',' ' ' <<< "${TRAEFIK_HOST_DYNAMIC_FILES:-}"); do
+    printf '%s\n' "$name"
+  done
+}
+
 dynamic_config_files_check() {
-  local dir="${REPO_DIR:-.}/infra/traefik/dynamic" unexpected
+  local dir="${REPO_DIR:-.}/infra/traefik/dynamic" found allowed unexpected="" path name host_name
+  if ! allowed="$(dynamic_config_allowed_names)"; then
+    echo "    Versionierte Traefik-Dateien nicht ermittelbar (git ls-files in ${REPO_DIR:-.})" >&2
+    return 1
+  fi
+  for host_name in $(tr ',' ' ' <<< "${TRAEFIK_HOST_DYNAMIC_FILES:-}"); do
+    case "$host_name" in
+      */* | .* | "" ) echo "    TRAEFIK_HOST_DYNAMIC_FILES: ungültiger Dateiname «$host_name»" >&2; return 1 ;;
+    esac
+    path="$dir/$host_name"
+    if [ -e "$path" ] && { [ -L "$path" ] || [ ! -f "$path" ]; }; then
+      echo "    Host-Datei $path ist keine normale Datei (Symlink/Verzeichnis)" >&2
+      return 1
+    fi
+  done
   # find-Fehler (z. B. Verzeichnis nicht lesbar) = Fehlschlag, nicht «nichts gefunden» (Review L4)
-  if ! unexpected="$(find "$dir" -mindepth 1 \( -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -type d \) \
-    ! -name security.yml ! -name admin-isolation.yml ! -name admin-gate.yml ! -name tenant-domains.yml -print)"; then
+  if ! found="$(find "$dir" -mindepth 1 \( -name '*.yml' -o -name '*.yaml' -o -name '*.toml' -o -type d \) -print)"; then
     echo "    Traefik-Dateiprovider-Verzeichnis nicht prüfbar: $dir" >&2
     return 1
   fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    name="${path#"$dir"/}"
+    if [ -d "$path" ] || ! grep -qxF -- "$name" <<< "$allowed"; then
+      unexpected="$unexpected $path"
+    fi
+  done <<< "$found"
   if [ -n "$unexpected" ]; then
-    echo "    Unerwartete Dateien im Traefik-Dateiprovider-Verzeichnis (von wem?): $unexpected" >&2
+    echo "    Unerwartete Dateien im Traefik-Dateiprovider-Verzeichnis (von wem?):$unexpected" >&2
+    echo "    Host-eigene Dateien in .env freigeben: TRAEFIK_HOST_DYNAMIC_FILES=\"<datei.yml>\"" >&2
     return 1
   fi
   # Versionierte Dateien unverändert (das Backend kann im Verzeichnis schreiben)

@@ -852,9 +852,40 @@ capture_current_release() {
 # (oder gar keins - dann hilft die Wartungsansicht auch nicht weiter).
 rollback_apps() {
   local status=0
+  # Liefen in diesem Deploy Migrationen, passt das vorherige Image-Set nicht mehr zur Datenbank
+  # (1.5.0: 0205 entfernt Admin-Spalten, r90 startete danach nicht mehr). Ein Rollback der Images
+  # würde den Ausfall nur sicher machen - stattdessen beim neuen Release bleiben.
+  if [ "${MIGRATIONS_APPLIED:-0}" = 1 ]; then
+    hold_release_after_migration
+    return 1
+  fi
   rollback_app_images || status=$?
   end_deploy_maintenance rollback || true
   return "$status"
+}
+
+# Kein Rollback nach Migrationen: das neue Release bleibt (es ist das einzige, das zur migrierten
+# Datenbank passt) und wird Rollback-Ziel, damit ein späteres rollback nicht auf das inkompatible alte
+# Release zurückgeht. Besteht es die Smoke-Checks, endet die Wartung; sonst bleibt die Wartungsseite
+# aktiv (Nutzer sehen Wartung statt Fehler), bis der Betreiber eingreift.
+hold_release_after_migration() {
+  echo "==> [$ENVIRONMENT] KEIN automatischer App-Rollback" >&2
+  echo "    Dieses Deploy hat Datenbankmigrationen ausgeführt; das vorherige Release passt nicht zur" >&2
+  echo "    migrierten Datenbank. $HOCX_VERSION bleibt aktiv und wird Rollback-Ziel." >&2
+  install -m 600 "$PROJECT_DIR/.releases/${HOCX_VERSION}.env" "$PROJECT_DIR/.releases/current.env" || true
+  if run_smoke_checks; then
+    end_deploy_maintenance aborted || true
+    echo "    $HOCX_VERSION läuft und besteht die Smoke-Checks; behoben wird nach vorne (Fix, erneutes Deploy)." >&2
+  else
+    # Wartungsseite stehen lassen: der EXIT-Trap darf sie nicht beenden
+    DEPLOY_MAINTENANCE_ACTIVE=0
+    echo "    $HOCX_VERSION besteht die Smoke-Checks NICHT. Der Wartungsmodus bleibt aktiv." >&2
+    echo "    Wartung beenden: Admin-Portal -> System -> Wartung -> Freigeben, oder" >&2
+    echo "    docker compose -p $PROJECT_NAME ... run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome aborted" >&2
+  fi
+  echo "    Optionen: Fehler beheben und ./scripts/deploy.sh $ENVIRONMENT erneut ausführen, oder das" >&2
+  echo "    Datenbank-Backup dieses Laufs einspielen und danach das vorherige Release deployen:" >&2
+  echo "    ${BACKUP_FILE:-(kein Backup in diesem Lauf)}" >&2
 }
 
 rollback_app_images() {
@@ -1234,7 +1265,17 @@ case "${HOCX_SINGLE_TENANT_RESOLUTION:-}" in
     exit 1
     ;;
 esac
-if ! "${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head; then
+# Ob Migrationen liefen, steht in der Alembic-Ausgabe («Running upgrade a -> b»); danach ist kein
+# Rollback der Images mehr möglich (rollback_apps -> hold_release_after_migration).
+MIGRATIONS_APPLIED=0
+MIGRATION_LOG="$(mktemp)"
+migration_status=0
+"${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head 2>&1 | tee "$MIGRATION_LOG" || migration_status=$?
+if grep -q "Running upgrade" "$MIGRATION_LOG"; then
+  MIGRATIONS_APPLIED=1
+fi
+rm -f "$MIGRATION_LOG"
+if [ "$migration_status" -ne 0 ]; then
   echo "Datenbankmigration fehlgeschlagen. Die laufende App wurde nicht veraendert." >&2
   restart_containers_stopped_for_pg_upgrade
   end_deploy_maintenance aborted || true
