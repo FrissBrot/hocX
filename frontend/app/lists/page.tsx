@@ -13,8 +13,9 @@ import {
 } from "@/types/api";
 import { can } from "@/lib/permissions";
 
-export default async function ListsPage() {
+export default async function ListsPage({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
   const session = await requireSession();
+  const { open } = await searchParams;
   const canWrite = can(session, "meetings.edit");
 
   if (!canWrite) {
@@ -36,7 +37,7 @@ export default async function ListsPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileLists initialLists={lists ?? []} initialEntriesByList={initialEntriesByList} participants={participants ?? []} events={events ?? []} />}
+        mobile={<MobileLists initialLists={lists ?? []} initialEntriesByList={initialEntriesByList} participants={participants ?? []} events={events ?? []} autoOpenId={open ?? null} />}
         desktop={
           <>
           <section className="panel lists-page">
@@ -45,6 +46,7 @@ export default async function ListsPage() {
               initialEntriesByList={initialEntriesByList}
               availableParticipants={participants ?? []}
               availableEvents={events ?? []}
+              autoOpenId={open ?? null}
             />
           </section>
           </>

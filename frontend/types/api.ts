@@ -2955,6 +2955,8 @@ export type GlobalSearchResult = {
   /** Elemente der Bibliothek und ihre Blöcke (nur mit templates.edit) */
   elements?: { id: string; title: string; description: string | null }[];
   blocks?: { element_id: string; element_title: string; block_id: number; title: string }[];
+  /** Strukturierte Listen nach Namen (nur mit meetings.edit), ohne Einträge */
+  lists?: { id: string; name: string; description: string | null }[];
 };
 
 /** GET /api/public-links (app/public_links): gerade gültige Zugangswege ohne Anmeldung. */

@@ -15,7 +15,7 @@ import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo } from "@/types/api";
 import { buildSettingEntries } from "@/lib/search/setting-entries";
 
-export type SearchGroup = "recent" | "list" | "pages" | "settings" | "roles" | "elements" | "people" | "files";
+export type SearchGroup = "recent" | "list" | "pages" | "settings" | "roles" | "elements" | "lists" | "people" | "files";
 
 export type SearchEntry = {
   id: string;

@@ -3,7 +3,7 @@
 import { DocumentExportDialog } from "@/components/documents/export-dialog";
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -38,6 +38,8 @@ type ListManagerProps = {
   initialEntriesByList: Record<string, StructuredListEntry[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
+  /** Liste, die beim Öffnen gewählt wird (?open=<id>, z. B. aus der globalen Suche) */
+  autoOpenId?: string | null;
 };
 
 type ListDefinitionFormState = {
@@ -113,6 +115,7 @@ export function ListManager({
   initialEntriesByList,
   availableParticipants,
   availableEvents,
+  autoOpenId = null,
 }: ListManagerProps) {
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("lists");
@@ -120,7 +123,14 @@ export function ListManager({
   const confirm = useConfirm();
   const [lists, setLists] = useState(initialLists);
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
-  const [selectedListId, setSelectedListId] = useState<string | null>(initialLists[0]?.id ?? null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(
+    (autoOpenId && initialLists.some((definition) => definition.id === autoOpenId) ? autoOpenId : initialLists[0]?.id) ?? null
+  );
+  // Erneut gesucht, während /lists schon offen ist: neue ?open=-Liste wählen
+  useEffect(() => {
+    if (autoOpenId && lists.some((definition) => definition.id === autoOpenId)) setSelectedListId(autoOpenId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenId]);
   const [search, setSearch] = useState("");
   const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

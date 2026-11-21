@@ -2768,6 +2768,7 @@
       "requires_any": [
         [
           "files.read",
+          "meetings.edit",
           "participants.read",
           "photos.read",
           "templates.edit"
@@ -2775,6 +2776,7 @@
       ],
       "branches": [
         "files.read",
+        "meetings.edit",
         "participants.contacts",
         "participants.read",
         "photos.read",
