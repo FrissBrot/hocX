@@ -8,7 +8,79 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_admin_alert_ack`).
+## [1.5.1] - 2026-11-22
+
+Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
+Warnungen quittieren, Exporte, Admin-Tabellen), Erkennung eines gestörten Maildienstes, Ablehnung
+geleakter Passwörter und Risikosignal «neues Land», eine einheitliche Update-/Wartungsseite, die neue
+Foto-Ansicht, Keywords und Synonyme in der Suche, Listen in der globalen Suche, Dateiablage per
+Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.5.0 mit
+`./scripts/deploy.sh <test|prod>`; sieben Migrationen (0209–0218).
+
+### Update
+
+**Kurz für Betreiber (Update von 1.5.0):**
+
+- `./scripts/deploy.sh <test|prod>` wie gewohnt. Neue Migrationen (lineare Kette ab `0208_platform_metrics`):
+  `0209_admin_alert_ack`, `0210_email_delivery_status`, `0212_maintenance_public_update`,
+  `0214_template_content_version`, `0215_auth_geo_country`, `0217_file_keywords_synonyms`,
+  `0218_album_item_auto_source` (Details unten).
+- **Neue Einstellungen (kein Secret):** `PASSWORD_LEAK_CHECK` (`on`/`local-only`/`off`, Standard `on`),
+  `PASSWORD_LEAK_MIN_COUNT`, `GEOIP_AUTO_UPDATE` (Standard an) und optional `HOCX_STATUS_PAGE_URL`
+  (https, Link auf der Update-Seite, wenn ein Update länger als 15 Minuten dauert).
+- **Ausgehende Verbindungen:** das Backend braucht HTTPS zu `api.pwnedpasswords.com` (Leak-Prüfung neuer
+  Passwörter), der job-worker HTTPS zu `download.db-ip.com` (Länder-Datenbank). Ohne Internet:
+  `PASSWORD_LEAK_CHECK=local-only` (lokale Liste im Image) und `GEOIP_AUTO_UPDATE=false` (RUNBOOK Abschnitt 23).
+- **Neues Volume `geoip_data`** (job-worker schreibt, Backend liest); der Job `geoip_update` lädt die
+  Datenbank beim ersten Tick. Fehlt sie, entfällt nur das Signal «neues Land» (Systemstatus «nicht eingerichtet»).
+- **Vereinslogos:** Altlogos ohne Raster-Endung (z. B. SVG oder ohne Dateiendung) werden nicht mehr
+  ausgeliefert (404) und müssen in den Mandant-Einstellungen neu hochgeladen werden (PNG/JPEG/GIF/WebP).
+- **Risikosignal «neues Land» (+10 Punkte):** zusammen mit neuem Gerät und neuem Netz erreicht eine
+  Anmeldung damit die Stufe, ab der Konten ohne zweiten Faktor einen Bestätigungscode per Mail bekommen.
+  Nutzer im Ausland bekommen auf neuen Geräten deshalb eher einen Mailcode.
+- **Plattform-Admins setzen keine Passwörter mehr für Benutzer:** die Benutzerverwaltung verschickt einen
+  Zurücksetzungslink bzw. eine Einladung (funktionierender E-Mail-Versand nötig; Notweg über
+  `python -m app.admin_cli`, RUNBOOK Abschnitt 22).
+- **Erster Deploy auf 1.5.1 zeigt noch die alte Wartungsseite:** die neue, einheitliche Update-Seite
+  liefert erst das neue Release aus; ab dem nächsten Update erscheint sie in beiden Wegen.
+- **E-Mail-Versand prüfen:** ist der Versand gestört, werden Anmeldungen, die einen Mailcode brauchen,
+  sofort mit «Anmeldung aktuell nicht möglich» abgewiesen; der Systemstatus zeigt die neue Prüfung
+  «E-Mail-Versand» (ntfy-Alarm `email:smtp:<grund>`).
+- Neue Abhängigkeit `maxminddb==3.2.0` (Apache-2.0); neuer Hintergrundjob `geoip_update` (Lock-ID 202600045).
+
+**Migrationen im Detail:**
+
+- `0209_admin_alert_ack`: quittierte Sicherheitswarnungen (Plattform-Admin).
+- `0210_email_delivery_status`: Spalten für Fehler in Folge, Fehlerklasse und «gestört seit» in
+  `platform_notification_settings` (Plattform-Einstellung, keine Mandantendaten).
+- `0212_maintenance_public_update`: öffentlicher Wartungsstatus mit `kind` (`update`/`maintenance`),
+  `from_version`, `to_version` (Funktion für die Abgabebox).
+- `0214_template_content_version`: Vorlagenversion zählt inhaltliche Änderungen per Trigger hoch.
+- `0215_auth_geo_country`: drei nullable Spalten mit Ländercode (`auth_event.src_country`,
+  `auth_session.country`, `auth_known_device.last_country`), nie die IP.
+- `0217_file_keywords_synonyms`: Spalte `stored_file.keywords` (leer, kein Backfill), Tabelle
+  `search_synonym_group` (`tenant_id`, RLS); Suchdokument und Trigger der Fotosuche nehmen Keywords auf.
+- `0218_album_item_auto_source`: `photo_album_item.auto_source` markiert Einträge, die nur wegen des
+  Aufnahmedatums in einem Zyklus-Perioden-Album stehen (Bestand bleibt unmarkiert).
+
+### Sicherheit
+
+- **Geleakte Passwörter werden abgelehnt (SEC-AUTH-015):** alle Setzpfade (Einladung, Passwort
+  vergessen, Profil, Verwaltung, Plattform-Admin-Konten) prüfen nach der Stärkeregel gegen die
+  Pwned-Passwords-Range-API (k-Anonymität: nur 5 Hex-Zeichen des SHA-1, mit Padding), Rückfall auf
+  eine lokale Liste (SecLists, MIT). Eigene Meldung «Dieses Passwort ist aus einem Datenleck bekannt»
+  in allen Sprachen. Plattform-Admin-Konten bekommen dabei dieselbe Stärkeregel wie Konten.
+- **Risikosignal «neues Land»:** Land der Anmeldung lokal aus DB-IP «IP to Country Lite» (CC BY 4.0);
+  Land in 90 Tagen erfolgreicher Anmeldungen nie gesehen → 10 Punkte, allein nie entscheidend, ohne
+  Baseline kein Signal. Gespeichert wird nur der Ländercode, nie die IP.
+- **Vereinslogo-Route `/api/tenants/{id}/profile-image` nicht mehr für alle öffentlich:** ohne Anmeldung
+  nur, wo hocX das Logo ohnehin öffentlich zeigt (eigene App-Domain, Prüfseite mit Vereinsidentität),
+  angemeldet nur eigener Mandant und vertraute Partner; sonst einheitlich 404. Rate-Limit, Cache nur
+  für öffentliche Logos.
+- **Duplikat-Orakel geschlossen:** Vorab-Abgleich, Dokument-, Protokollbild-, Word-Import-, Galerie-
+  und Abgabe-Link-Uploads melden nur Duplikate, die die Person sehen darf; unsichtbare werden eigene
+  Kopien ohne fremde ID. Metadaten werden nur bei verwaltbaren Dateien ergänzt.
+- Sicherheitshinweis-Mails «lassen sich nicht abschalten» (Text wie im Design und in en/fr/it).
 
 ### Geändert
 
@@ -25,9 +97,48 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
   (Audit-Log, Fehlerprotokoll, Uploads, Benutzer).
 - **Audit-Log:** Filter Zeitraum, Akteur (Art, Plattform-Admin) und Entität, Details als Schlüssel-Wert-Liste.
 - **Plattform-Admins:** Liste mit Anzahl Passkeys und letzter Anmeldung.
+- **Gleiche Meldung während eines Updates:** Bisher wechselte die Anzeige beim Deploy zwischen der
+  In-App-Wartungsseite («hocX wird gerade gewartet», Deploy-Fenster) und der statischen
+  Traefik-Seite («hocX wird gerade aktualisiert», Neustart der Container). Jetzt zeigen beide Wege
+  während eines Updates dieselbe Update-Meldung im neuen Design: «hocX wird aktualisiert», alte →
+  neue Version, «Jetzt neu laden» (prüft sofort), automatisches Neuladen und nach 15 Minuten «Das
+  Update dauert länger». Anmeldeseite und Abgabebox-Banner ziehen mit. Geplante oder manuelle
+  Wartung zeigt die neue Wartungsseite mit voraussichtlichem Ende, Spanne, Fortschrittsbalken und
+  Countdown bis zur nächsten Prüfung (RUNBOOK Abschnitt 20).
+- Öffentlicher Wartungsstatus: neue Felder `kind` (`update`/`maintenance`), `from_version`,
+  `to_version`.
+- **Foto-Ansicht im neuen Design:** Kopfzeile mit Badges (LIVE, Best-of, Datum geschätzt/korrigiert),
+  Teilen-Popover (Freigabelink nur für dieses Foto), Löschen-Popover (Papierkorb mit Rückgängig),
+  Filmstreifen, Vergleichsmodus für Duplikat-/Ähnlich-Gruppen, Seitenleiste mit Aufnahmedatum
+  (Setzen/Verschieben mit Vorschau/Zurücksetzen), Alben, Tags, Keywords, Analyse und Details;
+  Tastenkürzel B (Best-of) und Entf (Löschen).
+- **Aufnahmedatum verschieben ohne Uhrzeit:** Fotos ohne Uhrzeit (geschätztes Datum, Korrektur ohne
+  Uhrzeit) werden nur um die ganzen Tage des Versatzes verschoben (−13 h → unverändert, −30 h → −1 Tag);
+  Vorschau, Bestätigung und Ergebnis nennen sie («unverändert – keine Uhrzeit»).
+- **Auto-Alben ziehen Datumskorrekturen nach:** Fotos, die nur wegen ihres Aufnahmedatums in einem
+  Zyklus-Perioden-Album stehen, wandern bei Korrektur, Verschieben, Zurücksetzen oder Schätzdatum in die
+  passende Periode; manuelle Zuordnungen, Abgabe- und Termin-Alben bleiben unberührt.
+- **Protokolle:** Reihenfolge der Terminfelder «aus Termin/Pendenz» kommt in geplanten und vorbereiteten
+  Protokollen sofort an; die Vorlagenversion zählt Änderungen, geplante Protokolle mit älterem Stand
+  zeigen «Vorlage wurde geändert» mit «Aus Vorlage neu laden».
+- **Vorlagen:** Einfügelinie beim Ziehen von Terminfeldern und Tabellenzeilen.
+- **Pendenzen:** Escape in der Dateisuche schliesst nur die Trefferliste, nicht den Dialog.
+- Ablage: mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
 
 ### Neu
 
+- **Maildienst-Ausfall wird erkannt:** Jeder Versandversuch (Benachrichtigungen, Login-Code,
+  Test-Mail) meldet sein Ergebnis an einen zentralen Versandstatus. Ist der Versand gestört, zeigt die
+  Anmeldung statt «Code versendet» sofort «Anmeldung aktuell nicht möglich, wende dich an deinen
+  Administrator» (nur für Anmeldungen, die einen Mailcode brauchen; bekannte Geräte und Konten mit
+  zweitem Faktor sind nicht betroffen). «Passwort vergessen» und Einladungen weisen auf die Störung hin.
+- **Systemmonitoring:** neue Prüfung «E-Mail-Versand» unter `/admin/system` (letzter Erfolg, letzter
+  Fehler, Fehler in Folge, Fehlerklasse) mit ntfy-Alarm `email:smtp:<grund>`; nicht eingerichteter
+  Versand erscheint ruhig als eigener Zustand. Versandfehler landen gedrosselt im Fehlerprotokoll
+  (ohne Empfängeradressen). Dazu Checks `password_leak` und `geoip` («nicht eingerichtet» ohne Alarm).
+- «Angemeldete Geräte», Mails «neues Gerät»/Sicherheitswarnung und die Ereignisliste im Admin-Panel
+  zeigen das Land (übersetzter Name, Quellenangabe DB-IP); die Ereignisliste zeigt zusätzlich die
+  Risikogründe.
 - Sicherheitswarnungen quittieren (gilt, solange die Warnung offen ist; zählt nicht mehr in Glocke und
   Übersicht).
 - Export von Anmeldeereignissen und Audit-Log (JSONL, mit Passwort verschlüsselt, höchstens 92 Tage,
@@ -39,61 +150,6 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
 - Mandanten-Detail: Tabs Features & Module, Nutzung, Sicherheit.
 - Sicherheitsereignis `reset.request` (layer `device`), wenn ein Passwort-Reset über das Gerätekontingent
   läuft oder es erschöpft ist.
-- E2E: axe-Prüfung (WCAG 2.1 A/AA) aller Admin-Seiten.
-### Neu
-
-- **Maildienst-Ausfall wird erkannt:** Jeder Versandversuch (Benachrichtigungen, Login-Code,
-  Test-Mail) meldet sein Ergebnis an einen zentralen Versandstatus (Migration
-  `0210_email_delivery_status`). Ist der Versand gestört, zeigt die Anmeldung statt «Code
-  versendet» sofort «Anmeldung aktuell nicht möglich, wende dich an deinen Administrator» (nur für
-  Anmeldungen, die einen Mailcode brauchen; bekannte Geräte und Konten mit zweitem Faktor sind nicht
-  betroffen). «Passwort vergessen» und Einladungen weisen auf die Störung hin.
-- **Systemmonitoring:** neue Prüfung «E-Mail-Versand» unter `/admin/system` (letzter Erfolg, letzter
-  Fehler, Fehler in Folge, Fehlerklasse) mit ntfy-Alarm `email:smtp:<grund>`; nicht eingerichteter
-  Versand erscheint ruhig als eigener Zustand. Versandfehler landen gedrosselt im Fehlerprotokoll
-  (ohne Empfängeradressen).
-### Update
-
-- Migration `0215_auth_geo_country` (drei nullable Spalten mit Ländercode: `auth_event.src_country`,
-  `auth_session.country`, `auth_known_device.last_country`).
-- Neues Volume `geoip_data` (job-worker schreibt, Backend liest) für die DB-IP-Länderdatenbank; der Job
-  `geoip_update` lädt sie beim ersten Tick. Ausgehend braucht der job-worker HTTPS zu
-  `download.db-ip.com`, das Backend zu `api.pwnedpasswords.com`. Ohne Internet:
-  `PASSWORD_LEAK_CHECK=local-only` und `GEOIP_AUTO_UPDATE=false` (RUNBOOK Abschnitt 23).
-- Neue Einstellungen (kein Secret): `PASSWORD_LEAK_CHECK` (`on`/`local-only`/`off`),
-  `PASSWORD_LEAK_MIN_COUNT`, `GEOIP_AUTO_UPDATE`. Neue Abhängigkeit `maxminddb==3.2.0` (Apache-2.0).
-
-### Sicherheit
-
-- **Geleakte Passwörter werden abgelehnt (SEC-AUTH-015):** alle Setzpfade (Einladung, Passwort
-  vergessen, Profil, Verwaltung, Plattform-Admin-Konten) prüfen nach der Stärkeregel gegen die
-  Pwned-Passwords-Range-API (k-Anonymität: nur 5 Hex-Zeichen des SHA-1, mit Padding), Rückfall auf
-  eine lokale Liste (SecLists, MIT). Eigene Meldung «Dieses Passwort ist aus einem Datenleck bekannt»
-  in allen Sprachen. Plattform-Admin-Konten bekommen dabei dieselbe Stärkeregel wie Konten.
-- **Risikosignal «neues Land»:** Land der Anmeldung lokal aus DB-IP «IP to Country Lite» (CC BY 4.0);
-  Land in 90 Tagen erfolgreicher Anmeldungen nie gesehen → 10 Punkte, allein nie entscheidend, ohne
-  Baseline kein Signal. Gespeichert wird nur der Ländercode, nie die IP.
-
-### Neu
-
-- «Angemeldete Geräte», Mails «neues Gerät»/Sicherheitswarnung und die Ereignisliste im Admin-Panel
-  zeigen das Land (übersetzter Name, Quellenangabe DB-IP); die Ereignisliste zeigt zusätzlich die
-  Risikogründe. Systemmonitor: Checks `password_leak` und `geoip` («nicht eingerichtet» ohne Alarm).
-### Geändert
-
-- **Gleiche Meldung während eines Updates:** Bisher wechselte die Anzeige beim Deploy zwischen der
-  In-App-Wartungsseite («hocX wird gerade gewartet», Deploy-Fenster) und der statischen
-  Traefik-Seite («hocX wird gerade aktualisiert», Neustart der Container). Jetzt zeigen beide Wege
-  während eines Updates dieselbe Update-Meldung im neuen Design: «hocX wird aktualisiert», alte →
-  neue Version, «Jetzt neu laden» (prüft sofort), automatisches Neuladen und nach 15 Minuten «Das
-  Update dauert länger». Anmeldeseite und Abgabebox-Banner ziehen mit. Geplante oder manuelle
-  Wartung zeigt die neue Wartungsseite mit voraussichtlichem Ende, Spanne, Fortschrittsbalken und
-  Countdown bis zur nächsten Prüfung (RUNBOOK Abschnitt 20).
-- Öffentlicher Wartungsstatus: neue Felder `kind` (`update`/`maintenance`), `from_version`,
-  `to_version`; Migration `0212_maintenance_public_update` (Funktion für die Abgabebox).
-- Optional `HOCX_STATUS_PAGE_URL` (https): Hinweis auf die Statusseite, wenn ein Update länger dauert.
-### Neu
-
 - **Keywords für Fotos und Dateien:** zusätzliche Suchbegriffe je Datei, «weniger verbindlich» als
   Tags – nirgends angezeigt, nur für die Suche (Gewicht wie Tags, Tippfehler-tolerant). Bearbeiten in
   der Foto-Ansicht (Seitenleiste), im Datei-Detail der Ablage und für mehrere auf einmal (Fotos:
@@ -103,13 +159,14 @@ Plattform-Admin, Rest des Umbaus (geplant für 1.5.1). Eine Migration (`0209_adm
   auch bei Tippfehlern im Suchwort): eingebauter Grundstock mit Vereins- und Schweizer Begriffen in
   de/en/fr/it (Velo↔Fahrrad, Hock↔Sitzung, Lager↔Zeltlager, Znüni↔Zvieri …) und eigene Gruppen je
   Verein unter Einstellungen › **Suche & Synonyme** (`settings.manage`).
-- **Ablage:** mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
-
-### Update
-
-- Migration `0217_file_keywords_synonyms`: Spalte `stored_file.keywords` (leer, kein Backfill),
-  Tabelle `search_synonym_group` (`tenant_id`, RLS), Suchdokument und Trigger der Fotosuche nehmen
-  Keywords auf.
+- **Listen in der globalen Suche (Strg/⌘+K):** strukturierte Listen erscheinen nach ihrem Namen als
+  eigene Gruppe «Listen» (nur mit `meetings.edit`, wie die Listenseite; Einträge werden nicht durchsucht).
+- **Dateien per Drag-and-Drop in Pendenzen:** Dropzone im Pendenz-Dialog mit Duplikat-Abgleich (nur
+  sichtbare Dateien), GPS-Rückfrage wie beim Foto-Upload; Abbrechen verwirft die im Dialog
+  hochgeladenen Dateien in den Papierkorb (wiederherstellbar).
+- **Website:** Logos der Mandanten in der Kundenleiste «Im Einsatz bei» (nur Mandanten mit
+  «auf der Website zeigen» und Logo; eigene, gehärtete Logo-Route).
+- E2E: axe-Prüfung (WCAG 2.1 A/AA) aller Admin-Seiten.
 
 ## [1.5.0] - 2026-11-21
 
