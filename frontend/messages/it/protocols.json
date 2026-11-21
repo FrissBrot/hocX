@@ -224,6 +224,8 @@
     "openOriginalDocument": "Apri documento originale",
     "createdAtPill": "Creato il {date}",
     "templateVersionPill": "Versione modello {version, number}",
+    "templateChangedHint": "Il modello è stato modificato",
+    "templateChangedReload": "Ricarica dal modello",
     "orderSaveFailed": "L'ordine non può essere salvato",
     "otherEditorWarningDescription": "Almeno un'altra persona sta modificando attivamente questo verbale in questo momento. Il cambio di stato verrà applicato immediatamente per tutti.",
     "otherEditorWarningTitle": "Un'altra persona sta modificando",

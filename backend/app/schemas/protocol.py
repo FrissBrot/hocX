@@ -86,6 +86,9 @@ class ProtocolRead(PublicIdModel):
     tenant_id: uuid.UUID
     template_id: uuid.UUID
     template_version: int
+    # Aktuelle Version der Vorlage (Migration 0214): höher als template_version heisst, die
+    # Vorlage wurde seit dem Erstellen bzw. letzten Abgleich geändert (Hinweis im Editor).
+    template_latest_version: int | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date

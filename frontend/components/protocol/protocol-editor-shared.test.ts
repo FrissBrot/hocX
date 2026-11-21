@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createTranslator } from "next-intl";
 
-import { attendanceParticipants, imageSimilarityNotice, protocolAttendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
+import { attendanceParticipants, configuredSourceFields, imageSimilarityNotice, protocolAttendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
 import { ParticipantSummary, ProtocolElement, ProtocolElementBlock } from "@/types/api";
 
 function participant(id: string, overrides: Partial<ParticipantSummary> = {}): ParticipantSummary {
@@ -177,5 +177,29 @@ describe("imageSimilarityNotice", () => {
   it("returns null without a warning", () => {
     expect(imageSimilarityNotice({ duplicate_warning: null }, (key) => key)).toBeNull();
     expect(imageSimilarityNotice({}, (key) => key)).toBeNull();
+  });
+});
+
+describe("configuredSourceFields", () => {
+  // Bug «Die gesetzte Reihenfolge kommt nicht im Protokoll-Editor an»: der Editor zeigt die
+  // Terminfelder in der Reihenfolge aus config.event_fields, nicht nach der Standardliste.
+  const saved = [
+    { field: "location", label: "", enabled: true },
+    { field: "spezial_time1", label: "Treffzeit TN", enabled: true },
+    { field: "program", label: "", enabled: true },
+    { field: "organizer_ids", label: "Organisatoren", enabled: true },
+    { field: "title", label: "", enabled: false },
+    { field: "spezial_text1", label: "", enabled: true },
+  ];
+
+  it("keeps the saved order and drops disabled and hidden fields", () => {
+    const fields = configuredSourceFields(saved, (field) => `std:${field}`, (field) => field === "spezial_text1");
+    expect(fields.map((entry) => entry.field)).toEqual(["location", "spezial_time1", "program", "organizer_ids"]);
+    expect(fields.map((entry) => entry.label)).toEqual(["std:location", "Treffzeit TN", "std:program", "Organisatoren"]);
+  });
+
+  it("treats older snapshots without enabled as chosen and ignores missing configs", () => {
+    expect(configuredSourceFields([{ field: "tag", label: " " }], (field) => field).map((entry) => entry.label)).toEqual(["tag"]);
+    expect(configuredSourceFields(null, (field) => field)).toEqual([]);
   });
 });

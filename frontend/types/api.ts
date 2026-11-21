@@ -1665,6 +1665,8 @@ export type ProtocolSummary = {
   tenant_id?: string;
   template_id?: string;
   template_version?: number;
+  /** Aktuelle Version der Vorlage; höher als template_version = Vorlage seither geändert. */
+  template_latest_version?: number | null;
   protocol_number: string;
   title: string | null;
   protocol_date?: string;

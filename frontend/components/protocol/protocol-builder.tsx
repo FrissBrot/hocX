@@ -16,35 +16,23 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
 import { formatDate, formatDateTime, toIntlLocale } from "@/lib/utils/format";
-import { ProtocolListCycle, ProtocolSummary, ProtocolTemplateSyncResult, TemplateSummary } from "@/types/api";
+import { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
 import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
+import { protocolActionError, useTemplateSync } from "@/components/protocol/use-template-sync";
 
 const PAGE_SIZE = 100;
 const SERVER_SEARCH_DEBOUNCE_MS = 300;
 
-/** Bekannte englische Backend-Meldungen in Benutzersprache, sonst die Meldung selbst. */
-export function protocolActionError(error: unknown, t: (key: string) => string, fallback: string): string {
-  if (error instanceof ApiError && error.status === 409 && /already abgeschlossen/i.test(error.message)) {
-    return t("alreadyFinalizedError");
-  }
-  const code = error instanceof ApiError && error.status === 409 ? (error.detail as { code?: string } | undefined)?.code : undefined;
-  if (code === "protocol_has_fines") {
-    return t("deleteHasFinesError");
-  }
-  if (code === "protocol_has_collected_fines") {
-    return t("deleteHasCollectedFinesError");
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+export { protocolActionError };
 
 /** Fügt nachgeladene Protokolle an, ohne bereits vorhandene doppelt aufzunehmen. */
 export function mergeProtocols(current: ProtocolSummary[], incoming: ProtocolSummary[]): ProtocolSummary[] {
@@ -342,40 +330,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
     }
   }
 
-  // Elemente aus der aktuellen Vorlage neu aufbauen, erfasste Daten bleiben erhalten. Erst
-  // eine Vorschau (dry_run), damit klar ist, was hinzukommt, wegfällt oder stehen bleibt.
+  // Elemente aus der aktuellen Vorlage neu aufbauen, erfasste Daten bleiben erhalten (Rückfrage
+  // mit Vorschau in useTemplateSync).
+  const runTemplateSync = useTemplateSync();
   async function syncWithTemplate(protocolId: string) {
-    const url = `/api/protocols/${protocolId}/sync-template`;
-    try {
-      const preview = await browserApiFetch<ProtocolTemplateSyncResult>(`${url}?dry_run=true`, { method: "POST" });
-      const listFormat = new Intl.ListFormat(toIntlLocale(locale), { style: "long", type: "conjunction" });
-      const message = [
-        t("syncTemplateConfirmMessage", {
-          updated: preview.updated_elements.length,
-          added: preview.added_elements.length,
-          removed: preview.removed_elements.length,
-        }),
-        preview.removed_elements.length
-          ? t("syncTemplateConfirmRemoved", { names: listFormat.format(preview.removed_elements) })
-          : null,
-        preview.kept_elements.length
-          ? t("syncTemplateConfirmKept", { count: preview.kept_elements.length, names: listFormat.format(preview.kept_elements) })
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" ");
-      const ok = await confirm({
-        title: t("syncTemplateConfirmTitle"),
-        message,
-        confirmLabel: t("syncTemplateConfirmLabel"),
-      });
-      if (!ok) return;
-      await browserApiFetch<ProtocolTemplateSyncResult>(url, { method: "POST" });
-      showToast(t("syncTemplateDone"), "success");
-      router.refresh();
-    } catch (error) {
-      showToast(protocolActionError(error, t, t("syncTemplateFailed")), "error");
-    }
+    if (await runTemplateSync(protocolId)) router.refresh();
   }
 
   function renderProtocolRow(protocol: ProtocolSummary) {

@@ -411,6 +411,23 @@ export function asObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
 }
 
+export type ConfiguredSourceField = { field: string; label: string; enabled?: boolean };
+
+/** Felder «aus Termin»/«aus Pendenz» eines Blocks (config.event_fields bzw. todo_fields) in der
+ * gespeicherten Reihenfolge, wie im Baustein-Editor sortiert - bewusst ohne Umsortieren nach der
+ * Standardliste. Abgewählte (enabled: false) und ausgeblendete Felder fehlen; ohne eigenes Label
+ * gilt `fallbackLabel` (Alias des Mandanten bzw. Standardname). */
+export function configuredSourceFields(
+  saved: unknown,
+  fallbackLabel: (field: string) => string,
+  isHidden: (field: string) => boolean = () => false
+): ConfiguredSourceField[] {
+  if (!Array.isArray(saved)) return [];
+  return (saved as ConfiguredSourceField[])
+    .filter((entry) => entry && typeof entry.field === "string" && entry.enabled !== false && !isHidden(entry.field))
+    .map((entry) => ({ ...entry, label: entry.label?.trim() || fallbackLabel(entry.field) }));
+}
+
 // repeat_source_id in the snapshot is the internal event id; EventSummary.id is the
 // public UUID, so resolve through the block's public_reference_ids.
 export function blockEventPublicId(block: ProtocolElementBlock): string | undefined {

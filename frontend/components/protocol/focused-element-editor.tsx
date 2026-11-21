@@ -81,6 +81,7 @@ import {
   TodoMiniMenu,
   asObject,
   blockEventPublicId,
+  configuredSourceFields,
   protocolAttendanceParticipants,
   canCreateProtocolEventDraft,
   compareIsoDate,
@@ -2332,17 +2333,17 @@ function FocusedElementEditorImpl({
                   const linkedEvent = linkedEventId ? availableEvents.find((e) => e.id === linkedEventId) : undefined;
                   // Ausgeblendete Spezialfelder fehlen; ohne eigenes Label im Block gilt der
                   // Name aus den Mandant-Einstellungen (Alias), sonst der Standardname
-                  const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
-                    ? (blockConfig.event_fields as Array<{ field: string; label: string; enabled?: boolean }>)
-                        .filter((ef) => ef.enabled !== false && !eventFieldConfig.hidden(ef.field))
-                        .map((ef) => ({ ...ef, label: ef.label?.trim() || eventFieldConfig.label(ef.field, tTemplates(`eventField.${ef.field}`)) }))
+                  const configuredEventFields = isAutoEventBlock
+                    ? configuredSourceFields(
+                        blockConfig.event_fields,
+                        (field) => eventFieldConfig.label(field, tTemplates(`eventField.${field}`)),
+                        eventFieldConfig.hidden
+                      )
                     : [];
                   // «Pro Pendenz»: Felder der Pendenz zuoberst, nur lesend (bearbeitet wird die Pendenz)
                   const linkedTodo = blockConfig.repeat_source_type === "todo" ? block.linked_todo ?? null : null;
-                  const configuredTodoFields = linkedTodo && Array.isArray(blockConfig.todo_fields)
-                    ? (blockConfig.todo_fields as Array<{ field: string; label: string; enabled?: boolean }>)
-                        .filter((tf) => tf.enabled !== false)
-                        .map((tf) => ({ ...tf, label: tf.label?.trim() || tTemplates(`todoField.${tf.field}`) }))
+                  const configuredTodoFields = linkedTodo
+                    ? configuredSourceFields(blockConfig.todo_fields, (field) => tTemplates(`todoField.${field}`))
                     : [];
                   const linkedTodoValue = (todo: LinkedTodo, field: string): string => {
                     if (field === "due_date") return todo.due_date ? formatDate(todo.due_date) : todo.due_marker ?? "";

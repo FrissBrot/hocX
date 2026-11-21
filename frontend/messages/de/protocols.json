@@ -224,6 +224,8 @@
     "openOriginalDocument": "Original-Dokument öffnen",
     "createdAtPill": "Erstellt am {date}",
     "templateVersionPill": "Vorlagenversion {version, number}",
+    "templateChangedHint": "Vorlage wurde geändert",
+    "templateChangedReload": "Aus Vorlage neu laden",
     "orderSaveFailed": "Reihenfolge konnte nicht gespeichert werden",
     "otherEditorWarningDescription": "Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen.",
     "otherEditorWarningTitle": "Andere Person bearbeitet gerade",
