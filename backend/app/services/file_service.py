@@ -1317,6 +1317,30 @@ class FileService:
         db.flush()
         return outcome
 
+    def visible_overview_items(self, db: Session, user, public_ids: list[uuid.UUID]) -> dict[uuid.UUID, FileOverviewItem]:
+        """Die Dateien aus public_ids, die die Person in der Dateisuche (GET /files) sähe: eigener
+        Mandant, files.read/photos.read getrennt, Reichweite für Abgabe-Dateien, kein Papierkorb.
+        Fragt immer ab (auch mit leerer Liste), damit Aufrufer kein Zeit-Orakel bilden."""
+        from app.core.permissions import P
+        from app.services import context_visibility_service
+
+        if user.current_tenant_id is None:
+            return {}
+        if not user.can(P.FILES_READ) and not user.can(P.PHOTOS_READ):
+            return {}
+        only_images = not user.can(P.FILES_READ)
+        exclude_images = not only_images and not user.can(P.PHOTOS_READ)
+        items = self.list_tenant_files(
+            db,
+            user.current_tenant_id,
+            limit=max(len(public_ids), 1),
+            file_ids=list(public_ids),
+            only_images=only_images,
+            exclude_images=exclude_images,
+            readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        )
+        return {item.id: item for item in items}
+
     def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
         return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)
 
@@ -1921,6 +1945,7 @@ class FileService:
         upload_cycle_config_id: int | None = None,
         file_results: list[dict] | None = None,
         allow_images: bool = False,
+        allow_duplicates: bool = False,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -1943,13 +1968,19 @@ class FileService:
         duplicates: list[tuple[str, str]] = []
         # Vorfilter und Virenscan ohne den Upload-Lock des Mandanten (CONC-008), danach unter Lock
         # erneut auf Duplikate prüfen.
-        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        # allow_duplicates (Pendenz-Dialog, «Kopie hochladen»): kein Überspringen exakter Duplikate,
+        # jede Datei wird wie neu gespeichert (Virenscan, Magic-Byte, Quota gelten unverändert).
+        duplicate_errors: list[str] = []
+        if not allow_duplicates:
+            files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
         scanned = list(zip(files, await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         ))) if files else []
         await acquire_upload_lock(db, tenant_id)
-        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
-        duplicate_errors += late_duplicate_errors
+        still_new = files
+        if not allow_duplicates:
+            still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+            duplicate_errors += late_duplicate_errors
         keep = {id(file) for file in still_new}
         scanned = [(file, status) for file, status in scanned if id(file) in keep]
         files = [file for file, _status in scanned]

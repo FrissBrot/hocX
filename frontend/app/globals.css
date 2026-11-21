@@ -7344,6 +7344,7 @@ button.table-row-link.table-row-toggle {
   grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-1);
 }

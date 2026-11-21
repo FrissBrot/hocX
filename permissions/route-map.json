@@ -1728,7 +1728,17 @@
         "files.manage"
       ],
       "requires_if": [
+        "photos.manage",
         "submissions.manage"
+      ]
+    },
+    "POST /api/files/duplicate-check": {
+      "handler": "files.check_file_duplicates",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ]
     },
     "GET /api/files/gallery-upload-jobs": {

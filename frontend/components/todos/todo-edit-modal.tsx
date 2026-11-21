@@ -21,9 +21,15 @@ import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api"
 import { useConfirm } from "@/contexts/confirm-context";
 import { TodoFineSection, type TodoFineDraft } from "@/components/finances/todo-fine-section";
 import { TodoAutoCloseHint, TodoCollectPanel, TodoSubmittedFileItems, useTodoSubmissionStatus } from "./todo-submission-collect";
+import { TodoFileDropOverlay, TodoPendingUploadItems, useTodoDialogDropzone } from "./todo-file-drop";
+import { useTodoFileUpload } from "./use-todo-file-upload";
 
-export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false, canCollectSubmission = false, canReadSubmission = false, onUpdated }: {
+export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false, canCollectSubmission = false, canReadSubmission = false, onUpdated, canUploadFiles = false, canUploadImages = false }: {
   todo: TodoListItem;
+  /** Dateien hochladen (Ziehen ins Popup, «Datei hochladen …»): files.manage */
+  canUploadFiles?: boolean;
+  /** Bilder dabei annehmen: photos.manage */
+  canUploadImages?: boolean;
   /** «Datei einsammeln» (Dateien) anbieten: submissions.manage (inkl. Modul Abgabebox) und Pendenzen bearbeiten */
   canCollectSubmission?: boolean;
   /** Stand der Abgabe zeigen (Link, eingereichte Dateien): submissions.read (inkl. Modul Abgabebox) */
@@ -70,7 +76,16 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todo.id]);
 
+  const upload = useTodoFileUpload({
+    attachedIds: detailsDraft?.files.map((file) => file.id) ?? [],
+    onAttach: (file) => setDetailsDraft((current) => current && !current.files.some((item) => item.id === file.id) ? { ...current, files: [...current.files, file] } : current),
+    canUploadImages,
+  });
+  const uploadEnabled = editable && canUploadFiles && !!detailsDraft;
+  const dropzone = useTodoDialogDropzone((files) => void upload.uploadFiles(files), uploadEnabled);
+  const uploading = upload.pending.length > 0;
   const fileCount = (detailsDraft?.files.length ?? 0) + (submission?.files.length ?? 0);
+  const showFileList = fileCount > 0 || uploading;
   const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
   const filesChanged = !!details && !!detailsDraft && detailsDraft.files.map((file) => file.id).join() !== details.files.map((file) => file.id).join();
 
@@ -84,7 +99,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   }
 
   async function save() {
-    if (!editable || !draft.task.trim()) return;
+    if (!editable || !draft.task.trim() || uploading) return;
     setBusy(true);
     try {
       // Nur Geändertes senden: ein mitgeschickter, unveränderter Status setzte früher das
@@ -150,7 +165,8 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   }
 
   return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) onClose(); }} onClose={() => { if (!busy) onClose(); }}>
-    <header className="todo-edit-heading">
+    <TodoFileDropOverlay active={dropzone.isDragging} />
+    <header className="todo-edit-heading" ref={dropzone.anchorRef}>
       <div className="todo-edit-eyebrow">{t("editEyebrow")} {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
       <input aria-label={t("colTask")} className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />
       <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={onClose}><ActionIcon name="close" /></button>
@@ -174,7 +190,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
         <div className="field-stack"><span className="todo-collect-files-head"><span className="field-label">{t("filesLabel")}</span>
           {fileCount > 0 && <small className="muted">{t("filesCount", { count: fileCount })}</small>}</span>
           {detailsDraft && <>
-            {fileCount > 0 ? <ul className="todo-edit-files">
+            {showFileList ? <ul className="todo-edit-files">
               <TodoSubmittedFileItems todo={draft} status={submission} />
               {detailsDraft.files.map((file) => <li key={file.id}>
                 <a className="todo-edit-file" href={file.content_url} target="_blank" rel="noreferrer">
@@ -185,8 +201,9 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
                 {editable && <button type="button" className="button-icon-soft-sm" aria-label={t("removeFile", { name: file.original_name })} title={t("removeFile", { name: file.original_name })}
                   onClick={() => setDetailsDraft((current) => current && { ...current, files: current.files.filter((item) => item.id !== file.id) })}><ActionIcon name="close" /></button>}
               </li>)}
+              <TodoPendingUploadItems pending={upload.pending} />
             </ul> : !canEdit && <span className="muted">{t("filesEmpty")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
-            {editable && <TodoFilePicker excludeIds={detailsDraft.files.map((file) => file.id)} onPick={(file) => setDetailsDraft((current) => current && { ...current, files: [...current.files, file] })} />}
+            {editable && <TodoFilePicker excludeIds={detailsDraft.files.map((file) => file.id)} onPick={(file) => setDetailsDraft((current) => current && { ...current, files: [...current.files, file] })} onUploadFiles={uploadEnabled ? (files) => void upload.uploadFiles(files) : undefined} />}
           </>}
           <TodoCollectPanel todo={draft} status={submission} canCollect={canCollectSubmission && canEdit} disabled={busy} onBusyChange={setCollecting} onTodoChange={applyServerTodo} />
         </div>
@@ -229,7 +246,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     </div>
     <footer className="todo-edit-footer">
       {canEdit && <button type="button" className="todo-edit-delete" disabled={busy} onClick={() => void remove()}>{t("deleteButton")}</button>}
-      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>{canEdit && <button type="button" className="button-primary" disabled={busy || !draft.task.trim()} onClick={() => void save()}>{busy ? t("savingEllipsis") : t("saveButton")}</button>}</div>
+      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>{canEdit && <button type="button" className="button-primary" disabled={busy || uploading || !draft.task.trim()} onClick={() => void save()}>{busy ? t("savingEllipsis") : t("saveButton")}</button>}</div>
     </footer>
   </Modal>;
 }

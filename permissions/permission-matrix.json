@@ -949,6 +949,13 @@
         "writer"
       ]
     },
+    "POST /api/files/duplicate-check": {
+      "handler": "files.check_file_duplicates",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "GET /api/files/gallery-upload-jobs": {
       "handler": "files.list_gallery_upload_jobs",
       "allowed": [

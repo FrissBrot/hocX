@@ -260,5 +260,21 @@
       "protocol_closed": "Le procès-verbal est clôturé.",
       "todo_not_submission": "Cette tâche n'appartient à aucune remise."
     }
+  },
+  "fileDrop": {
+    "searchHint": "ou glisser dans la fenêtre",
+    "uploadOption": "Téléverser un fichier …",
+    "overlayTitle": "Relâcher pour joindre",
+    "overlayText": "Le fichier sera joint à cette tâche sous « Fichiers ».",
+    "uploading": "Téléversement …",
+    "uploaded": "« {name} » téléversé et joint.",
+    "uploadFailed": "« {name} » n’a pas pu être téléversé.",
+    "duplicateTitle": "Fichier déjà existant",
+    "duplicateMessage": "Ce fichier existe déjà : {name} ({place}, {date}).",
+    "duplicateMessageNoPlace": "Ce fichier existe déjà : {name} ({date}).",
+    "attachExisting": "Joindre l’existant",
+    "uploadCopy": "Téléverser une copie",
+    "attachedExisting": "Fichier existant « {name} » joint.",
+    "alreadyAttached": "« {name} » est déjà joint à cette tâche."
   }
 }

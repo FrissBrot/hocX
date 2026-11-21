@@ -46,6 +46,9 @@ from app.schemas.files import (
     ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
+    FileDuplicateCheckRequest,
+    FileDuplicateCheckResponse,
+    FileDuplicateMatch,
     FileBulkDeleteResult,
     FileBulkTagsUpdate,
     FileOverviewItem,
@@ -71,6 +74,7 @@ from app.schemas.files import (
     UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
+from app.services import upload_precheck_service
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
@@ -456,6 +460,35 @@ def precheck_uploads(
     return UploadPrecheckResponse(results=results)
 
 
+@router.post("/files/duplicate-check", response_model=FileDuplicateCheckResponse)
+def check_file_duplicates(
+    payload: FileDuplicateCheckRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Gibt es Dateien mit diesem Inhalt (SHA-256) schon? Für die Rückfrage «Bestehende anhängen /
+    Kopie hochladen» beim Hochladen in eine Pendenz. Gemeldet werden nur Dateien des eigenen
+    Mandanten, die die Person auch in der Dateisuche (GET /files) sehen würde - gleiche Rechte,
+    gleiche Reichweite für Abgabe-Dateien, kein Papierkorb. Ein Hash eines fremden Mandanten oder
+    einer unsichtbaren Datei ergibt dieselbe Antwort wie ein unbekannter (kein Existenz-Orakel;
+    die Sichtbarkeitsabfrage läuft auch ohne Kandidaten, damit die Antwortzeit nichts verrät).
+    POST statt GET, damit die Hashes nicht in Logs/URLs landen; der Endpunkt ändert nichts."""
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    wanted = list(dict.fromkeys(checksum.lower() for checksum in payload.sha256))
+    existing = upload_precheck_service.find_existing(db, user.current_tenant_id, wanted)
+    candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+    visible = service.visible_overview_items(db, user, candidate_ids)
+    matches: list[FileDuplicateMatch] = []
+    for checksum in wanted:
+        # Älteste sichtbare Datei mit diesem Inhalt (find_existing sortiert nach id)
+        match = next((visible[row.public_id] for row in existing.get(checksum, []) if row.public_id in visible), None)
+        if match is not None:
+            matches.append(FileDuplicateMatch(sha256=checksum, file=match))
+    return FileDuplicateCheckResponse(matches=matches)
+
+
 @router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
@@ -667,6 +700,12 @@ async def upload_documents(
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
     cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Pendenz-Dialog: «Kopie hochladen» bzw. keine sichtbare Datei mit gleichem Inhalt - dann
+    # wird auch ein (evtl. für die Person unsichtbares) exaktes Duplikat neu gespeichert, statt
+    # es zu überspringen und dessen ID zurückzugeben.
+    allow_duplicates: Annotated[bool, Form()] = False,
+    # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
+    allow_images: Annotated[bool, Form()] = False,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -677,7 +716,7 @@ async def upload_documents(
     kommt direkt zurueck."""
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, db=db, user=user)
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, db=db, user=user)
 
 
 async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
@@ -690,6 +729,12 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
     cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Pendenz-Dialog: «Kopie hochladen» bzw. keine sichtbare Datei mit gleichem Inhalt - dann
+    # wird auch ein (evtl. für die Person unsichtbares) exaktes Duplikat neu gespeichert, statt
+    # es zu überspringen und dessen ID zurückzugeben.
+    allow_duplicates: Annotated[bool, Form()] = False,
+    # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
+    allow_images: Annotated[bool, Form()] = False,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -699,6 +744,9 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
     kommt direkt zurueck."""
     require_permission(user, P.FILES_MANAGE)
+    if allow_images is True:
+        # Bilder landen (nach MIME) auch in «Fotos» - dafür braucht es das Foto-Schreibrecht.
+        require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if len(files) > MAX_DOCUMENT_UPLOAD_BATCH_FILES:
@@ -767,6 +815,8 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
         upload_element_label=target.element_label,
         upload_cycle_config_id=target.cycle_config_id,
         file_results=file_results,
+        allow_images=allow_images is True,
+        allow_duplicates=allow_duplicates is True,
     )
     return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
 

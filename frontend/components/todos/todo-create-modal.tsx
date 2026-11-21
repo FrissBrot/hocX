@@ -16,6 +16,8 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoBlock, TodoDetailFile, TodoListItem } from "@/types/api";
 import { TodoFilePicker } from "./todo-file-picker";
+import { TodoFileDropOverlay, TodoPendingUploadItems, useTodoDialogDropzone } from "./todo-file-drop";
+import { useTodoFileUpload } from "./use-todo-file-upload";
 
 type StatusCode = "open" | "in_progress" | "done";
 
@@ -25,7 +27,12 @@ type StatusCode = "open" | "in_progress" | "done";
  * Angelegt wird mit POST; mehrere Zuständige, Notizen und Dateien folgen wie beim Bearbeiten über
  * PATCH bzw. PUT /details.
  */
-export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onClose, onCreated }: {
+export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onClose, onCreated, canUploadFiles = false, canUploadImages = false }: {
+  /** Dateien hochladen (Ziehen ins Popup, «Datei hochladen …»): files.manage. Die Datei landet
+   * sofort in der Ablage und wird beim «Erstellen» mit der neuen Pendenz verknüpft. */
+  canUploadFiles?: boolean;
+  /** Bilder dabei annehmen: photos.manage */
+  canUploadImages?: boolean;
   participants: ParticipantSummary[];
   todoBlocks: TodoBlock[];
   tagSuggestions: string[];
@@ -45,11 +52,20 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
   const [dueDate, setDueDate] = useState("");
   const [blockId, setBlockId] = useState("");
   const [busy, setBusy] = useState(false);
+  const upload = useTodoFileUpload({
+    attachedIds: files.map((file) => file.id),
+    onAttach: (file) => setFiles((current) => current.some((item) => item.id === file.id) ? current : [...current, file]),
+    canUploadImages,
+  });
+  const uploadEnabled = canUploadFiles && !busy;
+  const dropzone = useTodoDialogDropzone((dropped) => void upload.uploadFiles(dropped), uploadEnabled);
+  const uploading = upload.pending.length > 0;
+  const showFileList = files.length > 0 || uploading;
   const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || t("nobodyLabel");
 
   async function create() {
     const trimmed = task.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || uploading) return;
     setBusy(true);
     try {
       const url = blockId ? `/api/protocol-element-blocks/${blockId}/todos` : `/api/todos`;
@@ -78,7 +94,8 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
   }
 
   return <Modal open title={t("createModalTitle")} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) onClose(); }} onClose={() => { if (!busy) onClose(); }}>
-    <header className="todo-edit-heading">
+    <TodoFileDropOverlay active={dropzone.isDragging} />
+    <header className="todo-edit-heading" ref={dropzone.anchorRef}>
       <div className="todo-edit-eyebrow">{t("createEyebrow")}</div>
       <input aria-label={t("colTask")} className="todo-edit-title" value={task} placeholder={t("taskPlaceholder")} autoFocus disabled={busy}
         onChange={(event) => setTask(event.target.value)}
@@ -102,7 +119,7 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
           <RichTextEditor value={notes} onChange={setNotes} placeholder={t("notesPlaceholder")} />
         </div>
         <div className="field-stack"><span className="field-label">{t("filesLabel")}</span>
-          {files.length > 0 ? <ul className="todo-edit-files">
+          {showFileList ? <ul className="todo-edit-files">
             {files.map((file) => <li key={file.id}>
               <a className="todo-edit-file" href={file.content_url} target="_blank" rel="noreferrer">
                 <FileTypeIcon name={file.original_name} />
@@ -112,8 +129,9 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
               <button type="button" className="button-icon-soft-sm" aria-label={t("removeFile", { name: file.original_name })} title={t("removeFile", { name: file.original_name })}
                 onClick={() => setFiles((current) => current.filter((item) => item.id !== file.id))}><ActionIcon name="close" /></button>
             </li>)}
+            <TodoPendingUploadItems pending={upload.pending} />
           </ul> : null}
-          <TodoFilePicker excludeIds={files.map((file) => file.id)} onPick={(file) => setFiles((current) => [...current, file])} />
+          <TodoFilePicker excludeIds={files.map((file) => file.id)} onPick={(file) => setFiles((current) => [...current, file])} onUploadFiles={uploadEnabled ? (dropped) => void upload.uploadFiles(dropped) : undefined} />
         </div>
       </div>
       <aside className="todo-edit-sidebar">
@@ -151,7 +169,7 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
     <footer className="todo-edit-footer">
       <div className="todo-edit-actions">
         <button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>
-        <button type="button" className="button-primary" disabled={busy || !task.trim()} onClick={() => void create()}>{busy ? t("creatingEllipsis") : t("createModalTitle")}</button>
+        <button type="button" className="button-primary" disabled={busy || uploading || !task.trim()} onClick={() => void create()}>{busy ? t("creatingEllipsis") : t("createModalTitle")}</button>
       </div>
     </footer>
   </Modal>;

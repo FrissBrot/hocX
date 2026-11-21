@@ -260,5 +260,21 @@
       "protocol_closed": "Il verbale è chiuso.",
       "todo_not_submission": "Questo compito non appartiene a nessuna consegna."
     }
+  },
+  "fileDrop": {
+    "searchHint": "o trascina nella finestra",
+    "uploadOption": "Carica file …",
+    "overlayTitle": "Rilascia per allegare",
+    "overlayText": "Il file verrà allegato a questo compito sotto «File».",
+    "uploading": "Caricamento …",
+    "uploaded": "«{name}» caricato e allegato.",
+    "uploadFailed": "Impossibile caricare «{name}».",
+    "duplicateTitle": "File già presente",
+    "duplicateMessage": "Questo file esiste già: {name} ({place}, {date}).",
+    "duplicateMessageNoPlace": "Questo file esiste già: {name} ({date}).",
+    "attachExisting": "Allega esistente",
+    "uploadCopy": "Carica una copia",
+    "attachedExisting": "File esistente «{name}» allegato.",
+    "alreadyAttached": "«{name}» è già allegato a questo compito."
   }
 }

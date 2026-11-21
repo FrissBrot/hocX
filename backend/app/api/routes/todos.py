@@ -27,11 +27,13 @@ from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
+from app.services.file_service import FileService
 from app.services import submission_reviewer_service as submission_reviewers
 from app.services import todo_fine_service, todo_submission_service
 from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 router = APIRouter()
+_file_service = FileService()
 service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
@@ -551,6 +553,14 @@ def put_todo_details(
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     todo = _todo_or_404(db, user, todo_id)
+    if payload.file_ids is not None:
+        # Neu verknüpfen nur, was die Person in der Dateisuche sieht (sonst zeigte GET .../details
+        # Name und Grösse einer für sie unsichtbaren Datei). Schon verknüpfte bleiben erlaubt.
+        # Unsichtbar und unbekannt ergeben dieselbe Antwort (kein Existenz-Orakel).
+        linked = {file.id for file in service.get_details(db, todo).files}
+        added = [file_id for file_id in dict.fromkeys(payload.file_ids) if file_id not in linked]
+        if added and len(_file_service.visible_overview_items(db, user, added)) != len(added):
+            raise HTTPException(status_code=400, detail="Todo details could not be saved")
     try:
         return service.update_details(db, todo, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:

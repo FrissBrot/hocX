@@ -14,7 +14,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
-vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true), useChoice: () => vi.fn().mockResolvedValue("cancel") }));
 // Tiptap rendert in jsdom nicht zuverlässig (wie in element-definition-manager.test.tsx gemockt)
 vi.mock("@/components/ui/rich-text-editor", () => ({
   RichTextEditor: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly?: boolean }) =>
