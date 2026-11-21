@@ -52,6 +52,7 @@
     "absent": "Unexcused absence"
   },
   "fineTransaction": "Fine {type}: {name}",
+  "todoFineTransaction": "Task fine: {name} - {task}",
   "col": {
     "status": "Status",
     "task": "Task",

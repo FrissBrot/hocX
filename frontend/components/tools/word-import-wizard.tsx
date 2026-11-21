@@ -41,6 +41,7 @@ import {
   WordImportTextTarget,
 } from "@/lib/api/word-import";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { useReviewProgress } from "./use-review-progress";
 
 type Step = "upload" | "structure" | "review" | "done";
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -1016,14 +1017,13 @@ export function WordImportWizard({
   const confirm = useConfirm();
   // Real bug fixed here: "Neu analysieren" (and changing a single table's role, which
   // reanalyzes the same way) used to silently discard every manual review decision with
-  // no warning at all, in both standalone and queue mode. progressHydratingRef mirrors
-  // isHydratingRef but is consumed by its own effect below (kept separate so the two
-  // never race over which one resets it first) - applyAnalysis sets both together and
-  // clears hasReviewProgressRef, the one below then flips hasReviewProgressRef back to
-  // true the next time the reviewer actually touches Anwesenheit/Termine/Listen/
-  // Matrizen/Texte state, which is what reanalyzeWithRoles below checks before wiping.
-  const progressHydratingRef = useRef(false);
-  const hasReviewProgressRef = useRef(false);
+  // no warning at all, in both standalone and queue mode. reviewProgress compares the
+  // current Anwesenheit/Termine/Listen/Matrizen/Texte state against the exact references
+  // applyAnalysis wrote (see use-review-progress.ts) - any reviewer edit replaces one of
+  // them, which is what reanalyzeWithRoles below checks before wiping. Comparing instead
+  // of counting effect runs keeps StrictMode/Fast Refresh effect re-runs in the dev server
+  // from mistaking the freshly loaded state for review progress.
+  const reviewProgress = useReviewProgress([texts, attendance, events, lists, matrices]);
   // See updateTableRole's docstring - closes a click-race React state can't close on its
   // own since it only reflects the last completed render.
   const reanalyzeBusyRef = useRef(false);
@@ -1065,18 +1065,6 @@ export function WordImportWizard({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, protocolDate, texts, attendance, events, lists, matrices, step]);
-
-  // See hasReviewProgressRef's declaration above - runs in both standalone and queue
-  // mode (unlike the draft-autosave effect above, which is queue-only), consuming its
-  // own hydration flag so the two effects never race over who resets it first.
-  useEffect(() => {
-    if (progressHydratingRef.current) {
-      progressHydratingRef.current = false;
-      return;
-    }
-    hasReviewProgressRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texts, attendance, events, lists, matrices]);
 
   // Flushes on unmount specifically (empty deps => cleanup runs only when the wizard goes
   // away entirely - the queue view unmounts it both on "Zurück zur Warteschlange" and on
@@ -1721,15 +1709,6 @@ export function WordImportWizard({
     // Suppresses the draft-autosave effect for the state update this triggers - loading or
     // reanalyzing a document isn't itself a reviewer edit worth saving back.
     isHydratingRef.current = true;
-    // Same idea for hasReviewProgressRef (see its declaration) - this state update is a
-    // fresh baseline, not itself a reviewer edit worth protecting against the NEXT
-    // reanalysis. EXCEPT when a saved draft is being restored here (documentId load
-    // effect below): that draft IS real, already-invested review progress the reviewer
-    // would lose if they click "Neu analysieren" without ever having touched anything
-    // else first - seeding this to true in that case is what makes the very next
-    // reanalyze correctly ask for confirmation instead of silently wiping it.
-    progressHydratingRef.current = true;
-    hasReviewProgressRef.current = !!draft;
     setAnalysis(result);
     setProtocolDate(draft ? draft.protocolDate : result.protocol_date ?? "");
     setTableRoles(
@@ -1890,11 +1869,21 @@ export function WordImportWizard({
     // see renderAttendanceRow) - the draft would then permanently fail the length check on
     // every future reload and silently revert to the fresh, unedited suggestions.
     const eventsToUse = draft ? draft.events : freshEvents;
-    setTexts(draft ? draft.texts : freshTexts);
-    setAttendance(draft ? draft.attendance : freshAttendance);
+    const textsToUse = draft ? draft.texts : freshTexts;
+    const attendanceToUse = draft ? draft.attendance : freshAttendance;
+    const listsToUse = draft ? draft.lists : freshLists;
+    const matricesToUse = draft ? draft.matrices : freshMatrices;
+    // Fresh baseline for reviewProgress (see its declaration) - loading/reanalyzing isn't
+    // itself a reviewer edit worth protecting against the NEXT reanalysis. EXCEPT when a
+    // saved draft is being restored here (documentId load effect): that draft IS real,
+    // already-invested review progress, so the very next reanalyze asks for confirmation.
+    // Same order as the useReviewProgress call.
+    reviewProgress.reset([textsToUse, attendanceToUse, eventsToUse, listsToUse, matricesToUse], !!draft);
+    setTexts(textsToUse);
+    setAttendance(attendanceToUse);
     setEvents(eventsToUse);
-    setLists(draft ? draft.lists : freshLists);
-    setMatrices(draft ? draft.matrices : freshMatrices);
+    setLists(listsToUse);
+    setMatrices(matricesToUse);
     // Real bug fixed here: always "tables" regardless of the restored draft's own
     // step - a draft resumed at step "review" landed on the Structure step's own
     // "Erkannte Tabellen" panel body (activeCategory isn't gated on step, so nothing
@@ -1941,10 +1930,10 @@ export function WordImportWizard({
     }
     // Real bug fixed here: this used to always wipe every already-reviewed Anwesenheit/
     // Termine/Listen/Matrizen/Texte decision back to fresh auto-suggestions with zero
-    // warning (see hasReviewProgressRef's declaration). Only asks when there's actually
+    // warning (see reviewProgress's declaration). Only asks when there's actually
     // something at stake - a routine table-role pick during initial setup, before any
     // real review happened, still goes through with no interruption.
-    if (hasReviewProgressRef.current) {
+    if (reviewProgress.hasProgress()) {
       const proceed = await confirm({
         title: t("reanalyzeConfirmTitle"),
         message: t("reanalyzeConfirmMessage"),

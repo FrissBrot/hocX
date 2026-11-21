@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import Row, Date, cast, func, select, text
+from sqlalchemy import Row, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.permissions import P
@@ -57,6 +57,15 @@ def chart_cycle_bounds(db: Session, tenant_id: int, config_id, offset: int = 0):
     boundary_year = year - 1 if config.reset_month == 12 and config.reset_day == 31 else year
     return (reset_boundary(boundary_year, config.reset_month, config.reset_day) + timedelta(days=1),
             reset_boundary(boundary_year + 1, config.reset_month, config.reset_day))
+
+
+def _todo_period_date():
+    """Stichtag einer Pendenz für den Statistik-Zeitraum: Protokolldatum, sonst der Schweizer
+    Kalendertag der Erfassung. Nie ``cast(created_at, Date)``: das rechnet in der Zeitzone der
+    DB-Session (UTC), eine Pendenz vom 1.1. um 00:30 fiele ins Vorjahr (Nachtlauf 2026-11-20)."""
+    from app.services.capture_date import upload_day_sql
+
+    return func.coalesce(Protocol.protocol_date, upload_day_sql(ProtocolTodo.created_at))
 
 
 def _date_conditions(column, bounds):
@@ -191,7 +200,7 @@ def fetch_todo_rows(
         .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
         .where(ProtocolTodo.tenant_id == tenant_id)
-        .where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
+        .where(*_date_conditions(_todo_period_date(), bounds))
         .where(*([] if template_ids is None else [Protocol.template_id.in_(template_ids)]))
     ).all()
 
@@ -352,7 +361,7 @@ def fetch_todo_insight_rows(
 
     query, *_ = ProtocolTodoRepository()._base_todo_query()
     query = query.where(ProtocolTodo.tenant_id == tenant_id, ProtocolTodo.pending_delete.is_(False))
-    query = query.where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
+    query = query.where(*_date_conditions(_todo_period_date(), bounds))
     if template_ids is not None:
         query = query.where(Protocol.template_id.in_(template_ids))
     return db.execute(query).all()

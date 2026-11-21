@@ -52,6 +52,7 @@
     "absent": "Assenza ingiustificata"
   },
   "fineTransaction": "Multa {type}: {name}",
+  "todoFineTransaction": "Multa compito: {name} - {task}",
   "col": {
     "status": "Stato",
     "task": "Compito",

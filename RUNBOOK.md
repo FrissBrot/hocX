@@ -1170,6 +1170,14 @@ Ereignisse `events.py`), gemeinsame Zähler-Primitive `backend/app/core/rate_lim
 Inhaberin nicht mehr aussperren. Eine Geräte-ID wird nur an ein Konto gebunden, wenn sie bei diesem Konto
 neu ausgestellt wurde; das Gerät, auf dem «Passwort vergessen» abgeschlossen wird, gilt danach als bekannt.
 
+**Passwort vergessen** (`POST /api/auth/password-reset/request`, immer 202): je Quelle 10 Anfragen in
+15 min (sonst 429 nur für diese Quelle), je Adresse und je Adresse+Quelle höchstens 3 Mails pro Stunde.
+Haben Fremde das Adress-Kontingent aufgebraucht, bekommt die Inhaberin von einem **bekannten Gerät
+ihres Kontos** (signiertes Cookie `__Host-hocx_device`, Eintrag in `auth_known_device` dieses Kontos)
+trotzdem eine Mail: eigenes Kontingent von 3 Mails pro Stunde je Gerät (höchstens 6 pro Stunde und Konto). Konto und Gerät prüft erst die
+Hintergrundaufgabe nach der Antwort - Antwort und Laufzeit verraten nichts. Fremde, gefälschte oder einem
+anderen Konto gehörende Gerätecookies bekommen kein Zusatzkontingent.
+
 **Ohne E-Mail-Versand** gilt: Konten mit zweitem Faktor werden nie abgewiesen (der Faktor ist die Prüfung).
 Konten ohne Faktor auf unbekanntem Gerät werden nur bei Quellsignalen (L1/L2) oder über L5 abgewiesen
 (429 `login_denied`, gleich für falsches und richtiges Passwort); der Angriffsmodus allein weist nie ab.

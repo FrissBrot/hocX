@@ -193,3 +193,26 @@ def test_other_tenants_never_count(db):
     # Und umgekehrt: Mandant B sieht ebenfalls nur seine eigenen Zahlen.
     foreign_overview = _overview(db, foreign.id, "admin", foreign_reader.id, year=today.year)
     assert foreign_overview.todo_insights.overdue == 2
+
+
+def test_todo_period_counts_by_swiss_day_not_utc(db):
+    """Eine freie Pendenz vom 1.1. um 00:30 Schweizer Zeit (31.12. 23:30 UTC) gehört ins neue Jahr,
+    eine vom 31.12. um 23:30 Schweizer Zeit (22:30 UTC) ins alte (Nachtlauf 2026-11-20)."""
+    from app.services.statistics_common import calendar_year_bounds, fetch_todo_insight_rows, fetch_todo_rows
+
+    tenant = make_tenant(db, "Statistik Tagesgrenze")
+    new_year = make_protocol_todo(db, None, task="Neujahr 00:30", tenant_id=tenant.id)
+    new_year.created_at = datetime(2024, 12, 31, 23, 30, tzinfo=timezone.utc)
+    old_year = make_protocol_todo(db, None, task="Silvester 23:30", tenant_id=tenant.id)
+    old_year.created_at = datetime(2025, 12, 31, 22, 30, tzinfo=timezone.utc)
+    late_utc = make_protocol_todo(db, None, task="Silvester 00:30 (nächstes Jahr)", tenant_id=tenant.id)
+    late_utc.created_at = datetime(2025, 12, 31, 23, 30, tzinfo=timezone.utc)
+    db.flush()
+
+    tasks = {row[0].task for row in fetch_todo_insight_rows(db, tenant.id, calendar_year_bounds(2025))}
+    assert tasks == {"Neujahr 00:30", "Silvester 23:30"}
+    assert len(fetch_todo_rows(db, tenant.id, calendar_year_bounds(2025))) == 2
+    assert {row[0].task for row in fetch_todo_insight_rows(db, tenant.id, calendar_year_bounds(2024))} == set()
+    assert {row[0].task for row in fetch_todo_insight_rows(db, tenant.id, calendar_year_bounds(2026))} == {
+        "Silvester 00:30 (nächstes Jahr)",
+    }

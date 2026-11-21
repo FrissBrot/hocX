@@ -65,14 +65,22 @@ def _issue(db: Session, user: AppUser, purpose: str, *, created_by_user_id: int 
 # ── Passwort vergessen ──────────────────────────────────────────────────
 
 
+def password_reset_account(db: Session, email: str) -> AppUser | None:
+    """Konto, für das «Passwort vergessen» einen Link ausstellen würde (aktiv, Login erlaubt)."""
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return None
+    user = db.scalar(select(AppUser).where(AppUser.email == normalized, AppUser.login_enabled.is_(True)))
+    if user is None or not user.is_active or user.has_left:
+        return None
+    return user
+
+
 def request_password_reset(db: Session, email: str) -> None:
     """Legt für ein aktives Konto mit Login einen Link an. Ohne passendes Konto passiert nichts;
     der Aufrufer antwortet in beiden Fällen gleich."""
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return
-    user = db.scalar(select(AppUser).where(AppUser.email == normalized, AppUser.login_enabled.is_(True)))
-    if user is None or not user.is_active or user.has_left:
+    user = password_reset_account(db, email)
+    if user is None:
         return
     _issue(db, user, "password_reset", created_by_user_id=None)
     db.commit()

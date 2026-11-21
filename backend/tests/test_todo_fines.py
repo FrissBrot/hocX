@@ -222,6 +222,24 @@ def test_completing_late_freezes_and_reopening_keeps_frozen_fines(db, setup):
     assert sorted((f.participant_name_snapshot, f.amount) for f in again) == [("Anna", Decimal("4.00")), ("Ben", Decimal("20.00"))]
 
 
+@pytest.mark.parametrize(("language", "expected"), [
+    ("de", "Busse Pendenz: Ben - Material bringen"),
+    ("fr", "Amende tâche : Ben - Material bringen"),
+    (None, "Busse Pendenz: Ben - Material bringen"),
+])
+def test_collect_books_text_in_document_language_of_tenant(db, setup, language, expected):
+    """Buchungstext der Kassenbuchung folgt der Dokumentsprache des Vereins (Nachtlauf 2026-11-20)."""
+    s = setup
+    s["tenant"].document_language = language
+    _rule(db, s)
+    todo = _todo(db, s, days_late=3, people=("ben",))
+    _complete(db, todo)
+    fine = db.scalar(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id))
+    route.collect_todo_fine(fine.public_id, db=db, user=s["manager"])
+    tx = db.scalar(select(FinanceTransaction).where(FinanceTransaction.account_id == s["account"].id))
+    assert tx.description == expected
+
+
 def test_no_fine_warning_for_person_who_already_has_a_fine_on_this_todo(db, setup):
     """Wieder geöffnet und neu terminiert: wer schon eine gespeicherte Busse hat, bekommt keine
     zweite (sync_todo, open_items) - also auch keine Mail «Busse droht» mit neuen Beträgen."""

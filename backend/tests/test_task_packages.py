@@ -250,6 +250,121 @@ def test_new_tagged_event_adds_occurrence_without_deleting(db, setup):
     assert keys == {f"event:{first.id}", f"event:{second.id}"}  # abgesagter Termin: Aufgabe bleibt
 
 
+def _event_package(db, s):
+    """Paket mit zwei Aufgaben "pro Termin" (Tag Lager) und zwei Lagern; Instanzen angelegt."""
+    package, item, _ = _package(db, s, recurrence={"type": "events", "event_tag": "Lager"}, due_rule={"type": "offset", "offset_days": -14})
+    second_item = TaskPackageItem(
+        task_package_id=package.id, task="Material packen", tags=[], responsible_json=item.responsible_json,
+        recurrence_json=item.recurrence_json, due_rule_json=item.due_rule_json, sort_index=1,
+    )
+    db.add(second_item)
+    events = []
+    for title, day in (("Pfingstlager", date(2027, 5, 15)), ("Sola", date(2027, 7, 10))):
+        event = make_event(db, s["tenant"].id, title=title, event_date=day)
+        event.tag = "Lager"
+        events.append(event)
+    db.flush()
+    packages.sync_package(db, package, today=TODAY)
+    return package, item, second_item, events
+
+
+def _instance(db, item, event) -> ProtocolTodo:
+    todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.task_package_item_id == item.id, ProtocolTodo.occurrence_key == f"event:{event.id}"))
+    db.refresh(todo)
+    return todo
+
+
+def _patch_event(db, event, user, **values):
+    from app.api.routes import events as events_route
+    from app.schemas.event import EventUpdate
+
+    return events_route.patch_event(event.public_id, EventUpdate(**values), db=db, user=user)
+
+
+def _status_audit(db, todo) -> list[dict]:
+    from sqlalchemy import text
+
+    return list(db.scalars(text(
+        "SELECT details_json FROM audit_log WHERE entity_type = 'protocol_todo' AND entity_id = :id AND action = 'todo.status_changed' ORDER BY id"
+    ), {"id": todo.id}))
+
+
+def test_cancelled_event_cancels_open_instances_and_reactivation_reopens_them(db, setup):
+    _, item, second_item, (camp, sola) = _event_package(db, setup)
+    admin = make_current_user(setup["tenant"].id, role="admin")
+    done = _instance(db, second_item, camp)
+    todo_service.update_todo(db, done.id, ProtocolTodoUpdate(todo_status_id=_status_id(db, "done")))
+    in_progress = _instance(db, item, camp)
+    todo_service.update_todo(db, in_progress.id, ProtocolTodoUpdate(todo_status_id=_status_id(db, "in_progress")))
+
+    _patch_event(db, camp, admin, is_cancelled=True)
+
+    cancelled = _instance(db, item, camp)
+    assert cancelled.todo_status_id == _status_id(db, "cancelled") and cancelled.completed_at is not None
+    assert any(entry.startswith(packages.EVENT_CANCELLED_MARKER_PREFIX) for entry in cancelled.overridden_fields)
+    assert _instance(db, second_item, camp).todo_status_id == _status_id(db, "done")  # erledigt bleibt
+    assert _instance(db, item, sola).todo_status_id == _status_id(db, "open")  # anderer Termin unberührt
+    [audit] = [entry for entry in _status_audit(db, cancelled) if entry.get("reason")]
+    assert audit["reason"] == "event_cancelled" and audit["to_status_id"] == _status_id(db, "cancelled")
+
+    # Keine Erinnerung/Busse: abgebrochen zählt nicht als offen
+    from app.notifications.todos import OPEN_STATUS_CODES
+    assert "cancelled" not in OPEN_STATUS_CODES
+
+    _patch_event(db, camp, admin, is_cancelled=False)
+
+    reopened = _instance(db, item, camp)
+    assert reopened.todo_status_id == _status_id(db, "in_progress")  # Status vor der Absage
+    assert reopened.completed_at is None
+    assert not any(str(entry).startswith(packages.EVENT_CANCELLED_MARKER_PREFIX) for entry in reopened.overridden_fields)
+    assert _instance(db, second_item, camp).todo_status_id == _status_id(db, "done")
+    assert [entry["reason"] for entry in _status_audit(db, reopened) if entry.get("reason")] == ["event_cancelled", "event_reactivated"]
+
+
+def test_reactivation_keeps_instances_cancelled_by_hand(db, setup):
+    _, item, second_item, (camp, _) = _event_package(db, setup)
+    admin = make_current_user(setup["tenant"].id, role="admin")
+    # Vor der Absage von Hand abgebrochen: bleibt abgebrochen
+    by_hand_before = _instance(db, second_item, camp)
+    todo_service.update_todo(db, by_hand_before.id, ProtocolTodoUpdate(todo_status_id=_status_id(db, "cancelled")))
+
+    _patch_event(db, camp, admin, is_cancelled=True)
+    # Nach der Absage von Hand geöffnet und wieder abgebrochen: Herkunft ist jetzt die Hand
+    by_hand_after = _instance(db, item, camp)
+    todo_service.update_todo(db, by_hand_after.id, ProtocolTodoUpdate(todo_status_id=_status_id(db, "open")))
+    todo_service.update_todo(db, by_hand_after.id, ProtocolTodoUpdate(todo_status_id=_status_id(db, "cancelled")))
+
+    _patch_event(db, camp, admin, is_cancelled=False)
+
+    assert _instance(db, second_item, camp).todo_status_id == _status_id(db, "cancelled")
+    assert _instance(db, item, camp).todo_status_id == _status_id(db, "cancelled")
+
+
+def test_event_cancellation_never_touches_other_tenants(db, setup):
+    _, item, _, (camp, _) = _event_package(db, setup)
+    admin = make_current_user(setup["tenant"].id, role="admin")
+    # Fremder Mandant mit einer Paket-Instanz, deren occurrence_key auf denselben Termin zeigt
+    other = make_tenant(db, "Andere Abteilung")
+    other_setup = {**setup, "tenant": other, "cycle": make_cycle_config(db, other.id, name="Jahr", reset_month=7, reset_day=31)}
+    _, other_item, _ = _package(db, other_setup, recurrence={"type": "once"})
+    foreign = ProtocolTodo(
+        tenant_id=other.id, task="Fremd", todo_status_id=_status_id(db, "open"), task_package_item_id=other_item.id,
+        cycle_config_id=other_setup["cycle"].id, cycle_year=2026, occurrence_key=f"event:{camp.id}", overridden_fields=[],
+    )
+    db.add(foreign)
+    db.flush()
+
+    # Fremde dürfen den Termin nicht absagen (404 wie bei unbekannter ID)
+    with pytest.raises(HTTPException) as error:
+        _patch_event(db, camp, make_current_user(other.id, role="admin"), is_cancelled=True)
+    assert error.value.status_code == 404
+
+    _patch_event(db, camp, admin, is_cancelled=True)
+    db.refresh(foreign)
+    assert foreign.todo_status_id == _status_id(db, "open") and foreign.overridden_fields == []
+    assert _instance(db, item, camp).todo_status_id == _status_id(db, "cancelled")
+
+
 # ---------------------------------------------------------------------------
 # Löschen
 # ---------------------------------------------------------------------------

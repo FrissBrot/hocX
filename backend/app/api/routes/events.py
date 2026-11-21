@@ -150,13 +150,23 @@ def patch_event(
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
     previous_tag = current.tag
+    package_todo_changes: list[dict] = []
     try:
-        updated = service.update_event(db, current.id, payload)
+        updated = service.update_event(db, current.id, payload, package_todo_changes=package_todo_changes)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Event could not be updated") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Event not found")
+    for change in package_todo_changes:
+        # Absage/Wiederaktivieren des Termins hat eine Paket-Instanz ab- bzw. wieder aufgebrochen
+        audit.log(
+            db, action="todo.status_changed", actor=user, entity_type="protocol_todo", entity_id=change["todo_id"],
+            details={
+                "from_status_id": change["from_status_id"], "to_status_id": change["to_status_id"],
+                "reason": "event_cancelled" if updated.is_cancelled else "event_reactivated", "event_id": updated.id,
+            },
+        )
     submission_service.sync_todos_for_event(db, updated)
     photo_event_link_service.sync_photos_for_event(db, updated)
     sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=updated.tag)

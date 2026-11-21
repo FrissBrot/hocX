@@ -52,6 +52,7 @@
     "absent": "Absence non excusée"
   },
   "fineTransaction": "Amende {type} : {name}",
+  "todoFineTransaction": "Amende tâche : {name} - {task}",
   "col": {
     "status": "Statut",
     "task": "Tâche",

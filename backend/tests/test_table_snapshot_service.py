@@ -132,6 +132,42 @@ def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
     assert entry_snapshot.snapshot_json[0]["values_json"] == {"k1": {"text_value": "reconstructed"}}
 
 
+def test_reconstruct_list_period_ignores_system_fields_in_definition_values(db):
+    """id/public_id/tenant_id/Zeitstempel und andere Systemfelder kommen nie aus dem Entwurf
+    (Nachtlauf 2026-11-20): sonst liesse sich im Backup eine Zeile mit fremder id ablegen."""
+    tenant = make_tenant(db)
+    other_tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    definition = make_list_definition(db, tenant.id, name="Echt")
+    foreign = make_list_definition(db, other_tenant.id, name="Fremd")
+
+    TableSnapshotService().reconstruct_list_period(
+        db,
+        tenant_id=tenant.id,
+        cycle_config=cycle_config,
+        cycle_year=2020,
+        list_public_id=str(definition.public_id),
+        definition_values={
+            "name": "Bearbeitet", "description": "Text", "is_active": False, "columns": TWO_COLUMNS,
+            "id": foreign.id, "public_id": str(foreign.public_id), "tenant_id": other_tenant.id,
+            "created_at": "1999-01-01T00:00:00+00:00", "updated_at": "1999-01-01T00:00:00+00:00",
+            "is_group_source": True, "content_version": 999,
+        },
+        entry_payloads=[],
+        edited_by=1,
+    )
+
+    [row] = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_definition"
+    ).one().snapshot_json
+    assert row["id"] == definition.id
+    assert row["public_id"] == str(definition.public_id)
+    assert row["tenant_id"] == tenant.id
+    assert row["created_at"] == definition.created_at.isoformat()
+    assert (row["name"], row["description"], row["is_active"]) == ("Bearbeitet", "Text", False)
+    assert "is_group_source" not in row and "content_version" not in row
+
+
 def test_reconstruct_list_period_resolves_multiple_entries_from_mixed_live_and_snapshot_sources(db):
     """Regression coverage for the batched entry-identity resolver (audit fix,
     2026-09-17, replacing a per-entry query+full-snapshot-scan with one live query plus

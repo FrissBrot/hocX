@@ -800,6 +800,7 @@
     "status": "Status",
     "task": "Aufgabe"
   },
+  "todoFineTransaction": "Busse Pendenz: {name} - {task}",
   "todoStatus": {
     "cancelled": "Abgebrochen",
     "done": "Erledigt",

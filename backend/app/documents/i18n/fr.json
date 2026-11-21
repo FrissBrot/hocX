@@ -800,6 +800,7 @@
     "status": "Statut",
     "task": "Tâche"
   },
+  "todoFineTransaction": "Amende tâche : {name} - {task}",
   "todoStatus": {
     "cancelled": "Annulé",
     "done": "Terminé",
