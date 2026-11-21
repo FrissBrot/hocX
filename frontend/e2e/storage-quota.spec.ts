@@ -17,7 +17,11 @@ test("rejects a gallery upload once the tenant's plan storage quota is exceeded"
   // (playwright.config.ts) could abort before it finishes.
   test.setTimeout(120_000);
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
-  const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
+  // Origin wie in auth.setup.ts: ohne Admin-Domain leitet das Backend die Passkey-RP-ID daraus ab
+  const adminOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
+  const adminApi = await playwrightRequest.newContext({
+    baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin, extraHTTPHeaders: { Origin: adminOrigin },
+  });
   const planCode = `e2e_quota_${Date.now()}`;
   let tenantId: string | undefined;
   let originalSubscription: Record<string, unknown> | undefined;
@@ -89,9 +93,8 @@ test("rejects a gallery upload once the tenant's plan storage quota is exceeded"
     const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
     if (adminPasskey) {
       const path = `/api/admin/plans/${planCode}`;
-      const origin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").origin;
-      const removed = await adminApi
-        .delete(path, { headers: await stepUpHeaders(adminApi, adminPasskey, origin, "catalog-change", "DELETE", path) })
+      const removed = await stepUpHeaders(adminApi, adminPasskey, adminOrigin, "catalog-change", "DELETE", path)
+        .then((headers) => adminApi.delete(path, { headers }))
         .catch(() => null);
       await adminPasskey.save(platformAdminPasskeyFile);
       expect.soft(removed?.status(), "Temporärer Plan wurde nicht gelöscht").toBe(204);
