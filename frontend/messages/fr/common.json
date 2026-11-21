@@ -292,7 +292,8 @@
       "reorder": "Modifier l’ordre",
       "protocol": "Procès-verbal",
       "designer": "Document Studio",
-      "media": "Photos et fichiers"
+      "media": "Photos et fichiers",
+      "admin": "Admin plateforme"
     },
     "shortcuts": {
       "global_search": "Ouvrir ou fermer la recherche globale",
@@ -323,11 +324,27 @@
       "designer_move": "Déplacer l’élément sélectionné",
       "designer_deselect": "Annuler la sélection",
       "media_previous": "Photo ou fichier précédent",
-      "media_next": "Photo ou fichier suivant"
+      "media_next": "Photo ou fichier suivant",
+      "admin_toggleSidebar": "Afficher la barre latérale compacte ou large"
     }
   },
   "numberStepper": {
     "decrease": "Diminuer {label}",
     "increase": "Augmenter {label}"
+  },
+  "health": {
+    "ok": "OK",
+    "healthy": "En ordre",
+    "degraded": "Dégradé",
+    "warning": "Avertissement",
+    "critical": "Critique",
+    "unknown": "Inconnu"
+  },
+  "timeRange": {
+    "24h": "24 h",
+    "7d": "7 j",
+    "30d": "30 j",
+    "90d": "90 j",
+    "12m": "12 mois"
   }
 }

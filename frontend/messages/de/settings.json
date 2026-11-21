@@ -127,6 +127,9 @@
       "activity": {
         "description": "Wer wann was geändert hat."
       },
+      "securityLogins": {
+        "description": "Warnungen, Anmeldungen und Sitzungen der Konten."
+      },
       "import": {
         "description": "Protokolle und Daten aus Word und anderen Quellen übernehmen."
       }

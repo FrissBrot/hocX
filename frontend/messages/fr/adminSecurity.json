@@ -1,0 +1,177 @@
+{
+  "tabsLabel": "Espace sécurité",
+  "tabs": {
+    "overview": "Vue d’ensemble",
+    "events": "Événements de connexion",
+    "blocks": "Blocages",
+    "alerts": "Alertes",
+    "audit": "Journal d’audit",
+    "policy": "Règles"
+  },
+  "ownerOnly": "Cette vue est réservée aux owners.",
+  "loadFailed": "Les données n’ont pas pu être chargées.",
+  "refresh": "Actualiser",
+  "outcomes": {
+    "all": "Tous",
+    "success": "Réussite",
+    "failure": "Échec",
+    "blocked": "Bloqué",
+    "challenged": "Contrôle supplémentaire",
+    "info": "Info"
+  },
+  "severity": {
+    "critical": "Critique",
+    "warning": "Avertissement"
+  },
+  "overview": {
+    "title": "Sécurité",
+    "description": "Protection des connexions de toute la plateforme : alertes, tentatives échouées, blocages. Les adresses n’apparaissent que sous forme de pseudonymes abrégés.",
+    "tiles": {
+      "openAlerts": "Alertes ouvertes",
+      "criticalAlerts": "{count, plural, =0 {aucune critique} one {# critique} other {# critiques}}",
+      "failures": "Échecs 24 h",
+      "previous": "Veille : {count, number}",
+      "activeBlocks": "Blocages actifs",
+      "blocked": "Refusés 24 h : {count, number}",
+      "adminLogins": "Connexions admin 24 h"
+    },
+    "chartTitle": "Connexions des dernières 48 heures",
+    "chartSummary": "{failures, number} tentatives échouées et {successes, number} connexions réussies en 48 heures, par tranches de 5 minutes.",
+    "showTable": "Données en tableau",
+    "showChart": "En graphique",
+    "chartEmpty": "Aucun événement de connexion durant les dernières 48 heures.",
+    "series": {
+      "failures": "Échecs",
+      "successes": "Réussies",
+      "blocked": "Bloquées"
+    },
+    "columns": {
+      "bucket": "Heure",
+      "failures": "Échecs",
+      "successes": "Réussies",
+      "blocked": "Bloquées",
+      "network": "Réseau (pseudonyme)",
+      "account": "Compte (pseudonyme)",
+      "accounts": "Comptes",
+      "networks": "Réseaux",
+      "tenants": "Mandants",
+      "lastSeen": "Dernière fois"
+    },
+    "topNetworks": "Réseaux suspects (24 h)",
+    "topAccounts": "Comptes concernés (24 h)",
+    "noTopNetworks": "Aucune tentative échouée depuis un réseau isolé.",
+    "noTopAccounts": "Aucun compte avec des tentatives échouées.",
+    "alertsTitle": "Alertes actuelles",
+    "allAlerts": "Toutes les alertes",
+    "auditLink": "Ouvrir le journal d’audit"
+  },
+  "events": {
+    "title": "Événements de connexion",
+    "description": "Derniers événements de la protection des connexions. Comptes, réseaux et appareils n’apparaissent que sous forme de pseudonymes abrégés.",
+    "typeLabel": "Type d’événement",
+    "typeAll": "Tous les types",
+    "outcomeLabel": "Résultat",
+    "columns": {
+      "time": "Heure",
+      "type": "Événement",
+      "outcome": "Résultat",
+      "actor": "Acteur",
+      "tenant": "Mandant",
+      "subject": "Compte",
+      "network": "Réseau",
+      "risk": "Risque",
+      "client": "Appareil"
+    },
+    "actorKinds": {
+      "user": "Utilisateur",
+      "admin": "Admin plateforme",
+      "anonymous": "Inconnu",
+      "system": "Système"
+    },
+    "empty": "Aucun événement pour cette sélection.",
+    "previous": "Plus récents",
+    "next": "Plus anciens",
+    "pageInfo": "Entrées {from, number}–{to, number}"
+  },
+  "blocks": {
+    "title": "Blocages",
+    "description": "Blocages IP actifs de la protection des connexions. Les poser et les lever exige une confirmation par passkey.",
+    "add": "Blocage manuel",
+    "columns": {
+      "subject": "Source (pseudonyme)",
+      "scope": "Portée",
+      "stage": "Niveau",
+      "kind": "Type",
+      "reason": "Motif",
+      "until": "Jusqu’à",
+      "actions": "Actions"
+    },
+    "scopes": {
+      "source": "Adresse unique",
+      "net": "Réseau"
+    },
+    "manual": "Manuel",
+    "automatic": "Automatique",
+    "unblock": "Débloquer",
+    "unblockConfirm": "Lever le blocage de {subject} ? Les connexions depuis cette source seront à nouveau possibles.",
+    "unblocked": "Blocage levé.",
+    "created": "Blocage posé.",
+    "failed": "L’action a échoué : {message}",
+    "empty": "Aucune source n’est bloquée actuellement.",
+    "modalTitle": "Blocage manuel",
+    "ipLabel": "Adresse IP",
+    "ipHelp": "Hachée à l’enregistrement, jamais stockée en clair.",
+    "scopeLabel": "Portée",
+    "minutesLabel": "Durée en minutes",
+    "minutesHelp": "Au maximum {max, number} minutes.",
+    "reasonLabel": "Motif",
+    "save": "Bloquer",
+    "cancel": "Annuler",
+    "readOnly": "Seuls les owners peuvent poser ou lever des blocages."
+  },
+  "alerts": {
+    "title": "Alertes",
+    "description": "Règles d’alerte actuellement déclenchées par la protection des connexions. Les mêmes règles notifient aussi via ntfy.",
+    "empty": "Aucune règle d’alerte n’est déclenchée actuellement.",
+    "columns": {
+      "severity": "Gravité",
+      "rule": "Règle",
+      "subject": "Concerné (pseudonyme)",
+      "key": "Clé"
+    },
+    "rules": {
+      "stuffing": "Credential stuffing : nombreux échecs depuis de nombreux réseaux",
+      "spraying": "Password spraying depuis un réseau",
+      "account_attack": "Compte attaqué",
+      "admin_mfa": "MFA admin échouée",
+      "admin_new_device": "Connexion plateforme depuis un nouvel appareil",
+      "blocks": "Nombreux blocages IP",
+      "network": "Nombreux échecs depuis un réseau",
+      "cross_tenant": "Schéma d’attaque sur plusieurs mandants",
+      "tenant": "Nombreux comptes d’un mandant avec des échecs",
+      "limiter": "Protection des connexions (Redis) perturbée",
+      "unknown": "Autre règle"
+    }
+  },
+  "audit": {
+    "title": "Journal d’audit",
+    "description": "Actions des admins et des mandants avec leur résultat."
+  },
+  "policy": {
+    "title": "Règles",
+    "description": "Paramètres effectifs de la protection des connexions (affichage seul, sans secrets). Ils se modifient dans la configuration du serveur.",
+    "setting": "Paramètre",
+    "value": "Valeur",
+    "yes": "Oui",
+    "no": "Non",
+    "groups": {
+      "sessions": "Sessions",
+      "limits": "Seuils et limites de débit",
+      "blocks": "Blocages",
+      "risk": "Évaluation du risque",
+      "step_up": "Confirmation (step-up)",
+      "alerts": "Règles d’alerte",
+      "retention": "Conservation"
+    }
+  }
+}

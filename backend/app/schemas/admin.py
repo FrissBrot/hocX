@@ -118,6 +118,9 @@ class AdminTenantRead(BaseModel):
     # Vertragsende für das Offboarding (0146); None = unbefristet
     contract_ends_on: date | None = None
     show_on_website: bool = False
+    # Identitätsprüfung (tenant.identity_verified_at) - für den abgeleiteten Status «nicht verifiziert»
+    # in Liste und Detailseite (Admin-Redesign §2 B).
+    identity_verified_at: datetime | None = None
 
 
 class AdminTenantWebsiteListingUpdate(BaseModel):
@@ -344,6 +347,14 @@ class SystemErrorLogPage(BaseModel):
     total: int
 
 
+class SystemErrorLogGroup(BaseModel):
+    error_type: str
+    count: int
+    tenants: int
+    first_at: datetime
+    last_at: datetime
+
+
 class SystemErrorLogFilterOptions(BaseModel):
     error_types: list[str]
     sources: list[str]
@@ -529,9 +540,12 @@ class NotificationSettingsRead(BaseModel):
     ntfy_token_set: bool
     admin_url: str | None = None
     reminder_hours: int
+    # Klartext-Token und fertige URL für den HTTP-Monitor in Uptime Kuma kommen nur in der Antwort
+    # auf das Rotieren (einmalige Anzeige); beim normalen Lesen bleiben sie leer.
     status_token: str | None = None
-    # Fertige URL für den HTTP-Monitor in Uptime Kuma (ohne bekannte Domain nur der Pfad).
     status_url: str | None = None
+    status_token_set: bool = False
+    status_token_hint: str | None = None
     last_sent_at: datetime | None = None
     last_send_error: str | None = None
     last_send_error_at: datetime | None = None

@@ -204,6 +204,12 @@
         "label": "Voir le journal d’activité",
         "description": "Qui a modifié quoi et quand (journal de l’organisation)."
       }
+    },
+    "security": {
+      "read": {
+        "label": "Voir sécurité et connexions",
+        "description": "Alertes de sécurité et activité de connexion des comptes de l’organisation (sans adresses IP)."
+      }
     }
   },
   "permissionsHelp": "Un rôle regroupe des autorisations ; un compte reçoit toutes les autorisations de ses rôles. « MFA » : qui l'a se connecte avec un second facteur. « Module non réservé » : n'agit qu'avec ce module d'abonnement. Grisé : vous ne l'avez pas vous-même ou elle découle d'une autre autorisation.",

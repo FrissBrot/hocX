@@ -1,36 +1,109 @@
 {
-  "title": "Amministrazione piattaforma",
-  "tagline": "Gestisci organizzazioni e utenti in tutto il sistema.",
+  "title": "Admin piattaforma",
+  "tagline": "Gestire organizzazioni e utenti dell’intero sistema.",
   "groups": {
     "tenants": "Organizzazioni",
-    "system": "Sistema",
-    "access": "Accesso"
+    "access": "Utenti e accessi",
+    "security": "Sicurezza",
+    "operations": "Esercizio",
+    "analytics": "Analisi",
+    "settings": "Impostazioni"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Panoramica",
     "tenants": "Organizzazioni",
-    "pricing": "Prezzi",
-    "cashflow": "Flusso di cassa",
-    "users": "Utenti",
-    "domains": "Domini",
-    "systemStatus": "Stato del sistema",
-    "errorLogs": "Registro errori",
-    "uploadPipeline": "Pipeline file",
-    "notifications": "Notifiche",
-    "jobs": "Job",
-    "admins": "Account amministratore",
-    "security": "Sicurezza",
     "verifications": "Verifiche",
+    "domains": "Domini",
+    "pricing": "Catalogo",
+    "cashflow": "Ricavi e fatturazione",
+    "users": "Cerca utenti",
+    "admins": "Admin piattaforma",
+    "securityOverview": "Sicurezza",
+    "securityEvents": "Eventi di accesso",
+    "securityBlocks": "Blocchi",
+    "securityAlerts": "Avvisi",
+    "auditLog": "Registro di audit",
+    "securityPolicy": "Regole",
+    "systemStatus": "Stato del sistema",
+    "jobs": "Job",
+    "errorLogs": "Errori",
+    "uploadPipeline": "Caricamenti e scansioni",
+    "delivery": "Recapito (e-mail)",
     "storage": "Archiviazione",
     "backups": "Backup",
     "maintenance": "Manutenzione",
-    "documentTemplates": "Modelli di documento",
-    "auditLog": "Registro di audit"
+    "analytics": "Analisi",
+    "notifications": "Notifiche ed e-mail",
+    "documentTemplates": "Contenuti e modelli",
+    "account": "Profilo e passkey"
   },
-  "logout": "Disconnetti",
+  "keywords": {
+    "pricing": "prezzi piani funzionalità pacchetti di archiviazione cambio",
+    "cashflow": "cashflow fatture costi MRR entrate",
+    "notifications": "ntfy SMTP token di stato uptime",
+    "account": "passkey profilo account",
+    "theme": "aspetto tema chiaro scuro"
+  },
+  "actions": {
+    "themeLight": "Aspetto: chiaro",
+    "themeDark": "Aspetto: scuro",
+    "themeAuto": "Aspetto: automatico",
+    "shortcuts": "Mostra scorciatoie da tastiera"
+  },
+  "search": {
+    "title": "Cerca nell’admin",
+    "placeholder": "Cerca pagine, organizzazioni, domini …",
+    "emptyStart": "Digita per trovare pagine, azioni, organizzazioni e domini.",
+    "loading": "Ricerca in corso …",
+    "noResults": "Nessun risultato per «{query}».",
+    "remoteFailed": "La ricerca sul server non è riuscita; sono mostrate solo pagine e azioni.",
+    "hintSelect": "selezionare",
+    "hintOpen": "aprire",
+    "hintToggle": "chiudere",
+    "groups": {
+      "recent": "Aperti di recente",
+      "pages": "Pagine",
+      "actions": "Azioni",
+      "tenants": "Organizzazioni",
+      "users": "Utenti",
+      "domains": "Domini",
+      "jobs": "Job",
+      "checks": "Controlli di sistema",
+      "audit": "Registro di audit"
+    }
+  },
+  "logout": "Esci",
   "menuToggleClose": "Chiudi",
-  "breadcrumbNav": "Percorso di navigazione",
-  "readOnlyBanner": "Accesso in sola lettura (support): con questo account non sono possibili modifiche.",
-  "accountSettings": "Impostazioni account",
-  "accountSettingsLoadFailed": "Impossibile caricare le impostazioni account."
+  "breadcrumbNav": "Percorso",
+  "mainNav": "Navigazione admin",
+  "accountMenu": "Menu del profilo",
+  "readOnlyBanner": "Accesso in sola lettura (support): questo account non può apportare modifiche.",
+  "accountSettings": "Profilo e passkey",
+  "accountSettingsLoadFailed": "Non è stato possibile caricare le impostazioni dell’account.",
+  "navWithCount": "{label} ({count})",
+  "compactSidebar": "Compatta",
+  "expandSidebar": "Espandi barra laterale",
+  "detail": "Dettaglio",
+  "roles": {
+    "owner": "Owner",
+    "support": "Support (sola lettura)"
+  },
+  "environments": {
+    "test": "Test",
+    "development": "Dev"
+  },
+  "attention": {
+    "label": "{count, plural, =0 {Avvisi, nessuno aperto} one {Avvisi, # aperto} other {Avvisi, # aperti}}",
+    "title": "Richiede attenzione",
+    "empty": "Niente di aperto.",
+    "items": {
+      "verifications_open": "{count, plural, one {# verifica aperta} other {# verifiche aperte}}",
+      "security_alerts": "{count, plural, one {# avviso di sicurezza} other {# avvisi di sicurezza}}",
+      "operations_problems": "{count, plural, one {# problema di esercizio} other {# problemi di esercizio}}"
+    }
+  },
+  "account": {
+    "title": "Profilo e passkey",
+    "description": "Gestisci le passkey del tuo account admin. Le modifiche richiedono la conferma con una passkey esistente."
+  }
 }

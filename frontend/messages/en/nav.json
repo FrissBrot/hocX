@@ -86,5 +86,6 @@
   "accessWho": "Who has access",
   "accessSecurity": "Security",
   "submissionPhotos": "Photos from submissions",
-  "settingsOverview": "All settings"
+  "settingsOverview": "All settings",
+  "securityLogins": "Security & sign-ins"
 }

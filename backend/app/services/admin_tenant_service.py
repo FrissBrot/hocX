@@ -5,6 +5,7 @@ import re
 import shutil
 import unicodedata
 import uuid
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -68,6 +69,9 @@ def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_im
         return None
     return f"/api/admin/tenants/{tenant_public_id}/profile-image"
 
+
+# «Vertrag endet»: Vertragsende in weniger als so vielen Tagen (Admin-Redesign §2 B, wie die Detailseite).
+CONTRACT_ENDING_DAYS = 30
 
 # Features, deren Buchung bestimmt, ob Traefik Mandanten-Domains bedient
 # (traefik_config_service.FEATURE_BY_PURPOSE)
@@ -142,6 +146,7 @@ class AdminTenantService:
             billing_start_date=tenant.billing_start_date,
             contract_ends_on=tenant.contract_ends_on,
             show_on_website=tenant.show_on_website,
+            identity_verified_at=tenant.identity_verified_at,
         )
 
     def _assigned_storage_packages(self, db: Session, tenant_id: int) -> list[AdminTenantStoragePackageRead]:
@@ -165,8 +170,13 @@ class AdminTenantService:
         q: str | None = None,
         plan_code: str | None = None,
         needs_rebooking: bool = False,
+        sort: str = "name",
+        descending: bool = False,
+        status: str | None = None,
+        storage_min_ratio: float | None = None,
+        today: date | None = None,
     ) -> AdminTenantPage:
-        query = db.query(Tenant).order_by(Tenant.name.asc())
+        query = db.query(Tenant)
         # Applied before the offset/limit slice (audit A1, 2026-08-16) - the frontend used
         # to filter only the already-fetched current page, so a match on a later page was
         # invisible while browsing an earlier one.
@@ -186,15 +196,45 @@ class AdminTenantService:
                 .where(StoragePackage.is_bookable.is_(False))
             )
             query = query.filter(or_(Tenant.plan_code.in_(non_bookable_plan), Tenant.id.in_(non_bookable_package_tenants)))
-        total = query.count()
-        query = query.offset(offset)
-        if limit is not None:
-            query = query.limit(limit)
-        tenants = query.all()
+        # Abgeleiteter Status (Admin-Redesign §2 B) - es gibt kein Statusfeld, nur diese Regeln.
+        if status == "read_only":
+            query = query.filter(Tenant.id.in_(select(TenantFeature.tenant_id).where(TenantFeature.access == "read_only")))
+        elif status == "contract_ending":
+            today = today or date.today()
+            query = query.filter(Tenant.contract_ends_on.is_not(None), Tenant.contract_ends_on < today + timedelta(days=CONTRACT_ENDING_DAYS))
+        elif status == "unverified":
+            query = query.filter(Tenant.identity_verified_at.is_(None))
+        storage_totals = self.storage_service.total_bytes_by_tenant(db)
+        if sort in ("storage", "users") or storage_min_ratio is not None:
+            # Speicher und Benutzerzahl sind keine Spalten: über alle gefilterten Mandanten in Python
+            # sortieren/filtern und erst danach paginieren (Mandantenzahl im Bereich Hunderter).
+            candidates = query.order_by(Tenant.name.asc()).all()
+            if storage_min_ratio is not None:
+                candidates = [
+                    tenant for tenant in candidates
+                    if tenant.storage_quota_bytes and storage_totals.get(tenant.id, 0) / tenant.storage_quota_bytes >= storage_min_ratio
+                ]
+            if sort == "storage":
+                candidates.sort(key=lambda tenant: storage_totals.get(tenant.id, 0), reverse=descending)
+            elif sort == "users":
+                user_counts = self._login_account_counts(db)
+                candidates.sort(key=lambda tenant: user_counts.get(tenant.id, 0), reverse=descending)
+            elif descending:
+                candidates.reverse()
+            total = len(candidates)
+            tenants = candidates[offset:offset + limit] if limit is not None else candidates[offset:]
+        else:
+            column = {"created": Tenant.created_at, "plan": Tenant.plan_code}.get(sort, func.lower(Tenant.name))
+            ordering = column.desc().nulls_last() if descending else column.asc().nulls_last()
+            query = query.order_by(ordering, Tenant.name.asc(), Tenant.id.asc())
+            total = query.count()
+            query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+            tenants = query.all()
         # One query for every tenant's storage total / booked features / plan / storage
         # packages instead of N+1 - list_tenants can return up to 500 rows (see the route's
         # `le=500` cap).
-        storage_totals = self.storage_service.total_bytes_by_tenant(db)
         features_by_tenant: dict[int, list[str]] = {}
         read_only_by_tenant: dict[int, list[str]] = {}
         addons_by_tenant: dict[int, list[str]] = {}
@@ -235,6 +275,20 @@ class AdminTenantService:
             ],
             total=total,
         )
+
+    def _login_account_counts(self, db: Session) -> dict[int, int]:
+        """Wie user_limit_service.login_account_count, aber für alle Mandanten in einer Abfrage."""
+        from app.services.todo_fine_service import today as today_local
+
+        rows = db.execute(
+            select(AppUser.tenant_id, func.count(AppUser.id))
+            .where(
+                AppUser.login_enabled.is_(True), AppUser.is_active.is_(True),
+                or_(AppUser.left_at.is_(None), AppUser.left_at >= today_local()),
+            )
+            .group_by(AppUser.tenant_id)
+        ).all()
+        return {tenant_id: int(count) for tenant_id, count in rows}
 
     def list_features(self, db: Session) -> list[AdminFeatureRead]:
         features = db.query(Feature).order_by(Feature.code.asc()).all()

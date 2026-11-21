@@ -1,0 +1,96 @@
+{
+  "title": "Overview",
+  "subtitle": "Platform health, key figures and open tasks at a glance.",
+  "loadFailed": "The overview could not be loaded.",
+  "refreshFailed": "Refresh failed – showing the last known state.",
+  "noPermission": "No permission",
+  "refresh": {
+    "pause": "Pause refresh",
+    "resume": "Resume refresh"
+  },
+  "status": {
+    "platform": "Platform",
+    "states": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "warning": "Warning",
+      "critical": "Critical",
+      "unknown": "Unknown"
+    },
+    "rules": {
+      "noData": "No current monitoring data (snapshot missing, stale or Docker unreachable).",
+      "critical": "At least one critical problem.",
+      "warning": "At least one warning, nothing critical.",
+      "maintenance": "No problems, but maintenance is running.",
+      "runtime": "No problems, but the runtime check reports a warning (pool or lag).",
+      "overload": "No problems, but requests were rejected due to overload in the last 5 minutes.",
+      "none": "No problems."
+    },
+    "asOf": "As of {time}",
+    "maintenanceActive": "Maintenance active – details",
+    "changed": "Platform status: {status}"
+  },
+  "kpis": {
+    "title": "Key figures",
+    "platform": "Platform health",
+    "platformHint": "{critical, plural, one {# critical} other {# critical}} · {warning, plural, one {# warning} other {# warnings}}",
+    "tenants": "Tenants",
+    "tenantsNew": "{count, plural, =0 {none new in 30 days} one {+# new in 30 days} other {+# new in 30 days}}",
+    "activeUsers": "Active users (30 d)",
+    "activeUsersHint": "signed in during the last 30 days",
+    "vsPrevious30d": "{percent} % vs. previous 30 days",
+    "mrr": "Monthly revenue (run rate)",
+    "vsPreviousMonth": "{percent} % vs. previous month",
+    "payingTenants": "{count, plural, one {# paying tenant} other {# paying tenants}}",
+    "overdue": "{count, plural, one {# invoice overdue} other {# invoices overdue}}",
+    "errors": "Errors (24 h)",
+    "vsPrevious24h": "{percent} % vs. previous 24 h",
+    "loginFailures": "Failed sign-ins (24 h)"
+  },
+  "todos": {
+    "title": "To do",
+    "empty": "Nothing open.",
+    "items": {
+      "verifications": "{count, plural, one {# identity verification open} other {# identity verifications open}}",
+      "rebooking": "{count, plural, one {# tenant needs rebooking} other {# tenants need rebooking}}",
+      "overdueCharges": "{count, plural, one {# invoice overdue} other {# invoices overdue}}",
+      "unhealthyDomains": "{count, plural, one {# domain unreachable} other {# domains unreachable}}",
+      "storageHot": "{count, plural, one {# tenant at 85 % storage or more} other {# tenants at 85 % storage or more}}",
+      "jobs": "{count, plural, one {# background job failing or overdue} other {# background jobs failing or overdue}}",
+      "backups": "Backups report a problem"
+    }
+  },
+  "charts": {
+    "range": "Period",
+    "success": "Successful",
+    "failure": "Failed",
+    "errors": "Errors",
+    "loginsTitle": "Sign-ins",
+    "errorsTitle": "Errors",
+    "loginsSummary": "{range}: {success, number} successful and {failure, number} failed sign-ins.",
+    "errorsSummary": "{range}: {count, number} errors.",
+    "loadFailed": "Chart could not be loaded.",
+    "asTable": "Data as table",
+    "time": "Time"
+  },
+  "ranges": {
+    "24h": "Last 24 hours",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days"
+  },
+  "feed": {
+    "title": "Activity",
+    "empty": "No entries.",
+    "filters": {
+      "all": "All",
+      "admin": "Admin",
+      "system": "System"
+    },
+    "systemKinds": {
+      "problem": "Problem: {subject}",
+      "resolved": "Resolved: {subject}",
+      "container_restart": "Container restarted: {subject}"
+    }
+  }
+}

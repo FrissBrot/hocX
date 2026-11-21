@@ -1,0 +1,94 @@
+{
+  "loadFailed": "Data could not be loaded.",
+  "status": {
+    "active": "Active",
+    "readOnly": "Read-only",
+    "contractEnding": "Contract ending",
+    "unverified": "Not verified"
+  },
+  "statusFilter": {
+    "all": "All statuses",
+    "storageFull": "Storage ≥ 85%"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "profile": "Profile",
+    "subscription": "Subscription & billing",
+    "users": "Users",
+    "domains": "Domains",
+    "verification": "Verification",
+    "storage": "Storage",
+    "activity": "Activity",
+    "technical": "Technical"
+  },
+  "header": {
+    "eyebrow": "Tenant",
+    "created": "Created on {date}",
+    "edit": "Edit",
+    "actions": "More actions",
+    "clone": "Clone",
+    "export": "Export",
+    "cleanup": "Clean up",
+    "delete": "Delete",
+    "id": "Tenant ID"
+  },
+  "overview": {
+    "users": "Users",
+    "usersOfLimit": "{count} / {limit}",
+    "participants": "Participants",
+    "storage": "Storage",
+    "storageOfQuota": "{used} / {quota}",
+    "storageUnlimited": "{used} (no limit)",
+    "openCharges": "Open invoices",
+    "overdue": "{count, plural, one {# overdue} other {# overdue}}",
+    "details": "Details",
+    "recentActivity": "Recent activity",
+    "allActivity": "All entries",
+    "noActivity": "No entries yet.",
+    "failure": "Failed"
+  },
+  "domains": {
+    "title": "Domains",
+    "description": "Custom domains of this tenant and their reachability.",
+    "empty": "No custom domains.",
+    "allDomains": "All domains"
+  },
+  "activity": {
+    "title": "Activity",
+    "description": "Audit entries of this tenant (actions by admins and members).",
+    "time": "Time",
+    "action": "Action",
+    "outcome": "Outcome",
+    "actor": "Performed by",
+    "loading": "Loading …",
+    "empty": "No entries.",
+    "success": "Succeeded",
+    "failure": "Failed"
+  },
+  "technical": {
+    "errorsTitle": "Errors",
+    "errorsDescription": "Unexpected errors that occurred for this tenant.",
+    "allErrors": "Error log",
+    "time": "Time",
+    "type": "Error",
+    "request": "Request",
+    "status": "Status",
+    "loading": "Loading …",
+    "errorsEmpty": "No errors recorded."
+  },
+  "charges": {
+    "title": "Invoices",
+    "description": "Charges to this tenant.",
+    "allCharges": "All invoices",
+    "period": "Period",
+    "amount": "Amount",
+    "status": "Status",
+    "due": "Due on",
+    "loading": "Loading …",
+    "empty": "No invoices.",
+    "overdue": "Overdue",
+    "status_open": "Open",
+    "status_paid": "Paid",
+    "status_waived": "Waived"
+  }
+}

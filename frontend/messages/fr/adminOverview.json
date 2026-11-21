@@ -1,0 +1,96 @@
+{
+  "title": "Vue d’ensemble",
+  "subtitle": "État de la plateforme, indicateurs et tâches ouvertes en un coup d’œil.",
+  "loadFailed": "La vue d’ensemble n’a pas pu être chargée.",
+  "refreshFailed": "Échec de l’actualisation – affichage du dernier état connu.",
+  "noPermission": "Pas d’autorisation",
+  "refresh": {
+    "pause": "Suspendre l’actualisation",
+    "resume": "Reprendre l’actualisation"
+  },
+  "status": {
+    "platform": "Plateforme",
+    "states": {
+      "healthy": "En ordre",
+      "degraded": "Dégradé",
+      "warning": "Avertissement",
+      "critical": "Critique",
+      "unknown": "Inconnu"
+    },
+    "rules": {
+      "noData": "Aucune donnée de surveillance actuelle (instantané manquant, obsolète ou Docker injoignable).",
+      "critical": "Au moins un problème critique.",
+      "warning": "Au moins un avertissement, rien de critique.",
+      "maintenance": "Aucun problème, mais une maintenance est en cours.",
+      "runtime": "Aucun problème, mais le contrôle d’exécution signale un avertissement (pool ou latence).",
+      "overload": "Aucun problème, mais des requêtes ont été refusées pour surcharge ces 5 dernières minutes.",
+      "none": "Aucun problème."
+    },
+    "asOf": "État au {time}",
+    "maintenanceActive": "Maintenance en cours – détails",
+    "changed": "État de la plateforme : {status}"
+  },
+  "kpis": {
+    "title": "Indicateurs",
+    "platform": "État de la plateforme",
+    "platformHint": "{critical, plural, one {# critique} other {# critiques}} · {warning, plural, one {# avertissement} other {# avertissements}}",
+    "tenants": "Organisations",
+    "tenantsNew": "{count, plural, =0 {aucune nouvelle en 30 jours} one {+# nouvelle en 30 jours} other {+# nouvelles en 30 jours}}",
+    "activeUsers": "Utilisateurs actifs (30 j)",
+    "activeUsersHint": "connectés au cours des 30 derniers jours",
+    "vsPrevious30d": "{percent} % par rapport aux 30 jours précédents",
+    "mrr": "Revenus mensuels (run rate)",
+    "vsPreviousMonth": "{percent} % par rapport au mois précédent",
+    "payingTenants": "{count, plural, one {# organisation payante} other {# organisations payantes}}",
+    "overdue": "{count, plural, one {# facture en retard} other {# factures en retard}}",
+    "errors": "Erreurs (24 h)",
+    "vsPrevious24h": "{percent} % par rapport aux 24 h précédentes",
+    "loginFailures": "Connexions échouées (24 h)"
+  },
+  "todos": {
+    "title": "À faire",
+    "empty": "Rien en attente.",
+    "items": {
+      "verifications": "{count, plural, one {# vérification d’identité ouverte} other {# vérifications d’identité ouvertes}}",
+      "rebooking": "{count, plural, one {# organisation à reclasser} other {# organisations à reclasser}}",
+      "overdueCharges": "{count, plural, one {# facture en retard} other {# factures en retard}}",
+      "unhealthyDomains": "{count, plural, one {# domaine injoignable} other {# domaines injoignables}}",
+      "storageHot": "{count, plural, one {# organisation à 85 % de stockage ou plus} other {# organisations à 85 % de stockage ou plus}}",
+      "jobs": "{count, plural, one {# tâche de fond en échec ou en retard} other {# tâches de fond en échec ou en retard}}",
+      "backups": "Les sauvegardes signalent un problème"
+    }
+  },
+  "charts": {
+    "range": "Période",
+    "success": "Réussies",
+    "failure": "Échouées",
+    "errors": "Erreurs",
+    "loginsTitle": "Connexions",
+    "errorsTitle": "Erreurs",
+    "loginsSummary": "{range} : {success, number} connexions réussies et {failure, number} échouées.",
+    "errorsSummary": "{range} : {count, number} erreurs.",
+    "loadFailed": "Le graphique n’a pas pu être chargé.",
+    "asTable": "Données sous forme de tableau",
+    "time": "Heure"
+  },
+  "ranges": {
+    "24h": "24 dernières heures",
+    "7d": "7 derniers jours",
+    "30d": "30 derniers jours",
+    "90d": "90 derniers jours"
+  },
+  "feed": {
+    "title": "Activité",
+    "empty": "Aucune entrée.",
+    "filters": {
+      "all": "Tout",
+      "admin": "Admin",
+      "system": "Système"
+    },
+    "systemKinds": {
+      "problem": "Problème : {subject}",
+      "resolved": "Résolu : {subject}",
+      "container_restart": "Conteneur redémarré : {subject}"
+    }
+  }
+}

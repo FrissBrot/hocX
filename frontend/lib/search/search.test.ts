@@ -237,3 +237,13 @@ describe("Suche in allen Sprachen und mit Tippfehlern", () => {
     expect(matchScore({ label: "Verlauf" }, "vrluaf")).toBe(0);
   });
 });
+
+describe("highlightMatch", () => {
+  it("markiert Fundstellen unabhängig von Umlauten und Gross-/Kleinschreibung", async () => {
+    const { highlightMatch } = await import("./match");
+    expect(highlightMatch("Küchenämtli", "kuche")).toEqual([{ text: "Küche", hit: true }, { text: "nämtli", hit: false }]);
+    expect(highlightMatch("Audit-Log", "log")).toEqual([{ text: "Audit-", hit: false }, { text: "Log", hit: true }]);
+    expect(highlightMatch("Strasse", "straße")).toEqual([{ text: "Strasse", hit: true }]);
+    expect(highlightMatch("Jobs", "")).toEqual([{ text: "Jobs", hit: false }]);
+  });
+});

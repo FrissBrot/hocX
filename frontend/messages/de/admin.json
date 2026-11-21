@@ -590,6 +590,10 @@
       "auth_security_maintenance": {
         "title": "Anmeldeschutz aufräumen",
         "description": "Stündlich: löscht Sicherheitsereignisse nach 90 Tagen, beendete Sitzungen und lange unbenutzte Geräte und repariert Zähler ohne Ablauf."
+      },
+      "metrics_rollup": {
+        "title": "Kennzahlen-Rollup",
+        "description": "Rechnet täglich Zählwerte für Dashboard und Analysen (Mandanten, aktive Benutzer, Anmeldungen, Fehler, Speicher, Nutzung je Modul). Erster Lauf ergänzt 90 Tage rückwirkend."
       }
     }
   },
@@ -666,7 +670,9 @@
       "lastError": "Letzter Fehler ({date}): {error}",
       "queue": "Wartend: {pending} · Fehlgeschlagen: {failed}"
     },
-    "reminderPopover": "Bleibt ein Problem offen, kommt nach dieser Anzahl Stunden die Erinnerung «Weiterhin: …». 0 schaltet Erinnerungen aus. Konnte ntfy eine Nachricht nicht zustellen, sendet hocX sie bis zu 24 Stunden lang erneut."
+    "reminderPopover": "Bleibt ein Problem offen, kommt nach dieser Anzahl Stunden die Erinnerung «Weiterhin: …». 0 schaltet Erinnerungen aus. Konnte ntfy eine Nachricht nicht zustellen, sendet hocX sie bis zu 24 Stunden lang erneut.",
+    "statusTokenOnce": "Diese URL mit dem Status-Token wird nur jetzt angezeigt. Kopiere sie in Uptime Kuma; nach dem Neuladen ist sie nicht mehr sichtbar.",
+    "statusTokenMasked": "Status-Token ist gesetzt (endet auf «{hint}»). Er wird nur direkt nach dem Erzeugen angezeigt – bei Verlust einen neuen erzeugen."
   },
   "login": {
     "title": "Admin-Anmeldung",
@@ -693,13 +699,6 @@
     "passkeyUnsupported": "Dieser Browser unterstützt keine Passkeys. Die Admin-Anmeldung ist nur mit Passkey möglich.",
     "passkeyVerifyHint": "Bestätige die Anmeldung mit deinem Passkey.",
     "verifyWithPasskey": "Mit Passkey bestätigen"
-  },
-  "dashboard": {
-    "eyebrow": "Übersicht",
-    "title": "Dashboard",
-    "tenants": "Mandanten",
-    "totalUsers": "Benutzer gesamt",
-    "activeLogins": "Mit aktivem Login"
   },
   "roleOptions": {
     "reader": "Reader",
@@ -927,7 +926,9 @@
       "roleChangeFailed": "Rolle konnte nicht geändert werden",
       "userDeleteConfirm": "Benutzer \"{name}\" endgültig löschen? Das Konto gehört nur zu diesem Mandanten und ist danach weg.",
       "userDeleted": "Benutzer gelöscht",
-      "userDeleteFailed": "Benutzer konnte nicht gelöscht werden"
+      "userDeleteFailed": "Benutzer konnte nicht gelöscht werden",
+      "roleChangeConfirm": "{name} erhält die Rolle «{role}». Die Rechte ändern sich sofort.",
+      "roleChangeConfirmLabel": "Rolle ändern"
     }
   },
   "plans": {
@@ -957,7 +958,15 @@
     "colMessage": "Nachricht",
     "loading": "Wird geladen…",
     "noErrorsFound": "Keine Fehler gefunden.",
-    "triggeredBy": "Ausgelöst von: {email}"
+    "triggeredBy": "Ausgelöst von: {email}",
+    "dateFrom": "Von",
+    "dateTo": "Bis",
+    "viewEntries": "Einträge",
+    "viewGrouped": "Gruppiert",
+    "colCount": "Anzahl",
+    "colTenants": "Mandanten",
+    "colFirst": "Erstmals",
+    "colLast": "Zuletzt"
   },
   "domains": {
     "title": "Domains",
@@ -1092,7 +1101,8 @@
     "importPasswordLabel": "Export-Passwort",
     "importPasswordHelp": "Nur nötig, wenn beim Export ein Passwort gesetzt wurde.",
     "exportCredentials": "Zugangsdaten mitexportieren",
-    "exportCredentialsHint": "Passwort-Hashes, MFA-Secrets sowie Link- und Kalender-Tokens. Nur für einen Umzug, bei dem alle Logins und Links weiter gelten sollen. Ohne diese Option erhalten importierte Konten ein zufälliges Passwort und Links eine neue URL."
+    "exportCredentialsHint": "Passwort-Hashes, MFA-Secrets sowie Link- und Kalender-Tokens. Nur für einen Umzug, bei dem alle Logins und Links weiter gelten sollen. Ohne diese Option erhalten importierte Konten ein zufälliges Passwort und Links eine neue URL.",
+    "cloneDefaultName": "{name} (Kopie)"
   },
   "pricing": {
     "title": "Preise",

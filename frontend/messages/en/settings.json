@@ -127,6 +127,9 @@
       "activity": {
         "description": "Who changed what, and when."
       },
+      "securityLogins": {
+        "description": "Alerts, sign-ins and sessions of the accounts."
+      },
       "import": {
         "description": "Bring in minutes and data from Word and other sources."
       }

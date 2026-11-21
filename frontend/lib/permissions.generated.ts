@@ -1,7 +1,7 @@
 // GENERATED FILE - do not edit by hand. Source of truth: permissions/catalog.json (repo root).
 // Regenerate with: python3 scripts/sync-permission-catalog.py
 
-export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings.edit" | "meetings.approve" | "todos.complete_own" | "templates.edit" | "templates.manage" | "participants.read" | "participants.contacts" | "participants.manage" | "participants.export" | "finances.read" | "finances.manage" | "fines.manage" | "reports.personal" | "files.read" | "files.manage" | "photos.read" | "photos.manage" | "sharing.public" | "submissions.read" | "submissions.review" | "submissions.manage" | "settings.manage" | "activity.read" | "access.manage" | "data.export";
+export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings.edit" | "meetings.approve" | "todos.complete_own" | "templates.edit" | "templates.manage" | "participants.read" | "participants.contacts" | "participants.manage" | "participants.export" | "finances.read" | "finances.manage" | "fines.manage" | "reports.personal" | "files.read" | "files.manage" | "photos.read" | "photos.manage" | "sharing.public" | "submissions.read" | "submissions.review" | "submissions.manage" | "settings.manage" | "activity.read" | "security.read" | "access.manage" | "data.export";
 export type PermissionArea = "meetings" | "templates" | "participants" | "finances" | "reports" | "files" | "submissions" | "administration";
 export type PermissionFeature = "finance" | "abgabebox" | "custom_domain" | "verify_domain" | "task_packages" | "custom_roles" | "photo_sharing" | "document_designer" | "todo_fines";
 export type SystemRoleKey = "admin" | "writer" | "kassier" | "reader";
@@ -45,6 +45,7 @@ export const PERMISSIONS: readonly PermissionInfo[] = [
   { key: "submissions.manage", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: ["submissions.read"], scopes: [] },
   { key: "settings.manage", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
   { key: "activity.read", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
+  { key: "security.read", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
   { key: "access.manage", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
   { key: "data.export", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
 ];

@@ -1,0 +1,94 @@
+{
+  "loadFailed": "Impossible de charger les données.",
+  "status": {
+    "active": "Actif",
+    "readOnly": "Lecture seule",
+    "contractEnding": "Contrat se termine",
+    "unverified": "Non vérifié"
+  },
+  "statusFilter": {
+    "all": "Tous les statuts",
+    "storageFull": "Stockage ≥ 85 %"
+  },
+  "tabs": {
+    "overview": "Aperçu",
+    "profile": "Données de base",
+    "subscription": "Abonnement et facturation",
+    "users": "Utilisateurs",
+    "domains": "Domaines",
+    "verification": "Vérification",
+    "storage": "Stockage",
+    "activity": "Activité",
+    "technical": "Technique"
+  },
+  "header": {
+    "eyebrow": "Client",
+    "created": "Créé le {date}",
+    "edit": "Modifier",
+    "actions": "Autres actions",
+    "clone": "Cloner",
+    "export": "Exporter",
+    "cleanup": "Nettoyer",
+    "delete": "Supprimer",
+    "id": "ID du client"
+  },
+  "overview": {
+    "users": "Utilisateurs",
+    "usersOfLimit": "{count} / {limit}",
+    "participants": "Participants",
+    "storage": "Stockage",
+    "storageOfQuota": "{used} / {quota}",
+    "storageUnlimited": "{used} (sans limite)",
+    "openCharges": "Factures ouvertes",
+    "overdue": "{count, plural, one {# en retard} other {# en retard}}",
+    "details": "Détails",
+    "recentActivity": "Activité récente",
+    "allActivity": "Toutes les entrées",
+    "noActivity": "Aucune entrée pour l’instant.",
+    "failure": "Échec"
+  },
+  "domains": {
+    "title": "Domaines",
+    "description": "Domaines propres de ce client et leur accessibilité.",
+    "empty": "Aucun domaine propre.",
+    "allDomains": "Tous les domaines"
+  },
+  "activity": {
+    "title": "Activité",
+    "description": "Entrées d’audit de ce client (actions des admins et des membres).",
+    "time": "Heure",
+    "action": "Action",
+    "outcome": "Résultat",
+    "actor": "Effectué par",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée.",
+    "success": "Réussi",
+    "failure": "Échec"
+  },
+  "technical": {
+    "errorsTitle": "Erreurs",
+    "errorsDescription": "Erreurs inattendues survenues pour ce client.",
+    "allErrors": "Journal des erreurs",
+    "time": "Heure",
+    "type": "Erreur",
+    "request": "Requête",
+    "status": "Statut",
+    "loading": "Chargement …",
+    "errorsEmpty": "Aucune erreur enregistrée."
+  },
+  "charges": {
+    "title": "Factures",
+    "description": "Créances envers ce client.",
+    "allCharges": "Toutes les factures",
+    "period": "Période",
+    "amount": "Montant",
+    "status": "Statut",
+    "due": "Échéance",
+    "loading": "Chargement …",
+    "empty": "Aucune facture.",
+    "overdue": "En retard",
+    "status_open": "Ouverte",
+    "status_paid": "Payée",
+    "status_waived": "Remise"
+  }
+}

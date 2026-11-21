@@ -35,7 +35,9 @@ class AdminDomainService:
             traefik_config_service.regenerate(db)
         return domain
 
-    def list_domains(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminDomainPage:
+    def list_domains(
+        self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None, tenant_id: int | None = None
+    ) -> AdminDomainPage:
         query = (
             db.query(TenantDomain, Tenant)
             .join(Tenant, TenantDomain.tenant_id == Tenant.id)
@@ -46,6 +48,9 @@ class AdminDomainService:
         if q and q.strip():
             like = contains_pattern(q.strip())
             query = query.filter(or_(TenantDomain.domain.ilike(like, escape=LIKE_ESCAPE), Tenant.name.ilike(like, escape=LIKE_ESCAPE)))
+        # Tab «Domains» der Mandanten-Detailseite
+        if tenant_id is not None:
+            query = query.filter(TenantDomain.tenant_id == tenant_id)
         total = query.count()
         query = query.offset(offset)
         if limit is not None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -8,10 +9,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import aliased
 
 from app.models import AppUser, PlatformAdmin, SystemErrorLog, Tenant
-from app.schemas.admin import SystemErrorLogFilterOptions, SystemErrorLogPage, SystemErrorLogRead
+from app.schemas.admin import SystemErrorLogFilterOptions, SystemErrorLogGroup, SystemErrorLogPage, SystemErrorLogRead
 from app.services import public_id_service
 
 DEFAULT_PAGE_SIZE = 50
+_TZ = ZoneInfo("Europe/Zurich")
+
+
+def _day_start(day: date) -> datetime:
+    return datetime.combine(day, time.min, tzinfo=_TZ)
+
+
+def _apply_filters(query, *, tenant_id, error_type, source, date_from: date | None, date_to: date | None):
+    """Gemeinsame Filter für Liste und Gruppenansicht. Zeitraum in Schweizer Kalendertagen,
+    ``date_to`` inklusive (Index idx_system_error_log_created)."""
+    if tenant_id is not None:
+        query = query.filter(SystemErrorLog.tenant_id == tenant_id)
+    if error_type is not None:
+        query = query.filter(SystemErrorLog.error_type == error_type)
+    if source is not None:
+        query = query.filter(SystemErrorLog.source == source)
+    if date_from is not None:
+        query = query.filter(SystemErrorLog.created_at >= _day_start(date_from))
+    if date_to is not None:
+        query = query.filter(SystemErrorLog.created_at < _day_start(date_to + timedelta(days=1)))
+    return query
 
 
 class AdminErrorLogService:
@@ -24,6 +46,8 @@ class AdminErrorLogService:
         tenant_id: int | None = None,
         error_type: str | None = None,
         source: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         offset: int = 0,
     ) -> SystemErrorLogPage:
@@ -36,12 +60,7 @@ class AdminErrorLogService:
             .outerjoin(actor_user, SystemErrorLog.actor_user_id == actor_user.id)
             .outerjoin(actor_admin, SystemErrorLog.actor_admin_id == actor_admin.id)
         )
-        if tenant_id is not None:
-            query = query.filter(SystemErrorLog.tenant_id == tenant_id)
-        if error_type is not None:
-            query = query.filter(SystemErrorLog.error_type == error_type)
-        if source is not None:
-            query = query.filter(SystemErrorLog.source == source)
+        query = _apply_filters(query, tenant_id=tenant_id, error_type=error_type, source=source, date_from=date_from, date_to=date_to)
 
         total = query.count()
         rows = query.order_by(SystemErrorLog.created_at.desc()).limit(limit).offset(offset).all()
@@ -63,6 +82,32 @@ class AdminErrorLogService:
             for entry, tenant_name, user_email, admin_email in rows
         ]
         return SystemErrorLogPage(items=items, total=total)
+
+    def group_errors(
+        self,
+        db: Session,
+        *,
+        tenant_id: int | None = None,
+        source: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        limit: int = 100,
+    ) -> list[SystemErrorLogGroup]:
+        """Gruppenansicht: Fehlertyp × Anzahl × betroffene Mandanten × zuletzt - nur Zählwerte,
+        keine Meldungen/Tracebacks."""
+        query = db.query(
+            SystemErrorLog.error_type,
+            func.count(SystemErrorLog.id),
+            func.count(func.distinct(SystemErrorLog.tenant_id)),
+            func.min(SystemErrorLog.created_at),
+            func.max(SystemErrorLog.created_at),
+        )
+        query = _apply_filters(query, tenant_id=tenant_id, error_type=None, source=source, date_from=date_from, date_to=date_to)
+        rows = query.group_by(SystemErrorLog.error_type).order_by(func.count(SystemErrorLog.id).desc(), SystemErrorLog.error_type).limit(limit).all()
+        return [
+            SystemErrorLogGroup(error_type=error_type, count=count, tenants=tenants, first_at=first_at, last_at=last_at)
+            for error_type, count, tenants, first_at, last_at in rows
+        ]
 
     def filter_options(self, db: Session) -> SystemErrorLogFilterOptions:
         error_types = [row[0] for row in db.execute(select(SystemErrorLog.error_type).distinct().order_by(SystemErrorLog.error_type)).all()]

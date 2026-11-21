@@ -86,5 +86,6 @@
   "accessWho": "Qui a accès",
   "accessSecurity": "Sécurité",
   "submissionPhotos": "Photos des dépôts",
-  "settingsOverview": "Tous les paramètres"
+  "settingsOverview": "Tous les paramètres",
+  "securityLogins": "Sécurité et connexions"
 }

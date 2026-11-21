@@ -289,11 +289,14 @@ def _charge_read(charge: TenantCharge, tenant_public_id: uuid.UUID | None, today
 
 
 def list_charges(
-    db: Session, *, status: str | None, q: str | None, year: int | None, offset: int, limit: int, today: date | None = None
+    db: Session, *, status: str | None, q: str | None, year: int | None, offset: int, limit: int, today: date | None = None,
+    tenant_id: int | None = None,
 ) -> TenantChargePage:
     today = today or today_local()
     base = select(TenantCharge, Tenant.public_id).outerjoin(Tenant, Tenant.id == TenantCharge.tenant_id)
     filters = []
+    if tenant_id is not None:  # Rechnungen eines Mandanten (Detailseite, Tab «Abo & Abrechnung»)
+        filters.append(TenantCharge.tenant_id == tenant_id)
     if q and q.strip():
         filters.append(TenantCharge.tenant_name.ilike(contains_pattern(q.strip()), escape=LIKE_ESCAPE))
     if year is not None:

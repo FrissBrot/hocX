@@ -26,7 +26,8 @@ from app.schemas.cashflow import (
     TenantChargeRead,
     TenantChargeUpdate,
 )
-from app.services import cashflow_service
+from app.models import Tenant
+from app.services import cashflow_service, public_id_service
 from app.services.audit_service import AuditService
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
@@ -55,9 +56,15 @@ def list_charges(
     year: int | None = Query(None, ge=2000, le=2100),
     offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
     limit: int = Query(50, ge=1, le=200),
+    tenant_id: uuid.UUID | None = None,
 ):
     _sync(db)
-    return cashflow_service.list_charges(db, status=status, q=q, year=year, offset=offset, limit=limit)
+    internal_tenant_id = None
+    if tenant_id is not None:
+        internal_tenant_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)  # nosemgrep: public-id-lookup-without-tenant -- Plattform-Admin, mandantenübergreifend by design (wie admin._resolve_tenant_id)
+        if internal_tenant_id is None:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+    return cashflow_service.list_charges(db, status=status, q=q, year=year, offset=offset, limit=limit, tenant_id=internal_tenant_id)
 
 
 @router.patch("/cashflow/charges/{charge_id}", response_model=TenantChargeRead)

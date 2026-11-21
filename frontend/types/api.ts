@@ -899,6 +899,8 @@ export type AdminTenantSummary = {
   billing_start_date: string | null;
   contract_ends_on: string | null;
   show_on_website: boolean;
+  // Identitätsprüfung (Admin-Redesign: Status «nicht verifiziert»)
+  identity_verified_at?: string | null;
 };
 
 export type AdminTenantStoragePackage = {
@@ -1158,6 +1160,14 @@ export type SystemErrorLogPage = {
   total: number;
 };
 
+export type SystemErrorLogGroup = {
+  error_type: string;
+  count: number;
+  tenants: number;
+  first_at: string;
+  last_at: string;
+};
+
 export type SystemErrorLogFilterOptions = {
   error_types: string[];
   sources: string[];
@@ -1344,6 +1354,8 @@ export type NotificationSettings = {
   reminder_hours: number;
   status_token: string | null;
   status_url: string | null;
+  status_token_set: boolean;
+  status_token_hint: string | null;
   last_sent_at: string | null;
   last_send_error: string | null;
   last_send_error_at: string | null;

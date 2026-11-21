@@ -113,6 +113,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("storage_purge", "storage", 1),
     # Anmeldeschutz: Sicherheitsereignisse nach Frist löschen, Sessions/Geräte aufräumen, Zähler ohne TTL
     _loop("auth_security_maintenance", "cleanup", 60),
+    # Kennzahlen-Rollup (Dashboard/Analysen): tickt stündlich, rechnet nur fehlende Tage.
+    _loop("metrics_rollup", "maintenance", 60, service="job-worker"),
     # Takt kommt aus abgabebox-backend/app/config.py (ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES,
     # Default 30) - das Backend kennt die Einstellung nicht, darum hier mit Reserve.
     JobDefinition(

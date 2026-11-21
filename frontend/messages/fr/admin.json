@@ -590,6 +590,10 @@
       "auth_security_maintenance": {
         "title": "Nettoyage de la protection des connexions",
         "description": "Toutes les heures : supprime les événements de sécurité après 90 jours, les sessions terminées et les appareils longtemps inutilisés, et répare les compteurs sans expiration."
+      },
+      "metrics_rollup": {
+        "title": "Agrégation des indicateurs",
+        "description": "Calcule chaque jour des compteurs pour le tableau de bord et les analyses (mandants, utilisateurs actifs, connexions, erreurs, stockage, utilisation par module). La première exécution reprend 90 jours."
       }
     }
   },
@@ -666,7 +670,9 @@
       "lastError": "Dernière erreur ({date}) : {error}",
       "queue": "En attente : {pending} · Échecs : {failed}"
     },
-    "reminderPopover": "Si un problème reste ouvert, le rappel «Toujours : …» est envoyé après ce nombre d'heures. 0 désactive les rappels. Si ntfy n'a pas pu livrer un message, hocX le renvoie pendant 24 heures au maximum."
+    "reminderPopover": "Si un problème reste ouvert, le rappel «Toujours : …» est envoyé après ce nombre d'heures. 0 désactive les rappels. Si ntfy n'a pas pu livrer un message, hocX le renvoie pendant 24 heures au maximum.",
+    "statusTokenOnce": "Cette URL avec le jeton de statut n’est affichée que maintenant. Copiez-la dans Uptime Kuma ; après rechargement, elle n’est plus visible.",
+    "statusTokenMasked": "Un jeton de statut est défini (se termine par « {hint} »). Il n’est affiché que juste après sa création – en cas de perte, en créer un nouveau."
   },
   "login": {
     "title": "Connexion administrateur",
@@ -693,13 +699,6 @@
     "passkeyUnsupported": "Ce navigateur ne prend pas en charge les clés d’accès. La connexion administrateur n’est possible qu’avec une clé d’accès.",
     "passkeyVerifyHint": "Confirmez la connexion avec votre clé d’accès.",
     "verifyWithPasskey": "Confirmer avec la clé d’accès"
-  },
-  "dashboard": {
-    "eyebrow": "Aperçu",
-    "title": "Tableau de bord",
-    "tenants": "Organisations",
-    "totalUsers": "Total des utilisateurs",
-    "activeLogins": "Avec connexion active"
   },
   "roleOptions": {
     "reader": "Lecteur",
@@ -927,7 +926,9 @@
       "roleChangeFailed": "Le rôle n'a pas pu être modifié",
       "userDeleteConfirm": "Supprimer définitivement l'utilisateur « {name} » ? Le compte n'appartient qu'à cette organisation et disparaîtra ensuite.",
       "userDeleted": "Utilisateur supprimé",
-      "userDeleteFailed": "L'utilisateur n'a pas pu être supprimé"
+      "userDeleteFailed": "L'utilisateur n'a pas pu être supprimé",
+      "roleChangeConfirm": "{name} recevra le rôle « {role} ». Les droits changent immédiatement.",
+      "roleChangeConfirmLabel": "Changer le rôle"
     }
   },
   "plans": {
@@ -957,7 +958,15 @@
     "colMessage": "Message",
     "loading": "Chargement…",
     "noErrorsFound": "Aucune erreur trouvée.",
-    "triggeredBy": "Déclenché par : {email}"
+    "triggeredBy": "Déclenché par : {email}",
+    "dateFrom": "Du",
+    "dateTo": "Au",
+    "viewEntries": "Entrées",
+    "viewGrouped": "Regroupé",
+    "colCount": "Nombre",
+    "colTenants": "Mandants",
+    "colFirst": "Première fois",
+    "colLast": "Dernière fois"
   },
   "domains": {
     "title": "Domaines",
@@ -1092,7 +1101,8 @@
     "importPasswordLabel": "Mot de passe de l'export",
     "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export.",
     "exportCredentials": "Inclure les identifiants",
-    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL."
+    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL.",
+    "cloneDefaultName": "{name} (copie)"
   },
   "pricing": {
     "title": "Tarifs",

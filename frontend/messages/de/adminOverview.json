@@ -1,0 +1,96 @@
+{
+  "title": "Übersicht",
+  "subtitle": "Zustand der Plattform, Kennzahlen und offene Aufgaben auf einen Blick.",
+  "loadFailed": "Die Übersicht konnte nicht geladen werden.",
+  "refreshFailed": "Aktualisieren fehlgeschlagen – angezeigt wird der letzte Stand.",
+  "noPermission": "Keine Berechtigung",
+  "refresh": {
+    "pause": "Aktualisierung pausieren",
+    "resume": "Aktualisierung fortsetzen"
+  },
+  "status": {
+    "platform": "Plattform",
+    "states": {
+      "healthy": "In Ordnung",
+      "degraded": "Eingeschränkt",
+      "warning": "Warnung",
+      "critical": "Kritisch",
+      "unknown": "Unbekannt"
+    },
+    "rules": {
+      "noData": "Keine aktuellen Monitoring-Daten (Snapshot fehlt, ist veraltet oder Docker ist nicht erreichbar).",
+      "critical": "Mindestens ein kritisches Problem.",
+      "warning": "Mindestens eine Warnung, nichts Kritisches.",
+      "maintenance": "Keine Probleme, aber eine Wartung läuft.",
+      "runtime": "Keine Probleme, aber die Laufzeit-Prüfung meldet eine Warnung (Pool oder Verzögerung).",
+      "overload": "Keine Probleme, aber in den letzten 5 Minuten wurden Anfragen wegen Überlast abgewiesen.",
+      "none": "Keine Probleme."
+    },
+    "asOf": "Stand {time}",
+    "maintenanceActive": "Wartung aktiv – Details",
+    "changed": "Plattformstatus: {status}"
+  },
+  "kpis": {
+    "title": "Kennzahlen",
+    "platform": "Plattformzustand",
+    "platformHint": "{critical, plural, one {# kritisch} other {# kritisch}} · {warning, plural, one {# Warnung} other {# Warnungen}}",
+    "tenants": "Mandanten",
+    "tenantsNew": "{count, plural, =0 {keine neuen in 30 Tagen} one {+# neu in 30 Tagen} other {+# neu in 30 Tagen}}",
+    "activeUsers": "Aktive Benutzer (30 T)",
+    "activeUsersHint": "mit Anmeldung in den letzten 30 Tagen",
+    "vsPrevious30d": "{percent} % zu den 30 Tagen davor",
+    "mrr": "Monatliche Einnahmen (Run-Rate)",
+    "vsPreviousMonth": "{percent} % zum Vormonat",
+    "payingTenants": "{count, plural, one {# zahlender Mandant} other {# zahlende Mandanten}}",
+    "overdue": "{count, plural, one {# Rechnung überfällig} other {# Rechnungen überfällig}}",
+    "errors": "Fehler (24 h)",
+    "vsPrevious24h": "{percent} % zu den 24 h davor",
+    "loginFailures": "Fehlgeschlagene Anmeldungen (24 h)"
+  },
+  "todos": {
+    "title": "Zu erledigen",
+    "empty": "Nichts offen.",
+    "items": {
+      "verifications": "{count, plural, one {# Identitätsprüfung offen} other {# Identitätsprüfungen offen}}",
+      "rebooking": "{count, plural, one {# Mandant muss umgebucht werden} other {# Mandanten müssen umgebucht werden}}",
+      "overdueCharges": "{count, plural, one {# Rechnung überfällig} other {# Rechnungen überfällig}}",
+      "unhealthyDomains": "{count, plural, one {# Domain nicht erreichbar} other {# Domains nicht erreichbar}}",
+      "storageHot": "{count, plural, one {# Mandant mit Speicher ab 85 %} other {# Mandanten mit Speicher ab 85 %}}",
+      "jobs": "{count, plural, one {# Hintergrundjob fehlerhaft oder überfällig} other {# Hintergrundjobs fehlerhaft oder überfällig}}",
+      "backups": "Backups melden ein Problem"
+    }
+  },
+  "charts": {
+    "range": "Zeitraum",
+    "success": "Erfolgreich",
+    "failure": "Fehlgeschlagen",
+    "errors": "Fehler",
+    "loginsTitle": "Anmeldungen",
+    "errorsTitle": "Fehler",
+    "loginsSummary": "{range}: {success, number} erfolgreiche und {failure, number} fehlgeschlagene Anmeldungen.",
+    "errorsSummary": "{range}: {count, number} Fehler.",
+    "loadFailed": "Diagramm konnte nicht geladen werden.",
+    "asTable": "Daten als Tabelle",
+    "time": "Zeit"
+  },
+  "ranges": {
+    "24h": "Letzte 24 Stunden",
+    "7d": "Letzte 7 Tage",
+    "30d": "Letzte 30 Tage",
+    "90d": "Letzte 90 Tage"
+  },
+  "feed": {
+    "title": "Aktivität",
+    "empty": "Keine Einträge.",
+    "filters": {
+      "all": "Alle",
+      "admin": "Admin",
+      "system": "System"
+    },
+    "systemKinds": {
+      "problem": "Problem: {subject}",
+      "resolved": "Behoben: {subject}",
+      "container_restart": "Container neu gestartet: {subject}"
+    }
+  }
+}

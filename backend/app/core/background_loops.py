@@ -72,6 +72,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "capture_date_file_sync": 202600035,
     # Anmeldeschutz: Aufbewahrung auth_event, Sessions, Geräte, Zähler ohne TTL (Migration 0206)
     "auth_security_maintenance": 202600036,
+    # Admin-Redesign Phase D: täglicher Kennzahlen-Rollup (Migration 0208_platform_metrics).
+    "metrics_rollup": 202600037,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

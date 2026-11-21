@@ -22,6 +22,24 @@ export const CHART_COLORS = {
   surplus: "var(--success)",
   deficit: "var(--danger)",
   previous: "var(--text)",
+  // Admin-Übersicht (Dashboard-Diagramme Anmeldungen/Fehler, Plan §3.4)
+  loginSuccess: "var(--success)",
+  loginFailure: "var(--danger)",
+  errors: "var(--danger)",
+  // Sicherheitsbereich des Plattform-Admins (Anmeldungen: Fehlversuch/gesperrt/erfolgreich)
+  securityFailures: "var(--danger)",
+  securityBlocked: "var(--warning)",
+  securitySuccesses: "var(--success)",
+  // Admin-Analysen (Plattform-Admin, Seite Analysen)
+  analyticsTenants: "var(--chart-1)",
+  analyticsUsers: "var(--chart-2)",
+  analyticsNew: "var(--chart-3)",
+  analyticsRevenue: "var(--success)",
+  analyticsStorage: "var(--chart-4)",
+  analyticsLoad: "var(--chart-5)",
+  analyticsErrors: "var(--danger)",
+  analyticsLoginFailure: "var(--danger)",
+  analyticsLoginSuccess: "var(--success)",
 } as const;
 
 export const CHART_PIE_PALETTE = [

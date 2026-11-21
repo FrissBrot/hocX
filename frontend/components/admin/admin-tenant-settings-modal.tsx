@@ -49,6 +49,11 @@ type Props = {
   onClose: () => void;
   tenant: AdminTenantSummary | null;
   onSaved: (tenant: AdminTenantSummary) => void;
+  /** Detailseite /admin/tenants/[id]: genau einen Tab ohne Modal-Rahmen zeigen (Admin-Redesign §5.2).
+   *  Geladen wird dann nur, was dieser Tab braucht (die Benutzerliste ist auditiert). */
+  embeddedTab?: SettingsTab;
+  /** support-Admin: Schreibknöpfe deaktiviert (das Backend lehnt ohnehin mit 403 ab). */
+  readOnly?: boolean;
 };
 
 type TenantFormState = {
@@ -85,9 +90,9 @@ function getCleanupCategories(t: TFunc): { key: TenantCleanupCategory; title: st
   ];
 }
 
-type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher";
+export type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher" | "verifizierung";
 
-export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
+export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embeddedTab, readOnly = false }: Props) {
   const t = useTranslations("admin");
   const locale = useLocale();
   const tNav = useTranslations("nav");
@@ -97,7 +102,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
   const showToast = useToast();
   const confirm = useConfirm();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("stammdaten");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(embeddedTab ?? "stammdaten");
+  // Im eingebetteten Modus nur laden, was der Tab braucht.
+  const needs = (tab: SettingsTab) => !embeddedTab || embeddedTab === tab;
   const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
   const [tenantBusy, setTenantBusy] = useState(false);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState<string | null>(null);
@@ -142,8 +149,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   // Nur beim Öffnen bzw. Wechsel des Mandanten auf den ersten Tab springen - nicht nach jedem
   // Speichern (onSaved reicht ein neues tenant-Objekt herein).
   useEffect(() => {
-    if (open) setActiveTab("stammdaten");
-  }, [open, tenant?.id]);
+    if (open) setActiveTab(embeddedTab ?? "stammdaten");
+  }, [open, tenant?.id, embeddedTab]);
 
   // Vorschau des gewählten, noch nicht gespeicherten Profilbilds.
   useEffect(() => {
@@ -167,18 +174,18 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       profileImageUrl: tenant.profile_image_url
     });
 
-    void loadTenantUsers(tenant.id);
+    if (needs("benutzer")) void loadTenantUsers(tenant.id);
 
     setCleanupSelected(new Set());
     setCleanupConfirmName("");
     setCleanupLastResult(null);
-    void loadCleanupPreview(tenant.id);
+    if (needs("aufraeumen")) void loadCleanupPreview(tenant.id);
 
-    void loadStorageUsage(tenant.id);
+    if (needs("speicher")) void loadStorageUsage(tenant.id);
 
     // Angehakt = Zusatzmodule; Plan-Module kommen aus dem Plan (Planwechsel führt sie nach)
     setSelectedFeatures(new Set(tenant.addon_features));
-    void loadFeatureCatalog();
+    if (needs("abo")) void loadFeatureCatalog();
 
     setSubscriptionForm({
       plan_code: tenant.plan_code,
@@ -189,11 +196,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       billing_start_date: tenant.billing_start_date,
       contract_ends_on: tenant.contract_ends_on,
     });
-    void loadPlanCatalog();
+    if (needs("abo") || needs("speicher")) void loadPlanCatalog();
 
     setPackageToAdd("");
-    void loadStoragePackageCatalog();
-  }, [open, tenant]);
+    if (needs("speicher")) void loadStoragePackageCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tenant, embeddedTab]);
 
   async function loadStoragePackageCatalog() {
     try {
@@ -439,6 +447,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   async function changeUserRole(userId: string, roleCode: string) {
     if (!tenant) return;
     const previous = tenantUsers;
+    // Rollenwechsel ändert die Rechte sofort: vorher bestätigen (Admin-Redesign §1.3).
+    const target = tenantUsers.find((u) => u.user_id === userId);
+    const roleLabel = roleOptions.find((option) => option.code === roleCode)?.label ?? roleCode;
+    if (!(await confirm({ message: t("tenantModal.toasts.roleChangeConfirm", { name: target?.display_name ?? "", role: roleLabel }), confirmLabel: t("tenantModal.toasts.roleChangeConfirmLabel") }))) return;
     try {
       const updated = await stepUpFetch<AdminTenantUser>("user-manage", `/api/admin/tenants/${tenant.id}/users/${userId}`, {
         method: "PUT",
@@ -486,7 +498,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       ? null
       : (selectedPlan?.included_storage_bytes ?? 0) + tenant.package_storage_bytes;
 
-  const closeButton = (
+  const closeButton = embeddedTab ? null : (
     <button type="button" className="button-ghost" onClick={onClose}>
       {t("tenantModal.close")}
     </button>
@@ -496,7 +508,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     activeTab === "stammdaten" ? (
       <div className="modal-footer-actions">
         {closeButton}
-        <button type="submit" form="admin-tenant-stammdaten" className="button-primary" disabled={tenantBusy}>
+        <button type="submit" form="admin-tenant-stammdaten" className="button-primary" disabled={tenantBusy || readOnly}>
           {tenantBusy ? t("tenantModal.saving") : t("tenantModal.save")}
         </button>
       </div>
@@ -507,7 +519,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
         </span>
         <div className="modal-footer-actions">
           {closeButton}
-          <button type="submit" form="admin-tenant-abo" className="button-primary" disabled={subscriptionBusy}>
+          <button type="submit" form="admin-tenant-abo" className="button-primary" disabled={subscriptionBusy || readOnly}>
             {subscriptionBusy ? t("tenantModal.saving") : t("tenantModal.saveSubscription")}
           </button>
         </div>
@@ -516,31 +528,17 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       <div className="modal-footer-actions">{closeButton}</div>
     );
 
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t("tenantModal.title", { tenant: tenant.name })}
-      size="wide"
-      className="admin-tenant-modal"
-      header={
-        <div className="admin-modal-heading">
-          <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} size="lg" />
-          <div>
-            <div className="eyebrow">{t("tenantModal.eyebrow")}</div>
-            <h2>{tenant.name}</h2>
-          </div>
-        </div>
-      }
-      headerActions={
-        tenant.plan_code ? <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone={tones.get(tenant.plan_code) ?? "neutral"} /> : null
-      }
-      footer={footer}
-    >
-      <Tabs
-        activeId={activeTab}
-        onChange={(id) => setActiveTab(id as SettingsTab)}
-        tabs={[
+  const mfaModal = (
+    <MfaAdminModal
+      open={!!mfaModalUser}
+      onClose={() => setMfaModalUser(null)}
+      title={mfaModalUser ? t("tenantModal.mfaTitle", { name: mfaModalUser.display_name }) : t("tenantModal.mfaTitleFallback")}
+      loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa` : null}
+      deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa/factors` : null}
+    />
+  );
+
+  const tabs = [
           {
             id: "stammdaten",
             label: t("tenantModal.tabs.masterData"),
@@ -1063,16 +1061,45 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             label: t("tenantModal.tabs.verification"),
             content: <AdminTenantVerificationPanel tenantId={tenant.id} tenantName={tenant.name} />
           }
-        ]}
-      />
+  ];
 
-      <MfaAdminModal
-        open={!!mfaModalUser}
-        onClose={() => setMfaModalUser(null)}
-        title={mfaModalUser ? t("tenantModal.mfaTitle", { name: mfaModalUser.display_name }) : t("tenantModal.mfaTitleFallback")}
-        loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa` : null}
-        deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa/factors` : null}
-      />
+  if (embeddedTab) {
+    const embedded = tabs.find((tab) => tab.id === embeddedTab);
+    return (
+      <section className="panel admin-tenant-detail-panel">
+        {/* support-Admin: Formulare sichtbar, Schreiben gesperrt (fieldset disabled). */}
+        <fieldset className="admin-tenant-detail-fieldset" disabled={readOnly}>
+          {embedded?.content}
+        </fieldset>
+        {embeddedTab === "stammdaten" || embeddedTab === "abo" ? <div className="admin-tenant-detail-footer">{footer}</div> : null}
+        {mfaModal}
+      </section>
+    );
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t("tenantModal.title", { tenant: tenant.name })}
+      size="wide"
+      className="admin-tenant-modal"
+      header={
+        <div className="admin-modal-heading">
+          <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} size="lg" />
+          <div>
+            <div className="eyebrow">{t("tenantModal.eyebrow")}</div>
+            <h2>{tenant.name}</h2>
+          </div>
+        </div>
+      }
+      headerActions={
+        tenant.plan_code ? <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone={tones.get(tenant.plan_code) ?? "neutral"} /> : null
+      }
+      footer={footer}
+    >
+      <Tabs activeId={activeTab} onChange={(id) => setActiveTab(id as SettingsTab)} tabs={tabs} />
+      {mfaModal}
     </Modal>
   );
 }

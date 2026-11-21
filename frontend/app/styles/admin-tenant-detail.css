@@ -1,0 +1,121 @@
+/* Admin-Redesign: Klassen fuer den Bereich tenant-detail (nur Tokens, Light/Dark). */
+
+/* Mandanten-Detailseite /admin/tenants/[id] (Admin-Redesign §5.2) */
+.admin-tenant-detail-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-tenant-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.admin-tenant-detail-id {
+  max-width: 32rem;
+}
+
+.admin-tenant-status-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.table-row-link + .admin-tenant-status-badges {
+  display: flex;
+  margin-top: var(--space-1);
+}
+
+.admin-tenant-detail-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.admin-tenant-detail-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.admin-tenant-detail-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.admin-tenant-detail-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.admin-tenant-detail-section-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.admin-tenant-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-tenant-kpi {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  border-left: 3px solid var(--border);
+}
+
+.admin-tenant-kpi-warning {
+  border-left-color: var(--warning);
+}
+
+.admin-tenant-kpi-danger {
+  border-left-color: var(--danger);
+}
+
+.admin-tenant-kpi-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-tenant-kpi-link {
+  font-size: var(--text-sm);
+}
+
+.admin-tenant-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-tenant-activity-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .admin-tenant-detail-identity {
+    align-items: flex-start;
+  }
+}

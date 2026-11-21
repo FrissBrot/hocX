@@ -21,7 +21,7 @@ from typing import Any
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.config import settings
 from app.services import document_sync_service, domain_health_check_service, erasure_journal, retention_service
-from app.services import maintenance_service, photo_album_service, storage_migration_service, system_alert_service
+from app.services import maintenance_service, metrics_rollup_service, photo_album_service, storage_migration_service, system_alert_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
@@ -100,6 +100,7 @@ async def log_cleanup_loop() -> None:
         system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
         retention_service.cleanup(db)
         erasure_journal.purge(db, retention_days=settings.erasure_journal_retention_days)
+        metrics_rollup_service.cleanup_samples(db)
 
     await run_advisory_locked_loop(
         name="log_cleanup",
@@ -380,6 +381,13 @@ async def auth_security_maintenance_loop() -> None:
     await run_advisory_locked_loop(name="auth_security_maintenance", interval_seconds=60 * 60, task=_task)
 
 
+async def metrics_rollup_loop() -> None:
+    """Kennzahlen-Rollup für Dashboard und Analysen (services/metrics_rollup_service.py): stündlich
+    prüfen, fehlende Tage bis gestern rechnen (erster Lauf: Backfill 90 Tage). Im job-worker, weil
+    die Speicher-Summe je Mandant teuer ist."""
+    await run_advisory_locked_loop(name="metrics_rollup", interval_seconds=60 * 60, task=metrics_rollup_service.run_job)
+
+
 LoopFactory = Callable[[], Coroutine[Any, Any, None]]
 
 # Leicht: Steuerung, Überwachung, kurze Abfragen - bleiben in den uvicorn-Workern.
@@ -414,4 +422,5 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     todo_reminders_loop,
     file_trash_purge_loop,
     capture_date_file_sync_loop,
+    metrics_rollup_loop,
 )

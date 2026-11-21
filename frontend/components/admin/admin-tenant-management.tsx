@@ -1,7 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
+import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
@@ -12,31 +14,33 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
-import { stepUpFetch, stepUpHeaders } from "@/lib/admin-step-up";
-import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
+import { TenantCloneModal, TenantExportModal, useTenantDelete } from "@/components/admin/tenant-detail/tenant-action-modals";
+import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize, formatPercentNumber } from "@/lib/utils/format";
+import {
+  DEFAULT_TENANT_VIEW,
+  STORAGE_WARNING_RATIO,
+  TenantListView,
+  TenantSortKey,
+  TenantStatusFilter,
+  tenantListQuery,
+} from "@/lib/admin/tenant-list";
+import { TenantStatusBadges } from "@/components/admin/tenant-detail/tenant-status-badges";
 import { AdminPlan, AdminTenantCreate, AdminTenantPage, AdminTenantSummary } from "@/types/api";
 
-// Erst beim Oeffnen laden (grosses Einstellungs-Modal).
-const AdminTenantSettingsModal = dynamic(
-  () => import("@/components/admin/admin-tenant-settings-modal").then((m) => m.AdminTenantSettingsModal),
-  { ssr: false }
-);
 
 type Props = {
   initialPage: AdminTenantPage;
   initialPlans: AdminPlan[];
   initialPlanFilter?: string;
+  /** Sortierung/Filter aus der URL (Admin-Redesign §5.1) - Mandantennamen sind keine Personendaten. */
+  initialView?: Partial<TenantListView>;
 };
 
-// Wie export_crypto.MIN_PASSWORD_LENGTH im Backend.
-const EXPORT_PASSWORD_MIN_LENGTH = 12;
+
 const PAGE_SIZE = 50;
 
-// Ab diesem Anteil wird der Speicherbalken in der Liste als Warnung eingefärbt.
-const STORAGE_WARNING_RATIO = 0.85;
 
 const emptyCreateForm: AdminTenantCreate = {
   name: "",
@@ -44,34 +48,27 @@ const emptyCreateForm: AdminTenantCreate = {
   billing_cycle: "monthly",
 };
 
-export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFilter = "" }: Props) {
+export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFilter = "", initialView }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations("admin.tenants");
   const tPlans = useTranslations("admin.plans");
+  const tDetail = useTranslations("adminTenantDetail");
   const locale = useLocale();
   const showToast = useToast();
-  const confirm = useConfirm();
   const [page, setPage] = useState(initialPage);
   const [offset, setOffset] = useState(0);
   const tenants = page.items;
   const [modalOpen, setModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [createBusy, setCreateBusy] = useState(false);
-  const [search, setSearch] = useState("");
+  const [view, setView] = useState<TenantListView>({ ...DEFAULT_TENANT_VIEW, ...initialView });
+  const [search, setSearch] = useState(view.q);
   const [plans, setPlans] = useState<AdminPlan[]>(initialPlans);
   const [planFilter, setPlanFilter] = useState(initialPlanFilter);
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [settingsTenant, setSettingsTenant] = useState<AdminTenantSummary | null>(null);
-  const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const confirmDeleteTenant = useTenantDelete();
   const [cloneTenant, setCloneTenant] = useState<AdminTenantSummary | null>(null);
-  const [cloneName, setCloneName] = useState("");
-  const [cloneMode, setCloneMode] = useState<"structure" | "full">("structure");
-  const [cloneBusy, setCloneBusy] = useState(false);
-  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTenant, setExportTenant] = useState<AdminTenantSummary | null>(null);
-  const [exportScope, setExportScope] = useState<"structure" | "structure_lists" | "full" | "full_abgabebox">("structure");
-  const [exportPassword, setExportPassword] = useState("");
-  const [exportPasswordConfirm, setExportPasswordConfirm] = useState("");
-  const [exportCredentials, setExportCredentials] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -92,10 +89,17 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   async function fetchPage(nextOffset: number, query: string, plan: string = planFilter) {
     setLoading(true);
     try {
-      const q = query.trim();
-      const result = await browserApiFetch<AdminTenantPage>(
-        `/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}${plan ? `&plan=${encodeURIComponent(plan)}` : ""}`
-      );
+      const params = tenantListQuery({ ...view, q: query }, plan);
+      // Zustand in der URL (teilen, Zurück-Taste): nur Mandantenname, Plan- und Filter-Codes.
+      const urlQuery = params.toString();
+      // Nur ersetzen, wenn sich die Adresse wirklich ändert und die Liste noch angezeigt wird: ein
+      // verspätetes replace (Such-Debounce) überschrieb sonst den Klick auf einen Mandanten.
+      if (window.location.pathname === pathname && window.location.search.replace(/^\?/, "") !== urlQuery) {
+        router.replace((urlQuery ? `${pathname}?${urlQuery}` : pathname) as Route, { scroll: false });
+      }
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(nextOffset));
+      const result = await browserApiFetch<AdminTenantPage>(`/api/admin/tenants?${params.toString()}`);
       setPage(result);
     } catch {
       // keep showing the previous page rather than blanking the table on a transient error
@@ -127,9 +131,49 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset]);
 
+  // Sortierung/Filter geändert: von vorne laden.
+  const viewKey = `${view.sort}:${view.dir}:${view.status}:${view.storageFull}`;
+  const firstViewRender = useRef(true);
+  useEffect(() => {
+    if (firstViewRender.current) {
+      firstViewRender.current = false;
+      return;
+    }
+    if (offset !== 0) setOffset(0);
+    else void fetchPage(0, search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey]);
+
+  function sortColumn(key: TenantSortKey, label: string) {
+    const active = view.sort === key;
+    return {
+      key,
+      label,
+      sortable: true,
+      sortDirection: active ? view.dir : null,
+      onSort: () =>
+        setView((current) => ({
+          ...current,
+          sort: key,
+          // Erster Klick: Text aufsteigend, Zahlen/Datum absteigend (grösste/neueste zuerst)
+          dir: current.sort === key ? (current.dir === "asc" ? "desc" : "asc") : key === "name" || key === "plan" ? "asc" : "desc",
+        })),
+    };
+  }
+
+  function openDetail(tenant: AdminTenantSummary) {
+    router.push(`/admin/tenants/${tenant.id}` as Route);
+  }
+
   // Debounced re-fetch from offset 0 whenever the search text changes - see the identical
   // pattern in admin-user-management.tsx.
+  const firstSearchRender = useRef(true);
   useEffect(() => {
+    // Beim Laden lädt schon der offset-Effekt oben - kein zweiter Abruf
+    if (firstSearchRender.current) {
+      firstSearchRender.current = false;
+      return;
+    }
     const timer = window.setTimeout(() => {
       if (offset !== 0) {
         setOffset(0);
@@ -169,125 +213,24 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     }
   }
 
-  function openSettings(tenant: AdminTenantSummary) {
-    setSettingsTenant(tenant);
-    setSettingsModalOpen(true);
-  }
-
-  function handleTenantSaved(updated: AdminTenantSummary) {
-    const planChanged = page.items.find((tenant) => tenant.id === updated.id)?.plan_code !== updated.plan_code;
-    setPage((current) => ({
-      ...current,
-      items: current.items.map((tenant) => (tenant.id === updated.id ? updated : tenant)),
-    }));
-    setSettingsTenant(updated);
-    if (planChanged) void reloadPlans();
-  }
-
   function openClone(tenant: AdminTenantSummary) {
     setCloneTenant(tenant);
-    setCloneName(`${tenant.name} (Kopie)`);
-    setCloneMode("structure");
-    setCloneModalOpen(true);
-  }
-
-  async function submitClone(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!cloneTenant) return;
-    setCloneBusy(true);
-    try {
-      await stepUpFetch<AdminTenantSummary>("tenant-export", `/api/admin/tenants/${cloneTenant.id}/clone`, {
-        method: "POST",
-        body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
-        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
-      });
-      await Promise.all([fetchPage(offset, search), reloadPlans()]);
-      setCloneModalOpen(false);
-      showToast(t("cloned"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("cloneFailed"), "error");
-    } finally {
-      setCloneBusy(false);
-    }
   }
 
   function openExport(tenant: AdminTenantSummary) {
     setExportTenant(tenant);
-    setExportScope("structure");
-    setExportPassword("");
-    setExportPasswordConfirm("");
-    setExportModalOpen(true);
-  }
-
-  // Ohne Passwort verschlüsselt das Backend mit dem Server-Schlüssel (export_crypto.py); mit
-  // Passwort muss es lang genug und bestätigt sein.
-  const exportPasswordTooShort = exportPassword !== "" && exportPassword.length < EXPORT_PASSWORD_MIN_LENGTH;
-  const exportPasswordMismatch = exportPassword !== "" && exportPassword !== exportPasswordConfirm;
-
-  async function submitExport(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!exportTenant) return;
-    // Was a plain <a href> GET navigation (audit finding, 2026-08-25): with
-    // SameSite=Lax cookies, a top-level navigation to that same URL from an external
-    // page (an <a target=_top>, a redirect, ...) would have carried the logged-in
-    // admin's session cookie and triggered a real export server-side, even though the
-    // attacker page couldn't read the resulting file back. Fetching it here instead -
-    // only reachable by JS running on this same origin, i.e. only by the admin actually
-    // clicking this button - closes that off entirely; same blob-download pattern
-    // downloadZip/downloadFile already use elsewhere in this codebase.
-    try {
-      const { browserApiBaseUrl } = await import("@/lib/api/client");
-      // POST statt GET: das optionale Passwort steht nur im Body, nie in einer URL.
-      const exportPath = `/api/admin/tenants/${exportTenant.id}/export`;
-      const exportBody = JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials });
-      // Export enthält alle Daten des Mandanten: nur mit Passkey-Bestätigung (Security-Review M2)
-      const confirmHeaders = await stepUpHeaders("tenant-export", "POST", exportPath, exportBody);
-      const res = await fetch(`${browserApiBaseUrl}${exportPath}`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", ...confirmHeaders },
-        body: exportBody,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const disposition = res.headers.get("content-disposition") ?? "";
-      const filenameMatch = /filename="?([^";]+)"?/i.exec(disposition);
-      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip.hocxenc`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("exportFailed"), "error");
-      return;
-    }
-    setExportModalOpen(false);
   }
 
   async function deleteTenant(tenant: AdminTenantSummary) {
-    const confirmed = await confirm({
-      title: t("deleteConfirmTitle", { name: tenant.name }),
-      message: t("deleteConfirmMessage", { participants: tenant.participant_count, users: tenant.user_count }),
-      tone: "danger",
-      confirmLabel: t("deletePermanently")
-    });
-    if (!confirmed) return;
-    try {
-      await stepUpFetch("tenant-delete", `/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
-      // Deleting the last item on a page would strand the view past the new end - fall
-      // back a page first if that's about to happen (changing offset re-triggers the load).
-      if (tenants.length === 1 && offset > 0) {
-        setOffset(offset - PAGE_SIZE);
-      } else {
-        await fetchPage(offset, search);
-      }
-      void reloadPlans();
-      showToast(t("deleted"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
+    if (!(await confirmDeleteTenant(tenant))) return;
+    // Deleting the last item on a page would strand the view past the new end - fall
+    // back a page first if that's about to happen (changing offset re-triggers the load).
+    if (tenants.length === 1 && offset > 0) {
+      setOffset(offset - PAGE_SIZE);
+    } else {
+      await fetchPage(offset, search);
     }
+    void reloadPlans();
   }
 
   function openImport() {
@@ -362,10 +305,38 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
             ]}
           />
         ) : null}
+        <FilterTabs
+          variant="chips"
+          value={view.status}
+          onChange={(value) => setView((current) => ({ ...current, status: value as TenantStatusFilter }))}
+          options={[
+            { value: "", label: tDetail("statusFilter.all") },
+            { value: "read_only", label: tDetail("status.readOnly") },
+            { value: "contract_ending", label: tDetail("status.contractEnding") },
+            { value: "unverified", label: tDetail("status.unverified") },
+          ]}
+        />
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={view.storageFull}
+            onChange={(event) => setView((current) => ({ ...current, storageFull: event.target.checked }))}
+          />
+          <span>{tDetail("statusFilter.storageFull")}</span>
+        </label>
       </article>
 
       <DataTable
-        columns={[t("colImage"), t("colTenant"), t("colPlan"), t("colParticipants"), t("colUsers"), t("colStorage"), t("colCreatedAt"), ""]}
+        columns={[
+          t("colImage"),
+          sortColumn("name", t("colTenant")),
+          sortColumn("plan", t("colPlan")),
+          t("colParticipants"),
+          sortColumn("users", t("colUsers")),
+          sortColumn("storage", t("colStorage")),
+          sortColumn("created", t("colCreatedAt")),
+          "",
+        ]}
         emptyMessage={loading ? t("loading") : t("noTenantsFound")}
       >
         {visibleTenants.map((tenant) => {
@@ -373,15 +344,16 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
           const usageRatio = tenant.storage_quota_bytes ? tenant.storage_used_bytes / tenant.storage_quota_bytes : 0;
           const storageState = usageRatio > 1 ? "over" : usageRatio >= STORAGE_WARNING_RATIO ? "warning" : "ok";
           return (
-            <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Name) */>
+            <tr key={tenant.id} className="table-row-clickable" onClick={() => openDetail(tenant)} /* a11y-ok: Maus-Abkürzung, Tastatur über table-row-link (Name) */>
               <td>
                 <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} />
               </td>
               <td>
                 {/* Tastatur: Name als Knopf, die Zeile bleibt für die Maus klickbar */}
-                <button type="button" className="table-row-link" onClick={(event) => { event.stopPropagation(); openSettings(tenant); }}>
+                <Link href={`/admin/tenants/${tenant.id}` as Route} className="table-row-link" onClick={(event) => event.stopPropagation()}>
                   {tenant.name}
-                </button>
+                </Link>
+                <TenantStatusBadges tenant={tenant} compact />
               </td>
               <td>
                 {tenant.plan_code ? (
@@ -419,7 +391,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
               <td onClick={(event) => event.stopPropagation()}>
                 <ActionMenu
                   items={[
-                    { label: t("settings"), onClick: () => openSettings(tenant) },
+                    { label: t("settings"), onClick: () => openDetail(tenant) },
                     { label: t("clone"), onClick: () => openClone(tenant) },
                     { label: t("export"), onClick: () => openExport(tenant) },
                     { label: t("delete"), onClick: () => deleteTenant(tenant), danger: true },
@@ -475,167 +447,17 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         </form>
       </Modal>
 
-      {settingsModalOpen ? (
-        <AdminTenantSettingsModal
-          open
-          onClose={() => setSettingsModalOpen(false)}
-          tenant={settingsTenant}
-          onSaved={handleTenantSaved}
-        />
-      ) : null}
+      <TenantCloneModal
+        tenant={cloneTenant}
+        onClose={() => setCloneTenant(null)}
+        onCloned={async () => {
+          await Promise.all([fetchPage(offset, search), reloadPlans()]);
+        }}
+      />
+      <TenantExportModal tenant={exportTenant} onClose={() => setExportTenant(null)} />
 
-      <Modal
-        open={cloneModalOpen}
-        onClose={() => setCloneModalOpen(false)}
-        title={cloneTenant ? t("cloneTitleNamed", { name: cloneTenant.name }) : t("cloneTitle")}
-        description={t("cloneDescription")}
-      >
-        <form className="grid" onSubmit={submitClone}>
-          <label className="field-stack">
-            <span className="field-label">{t("nameOfNewTenant")}</span>
-            <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
-          </label>
-          <div className="field-stack">
-            <span className="field-label">{t("scope")}</span>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="clone-mode"
-                value="structure"
-                checked={cloneMode === "structure"}
-                onChange={() => setCloneMode("structure")}
-              />
-              <span>
-                <strong>{t("cloneStructureOnlyTitle")}</strong>
-                <div className="muted">{t("cloneStructureOnlyDescription")}</div>
-              </span>
-            </label>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="clone-mode"
-                value="full"
-                checked={cloneMode === "full"}
-                onChange={() => setCloneMode("full")}
-              />
-              <span>
-                <strong>{t("cloneFullTitle")}</strong>
-                <div className="muted">{t("cloneFullDescription")}</div>
-              </span>
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setCloneModalOpen(false)}>
-              {t("cancel")}
-            </button>
-            <button type="submit" className="button-primary" disabled={cloneBusy}>
-              {cloneBusy ? t("cloning") : t("clone")}
-            </button>
-          </div>
-        </form>
-      </Modal>
 
-      <Modal
-        open={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        title={exportTenant ? t("exportTitleNamed", { name: exportTenant.name }) : t("exportTitle")}
-        description={t("exportDescription")}
-      >
-        <form className="grid" onSubmit={submitExport}>
-          <div className="field-stack">
-            <span className="field-label">{t("scope")}</span>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="export-scope"
-                value="structure"
-                checked={exportScope === "structure"}
-                onChange={() => setExportScope("structure")}
-              />
-              <span>
-                <strong>{t("exportStructureOnlyTitle")}</strong>
-                <div className="muted">{t("exportStructureOnlyDescription")}</div>
-              </span>
-            </label>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="export-scope"
-                value="structure_lists"
-                checked={exportScope === "structure_lists"}
-                onChange={() => setExportScope("structure_lists")}
-              />
-              <span>
-                <strong>{t("exportStructureListsTitle")}</strong>
-                <div className="muted">{t("exportStructureListsDescription")}</div>
-              </span>
-            </label>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="export-scope"
-                value="full"
-                checked={exportScope === "full"}
-                onChange={() => setExportScope("full")}
-              />
-              <span>
-                <strong>{t("exportFullTitle")}</strong>
-                <div className="muted">{t("exportFullDescription")}</div>
-              </span>
-            </label>
-            <label className="field-radio-option">
-              <input
-                type="radio"
-                name="export-scope"
-                value="full_abgabebox"
-                checked={exportScope === "full_abgabebox"}
-                onChange={() => setExportScope("full_abgabebox")}
-              />
-              <span>
-                <strong>{t("exportFullAbgabeboxTitle")}</strong>
-                <div className="muted">{t("exportFullAbgabeboxDescription")}</div>
-              </span>
-            </label>
-          </div>
-          {/* Datenschutz-Audit Paket 6: Zugangsdaten nur auf ausdrücklichen Wunsch */}
-          <label className="checkbox-row"><input type="checkbox" checked={exportCredentials} onChange={(event) => setExportCredentials(event.target.checked)} /><span>{t("exportCredentials")}</span></label>
-          <p className="field-help">{t("exportCredentialsHint")}</p>
-          <label className="field-stack">
-            <span className="field-label">{t("exportPasswordLabel")}</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={exportPassword}
-              onChange={(event) => setExportPassword(event.target.value)}
-            />
-            <span className="field-help">
-              {exportPasswordTooShort ? t("exportPasswordTooShort", { min: EXPORT_PASSWORD_MIN_LENGTH }) : t("exportPasswordHelp")}
-            </span>
-          </label>
-          {exportPassword ? (
-            <label className="field-stack">
-              <span className="field-label">{t("exportPasswordConfirmLabel")}</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={exportPasswordConfirm}
-                onChange={(event) => setExportPasswordConfirm(event.target.value)}
-              />
-              {exportPasswordConfirm && exportPasswordMismatch ? (
-                <span className="field-help">{t("exportPasswordMismatch")}</span>
-              ) : null}
-            </label>
-          ) : null}
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setExportModalOpen(false)}>
-              {t("cancel")}
-            </button>
-            <button type="submit" className="button-primary" disabled={exportPasswordTooShort || exportPasswordMismatch}>
-              {t("export")}
-            </button>
-          </div>
-        </form>
-      </Modal>
+
 
       <Modal
         open={importModalOpen}

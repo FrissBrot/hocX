@@ -1261,3 +1261,35 @@ Anfragen bekommen 202 ohne Versand, 429 nur die anfragende Quelle (10 in 15 min)
 `auth_security_maintenance` (stündlich, `/admin/jobs`): löscht `auth_event` nach 90 Tagen, beendete
 Sessions nach 30 Tagen, Geräte nach 120 Tagen ohne Nutzung und repariert Zähler ohne Ablauf
 (`repaired_keys` > 0 im Lauf deutet auf einen Fehler).
+
+## 24. Admin-Konsole, Kennzahlen-Aggregation und Sicherheitsansichten (Admin-Redesign 1.5.0)
+
+**Aufbau:** Das Plattform-Admin ist in sieben Bereiche gegliedert (Übersicht, Mandanten, Benutzer &
+Zugänge, Sicherheit, Betrieb, Analysen, Einstellungen); Ctrl+K/⌘K sucht Seiten, Mandanten und Domains
+(für owner auch Benutzer, Jobs, Checks, Audit-Codes). Alte Adressen leiten um: `/admin/audit` →
+`/admin/security/audit`, `/admin/notifications` → `/admin/settings/notifications` (E-Mail-Versandprotokoll
+unter `/admin/operations/delivery`), Profil/Passkeys unter `/admin/account`. `/admin/system` und
+`/admin/jobs` bleiben (ntfy-Links).
+
+**Status-Token (Uptime Kuma):** Die Status-URL mit Token wird nur noch direkt nach «Neuen Token
+erzeugen» angezeigt (Einstellungen › Benachrichtigungen & E-Mail), danach nur «gesetzt, endet auf …».
+Bei Verlust neuen Token erzeugen und in Uptime Kuma eintragen.
+
+**Job `metrics_rollup`** (job-worker, Lock-ID 202600037, Kategorie Wartung, Takt stündlich):
+- rechnet fehlende Kalendertage bis gestern (Europe/Zurich) in `platform_metric_daily` und
+  `tenant_metric_daily` (RLS) nach, idempotent; der erste Lauf ergänzt 90 Tage rückwirkend aus
+  `audit_log`/`created_at`. Speicher, gebuchte Features und MRR gibt es nur ab Einführung (kein Backfill).
+- Läuft er nicht (Jobs-Seite «überfällig»), zeigen die Analysen den letzten Stand; ein späterer Lauf holt
+  die Lücke ohne Doppelzählung nach. Einen Tag neu rechnen: Zeilen des Tages in beiden Tabellen löschen,
+  der nächste Lauf rechnet ihn neu.
+- Der Systemmonitor schreibt höchstens alle ~5 min Stichproben nach `system_metric_sample`
+  (Aufbewahrung 14 Tage über `log_cleanup`).
+
+**Neue Rechte:** Mandanten-Berechtigung `security.read` (nur Standardrolle «admin») für
+Einstellungen › Sicherheit & Anmeldungen (`/tenant-settings/security`, API `/api/auth-security/activity`).
+`access.manage` allein reicht dafür nicht mehr; Sitzungen eines Kontos beenden verlangt weiterhin
+`access.manage` und eine frische Anmeldung.
+
+**Rechte-Übersicht:** `permissions/route-map.json` führt für Plattform-Routen `admin_level`
+(A = jeder Admin, W = owner schreibend, O = owner lesend) und `step_up` (Passkey-Zweck). Eine
+Herabstufung erscheint im Diff und gehört begründet in die Commit-Nachricht.

@@ -1,0 +1,177 @@
+{
+  "tabsLabel": "Sicherheitsbereich",
+  "tabs": {
+    "overview": "Übersicht",
+    "events": "Anmeldeereignisse",
+    "blocks": "Sperren",
+    "alerts": "Warnungen",
+    "audit": "Audit-Log",
+    "policy": "Richtlinien"
+  },
+  "ownerOnly": "Diese Ansicht ist nur für Owner sichtbar.",
+  "loadFailed": "Die Daten konnten nicht geladen werden.",
+  "refresh": "Aktualisieren",
+  "outcomes": {
+    "all": "Alle",
+    "success": "Erfolg",
+    "failure": "Fehlschlag",
+    "blocked": "Gesperrt",
+    "challenged": "Zusatzprüfung",
+    "info": "Info"
+  },
+  "severity": {
+    "critical": "Kritisch",
+    "warning": "Warnung"
+  },
+  "overview": {
+    "title": "Sicherheit",
+    "description": "Anmeldeschutz der ganzen Plattform: Warnungen, Fehlversuche, Sperren. Adressen erscheinen nur als gekürzte Pseudonyme.",
+    "tiles": {
+      "openAlerts": "Offene Warnungen",
+      "criticalAlerts": "{count, plural, =0 {keine kritisch} one {# kritisch} other {# kritisch}}",
+      "failures": "Fehlversuche 24 h",
+      "previous": "Vortag: {count, number}",
+      "activeBlocks": "Aktive Sperren",
+      "blocked": "Abgewiesen 24 h: {count, number}",
+      "adminLogins": "Admin-Anmeldungen 24 h"
+    },
+    "chartTitle": "Anmeldungen der letzten 48 Stunden",
+    "chartSummary": "{failures, number} Fehlversuche und {successes, number} erfolgreiche Anmeldungen in 48 Stunden, in 5-Minuten-Abschnitten.",
+    "showTable": "Daten als Tabelle",
+    "showChart": "Als Diagramm",
+    "chartEmpty": "In den letzten 48 Stunden gab es keine Anmeldeereignisse.",
+    "series": {
+      "failures": "Fehlversuche",
+      "successes": "Erfolgreich",
+      "blocked": "Gesperrt"
+    },
+    "columns": {
+      "bucket": "Zeit",
+      "failures": "Fehlversuche",
+      "successes": "Erfolgreich",
+      "blocked": "Gesperrt",
+      "network": "Netz (Pseudonym)",
+      "account": "Konto (Pseudonym)",
+      "accounts": "Konten",
+      "networks": "Netze",
+      "tenants": "Mandanten",
+      "lastSeen": "Zuletzt"
+    },
+    "topNetworks": "Auffällige Netze (24 h)",
+    "topAccounts": "Betroffene Konten (24 h)",
+    "noTopNetworks": "Keine Fehlversuche aus einzelnen Netzen.",
+    "noTopAccounts": "Keine Konten mit Fehlversuchen.",
+    "alertsTitle": "Aktuelle Warnungen",
+    "allAlerts": "Alle Warnungen",
+    "auditLink": "Audit-Log öffnen"
+  },
+  "events": {
+    "title": "Anmeldeereignisse",
+    "description": "Letzte Ereignisse des Anmeldeschutzes. Konten, Netze und Geräte erscheinen nur als gekürzte Pseudonyme.",
+    "typeLabel": "Ereignistyp",
+    "typeAll": "Alle Typen",
+    "outcomeLabel": "Ergebnis",
+    "columns": {
+      "time": "Zeit",
+      "type": "Ereignis",
+      "outcome": "Ergebnis",
+      "actor": "Akteur",
+      "tenant": "Mandant",
+      "subject": "Konto",
+      "network": "Netz",
+      "risk": "Risiko",
+      "client": "Gerät"
+    },
+    "actorKinds": {
+      "user": "Benutzer",
+      "admin": "Plattform-Admin",
+      "anonymous": "Unbekannt",
+      "system": "System"
+    },
+    "empty": "Keine Ereignisse für diese Auswahl.",
+    "previous": "Neuere",
+    "next": "Ältere",
+    "pageInfo": "Einträge {from, number}–{to, number}"
+  },
+  "blocks": {
+    "title": "Sperren",
+    "description": "Aktive IP-Sperren des Anmeldeschutzes. Setzen und Aufheben verlangen eine Passkey-Bestätigung.",
+    "add": "Manuelle Sperre",
+    "columns": {
+      "subject": "Quelle (Pseudonym)",
+      "scope": "Umfang",
+      "stage": "Stufe",
+      "kind": "Art",
+      "reason": "Grund",
+      "until": "Bis",
+      "actions": "Aktionen"
+    },
+    "scopes": {
+      "source": "Einzelne Adresse",
+      "net": "Netz"
+    },
+    "manual": "Manuell",
+    "automatic": "Automatisch",
+    "unblock": "Entsperren",
+    "unblockConfirm": "Sperre für {subject} aufheben? Anmeldungen aus dieser Quelle sind danach wieder möglich.",
+    "unblocked": "Sperre aufgehoben.",
+    "created": "Sperre gesetzt.",
+    "failed": "Die Aktion ist fehlgeschlagen: {message}",
+    "empty": "Zurzeit ist keine Quelle gesperrt.",
+    "modalTitle": "Manuelle Sperre",
+    "ipLabel": "IP-Adresse",
+    "ipHelp": "Wird beim Speichern gehasht und nie im Klartext abgelegt.",
+    "scopeLabel": "Umfang",
+    "minutesLabel": "Dauer in Minuten",
+    "minutesHelp": "Höchstens {max, number} Minuten.",
+    "reasonLabel": "Grund",
+    "save": "Sperren",
+    "cancel": "Abbrechen",
+    "readOnly": "Nur Owner können Sperren setzen oder aufheben."
+  },
+  "alerts": {
+    "title": "Warnungen",
+    "description": "Aktuell ausgelöste Alarmregeln des Anmeldeschutzes. Dieselben Regeln melden auch über ntfy.",
+    "empty": "Zurzeit ist keine Alarmregel ausgelöst.",
+    "columns": {
+      "severity": "Schwere",
+      "rule": "Regel",
+      "subject": "Betroffen (Pseudonym)",
+      "key": "Schlüssel"
+    },
+    "rules": {
+      "stuffing": "Credential Stuffing: viele Fehlversuche aus vielen Netzen",
+      "spraying": "Password Spraying aus einem Netz",
+      "account_attack": "Konto unter Beschuss",
+      "admin_mfa": "Fehlgeschlagene Admin-MFA",
+      "admin_new_device": "Plattform-Anmeldung von neuem Gerät",
+      "blocks": "Viele IP-Sperren",
+      "network": "Viele Fehlversuche aus einem Netz",
+      "cross_tenant": "Angriffsmuster über mehrere Mandanten",
+      "tenant": "Viele Konten eines Mandanten mit Fehlversuchen",
+      "limiter": "Anmeldeschutz (Redis) gestört",
+      "unknown": "Andere Regel"
+    }
+  },
+  "audit": {
+    "title": "Audit-Log",
+    "description": "Admin- und Mandanten-Aktionen mit Ergebnis."
+  },
+  "policy": {
+    "title": "Richtlinien",
+    "description": "Wirksame Einstellungen des Anmeldeschutzes (nur Anzeige, ohne Geheimnisse). Geändert werden sie über die Server-Konfiguration.",
+    "setting": "Einstellung",
+    "value": "Wert",
+    "yes": "Ja",
+    "no": "Nein",
+    "groups": {
+      "sessions": "Sitzungen",
+      "limits": "Grenzwerte und Rate-Limits",
+      "blocks": "Sperren",
+      "risk": "Risikobewertung",
+      "step_up": "Bestätigung (Step-up)",
+      "alerts": "Alarmregeln",
+      "retention": "Aufbewahrung"
+    }
+  }
+}

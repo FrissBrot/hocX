@@ -3,34 +3,107 @@
   "tagline": "Manage organizations and users across the whole system.",
   "groups": {
     "tenants": "Organizations",
-    "system": "System",
-    "access": "Access"
+    "access": "Users & access",
+    "security": "Security",
+    "operations": "Operations",
+    "analytics": "Analytics",
+    "settings": "Settings"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Overview",
     "tenants": "Organizations",
-    "pricing": "Pricing",
-    "cashflow": "Cash flow",
-    "users": "Users",
+    "verifications": "Reviews",
     "domains": "Domains",
+    "pricing": "Catalog",
+    "cashflow": "Revenue & billing",
+    "users": "Find users",
+    "admins": "Platform admins",
+    "securityOverview": "Security",
+    "securityEvents": "Sign-in events",
+    "securityBlocks": "Blocks",
+    "securityAlerts": "Alerts",
+    "auditLog": "Audit log",
+    "securityPolicy": "Policies",
     "systemStatus": "System status",
-    "errorLogs": "Error log",
-    "uploadPipeline": "File pipeline",
-    "notifications": "Notifications",
     "jobs": "Jobs",
-    "admins": "Admin accounts",
-    "security": "Security",
-    "verifications": "Verifications",
+    "errorLogs": "Errors",
+    "uploadPipeline": "Uploads & scans",
+    "delivery": "Delivery (email)",
     "storage": "Storage",
     "backups": "Backups",
     "maintenance": "Maintenance",
-    "documentTemplates": "Document templates",
-    "auditLog": "Audit log"
+    "analytics": "Analytics",
+    "notifications": "Notifications & email",
+    "documentTemplates": "Content & templates",
+    "account": "Profile & passkeys"
   },
-  "logout": "Log out",
+  "keywords": {
+    "pricing": "prices plans features storage packages rebooking",
+    "cashflow": "cashflow invoices costs MRR income",
+    "notifications": "ntfy SMTP status token uptime",
+    "account": "passkey profile account",
+    "theme": "appearance theme light dark"
+  },
+  "actions": {
+    "themeLight": "Appearance: light",
+    "themeDark": "Appearance: dark",
+    "themeAuto": "Appearance: automatic",
+    "shortcuts": "Show keyboard shortcuts"
+  },
+  "search": {
+    "title": "Search admin",
+    "placeholder": "Search pages, organizations, domains …",
+    "emptyStart": "Type to find pages, actions, organizations and domains.",
+    "loading": "Searching …",
+    "noResults": "No results for “{query}”.",
+    "remoteFailed": "The server search failed; only pages and actions are shown.",
+    "hintSelect": "select",
+    "hintOpen": "open",
+    "hintToggle": "close",
+    "groups": {
+      "recent": "Recently opened",
+      "pages": "Pages",
+      "actions": "Actions",
+      "tenants": "Organizations",
+      "users": "Users",
+      "domains": "Domains",
+      "jobs": "Jobs",
+      "checks": "System checks",
+      "audit": "Audit log"
+    }
+  },
+  "logout": "Sign out",
   "menuToggleClose": "Close",
-  "breadcrumbNav": "Breadcrumb",
-  "readOnlyBanner": "Read-only access (support): changes aren't possible with this account.",
-  "accountSettings": "Account Settings",
-  "accountSettingsLoadFailed": "Could not load account settings."
+  "breadcrumbNav": "Breadcrumbs",
+  "mainNav": "Admin navigation",
+  "accountMenu": "Profile menu",
+  "readOnlyBanner": "Read-only access (support): this account cannot make changes.",
+  "accountSettings": "Profile & passkeys",
+  "accountSettingsLoadFailed": "The account settings could not be loaded.",
+  "navWithCount": "{label} ({count})",
+  "compactSidebar": "Compact",
+  "expandSidebar": "Expand sidebar",
+  "detail": "Detail",
+  "roles": {
+    "owner": "Owner",
+    "support": "Support (read-only)"
+  },
+  "environments": {
+    "test": "Test",
+    "development": "Dev"
+  },
+  "attention": {
+    "label": "{count, plural, =0 {Notices, none open} one {Notices, # open} other {Notices, # open}}",
+    "title": "Needs attention",
+    "empty": "Nothing open.",
+    "items": {
+      "verifications_open": "{count, plural, one {# review open} other {# reviews open}}",
+      "security_alerts": "{count, plural, one {# security alert} other {# security alerts}}",
+      "operations_problems": "{count, plural, one {# operations problem} other {# operations problems}}"
+    }
+  },
+  "account": {
+    "title": "Profile & passkeys",
+    "description": "Manage the passkeys of your admin account. Changes require confirmation with an existing passkey."
+  }
 }

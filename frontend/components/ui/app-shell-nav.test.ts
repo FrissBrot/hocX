@@ -90,8 +90,16 @@ describe("buildNav", () => {
     expect(hrefsOf(settings, "groups.settingsAreas")).toEqual(["/templates", "/task-packages", "/fine-settings", "/users"]);
     expect(hrefsOf(settings, "groups.appearance")).toEqual(["/documents", "/documents/brand", "/tenant-settings/domains"]);
     expect(hrefsOf(settings, "groups.organisation")).toEqual([
-      "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/shared-links", "/tenant-settings/activity", "/tools/import",
+      "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/shared-links", "/tenant-settings/activity",
+      "/tenant-settings/security", "/tools/import",
     ]);
+  });
+
+  it("zeigt «Sicherheit & Anmeldungen» nur mit security.read", () => {
+    expect(hrefsOf(settingsOf(adminSession()), "groups.organisation")).toContain("/tenant-settings/security");
+    for (const role of ["writer", "kassier", "reader"] as const) {
+      expect(settingsOf(sessionFor(role)).flatMap((group) => group.links.map((link) => link.href))).not.toContain("/tenant-settings/security");
+    }
   });
 
   it("zeigt «Fotos aus Abgaben» nur bei Freigabe und ohne «Fotos ansehen» (Phase 5)", () => {

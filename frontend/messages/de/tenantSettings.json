@@ -461,5 +461,77 @@
     "domainHintNone": "Noch keine eigene Domain: hocX läuft unter der gemeinsamen Adresse.",
     "domainHintManage": "Domains & Echtheit",
     "financeDescription": "Eine Währung für alle Konten und Bussen des Vereins."
+  },
+  "security": {
+    "title": "Sicherheit & Anmeldungen",
+    "description": "Warnungen und Anmeldeaktivität der Konten eurer Organisation der letzten 7 Tage. IP-Adressen werden nicht angezeigt.",
+    "summary": {
+      "failures24h": "Fehlversuche 24 h",
+      "accountsWithFailures": "Konten mit Fehlversuchen 24 h",
+      "newDeviceLogins": "Anmeldungen von neuen Geräten (7 T)",
+      "blocked24h": "Abgewiesene Versuche 24 h"
+    },
+    "warningsTitle": "Warnungen",
+    "warningsEmpty": "Keine Warnungen in den letzten 7 Tagen.",
+    "warnings": {
+      "account_attack": "{name}: {count, plural, one {# Fehlversuch} other {# Fehlversuche}} in 24 Stunden",
+      "privileged_new_device": "{name} (Administrator) hat sich von einem neuen Gerät angemeldet",
+      "mfa_removed": "{name}: Zweiter Faktor entfernt",
+      "account_locked": "{name}: Anmeldeversuche wurden gesperrt"
+    },
+    "accountsTitle": "Anmeldeaktivität pro Konto",
+    "accountsEmpty": "Keine Konten mit Anmeldung.",
+    "columns": {
+      "account": "Konto",
+      "lastLogin": "Letzte Anmeldung",
+      "failures": "Fehlversuche 7 T",
+      "sessions": "Aktive Sitzungen",
+      "actions": "Aktionen",
+      "time": "Zeit",
+      "event": "Ereignis",
+      "outcome": "Ergebnis",
+      "device": "Gerät",
+      "risk": "Risiko",
+      "warning": "Warnung",
+      "when": "Zuletzt"
+    },
+    "never": "Noch nie",
+    "revoke": "Sitzungen beenden",
+    "revokeConfirm": "Alle Sitzungen von {name} beenden? Die Person muss sich auf allen Geräten neu anmelden.",
+    "revoked": "{count, plural, =0 {Sitzungen beendet.} one {# Sitzung beendet.} other {# Sitzungen beendet.}}",
+    "revokeFailed": "Sitzungen konnten nicht beendet werden.",
+    "eventsTitle": "Letzte Ereignisse",
+    "eventsEmpty": "Keine Ereignisse in den letzten 7 Tagen.",
+    "events": {
+      "login_password": "Passwortprüfung",
+      "login_locked": "Gesperrter Versuch",
+      "login_challenge": "Zusätzliche Prüfung",
+      "login_mfa_totp": "Code (TOTP)",
+      "login_mfa_passkey": "Passkey",
+      "login_success": "Anmeldung",
+      "mfa_enroll": "Zweiter Faktor hinzugefügt",
+      "mfa_remove": "Zweiter Faktor entfernt",
+      "session_revoke": "Sitzungen beendet",
+      "session_logout": "Abmeldung",
+      "reset_request": "Passwort-Zurücksetzung angefordert",
+      "reset_complete": "Passwort zurückgesetzt",
+      "password_change": "Passwort geändert",
+      "stepup_success": "Bestätigung",
+      "stepup_failure": "Bestätigung fehlgeschlagen"
+    },
+    "outcomes": {
+      "success": "Erfolg",
+      "failure": "Fehlschlag",
+      "blocked": "Gesperrt",
+      "challenged": "Zusatzprüfung",
+      "info": "Info"
+    },
+    "risk": {
+      "normal": "Normal",
+      "moderate": "Erhöht",
+      "high": "Hoch",
+      "critical": "Kritisch"
+    },
+    "loadFailed": "Die Daten konnten nicht geladen werden."
   }
 }

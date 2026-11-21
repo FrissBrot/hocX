@@ -1,0 +1,177 @@
+{
+  "tabsLabel": "Area sicurezza",
+  "tabs": {
+    "overview": "Panoramica",
+    "events": "Eventi di accesso",
+    "blocks": "Blocchi",
+    "alerts": "Avvisi",
+    "audit": "Registro di audit",
+    "policy": "Regole"
+  },
+  "ownerOnly": "Questa vista è riservata agli owner.",
+  "loadFailed": "Impossibile caricare i dati.",
+  "refresh": "Aggiorna",
+  "outcomes": {
+    "all": "Tutti",
+    "success": "Riuscito",
+    "failure": "Fallito",
+    "blocked": "Bloccato",
+    "challenged": "Verifica aggiuntiva",
+    "info": "Info"
+  },
+  "severity": {
+    "critical": "Critico",
+    "warning": "Avviso"
+  },
+  "overview": {
+    "title": "Sicurezza",
+    "description": "Protezione degli accessi di tutta la piattaforma: avvisi, tentativi falliti, blocchi. Gli indirizzi compaiono solo come pseudonimi abbreviati.",
+    "tiles": {
+      "openAlerts": "Avvisi aperti",
+      "criticalAlerts": "{count, plural, =0 {nessuno critico} one {# critico} other {# critici}}",
+      "failures": "Tentativi falliti 24 h",
+      "previous": "Giorno prima: {count, number}",
+      "activeBlocks": "Blocchi attivi",
+      "blocked": "Respinti 24 h: {count, number}",
+      "adminLogins": "Accessi admin 24 h"
+    },
+    "chartTitle": "Accessi delle ultime 48 ore",
+    "chartSummary": "{failures, number} tentativi falliti e {successes, number} accessi riusciti in 48 ore, in intervalli di 5 minuti.",
+    "showTable": "Dati come tabella",
+    "showChart": "Come grafico",
+    "chartEmpty": "Nessun evento di accesso nelle ultime 48 ore.",
+    "series": {
+      "failures": "Falliti",
+      "successes": "Riusciti",
+      "blocked": "Bloccati"
+    },
+    "columns": {
+      "bucket": "Ora",
+      "failures": "Falliti",
+      "successes": "Riusciti",
+      "blocked": "Bloccati",
+      "network": "Rete (pseudonimo)",
+      "account": "Account (pseudonimo)",
+      "accounts": "Account",
+      "networks": "Reti",
+      "tenants": "Mandanti",
+      "lastSeen": "Ultima volta"
+    },
+    "topNetworks": "Reti sospette (24 h)",
+    "topAccounts": "Account coinvolti (24 h)",
+    "noTopNetworks": "Nessun tentativo fallito da singole reti.",
+    "noTopAccounts": "Nessun account con tentativi falliti.",
+    "alertsTitle": "Avvisi attuali",
+    "allAlerts": "Tutti gli avvisi",
+    "auditLink": "Apri il registro di audit"
+  },
+  "events": {
+    "title": "Eventi di accesso",
+    "description": "Ultimi eventi della protezione degli accessi. Account, reti e dispositivi compaiono solo come pseudonimi abbreviati.",
+    "typeLabel": "Tipo di evento",
+    "typeAll": "Tutti i tipi",
+    "outcomeLabel": "Esito",
+    "columns": {
+      "time": "Ora",
+      "type": "Evento",
+      "outcome": "Esito",
+      "actor": "Attore",
+      "tenant": "Mandante",
+      "subject": "Account",
+      "network": "Rete",
+      "risk": "Rischio",
+      "client": "Dispositivo"
+    },
+    "actorKinds": {
+      "user": "Utente",
+      "admin": "Admin piattaforma",
+      "anonymous": "Sconosciuto",
+      "system": "Sistema"
+    },
+    "empty": "Nessun evento per questa selezione.",
+    "previous": "Più recenti",
+    "next": "Meno recenti",
+    "pageInfo": "Voci {from, number}–{to, number}"
+  },
+  "blocks": {
+    "title": "Blocchi",
+    "description": "Blocchi IP attivi della protezione degli accessi. Impostarli e revocarli richiede una conferma con passkey.",
+    "add": "Blocco manuale",
+    "columns": {
+      "subject": "Origine (pseudonimo)",
+      "scope": "Ambito",
+      "stage": "Livello",
+      "kind": "Tipo",
+      "reason": "Motivo",
+      "until": "Fino a",
+      "actions": "Azioni"
+    },
+    "scopes": {
+      "source": "Indirizzo singolo",
+      "net": "Rete"
+    },
+    "manual": "Manuale",
+    "automatic": "Automatico",
+    "unblock": "Sblocca",
+    "unblockConfirm": "Revocare il blocco per {subject}? Gli accessi da questa origine saranno di nuovo possibili.",
+    "unblocked": "Blocco revocato.",
+    "created": "Blocco impostato.",
+    "failed": "L’azione non è riuscita: {message}",
+    "empty": "Al momento nessuna origine è bloccata.",
+    "modalTitle": "Blocco manuale",
+    "ipLabel": "Indirizzo IP",
+    "ipHelp": "Viene sottoposto a hash al salvataggio e mai memorizzato in chiaro.",
+    "scopeLabel": "Ambito",
+    "minutesLabel": "Durata in minuti",
+    "minutesHelp": "Al massimo {max, number} minuti.",
+    "reasonLabel": "Motivo",
+    "save": "Blocca",
+    "cancel": "Annulla",
+    "readOnly": "Solo gli owner possono impostare o revocare blocchi."
+  },
+  "alerts": {
+    "title": "Avvisi",
+    "description": "Regole di allarme attualmente attivate dalla protezione degli accessi. Le stesse regole notificano anche via ntfy.",
+    "empty": "Al momento nessuna regola di allarme è attiva.",
+    "columns": {
+      "severity": "Gravità",
+      "rule": "Regola",
+      "subject": "Interessato (pseudonimo)",
+      "key": "Chiave"
+    },
+    "rules": {
+      "stuffing": "Credential stuffing: molti tentativi falliti da molte reti",
+      "spraying": "Password spraying da una rete",
+      "account_attack": "Account sotto attacco",
+      "admin_mfa": "MFA admin fallita",
+      "admin_new_device": "Accesso alla piattaforma da un nuovo dispositivo",
+      "blocks": "Molti blocchi IP",
+      "network": "Molti tentativi falliti da una rete",
+      "cross_tenant": "Schema di attacco su più mandanti",
+      "tenant": "Molti account di un mandante con tentativi falliti",
+      "limiter": "Protezione degli accessi (Redis) disturbata",
+      "unknown": "Altra regola"
+    }
+  },
+  "audit": {
+    "title": "Registro di audit",
+    "description": "Azioni di admin e mandanti con il loro esito."
+  },
+  "policy": {
+    "title": "Regole",
+    "description": "Impostazioni effettive della protezione degli accessi (solo visualizzazione, senza segreti). Si modificano nella configurazione del server.",
+    "setting": "Impostazione",
+    "value": "Valore",
+    "yes": "Sì",
+    "no": "No",
+    "groups": {
+      "sessions": "Sessioni",
+      "limits": "Soglie e limiti di frequenza",
+      "blocks": "Blocchi",
+      "risk": "Valutazione del rischio",
+      "step_up": "Conferma (step-up)",
+      "alerts": "Regole di allarme",
+      "retention": "Conservazione"
+    }
+  }
+}

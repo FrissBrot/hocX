@@ -1,7 +1,8 @@
 """Plattform-Admin: Anmeldeschutz (Auth-Audit 2026-11-20) - Daten für das Sicherheits-Dashboard
 (zweiter Schritt) und Verwaltung der IP-Sperren (Stufe 5, Entsperren).
 
-Lesen: jeder Plattform-Admin. Sperren setzen/aufheben: require_admin_write, auditiert. Adressen
+Lesen: nur owner (require_admin_owner; Anmeldeereignisse sind Personenbezug, Security-Review
+Admin-Redesign M2). Sperren setzen/aufheben: require_admin_write, auditiert. Adressen
 erscheinen nie im Klartext - nur gekürzte Pseudonyme; eine manuelle Sperre per IP wird beim Setzen
 gehasht."""
 
@@ -14,7 +15,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth_security import blocks, read_service
-from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
+from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
+from app.core.config import settings
 from app.core.admin_step_up import require_step_up
 from app.core.db import get_db
 from app.schemas.base import MAX_QUERY_OFFSET
@@ -32,12 +34,62 @@ class BlockCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=200)
 
 
-@router.get("/auth-security/summary")
+@router.get("/auth-security/summary", dependencies=[Depends(require_admin_owner)])
 def auth_security_summary(db: Session = Depends(get_db)):
     return read_service.platform_summary(db)
 
 
-@router.get("/auth-security/events")
+# ── Admin-Redesign Phase E: Sicherheits-Übersicht, Warnungen, Richtlinien (nur owner) ─────────
+
+# Wirksame Anmeldeschutz-Einstellungen, die die Richtlinien-Seite zeigt. Bewusst eine feste Liste
+# (kein Präfix-Filter über alle auth_*-Felder): neue Einstellungen erscheinen erst, wenn sie hier
+# eingetragen sind, und Geheimnisse (auth_secret, auth_secret_previous, admin_auth_secret …) oder
+# Cookie-Namen können nie versehentlich ausgeliefert werden (Test test_policy_has_no_secrets).
+POLICY_SETTINGS: dict[str, tuple[str, ...]] = {
+    "sessions": ("auth_session_ttl_hours", "auth_session_idle_minutes", "auth_session_absolute_hours", "auth_device_ttl_days",
+                 "admin_session_ttl_hours"),
+    "limits": ("auth_ip_failures_soft", "auth_ip_failures_hard", "auth_net_failures_soft", "auth_net_failures_hard_hour",
+               "auth_wide_failures_alert_hour", "auth_account_ip_failures", "auth_account_failures_challenge",
+               "auth_account_failures_known_only", "auth_totp_account_limit", "auth_totp_drip_seconds", "auth_passkey_account_limit",
+               "auth_ip_attempts_per_minute", "auth_ip_attempts_burst", "auth_net_attempts_per_minute", "auth_net_attempts_burst",
+               "auth_net6_factor", "auth_wide_attempts_per_minute", "auth_wide_attempts_burst", "auth_emergency_ip_per_minute",
+               "auth_emergency_account_per_minute"),
+    "blocks": ("auth_block_strikes", "auth_block_minutes", "auth_critical_deny_minutes"),
+    "risk": ("auth_risk_mode", "auth_risk_moderate", "auth_risk_high", "auth_risk_critical", "auth_global_attack_min",
+             "auth_global_attack_factor", "auth_tenant_accounts_alert"),
+    "step_up": ("auth_step_up_mfa_minutes", "auth_step_up_admin_minutes", "auth_email_code_ttl_minutes"),
+    "alerts": ("auth_alert_stuffing_min", "auth_alert_stuffing_networks", "auth_alert_spraying_accounts", "auth_alert_account_failures",
+               "auth_alert_account_networks", "auth_alert_admin_mfa_failures", "auth_alert_blocks_per_hour", "auth_alert_cross_tenant",
+               "auth_alert_redis_memory_ratio"),
+    "retention": ("auth_event_retention_days",),
+}
+
+
+@router.get("/auth-security/overview")
+def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Kacheln der Sicherheits-Übersicht: Zähler 24 h, offene Warnungen, aktive Sperren."""
+    alerts = read_service.platform_alerts(db)
+    return {
+        **read_service.platform_counters(db),
+        "open_alerts": len(alerts),
+        "critical_alerts": sum(1 for alert in alerts if alert["severity"] == "critical"),
+        "active_blocks": len(read_service.active_blocks()),
+    }
+
+
+@router.get("/auth-security/alerts")
+def auth_security_alerts(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Aktuell ausgelöste Alarmregeln (dieselben wie im Systemmonitor, nur Zahlen und Pseudonyme)."""
+    return read_service.platform_alerts(db)
+
+
+@router.get("/auth-security/policy")
+def auth_security_policy(_admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Wirksame Anmeldeschutz-Einstellungen (read-only, ohne Geheimnisse)."""
+    return {group: {name: getattr(settings, name) for name in names} for group, names in POLICY_SETTINGS.items()}
+
+
+@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
 def auth_security_events(
     db: Session = Depends(get_db),
     event_type: str | None = Query(None, max_length=64),
@@ -48,7 +100,7 @@ def auth_security_events(
     return read_service.recent_events(db, limit=limit, offset=offset, event_type=event_type, outcome=outcome)
 
 
-@router.get("/auth-security/blocks")
+@router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])
 def auth_security_blocks():
     return read_service.active_blocks()
 

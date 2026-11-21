@@ -127,6 +127,9 @@
       "activity": {
         "description": "Chi ha modificato cosa, e quando."
       },
+      "securityLogins": {
+        "description": "Avvisi, accessi e sessioni degli account."
+      },
       "import": {
         "description": "Importare verbali e dati da Word e altre fonti."
       }

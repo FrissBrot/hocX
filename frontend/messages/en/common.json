@@ -292,7 +292,8 @@
       "reorder": "Change order",
       "protocol": "Minutes",
       "designer": "Document Studio",
-      "media": "Photos and files"
+      "media": "Photos and files",
+      "admin": "Platform admin"
     },
     "shortcuts": {
       "global_search": "Open or close global search",
@@ -323,11 +324,27 @@
       "designer_move": "Move selected element",
       "designer_deselect": "Clear selection",
       "media_previous": "Previous photo or file",
-      "media_next": "Next photo or file"
+      "media_next": "Next photo or file",
+      "admin_toggleSidebar": "Show the sidebar compact or wide"
     }
   },
   "numberStepper": {
     "decrease": "Decrease {label}",
     "increase": "Increase {label}"
+  },
+  "health": {
+    "ok": "OK",
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "warning": "Warning",
+    "critical": "Critical",
+    "unknown": "Unknown"
+  },
+  "timeRange": {
+    "24h": "24 h",
+    "7d": "7 d",
+    "30d": "30 d",
+    "90d": "90 d",
+    "12m": "12 mo"
   }
 }

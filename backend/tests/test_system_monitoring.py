@@ -395,6 +395,16 @@ def test_test_notification_route_reports_errors_instead_of_raising(clean_state, 
     assert (result.ok, result.error) == (False, "HTTP 403")
 
 
+def test_status_token_is_shown_only_once(clean_state):
+    """Admin-Redesign §8.1 Nr. 5: Klartext-Token nur in der Antwort aufs Rotieren, danach maskiert."""
+    db = clean_state
+    rotated = admin_routes.rotate_status_token(db=db, current_admin=_admin())
+    assert rotated.status_token and rotated.status_url and rotated.status_token in rotated.status_url
+    masked = admin_routes.get_notification_settings(db=db, current_admin=_admin())
+    assert masked.status_token is None and masked.status_url is None
+    assert masked.status_token_set is True and masked.status_token_hint == rotated.status_token[-4:]
+
+
 def test_summary_endpoint_requires_token_and_reports_status(clean_state, monkeypatch):
     db = clean_state
     token = admin_routes.rotate_status_token(db=db, current_admin=_admin()).status_token
