@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adminBreadcrumb, attentionItems, buildAdminNav, findActiveAdminLink, groupCount, linkCount } from "./admin-shell-nav";
+import { activeAdminGroupId, adminBreadcrumb, attentionItems, buildAdminNav, findActiveAdminLink, groupCount, linkCount, resolveOpenAdminGroup, toggleAdminGroup } from "./admin-shell-nav";
 
 const hrefs = (role: "owner" | "support") => buildAdminNav(role).flatMap((group) => group.links.map((link) => link.href));
 
@@ -56,5 +56,30 @@ describe("admin-shell-nav", () => {
     expect(attentionItems(counts, "owner")).toEqual([{ key: "security_alerts", count: 2, href: "/admin/security/alerts" }]);
     expect(attentionItems(counts, "support")[0].href).toBe("/admin/security");
     expect(attentionItems(null, "owner")).toEqual([]);
+  });
+
+  describe("einklappbare Bereiche (1.5.1)", () => {
+    const nav = buildAdminNav("owner");
+
+    it("öffnet den Bereich der aktiven Seite automatisch, auch auf Detailseiten", () => {
+      expect(activeAdminGroupId(nav, "/admin/jobs")).toBe("operations");
+      expect(activeAdminGroupId(nav, "/admin/tenants/abc/users")).toBe("tenants");
+      expect(resolveOpenAdminGroup(nav, "/admin/security/events", "operations")).toBe("security");
+    });
+
+    it("ohne aktiven Bereich gilt der gemerkte, unbekannte oder titellose fallen weg", () => {
+      expect(activeAdminGroupId(nav, "/admin")).toBeNull();
+      expect(resolveOpenAdminGroup(nav, "/admin", "analytics")).toBe("analytics");
+      expect(resolveOpenAdminGroup(nav, "/admin/account", "gibt-es-nicht")).toBeNull();
+      expect(resolveOpenAdminGroup(nav, "/admin", "overview")).toBeNull();
+      // support sieht «Benutzer & Zugänge» nicht - ein gemerkter Bereich daraus öffnet nichts
+      expect(resolveOpenAdminGroup(buildAdminNav("support"), "/admin", "access")).toBeNull();
+    });
+
+    it("Klick öffnet einen Bereich und schliesst die anderen (Akkordeon), zweiter Klick schliesst", () => {
+      expect(toggleAdminGroup("tenants", "operations")).toBe("operations");
+      expect(toggleAdminGroup("operations", "operations")).toBeNull();
+      expect(toggleAdminGroup(null, "security")).toBe("security");
+    });
   });
 });

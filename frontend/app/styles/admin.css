@@ -718,7 +718,44 @@
 /* ── Admin-Konsole (Redesign Phase B): Sidebar A–G, Kompaktmodus, Kopfleiste ───────────── */
 
 .admin-sidebar {
-  gap: var(--space-4);
+  gap: var(--space-1);
+  /* dichter als die Mandanten-Sidebar: alle Bereiche ohne Scrollen bis 1440×700 (1.5.1) */
+  padding: var(--space-4);
+}
+
+.admin-sidebar .brand-lockup {
+  gap: var(--space-3);
+}
+
+/* «hocX» steht schon im Logo; die Zeile kostet Höhe, die die Bereiche brauchen (1.5.1) */
+.admin-sidebar .admin-brand-copy .eyebrow {
+  display: none;
+}
+
+.admin-sidebar .brand-mark {
+  width: 36px;
+  height: 36px;
+}
+
+.admin-sidebar .nav-link {
+  min-height: 30px; /* design-ok: kompakte Sidebar-Zeilen, alle gleich hoch (≥ 28 px Zielgrösse) */
+}
+
+.admin-sidebar .nav-links {
+  gap: 0;
+}
+
+.admin-sidebar .sidebar-footer {
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.admin-sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .admin-sidebar .admin-sidebar-search {
@@ -733,7 +770,7 @@
   overflow-y: auto;
   display: grid;
   align-content: start;
-  gap: var(--space-3);
+  gap: 2px;
 }
 
 .admin-nav-group {
@@ -754,6 +791,31 @@
   text-transform: uppercase;
 }
 
+/* Einklappbarer Bereichskopf (1.5.1): Optik von .nav-group-label (Mandanten-Sidebar), Zähler vor dem Chevron */
+.admin-nav-group-title.nav-group-label {
+  justify-content: flex-start;
+  min-height: 28px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+/* .nav-links setzt display: grid und würde das hidden-Attribut sonst überstimmen */
+.admin-nav-group .nav-links[hidden] {
+  display: none;
+}
+
+.admin-nav-group-title.nav-group-label svg {
+  display: block;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.admin-nav-group-title.nav-group-label .admin-nav-group-label {
+  margin-right: auto;
+  text-align: left;
+}
+
 .admin-nav-count-alert {
   display: inline-grid;
   place-items: center;
@@ -767,11 +829,7 @@
 }
 
 .admin-compact-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  justify-content: flex-start;
+  flex-shrink: 0;
 }
 
 /* Kompaktmodus: nur Icons, 64 px breite Sidebar (Beschriftung bleibt für Screenreader im aria-label) */
@@ -820,8 +878,8 @@
     padding: 0;
   }
 
-  .admin-frame-compact .admin-compact-toggle {
-    justify-content: center;
+  .admin-frame-compact .admin-sidebar-footer-row {
+    flex-direction: column;
   }
 }
 
