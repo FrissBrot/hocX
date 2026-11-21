@@ -190,7 +190,7 @@ def test_document_upload_with_allow_duplicates_does_not_reveal_hidden_duplicate(
 
     result = _upload(db, writer, [_upload_file(PDF, "neu.pdf")], allow_duplicates=True)
 
-    assert all(entry.file_id != str(hidden.public_id) for entry in result.file_results)
+    assert all(entry.file_id != hidden.public_id for entry in result.file_results)
     assert all(entry.status == "uploaded" for entry in result.file_results)
 
 
@@ -278,7 +278,7 @@ def test_document_upload_stores_copy_of_invisible_duplicate(db):
     result = _upload(db, _photos_manager(tenant.id), [_upload_file(PDF, "kopie.pdf")])
 
     assert len(result.items) == 1 and result.errors == []
-    assert all(entry.file_id != str(hidden.public_id) for entry in result.file_results)
+    assert all(entry.file_id != hidden.public_id for entry in result.file_results)
     assert db.query(StoredFile).filter_by(tenant_id=tenant.id, checksum_sha256=_sha(PDF)).count() == 2
 
 
@@ -289,7 +289,7 @@ def test_document_upload_still_skips_visible_duplicate_with_its_id(db):
     result = _upload(db, make_current_user(tenant.id, role="writer"), [_upload_file(PDF, "nochmal.pdf")])
 
     assert result.items == []
-    assert [(entry.status, entry.file_id) for entry in result.file_results] == [("skipped", str(stored.public_id))]
+    assert [(entry.status, entry.file_id) for entry in result.file_results] == [("skipped", stored.public_id)]
 
 
 def test_visibility_query_runs_even_without_candidates(db, monkeypatch):
@@ -387,9 +387,47 @@ def test_discard_never_touches_foreign_linked_old_or_other_peoples_files(db):
         assert row.deleted_at is None
 
 
+def test_discard_ignores_uploads_from_before_this_session(db):
+    """Eine Datei aus einer früheren Anmeldung (vor auth_time) bleibt unberührt."""
+    import dataclasses
+    from datetime import timedelta
+    from tests.factories import make_app_user
+
+    tenant = make_tenant(db)
+    account = make_app_user(db, email=f"s{tenant.id}@example.com", tenant_id=tenant.id, role_code="writer")
+    writer = make_current_user(tenant.id, role="writer", user_id=account.id)
+    stored = _own_upload(db, writer)
+    later_session = dataclasses.replace(writer, auth_time=datetime.now(UTC) + timedelta(hours=1))
+
+    assert _discard(db, later_session, stored.public_id) == []
+
+
 def test_discard_requires_manage_permission(db):
     tenant = make_tenant(db)
     reader = make_current_user(tenant.id, role="reader", permissions=frozenset({"files.read", "meetings.read"}))
     with pytest.raises(HTTPException) as exc_info:
         _discard(db, reader, uuid.uuid4())
     assert exc_info.value.status_code == 403
+
+
+def test_precheck_only_enriches_files_the_person_may_manage(db):
+    """Sichtbar, aber ohne photos.manage: kein Ergänzen der Metadaten (Schreiben strenger als Lesen)."""
+    from datetime import date
+
+    from tests.image_fixtures import jpeg
+    from tests.test_upload_precheck import _entry, _gallery_file, _precheck, _writer
+
+    tenant = make_tenant(db)
+    content = jpeg(color=(1, 2, 3))
+    row = _gallery_file(db, tenant.id, content)
+    reader_only = make_current_user(
+        tenant.id, role="writer", permissions=frozenset({"photos.read", "files.read", "files.manage", "meetings.read"})
+    )
+
+    result = _precheck(db, reader_only, [_entry(content)], estimated=date(1998, 8, 1))[0]
+    db.refresh(row)
+    assert result.status == "already_exists" and result.applied == []
+    assert row.estimated_taken_on is None
+
+    applied = _precheck(db, _writer(db, tenant.id), [_entry(content)], estimated=date(1998, 8, 1))[0]
+    assert applied.applied == ["estimated_taken_on"]

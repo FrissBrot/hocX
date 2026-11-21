@@ -1993,18 +1993,23 @@ def set_file_best_everywhere(
 # Höchstalter einer Datei, die «Abbrechen» im Pendenz-Dialog noch zurücknimmt (zusätzlich zur
 # Anmeldung der Session): ein Dialog bleibt nicht länger offen.
 DISCARD_UPLOAD_MAX_AGE = timedelta(hours=12)
+DISCARD_CLOCK_TOLERANCE = timedelta(minutes=5)
 
 
 def _discardable_upload_ids(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> list[uuid.UUID]:
     """Nur frisch von dieser Person in dieser Sitzung hochgeladene Dateien ohne jeden Bezug:
     eigener Mandant, created_by = Person, nach Anmeldung bzw. höchstens 12 h alt, keine
-    Pendenz-Verknüpfung, kein Termin/Zyklus/Abgabe-Bezug, in keinem Album. Alles andere wird
+    Pendenz-Verknüpfung, kein Termin/Zyklus/Abgabe-Bezug, in keinem Album, keinem Freigabelink. Alles andere wird
     stillschweigend übergangen (gleiche Antwort wie eine unbekannte ID)."""
-    from app.models.entities import ProtocolTodoFile
+    from app.models.entities import ProtocolTodoFile, ShareLinkFile
 
     since = datetime.now(UTC) - DISCARD_UPLOAD_MAX_AGE
-    if user.auth_time is not None and user.auth_time > since:
-        since = user.auth_time
+    auth_time = user.auth_time
+    if auth_time is not None and auth_time.tzinfo is None:
+        auth_time = auth_time.replace(tzinfo=UTC)
+    if auth_time is not None and auth_time > since:
+        # Kleine Toleranz: created_at ist die DB-Zeit (Transaktionsbeginn), auth_time die App-Zeit
+        since = max(since, auth_time - DISCARD_CLOCK_TOLERANCE)
     rows = db.execute(
         select(StoredFile.public_id)
         .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
@@ -2019,6 +2024,7 @@ def _discardable_upload_ids(db: Session, user: CurrentUser, public_ids: list[uui
             GalleryImage.submission_assignment_id.is_(None),
             ~select(ProtocolTodoFile.stored_file_id).where(ProtocolTodoFile.stored_file_id == StoredFile.id).exists(),
             ~select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.file_id == StoredFile.public_id).exists(),
+            ~select(ShareLinkFile.file_id).where(ShareLinkFile.file_id == StoredFile.public_id).exists(),
         )
     ).scalars()
     return list(dict.fromkeys(rows))

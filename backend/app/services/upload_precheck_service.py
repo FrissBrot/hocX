@@ -137,6 +137,12 @@ def enrich_existing(
     return outcome
 
 
+def _may_manage(viewer, mime_type: str | None) -> bool:
+    from app.services.file_trash_service import may_manage
+
+    return may_manage(viewer, mime_type)
+
+
 def precheck(
     db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None, viewer=None
 ) -> list[UploadPrecheckResult]:
@@ -181,7 +187,9 @@ def precheck(
             outcome = MergeOutcome()
             if with_metadata:
                 incoming = metadata_service.metadata_from_client(entry.metadata.model_dump() if entry.metadata else None)
-                outcome = enrich_existing(db, matches, checksum, incoming=incoming, estimated=estimated, user_id=user_id)
+                # Ergänzen ist Schreiben: nur Dateien, die die Person auch verwalten darf (Regel 1.2)
+                manageable = matches if viewer is None else [row for row in matches if _may_manage(viewer, row.mime_type)]
+                outcome = enrich_existing(db, manageable, checksum, incoming=incoming, estimated=estimated, user_id=user_id)
             results.append(
                 UploadPrecheckResult(
                     client_id=entry.client_id,
