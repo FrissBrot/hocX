@@ -12,6 +12,7 @@ import { authFiles } from "./auth";
 // /tenant-settings (design update, 2026-09-23), seit dem Einstellungen-Rahmen auf eigener Seite
 // /tenant-settings/abo.
 test("tenant Abo & Nutzung tab and admin tenant-settings Speicher tab show the same bytes used", async ({ page, request, browser }) => {
+  test.setTimeout(180_000);
   const session = await (await request.get("/api/auth/session")).json();
   const tenantName = session.current_tenant.name as string;
 
@@ -31,12 +32,14 @@ test("tenant Abo & Nutzung tab and admin tenant-settings Speicher tab show the s
       ).trim();
 
       await adminPage.goto("/admin/tenants");
+      // Seit dem Admin-Redesign führt die Zeile auf die Detailseite /admin/tenants/<id> (Tab «Speicher»)
       await adminPage.getByRole("row", { name: tenantName }).click();
+      await adminPage.waitForURL(/\/admin\/tenants\/[^/]+$/, { timeout: 60_000 });
       await adminPage.getByRole("tab", { name: "Speicher" }).click();
       const adminValue = (await adminPage.locator(".admin-storage-total-value").innerText()).trim();
 
       expect(adminValue).toBe(tenantValue);
-    }).toPass({ timeout: 30_000 });
+    }).toPass({ timeout: 120_000 });
   } finally {
     await adminContext.close();
   }

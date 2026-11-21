@@ -261,7 +261,7 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
             <nav className="topbar-breadcrumb admin-breadcrumb" aria-label={t("breadcrumbNav")}>
               {breadcrumb.link ? (
                 <>
-                  {breadcrumb.groupTitleKey ? (
+                  {breadcrumb.groupTitleKey && t(breadcrumb.groupTitleKey) !== t(breadcrumb.link.labelKey) ? (
                     <>
                       <span className="topbar-breadcrumb-group">{t(breadcrumb.groupTitleKey)}</span>
                       <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>

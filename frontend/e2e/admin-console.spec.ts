@@ -34,7 +34,8 @@ const ADMIN_PAGES = [
 ];
 
 async function expectHealthyPage(page: Page, path: string) {
-  const response = await page.goto(path);
+  // ERR_ABORTED: eine Client-Navigation der vorigen Seite (z. B. Polling/Redirect) bricht den Aufruf ab - einmal wiederholen
+  const response = await page.goto(path).catch(() => page.goto(path));
   expect(response?.status(), path).toBeLessThan(400);
   await expect(page.locator("main#main-content"), path).toBeVisible();
   await expect(page.getByText(/Application error|MISSING_MESSAGE/), path).toHaveCount(0);
@@ -42,6 +43,8 @@ async function expectHealthyPage(page: Page, path: string) {
 
 test.describe("Admin-Konsole", () => {
   test.use({ storageState: authFiles.platformAdmin });
+  // Dev-Server des E2E-Stacks kompiliert jede Route beim ersten Aufruf
+  test.setTimeout(240_000);
 
   test("alle Bereiche laden in der gemeinsamen Shell, alte URLs leiten um", async ({ page }) => {
     for (const path of ADMIN_PAGES) await expectHealthyPage(page, path);
@@ -96,7 +99,7 @@ test.describe("Admin-Konsole", () => {
     const tenant = tenants.items[0] as { id: string; name: string };
     await page.goto("/admin/tenants");
     await page.getByRole("link", { name: tenant.name, exact: true }).first().click();
-    await expect(page).toHaveURL(new RegExp(`/admin/tenants/${tenant.id}`));
+    await expect(page).toHaveURL(new RegExp(`/admin/tenants/${tenant.id}`), { timeout: 60_000 });
     const tabs = page.getByRole("tablist");
     for (const tab of ["Stammdaten", "Speicher", "Domains"]) {
       await tabs.getByRole("tab", { name: tab }).click();
