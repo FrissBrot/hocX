@@ -87,8 +87,19 @@ describe("Aufnahmedatum verschieben: Vorschau", () => {
   it("nimmt die Korrektur vor EXIF und zeigt ohne Uhrzeit nur den Tag", () => {
     const corrected = { ...base, exif_taken_at: "2001-01-01T00:05:00Z", capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false };
     expect(shiftPreview(corrected, 1, 0)).toEqual({ date: "2023-07-15", time: null });
-    // Ohne Uhrzeit gilt 12:00 als Ausgangspunkt (wie im Backend): +12 h ist schon der nächste Tag.
-    expect(shiftPreview(corrected, 0, 12)).toEqual({ date: "2023-07-15", time: null });
+    expect(shiftPreview(corrected, 1, 0)?.noTimeUnchanged).toBeUndefined();
+  });
+
+  it("verschiebt Fotos ohne Uhrzeit nur um ganze Tage (wie whole_shift_days im Backend)", () => {
+    const corrected = { ...base, capture_corrected_at: "2023-07-14T12:00:00Z", capture_corrected_has_time: false };
+    // Stunden allein wirken nicht: unverändert – keine Uhrzeit
+    expect(shiftPreview(corrected, 0, 12)).toEqual({ date: "2023-07-14", time: null, noTimeUnchanged: true });
+    expect(shiftPreview(corrected, 0, -13)).toEqual({ date: "2023-07-14", time: null, noTimeUnchanged: true });
+    // 1 Tag − 2 h ergibt keinen ganzen Tag
+    expect(shiftPreview(corrected, 1, -2)).toEqual({ date: "2023-07-14", time: null, noTimeUnchanged: true });
+    // −30 h → −1 Tag, 1 Tag + 5 h → +1 Tag
+    expect(shiftPreview(corrected, 0, -30)).toEqual({ date: "2023-07-13", time: null });
+    expect(shiftPreview(corrected, 1, 5)).toEqual({ date: "2023-07-15", time: null });
   });
 
   it("verschiebt ein geschätztes Datum, aber nie das Uploaddatum", () => {

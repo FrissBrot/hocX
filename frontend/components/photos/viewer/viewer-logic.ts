@@ -1,6 +1,7 @@
 // Reine Logik der Foto-Ansicht (Design «hocX Foto-Ansicht»): Löschbarkeit, Vergleichsentscheid,
 // Vorschau beim Verschieben des Aufnahmedatums, Analyse-Stufen. Ohne React, damit Vitest das
 // Verhalten direkt prüft; die Komponenten in diesem Ordner rufen nur diese Funktionen auf.
+import { wholeShiftDays } from "@/components/photos/photo-capture-date-dialog";
 import type { FileOverviewItem, SimilarityGroup, StoredFileMetadata } from "@/types/api";
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -111,6 +112,10 @@ export function captureDateKind(metadata: Pick<StoredFileMetadata, "capture_corr
 
 export type CaptureMoment = { date: string; time: string | null };
 
+/** Vorschau beim Verschieben: der neue Zeitpunkt; `noTimeUnchanged`, wenn das Foto keine Uhrzeit hat
+ * und der Versatz keinen ganzen Tag ergibt - dann ändert das Backend nichts (no_time_unchanged_ids). */
+export type ShiftPreview = CaptureMoment & { noTimeUnchanged?: true };
+
 const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/;
 
 function wallClock(value: string): { y: number; m: number; d: number; hh: number; mm: number } | null {
@@ -122,8 +127,9 @@ function wallClock(value: string): { y: number; m: number; d: number; hh: number
 const pad = (value: number) => String(value).padStart(2, "0");
 
 /** Ausgangspunkt fürs Verschieben wie `image_metadata_service.shift_base`: Korrektur, sonst EXIF,
- * sonst Schätzung (ohne Uhrzeit, technisch 12:00). Die Zeiten sind Kamerazeit ohne Zeitzone - die
- * Ziffern im ISO-String gelten, nie die Zeitzone des Browsers. */
+ * sonst Schätzung (ohne Uhrzeit). Die Zeiten sind Kamerazeit ohne Zeitzone - die Ziffern im
+ * ISO-String gelten, nie die Zeitzone des Browsers. Ohne Uhrzeit (`hasTime: false`) zählt beim
+ * Verschieben nur der Kalendertag (siehe shiftPreview). */
 export function shiftBase(
   metadata: Pick<StoredFileMetadata, "capture_corrected_at" | "capture_corrected_has_time" | "exif_taken_at" | "estimated_taken_on">
 ): { value: string; hasTime: boolean } | null {
@@ -133,21 +139,30 @@ export function shiftBase(
   return null;
 }
 
-/** Vorschau «Neu: …» beim Verschieben um Tage/Stunden - rechnet wie das Backend
- * (`shifted_correction`): Ausgangszeit + Versatz; ohne Uhrzeit zählt nur der neue Kalendertag.
+/** Vorschau beim Verschieben um Tage/Stunden - rechnet wie das Backend (`shifted_correction`):
+ * mit Uhrzeit Ausgangszeit + Versatz («Neu: …»); ohne Uhrzeit (Schätzung, Korrektur ohne Uhrzeit)
+ * wirken nur die ganzen Tage des Gesamtversatzes (`wholeShiftDays`, gegen null gerundet:
+ * −13 h → 0, 1 Tag − 2 h → 0, −30 h → −1). Ergibt das keinen ganzen Tag, bleibt das Foto
+ * unverändert (`noTimeUnchanged`, Anzeige «unverändert – keine Uhrzeit»).
  * Null, wenn das Foto kein Aufnahmedatum hat (Uploaddatum wird nie verschoben). */
 export function shiftPreview(
   metadata: Pick<StoredFileMetadata, "capture_corrected_at" | "capture_corrected_has_time" | "exif_taken_at" | "estimated_taken_on">,
   days: number,
   hours: number
-): CaptureMoment | null {
+): ShiftPreview | null {
   const base = shiftBase(metadata);
   const parts = base ? wallClock(base.value) : null;
   if (!base || !parts) return null;
+  if (!base.hasTime) {
+    const wholeDays = wholeShiftDays(days, hours);
+    const day = new Date(Date.UTC(parts.y, parts.m - 1, parts.d) + wholeDays * 86_400_000);
+    const date = `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}`;
+    return wholeDays === 0 ? { date, time: null, noTimeUnchanged: true } : { date, time: null };
+  }
   // UTC-Arithmetik: keine Sommerzeit-Sprünge, die Ziffern bleiben Kamerazeit.
   const moment = new Date(Date.UTC(parts.y, parts.m - 1, parts.d, parts.hh, parts.mm) + (days * 24 + hours) * 3_600_000);
   const date = `${moment.getUTCFullYear()}-${pad(moment.getUTCMonth() + 1)}-${pad(moment.getUTCDate())}`;
-  return { date, time: base.hasTime ? `${pad(moment.getUTCHours())}:${pad(moment.getUTCMinutes())}` : null };
+  return { date, time: `${pad(moment.getUTCHours())}:${pad(moment.getUTCMinutes())}` };
 }
 
 /** Ganzzahl aus einem Feld («», «-» = 0), sonst null (ungültig). */

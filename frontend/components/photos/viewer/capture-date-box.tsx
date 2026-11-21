@@ -133,6 +133,8 @@ function CaptureDateEditor({
   const shiftDays = parseWholeNumber(days);
   const shiftHours = parseWholeNumber(hours);
   const preview = shiftDays !== null && shiftHours !== null ? shiftPreview(metadata, shiftDays, shiftHours) : null;
+  // «Neu: …» bzw. bei Fotos ohne Uhrzeit, deren Versatz keinen ganzen Tag ergibt, «unverändert – keine Uhrzeit».
+  const previewLabel = preview?.noTimeUnchanged ? t("shiftPreviewNoTimeUnchanged") : t("shiftPreview", { value: formatMoment(preview) });
   const valid =
     mode === "set" ? Boolean(date)
     : mode === "shift" ? base !== null && shiftDays !== null && shiftHours !== null && (shiftDays !== 0 || shiftHours !== 0)
@@ -140,7 +142,7 @@ function CaptureDateEditor({
 
   let question = "";
   if (mode === "set") question = t("confirmSet", { date: formatMoment({ date, time: time || null }) });
-  else if (mode === "shift") question = t("confirmShift", { date: formatMoment(preview) });
+  else if (mode === "shift") question = preview?.noTimeUnchanged ? t("confirmShiftNoTimeUnchanged") : t("confirmShift", { date: formatMoment(preview) });
   else question = t("confirmReset");
 
   let resetTarget: string;
@@ -157,6 +159,7 @@ function CaptureDateEditor({
     setBusy(true);
     try {
       let saved: StoredFileMetadata | null = null;
+      let note: { text: string; tone: "info" | "success" } | null = null;
       if (mode === "shift") {
         const result = await browserApiFetch<FileBulkCaptureDateResult>("/api/files/bulk-capture-date", {
           method: "POST",
@@ -165,6 +168,9 @@ function CaptureDateEditor({
         if (result?.invalid_ids.length) throw new Error(tc("resultInvalid", { count: 1 }));
         if (result?.skipped_no_date_ids.length) throw new Error(tc("resultSkipped", { count: 1 }));
         if (result?.not_found_ids.length) throw new Error(tc("resultNotFound", { count: 1 }));
+        // Foto ohne Uhrzeit: nur ganze Tage wirken (whole_shift_days) - unverändert bzw. nur um Tage verschoben
+        if (result?.no_time_unchanged_ids?.length) note = { text: tc("resultNoTimeUnchanged", { count: 1 }), tone: "info" };
+        else if (result?.date_only_ids?.length) note = { text: tc("resultDateOnly", { count: 1 }), tone: "success" };
         saved = await browserApiFetch<StoredFileMetadata>(metadataUrl);
       } else {
         saved = await browserApiFetch<StoredFileMetadata>(`/api/stored-files/${fileId}/capture-correction`, {
@@ -172,7 +178,8 @@ function CaptureDateEditor({
           body: JSON.stringify(mode === "set" ? { corrected_date: date, corrected_time: time || null } : { corrected_date: null }),
         });
       }
-      showToast(t("saved"), "success");
+      if (note) showToast(note.text, note.tone);
+      else showToast(t("saved"), "success");
       onDone(saved);
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : tc("error"), "error");
@@ -214,7 +221,7 @@ function CaptureDateEditor({
             </label>
           </div>
           <p className="field-help" aria-live="polite">
-            {t("shiftHelp")} <strong className="photo-viewer-shift-preview">{t("shiftPreview", { value: formatMoment(preview) })}</strong>
+            {t("shiftHelp")} <strong className="photo-viewer-shift-preview">{previewLabel}</strong>
           </p>
         </>
       ) : null}
