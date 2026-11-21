@@ -379,7 +379,10 @@ def test_T3_stuffing_turns_on_attack_mode_and_alarms(db, monkeypatch):
 def test_T14_club_meeting_behind_one_nat_gets_no_hard_lock(db, mail, monkeypatch):
     """50 Anmeldungen + 30 Tippfehler hinter einer NAT-Adresse: höchstens zusätzliche Prüfung
     (E-Mail-Code), keine harte Sperre."""
+    # Geprüft werden Sperren, nicht die Ratelimits: Quelle UND Netz (/24, Burst 60) anheben, sonst
+    # hängt das Ergebnis davon ab, wie schnell die 80 Anmeldungen laufen (Topf füllt sich je Minute).
     monkeypatch.setattr(settings, "auth_ip_attempts_burst", 1000)
+    monkeypatch.setattr(settings, "auth_net_attempts_burst", 1000)
     tenant = make_tenant(db)
     users = [make_app_user(db, email=f"mitglied-{index}@example.com", tenant_id=tenant.id) for index in range(50)]
     hard = 0

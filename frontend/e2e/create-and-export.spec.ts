@@ -92,6 +92,9 @@ test("export dialog, template library, brand studio and designer render (light/d
       await page.screenshot({ path: `test-results/document-studio-${theme}-390.png` });
     }
   } finally {
-    await page.request.delete(`/api/protocol-todos/${todo.id}`);
+    // Aufräumen: ein Verbindungsabbruch (ECONNRESET einer wiederverwendeten Keep-alive-Verbindung)
+    // soll den Test nicht rot machen - einmal neu versuchen.
+    const remove = () => page.request.delete(`/api/protocol-todos/${todo.id}`);
+    await remove().catch(remove);
   }
 });
