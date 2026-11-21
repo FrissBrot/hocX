@@ -31,7 +31,8 @@ test("Geräteliste zeigt die eigene Session und meldet ein anderes Gerät ab", a
   // gespeicherten Sessions der übrigen Specs)
   for (let round = 0; round < 10 && (await signOut.count()) > 0; round++) {
     await signOut.first().click();
-    await page.getByRole("dialog").getByRole("button", { name: t.revoke, exact: true }).click();
+    // Rückfrage (useConfirm) ist ein alertdialog über dem Profil-Dialog
+    await page.getByRole("alertdialog").getByRole("button", { name: t.revoke, exact: true }).click();
     await expect(page.getByText(t.revoked)).toBeVisible();
   }
   await expect(signOut).toHaveCount(0);

@@ -73,3 +73,7 @@ services:
   # local dev's opt-in default untouched.
   clamav:
     profiles: !override []
+    # Frisches Volume: freshclam lädt beim Start eine neue Tagesdatenbank, während clamd die alte
+    # lädt - zwei Datenbanken im Speicher sprengten das Limit von 1,5 GB (clamd OOM-gekillt, Socket
+    # nie da; scripts/e2e.sh wartet dann vergeblich auf ClamAV). Nur im Wegwerf-Stack mehr Luft.
+    mem_limit: 3g
