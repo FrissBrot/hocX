@@ -592,6 +592,15 @@
 
 .table-block-row-dragging { opacity: 0.45; }
 
+/* Einfügelinie beim Ziehen: zeigt, ob die Zeile vor oder hinter dem Ziel landet (dropSide) */
+.table-block-row-drop { position: relative; border-color: var(--accent); }
+
+.table-block-row-drop::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--accent); pointer-events: none; }
+
+.table-block-row-drop-before::after { top: 0; }
+
+.table-block-row-drop-after::after { bottom: 0; }
+
 .table-block-row[draggable="true"] .table-block-row-number { cursor: grab; }
 
 .table-block-row-head { --button-bg: transparent; --button-hover-bg: transparent; display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 16px; align-items: center; gap: var(--space-3); width: 100%; padding: 10px 14px; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; box-shadow: none; font-weight: 400; } /* design-ok: Zeilenkopf wie im Entwurf, an 22-px-Nummer gekoppelt */

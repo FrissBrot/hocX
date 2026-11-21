@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: vi.fn(() => Promise.resolve([])), browserApiBaseUrl: "" }));
 
 import { newBlockForm, type BlockForm } from "./block-form";
-import { EVENT_FIELDS, eventFieldsOf, moveEnabledField, orderedFields, TableBlockSection, todoFieldsOf } from "./table-block-editor";
+import { dropSide, EVENT_FIELDS, eventFieldsOf, moveEnabledField, orderedFields, TableBlockSection, todoFieldsOf } from "./table-block-editor";
 
 const data = { participants: [], events: [], lists: [], listEntries: {}, ensureListEntries: () => undefined, knownEventTags: [], tagConfig: {} };
 
@@ -37,6 +37,15 @@ describe("orderedFields", () => {
   it("gilt auch für Pendenzfelder", () => {
     const fields = todoFieldsOf(formWith({ todo_fields: [{ field: "status", label: "", enabled: true }] }));
     expect(fields.map((entry) => entry.field)).toEqual(["status", "task", "description", "participant", "due_date", "origin"]);
+  });
+});
+
+describe("dropSide", () => {
+  it("zeigt die Einfügelinie dort, wo moveItem die Zeile ablegt", () => {
+    expect(dropSide(0, 2)).toBe("after"); // nach unten gezogen: hinter das Ziel
+    expect(dropSide(3, 1)).toBe("before"); // nach oben gezogen: vor das Ziel
+    expect(dropSide(2, 2)).toBeNull();
+    expect(dropSide(-1, 2)).toBeNull();
   });
 });
 
