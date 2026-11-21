@@ -16,6 +16,12 @@ Regeln:
   oder abgebrochene Instanzen und von Hand geänderte Felder (overridden_fields) bleiben.
 - Es wird nie automatisch gelöscht. Löschen nur explizit über remove_todos (Paket oder
   Zyklus-Zuweisung entfernen) mit Modus all/future/none.
+- Termin abgesagt (Wiederholung "pro Termin"): noch offene Instanzen dieses Termins werden
+  abgebrochen (keine Busse, keine Erinnerung), erledigte bleiben. Die Herkunft steht als Marker
+  in overridden_fields (EVENT_CANCELLED_MARKER_PREFIX + bisheriger Status); wird der Termin
+  wieder aktiviert, gehen genau diese Instanzen auf ihren vorherigen Status zurück. Ändert ein
+  Mensch den Status danach von Hand, entfällt der Marker (mark_overrides) - von Hand
+  abgebrochene Instanzen gehen nie automatisch wieder auf.
 """
 
 from __future__ import annotations
@@ -54,6 +60,12 @@ _logger = logging.getLogger(__name__)
 # landet in protocol_todo.overridden_fields und wird danach nicht mehr überschrieben.
 MANAGED_FIELDS = ("task", "reference_link", "tags", "due_date", "assignees")
 _CLOSED_STATUS_CODES = ("done", "cancelled")
+
+# Marker in protocol_todo.overridden_fields: Instanz wurde durch die Absage ihres Termins
+# abgebrochen; dahinter der Status-Code davor ("event_cancelled:open"). Kein Paket-Feld, wird von
+# _sync_item also nie als Überschreibung gelesen.
+EVENT_CANCELLED_MARKER_PREFIX = "event_cancelled:"
+_OPEN_STATUS_CODES = ("open", "in_progress")
 
 # Transaktions-Lock je Paket für den Abgleich. Andere Namensräume: upload_lock (909100001),
 # submission_service (909100002), protocol_service (909100011).
@@ -585,10 +597,77 @@ def mark_overrides(todo: ProtocolTodo, changed_fields: Iterable[str]) -> None:
         return
     overridden = list(todo.overridden_fields or [])
     for field in changed_fields:
+        if field == "todo_status_id":
+            # Status von Hand geändert: die Absage des Termins ist nicht mehr der Grund des
+            # Abbruchs, ein Wiederaktivieren des Termins öffnet die Instanz nicht mehr.
+            overridden = [entry for entry in overridden if not str(entry).startswith(EVENT_CANCELLED_MARKER_PREFIX)]
         managed = _OVERRIDE_FIELD_MAP.get(field)
         if managed and managed not in overridden:
             overridden.append(managed)
     todo.overridden_fields = overridden
+
+
+# ---------------------------------------------------------------------------
+# Termin abgesagt / wieder aktiviert
+# ---------------------------------------------------------------------------
+
+
+def _event_cancel_marker(todo: ProtocolTodo) -> str | None:
+    return next((str(entry) for entry in (todo.overridden_fields or []) if str(entry).startswith(EVENT_CANCELLED_MARKER_PREFIX)), None)
+
+
+def apply_event_cancellation(db: Session, event: Event, *, cancelled: bool) -> list[dict[str, Any]]:
+    """Absage (cancelled=True): offene Paket-Instanzen des Termins abbrechen und die Herkunft
+    merken. Wiederaktivieren (cancelled=False): genau diese Instanzen auf den Status davor
+    zurücksetzen. Nur Instanzen des Mandanten des Termins. Kein Commit; liefert je geänderte
+    Instanz {todo_id, from_status_id, to_status_id} für das Audit-Log."""
+    from datetime import datetime, timezone
+
+    from app.services import todo_fine_service
+
+    status_by_code = {row.code: row.id for row in db.execute(select(TodoStatus.id, TodoStatus.code)).all()}
+    code_by_id = {status_id: code for code, status_id in status_by_code.items()}
+    todos = db.scalars(
+        select(ProtocolTodo)
+        .where(
+            ProtocolTodo.tenant_id == event.tenant_id,
+            ProtocolTodo.task_package_item_id.is_not(None),
+            ProtocolTodo.occurrence_key == f"event:{event.id}",
+            ProtocolTodo.pending_delete.is_(False),
+        )
+        .order_by(ProtocolTodo.id)
+        .with_for_update()
+    ).all()
+    changes: list[dict[str, Any]] = []
+    for todo in todos:
+        current_code = code_by_id.get(todo.todo_status_id)
+        marker = _event_cancel_marker(todo)
+        if cancelled:
+            if current_code not in _OPEN_STATUS_CODES or "cancelled" not in status_by_code:
+                continue
+            target_id = status_by_code["cancelled"]
+            todo.overridden_fields = [*(todo.overridden_fields or []), f"{EVENT_CANCELLED_MARKER_PREFIX}{current_code}"]
+            # Wie ein Abbruch von Hand (ProtocolTodoService.update_todo): Abschlusszeitpunkt setzen
+            todo.completed_at = datetime.now(timezone.utc)
+        else:
+            if marker is None:
+                continue
+            todo.overridden_fields = [entry for entry in (todo.overridden_fields or []) if entry != marker]
+            previous_code = marker[len(EVENT_CANCELLED_MARKER_PREFIX):]
+            if current_code != "cancelled":
+                continue
+            target_id = status_by_code.get(previous_code if previous_code in _OPEN_STATUS_CODES else "open")
+            if target_id is None:
+                continue
+            todo.completed_at = None
+        changes.append({"todo_id": todo.id, "from_status_id": todo.todo_status_id, "to_status_id": target_id})
+        todo.todo_status_id = target_id
+        db.add(todo)
+        # Busse: abgebrochen läuft keine; wieder offen läuft sie wie vorher (sync_todo setzt
+        # nur den Bewertungs-Merker zurück, eingefrorene Bussen bleiben).
+        todo_fine_service.sync_todo(db, todo)
+    db.flush()
+    return changes
 
 
 def list_entry_belongs_to_tenant(db: Session, *, list_definition_id: int, list_entry_id: int, tenant_id: int) -> bool:

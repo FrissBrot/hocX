@@ -218,7 +218,11 @@ class EventService:
         db.refresh(created)
         return created
 
-    def update_event(self, db: Session, event_id: int, payload: EventUpdate) -> Event | None:
+    def update_event(
+        self, db: Session, event_id: int, payload: EventUpdate, *, package_todo_changes: list[dict] | None = None,
+    ) -> Event | None:
+        """package_todo_changes (optional): nimmt die durch Absage/Wiederaktivieren geänderten
+        Aufgabenpaket-Instanzen auf (für das Audit-Log der Route)."""
         # Zeile sperren: zwei gleichzeitige Änderungen ersetzten sonst beide die Zyklus-Zuordnungen
         # (DELETE + INSERT, der zweite scheiterte an pk_event_cycle), und ein PATCH während des
         # Löschens lief auf eine verschwundene Zeile (StaleDataError statt 404).
@@ -256,9 +260,18 @@ class EventService:
             and next_start != previous_date
             and self._current_cycle_keys(db, event.id) == self._default_cycle_keys(db, previous_date, tenant_id=event.tenant_id)
         )
+        was_cancelled = bool(event.is_cancelled)
         try:
             if values:
                 event = self.repository.update(db, event, values, commit=False)
+            if bool(event.is_cancelled) != was_cancelled:
+                # In derselben Transaktion wie die Absage: offene Paket-Instanzen des Termins
+                # abbrechen bzw. beim Wiederaktivieren genau diese wieder öffnen.
+                from app.services.task_package_service import apply_event_cancellation
+
+                changes = apply_event_cancellation(db, event, cancelled=bool(event.is_cancelled))
+                if package_todo_changes is not None:
+                    package_todo_changes.extend(changes)
             if payload.cycle_assignments is not None:
                 self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id, commit=False)
             elif follows_default_cycles:
