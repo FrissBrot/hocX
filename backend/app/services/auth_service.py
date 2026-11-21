@@ -206,7 +206,7 @@ class AuthService:
                     device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
                     details={"reason": "email_unavailable"},
                 )
-                raise email_challenge.email_unavailable() from None
+                raise email_challenge.email_unavailable() from None  # erwartet, schon in email_challenge._send erfasst
             events.record(
                 ctx=ctx,
                 event_type="login.password", outcome="challenged", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,

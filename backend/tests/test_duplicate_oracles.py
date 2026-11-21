@@ -282,7 +282,8 @@ def _similar_pair():
 def _circle_variant() -> bytes:
     from tests.test_protocol_image_duplicate_check import _circle_png_bytes
 
-    return _circle_png_bytes((198, 149), 99, 74, 50)
+    # pHash-Abstand 2 zum Original (Schwelle 5); andere Bytes, also kein exaktes Duplikat
+    return _circle_png_bytes((200, 150), 101, 75, 50)
 
 
 def test_gallery_similarity_hint_only_for_visible_images(db):
@@ -322,7 +323,7 @@ def test_protocol_image_similarity_hint_only_for_visible_images(db):
 
     visible = asyncio.run(
         service.save_protocol_image(
-            db, protocol_element_block=_make_block(db, protocol.id), file=_upload_file(_circle_png_bytes((198, 149), 99, 74, 50), "c.png"),
+            db, protocol_element_block=_make_block(db, protocol.id), file=_upload_file(_circle_variant(), "c.png"),
             viewer=make_current_user(tenant.id),
         )
     )

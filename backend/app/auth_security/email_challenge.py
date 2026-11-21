@@ -130,7 +130,7 @@ def resend(db: Session, ticket: str) -> None:
     except ChallengeUnavailable:
         # Erwartet und bereits erfasst (Versandstatus + Fehlerprotokoll in _send): kein zweiter
         # Eintrag über den HTTPException-Handler.
-        raise email_unavailable() from None
+        raise email_unavailable() from None  # erwartet, schon in _send erfasst (delivery_status + gedrosseltes Fehlerprotokoll)
     get_redis_sync().set(f"{FLOW_PREFIX}{ticket}", json.dumps(data), ex=ttl)
 
 

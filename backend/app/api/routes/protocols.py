@@ -83,13 +83,18 @@ def _get_writable_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: Cur
 _FROZEN_CONTENT_FIELDS = frozenset({"title", "protocol_date", "event_id", "session_notes", "track_changes_enabled"})
 
 
-def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:
+def _template_infos(db: Session, template_ids: set[int]) -> tuple[dict[int, CycleConfig], dict[int, int]]:
+    """Zyklus-Konfiguration und aktuelle Version (Migration 0214) je Vorlage in einer Abfrage. Die
+    IDs stammen aus bereits mandantengeprüft geladenen Protokollen (Vorlage und Protokoll gehören
+    immer zum selben Mandanten)."""
     rows = db.execute(
-        select(Template.id, CycleConfig)
-        .join(CycleConfig, CycleConfig.id == Template.cycle_config_id)
+        select(Template.id, Template.version, CycleConfig)
+        .outerjoin(CycleConfig, CycleConfig.id == Template.cycle_config_id)
         .where(Template.id.in_(template_ids))
     ).all()
-    return {template_id: cfg for template_id, cfg in rows}
+    cycles = {template_id: cfg for template_id, _version, cfg in rows if cfg is not None}
+    versions = {template_id: version for template_id, version, _cfg in rows}
+    return cycles, versions
 
 
 def _protocol_list_cycle(protocol_date: date, cfg: CycleConfig | None, *, today: date) -> ProtocolListCycle:
@@ -154,13 +159,7 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
     ).all()
     import_by_protocol = {row.protocol_id: (row.original_filename, row.stored_file_public_id) for row in import_rows}
 
-    cycle_by_template = _cycle_configs_by_template(db, {p.template_id for p in protocols})
-    # Gleicher Mandant wie das Protokoll (Vorlage und Protokoll gehören immer zusammen)
-    template_versions = dict(db.execute(
-        select(Template.id, Template.version)
-        .join(Protocol, (Protocol.template_id == Template.id) & (Protocol.tenant_id == Template.tenant_id))
-        .where(Protocol.id.in_(internal_ids))
-    ).all())
+    cycle_by_template, template_versions = _template_infos(db, {p.template_id for p in protocols})
     ProtocolRead.prime_public_ids(db, protocols)
     # Aktueller Zyklus nach Schweizer Datum (sonst zwischen 00:00 und 02:00 der falsche).
     today = todo_fine_service.today()

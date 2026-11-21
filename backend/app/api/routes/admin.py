@@ -286,6 +286,10 @@ AuditRange = Literal["24h", "7d", "30d", "90d"]
 
 
 def audit_filter(
+    # Rechte zuerst (Security-Review 1.5.1, I-1): sonst löst ein Support-Admin die IDs unten auf
+    # und erfährt per 404/403, ob ein Mandant bzw. Plattform-Admin existiert. FastAPI teilt die
+    # Dependency mit der Route, die Prüfung läuft nur einmal.
+    _owner: CurrentAdmin = Depends(require_admin_owner),
     db: Session = Depends(get_db),
     tenant_id: uuid.UUID | None = None,
     action: str | None = Query(default=None, max_length=100),

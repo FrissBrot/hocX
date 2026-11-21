@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import secrets
 import uuid
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import FastAPI
@@ -197,7 +198,7 @@ def test_security_export_is_encrypted_and_audited(db, tmp_path):
     db.execute(text(
         "INSERT INTO auth_event (event_type, outcome, actor_kind, subject_hash, ts) VALUES ('login.password', 'failure', 'anonymous', :hash, now())"
     ), {"hash": "f" * 32})
-    today = date.today().isoformat()
+    today = datetime.now(ZoneInfo("Europe/Zurich")).date().isoformat()  # Schweizer Tag wie die Route
     password = secrets.token_urlsafe(16)
     response = client.post("/api/admin/auth-security/export", json={
         "kind": "auth_events", "date_from": today, "date_to": today, "password": password,
@@ -275,7 +276,7 @@ def test_audit_log_filters_by_range_actor_and_entity(db):
     assert client.get(f"{base}&actor_kind=admin&actor_id={owner.admin_public_id}").json()["total"] == 1
     assert client.get(f"{base}&actor_kind=system").json()["total"] == 1
     assert client.get(f"{base}&entity_type=tenant&entity_id=4242").json()["total"] == 1
-    today = date.today().isoformat()
+    today = datetime.now(ZoneInfo("Europe/Zurich")).date().isoformat()  # Schweizer Tag wie die Route
     assert client.get(f"{base}&from={today}&to={today}").json()["total"] == 1
     assert client.get(f"{base}&actor_id={owner.admin_public_id}").status_code == 422
     assert client.get(f"{base}&entity_type=DROP%20TABLE").status_code == 422
@@ -485,6 +486,10 @@ def test_audit_timeline_aggregates_with_same_filters_and_rights(db):
     support = _client(db, _admin(db, "support"))
     assert support.get("/api/admin/audit-log/timeline").status_code == 403
     assert support.get("/api/admin/audit-log/entries/1").status_code == 403
+    # Kein Existenz-Orakel über die Filter-IDs: Rechte vor dem Auflösen (Security-Review I-1)
+    for query in (f"tenant_id={uuid.uuid4()}", f"actor_kind=admin&actor_id={uuid.uuid4()}"):
+        assert support.get(f"/api/admin/audit-log?{query}").status_code == 403
+        assert support.get(f"/api/admin/audit-log/timeline?{query}").status_code == 403
 
 
 def test_audit_entry_with_context_of_same_person(db):

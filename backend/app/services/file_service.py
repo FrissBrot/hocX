@@ -2248,13 +2248,15 @@ class FileService:
                 return
             job.status = "running"
             job.started_at = datetime.now(UTC)
+            # Zweites Sicherheitsnetz: der Job arbeitet nur im Mandanten des Auftrags (RLS, wie ein
+            # Request des Auftraggebers). Vor dem Commit binden: die nächste Transaktion bekommt den
+            # Mandanten über den after_begin-Hook (in der Savepoint-Testsitzung brach die Bindung
+            # nach dem Commit das anschliessende Rollback der Fehlerbehandlung).
+            bind_tenant_scope(db, job.tenant_id)
             db.commit()
             # Zeitscheibe (Concurrency-Audit CONC-008): ein grosser ZIP gibt nach
             # GALLERY_INGEST_SLICE_SECONDS ab, sobald andere Mandanten warten.
             self._ingest_slice_deadline = time.monotonic() + self.GALLERY_INGEST_SLICE_SECONDS
-            # Zweites Sicherheitsnetz: der Job arbeitet nur im Mandanten des Auftrags (RLS, wie ein
-            # Request des Auftraggebers); Status-Updates danach wieder unbeschränkt.
-            bind_tenant_scope(db, job.tenant_id)
             try:
                 asyncio.run(self._run_gallery_upload_job(db, job))
             except _IngestYield:
