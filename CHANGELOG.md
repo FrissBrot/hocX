@@ -6,9 +6,139 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [Unveröffentlicht]
+## [1.5.0] - 2026-11-21
 
-### Geändert
+Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).
+Schwerpunkte: Anmeldeschutz für alle Konten (bekannte Geräte, Bestätigungscode bei riskanten
+Anmeldungen, «Angemeldete Geräte», Sicherheitsmails), Plattform-Admin nur noch über die Admin-Domain
+und mit Passkey, ein neu gegliedertes Admin-Panel mit Sicherheitsbereich und Analysen, eine
+Wartungsseite statt Fehlerseiten während Updates, durchgängige Tastaturbedienung, eine neue
+Fotosuche, neu gestaltete Abgabe-, Termin- und Datei-Dialoge sowie die schnelle Pendenz im Protokoll.
+Update direkt von 1.4.1 mit `./scripts/deploy.sh <test|prod>`; sieben Migrationen (0202–0208).
+
+### Update
+
+**Kurz für Betreiber (Update von 1.4.1):**
+
+- `./scripts/deploy.sh <test|prod>` wie gewohnt. Migrationen `0202_submission_todo_tags`,
+  `0203_capture_date_in_file`, `0204_photo_search`, `0205_admin_passkey_only`, `0206_auth_hardening`,
+  `0207_security_read`, `0208_platform_metrics` (Details unten).
+- **Plattform-Admin nur noch mit Passkey:** Admin-TOTP und Admin-SSO werden entfernt, alle
+  Admin-Sessions beendet; beim ersten Admin-Login richtet jedes Konto einen Passkey ein. Notausgang:
+  `python -m app.admin_cli reset-passkeys --email …` (RUNBOOK Abschnitt 22).
+- **Plattform-Admin nur noch über die Admin-Domain (OpenZiti):** Pflicht sind `TRAEFIK_ADMIN_DOMAIN`
+  und `ADMIN_GATE_SECRET` (mindestens 32 Zeichen; `deploy.sh` erzeugt das Secret beim Update). Ohne
+  beides startet die API ausserhalb der Entwicklung nicht.
+- **Neuer Dienst `admin-frontend`** und **neues Netz `edge`:** Traefik und die angesprochenen Dienste
+  werden beim Update neu erstellt (kurze Unterbrechung). Ein lokaler 1.4.0-Hotfix
+  (`docker-compose.local.yml` mit `traefik.docker.network=hocx_default`) wird nicht mehr geladen und
+  nach dem Update entfernt.
+- **`INTERNAL_API_URL`** wird automatisch auf das interne `http://backend:8000` umgeschrieben.
+- **Neue optionale Variablen:** `AUTH_SECRET_PREVIOUS`, `AUTH_LEGACY_COOKIE_UNTIL`, `AUTH_NET6_FACTOR`,
+  `HOCX_ADMIN_SOURCE_CIDRS`, `HOCX_VERIFY_TENANT_DOMAIN_LIMIT`, `HOCX_DEPLOY_MAINTENANCE`,
+  `HOCX_IMAGE_KEEP_RELEASES`/`HOCX_IMAGE_CLEANUP`.
+- **E-Mail-Versand einrichten:** Riskante Anmeldungen von Konten ohne zweiten Faktor werden mit einem
+  Code per E-Mail bestätigt; ohne SMTP werden sie in Verdachtsfällen abgewiesen.
+- **«Abmelden»** beendet nur noch die Session dieses Geräts; «Alle anderen Geräte abmelden» im Profil.
+- Der erste Admin-Login je Gerät meldet einmal «Plattform-Anmeldung von neuem Gerät».
+- Protokolle mit abgewählten Terminfeldern bekommen beim nächsten Export eine neue Dokumentversion.
+- **Neue Berechtigung `security.read`** (Sicherheit & Anmeldungen): nur die Standardrolle
+  «Administrator» hat sie. Eigene Rollen mit nur «Zugänge verwalten» verlieren die Anmeldeaktivität –
+  im Rollen-Editor `security.read` zuteilen.
+
+**Details:**
+
+- **Hosts mit dem 1.4.0-Hotfix** (`docker-compose.local.yml` mit nur
+  `traefik.docker.network=hocx_default` an `abgabebox-backend`): Traefik hängt ab dieser Version nur
+  noch im Netz `edge`; der Hotfix würde die Abgabebox unerreichbar machen. `deploy.sh` lädt ihn
+  deshalb nicht mehr (Hinweis im Log) und entfernt die Datei nach dem erfolgreichen Update
+  (Kopie unter `backups/`). Steht mehr in der Datei, bleibt sie - den Eintrag dann von Hand löschen.
+- Nach dem Update meldet der erste Admin-Login je Gerät einmal «Plattform-Anmeldung von neuem
+  Gerät» (Warnung) - das Gerät wird erst ab dann wiedererkannt.
+- **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue
+  Dokumentversion (das PDF lässt die Felder jetzt weg). Keine Migration.
+- `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
+  `maintenance-page` (Image `nginxinc/nginx-unprivileged`, wird beim Pull geholt) vor den
+  Migrationen und setzt `infra/maintenance/` auf die Gruppe 5001 (nur lesen). Traefik wird neu
+  erstellt (neues internes Netz `maintenance`, kurze Unterbrechung von wenigen Sekunden beim
+  `docker compose up`); die Datei `infra/traefik/dynamic/maintenance.yml` lädt es ohne Neustart. Beim
+  Update auf diese Version selbst greift die Wartungsseite erst, sobald der Dienst läuft (also für
+  den Austausch der App-Container bereits).
+- Ab diesem Update ist hocX während der Datenbankmigration im Wartungsmodus (Fenster «Update» im
+  Admin-Portal unter System → Wartung, Audit `admin.maintenance_deploy_started/_ended`). Beim
+  Update **auf** 1.4.3 selbst gilt das schon: die CLI läuft mit dem neuen Backend-Image, das alte
+  Frontend zeigt dann den allgemeinen Wartungstext. Meldet das Deploy-Log «Wartungsmodus des
+  Updates ist NOCH AKTIV», das Fenster im Admin-Portal freigeben oder den im Log genannten Befehl
+  ausführen.
+- Eigene Domains der Mandanten: das Backend schreibt `tenant-domains.yml` beim Start neu, die
+  Wartungsseite gilt dort also nach dem Neustart des Backends automatisch.
+- Neue, optionale Variable `HOCX_DEPLOY_MAINTENANCE` (nur Shell, Standard an; `0` = ohne
+  Wartungsmodus während des Updates).
+- `./scripts/deploy.sh <test|prod>` genügt. **Neues Secret `ADMIN_GATE_SECRET`** wird beim Update
+  automatisch in der `.env` erzeugt; `deploy.sh` schreibt daraus `.secrets/admin_gate_secret` und die
+  Traefik-Datei `infra/traefik/dynamic/admin-gate.yml` (nicht im Repo). Traefik wird wegen der
+  geänderten `traefik.yml` automatisch neu erstellt.
+- Wer das Admin-Panel über einen Link von einer anderen Seite (oder nach dem SSO) öffnet, sieht kurz
+  die Login-Seite, die mit bestehender Sitzung sofort weiterleitet (`SameSite=Strict`).
+- **Beim Update werden Admin-TOTP und Admin-SSO entfernt; beim ersten Admin-Login wird ein Passkey
+  eingerichtet.** Migration `0205_admin_passkey_only`: löscht alle MFA-Faktoren der Plattform-Admins
+  (auch bisherige Admin-Passkeys, deren RP-ID die Hauptdomain war), beendet alle Admin-Sessions,
+  entfernt `platform_oidc_config` und `platform_admin.oidc_*`, neue CHECK-Constraint (Admin-Faktoren
+  nur `webauthn`). Downgrade möglich, ohne Daten zurück. Keine neuen Umgebungsvariablen ausser
+  `HOCX_ADMIN_SOURCE_CIDRS`/`HOCX_VERIFY_TENANT_DOMAIN_LIMIT` (optional, siehe unten).
+- Prüfadresse des Admin-Zugangs ist jetzt `GET /api/admin/auth/health` (statt
+  `/api/admin/auth/oidc/public-config`) - auch für die Wartungsseite.
+- `DEMO_TOTP_SEED` gilt nur noch für Mandanten-Demokonten, nicht mehr für Plattform-Admins.
+- Neuer Dienst `admin-frontend` (gleiches Frontend-Image, `HOCX_FRONTEND_ROLE=admin`); `deploy.sh`
+  startet und prüft ihn mit. `admin-gate.yml` wird jetzt nach `compose up` geschrieben (enthält die
+  Quelladresse); abweichende Tunnel-Endpunkte über `HOCX_ADMIN_SOURCE_CIDRS`. `INTERNAL_API_URL`
+  muss intern sein (Standard `http://backend:8000`), sonst bricht `deploy.sh` ab.
+- Neues Netz `edge`: Traefik ist nur noch darin (mit den Diensten, die es anspricht), nicht mehr im
+  Standardnetz; `compose up` erstellt die Dienste neu. Die Datenbank läuft ohne NET_RAW (nur die
+  Rechte des Postgres-Entrypoints).
+- `infra/traefik/dynamic` wird beim Deploy auf 3770 (Sticky-Bit) gesetzt, versionierte Dateien und
+  `admin-gate.yml` auf 0640.
+- **`INTERNAL_API_URL`** wird beim Update automatisch auf `http://backend:8000` umgestellt, falls
+  dort noch die öffentliche Domain steht (Hinweis im Deploy-Log); `deploy.sh` verlangt ein internes
+  Ziel.
+- Admin-Konten-, Mandanten-Konten- und Plattform-Einstellungen (SMTP, ntfy) sowie das Klonen eines
+  Mandanten verlangen jetzt ebenfalls eine Passkey-Bestätigung.
+- Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
+- Fehlerbilder und Ablauf: RUNBOOK Abschnitte 21 (Admin-Zugang) und 22 (Anmeldung, Notausgang).
+- **Migration `0206_auth_hardening`:** neue Tabellen `auth_event` (ohne Fremdschlüssel, RLS mit
+  nullbarem `tenant_id`), `auth_session` und `auth_known_device` (beide `tenant_id NOT NULL`, RLS).
+  Rein additiv, folgt auf `0205_admin_passkey_only`.
+- **Niemand muss sich neu anmelden:** bestehende Session-Cookies (ohne Session-ID, alter Cookie-Name
+  `hocx_session`) gelten bis zu ihrem Ablauf (höchstens 72 h; der alte Name wird bis
+  `AUTH_LEGACY_COOKIE_UNTIL`, sonst Start + 72 h, gelesen) weiter; auf eine Mandanten-Domain werden sie
+  nicht mehr weitergereicht; neue Anmeldungen bekommen
+  `__Host-hocx_session` mit Session-ID. Alte Sessions erscheinen nicht in «Angemeldete Geräte»;
+  «Alle anderen Geräte abmelden» beendet sie trotzdem. Laufende Bridge-Tokens (v3, 120 s) werden
+  weiter eingelöst. Alte Redis-Zähler laufen nach höchstens 15 min aus.
+- Neues optionales Secret `AUTH_SECRET_PREVIOUS` (leer lassen; nur für Rotation, RUNBOOK Abschnitt 23) -
+  `deploy.sh` schreibt die Secret-Datei auch leer. Neue optionale Variablen `AUTH_*` (RUNBOOK Abschnitt 23).
+- Neuer Hintergrundjob `auth_security_maintenance` (Backend, stündlich, Lock-ID 202600036).
+- Für die Prüfung riskanter Anmeldungen ohne zweiten Faktor sollte der E-Mail-Versand eingerichtet
+  sein.
+- Abgabebox-Backend und Backend gemeinsam ausrollen (das Deploy-Skript tut das): die Abgabebox
+  braucht das Spaltenrecht aus 0203.
+- **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
+  (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv; die Abgabebox liest sie nicht.
+- **Migration `0203_capture_date_in_file`:** neue Spalten `stored_file.capture_exif_original` (JSONB,
+  ursprüngliche Datumsfelder der Datei für «Original wiederherstellen») und
+  `stored_file.capture_file_state` (`pending`/`written`/`unsupported`/`failed`, CHECK und Teilindex),
+  dazu `SELECT` auf die Spalte `stored_file.source_checksum_sha256` für `hocx_abgabebox`
+  (Duplikatprüfung). Bestehende Korrekturen werden auf `pending` gesetzt; der neue Job
+  `capture_date_file_sync` (job-worker, jede Minute, unter `/admin/jobs`) schreibt sie danach in die
+  Dateien. Downgrade möglich, bereits geschriebene Dateien behalten dann aber das korrigierte Datum.
+- **Migration `0204_photo_search`:** Extensions `pg_trgm`, `unaccent`, `fuzzystrmatch` (in
+  `postgres:18` enthalten, «trusted», die Migration läuft wie immer mit `DATABASE_URL`), neue Tabellen
+  `photo_search_doc` und `photo_search_term` (je `tenant_id NOT NULL` und RLS), Trigger auf den
+  Quelltabellen halten sie aktuell (`SECURITY DEFINER` mit festem `search_path`, ohne `EXECUTE` für
+  andere Rollen). Die Migration indexiert alle bestehenden Dateien: rund 100 Sekunden je
+  100'000 Dateien.
+
+### Neu
 
 - **Plattform-Admin neu gegliedert (Admin-Redesign):** Konsole mit einmal geladener Shell und sieben
   Bereichen (Übersicht, Mandanten, Benutzer & Zugänge, Sicherheit, Betrieb, Analysen, Einstellungen),
@@ -34,8 +164,6 @@ Installationen aktualisieren können.
 - **Analysen:** täglicher Rollup (Job `metrics_rollup`, 90 Tage rückwirkend) für Wachstum, Nutzung,
   Feature-Buchungen, Umsatz, Auslastung, Speicher und Fehler; Fehlerprotokoll mit Zeitraum und
   gruppierter Ansicht.
-- **Status-Token der Uptime-Überwachung** wird nur noch einmal direkt nach dem Erzeugen angezeigt.
-
 - **Tastaturbedienung:** «?» öffnet eine Übersicht aller gerade gültigen Tastenkürzel (auch im
   Benutzermenü › Tastenkürzel), erster Tab-Halt jeder Seite ist «Zum Inhalt springen». Kürzel laufen
   zentral über eine Registry (keine Auslösung beim Tippen oder in offenen Dialogen, Strg und ⌘,
@@ -43,7 +171,6 @@ Installationen aktualisieren können.
   Elementdefinitionen, Tabellen-/Matrix-Designer) lassen sich ohne Ziehen ändern. Details:
   `KEYBOARD_AUDIT.md`, Regeln: `design/KEYBOARD_ACCESSIBILITY.md`, neue Prüfung
   `scripts/check-keyboard-a11y.py` (CI, Pre-Commit).
-
 - **Wartungsseite statt Traefik-Fehlerseite:** Während eines Updates oder wenn ein App-Container
   nicht erreichbar ist, zeigen Hauptdomain, Admin-Zugang und Abgabebox eine Wartungsseite im
   hocX-Look (Deutsch, Englisch, Französisch, Italienisch, hell/dunkel), die alle 10 Sekunden prüft,
@@ -54,10 +181,6 @@ Installationen aktualisieren können.
   `maintenance-page` im Traefik-Teil des Stacks (nginx, gleiches Image wie die Docs, nur statische
   Dateien aus `infra/maintenance/`), Traefik-Konfiguration in
   `infra/traefik/dynamic/maintenance.yml`, Ablauf und Tests in RUNBOOK Abschnitt 20.
-- **Eigene Domains der Mandanten** bekommen dieselbe Wartungsseite: die generierten Router in
-  `tenant-domains.yml` tragen die errors-Middleware (App-Domains: hocX-Seite, Abgabebox- und
-  Prüf-Domains: Abgabebox-Seite, APIs: JSON), dazu je Domain Ausweich-Router (Priorität 1 bzw. 50)
-  mit genau den Pfaden der Domain. Fehlt `maintenance.yml`, bleibt die Datei wie bisher.
 - **Wartungsmodus während des Updates:** `deploy.sh` startet vor der Datenbankmigration ein volles,
   sofort aktives Wartungsfenster «Update» (neue CLI `python -m app.maintenance_cli begin-deploy`)
   und beendet es nach den Smoke-Checks, bei jedem Rollback und bei jedem Abbruch wieder
@@ -70,46 +193,20 @@ Installationen aktualisieren können.
   (alle Sprachen). Lässt sich die Wartung nach einem sonst erfolgreichen Update nicht beenden,
   bricht das Update ohne Rollback mit Anleitung ab. Neue Systemprüfung «Wartungsmodus des
   Updates» (Warnung nach 30 Minuten, kritisch nach 2 Stunden, auch per ntfy).
-- Die Wartungsseite läuft in einem eigenen internen Netz nur mit Traefik und antwortet auch auf
-  grosse Uploads mit 503 (statt 413).
-
-- **Zugangslinks neu gestaltet** (Mandanten-Einstellungen › Zugangslinks, Design «hocX Zugangslinks»):
-  ein einziger Lead-Text statt der doppelten Beschreibung, gelber Hinweis «n Links laufen nicht von
-  selbst ab» mit Filter «Nur diese zeigen», Unterstrich-Reiter mit Zählern und eine kompakte
-  Zeilenliste statt der Tabelle (Name, farbige Art · Grund, Gültigkeit mit «genutzt TT.MM.»,
-  Aktionen «Verlauf», «Widerrufen», «Verwalten →»). Erstellt/von steht als Tooltip am Namen.
-  Widerrufen bestätigt man direkt unter der Zeile statt im Dialog; der Knopf erscheint nur mit
-  dem Recht «Öffentlich teilen». Partner-Links auf eigene Alben stehen jetzt im Reiter
-  Partner-Organisationen und lassen sich dort vom Album-Besitzer ebenfalls widerrufen.
 - **Verlauf der Partner-Organisationen** im Reiter Partner-Organisationen, filterbar je Partner:
   Album-Einladungen, angenommene/abgelehnte Freigaben und öffentliche Links, die Partner auf eigene
   Alben erstellt haben. Neue Lese-Route `GET /api/public-links/partner-history`
   (`settings.manage`, nur Alben des eigenen Mandanten, Partner nur als Organisationsname, ohne IP-
   und E-Mail-Adressen). Keine Migration.
-
-- **Abgabe-Formular v6:** Anlegen und Bearbeiten einer Abgabe nach Design v6 mit neuen Bausteinen
-  Segment-Umschalter, Zahlenfeld mit −/+ und Schalter (alle per Tastatur bedienbar). Als
-  Verantwortliche lassen sich jetzt alle Personenfelder eines Termins bzw. einer Liste wählen.
-  «Tags für die Pendenzen» schlägt die vorhandenen Pendenz-Tags vor (neue Lese-Route
-  `GET /api/todos/tags`, `meetings.read`); ein Komma trennt Tags. Höchstens 999 Dateien je Element.
-
 - **Pendenz «Abgabe einsammeln»:** Im Pendenz-Dialog (auch mobil) lässt sich zu einer Pendenz
   direkt eine Abgabe mit Datei einsammeln; Stand und Link stehen in der Pendenz, das Einsammeln
   lässt sich wieder beenden. Neue Routen `GET /api/protocol-todos/{id}/submission` und
   `POST /api/protocol-todos/{id}/stop-submission` (Rechte wie beim Anlegen einer Abgabe aus einer
   Pendenz).
-
 - **Schnelle Pendenz im Protokoll:** Fälligkeit mit Smart-Daten-Vorschlägen («morgen», «nächste
   Sitzung» …), Personen mit Profil-Badge, optional direkt «Als Abgabe einsammeln» (Alt+A, Mac ⌥A,
   steht in der Tastenkürzel-Hilfe). Enter legt an, Escape legt eine angefangene Pendenz an und
   schliesst das Menü.
-
-- **Bausteine-Liste und Element-Dialog** (Vorlagen › Elemente) nach Design: Liste der
-  Elementdefinitionen, eigener Dialog mit nummerierten Bausteinen (Ziehen oder Alt+Pfeil),
-  Löschen mit Rückfrage in der Zeile. Termin- und Pendenzzeilen im Tabellen-Baustein sind
-  sortierbar. Im Element abgewählte Terminfelder erscheinen nicht mehr im Protokoll-PDF.
-  Aktionsmenüs können Einträge mit einer Trennlinie absetzen.
-
 - Risk Engine v1 (deterministisch, versioniert, Score 0-100 mit Gründen) und Stufenmodell der
   IP-Sperren mit Entsperren über CLI (`python -m app.auth_security.cli`) und Admin-API
   (`/api/admin/auth-security/*`).
@@ -119,9 +216,61 @@ Installationen aktualisieren können.
   das nicht?» und Link auf Profil › Sicherheit; auch die bestehenden Hinweise zu Passwort/MFA haben
   den Link.
 - Profil › Sicherheit › «Angemeldete Geräte»; Step-up-Dialog in der ganzen App.
+- **Fotosuche:** sucht in allem, was hocX zu einem Foto weiss – Dateiname, Tags, Album, Termin
+  (Titel, Tag, Datum), Abgabe und Element, Protokoll, Word-Import, hochgeladen von, Kamera,
+  Aufnahmedatum (inkl. Korrektur). Reihenfolge der Wörter egal, Tippfehler toleriert («somerlager»,
+  «zlet»), Umlaute/Akzente egal («braeteln» = «Brätel»), Wortanfänge reichen, Datumsangaben in allen
+  Sprachen («2026», «Mai 2026», «02.05.2026», «2.5.», «juin»). Bei aktiver Suche sortiert «Beste
+  Treffer» (alle Wörter vor einigen, Tags/Abgabe/Termin vor Dateiname). Auch die globale Suche nutzt
+  das Ranking. Nur Fotos des eigenen Vereins; Papierkorb und fremde Partnerfotos bleiben draussen
+  (Partnerfotos in geteilten Alben nur über den Dateinamen).
+- **Aufnahmedatum in der Datei:** Korrigieren, Verschieben und «Original wiederherstellen» schreiben
+  das Datum auch in die Bilddatei (EXIF), Downloads und Originale enthalten es. Das ursprüngliche
+  Datum bleibt in hocX; Wiederherstellen macht die Datumsfelder byte-genau wie vorher. Die Anzeige
+  in hocX ändert sich wie bisher sofort, die Datei folgt im Hintergrund (ohne Neukodierung, Pixel
+  unverändert). JPEG, HEIC/HEIF, PNG, WebP und TIFF mit Aufnahmedatum werden an Ort und Stelle
+  geändert, ein JPEG ohne Datum bekommt eines; andere Formate ohne Datum und Bilder über 50 MB
+  behalten die Korrektur nur in hocX. Die ursprünglich hochgeladene Datei gilt weiter als Duplikat.
+  Der Foto-Viewer zeigt dezent, ob die Datei schon aktualisiert ist; die Bestätigung erklärt es.
+- **Pendenz als Abgabe einsammeln:** Im Pendenz-Dialog («Quelle») und im ⋮-Menü der Pendenzen im
+  Protokoll legt «Als Abgabe einsammeln» mit einem Klick eine Einzelabgabe an: Titel = Aufgabe,
+  Stichtag = Fälligkeit, Verantwortliche = Zugewiesene. Die Pendenz selbst wird die Pendenz der
+  Abgabe (keine zweite) und schliesst sich nach dem Upload; Notizen, Dateien und Tags bleiben. Toast
+  mit «Link kopieren» und «Anpassen». Nur mit «Abgaben verwalten» und «Sitzungen bearbeiten».
+  Pendenzen aus Protokollen werden nie mit einer Abgabe gelöscht, sie verlieren nur den Bezug.
+- **Tags für Abgabe-Pendenzen:** Im Abgabe-Assistenten (Schritt «Verantwortlich») gewählte Tags
+  bekommt jede Pendenz der Abgabe; «Abgabe-Tag erstellen» (standardmässig aus) gibt zusätzlich ein
+  Tag mit dem Titel der Abgabe. Änderungen ziehen nach, von Hand gesetzte Tags bleiben.
+
+### Geändert
+
+- **Status-Token der Uptime-Überwachung** wird nur noch einmal direkt nach dem Erzeugen angezeigt.
+- **Eigene Domains der Mandanten** bekommen dieselbe Wartungsseite: die generierten Router in
+  `tenant-domains.yml` tragen die errors-Middleware (App-Domains: hocX-Seite, Abgabebox- und
+  Prüf-Domains: Abgabebox-Seite, APIs: JSON), dazu je Domain Ausweich-Router (Priorität 1 bzw. 50)
+  mit genau den Pfaden der Domain. Fehlt `maintenance.yml`, bleibt die Datei wie bisher.
+- Die Wartungsseite läuft in einem eigenen internen Netz nur mit Traefik und antwortet auch auf
+  grosse Uploads mit 503 (statt 413).
+- **Zugangslinks neu gestaltet** (Mandanten-Einstellungen › Zugangslinks, Design «hocX Zugangslinks»):
+  ein einziger Lead-Text statt der doppelten Beschreibung, gelber Hinweis «n Links laufen nicht von
+  selbst ab» mit Filter «Nur diese zeigen», Unterstrich-Reiter mit Zählern und eine kompakte
+  Zeilenliste statt der Tabelle (Name, farbige Art · Grund, Gültigkeit mit «genutzt TT.MM.»,
+  Aktionen «Verlauf», «Widerrufen», «Verwalten →»). Erstellt/von steht als Tooltip am Namen.
+  Widerrufen bestätigt man direkt unter der Zeile statt im Dialog; der Knopf erscheint nur mit
+  dem Recht «Öffentlich teilen». Partner-Links auf eigene Alben stehen jetzt im Reiter
+  Partner-Organisationen und lassen sich dort vom Album-Besitzer ebenfalls widerrufen.
+- **Abgabe-Formular v6:** Anlegen und Bearbeiten einer Abgabe nach Design v6 mit neuen Bausteinen
+  Segment-Umschalter, Zahlenfeld mit −/+ und Schalter (alle per Tastatur bedienbar). Als
+  Verantwortliche lassen sich jetzt alle Personenfelder eines Termins bzw. einer Liste wählen.
+  «Tags für die Pendenzen» schlägt die vorhandenen Pendenz-Tags vor (neue Lese-Route
+  `GET /api/todos/tags`, `meetings.read`); ein Komma trennt Tags. Höchstens 999 Dateien je Element.
+- **Bausteine-Liste und Element-Dialog** (Vorlagen › Elemente) nach Design: Liste der
+  Elementdefinitionen, eigener Dialog mit nummerierten Bausteinen (Ziehen oder Alt+Pfeil),
+  Löschen mit Rückfrage in der Zeile. Termin- und Pendenzzeilen im Tabellen-Baustein sind
+  sortierbar. Im Element abgewählte Terminfelder erscheinen nicht mehr im Protokoll-PDF.
+  Aktionsmenüs können Einträge mit einer Trennlinie absetzen.
 - Daten für die kommenden Sicherheits-Dashboards: `/api/admin/auth-security/summary|events|blocks`
   (Plattform) und `/api/auth-security/activity` (Verein, `access.manage`, datensparsam).
-
 - «Abmelden» beendet nur noch die Session dieses Geräts (bisher alle); «Alle anderen Geräte abmelden»
   im Profil bzw. `POST /api/auth/logout-all`.
 - Kontoweite Sperre: ab 30 Fehlversuchen/15 min brauchen unbekannte Geräte nach korrektem Passwort eine
@@ -131,6 +280,42 @@ Installationen aktualisieren können.
 - «Passwort vergessen»: höchstens 3 Mails je Adresse und Stunde, weitere Anfragen ohne Versand (202).
 - TOTP: nach 10 Fehlversuchen in 15 min noch ein Versuch je Minute.
 - `SECURITY_ALERT_ADMIN_LOGINS` ist neu standardmässig `true`.
+- **Fotos-Seite (Design «Fotos Header 1a»):** Titel mit Anzahl, «Papierkorb» und «Bilder hochladen»
+  oben rechts, Werkzeugkasten mit Alle Fotos/Alben/Duplikate/Ähnliche, Suchfeld mit Leeren-Knopf,
+  Sortierung und Tag-Filter; bei Suche oder Filter eine Zeile «N von M Fotos» mit Filter-Chips und
+  «Filter zurücksetzen», eigener Leerzustand «Keine Fotos für „…“».
+- **Datei-Detail (Design «Datei-Detail Popup v2»):** Kopf mit Typ-Icon, Name (mit Recht per Klick
+  umbenennbar, die Endung bleibt), Quelle, Verarbeitungsstatus, «hochgeladen von» und Version;
+  links PDF-Ansicht oder extrahierter Text (kopierbar), ältere Versionen ansehbar; rechts «Details &
+  Tags» (Herkunft, Tags mit «neu erstellen» und häufigen Tags, Verarbeitungsschritte mit «Erneut
+  verarbeiten», Details mit MIME-Typ) und «Verlauf» mit allen Versionen; im Fuss «In den Papierkorb»
+  mit Bestätigung direkt im Fuss, danach «Wiederherstellen» oder «Nächste Datei →», sowie «Link
+  teilen», «In neuem Tab» und Herunterladen. Blättern mit ← / → bleibt.
+- **Termin-Dialog (Design «Termin Dialog v3»):** ein Dialog für Anlegen und Bearbeiten überall
+  (Terminliste, Kalender, Protokoll-Planung, Mobile): Kalenderblatt und Titel oben, Reiter
+  «Übersicht» (Beschreibung, Programm, Zeitraum, Standort, Tag, Zyklen), «Teilnehmer & Status»
+  (Absage, Teilnehmerzahl, Personen je Rolle) und «Weitere Felder» (Spezialfelder). Bearbeiten
+  speichert automatisch («✓ Alle Änderungen gespeichert»); beim Anlegen erst «Termin erstellen»,
+  danach ebenso. Löschen und Absagen im ⋮-Menü.
+- **Verlauf:** Die erste Seite aktualisiert sich live (neue Einträge kurz hervorgehoben).
+  Datensparsamer: erfolgreiche Anmeldungen sind für den Verein nur 30 Tage sichtbar (Fehlversuche
+  und Änderungen länger, die Plattform-Administration sieht alles bis zur Aufbewahrungsfrist); wer
+  den Verlauf öffnet, steht selbst darin; ein Hinweis erinnert an die Datenschutzerklärung.
+- **E-Mail-Link zu den Benachrichtigungs-Einstellungen:** Der Link im Fuss jeder
+  Benachrichtigungs-Mail führt jetzt direkt in die persönlichen Einstellungen (Profil, Reiter
+  «Benachrichtigungen»; Direktlink `/?profile=notifications`, auch nach der Anmeldung) statt auf die
+  Organisations-Einstellungen. Linktext «Benachrichtigungs-Einstellungen».
+- **Strg+K:** Der Eintrag «In dieser Liste suchen» entfällt, der erste Treffer ist wieder die Seite.
+  Strg+F (⌘F) im Suchfenster übernimmt den Begriff in die Listensuche.
+- **Update räumt alte Images auf:** `deploy.sh` entfernt nach einem erfolgreichen Update alte
+  hocX-App-Images. Behalten werden laufende, das aktuelle Release und die letzten 3 Releases
+  (`HOCX_IMAGE_KEEP_RELEASES`, abschaltbar mit `HOCX_IMAGE_CLEANUP=0`); fremde Images und
+  andere Projekte auf dem Host bleiben unberührt.
+- **«Meine Aufgaben»** hat denselben Schalter «Alle/Meine» wie Aufgaben › Pendenzen; Abgabe-Pendenzen
+  mit Fälligkeit zeigen in der Herkunftszeile «· erledigt sich mit der Abgabe».
+- **Aufgabenpakete bei Terminabsage:** Wird ein Termin abgesagt, werden noch offene Paket-Instanzen
+  dieses Termins abgebrochen (keine Erinnerungen und Bussen mehr); wird er wieder aktiviert, gehen genau
+  diese Instanzen auf ihren vorherigen Status zurück. Von Hand abgebrochene bleiben abgebrochen.
 
 ### Behoben
 
@@ -141,15 +326,21 @@ Installationen aktualisieren können.
   Auslöser (bzw. im Inhalt, wenn der Auslöser gelöscht wurde). Strg+Enter und Pfeiltasten im
   Protokoll lösen in Dialogen und Listen nicht mehr den Editor aus; Strg+Alt+T/N funktionieren auf
   dem Mac. Die eingeklappte Seitenleiste ist kein unsichtbares Tab-Ziel mehr.
-
 - **Abgabe-Assistent übersprang den letzten Schritt:** Ein Klick auf «Weiter» im vorletzten Schritt
   (Dateien) legte die Abgabe sofort an, statt den Schritt «Zugriff» zu zeigen - der Knopf wurde noch
   im selben Klick zum Erstellen-Knopf. Jetzt erstellt nur «Abgabe erstellen» im letzten Schritt.
-
 - **«Endgültig löschen» im Papierkorb scheiterte gelegentlich** («Dateien konnten nicht endgültig
   gelöscht werden»): lief für ein Dokument gerade die PDF-Erzeugung, sperrten Löschen und
   Dokument-Worker dieselben Zeilen in umgekehrter Reihenfolge, die Datenbank brach mit einem
   Deadlock ab. Das Löschen wartet jetzt auf den Worker.
+- **Foto-Viewer:** Die Knöpfe oben hatten keinen Hover-Effekt, «Original öffnen» war beim Überfahren
+  unlesbar (weiss auf weiss) und «Best-of» nie hervorgehoben. Jetzt reagieren alle auf Hover und
+  Tastaturfokus, «Best-of» ist gelb, wenn das Foto markiert ist.
+- **Bussen aus Pendenzen:** Der Buchungstext steht jetzt in der Dokumentsprache des Vereins statt
+  immer auf Deutsch.
+- **Statistik:** Pendenzen ohne Protokolldatum zählen nach dem Schweizer Kalendertag (eine Pendenz
+  vom 1.1. um 00:30 fiel bisher ins Vorjahr).
+- **Word-Import:** «Neu analysieren?» fragt nur noch nach, wenn wirklich schon etwas geprüft wurde.
 
 ### Sicherheit
 
@@ -181,7 +372,6 @@ Installationen aktualisieren können.
 - Deploy und `verify_release.sh` prüfen von aussen, dass die Admin-Pfade auf Haupt-, Abgabebox-,
   Admin-, Docs-, Website- und einer Mandanten-Domain über den öffentlichen Entrypoint nicht
   erreichbar sind; sonst Rollback.
-
 - **SEC-AUTH-002:** Längenlimits für E-Mail (320), Passwort (1024), Tickets und Codes in allen
   Anmelde-Schemas; 16 KiB Body-Limit für `/api/auth/*` und `/api/admin/auth/*`; Zählerschlüssel in
   Redis nur noch als HMAC-Pseudonym (keine E-Mail, keine IP, Länge fix). Redis voll/weg: definierte
@@ -216,7 +406,6 @@ Installationen aktualisieren können.
 - **SEC-AUTH-016/017/018/020:** ausgetretene Konten erhalten die generische 401; Reset-Kontingent je
   Adresse und Quelle getrennt; Session- und Geräte-Cookies mit `__Host-`-Präfix; Bridge-Tokens werden
   je Session wiederverwendet; WebAuthn prüft Algorithmus, Kurve und RSA-Länge.
-
 - **Plattform-Admins im Anmeldeschutz:** Die Passwortphase des Admin-Logins läuft über denselben
   Anmeldeschutz wie bei Konten (Zählen vor dem Prüfen, Scope `login-admin`), ohne IP-Sperren der
   Stufen 4/5 (Ziti-Notzugang). Passkey-Versuche werden vor der Prüfung gezählt (danach 1/min).
@@ -227,181 +416,11 @@ Installationen aktualisieren können.
   der Hauptdomain (SEC-AUTH-007). Widerruf von Sessions (Konten und Admins) mit Mikrosekunden-
   Auflösung: ein vor dem Widerruf ausgestelltes Token ist sicher ungültig, eine direkt danach neu
   ausgestellte Session gilt.
-
-### Update
-
-- **Hosts mit dem 1.4.0-Hotfix** (`docker-compose.local.yml` mit nur
-  `traefik.docker.network=hocx_default` an `abgabebox-backend`): Traefik hängt ab dieser Version nur
-  noch im Netz `edge`; der Hotfix würde die Abgabebox unerreichbar machen. `deploy.sh` lädt ihn
-  deshalb nicht mehr (Hinweis im Log) und entfernt die Datei nach dem erfolgreichen Update
-  (Kopie unter `backups/`). Steht mehr in der Datei, bleibt sie - den Eintrag dann von Hand löschen.
-- Nach dem Update meldet der erste Admin-Login je Gerät einmal «Plattform-Anmeldung von neuem
-  Gerät» (Warnung) - das Gerät wird erst ab dann wiedererkannt.
-- **Protokolle mit abgewählten Terminfeldern** bekommen beim nächsten Export eine neue
-  Dokumentversion (das PDF lässt die Felder jetzt weg). Keine Migration.
-
-- `./scripts/deploy.sh <test|prod>` wie gewohnt. Das Update startet den neuen Dienst
-  `maintenance-page` (Image `nginxinc/nginx-unprivileged`, wird beim Pull geholt) vor den
-  Migrationen und setzt `infra/maintenance/` auf die Gruppe 5001 (nur lesen). Traefik wird neu
-  erstellt (neues internes Netz `maintenance`, kurze Unterbrechung von wenigen Sekunden beim
-  `docker compose up`); die Datei `infra/traefik/dynamic/maintenance.yml` lädt es ohne Neustart. Beim
-  Update auf diese Version selbst greift die Wartungsseite erst, sobald der Dienst läuft (also für
-  den Austausch der App-Container bereits).
-- Ab diesem Update ist hocX während der Datenbankmigration im Wartungsmodus (Fenster «Update» im
-  Admin-Portal unter System → Wartung, Audit `admin.maintenance_deploy_started/_ended`). Beim
-  Update **auf** 1.4.3 selbst gilt das schon: die CLI läuft mit dem neuen Backend-Image, das alte
-  Frontend zeigt dann den allgemeinen Wartungstext. Meldet das Deploy-Log «Wartungsmodus des
-  Updates ist NOCH AKTIV», das Fenster im Admin-Portal freigeben oder den im Log genannten Befehl
-  ausführen.
-- Eigene Domains der Mandanten: das Backend schreibt `tenant-domains.yml` beim Start neu, die
-  Wartungsseite gilt dort also nach dem Neustart des Backends automatisch.
-- Keine Migrationen, keine neuen Secrets. Neue, optionale Variable `HOCX_DEPLOY_MAINTENANCE`
-  (nur Shell, Standard an; `0` = ohne Wartungsmodus während des Updates).
-- `./scripts/deploy.sh <test|prod>` genügt. **Neues Secret `ADMIN_GATE_SECRET`** wird beim Update
-  automatisch in der `.env` erzeugt; `deploy.sh` schreibt daraus `.secrets/admin_gate_secret` und die
-  Traefik-Datei `infra/traefik/dynamic/admin-gate.yml` (nicht im Repo). Traefik wird wegen der
-  geänderten `traefik.yml` automatisch neu erstellt. Keine Migration.
-- Wer das Admin-Panel über einen Link von einer anderen Seite (oder nach dem SSO) öffnet, sieht kurz
-  die Login-Seite, die mit bestehender Sitzung sofort weiterleitet (`SameSite=Strict`).
-- **Beim Update werden Admin-TOTP und Admin-SSO entfernt; beim ersten Admin-Login wird ein Passkey
-  eingerichtet.** Migration `0205_admin_passkey_only`: löscht alle MFA-Faktoren der Plattform-Admins
-  (auch bisherige Admin-Passkeys, deren RP-ID die Hauptdomain war), beendet alle Admin-Sessions,
-  entfernt `platform_oidc_config` und `platform_admin.oidc_*`, neue CHECK-Constraint (Admin-Faktoren
-  nur `webauthn`). Downgrade möglich, ohne Daten zurück. Keine neuen Umgebungsvariablen ausser
-  `HOCX_ADMIN_SOURCE_CIDRS`/`HOCX_VERIFY_TENANT_DOMAIN_LIMIT` (optional, siehe unten).
-- Prüfadresse des Admin-Zugangs ist jetzt `GET /api/admin/auth/health` (statt
-  `/api/admin/auth/oidc/public-config`) - auch für die Wartungsseite.
-- `DEMO_TOTP_SEED` gilt nur noch für Mandanten-Demokonten, nicht mehr für Plattform-Admins.
-- Neuer Dienst `admin-frontend` (gleiches Frontend-Image, `HOCX_FRONTEND_ROLE=admin`); `deploy.sh`
-  startet und prüft ihn mit. `admin-gate.yml` wird jetzt nach `compose up` geschrieben (enthält die
-  Quelladresse); abweichende Tunnel-Endpunkte über `HOCX_ADMIN_SOURCE_CIDRS`. `INTERNAL_API_URL`
-  muss intern sein (Standard `http://backend:8000`), sonst bricht `deploy.sh` ab.
-- Neues Netz `edge`: Traefik ist nur noch darin (mit den Diensten, die es anspricht), nicht mehr im
-  Standardnetz; `compose up` erstellt die Dienste neu. Die Datenbank läuft ohne NET_RAW (nur die
-  Rechte des Postgres-Entrypoints).
-- `infra/traefik/dynamic` wird beim Deploy auf 3770 (Sticky-Bit) gesetzt, versionierte Dateien und
-  `admin-gate.yml` auf 0640.
-- **`INTERNAL_API_URL`** wird beim Update automatisch auf `http://backend:8000` umgestellt, falls
-  dort noch die öffentliche Domain steht (Hinweis im Deploy-Log); `deploy.sh` verlangt ein internes
-  Ziel.
-- Admin-Konten-, Mandanten-Konten- und Plattform-Einstellungen (SMTP, ntfy) sowie das Klonen eines
-  Mandanten verlangen jetzt ebenfalls eine Passkey-Bestätigung.
-- Die Wartungsseite (Admin-Variante) prüft künftig `/api/admin/auth/health` über das Admin-Frontend.
-- Fehlerbilder und Ablauf: RUNBOOK Abschnitte 21 (Admin-Zugang) und 22 (Anmeldung, Notausgang).
-
-- **Migration `0206_auth_hardening`:** neue Tabellen `auth_event` (ohne Fremdschlüssel, RLS mit
-  nullbarem `tenant_id`), `auth_session` und `auth_known_device` (beide `tenant_id NOT NULL`, RLS).
-  Rein additiv, folgt auf `0205_admin_passkey_only`.
-- **Niemand muss sich neu anmelden:** bestehende Session-Cookies (ohne Session-ID, alter Cookie-Name
-  `hocx_session`) gelten bis zu ihrem Ablauf (höchstens 72 h; der alte Name wird bis
-  `AUTH_LEGACY_COOKIE_UNTIL`, sonst Start + 72 h, gelesen) weiter; auf eine Mandanten-Domain werden sie
-  nicht mehr weitergereicht; neue Anmeldungen bekommen
-  `__Host-hocx_session` mit Session-ID. Alte Sessions erscheinen nicht in «Angemeldete Geräte»;
-  «Alle anderen Geräte abmelden» beendet sie trotzdem. Laufende Bridge-Tokens (v3, 120 s) werden
-  weiter eingelöst. Alte Redis-Zähler laufen nach höchstens 15 min aus.
-- Neues optionales Secret `AUTH_SECRET_PREVIOUS` (leer lassen; nur für Rotation, RUNBOOK 20) -
-  `deploy.sh` schreibt die Secret-Datei auch leer. Neue optionale Variablen `AUTH_*` (RUNBOOK 20).
-- Neuer Hintergrundjob `auth_security_maintenance` (Backend, stündlich, Lock-ID 202600036).
-- Für die Prüfung riskanter Anmeldungen ohne zweiten Faktor sollte der E-Mail-Versand eingerichtet
-  sein.
-
-
-## [1.4.2] - 2026-11-20
-
-Neue Fotosuche, die Tippfehler, andere Wortreihenfolge, Umlaute und Datumsangaben versteht und nach
-Relevanz sortiert, dazu der neue Kopf der Fotos-Seite (Design «Fotos Header 1a»). Ein korrigiertes
-Aufnahmedatum steht jetzt auch in der Bilddatei. Neu gestaltet sind das Datei-Detail (Design
-«Datei-Detail Popup v2», mit Umbenennen und Versionsverlauf) und der Termin-Dialog (Design «Termin
-Dialog v3», Anlegen und Bearbeiten gleich, automatisches Speichern). Aus einer Pendenz entsteht mit
-einem Klick eine Einzelabgabe, Abgaben vergeben Tags an ihre Pendenzen. Der Verlauf aktualisiert sich
-live und ist datensparsamer, das Update räumt alte Images auf. Drei Migrationen (0202, 0203, 0204),
-keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
-
-### Update
-
-- Von **1.4.1** (oder 1.4.0): `./scripts/deploy.sh <test|prod>`. Abgabebox-Backend und Backend
-  gemeinsam ausrollen (das Deploy-Skript tut das): die Abgabebox braucht das Spaltenrecht aus 0203.
-- **Migration `0202_submission_todo_tags`:** zwei neue Spalten in `submission_assignment`
-  (`todo_tags`, leer, und `todo_own_tag`, aus). Rein additiv; die Abgabebox liest sie nicht.
-- **Migration `0203_capture_date_in_file`:** neue Spalten `stored_file.capture_exif_original` (JSONB,
-  ursprüngliche Datumsfelder der Datei für «Original wiederherstellen») und
-  `stored_file.capture_file_state` (`pending`/`written`/`unsupported`/`failed`, CHECK und Teilindex),
-  dazu `SELECT` auf die Spalte `stored_file.source_checksum_sha256` für `hocx_abgabebox`
-  (Duplikatprüfung). Bestehende Korrekturen werden auf `pending` gesetzt; der neue Job
-  `capture_date_file_sync` (job-worker, jede Minute, unter `/admin/jobs`) schreibt sie danach in die
-  Dateien. Downgrade möglich, bereits geschriebene Dateien behalten dann aber das korrigierte Datum.
-- **Migration `0204_photo_search`:** Extensions `pg_trgm`, `unaccent`, `fuzzystrmatch` (in
-  `postgres:18` enthalten, «trusted», die Migration läuft wie immer mit `DATABASE_URL`), neue Tabellen
-  `photo_search_doc` und `photo_search_term` (je `tenant_id NOT NULL` und RLS), Trigger auf den
-  Quelltabellen halten sie aktuell (`SECURITY DEFINER` mit festem `search_path`, ohne `EXECUTE` für
-  andere Rollen). Die Migration indexiert alle bestehenden Dateien: rund 100 Sekunden je
-  100'000 Dateien.
-- Ab diesem Update entfernt `deploy.sh` nach Erfolg alte hocX-App-Images (siehe unten).
-
-### Geändert
-
-- **Fotosuche:** sucht in allem, was hocX zu einem Foto weiss – Dateiname, Tags, Album, Termin
-  (Titel, Tag, Datum), Abgabe und Element, Protokoll, Word-Import, hochgeladen von, Kamera,
-  Aufnahmedatum (inkl. Korrektur). Reihenfolge der Wörter egal, Tippfehler toleriert («somerlager»,
-  «zlet»), Umlaute/Akzente egal («braeteln» = «Brätel»), Wortanfänge reichen, Datumsangaben in allen
-  Sprachen («2026», «Mai 2026», «02.05.2026», «2.5.», «juin»). Bei aktiver Suche sortiert «Beste
-  Treffer» (alle Wörter vor einigen, Tags/Abgabe/Termin vor Dateiname). Auch die globale Suche nutzt
-  das Ranking. Nur Fotos des eigenen Vereins; Papierkorb und fremde Partnerfotos bleiben draussen
-  (Partnerfotos in geteilten Alben nur über den Dateinamen).
-- **Fotos-Seite (Design «Fotos Header 1a»):** Titel mit Anzahl, «Papierkorb» und «Bilder hochladen»
-  oben rechts, Werkzeugkasten mit Alle Fotos/Alben/Duplikate/Ähnliche, Suchfeld mit Leeren-Knopf,
-  Sortierung und Tag-Filter; bei Suche oder Filter eine Zeile «N von M Fotos» mit Filter-Chips und
-  «Filter zurücksetzen», eigener Leerzustand «Keine Fotos für „…“».
-- **Aufnahmedatum in der Datei:** Korrigieren, Verschieben und «Original wiederherstellen» schreiben
-  das Datum auch in die Bilddatei (EXIF), Downloads und Originale enthalten es. Das ursprüngliche
-  Datum bleibt in hocX; Wiederherstellen macht die Datumsfelder byte-genau wie vorher. Die Anzeige
-  in hocX ändert sich wie bisher sofort, die Datei folgt im Hintergrund (ohne Neukodierung, Pixel
-  unverändert). JPEG, HEIC/HEIF, PNG, WebP und TIFF mit Aufnahmedatum werden an Ort und Stelle
-  geändert, ein JPEG ohne Datum bekommt eines; andere Formate ohne Datum und Bilder über 50 MB
-  behalten die Korrektur nur in hocX. Die ursprünglich hochgeladene Datei gilt weiter als Duplikat.
-  Der Foto-Viewer zeigt dezent, ob die Datei schon aktualisiert ist; die Bestätigung erklärt es.
-- **Datei-Detail (Design «Datei-Detail Popup v2»):** Kopf mit Typ-Icon, Name (mit Recht per Klick
-  umbenennbar, die Endung bleibt), Quelle, Verarbeitungsstatus, «hochgeladen von» und Version;
-  links PDF-Ansicht oder extrahierter Text (kopierbar), ältere Versionen ansehbar; rechts «Details &
-  Tags» (Herkunft, Tags mit «neu erstellen» und häufigen Tags, Verarbeitungsschritte mit «Erneut
-  verarbeiten», Details mit MIME-Typ) und «Verlauf» mit allen Versionen; im Fuss «In den Papierkorb»
-  mit Bestätigung direkt im Fuss, danach «Wiederherstellen» oder «Nächste Datei →», sowie «Link
-  teilen», «In neuem Tab» und Herunterladen. Blättern mit ← / → bleibt.
-- **Termin-Dialog (Design «Termin Dialog v3»):** ein Dialog für Anlegen und Bearbeiten überall
-  (Terminliste, Kalender, Protokoll-Planung, Mobile): Kalenderblatt und Titel oben, Reiter
-  «Übersicht» (Beschreibung, Programm, Zeitraum, Standort, Tag, Zyklen), «Teilnehmer & Status»
-  (Absage, Teilnehmerzahl, Personen je Rolle) und «Weitere Felder» (Spezialfelder). Bearbeiten
-  speichert automatisch («✓ Alle Änderungen gespeichert»); beim Anlegen erst «Termin erstellen»,
-  danach ebenso. Löschen und Absagen im ⋮-Menü.
-- **Pendenz als Abgabe einsammeln:** Im Pendenz-Dialog («Quelle») und im ⋮-Menü der Pendenzen im
-  Protokoll legt «Als Abgabe einsammeln» mit einem Klick eine Einzelabgabe an: Titel = Aufgabe,
-  Stichtag = Fälligkeit, Verantwortliche = Zugewiesene. Die Pendenz selbst wird die Pendenz der
-  Abgabe (keine zweite) und schliesst sich nach dem Upload; Notizen, Dateien und Tags bleiben. Toast
-  mit «Link kopieren» und «Anpassen». Nur mit «Abgaben verwalten» und «Sitzungen bearbeiten».
-  Pendenzen aus Protokollen werden nie mit einer Abgabe gelöscht, sie verlieren nur den Bezug.
-- **Tags für Abgabe-Pendenzen:** Im Abgabe-Assistenten (Schritt «Verantwortlich») gewählte Tags
-  bekommt jede Pendenz der Abgabe; «Abgabe-Tag erstellen» (standardmässig aus) gibt zusätzlich ein
-  Tag mit dem Titel der Abgabe. Änderungen ziehen nach, von Hand gesetzte Tags bleiben.
-- **Verlauf:** Die erste Seite aktualisiert sich live (neue Einträge kurz hervorgehoben).
-  Datensparsamer: erfolgreiche Anmeldungen sind für den Verein nur 30 Tage sichtbar (Fehlversuche
-  und Änderungen länger, die Plattform-Administration sieht alles bis zur Aufbewahrungsfrist); wer
-  den Verlauf öffnet, steht selbst darin; ein Hinweis erinnert an die Datenschutzerklärung.
-- **E-Mail-Link zu den Benachrichtigungs-Einstellungen:** Der Link im Fuss jeder
-  Benachrichtigungs-Mail führt jetzt direkt in die persönlichen Einstellungen (Profil, Reiter
-  «Benachrichtigungen»; Direktlink `/?profile=notifications`, auch nach der Anmeldung) statt auf die
-  Organisations-Einstellungen. Linktext «Benachrichtigungs-Einstellungen».
-- **Strg+K:** Der Eintrag «In dieser Liste suchen» entfällt, der erste Treffer ist wieder die Seite.
-  Strg+F (⌘F) im Suchfenster übernimmt den Begriff in die Listensuche.
-- **Update räumt alte Images auf:** `deploy.sh` entfernt nach einem erfolgreichen Update alte
-  hocX-App-Images. Behalten werden laufende, das aktuelle Release und die letzten 3 Releases
-  (`HOCX_IMAGE_KEEP_RELEASES`, abschaltbar mit `HOCX_IMAGE_CLEANUP=0`); fremde Images und
-  andere Projekte auf dem Host bleiben unberührt.
-
-### Behoben
-
-- **Foto-Viewer:** Die Knöpfe oben hatten keinen Hover-Effekt, «Original öffnen» war beim Überfahren
-  unlesbar (weiss auf weiss) und «Best-of» nie hervorgehoben. Jetzt reagieren alle auf Hover und
-  Tastaturfokus, «Best-of» ist gelb, wenn das Foto markiert ist.
+- **Passwort vergessen:** Ist das Kontingent je Adresse erschöpft (z. B. weil Fremde Anfragen
+  auslösen), bekommt die Inhaberin auf einem ihr bekannten Gerät trotzdem eine Mail (höchstens 3/h je
+  Gerät, 6/h je Konto). Die Antwort bleibt für alle gleich (kein Rückschluss auf Konten).
+- **Listenstand rekonstruieren:** übernimmt aus einem Entwurf nur noch Name, Beschreibung und
+  Aktiv-Status, keine System- oder Identitätsfelder.
 
 ## [1.4.1] - 2026-11-20
 
