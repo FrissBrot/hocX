@@ -50,10 +50,10 @@ from app.schemas.admin import (
     AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
-from app.schemas.public_catalog import PublicCustomerRead, PublicFeatureRead, PublicPlanComparisonRead, PublicPlanFeature, PublicPlanRead
+from app.schemas.public_catalog import PublicCustomerLogo, PublicCustomerRead, PublicFeatureRead, PublicPlanComparisonRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
-from app.services import plan_pricing
+from app.services import plan_pricing, website_customer_logo_service
 from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
@@ -360,9 +360,26 @@ class AdminTenantService:
         return self.get_tenant(db, tenant_id)
 
     def list_public_customers(self, db: Session) -> list[PublicCustomerRead]:
-        """Für die Website freigegebene Mandanten, alphabetisch."""
-        names = db.scalars(select(Tenant.name).where(Tenant.show_on_website.is_(True)).order_by(func.lower(Tenant.name)))
-        return [PublicCustomerRead(name=name) for name in names]
+        """Für die Website freigegebene Mandanten, alphabetisch, mit Logo, falls eines lesbar ist."""
+        customers: list[PublicCustomerRead] = []
+        storage_ok = True
+        for tenant in website_customer_logo_service.listed_tenants(db):
+            rendered = None
+            if storage_ok:
+                try:
+                    rendered = website_customer_logo_service.rendered_logo(tenant)
+                except StorageError as exc:
+                    # Speicher nicht erreichbar/falsch konfiguriert: die Website zeigt dann nur Namen
+                    # (kein Timeout je Mandant), der Fehler landet trotzdem im Fehlerprotokoll.
+                    _logger.warning("Website-Logos: Speicher nicht erreichbar", exc_info=True)
+                    record_system_error(db, exc=exc)
+                    storage_ok = False
+            logo = None
+            if rendered is not None:
+                key, image = rendered
+                logo = PublicCustomerLogo(url=website_customer_logo_service.logo_url(key), width=image.width, height=image.height)
+            customers.append(PublicCustomerRead(name=tenant.name, logo=logo))
+        return customers
 
     def list_public_plans(self, db: Session) -> list[PublicPlanRead]:
         """Buchbare Plaene fuer die oeffentliche Website, gleiche Reihenfolge wie im Adminportal

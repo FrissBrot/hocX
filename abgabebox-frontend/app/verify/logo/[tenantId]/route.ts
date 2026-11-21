@@ -5,14 +5,16 @@ import { parseDocumentId } from "@/lib/verify";
 // Abgabebox bei img-src 'self' bleiben kann (sie wird beim Build festgelegt, das Release-Image
 // kennt die Hauptdomain nicht). Die Prüfseite zeigt das Logo nur, wenn der Mandant die Anzeige
 // freigegeben hat (View document_verification_public); auch das XMP der PDFs enthält die
-// public_id nur dann. Das Profilbild selbst ist über den Hauptendpunkt ohnehin öffentlich - diese
-// Route ist kein Zugriffsschutz, sondern nur ein same-origin-Proxy.
+// public_id nur dann. Das Hauptbackend liefert das Logo ohne Anmeldung genau dann
+// (verify_show_identity, tenant_service.tenant_logo_is_public) - diese Route ist kein eigener
+// Zugriffsschutz, sondern nur ein same-origin-Proxy. Die Client-IP (von Traefik gesetzt) geht als
+// X-Forwarded-For mit, damit das IP-Rate-Limit des Backends je Besucher statt für alle zählt.
 const backendBase = process.env.HOCX_INTERNAL_API_URL ?? "http://backend:8000";
 const MAX_BYTES = 2 * 1024 * 1024;
 // Nur Rasterformate - ein SVG wäre same-origin ausgeliefert ein aktives Dokument.
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
-export async function GET(_request: Request, { params }: { params: Promise<{ tenantId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ tenantId: string }> }) {
   const { tenantId } = await params;
   const id = parseDocumentId(tenantId);
   if (!id) {
@@ -20,7 +22,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ten
   }
   let upstream: Response;
   try {
-    upstream = await fetch(`${backendBase}/api/tenants/${id}/profile-image`, { cache: "no-store", redirect: "error" });
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    upstream = await fetch(`${backendBase}/api/tenants/${id}/profile-image`, {
+      cache: "no-store",
+      redirect: "error",
+      headers: forwardedFor ? { "X-Forwarded-For": forwardedFor } : undefined,
+    });
   } catch {
     return new Response(null, { status: 502 });
   }

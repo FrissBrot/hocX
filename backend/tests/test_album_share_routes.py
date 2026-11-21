@@ -369,7 +369,7 @@ def test_accepting_a_share_establishes_mutual_trust_that_survives_revoking(db):
     assert seen_by_owner.trusted is True
     assert seen_by_owner.name == "Jubla Sonnenberg"
     assert seen_by_owner.participant_count == 2
-    assert seen_by_owner.profile_image_url == f"/api/tenants/{partner.public_id}/profile-image"
+    assert seen_by_owner.profile_image_url.startswith(f"/api/tenants/{partner.public_id}/profile-image?v=")
     assert seen_by_partner.trusted is True
     assert seen_by_partner.name == "Pfadi Wildegg"
 

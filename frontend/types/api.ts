@@ -1044,8 +1044,17 @@ export type PublicFeature = {
 export type PublicPlanComparison = { plans: PublicPlan[]; features: PublicFeature[] };
 
 /** Kunde fuer "Im Einsatz bei" auf der oeffentlichen Website (GET /api/public/customers). */
+export type PublicCustomerLogo = {
+  /** Relative URL mit nicht erratbarer Kennung (GET /api/public/customers/logos/<key>.png) */
+  url: string;
+  /** Pixelmasse des ausgelieferten PNG (doppelte Anzeigegrösse) */
+  width: number;
+  height: number;
+};
+
 export type PublicCustomer = {
   name: string;
+  logo: PublicCustomerLogo | null;
 };
 
 export type AdminTenantSubscriptionUpdate = {

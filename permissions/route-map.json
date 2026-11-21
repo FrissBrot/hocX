@@ -2748,6 +2748,11 @@
       "handler": "public_catalog.list_public_customers",
       "note": "öffentlicher Preis-/Kundenkatalog der Website"
     },
+    "GET /api/public/customers/logos/{key}.png": {
+      "handler": "public_catalog.get_public_customer_logo",
+      "note": "Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404",
+      "serves_files": true
+    },
     "GET /api/public/maintenance-status": {
       "handler": "maintenance_public.maintenance_status",
       "note": "öffentlicher Wartungsstatus"
@@ -3519,7 +3524,7 @@
     },
     "GET /api/tenants/{tenant_id}/profile-image": {
       "handler": "tenants.tenant_profile_image",
-      "note": "Vereinslogo (auch für die Login-Seite)"
+      "note": "Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404"
     },
     "GET /api/tenants/{tenant_id}/subscription": {
       "handler": "tenants.get_tenant_subscription",

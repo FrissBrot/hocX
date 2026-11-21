@@ -8,10 +8,20 @@ class PublicPlanFeature(BaseModel):
     name: str
 
 
+class PublicCustomerLogo(BaseModel):
+    """Logo eines gelisteten Kunden: relative URL mit nicht erratbarer Kennung (kein Mandanten-ID,
+    kein Speicherpfad) und die Pixelmasse des ausgelieferten PNG (für width/height im <img>)."""
+
+    url: str
+    width: int
+    height: int
+
+
 class PublicCustomerRead(BaseModel):
-    """Kunde fuer "Im Einsatz bei" - bewusst nur der Name, keine IDs/Slugs."""
+    """Kunde fuer "Im Einsatz bei" - Name und (falls vorhanden) Logo, keine IDs/Slugs."""
 
     name: str
+    logo: PublicCustomerLogo | None = None
 
 
 class PublicPlanRead(BaseModel):

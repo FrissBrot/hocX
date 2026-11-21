@@ -33,10 +33,11 @@ ALLOWED = {
     "public_share.*": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
     "public_submission_access.*": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)",
     "public_catalog.*": "öffentlicher Preis-/Kundenkatalog der Website",
+    "public_catalog.get_public_customer_logo": "Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404",
     "maintenance_public.*": "öffentlicher Wartungsstatus",
     "system_status.*": "Status-Token (kein Benutzer)",
     "calendar_feeds.get_calendar_feed": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve",
-    "tenants.tenant_profile_image": "Vereinslogo (auch für die Login-Seite)",
+    "tenants.tenant_profile_image": "Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404",
     # Eigene Daten (Ressourcenregel R4): ohne Permission, nur das eigene Konto.
     "users.get_me": "eigenes Konto",
     "users.list_my_sessions": "eigene Sitzungen (Angemeldete Geräte)",

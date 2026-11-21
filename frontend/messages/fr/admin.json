@@ -842,7 +842,7 @@
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
       "userLimitExceeded": " – limite atteinte ou dépassée.",
       "showOnWebsite": "Afficher comme client sur le site web",
-      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’organisation.",
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom et logo). À activer uniquement avec l’accord de l’organisation.",
       "contractEnd": "Fin du contrat",
       "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
     },

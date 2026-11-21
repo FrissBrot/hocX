@@ -842,7 +842,7 @@
       "userLimitHelp": "Empty = plan limit applies. Currently {count} user(s){suffix}",
       "userLimitExceeded": " – limit reached or exceeded.",
       "showOnWebsite": "Show as customer on the website",
-      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organization’s consent.",
+      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name and logo). Only enable with the organization’s consent.",
       "contractEnd": "Contract end",
       "contractEndHelp": "Empty = no end date. After the contract end plus the export period, /admin/system reports that the tenant’s data must be deleted."
     },

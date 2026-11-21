@@ -101,6 +101,10 @@ class ObjectNotFound(StorageError):
     pass
 
 
+class ObjectTooLarge(StorageError):
+    """get_bytes(max_bytes=...): das Objekt ist grösser als erlaubt (kein Speicherausfall)."""
+
+
 class StorageUnavailable(StorageError):
     """Ziel nicht erreichbar, Timeout, 5xx - vorübergehend, Wiederholung sinnvoll."""
 
@@ -760,7 +764,7 @@ class ObjectStore:
         for chunk in self.iter_bytes(namespace, key):
             buffer.extend(chunk)
             if max_bytes is not None and len(buffer) > max_bytes:
-                raise StorageError("Objekt grösser als erlaubt")
+                raise ObjectTooLarge("Objekt grösser als erlaubt")
         return bytes(buffer)
 
     def download_to(self, namespace: str, key: str, target: Path) -> ObjectInfo:

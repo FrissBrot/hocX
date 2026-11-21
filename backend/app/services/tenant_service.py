@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -36,7 +37,10 @@ from app.services.storage_service import StorageService
 def build_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
         return None
-    return f"/api/tenants/{tenant_public_id}/profile-image"
+    # Version aus dem Speicherschlüssel (bei jedem Upload neu): neues Logo = neue URL trotz
+    # Browser-Cache; gehasht, damit der Schlüssel (enthält die interne ID) nicht nach aussen geht.
+    version = hashlib.sha256(profile_image_path.encode()).hexdigest()[:12]
+    return f"/api/tenants/{tenant_public_id}/profile-image?v={version}"
 
 
 TENANT_PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
@@ -59,15 +63,58 @@ TENANT_PROFILE_IMAGE_SECURITY_HEADERS = {
 }
 
 
-def tenant_profile_image_response(request: Request | None, key: str) -> Response:
+def tenant_logo_is_public(db: Session, tenant: Tenant) -> bool:
+    """Ob das Vereinslogo ohne Anmeldung abrufbar sein muss - nur dort, wo hocX es ohnehin
+    öffentlich zeigt:
+
+    - Login-Branding einer eigenen App-Domain: ``/api/auth/tenant-by-domain`` liefert für eine
+      aktive App-Domain (mit gebuchtem ``custom_domain``) Name und Logo an jeden Besucher.
+    - Prüfseite für Dokumente (Abgabebox ``/verify/logo/<id>``): nur mit ``verify_show_identity``
+      (gleiche Bedingung wie die View ``document_verification_public``).
+    """
+    if tenant.verify_show_identity:
+        return True
+    from app.core.tenant_scope import tenant_scope_suspended
+
+    # tenant_feature steht unter RLS: angemeldet sähe man die Buchung eines fremden Mandanten nicht
+    # und bekäme 404 für ein Logo, das anonym öffentlich ist.
+    with tenant_scope_suspended(db):  # rls-ok: nur Ja/Nein, gibt keine fremden Daten zurück
+        return db.scalar(
+            select(TenantDomain.id).where(
+                TenantDomain.tenant_id == tenant.id,
+                TenantDomain.purpose == "app",
+                TenantDomain.status == "active",
+                TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
+            ).limit(1)
+        ) is not None
+
+
+def can_view_tenant_logo(db: Session, tenant: Tenant, user: CurrentUser | None) -> bool:
+    """Angemeldete sehen das Logo des eigenen Mandanten und vertrauter Partner (geteilte Alben,
+    tenant_trust_service - dieselbe Regel wie Name/Logo im Teilen-Dialog); alle anderen nur, wenn
+    es ohnehin öffentlich ist (tenant_logo_is_public)."""
+    from app.services import tenant_trust_service
+
+    if user is not None and user.current_tenant_id is not None:
+        if user.current_tenant_id == tenant.id or tenant_trust_service.is_trusted(db, user.current_tenant_id, tenant.id):
+            return True
+    return tenant_logo_is_public(db, tenant)
+
+
+def tenant_profile_image_media_type(key: str) -> str | None:
+    """Content-Type eines Profilbilds aus der Whitelist (nur Raster), None für alles andere."""
+    return TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(Path(key).suffix.lower())
+
+
+def tenant_profile_image_response(request: Request | None, key: str, *, extra_headers: dict[str, str] | None = None) -> Response:
     """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002), aus dem
     Objektspeicher (Namespace «main»).
 
     Die Route ist öffentlich und läuft im Origin der Hauptanwendung bzw. des Admin-Panels;
     ein als Profilbild abgelegtes HTML/SVG darf dort nie als Dokument ausgeführt werden.
     """
-    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(Path(key).suffix.lower())
-    headers = dict(TENANT_PROFILE_IMAGE_SECURITY_HEADERS)
+    media_type = tenant_profile_image_media_type(key)
+    headers = {**TENANT_PROFILE_IMAGE_SECURITY_HEADERS, **(extra_headers or {})}
     if media_type is None:
         return object_response(
             request, MAIN, key, media_type="application/octet-stream", filename=Path(key).name, attachment=True,

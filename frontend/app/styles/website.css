@@ -565,11 +565,54 @@
   color: var(--muted);
 }
 
+.ws-customer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) 44px;
+}
+
+/* Feste Zeilenhöhe = Logohöhe: Logos und reine Namen stehen auf einer Linie, nichts springt. */
 .ws-customer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
   font-family: var(--ws-font-serif), Georgia, serif;
   font-size: var(--text-xl);
   font-weight: 600;
   color: color-mix(in srgb, var(--muted) 85%, var(--bg));
+}
+
+/* Ruhig: Logos in Graustufen und gedämpft, beim Überfahren in Originalfarbe. Die Grösse ist
+   fest (32 px hoch, Breite aus dem Seitenverhältnis, width/height im Markup). */
+.ws-customer-logo {
+  display: block;
+  flex: none;
+  height: 32px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  border-radius: var(--radius-xs);
+  filter: grayscale(1);
+  opacity: 0.72;
+  transition: filter var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+
+.ws-customer-with-logo:hover .ws-customer-logo {
+  filter: none;
+  opacity: 1;
+}
+
+/* Dunkle Logos verschwänden auf dunklem Grund: im Dark Mode auf einer hellen Plakette. */
+[data-theme="dark"] .ws-customer-logo {
+  box-sizing: border-box;
+  padding: 2px;
+  background: var(--text);
 }
 
 /* --- Ablauf ------------------------------------------------------------------------------- */
