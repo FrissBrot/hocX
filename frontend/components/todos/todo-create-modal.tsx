@@ -60,6 +60,8 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
   const uploadEnabled = canUploadFiles && !busy;
   const dropzone = useTodoDialogDropzone((dropped) => void upload.uploadFiles(dropped), uploadEnabled);
   const uploading = upload.pending.length > 0;
+  /** Abbrechen/Schliessen: hier hochgeladene, nicht gespeicherte Dateien in den Papierkorb. */
+  const cancel = () => { upload.discardUnlinked(); onClose(); };
   const showFileList = files.length > 0 || uploading;
   const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || t("nobodyLabel");
 
@@ -85,6 +87,8 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
           body: JSON.stringify({ notes, file_ids: files.map((file) => file.id) }),
         });
       }
+      // Gespeichert: nur, was hochgeladen und wieder entfernt wurde, geht in den Papierkorb
+      upload.discardUnlinked(files.map((file) => file.id));
       onCreated(created);
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("createFailed"), "error");
@@ -93,14 +97,14 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
     }
   }
 
-  return <Modal open title={t("createModalTitle")} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) onClose(); }} onClose={() => { if (!busy) onClose(); }}>
+  return <Modal open title={t("createModalTitle")} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) cancel(); }} onClose={() => { if (!busy) cancel(); }}>
     <TodoFileDropOverlay active={dropzone.isDragging} />
     <header className="todo-edit-heading" ref={dropzone.anchorRef}>
       <div className="todo-edit-eyebrow">{t("createEyebrow")}</div>
       <input aria-label={t("colTask")} className="todo-edit-title" value={task} placeholder={t("taskPlaceholder")} autoFocus disabled={busy}
         onChange={(event) => setTask(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void create(); } }} />
-      <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={onClose}><ActionIcon name="close" /></button>
+      <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={cancel}><ActionIcon name="close" /></button>
     </header>
     <div className="todo-edit-body">
       <div className="todo-edit-main">
@@ -168,7 +172,7 @@ export function TodoCreateModal({ participants, todoBlocks, tagSuggestions, onCl
     </div>
     <footer className="todo-edit-footer">
       <div className="todo-edit-actions">
-        <button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>
+        <button type="button" className="button-secondary" disabled={busy} onClick={cancel}>{tCommon("cancel")}</button>
         <button type="button" className="button-primary" disabled={busy || uploading || !task.trim()} onClick={() => void create()}>{busy ? t("creatingEllipsis") : t("createModalTitle")}</button>
       </div>
     </footer>

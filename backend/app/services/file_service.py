@@ -1341,8 +1341,25 @@ class FileService:
         )
         return {item.id: item for item in items}
 
-    def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
-        return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)
+    def visible_duplicate_ids(self, db: Session, viewer, tenant_id: int, checksums: list[str]) -> dict[str, uuid.UUID]:
+        """Je Hash die älteste Datei mit diesem Inhalt, die die Person sehen darf (siehe
+        visible_overview_items). Unsichtbare Treffer fehlen - für die Person ist der Inhalt dann
+        «unbekannt» (kein Existenz-Orakel, Security-Review V-1/V-2). Die Sichtbarkeitsabfrage läuft
+        immer, auch ohne Treffer (gleiche Antwortzeit-Logik wie POST /files/duplicate-check)."""
+        existing = upload_precheck_service.find_existing(db, tenant_id, checksums)
+        candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+        visible = self.visible_overview_items(db, viewer, candidate_ids)
+        result: dict[str, uuid.UUID] = {}
+        for checksum, rows in existing.items():
+            match = next((row.public_id for row in rows if row.public_id in visible), None)
+            if match is not None:
+                result[checksum] = match
+        return result
+
+    def precheck_uploads(
+        self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None, viewer=None
+    ) -> list[UploadPrecheckResult]:
+        return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id, viewer=viewer)
 
     def _filter_exact_duplicates(
         self,
@@ -1350,13 +1367,21 @@ class FileService:
         tenant_id: int,
         files: list[tuple[str, bytes]],
         duplicates_out: list[tuple[str, str]] | None = None,
+        viewer=None,
     ) -> tuple[list[tuple[str, bytes]], list[str]]:
         """One indexed lookup per batch, before scanning or decoding any file. duplicates_out
         (optional) receives (filename, sha256) of every skipped file, so a caller can still
-        enrich the existing image's metadata (see upload_precheck_service.enrich_existing)."""
+        enrich the existing image's metadata (see upload_precheck_service.enrich_existing).
+
+        viewer (Upload mit angemeldeter Person): nur Duplikate, die diese Person sehen darf,
+        werden übersprungen; ein unsichtbares gilt als unbekannt und wird als eigene Kopie
+        gespeichert (keine fremde ID, kein Duplikat-Text)."""
         checksums = [hashlib.sha256(content).hexdigest() for _, content in files]
         if not checksums:
             return [], []
+        if viewer is not None:
+            seen = set(self.visible_duplicate_ids(db, viewer, tenant_id, checksums))
+            return self._split_duplicates(files, checksums, seen, duplicates_out)
         rows = db.execute(
             select(StoredFile.checksum_sha256, StoredFile.source_checksum_sha256).where(
                 StoredFile.tenant_id == tenant_id,
@@ -1368,6 +1393,12 @@ class FileService:
             )
         )
         seen = {value for row in rows for value in row if value}
+        return self._split_duplicates(files, checksums, seen, duplicates_out)
+
+    @staticmethod
+    def _split_duplicates(
+        files: list[tuple[str, bytes]], checksums: list[str], seen: set[str], duplicates_out: list[tuple[str, str]] | None
+    ) -> tuple[list[tuple[str, bytes]], list[str]]:
         accepted, warnings = [], []
         for file, checksum in zip(files, checksums):
             if checksum in seen:
@@ -1946,6 +1977,8 @@ class FileService:
         file_results: list[dict] | None = None,
         allow_images: bool = False,
         allow_duplicates: bool = False,
+        viewer=None,
+        include_gps: bool = True,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -1971,24 +2004,38 @@ class FileService:
         # allow_duplicates (Pendenz-Dialog, «Kopie hochladen»): kein Überspringen exakter Duplikate,
         # jede Datei wird wie neu gespeichert (Virenscan, Magic-Byte, Quota gelten unverändert).
         duplicate_errors: list[str] = []
+        if allow_images and not include_gps:
+            # Bilder ohne Standort wie beim Galerie-Upload (gps_strip, Datenschutz-Paket 9.3);
+            # Dokumente bleiben unverändert.
+            files = [
+                (name, await asyncio.to_thread(gps_strip.strip_gps, content, mime) if (mime := _owner_image_mime(content)) else content)
+                for name, content in files
+            ]
         if not allow_duplicates:
-            files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+            files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
         scanned = list(zip(files, await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         ))) if files else []
         await acquire_upload_lock(db, tenant_id)
         still_new = files
         if not allow_duplicates:
-            still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+            still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates, viewer=viewer)
             duplicate_errors += late_duplicate_errors
         keep = {id(file) for file in still_new}
         scanned = [(file, status) for file, status in scanned if id(file) in keep]
         files = [file for file, _status in scanned]
         scan_statuses = [status for _file, status in scanned]
-        existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
-        for name, checksum in duplicates:
-            match = existing.get(checksum)
-            results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
+        if viewer is not None:
+            # Nur sichtbare Treffer wurden übersprungen - deren ID meldet der Upload zurück
+            visible_ids = self.visible_duplicate_ids(db, viewer, tenant_id, [checksum for _, checksum in duplicates])
+            for name, checksum in duplicates:
+                match_id = visible_ids.get(checksum)
+                results.append({"name": name, "status": "skipped", "file_id": str(match_id) if match_id else None})
+        else:
+            existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
+            for name, checksum in duplicates:
+                match = existing.get(checksum)
+                results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
         if not files:
             return [], duplicate_errors
         if upload_assignment is not None and upload_element_ref is not None:

@@ -84,6 +84,8 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const uploadEnabled = editable && canUploadFiles && !!detailsDraft;
   const dropzone = useTodoDialogDropzone((files) => void upload.uploadFiles(files), uploadEnabled);
   const uploading = upload.pending.length > 0;
+  /** Abbrechen/Schliessen: hier hochgeladene, nicht gespeicherte Dateien in den Papierkorb. */
+  const cancel = () => { upload.discardUnlinked(); onClose(); };
   const fileCount = (detailsDraft?.files.length ?? 0) + (submission?.files.length ?? 0);
   const showFileList = fileCount > 0 || uploading;
   const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
@@ -129,6 +131,8 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           }),
         });
       }
+      // Gespeichert: nur, was hochgeladen und wieder entfernt wurde, geht in den Papierkorb
+      upload.discardUnlinked(detailsDraft?.files.map((file) => file.id) ?? []);
       onSaved({ ...draft, ...updated });
     } catch (error) {
       showToast(todoErrorMessage(error, t("saveFailed")), "error");
@@ -158,18 +162,18 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     try {
       const result = await browserApiFetch<{ pending_delete: boolean; todo: TodoListItem | null }>(`/api/protocol-todos/${todo.id}`, { method: "DELETE" });
       if (result.pending_delete && result.todo) onSaved({ ...todo, ...result.todo });
-      else onDeleted();
+      else { upload.discardUnlinked(); onDeleted(); }
     } catch (error) {
       showToast(todoErrorMessage(error, t("deleteFailed")), "error");
     } finally { setBusy(false); }
   }
 
-  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) onClose(); }} onClose={() => { if (!busy) onClose(); }}>
+  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) cancel(); }} onClose={() => { if (!busy) cancel(); }}>
     <TodoFileDropOverlay active={dropzone.isDragging} />
     <header className="todo-edit-heading" ref={dropzone.anchorRef}>
       <div className="todo-edit-eyebrow">{t("editEyebrow")} {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
       <input aria-label={t("colTask")} className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />
-      <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={onClose}><ActionIcon name="close" /></button>
+      <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={cancel}><ActionIcon name="close" /></button>
     </header>
     <div className="todo-edit-body">
       <div className="todo-edit-main">
@@ -246,7 +250,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     </div>
     <footer className="todo-edit-footer">
       {canEdit && <button type="button" className="todo-edit-delete" disabled={busy} onClick={() => void remove()}>{t("deleteButton")}</button>}
-      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>{canEdit && <button type="button" className="button-primary" disabled={busy || uploading || !draft.task.trim()} onClick={() => void save()}>{busy ? t("savingEllipsis") : t("saveButton")}</button>}</div>
+      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={cancel}>{tCommon("cancel")}</button>{canEdit && <button type="button" className="button-primary" disabled={busy || uploading || !draft.task.trim()} onClick={() => void save()}>{busy ? t("savingEllipsis") : t("saveButton")}</button>}</div>
     </footer>
   </Modal>;
 }

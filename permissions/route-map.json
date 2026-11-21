@@ -1722,6 +1722,15 @@
         "files.manage"
       ]
     },
+    "POST /api/files/discard-uploads": {
+      "handler": "files.discard_unlinked_uploads",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
     "POST /api/files/document-uploads": {
       "handler": "files.upload_documents",
       "requires": [

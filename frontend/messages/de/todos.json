@@ -275,6 +275,11 @@
     "attachExisting": "Bestehende anhängen",
     "uploadCopy": "Kopie hochladen",
     "attachedExisting": "Bestehende Datei «{name}» angehängt.",
-    "alreadyAttached": "«{name}» ist bereits an diese Pendenz angehängt."
+    "alreadyAttached": "«{name}» ist bereits an diese Pendenz angehängt.",
+    "discarded": "{count, plural, one {Eine hochgeladene Datei liegt} other {# hochgeladene Dateien liegen}} im Papierkorb (wiederherstellbar).",
+    "gpsTitle": "Standortdaten im Bild",
+    "gpsMessage": "«{name}» enthält GPS-Daten. Wie beim Foto-Upload mitsenden?",
+    "gpsInclude": "GPS mitsenden",
+    "gpsStrip": "Ohne GPS hochladen"
   }
 }

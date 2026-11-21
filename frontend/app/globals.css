@@ -7300,9 +7300,21 @@ button.table-row-link.table-row-toggle {
   box-shadow: var(--shadow);
   animation: confirm-shell-in var(--dur-base) cubic-bezier(0.25, 1.15, 0.5, 1) both;
 }
-/* Rückfrage mit zwei Wegen (useChoice): drei Knöpfe passen auf dem Desktop in eine Zeile */
+/* Rückfrage mit zwei Wegen (useChoice): drei Knöpfe auf dem Desktop in einer Zeile,
+   auf dem Smartphone gestapelt (Hauptaktion oben, volle Breite) */
 .confirm-shell.confirm-choice {
-  width: min(520px, 100%);
+  width: min(600px, 100%);
+}
+.confirm-choice .confirm-actions {
+  flex-wrap: nowrap;
+}
+@media (max-width: 640px) {
+  .confirm-choice .confirm-actions {
+    flex-direction: column-reverse;
+  }
+  .confirm-choice .confirm-actions button {
+    width: 100%;
+  }
 }
 @keyframes confirm-shell-in {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }

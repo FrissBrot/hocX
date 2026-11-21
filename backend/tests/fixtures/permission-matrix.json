@@ -942,6 +942,13 @@
         "writer"
       ]
     },
+    "POST /api/files/discard-uploads": {
+      "handler": "files.discard_unlinked_uploads",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "POST /api/files/document-uploads": {
       "handler": "files.upload_documents",
       "allowed": [

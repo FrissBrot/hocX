@@ -275,6 +275,11 @@
     "attachExisting": "Allega esistente",
     "uploadCopy": "Carica una copia",
     "attachedExisting": "File esistente «{name}» allegato.",
-    "alreadyAttached": "«{name}» è già allegato a questo compito."
+    "alreadyAttached": "«{name}» è già allegato a questo compito.",
+    "discarded": "{count, plural, one {Un file caricato è stato spostato} other {# file caricati sono stati spostati}} nel cestino (ripristinabile).",
+    "gpsTitle": "Dati di posizione nell’immagine",
+    "gpsMessage": "«{name}» contiene dati GPS. Includerli, come nel caricamento di foto?",
+    "gpsInclude": "Includi GPS",
+    "gpsStrip": "Carica senza GPS"
   }
 }

@@ -14,6 +14,12 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/lib/image-analysis/precheck", () => ({
   hashForPrecheck: async (file: File) => ({ sha256: `sha-${file.name}`, analysis: "ok" }),
 }));
+vi.mock("@/lib/image-analysis/analyze", () => ({
+  analyzeFile: async (file: File) => ({
+    kind: "image", sha256: `sha-${file.name}`, analysis: "ok", format: "png", captureDate: "missing",
+    metadata: file.name.includes("gps") ? { gps: { latitude: 47.3, longitude: 8.5 } } : {},
+  }),
+}));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true), useChoice: () => choice }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -155,6 +161,61 @@ describe("Pendenz-Dialog als Dropzone", () => {
     fireEvent.drop(shell, fileTransfer([new File(["x"], "virus.pdf")]));
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining("infiziert"), "error"));
     expect(screen.queryByRole("link", { name: /virus\.pdf/ })).toBeNull();
+  });
+});
+
+describe("Abbrechen und GPS", () => {
+  it("Abbrechen legt die im Dialog hochgeladenen, nicht gespeicherten Dateien in den Papierkorb", async () => {
+    const onClose = vi.fn();
+    api.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url.endsWith("/details") && !init?.method) return Promise.resolve({ notes: "", files: [] });
+      if (url === "/api/files/duplicate-check") return Promise.resolve({ matches: [] });
+      if (url === "/api/files/discard-uploads") return Promise.resolve({ discarded: ["file-new"] });
+      if (url.startsWith("/api/files")) return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    mount({ onClose });
+    const shell = await dialogShell();
+    fireEvent.drop(shell, fileTransfer([new File(["x"], "Budget.pdf")]));
+    await screen.findByRole("link", { name: /Budget\.pdf/ });
+
+    fireEvent.click(within(shell).getByRole("button", { name: "Abbrechen" }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(api).toHaveBeenCalledWith("/api/files/discard-uploads", expect.objectContaining({ method: "POST", body: JSON.stringify({ file_ids: ["file-new"] }) }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining("Papierkorb"), "info"));
+  });
+
+  it("vorhandene, nur angehängte Dateien werden nie verworfen", async () => {
+    duplicateMatches = [{ sha256: "x", file: existing }];
+    choice.mockResolvedValue("confirm");
+    const onClose = vi.fn();
+    mount({ onClose });
+    const shell = await dialogShell();
+    fireEvent.drop(shell, fileTransfer([new File(["x"], "Budget.pdf")]));
+    await screen.findByRole("link", { name: /Budget\.pdf/ });
+    fireEvent.click(within(shell).getByRole("button", { name: "Abbrechen" }));
+    expect(api).not.toHaveBeenCalledWith("/api/files/discard-uploads", expect.anything());
+  });
+
+  it("Bild mit GPS: Rückfrage, «Ohne GPS» sendet include_gps=false, gilt für das ganze Ablegen", async () => {
+    choice.mockResolvedValue("alternative");
+    mount({ canUploadImages: true });
+    const shell = await dialogShell();
+    fireEvent.drop(shell, fileTransfer([new File(["a"], "gps-1.jpg"), new File(["b"], "gps-2.jpg")]));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    expect(choice).toHaveBeenCalledOnce();
+    expect(choice.mock.calls[0][0]).toMatchObject({ title: "Standortdaten im Bild", confirmLabel: "GPS mitsenden", alternativeLabel: "Ohne GPS hochladen" });
+    for (const call of upload.mock.calls) expect((call[1] as FormData).get("include_gps")).toBe("false");
+  });
+
+  it("Bild ohne GPS: keine Rückfrage", async () => {
+    mount({ canUploadImages: true });
+    const shell = await dialogShell();
+    fireEvent.drop(shell, fileTransfer([new File(["a"], "foto.jpg")]));
+    await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    expect(choice).not.toHaveBeenCalled();
+    expect((upload.mock.calls[0][1] as FormData).get("include_gps")).toBeNull();
   });
 });
 

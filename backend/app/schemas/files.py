@@ -320,6 +320,16 @@ class FileDuplicateCheckResponse(BaseModel):
     matches: list[FileDuplicateMatch]
 
 
+class FileDiscardUploadsRequest(BaseModel):
+    """POST /files/discard-uploads: im Pendenz-Dialog hochgeladene, nicht verknüpfte Dateien."""
+
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_DUPLICATE_CHECK_HASHES * 5)
+
+
+class FileDiscardUploadsResult(BaseModel):
+    discarded: list[uuid.UUID]
+
+
 class CaptureDateUpdate(BaseModel):
     """PATCH /stored-files/{id}/capture-date - null entfernt das geschätzte Datum."""
 

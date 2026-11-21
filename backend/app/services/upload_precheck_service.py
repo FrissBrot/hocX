@@ -138,7 +138,7 @@ def enrich_existing(
 
 
 def precheck(
-    db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None
+    db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None, viewer=None
 ) -> list[UploadPrecheckResult]:
     """Siehe Moduldocstring. Committet die ergänzten Metadaten selbst (eine Transaktion für
     den ganzen Batch, Zeilen gesperrt) - der Aufrufer muss nichts mehr tun.
@@ -152,6 +152,19 @@ def precheck(
     with_metadata = request.context == "gallery"
     estimated = metadata_service.valid_estimated_date(request.estimated_taken_on) if with_metadata else None
     existing = find_existing(db, tenant_id, [entry.sha256 for entry in request.files], lock=True)
+    if viewer is not None:
+        # Nur Dateien, die die Person sehen darf (Security-Review V-1): unsichtbare Treffer gelten
+        # als unbekannt - keine fremde ID, keine Metadaten-Ergänzung, der Upload wird eine eigene
+        # Kopie. Die Sichtbarkeitsabfrage läuft immer (gleiche Antwortzeit-Logik wie duplicate-check).
+        from app.services.file_service import FileService
+
+        candidate_ids = list(dict.fromkeys(row.public_id for rows in existing.values() for row in rows))
+        visible = FileService().visible_overview_items(db, viewer, candidate_ids)
+        existing = {
+            checksum: kept
+            for checksum, rows in existing.items()
+            if (kept := [row for row in rows if row.public_id in visible])
+        }
     results: list[UploadPrecheckResult] = []
     # Dieselbe Aufnahme mehrfach in einem Batch: nur die erste Kopie wird als Upload gemeldet,
     # weitere als fallback_required (der Server überspringt sie beim Upload als Duplikat).

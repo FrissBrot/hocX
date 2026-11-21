@@ -275,6 +275,11 @@
     "attachExisting": "Joindre l’existant",
     "uploadCopy": "Téléverser une copie",
     "attachedExisting": "Fichier existant « {name} » joint.",
-    "alreadyAttached": "« {name} » est déjà joint à cette tâche."
+    "alreadyAttached": "« {name} » est déjà joint à cette tâche.",
+    "discarded": "{count, plural, one {Un fichier téléversé a été placé} other {# fichiers téléversés ont été placés}} dans la corbeille (restaurable).",
+    "gpsTitle": "Données de localisation dans l’image",
+    "gpsMessage": "« {name} » contient des données GPS. Les inclure, comme pour le téléversement de photos ?",
+    "gpsInclude": "Inclure le GPS",
+    "gpsStrip": "Téléverser sans GPS"
   }
 }

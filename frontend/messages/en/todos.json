@@ -275,6 +275,11 @@
     "attachExisting": "Attach existing",
     "uploadCopy": "Upload copy",
     "attachedExisting": "Existing file “{name}” attached.",
-    "alreadyAttached": "“{name}” is already attached to this task."
+    "alreadyAttached": "“{name}” is already attached to this task.",
+    "discarded": "{count, plural, one {One uploaded file was} other {# uploaded files were}} moved to the trash (restorable).",
+    "gpsTitle": "Location data in image",
+    "gpsMessage": "“{name}” contains GPS data. Include it, as with photo uploads?",
+    "gpsInclude": "Include GPS",
+    "gpsStrip": "Upload without GPS"
   }
 }

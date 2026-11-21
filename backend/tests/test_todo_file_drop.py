@@ -9,6 +9,7 @@
 import asyncio
 import hashlib
 import io
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -18,7 +19,7 @@ from starlette.datastructures import Headers
 
 from app.api.routes import files as files_routes
 from app.models.entities import GalleryImage, StoredFile, SubmissionAssignment
-from app.schemas.files import FileDuplicateCheckRequest
+from app.schemas.files import FileDiscardUploadsRequest, FileDuplicateCheckRequest, UploadPrecheckRequest
 from app.services.file_service import FileService
 from tests.factories import make_current_user, make_tenant
 
@@ -233,3 +234,162 @@ def test_document_upload_allow_images_stores_image(db):
 
     assert len(result.items) == 1
     assert result.items[0].mime_type == "image/png"
+
+
+# --- V-1/V-2: Duplikate, die die Person nicht sehen darf, gelten als unbekannt --------------
+
+def _photos_manager(tenant_id: int):
+    """Darf Fotos verwalten, sieht aber keine Dokumente der Ablage."""
+    return make_current_user(
+        tenant_id, role="writer", permissions=frozenset({"photos.read", "photos.manage", "files.manage", "meetings.read"})
+    )
+
+
+def test_precheck_treats_invisible_duplicate_as_unknown(db):
+    tenant = make_tenant(db)
+    _store_pdf(db, tenant.id)
+    entry = {"client_id": "a", "sha256": _sha(PDF), "name": "x.pdf", "size": len(PDF)}
+
+    hidden = files_routes.precheck_uploads(
+        UploadPrecheckRequest(context="document", files=[entry]), db=db, user=_photos_manager(tenant.id)
+    ).results
+    visible = files_routes.precheck_uploads(
+        UploadPrecheckRequest(context="document", files=[entry]), db=db, user=make_current_user(tenant.id, role="writer")
+    ).results
+
+    assert hidden[0].status == "upload_required" and hidden[0].file_id is None
+    assert visible[0].status == "already_exists" and visible[0].file_id is not None
+
+
+def test_precheck_never_reports_foreign_tenant_file(db):
+    own, foreign = make_tenant(db), make_tenant(db)
+    _store_pdf(db, foreign.id)
+    entry = {"client_id": "a", "sha256": _sha(PDF), "name": "x.pdf", "size": len(PDF)}
+    result = files_routes.precheck_uploads(
+        UploadPrecheckRequest(context="document", files=[entry]), db=db, user=make_current_user(own.id, role="writer")
+    ).results
+    assert result[0].status == "upload_required" and result[0].file_id is None
+
+
+def test_document_upload_stores_copy_of_invisible_duplicate(db):
+    tenant = make_tenant(db)
+    hidden = _store_pdf(db, tenant.id)
+
+    result = _upload(db, _photos_manager(tenant.id), [_upload_file(PDF, "kopie.pdf")])
+
+    assert len(result.items) == 1 and result.errors == []
+    assert all(entry.file_id != str(hidden.public_id) for entry in result.file_results)
+    assert db.query(StoredFile).filter_by(tenant_id=tenant.id, checksum_sha256=_sha(PDF)).count() == 2
+
+
+def test_document_upload_still_skips_visible_duplicate_with_its_id(db):
+    tenant = make_tenant(db)
+    stored = _store_pdf(db, tenant.id)
+
+    result = _upload(db, make_current_user(tenant.id, role="writer"), [_upload_file(PDF, "nochmal.pdf")])
+
+    assert result.items == []
+    assert [(entry.status, entry.file_id) for entry in result.file_results] == [("skipped", str(stored.public_id))]
+
+
+def test_visibility_query_runs_even_without_candidates(db, monkeypatch):
+    """Gleiche Antwortzeit-Logik: ohne Treffer im Mandanten läuft die Sichtbarkeitsabfrage trotzdem."""
+    tenant = make_tenant(db)
+    calls = []
+    original = FileService.visible_overview_items
+    monkeypatch.setattr(FileService, "visible_overview_items", lambda self, *args: calls.append(args) or original(self, *args))
+    entry = {"client_id": "a", "sha256": "0" * 64, "name": "x.pdf", "size": 1}
+
+    files_routes.precheck_uploads(UploadPrecheckRequest(context="document", files=[entry]), db=db, user=make_current_user(tenant.id))
+    _upload(db, make_current_user(tenant.id), [_upload_file(b"%PDF-1.7\n%neu\n", "neu.pdf")])
+
+    assert len(calls) >= 2
+
+
+# --- GPS wie beim Galerie-Upload ------------------------------------------------------------
+
+def _stored_bytes(db, stored: StoredFile) -> bytes:
+    from app.core.storage import get_object_store
+    from app.services.stored_file_location import namespace_for_stored_file
+
+    return get_object_store().get_bytes(namespace_for_stored_file(db, stored), stored.storage_path)
+
+
+def test_document_upload_strips_gps_from_images_when_asked(db):
+    from tests.image_fixtures import jpeg, read_exif
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photo = jpeg(latitude=47.37, longitude=8.54)
+    assert read_exif(photo)[2]
+
+    stripped = _upload(db, writer, [_upload_file(photo, "ort.jpg")], allow_images=True, allow_duplicates=True, include_gps=False)
+    kept = _upload(db, writer, [_upload_file(photo, "ort2.jpg")], allow_images=True, allow_duplicates=True)
+
+    stripped_row = db.query(StoredFile).filter_by(public_id=stripped.items[0].id).one()
+    kept_row = db.query(StoredFile).filter_by(public_id=kept.items[0].id).one()
+    assert read_exif(_stored_bytes(db, stripped_row))[2] == {}
+    assert read_exif(_stored_bytes(db, kept_row))[2]
+
+
+# --- Abbrechen: frisch hochgeladene, unverknüpfte Dateien in den Papierkorb -----------------
+
+def _discard(db, user, *ids):
+    return files_routes.discard_unlinked_uploads(FileDiscardUploadsRequest(file_ids=list(ids)), db=db, user=user).discarded
+
+
+def _own_upload(db, user, name="neu.pdf", marker=b"neu"):
+    result = _upload(db, user, [_upload_file(b"%PDF-1.7\n%" + marker + b"\n", name)], allow_duplicates=True)
+    return db.query(StoredFile).filter_by(public_id=result.items[0].id).one()
+
+
+def test_discard_trashes_own_fresh_unlinked_upload(db):
+    tenant = make_tenant(db)
+    from tests.factories import make_app_user
+
+    account = make_app_user(db, email=f"d{tenant.id}@example.com", tenant_id=tenant.id, role_code="writer")
+    writer = make_current_user(tenant.id, role="writer", user_id=account.id)
+    stored = _own_upload(db, writer)
+
+    assert _discard(db, writer, stored.public_id) == [stored.public_id]
+    db.refresh(stored)
+    assert stored.deleted_at is not None  # Papierkorb, wiederherstellbar
+
+
+def test_discard_never_touches_foreign_linked_old_or_other_peoples_files(db):
+    from app.models.entities import ProtocolTodoFile
+    from app.schemas.protocol import ProtocolTodoCreate
+    from app.services.protocol_todo_service import ProtocolTodoService
+    from tests.factories import make_app_user
+
+    tenant, foreign = make_tenant(db), make_tenant(db)
+    me = make_app_user(db, email=f"me{tenant.id}@example.com", tenant_id=tenant.id, role_code="writer")
+    other = make_app_user(db, email=f"other{tenant.id}@example.com", tenant_id=tenant.id, role_code="writer")
+    writer = make_current_user(tenant.id, role="writer", user_id=me.id)
+
+    linked = _own_upload(db, writer, "verknuepft.pdf", b"a")
+    todo = ProtocolTodoService().create_standalone_todo(db, tenant.id, ProtocolTodoCreate(task="Mit Datei", todo_status_id=1))
+    db.flush()
+    db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=linked.id, sort_index=0))
+    old = _own_upload(db, writer, "alt.pdf", b"b")
+    old.created_at = datetime(2020, 1, 1, tzinfo=UTC)
+    someone_else = _own_upload(db, make_current_user(tenant.id, role="writer", user_id=other.id), "fremd.pdf", b"c")
+    foreign_file = _own_upload(db, make_current_user(foreign.id, role="writer", user_id=me.id), "mandant.pdf", b"d")
+    with_bezug = _own_upload(db, writer, "bezug.pdf", b"e")
+    gallery = db.query(GalleryImage).filter_by(stored_file_id=with_bezug.id).one()
+    gallery.submission_assignment_id = _assignment_id(db, tenant.id)
+    db.flush()
+
+    ids = [linked.public_id, old.public_id, someone_else.public_id, foreign_file.public_id, with_bezug.public_id]
+    assert _discard(db, writer, *ids) == []
+    for row in (linked, old, someone_else, foreign_file, with_bezug):
+        db.refresh(row)
+        assert row.deleted_at is None
+
+
+def test_discard_requires_manage_permission(db):
+    tenant = make_tenant(db)
+    reader = make_current_user(tenant.id, role="reader", permissions=frozenset({"files.read", "meetings.read"}))
+    with pytest.raises(HTTPException) as exc_info:
+        _discard(db, reader, uuid.uuid4())
+    assert exc_info.value.status_code == 403

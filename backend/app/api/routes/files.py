@@ -46,6 +46,8 @@ from app.schemas.files import (
     ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
+    FileDiscardUploadsRequest,
+    FileDiscardUploadsResult,
     FileDuplicateCheckRequest,
     FileDuplicateCheckResponse,
     FileDuplicateMatch,
@@ -456,7 +458,7 @@ def precheck_uploads(
         raise HTTPException(status_code=400, detail="No active tenant")
     if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
-    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id)
+    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id, viewer=user)
     return UploadPrecheckResponse(results=results)
 
 
@@ -706,6 +708,8 @@ async def upload_documents(
     allow_duplicates: Annotated[bool, Form()] = False,
     # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
     allow_images: Annotated[bool, Form()] = False,
+    # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -716,7 +720,7 @@ async def upload_documents(
     kommt direkt zurueck."""
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, db=db, user=user)
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, include_gps=include_gps, db=db, user=user)
 
 
 async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
@@ -735,6 +739,8 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     allow_duplicates: Annotated[bool, Form()] = False,
     # Pendenz-Dialog: Bilder (ohne HEIC) wie Dokumente annehmen - nur mit photos.manage.
     allow_images: Annotated[bool, Form()] = False,
+    # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -817,6 +823,9 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
         file_results=file_results,
         allow_images=allow_images is True,
         allow_duplicates=allow_duplicates is True,
+        include_gps=include_gps is not False,
+        # Duplikate nur überspringen, wenn die Person sie sehen darf (Security-Review V-2)
+        viewer=user,
     )
     return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
 
@@ -1979,6 +1988,55 @@ def set_file_best_everywhere(
         raise HTTPException(
             status_code=422, detail="Dieses Foto gehört zu keinem Album – Best-of ist nur innerhalb eines Albums möglich."
         )
+
+
+# Höchstalter einer Datei, die «Abbrechen» im Pendenz-Dialog noch zurücknimmt (zusätzlich zur
+# Anmeldung der Session): ein Dialog bleibt nicht länger offen.
+DISCARD_UPLOAD_MAX_AGE = timedelta(hours=12)
+
+
+def _discardable_upload_ids(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Nur frisch von dieser Person in dieser Sitzung hochgeladene Dateien ohne jeden Bezug:
+    eigener Mandant, created_by = Person, nach Anmeldung bzw. höchstens 12 h alt, keine
+    Pendenz-Verknüpfung, kein Termin/Zyklus/Abgabe-Bezug, in keinem Album. Alles andere wird
+    stillschweigend übergangen (gleiche Antwort wie eine unbekannte ID)."""
+    from app.models.entities import ProtocolTodoFile
+
+    since = datetime.now(UTC) - DISCARD_UPLOAD_MAX_AGE
+    if user.auth_time is not None and user.auth_time > since:
+        since = user.auth_time
+    rows = db.execute(
+        select(StoredFile.public_id)
+        .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
+        .where(
+            StoredFile.tenant_id == user.current_tenant_id,
+            StoredFile.public_id.in_(public_ids),
+            StoredFile.created_by == user.user_id,
+            StoredFile.created_at >= since,
+            StoredFile.deleted_at.is_(None),
+            GalleryImage.event_id.is_(None),
+            GalleryImage.cycle_config_id.is_(None),
+            GalleryImage.submission_assignment_id.is_(None),
+            ~select(ProtocolTodoFile.stored_file_id).where(ProtocolTodoFile.stored_file_id == StoredFile.id).exists(),
+            ~select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.file_id == StoredFile.public_id).exists(),
+        )
+    ).scalars()
+    return list(dict.fromkeys(rows))
+
+
+@router.post("/files/discard-uploads", response_model=FileDiscardUploadsResult)
+def discard_unlinked_uploads(payload: FileDiscardUploadsRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """«Abbrechen» im Pendenz-Dialog: dort hochgeladene, nicht mit «Speichern» verknüpfte Dateien
+    in den Papierkorb (wiederherstellbar, file_trash_service mit seinen Löschrechten). Nie schon
+    vorhandene, verknüpfte oder fremde Dateien - siehe _discardable_upload_ids."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = _discardable_upload_ids(db, user, list(dict.fromkeys(payload.file_ids)))
+    if not ids:
+        return FileDiscardUploadsResult(discarded=[])
+    trashed, _errors = file_trash_service.trash_files(db, user, ids, hidden_ids=_files_outside_scope(db, user, ids))
+    return FileDiscardUploadsResult(discarded=trashed)
 
 
 @router.post("/files/bulk-delete", response_model=FileBulkDeleteResult)

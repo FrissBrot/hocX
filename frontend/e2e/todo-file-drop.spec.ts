@@ -134,6 +134,20 @@ test("Pendenz: Datei ins Popup ziehen, Duplikat-Rückfrage, Höhe der Dateisuche
   expect(details.files.map((file) => file.original_name)).toEqual([newName, existingName]);
   expect(details.files[1].id).toBe(existingId);
 
+  // ── Abbrechen: im Dialog hochgeladene, nicht gespeicherte Datei landet im Papierkorb ─────
+  await openTodo(page, todo.task);
+  const discardName = `Verworfen-${suffix}.pdf`;
+  await dragFiles(page, "drop", [{ name: discardName, content: `%PDF-1.7\n%e2e-discard-${suffix}\n%%EOF\n` }]);
+  await expect(dialog(page).getByRole("link", { name: new RegExp(discardName) })).toBeVisible({ timeout: 60_000 });
+  await dialog(page).getByRole("button", { name: "Abbrechen" }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(async () => {
+    const trash = await (await request.get("/api/files/trash")).json() as { items: { original_name: string }[] };
+    expect(trash.items.map((item) => item.original_name)).toContain(discardName);
+  }).toPass({ timeout: 30_000 });
+  const afterCancel = await (await request.get(`/api/protocol-todos/${todo.id}/details`)).json() as { files: { original_name: string }[] };
+  expect(afterCancel.files.map((file) => file.original_name)).toEqual([newName, existingName]);
+
   // ── 390 px: Smartphones bekommen das Mobile-Sheet (ohne Dateisuche/Dropzone) ─────────────
   await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ["light", "dark"]) {
