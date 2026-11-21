@@ -89,7 +89,7 @@ def test_security_mail_links_only_to_profile_security_and_has_no_settings_hint()
     links = set(re.findall(r'href="([^"]+)"', mail.html))
     assert all(link.endswith("/?profile=security") for link in links), links
     assert "profile=notifications" not in mail.html and "#token" not in mail.html
-    assert "lassen sich nicht abbestellen" in mail.html
+    assert "lassen sich nicht abschalten" in mail.html
 
 
 def test_test_mail_uses_the_frame_without_tenant():
