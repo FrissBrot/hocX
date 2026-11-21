@@ -132,7 +132,8 @@
     "selectionActions": "Azioni sulla selezione",
     "downloadError": "Impossibile scaricare le foto.",
     "removeFromAlbum": "Togli dall’album",
-    "bestHelp": "Ogni album ha una selezione delle foto migliori. hocX la propone in base all’analisi delle foto. Con la stella includi una foto in modo fisso nella selezione o la escludi; resta così anche dopo nuovi calcoli. In «Tutte le foto» la stella vale per tutti gli album che contengono la foto."
+    "bestHelp": "Ogni album ha una selezione delle foto migliori. hocX la propone in base all’analisi delle foto. Con la stella includi una foto in modo fisso nella selezione o la escludi; resta così anche dopo nuovi calcoli. In «Tutte le foto» la stella vale per tutti gli album che contengono la foto.",
+    "keywordsAction": "Parole chiave"
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# foto} other {# foto}}",

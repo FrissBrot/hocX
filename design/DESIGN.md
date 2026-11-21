@@ -73,6 +73,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
 | Filter-/Options-Menü mit Checkboxen (Ansicht, Spalten, Fälligkeit) | CSS-Klassen `.mini-menu-*` aus `globals.css` | Eingebetteter Trigger + Popover mit Sections/Checkboxen, kein Klick-Aktionsmenü für ein Objekt — dafür `ActionMenu` |
 | Tags | `TagInput` | Farben aus `TAG_COLORS` |
+| Liste kurzer Begriffe ohne Farbe (Keywords, Synonyme) | `KeywordInput` | Schlichte, gestrichelte Chips; Wert ist `string[]`. Für Tags weiter `TagInput` |
 | Datum | `DateInput` | Nie `<input type="date">` roh, Details in Abschnitt 6 |
 | Suche | `SearchInput` | Nie eigenes Suchfeld |
 | Filter (wenige Werte) | `FilterTabs` (`options`, `value`, `onChange`, optional `count`) | |

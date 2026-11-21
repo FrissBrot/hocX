@@ -132,7 +132,8 @@
     "selectionActions": "Selection actions",
     "downloadError": "Photos could not be downloaded.",
     "removeFromAlbum": "Remove from album",
-    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo."
+    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo.",
+    "keywordsAction": "Keywords"
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# photo} other {# photos}}",

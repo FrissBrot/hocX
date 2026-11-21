@@ -71,7 +71,8 @@ export function MobileFiles({ initialItems, canManage = false }: { initialItems:
   useOpenRequest(items, (item) => setDetail(item), (text) => { setSearch(text); setSearchOpen(true); });
 
   function url(skip: number) {
-    const [sortBy, sortDir] = sort.split(":");
+    // Mit Suchtext und Standardsortierung: beste Treffer zuerst (wie Desktop/Fotos)
+    const [sortBy, sortDir] = search.trim() && sort === SORTS[0].id ? ["relevance", "desc"] : sort.split(":");
     const params = new URLSearchParams({ exclude_images: "true", skip: String(skip), limit: String(PAGE_SIZE), sort_by: sortBy, sort_dir: sortDir });
     if (source !== "all") params.set("source", source);
     if (search.trim()) params.set("search", search.trim());

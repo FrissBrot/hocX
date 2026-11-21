@@ -14,6 +14,7 @@ import { useFileActions } from "./file-actions";
 import { FilesGrid } from "./files-grid";
 import { FilesTable } from "./files-table";
 import { TrashModal } from "./trash-modal";
+import { KeywordsBulkDialog } from "./keywords-bulk-dialog";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
@@ -33,7 +34,7 @@ import { DocumentUploadResult, FileOverviewItem, FileOverviewSource, FileTrashAc
 const PAGE_SIZE = 60;
 
 type SourceFilter = "all" | FileOverviewSource;
-type SortKey = "created_at" | "original_name" | "file_size_bytes";
+type SortKey = "created_at" | "original_name" | "file_size_bytes" | "relevance";
 
 type TFunc = (key: string) => string;
 
@@ -50,8 +51,12 @@ function sourceOptions(t: TFunc): { value: SourceFilter; label: string }[] {
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
-function sortOptions(t: TFunc): SortOption[] {
+// Mit Suchtext stehen die besten Treffer zuerst (tolerante Suche, services/photo_search.py), wie in Fotos.
+const RELEVANCE_SORT = "relevance:desc";
+
+function sortOptions(t: TFunc, searching: boolean): SortOption[] {
   return [
+    ...(searching ? [{ id: RELEVANCE_SORT, label: t("sortOptions.relevance"), key: "relevance" as const, dir: "desc" as const }] : []),
     { id: "created_at:desc", label: t("sortOptions.newestFirst"), key: "created_at", dir: "desc" },
     { id: "created_at:asc", label: t("sortOptions.oldestFirst"), key: "created_at", dir: "asc" },
     { id: "original_name:asc", label: t("sortOptions.nameAsc"), key: "original_name", dir: "asc" },
@@ -85,6 +90,14 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
   const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // Ohne eigene Wahl sortiert eine Suche nach Relevanz; ohne Suche gilt die gewählte Sortierung.
+  const [sortChosen, setSortChosen] = useState(false);
+  const searching = search.trim().length > 0;
+  const effectiveSortKey: SortKey = searching && !sortChosen ? "relevance" : sortKey === "relevance" && !searching ? "created_at" : sortKey;
+  const effectiveSortDir = effectiveSortKey === "relevance" ? "desc" : sortDir;
+  // Mehrfachauswahl (Keywords bearbeiten), nur mit files.manage
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [keywordsOpen, setKeywordsOpen] = useState(false);
   const [items, setItems] = useState<FileOverviewItem[]>(initialItems);
   const [hasMore, setHasMore] = useState(initialItems.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -134,8 +147,8 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
     params.set("exclude_images", "true");
     params.set("skip", String(skip));
     params.set("limit", String(PAGE_SIZE));
-    params.set("sort_by", sortKey);
-    params.set("sort_dir", sortDir);
+    params.set("sort_by", effectiveSortKey);
+    params.set("sort_dir", effectiveSortDir);
     return `/api/files?${params.toString()}`;
   }
 
@@ -166,7 +179,7 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceFilter, search, tagFilter.join(","), sortKey, sortDir]);
+  }, [sourceFilter, search, tagFilter.join(","), effectiveSortKey, effectiveSortDir]);
 
   async function reloadFromStart() {
     const requestId = ++requestIdRef.current;
@@ -264,6 +277,21 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
 
   const hasNoFiles = items.length === 0 && !hasMore && sourceFilter === "all" && !search.trim() && tagFilter.length === 0;
 
+  const selection = canDelete
+    ? {
+        selected,
+        onToggle: (id: string) =>
+          setSelected((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          }),
+        onToggleAll: () =>
+          setSelected((current) => (items.length > 0 && items.every((item) => current.has(item.id)) ? new Set() : new Set(items.map((item) => item.id)))),
+      }
+    : undefined;
+
   function openUpload() {
     setDroppedFiles([]);
     setUploadModalOpen(true);
@@ -316,12 +344,13 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
         </div>
         <SearchableSelect
           className="files-sort-select"
-          options={sortOptions(t)}
+          options={sortOptions(t, searching)}
           getId={(option) => option.id}
           getLabel={(option) => option.label}
-          value={`${sortKey}:${sortDir}`}
+          value={`${effectiveSortKey}:${effectiveSortDir}`}
           onChange={(option) => {
             if (!option) return;
+            setSortChosen(option.key !== "relevance");
             setSortKey(option.key);
             setSortDir(option.dir);
           }}
@@ -345,10 +374,22 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
         </div>
       </div>
 
+      {canDelete && selected.size > 0 ? (
+        <div className="files-bulk-bar" role="region" aria-label={t("bulk.label")}>
+          <span className="files-bulk-count">{t("bulk.selectedCount", { count: selected.size })}</span>
+          <button type="button" className="button-secondary" onClick={() => setKeywordsOpen(true)}>
+            {t("bulk.keywords")}
+          </button>
+          <button type="button" className="button-ghost" onClick={() => setSelected(new Set())}>
+            {t("bulk.clear")}
+          </button>
+        </div>
+      ) : null}
+
       {view === "grid" ? (
-        <FilesGrid items={items} onOpenDetail={setDetailItem} actionsFor={actionsFor} />
+        <FilesGrid items={items} onOpenDetail={setDetailItem} actionsFor={actionsFor} selection={selection} />
       ) : (
-        <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} actionsFor={actionsFor} />
+        <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} actionsFor={actionsFor} selection={selection} />
       )}
       </div>
       )}
@@ -371,6 +412,15 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
           initialFiles={droppedFiles}
           onClose={() => setUploadModalOpen(false)}
           onUploaded={handleDocumentsUploaded}
+        />
+      )}
+
+      {keywordsOpen && (
+        <KeywordsBulkDialog
+          open
+          fileIds={Array.from(selected)}
+          onClose={() => setKeywordsOpen(false)}
+          onDone={() => setSelected(new Set())}
         />
       )}
 

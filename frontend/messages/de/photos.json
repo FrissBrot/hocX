@@ -132,7 +132,8 @@
     "selectionActions": "Auswahlaktionen",
     "downloadError": "Fotos konnten nicht heruntergeladen werden.",
     "removeFromAlbum": "Aus Album nehmen",
-    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt."
+    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt.",
+    "keywordsAction": "Keywords"
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# Foto} other {# Fotos}}",

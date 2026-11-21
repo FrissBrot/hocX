@@ -533,5 +533,23 @@
       "critical": "Kritisch"
     },
     "loadFailed": "Die Daten konnten nicht geladen werden."
+  },
+  "searchSynonyms": {
+    "eyebrow": "Suche",
+    "intro": "Die Suche in Fotos und Ablage findet auch gleichbedeutende Wörter. Hier legt ihr eigene fest, zusätzlich zum eingebauten Grundstock.",
+    "ownTitle": "Eigene Synonyme",
+    "ownIntro": "Je Zeile eine Gruppe gleichbedeutender Wörter, z. B. «Grümpi», «Grümpelturnier». Ein Eintrag ist ein Wort.",
+    "empty": "Noch keine eigenen Synonyme.",
+    "groupLabel": "Synonymgruppe {number}",
+    "groupPlaceholder": "Wort, Enter",
+    "removeGroup": "Gruppe {number} entfernen",
+    "needsTwo": "Eine Gruppe braucht mindestens zwei Wörter, sonst wird sie nicht gespeichert.",
+    "addGroup": "Gruppe hinzufügen",
+    "save": "Speichern",
+    "saving": "Speichert …",
+    "savedToast": "Synonyme gespeichert.",
+    "saveError": "Synonyme konnten nicht gespeichert werden.",
+    "builtinTitle": "Eingebauter Grundstock ({count, number} Gruppen)",
+    "builtinIntro": "Diese Synonyme gelten immer (Vereinsleben, Schweizer Begriffe, Deutsch/Englisch/Französisch/Italienisch)."
   }
 }

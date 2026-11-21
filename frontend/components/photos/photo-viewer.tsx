@@ -13,6 +13,7 @@ import { TimeInput } from "@/components/ui/time-input";
 import { CaptureCorrectionRequest, useCaptureCorrectionConfirm } from "@/components/photos/photo-capture-date-dialog";
 import { todayIso } from "@/components/mobile/mobile-utils";
 import { TagInput } from "@/components/ui/tag-input";
+import { FileKeywords } from "@/components/files/file-keywords";
 import { PhotoDateMarker } from "@/components/photos/photo-date-marker";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { HelpPopover } from "@/components/ui/help-popover";
@@ -422,6 +423,9 @@ export function PhotoViewer({
             </div>
             <TagInput value={tagsValue} onChange={handleTagsChange} placeholder={t("tagPlaceholder")} alwaysShowPlaceholder />
           </div>
+
+          {/* Keywords: eigenständiger Baustein (lädt/speichert selbst), nur für die Suche */}
+          <FileKeywords fileId={item.id} className="photo-viewer-section" titleClassName="photo-viewer-section-title" />
         </div>
       </div>
     </div>,

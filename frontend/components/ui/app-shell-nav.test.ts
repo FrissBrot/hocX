@@ -87,7 +87,7 @@ describe("buildNav", () => {
   it("gruppiert die Einstellungen in Bereiche, Auftritt und Organisation", () => {
     const settings = settingsOf(adminSession());
     expect(settings.map((group) => group.titleKey)).toEqual(["groups.settingsAreas", "groups.appearance", "groups.organisation"]);
-    expect(hrefsOf(settings, "groups.settingsAreas")).toEqual(["/templates", "/task-packages", "/fine-settings", "/users"]);
+    expect(hrefsOf(settings, "groups.settingsAreas")).toEqual(["/templates", "/task-packages", "/fine-settings", "/users", "/tenant-settings/search"]);
     expect(hrefsOf(settings, "groups.appearance")).toEqual(["/documents", "/documents/brand", "/tenant-settings/domains"]);
     expect(hrefsOf(settings, "groups.organisation")).toEqual([
       "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/shared-links", "/tenant-settings/activity",

@@ -68,7 +68,8 @@
     "organisationProfile": "organizzazione profilo generale nome logo impostazioni configurazione associazione",
     "cycles": "flussi cicli Cicli",
     "myTasks": "I miei compiti cose da fare consegne",
-    "settings": "impostazioni configurazione panoramica opzioni"
+    "settings": "impostazioni configurazione panoramica opzioni",
+    "tenant-settings-search": "ricerca sinonimi parole chiave termini equivalenti"
   },
   "blockIn": "Blocco in «{element}»",
   "roleLabel": "Ruolo",

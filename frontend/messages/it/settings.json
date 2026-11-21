@@ -134,5 +134,10 @@
         "description": "Importare verbali e dati da Word e altre fonti."
       }
     }
+  },
+  "cards": {
+    "searchSynonyms": {
+      "description": "Sinonimi propri per la ricerca in foto e archivio."
+    }
   }
 }

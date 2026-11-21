@@ -18,6 +18,22 @@ Die Seite hat vier Reiter:
     teilen und öffentliche Links setzen zusätzlich das Abo-Modul «Teilen von Fotos» voraus.
     Siehe [Rollen & Berechtigungen](rollen.md).
 
+## Suchen, Keywords und Synonyme {#suche}
+
+Die Suche findet Fotos über Dateiname, Tags, Termin, Abgabe, Album, Protokoll, Kamera und
+Aufnahmedatum («Mai 2026», «2.5.»). Tippfehler, Umlaute und die Reihenfolge der Wörter spielen keine
+Rolle; die besten Treffer stehen zuoberst.
+
+- **Keywords** sind zusätzliche Suchbegriffe, «weniger verbindlich» als Tags: sie werden nirgends
+  angezeigt und filtern nichts, sie helfen nur beim Finden. Du setzt sie in der Foto-Ansicht in der
+  Seitenleiste unter **Keywords** (Enter oder Komma trennt) oder für mehrere Fotos auf einmal: Fotos
+  auswählen › **Keywords** › hinzufügen bzw. vorhandene zum Entfernen antippen › **Übernehmen**.
+- **Synonyme**: die Suche kennt gleichbedeutende Wörter. «Fahrrad» findet auch Fotos mit «Velo»,
+  «Sitzung» auch den «Hock», «Znüni» auch das «Zvieri» – ein eingebauter Grundstock in Deutsch,
+  Englisch, Französisch und Italienisch. Eigene Synonyme legt ein Admin unter
+  [Einstellungen › Suche & Synonyme](einstellungen.md#suche) fest. Treffer über ein Synonym stehen
+  etwas weiter unten als direkte Treffer.
+
 ## Fotos hochladen {#hochladen}
 
 1. Klicke auf **+ Bilder hochladen** oder ziehe Bilder direkt auf die Seite.

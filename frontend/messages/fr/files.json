@@ -116,7 +116,9 @@
       "scan": "Analyse antivirus",
       "pdf": "Vue PDF",
       "text": "Extraction du texte"
-    }
+    },
+    "selectAll": "Sélectionner tous les fichiers chargés",
+    "selectFile": "Sélectionner {name}"
   },
   "view": {
     "title": "Fichiers",
@@ -154,7 +156,8 @@
     "nameAsc": "Nom (A-Z)",
     "nameDesc": "Nom (Z-A)",
     "sizeDesc": "Taille (grand-petit)",
-    "sizeAsc": "Taille (petit-grand)"
+    "sizeAsc": "Taille (petit-grand)",
+    "relevance": "Meilleurs résultats"
   },
   "target": {
     "ruleType": "{filename} : type de fichier '.{ext}' non autorisé",
@@ -330,5 +333,37 @@
     "loading": "Chargement de la corbeille …",
     "loadError": "Impossible de charger la corbeille.",
     "actionError": "L'action n'a pas pu être effectuée."
+  },
+  "keywords": {
+    "title": "Mots-clés",
+    "saving": "enregistrement …",
+    "inputLabel": "Mots-clés",
+    "placeholder": "+ Mot-clé",
+    "hint": "Uniquement pour la recherche, jamais affichés. Entrée ou virgule pour séparer.",
+    "saveError": "Les mots-clés n'ont pas pu être enregistrés.",
+    "bulk": {
+      "title": "{count, plural, one {Mots-clés pour # fichier} other {Mots-clés pour # fichiers}}",
+      "description": "Les mots-clés sont des termes de recherche qui ne sont jamais affichés.",
+      "addLabel": "Ajouter",
+      "addPlaceholder": "Terme, Entrée",
+      "removeLabel": "Retirer",
+      "removeHelp": "Touchez un mot-clé existant pour le marquer à retirer.",
+      "loading": "Chargement …",
+      "noneInSelection": "La sélection n'a encore aucun mot-clé.",
+      "keep": "Garder",
+      "markRemove": "Marquer pour retirer",
+      "countSuffix": "{count}×",
+      "cancel": "Annuler",
+      "apply": "Appliquer",
+      "doneToast": "{count, plural, =0 {Aucun fichier modifié} one {# fichier mis à jour} other {# fichiers mis à jour}}",
+      "error": "Les mots-clés n'ont pas pu être modifiés.",
+      "tooMany": "Au maximum {max} fichiers à la fois."
+    }
+  },
+  "bulk": {
+    "label": "Sélection",
+    "selectedCount": "{count, plural, one {# fichier sélectionné} other {# fichiers sélectionnés}}",
+    "keywords": "Modifier les mots-clés",
+    "clear": "Annuler la sélection"
   }
 }

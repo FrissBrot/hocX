@@ -116,7 +116,9 @@
       "scan": "Controllo antivirus",
       "pdf": "Vista PDF",
       "text": "Estrazione del testo"
-    }
+    },
+    "selectAll": "Seleziona tutti i file caricati",
+    "selectFile": "Seleziona {name}"
   },
   "view": {
     "title": "File",
@@ -154,7 +156,8 @@
     "nameAsc": "Nome (A-Z)",
     "nameDesc": "Nome (Z-A)",
     "sizeDesc": "Dimensione (grande-piccolo)",
-    "sizeAsc": "Dimensione (piccolo-grande)"
+    "sizeAsc": "Dimensione (piccolo-grande)",
+    "relevance": "Risultati migliori"
   },
   "target": {
     "ruleType": "{filename}: tipo file '.{ext}' non consentito",
@@ -330,5 +333,37 @@
     "loading": "Caricamento del cestino …",
     "loadError": "Impossibile caricare il cestino.",
     "actionError": "Impossibile eseguire l'azione."
+  },
+  "keywords": {
+    "title": "Parole chiave",
+    "saving": "salvataggio …",
+    "inputLabel": "Parole chiave",
+    "placeholder": "+ Parola chiave",
+    "hint": "Solo per la ricerca, non vengono mai mostrate. Invio o virgola per separare.",
+    "saveError": "Impossibile salvare le parole chiave.",
+    "bulk": {
+      "title": "{count, plural, one {Parole chiave per # file} other {Parole chiave per # file}}",
+      "description": "Le parole chiave sono termini di ricerca che non vengono mai mostrati.",
+      "addLabel": "Aggiungi",
+      "addPlaceholder": "Termine, Invio",
+      "removeLabel": "Rimuovi",
+      "removeHelp": "Tocca una parola chiave esistente per contrassegnarla da rimuovere.",
+      "loading": "Caricamento …",
+      "noneInSelection": "La selezione non ha ancora parole chiave.",
+      "keep": "Mantieni",
+      "markRemove": "Contrassegna da rimuovere",
+      "countSuffix": "{count}×",
+      "cancel": "Annulla",
+      "apply": "Applica",
+      "doneToast": "{count, plural, =0 {Nessun file modificato} one {# file aggiornato} other {# file aggiornati}}",
+      "error": "Impossibile modificare le parole chiave.",
+      "tooMany": "Al massimo {max} file alla volta."
+    }
+  },
+  "bulk": {
+    "label": "Selezione",
+    "selectedCount": "{count, plural, one {# file selezionato} other {# file selezionati}}",
+    "keywords": "Modifica parole chiave",
+    "clear": "Annulla selezione"
   }
 }

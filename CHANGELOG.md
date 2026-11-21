@@ -6,6 +6,27 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **Keywords für Fotos und Dateien:** zusätzliche Suchbegriffe je Datei, «weniger verbindlich» als
+  Tags – nirgends angezeigt, nur für die Suche (Gewicht wie Tags, Tippfehler-tolerant). Bearbeiten in
+  der Foto-Ansicht (Seitenleiste), im Datei-Detail der Ablage und für mehrere auf einmal (Fotos:
+  Auswahl › Keywords; Ablage: neue Mehrfachauswahl › Keywords bearbeiten, hinzufügen/entfernen).
+  Rechte wie beim Taggen (Fotos: `photos.manage`, Dateien: `files.manage`, nur eigener Mandant).
+- **Synonyme in der Suche:** jedes Suchwort wird um gleichbedeutende Wörter erweitert (Gewicht 0.8,
+  auch bei Tippfehlern im Suchwort): eingebauter Grundstock mit Vereins- und Schweizer Begriffen in
+  de/en/fr/it (Velo↔Fahrrad, Hock↔Sitzung, Lager↔Zeltlager, Znüni↔Zvieri …) und eigene Gruppen je
+  Verein unter Einstellungen › **Suche & Synonyme** (`settings.manage`).
+- **Ablage:** mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
+
+### Update
+
+- Migration `0217_file_keywords_synonyms`: Spalte `stored_file.keywords` (leer, kein Backfill),
+  Tabelle `search_synonym_group` (`tenant_id`, RLS), Suchdokument und Trigger der Fotosuche nehmen
+  Keywords auf.
+
 ## [1.5.0] - 2026-11-21
 
 Erstes Release nach 1.4.1 (1.4.2 wurde nie veröffentlicht; alles daraus ist hier enthalten).

@@ -533,5 +533,23 @@
       "critical": "Critique"
     },
     "loadFailed": "Les données n’ont pas pu être chargées."
+  },
+  "searchSynonyms": {
+    "eyebrow": "Recherche",
+    "intro": "La recherche dans les photos et les fichiers trouve aussi les mots de même sens. Définissez ici les vôtres, en plus de la base intégrée.",
+    "ownTitle": "Vos synonymes",
+    "ownIntro": "Une ligne par groupe de mots de même sens, p. ex. «Grümpi», «Grümpelturnier». Chaque entrée est un mot.",
+    "empty": "Pas encore de synonymes propres.",
+    "groupLabel": "Groupe de synonymes {number}",
+    "groupPlaceholder": "Mot, Entrée",
+    "removeGroup": "Supprimer le groupe {number}",
+    "needsTwo": "Un groupe doit contenir au moins deux mots, sinon il n'est pas enregistré.",
+    "addGroup": "Ajouter un groupe",
+    "save": "Enregistrer",
+    "saving": "Enregistrement …",
+    "savedToast": "Synonymes enregistrés.",
+    "saveError": "Les synonymes n'ont pas pu être enregistrés.",
+    "builtinTitle": "Base intégrée ({count, number} groupes)",
+    "builtinIntro": "Ces synonymes s'appliquent toujours (vie associative, termes suisses, allemand/anglais/français/italien)."
   }
 }

@@ -134,5 +134,10 @@
         "description": "Protokolle und Daten aus Word und anderen Quellen übernehmen."
       }
     }
+  },
+  "cards": {
+    "searchSynonyms": {
+      "description": "Eigene Synonyme für die Suche in Fotos und Ablage."
+    }
   }
 }

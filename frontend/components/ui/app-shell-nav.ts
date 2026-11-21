@@ -145,6 +145,10 @@ export function buildSettingsNav(session: NavSession | null): SettingsGroup[] {
         ...(can(session, "access.manage")
           ? [{ href: "/users", labelKey: "users", icon: "users" as const, area: { titleKey: "participants", hrefs: ["/participants"] } }]
           : []),
+        // Suche (Synonyme) für Fotos und Ablage: Vereinseinstellung (settings.manage)
+        ...(managesSettings
+          ? [{ href: "/tenant-settings/search", labelKey: "searchSynonyms", icon: "files" as const, area: { titleKey: "groups.storage", hrefs: ["/files", "/photos"] } }]
+          : []),
       ],
     },
     {

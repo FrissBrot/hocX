@@ -68,7 +68,8 @@
     "organisationProfile": "organisation profil général nom logo paramètres réglages configuration association",
     "cycles": "déroulements cycles Cycles",
     "myTasks": "Mes tâches à faire remises",
-    "settings": "paramètres configuration vue d'ensemble options réglages"
+    "settings": "paramètres configuration vue d'ensemble options réglages",
+    "tenant-settings-search": "recherche synonymes mots-clés termes équivalents"
   },
   "blockIn": "Bloc dans «{element}»",
   "roleLabel": "Rôle",

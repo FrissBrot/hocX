@@ -116,7 +116,9 @@
       "scan": "Virenprüfung",
       "pdf": "PDF-Ansicht",
       "text": "Texterkennung"
-    }
+    },
+    "selectAll": "Alle geladenen auswählen",
+    "selectFile": "{name} auswählen"
   },
   "view": {
     "title": "Dateien",
@@ -154,7 +156,8 @@
     "nameAsc": "Name (A-Z)",
     "nameDesc": "Name (Z-A)",
     "sizeDesc": "Grösse (gross-klein)",
-    "sizeAsc": "Grösse (klein-gross)"
+    "sizeAsc": "Grösse (klein-gross)",
+    "relevance": "Beste Treffer"
   },
   "target": {
     "ruleType": "{filename}: Dateityp '.{ext}' nicht erlaubt",
@@ -330,5 +333,37 @@
     "loading": "Papierkorb wird geladen …",
     "loadError": "Papierkorb konnte nicht geladen werden.",
     "actionError": "Aktion konnte nicht ausgeführt werden."
+  },
+  "keywords": {
+    "title": "Keywords",
+    "saving": "speichert …",
+    "inputLabel": "Keywords",
+    "placeholder": "+ Keyword",
+    "hint": "Nur für die Suche, wird nirgends angezeigt. Enter oder Komma trennt.",
+    "saveError": "Keywords konnten nicht gespeichert werden.",
+    "bulk": {
+      "title": "{count, plural, one {Keywords für # Datei} other {Keywords für # Dateien}}",
+      "description": "Keywords sind Suchbegriffe, die nirgends angezeigt werden.",
+      "addLabel": "Hinzufügen",
+      "addPlaceholder": "Begriff, Enter",
+      "removeLabel": "Entfernen",
+      "removeHelp": "Antippen markiert ein vorhandenes Keyword zum Entfernen.",
+      "loading": "Lädt …",
+      "noneInSelection": "Die Auswahl hat noch keine Keywords.",
+      "keep": "Behalten",
+      "markRemove": "Zum Entfernen markieren",
+      "countSuffix": "{count}×",
+      "cancel": "Abbrechen",
+      "apply": "Übernehmen",
+      "doneToast": "{count, plural, =0 {Keine Datei geändert} one {# Datei aktualisiert} other {# Dateien aktualisiert}}",
+      "error": "Keywords konnten nicht geändert werden.",
+      "tooMany": "Höchstens {max} Dateien auf einmal."
+    }
+  },
+  "bulk": {
+    "label": "Auswahl",
+    "selectedCount": "{count, plural, one {# Datei ausgewählt} other {# Dateien ausgewählt}}",
+    "keywords": "Keywords bearbeiten",
+    "clear": "Auswahl aufheben"
   }
 }

@@ -7,6 +7,7 @@ import { HelpPopover } from "@/components/ui/help-popover";
 
 import { PhotoActionIcon } from "./photo-action-icon";
 import { PhotoCaptureDateDialog } from "./photo-capture-date-dialog";
+import { KeywordsBulkDialog } from "@/components/files/keywords-bulk-dialog";
 import { menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -54,6 +55,7 @@ export function PhotoBulkBar({
   const [bestOpen, setBestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [captureDateOpen, setCaptureDateOpen] = useState(false);
+  const [keywordsOpen, setKeywordsOpen] = useState(false);
 
   useEffect(() => {
     browserApiFetch<PhotoAlbum[]>("/api/files/albums").then((data) => setAlbums(data ?? [])).catch(() => {});
@@ -188,6 +190,7 @@ export function PhotoBulkBar({
           </Popover>
         </div>
         <button type="button" className="button-secondary button-ghost" onClick={() => setTaggingOpen((open) => !open)} disabled={busy} aria-expanded={taggingOpen}><PhotoActionIcon name="tag" />{t("tagsAction")}</button>
+        <button type="button" className="button-secondary button-ghost" onClick={() => setKeywordsOpen(true)} disabled={busy}><PhotoActionIcon name="tag" />{t("keywordsAction")}</button>
         <div ref={bestAnchorRef}>
           <button type="button" className="button-secondary button-ghost photo-bulk-best" onClick={() => setBestOpen((open) => !open)} onKeyDown={menuButtonKeyDown(bestOpen, setBestOpen)} disabled={busy} aria-haspopup="menu" aria-expanded={bestOpen}><PhotoActionIcon name="star" />{t("bestAction")}</button>
           <HelpPopover topic={t("bestAction")} docs={{ page: "fotos", anchor: "best-of" }}>{t("bestHelp")}</HelpPopover>
@@ -204,6 +207,9 @@ export function PhotoBulkBar({
       </div>
       {captureDateOpen && (
         <PhotoCaptureDateDialog open fileIds={selectedIds} onClose={() => setCaptureDateOpen(false)} onDone={onDone} />
+      )}
+      {keywordsOpen && (
+        <KeywordsBulkDialog open fileIds={selectedIds} onClose={() => setKeywordsOpen(false)} onDone={onDone} />
       )}
       <ShareLinkModal
         open={shareOpen}

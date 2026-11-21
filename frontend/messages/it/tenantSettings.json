@@ -533,5 +533,23 @@
       "critical": "Critico"
     },
     "loadFailed": "Impossibile caricare i dati."
+  },
+  "searchSynonyms": {
+    "eyebrow": "Ricerca",
+    "intro": "La ricerca in foto e archivio trova anche parole con lo stesso significato. Qui definite le vostre, oltre alla base integrata.",
+    "ownTitle": "Sinonimi propri",
+    "ownIntro": "Un gruppo di parole con lo stesso significato per riga, p. es. «Grümpi», «Grümpelturnier». Ogni voce è una parola.",
+    "empty": "Ancora nessun sinonimo proprio.",
+    "groupLabel": "Gruppo di sinonimi {number}",
+    "groupPlaceholder": "Parola, Invio",
+    "removeGroup": "Rimuovi gruppo {number}",
+    "needsTwo": "Un gruppo richiede almeno due parole, altrimenti non viene salvato.",
+    "addGroup": "Aggiungi gruppo",
+    "save": "Salva",
+    "saving": "Salvataggio …",
+    "savedToast": "Sinonimi salvati.",
+    "saveError": "Impossibile salvare i sinonimi.",
+    "builtinTitle": "Base integrata ({count, number} gruppi)",
+    "builtinIntro": "Questi sinonimi valgono sempre (vita associativa, termini svizzeri, tedesco/inglese/francese/italiano)."
   }
 }

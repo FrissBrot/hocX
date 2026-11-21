@@ -3759,6 +3759,101 @@ button.table-row-link.table-row-toggle {
   padding: 1px var(--space-2);
 }
 
+/* Keywords (KeywordInput): schlichter als Tags - gestrichelter Rahmen, keine Farbe, nur für die Suche. */
+.keyword-input-list {
+  display: contents;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px var(--space-1) 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--border-strong);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.keyword-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyword-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.keyword-input-readonly {
+  cursor: default;
+}
+
+.keyword-input-empty {
+  font-size: var(--text-sm);
+}
+
+.keyword-section-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.photo-viewer-sidebar .keyword-chip {
+  border-color: var(--pv-border);
+  color: var(--pv-text);
+}
+
+.photo-viewer-sidebar .keyword-input:focus-within {
+  box-shadow: none;
+}
+
+.photo-viewer-sidebar .keyword-section-hint,
+.photo-viewer-sidebar .keyword-input-empty {
+  color: var(--pv-muted);
+}
+
+/* Mehrfachbearbeitung Keywords (Fotos und Ablage) */
+.keyword-bulk-existing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.keyword-bulk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.keyword-bulk-toggle[aria-pressed="true"] {
+  border-style: solid;
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  text-decoration: line-through;
+}
+
+.keyword-bulk-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
 .tag-chip-active {
   background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);

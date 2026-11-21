@@ -134,5 +134,10 @@
         "description": "Bring in minutes and data from Word and other sources."
       }
     }
+  },
+  "cards": {
+    "searchSynonyms": {
+      "description": "Your own synonyms for searching photos and files."
+    }
   }
 }
