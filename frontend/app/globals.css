@@ -13233,7 +13233,7 @@ a.mobile-list-row { color: var(--text); }
 .admin-status-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); }
 .admin-status-card-meta { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .admin-status-card-meta code { font-size: var(--text-xs); }
-.admin-status-card .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.admin-status-card .table-shell { max-width: 100%; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .admin-status-state { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--status-fg); font-size: var(--text-sm); }
 .admin-status-state .admin-status-dot { width: 7px; height: 7px; }
 .admin-status-memory { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }

@@ -300,7 +300,7 @@
 
 .maintenance-history { display: flex; flex-direction: column; gap: var(--space-3); }
 
-.maintenance-history .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.maintenance-history .table-shell { max-width: 100%; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 
 .maintenance-history-reason { font-weight: 600; }
 
@@ -974,9 +974,42 @@
   }
 }
 
-/* Seiten mit breiten Tabellen/Diagrammen: eine Spalte, die nie breiter als der Platz wird (390 px) */
+/* Seiten mit breiten Tabellen/Diagrammen: eine Spalte, die nie breiter als der Platz wird (390 px).
+   Grid-Elemente sind sonst mindestens so breit wie ihr breitester Inhalt (min-width: auto). */
 .admin-status-page,
-.admin-analytics-page {
+.admin-analytics-page,
+.maintenance-page {
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
+}
+
+.admin-status-page > *,
+.admin-analytics-page > *,
+.maintenance-page > *,
+.admin-status-page .card,
+.admin-status-page section,
+.admin-analytics-page .tabs,
+.admin-analytics-page .tabs-panel {
+  min-width: 0;
+}
+
+/* Breite Tabellen in den Status-Karten scrollen in sich */
+.admin-status-page .table-shell {
+  overflow-x: auto;
+}
+
+/* Viele Reiter (Analysen, Mandanten-Detail) scrollen quer statt die Seite zu verbreitern */
+.admin-frame .tabs-list {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* Kopf mit Zeitraum-Umschaltern: auf schmalen Bildschirmen umbrechen statt überlaufen */
+.admin-frame .page-header > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-frame .page-header .filter-tabs {
+  overflow-x: auto;
 }

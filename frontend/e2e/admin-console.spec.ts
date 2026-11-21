@@ -197,6 +197,28 @@ test.describe("Sicherheit & Anmeldungen (Verein)", () => {
   });
 });
 
+// Smartphone (390 px): keine Admin-Seite wird breiter als der Viewport - breite Tabellen, Reiter und
+// Diagramme scrollen bzw. schrumpfen in sich.
+test.describe("Admin-Konsole: 390 px ohne horizontales Überlaufen", () => {
+  test.use({ storageState: authFiles.platformAdmin, viewport: { width: 390, height: 844 } });
+  test.setTimeout(480_000);
+
+  test("alle Admin-Seiten passen in 390 px", async ({ page }) => {
+    const tenants = await (await page.request.get("/api/admin/tenants?limit=1&offset=0")).json();
+    const tenantId = tenants.items?.[0]?.id as string | undefined;
+    const tenantTabs = ["", "/profile", "/subscription", "/features", "/users", "/domains", "/verification", "/storage", "/usage", "/activity", "/security", "/technical"];
+    const pages = tenantId ? [...ADMIN_PAGES, ...tenantTabs.map((tab) => `/admin/tenants/${tenantId}${tab}`)] : ADMIN_PAGES;
+    const tooWide: string[] = [];
+    for (const path of pages) {
+      await expectHealthyPage(page, path);
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      const width = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (width > 391) tooWide.push(`${path}: ${width}px`);
+    }
+    expect(tooWide, tooWide.join("\n")).toEqual([]);
+  });
+});
+
 // WCAG-Prüfung der Admin-Konsole (Plan Phase F): axe-core auf allen Bereichen, Regeln WCAG 2.1 A/AA.
 // Bekannte, bewusst offene Punkte stehen mit Begründung in AXE_DISABLED.
 const AXE_DISABLED: string[] = [
