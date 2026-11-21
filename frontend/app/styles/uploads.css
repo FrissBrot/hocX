@@ -774,7 +774,8 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  min-height: 320px;
+  /* Feste Höhe: PDF-Ansicht und «Extrahierter Text» sind gleich hoch, der Dialog springt beim Wechsel nicht */
+  height: clamp(320px, 66vh, 760px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--bg);
@@ -786,13 +787,14 @@
   align-items: center;
   justify-content: center;
   width: 100%;
+  min-height: 0;
   padding: var(--space-3);
 }
 
 .file-detail-preview-img {
   display: block;
   width: 100%;
-  max-height: 62vh;
+  max-height: 100%;
   border-radius: var(--radius-sm);
   object-fit: contain;
   box-shadow: var(--shadow-soft);
@@ -905,6 +907,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-height: 0;
   margin: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -926,8 +929,9 @@
 }
 
 .file-detail-text {
+  flex: 1 1 auto;
   width: 100%;
-  max-height: 58vh;
+  min-height: 0;
   margin: 0;
   padding: var(--space-4);
   overflow: auto;
@@ -1450,7 +1454,7 @@
   }
 
   .file-detail-preview {
-    min-height: 220px;
+    height: clamp(220px, 60vh, 560px);
   }
 
   .file-detail-cells {
