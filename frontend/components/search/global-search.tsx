@@ -5,9 +5,8 @@ import { KeyboardEvent, MutableRefObject, useEffect, useMemo, useRef, useState }
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
-import { Modal } from "@/components/ui/modal";
+import { CommandPalette, type PaletteEntry } from "@/components/search/command-palette";
 import { NavIcon } from "@/components/ui/nav-icons";
-import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { can, roleName } from "@/lib/permissions";
 import { storeSearchHandoff } from "@/lib/search/handoff";
@@ -80,12 +79,10 @@ export function GlobalSearch({
   const tNav = useTranslations("nav");
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
   const [remote, setRemote] = useState<GlobalSearchResult | null>(null);
   const [remoteState, setRemoteState] = useState<"idle" | "loading" | "error">("idle");
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const userId = session?.user?.id != null ? String(session.user.id) : null;
   const searchesPeople = can(session, "participants.read");
   const searchesFiles = can(session, "files.read") || can(session, "photos.read");
@@ -118,7 +115,6 @@ export function GlobalSearch({
     if (!open) return;
     // Das Fenster wird bei jedem Öffnen neu montiert (Zustand startet leer); die Suche nicht
     // zurücksetzen - sonst gingen die vor dem Montieren getippten Zeichen verloren.
-    setActiveIndex(0);
     setRemote(null);
     setRecent(readRecent(userId));
     const raf = window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -233,14 +229,6 @@ export function GlobalSearch({
     return result.sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
   }, [trimmed, recent, listInput, staticEntries, remote, t, roles, tNav]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [trimmed]);
-
-  useEffect(() => {
-    itemRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, entries.length]);
-
   function select(entry: SearchEntry) {
     onClose();
     if (entry.action) {
@@ -253,104 +241,54 @@ export function GlobalSearch({
     router.push(entry.href as Route);
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): boolean {
     // Strg+F / ⌘F im Suchfenster: den getippten Begriff in die Listensuche der Seite übernehmen
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f" && listInput) {
       event.preventDefault();
       onClose();
       focusListSearch(listInput, trimmed);
-      return;
+      return true;
     }
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((current) => Math.min(entries.length - 1, current + 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setActiveIndex((current) => Math.max(0, current - 1));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const entry = entries[activeIndex];
-      if (entry) select(entry);
-    }
+    return false;
   }
 
-  const activeId = entries[activeIndex] ? `global-search-option-${activeIndex}` : undefined;
-  let lastGroup: SearchGroup | null = null;
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const paletteEntries: PaletteEntry<SearchGroup>[] = entries.map((entry) => ({
+    id: entry.id,
+    group: entry.group,
+    label: entry.label,
+    sublabel: entry.sublabel,
+    icon: entry.icon ? <NavIcon name={entry.icon} /> : undefined,
+  }));
 
   return (
-    <Modal open={open} onClose={onClose} title={t("title")} hideHeader className="global-search-shell">
-      <div className="global-search" data-global-search>
-        <div className="global-search-field-row">
-          <SearchInput
-            ref={focusOnMount}
-            autoFocus
-            value={query}
-            onChange={setQuery}
-            onKeyDown={handleKeyDown}
-            placeholder={t(searchesPeople || searchesFiles ? "placeholder" : "placeholderMenus")}
-            className="global-search-input"
-            aria-label={t("title")}
-            role="combobox"
-            aria-expanded
-            aria-controls="global-search-results"
-            aria-activedescendant={activeId}
-            aria-autocomplete="list"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <kbd className="global-search-kbd">Esc</kbd>{/* i18n-ok: Tastenname, sprachunabhaengig */}
-        </div>
-
-        <div className="global-search-list" id="global-search-results" role="listbox" aria-label={t("results")}>
-          {entries.length === 0 ? (
-            <div className="global-search-empty">
-              {!trimmed
-                ? t("emptyStart")
-                : remoteState === "loading"
-                  ? t("loading")
-                  : t("noResults", { query: trimmed })}
-            </div>
-          ) : (
-            entries.map((entry, index) => {
-              const heading = entry.group !== lastGroup && entry.group !== "list" ? <div className="global-search-group" role="presentation">{t(`groups.${entry.group}`)}</div> : null;
-              lastGroup = entry.group;
-              const active = index === activeIndex;
-              return (
-                <div key={entry.id} role="presentation">
-                  {heading}
-                  <button
-                    id={`global-search-option-${index}`}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    tabIndex={-1}
-                    ref={(node) => { itemRefs.current[index] = node; }}
-                    className={`global-search-item${active ? " global-search-item-active" : ""}`}
-                    onMouseMove={() => { if (index !== activeIndex) setActiveIndex(index); }}
-                    onClick={() => select(entry)}
-                  >
-                    <span className="global-search-item-icon" aria-hidden="true">
-                      {entry.icon ? <NavIcon name={entry.icon} /> : <span className="global-search-item-dot" />}
-                    </span>
-                    <span className="global-search-item-text">
-                      <span className="global-search-item-title">{entry.label}</span>
-                      {entry.sublabel ? <span className="global-search-item-sub">{entry.sublabel}</span> : null}
-                    </span>
-                  </button>
-                </div>
-              );
-            })
-          )}
+    <CommandPalette
+      open={open}
+      onClose={onClose}
+      title={t("title")}
+      query={query}
+      onQueryChange={setQuery}
+      entries={paletteEntries}
+      groupLabel={(group) => (group === "list" ? null : t(`groups.${group}`))}
+      onSelect={(entry) => { const original = byId.get(entry.id); if (original) select(original); }}
+      placeholder={t(searchesPeople || searchesFiles ? "placeholder" : "placeholderMenus")}
+      emptyText={!trimmed ? t("emptyStart") : remoteState === "loading" ? t("loading") : t("noResults", { query: trimmed })}
+      status={
+        <>
           {trimmed && remoteState === "loading" && entries.length > 0 ? <div className="global-search-status">{t("loading")}</div> : null}
           {remoteState === "error" ? <div className="global-search-status" role="status">{t("remoteFailed")}</div> : null}
-        </div>
-
-        <div className="global-search-footer">
+        </>
+      }
+      footer={
+        <>
           <span className="global-search-footer-hint"><kbd className="global-search-kbd">↑↓</kbd> {t("hintSelect")}</span>
           <span className="global-search-footer-hint"><kbd className="global-search-kbd">↵</kbd> {t("hintOpen")}</span>
           {listInput ? <span className="global-search-footer-hint"><kbd className="global-search-kbd">{shortcut("F")}</kbd> {t("hintList")}</span> : null}
-        </div>
-      </div>
-    </Modal>
+        </>
+      }
+      onInputKeyDown={handleKeyDown}
+      inputRef={focusOnMount}
+      idPrefix="global-search"
+    />
   );
 }

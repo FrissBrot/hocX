@@ -292,7 +292,8 @@
       "reorder": "Modifier l’ordre",
       "protocol": "Procès-verbal",
       "designer": "Document Studio",
-      "media": "Photos et fichiers"
+      "media": "Photos et fichiers",
+      "admin": "Admin plateforme"
     },
     "shortcuts": {
       "global_search": "Ouvrir ou fermer la recherche globale",
@@ -323,7 +324,8 @@
       "designer_move": "Déplacer l’élément sélectionné",
       "designer_deselect": "Annuler la sélection",
       "media_previous": "Photo ou fichier précédent",
-      "media_next": "Photo ou fichier suivant"
+      "media_next": "Photo ou fichier suivant",
+      "admin_toggleSidebar": "Afficher la barre latérale compacte ou large"
     }
   },
   "numberStepper": {

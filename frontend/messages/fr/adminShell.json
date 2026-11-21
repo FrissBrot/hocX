@@ -1,36 +1,109 @@
 {
-  "title": "Administration de la plateforme",
-  "tagline": "Gérer les organisations et les utilisateurs sur l'ensemble du système.",
+  "title": "Admin plateforme",
+  "tagline": "Gérer les organisations et les utilisateurs de tout le système.",
   "groups": {
     "tenants": "Organisations",
-    "system": "Système",
-    "access": "Accès"
+    "access": "Utilisateurs et accès",
+    "security": "Sécurité",
+    "operations": "Exploitation",
+    "analytics": "Analyses",
+    "settings": "Paramètres"
   },
   "nav": {
-    "dashboard": "Tableau de bord",
+    "dashboard": "Vue d’ensemble",
     "tenants": "Organisations",
-    "pricing": "Tarifs",
-    "cashflow": "Trésorerie",
-    "users": "Utilisateurs",
-    "domains": "Domaines",
-    "systemStatus": "État du système",
-    "errorLogs": "Journal des erreurs",
-    "uploadPipeline": "Pipeline de fichiers",
-    "notifications": "Notifications",
-    "jobs": "Tâches",
-    "admins": "Comptes administrateurs",
-    "security": "Sécurité",
     "verifications": "Vérifications",
+    "domains": "Domaines",
+    "pricing": "Catalogue",
+    "cashflow": "Chiffre d’affaires et facturation",
+    "users": "Rechercher des utilisateurs",
+    "admins": "Admins plateforme",
+    "securityOverview": "Sécurité",
+    "securityEvents": "Événements de connexion",
+    "securityBlocks": "Blocages",
+    "securityAlerts": "Alertes",
+    "auditLog": "Journal d’audit",
+    "securityPolicy": "Règles",
+    "systemStatus": "État du système",
+    "jobs": "Tâches",
+    "errorLogs": "Erreurs",
+    "uploadPipeline": "Téléversements et analyses",
+    "delivery": "Distribution (e-mail)",
     "storage": "Stockage",
     "backups": "Sauvegardes",
     "maintenance": "Maintenance",
-    "documentTemplates": "Modèles de documents",
-    "auditLog": "Journal d’audit"
+    "analytics": "Analyses",
+    "notifications": "Notifications et e-mail",
+    "documentTemplates": "Contenus et modèles",
+    "account": "Profil et passkeys"
+  },
+  "keywords": {
+    "pricing": "prix plans fonctionnalités paquets de stockage changement",
+    "cashflow": "trésorerie factures coûts MRR recettes",
+    "notifications": "ntfy SMTP jeton de statut uptime",
+    "account": "passkey profil compte",
+    "theme": "apparence thème clair sombre"
+  },
+  "actions": {
+    "themeLight": "Apparence : claire",
+    "themeDark": "Apparence : sombre",
+    "themeAuto": "Apparence : automatique",
+    "shortcuts": "Afficher les raccourcis clavier"
+  },
+  "search": {
+    "title": "Rechercher dans l’admin",
+    "placeholder": "Rechercher pages, organisations, domaines …",
+    "emptyStart": "Tapez pour trouver pages, actions, organisations et domaines.",
+    "loading": "Recherche en cours …",
+    "noResults": "Aucun résultat pour « {query} ».",
+    "remoteFailed": "La recherche sur le serveur a échoué ; seules les pages et actions sont affichées.",
+    "hintSelect": "choisir",
+    "hintOpen": "ouvrir",
+    "hintToggle": "fermer",
+    "groups": {
+      "recent": "Ouverts récemment",
+      "pages": "Pages",
+      "actions": "Actions",
+      "tenants": "Organisations",
+      "users": "Utilisateurs",
+      "domains": "Domaines",
+      "jobs": "Tâches",
+      "checks": "Contrôles système",
+      "audit": "Journal d’audit"
+    }
   },
   "logout": "Se déconnecter",
   "menuToggleClose": "Fermer",
-  "breadcrumbNav": "Fil d'Ariane",
-  "readOnlyBanner": "Accès en lecture seule (support) : les modifications ne sont pas possibles avec ce compte.",
-  "accountSettings": "Paramètres du compte",
-  "accountSettingsLoadFailed": "Impossible de charger les paramètres du compte."
+  "breadcrumbNav": "Fil d’Ariane",
+  "mainNav": "Navigation admin",
+  "accountMenu": "Menu du profil",
+  "readOnlyBanner": "Accès en lecture seule (support) : ce compte ne peut rien modifier.",
+  "accountSettings": "Profil et passkeys",
+  "accountSettingsLoadFailed": "Les paramètres du compte n’ont pas pu être chargés.",
+  "navWithCount": "{label} ({count})",
+  "compactSidebar": "Compact",
+  "expandSidebar": "Déplier la barre latérale",
+  "detail": "Détail",
+  "roles": {
+    "owner": "Owner",
+    "support": "Support (lecture seule)"
+  },
+  "environments": {
+    "test": "Test",
+    "development": "Dev"
+  },
+  "attention": {
+    "label": "{count, plural, =0 {Avis, aucun ouvert} one {Avis, # ouvert} other {Avis, # ouverts}}",
+    "title": "Demande votre attention",
+    "empty": "Rien d’ouvert.",
+    "items": {
+      "verifications_open": "{count, plural, one {# vérification ouverte} other {# vérifications ouvertes}}",
+      "security_alerts": "{count, plural, one {# alerte de sécurité} other {# alertes de sécurité}}",
+      "operations_problems": "{count, plural, one {# problème d’exploitation} other {# problèmes d’exploitation}}"
+    }
+  },
+  "account": {
+    "title": "Profil et passkeys",
+    "description": "Gérer les passkeys de votre compte admin. Chaque modification exige une confirmation avec un passkey existant."
+  }
 }

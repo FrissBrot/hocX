@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { backendFetchWithSession } from "@/lib/api/server";
 import { AdminSessionInfo } from "@/types/api";
 
-export async function requireAdminSession(): Promise<AdminSessionInfo> {
+// cache(): Layout der Konsole und Seite fragen die Sitzung im selben Request nur einmal ab.
+export const requireAdminSession = cache(async function requireAdminSession(): Promise<AdminSessionInfo> {
   const session = await backendFetchWithSession<AdminSessionInfo>("/api/admin/auth/session");
   if (session === null) {
     // Siehe requireSession() in server.ts: ein nicht erreichbares Backend darf nie wie "nicht
@@ -14,4 +16,4 @@ export async function requireAdminSession(): Promise<AdminSessionInfo> {
     redirect("/admin/login");
   }
   return session;
-}
+});

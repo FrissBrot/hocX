@@ -3,34 +3,107 @@
   "tagline": "Mandanten und Benutzer über das ganze System verwalten.",
   "groups": {
     "tenants": "Mandanten",
-    "system": "System",
-    "access": "Zugang"
+    "access": "Benutzer & Zugänge",
+    "security": "Sicherheit",
+    "operations": "Betrieb",
+    "analytics": "Analysen",
+    "settings": "Einstellungen"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Übersicht",
     "tenants": "Mandanten",
-    "pricing": "Preise",
-    "cashflow": "Cashflow",
-    "users": "Benutzer",
+    "verifications": "Prüfungen",
     "domains": "Domains",
+    "pricing": "Katalog",
+    "cashflow": "Umsatz & Abrechnung",
+    "users": "Benutzer suchen",
+    "admins": "Plattform-Admins",
+    "securityOverview": "Sicherheit",
+    "securityEvents": "Anmeldeereignisse",
+    "securityBlocks": "Sperren",
+    "securityAlerts": "Warnungen",
+    "auditLog": "Audit-Log",
+    "securityPolicy": "Richtlinien",
     "systemStatus": "Systemstatus",
-    "errorLogs": "Fehlerprotokoll",
-    "uploadPipeline": "Datei-Pipeline",
-    "notifications": "Benachrichtigungen",
     "jobs": "Jobs",
-    "admins": "Admin-Accounts",
-    "security": "Sicherheit",
-    "verifications": "Verifizierungen",
-    "storage": "Storage",
+    "errorLogs": "Fehler",
+    "uploadPipeline": "Uploads & Scans",
+    "delivery": "Zustellung (E-Mail)",
+    "storage": "Speicher",
     "backups": "Backups",
     "maintenance": "Wartung",
-    "documentTemplates": "Dokumentvorlagen",
-    "auditLog": "Audit-Log"
+    "analytics": "Analysen",
+    "notifications": "Benachrichtigungen & E-Mail",
+    "documentTemplates": "Inhalte & Vorlagen",
+    "account": "Profil & Passkeys"
   },
-  "logout": "Logout",
+  "keywords": {
+    "pricing": "Preise Pläne Features Speicherpakete Umbuchung",
+    "cashflow": "Cashflow Rechnungen Kosten MRR Einnahmen",
+    "notifications": "ntfy SMTP Status-Token Uptime",
+    "account": "Passkey Profil Konto",
+    "theme": "Darstellung Theme hell dunkel"
+  },
+  "actions": {
+    "themeLight": "Darstellung: hell",
+    "themeDark": "Darstellung: dunkel",
+    "themeAuto": "Darstellung: automatisch",
+    "shortcuts": "Tastenkürzel anzeigen"
+  },
+  "search": {
+    "title": "Admin durchsuchen",
+    "placeholder": "Seiten, Mandanten, Domains suchen …",
+    "emptyStart": "Tippen, um Seiten, Aktionen, Mandanten und Domains zu finden.",
+    "loading": "Suche läuft …",
+    "noResults": "Keine Treffer für «{query}».",
+    "remoteFailed": "Die Suche auf dem Server ist fehlgeschlagen; angezeigt sind nur Seiten und Aktionen.",
+    "hintSelect": "auswählen",
+    "hintOpen": "öffnen",
+    "hintToggle": "schliessen",
+    "groups": {
+      "recent": "Zuletzt geöffnet",
+      "pages": "Seiten",
+      "actions": "Aktionen",
+      "tenants": "Mandanten",
+      "users": "Benutzer",
+      "domains": "Domains",
+      "jobs": "Jobs",
+      "checks": "Systemprüfungen",
+      "audit": "Audit-Log"
+    }
+  },
+  "logout": "Abmelden",
   "menuToggleClose": "Schliessen",
   "breadcrumbNav": "Brotkrumen",
+  "mainNav": "Admin-Navigation",
+  "accountMenu": "Profilmenü",
   "readOnlyBanner": "Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.",
-  "accountSettings": "Account Settings",
-  "accountSettingsLoadFailed": "Die Account-Einstellungen konnten nicht geladen werden."
+  "accountSettings": "Profil & Passkeys",
+  "accountSettingsLoadFailed": "Die Account-Einstellungen konnten nicht geladen werden.",
+  "navWithCount": "{label} ({count})",
+  "compactSidebar": "Kompakt",
+  "expandSidebar": "Seitenleiste ausklappen",
+  "detail": "Detail",
+  "roles": {
+    "owner": "Owner",
+    "support": "Support (nur lesen)"
+  },
+  "environments": {
+    "test": "Test",
+    "development": "Dev"
+  },
+  "attention": {
+    "label": "{count, plural, =0 {Hinweise, keine offen} one {Hinweise, # offen} other {Hinweise, # offen}}",
+    "title": "Braucht Aufmerksamkeit",
+    "empty": "Nichts offen.",
+    "items": {
+      "verifications_open": "{count, plural, one {# Prüfung offen} other {# Prüfungen offen}}",
+      "security_alerts": "{count, plural, one {# Sicherheitswarnung} other {# Sicherheitswarnungen}}",
+      "operations_problems": "{count, plural, one {# Problem im Betrieb} other {# Probleme im Betrieb}}"
+    }
+  },
+  "account": {
+    "title": "Profil & Passkeys",
+    "description": "Passkeys deines Admin-Kontos verwalten. Änderungen verlangen eine Bestätigung mit einem vorhandenen Passkey."
+  }
 }

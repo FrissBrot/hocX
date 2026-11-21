@@ -34,15 +34,32 @@ export const GLOBAL_NAMESPACES = [
 // Zusaetzliche Namespaces pro Bereich (immer zusammen mit GLOBAL_NAMESPACES ausgeliefert).
 // Schluessel = Bereichsname, wie er in <AreaIntlProvider area="..."> steht.
 export const AREA_NAMESPACES = {
-  admin: ["admin", "adminBackups", "adminCashflow", "adminMaintenance", "adminShell", "adminStorage", "files", "storage"],
-  // Unterbereich von admin: das Document Studio ist gross und wird nur hier gebraucht.
-  adminDocumentTemplates: [
+  admin: [
     "admin",
+    "adminAnalytics",
     "adminBackups",
     "adminCashflow",
     "adminMaintenance",
+    "adminOverview",
+    "adminSecurity",
     "adminShell",
     "adminStorage",
+    "adminTenantDetail",
+    "files",
+    "storage",
+  ],
+  // Unterbereich von admin: das Document Studio ist gross und wird nur hier gebraucht.
+  adminDocumentTemplates: [
+    "admin",
+    "adminAnalytics",
+    "adminBackups",
+    "adminCashflow",
+    "adminMaintenance",
+    "adminOverview",
+    "adminSecurity",
+    "adminShell",
+    "adminStorage",
+    "adminTenantDetail",
     "documentStudio",
     "files",
     "storage",

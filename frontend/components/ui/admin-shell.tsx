@@ -2,310 +2,248 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
-import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
-import { AdminAccountSettings } from "@/components/admin/admin-account-settings";
+import type { AdminSessionInfo } from "@/types/api";
+import type { AdminPaletteAction } from "@/components/admin/admin-command-palette";
+import { AdminNavIcon } from "@/components/ui/admin-nav-icons";
+import {
+  adminBreadcrumb,
+  attentionItems,
+  buildAdminNav,
+  groupCount,
+  linkCount,
+  type AdminNavCounts,
+  type AdminNavLink,
+} from "@/components/ui/admin-shell-nav";
+import { Badge } from "@/components/ui/badge";
 import { Menu, MenuDivider, MenuItem, menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
-import { ShortcutHelp } from "@/components/ui/shortcut-help";
 import { SkipLink } from "@/components/ui/skip-link";
 import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
 import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
+import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "security" | "storage" | "backups" | "maintenance";
+const AdminCommandPalette = dynamic(() => import("@/components/admin/admin-command-palette").then((m) => m.AdminCommandPalette), { ssr: false });
+const ShortcutHelp = dynamic(() => import("@/components/ui/shortcut-help").then((m) => m.ShortcutHelp), { ssr: false });
 
-type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
+const COMPACT_KEY = "hocx-admin-sidebar";
+const COUNTS_INTERVAL_MS = 60_000;
 
-// labelKey/titleKey sind Schluessel im "adminShell"-Namespace (frontend/messages/<locale>/adminShell.json) -
-// uebersetzt wird erst beim Rendern in AdminShell, siehe app-shell-nav.ts fuer dasselbe Muster.
-const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
-  { titleKey: null, links: [{ href: "/admin", labelKey: "nav.dashboard", icon: "dashboard" }] },
-  {
-    titleKey: "groups.tenants",
-    links: [
-      { href: "/admin/tenants", labelKey: "nav.tenants", icon: "tenants", badge: "count" },
-      { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
-      { href: "/admin/cashflow", labelKey: "nav.cashflow", icon: "cashflow" },
-      { href: "/admin/users", labelKey: "nav.users", icon: "users" },
-      { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
-      { href: "/admin/verifications", labelKey: "nav.verifications", icon: "verifications" },
-    ],
-  },
-  {
-    titleKey: "groups.system",
-    links: [
-      { href: "/admin/system", labelKey: "nav.systemStatus", icon: "system" },
-      { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
-      { href: "/admin/audit", labelKey: "nav.auditLog", icon: "security" },
-      { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
-      { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
-      { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
-      { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
-      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
-      { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
-      { href: "/admin/notifications", labelKey: "nav.notifications", icon: "notifications" },
-    ],
-  },
-  {
-    titleKey: "groups.access",
-    links: [
-      { href: "/admin/admins", labelKey: "nav.admins", icon: "admins" },
-    ],
-  },
-];
+type ThemePreference = "light" | "dark" | "auto";
 
-const allNavLinks = navGroups.flatMap((group) => group.links);
-
-function isActiveLink(href: string, pathname: string): boolean {
-  return pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
+function readCompact(): boolean {
+  try {
+    return window.localStorage.getItem(COMPACT_KEY) === "compact";
+  } catch {
+    return false;
+  }
 }
 
-/** Linienicons im Stil von nav-icons.tsx, nur für die Admin-Navigation. */
-function AdminNavIcon({ name }: { name: AdminIconKey }) {
-  const paths: Record<AdminIconKey, ReactNode> = {
-    dashboard: (
-      <>
-        <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.5" />
-        <rect x="13" y="3.5" width="7.5" height="7.5" rx="1.5" />
-        <rect x="3.5" y="13" width="7.5" height="7.5" rx="1.5" />
-        <rect x="13" y="13" width="7.5" height="7.5" rx="1.5" />
-      </>
-    ),
-    tenants: (
-      <>
-        <path d="M4 20V10l8-5.5L20 10v10" />
-        <path d="M9.5 20v-6h5v6M3 20h18" />
-      </>
-    ),
-    pricing: (
-      <>
-        <path d="M3.5 12.2V4.5a1 1 0 011-1h7.7l8.3 8.3a1.5 1.5 0 010 2.1l-6.4 6.4a1.5 1.5 0 01-2.1 0z" />
-        <circle cx="8" cy="8" r="1.4" />
-      </>
-    ),
-    cashflow: (
-      <>
-        <path d="M3.5 20.5h17" />
-        <path d="M4 15.5l4.5-4.5 3.5 3 7.5-7.5" />
-        <path d="M15 6.5h4.5V11" />
-      </>
-    ),
-    users: (
-      <>
-        <circle cx="9" cy="8" r="3.5" />
-        <path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5" />
-        <path d="M15.5 4.8a3.5 3.5 0 010 6.4M18 14.8c1.9.7 3.2 2.5 3.5 5.2" />
-      </>
-    ),
-    domains: (
-      <>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z" />
-      </>
-    ),
-    verifications: (
-      <>
-        <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
-        <path d="M9 12l2 2 4-4" />
-      </>
-    ),
-    documents: (
-      <>
-        <path d="M7 3.5h7l4 4V20.5H7z" />
-        <path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6" />
-      </>
-    ),
-    errors: (
-      <>
-        <path d="M10.3 4.2L2.8 17.5a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.2a2 2 0 00-3.4 0z" />
-        <path d="M12 9.5v4M12 17h.01" />
-      </>
-    ),
-    pipeline: (
-      <>
-        <path d="M4 7h9M17 7h3M4 17h3M11 17h9M4 12h13M21 12h-.5" />
-        <circle cx="15" cy="7" r="2" />
-        <circle cx="9" cy="17" r="2" />
-        <circle cx="19" cy="12" r="2" />
-      </>
-    ),
-    admins: <path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.5-4.4-1.4-7.5-4.9-7.5-9.5V6z" />,
-    system: (
-      <>
-        <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
-      </>
-    ),
-    notifications: (
-      <>
-        <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 2h-15z" />
-        <path d="M10 20.5a2 2 0 004 0" />
-      </>
-    ),
-    jobs: (
-      <>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 7.5V12l3 2" />
-      </>
-    ),
-    storage: (
-      <>
-        <ellipse cx="12" cy="6" rx="7.5" ry="2.5" />
-        <path d="M4.5 6v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5V6" />
-        <path d="M4.5 12v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-6" />
-      </>
-    ),
-    backups: (
-      <>
-        <path d="M4.5 12a7.5 7.5 0 101.9-5" />
-        <path d="M4.5 4.5V8H8" />
-        <path d="M12 8v4l2.5 1.5" />
-      </>
-    ),
-    maintenance: (
-      <>
-        <path d="M14.5 6.5a4 4 0 00-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 005.3-5.3l-2.4 2.4-2.6-.6-.6-2.6z" />
-      </>
-    ),
-    security: (
-      <>
-        <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
-        <path d="M8 10.5V7.5a4 4 0 018 0v3" />
-      </>
-    ),
-  };
+/**
+ * Rahmen der Admin-Konsole (Plan §6.1): Sidebar mit den Bereichen A–G (alle offen, Kompaktmodus),
+ * Kopfleiste mit Brotkrumen, Suche (Ctrl+K), Glocke und Umgebungs-Badge. Wird einmal im Layout
+ * app/admin/(console)/layout.tsx gemountet, nicht pro Seite.
+ */
+export function AdminShell({ children, session, environment = "production" }: { children: ReactNode; session: AdminSessionInfo; environment?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={18} height={18} aria-hidden="true" className="nav-link-icon">
-      {paths[name]}
-    </svg>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AdminShellInner session={session} environment={environment}>{children}</AdminShellInner>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
 
-export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
+function AdminShellInner({ children, session, environment }: { children: ReactNode; session: AdminSessionInfo; environment: string }) {
   const t = useTranslations("adminShell");
   const tCommon = useTranslations("common");
-  // Shortcut-Hilfe («?») und Auffangen verlorenen Fokus wie in der App-Shell
+  const shortcut = useShortcutLabel();
+  const pathname = usePathname();
+  const router = useRouter();
+  const role = session.admin?.role ?? null;
+  const navGroups = useMemo(() => buildAdminNav(role), [role]);
+  const breadcrumb = adminBreadcrumb(navGroups, pathname);
+
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   useShortcut("global.help", () => setShortcutHelpOpen(true));
   useFocusRescue();
-  const pathname = usePathname();
-  const router = useRouter();
-  const avatarTriggerRef = useRef<HTMLButtonElement>(null);
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
-  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [tenantTotal, setTenantTotal] = useState<number | null>(null);
 
+  // Suche (Ctrl+K): Zeichen, die vor dem Montieren des Fensters getippt werden, puffern (wie app-shell.tsx)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchOpenRef = useRef(false);
   useEffect(() => {
-    // Nur für den Zähler in der Navigation - limit=1 hält die Antwort klein.
-    browserApiFetch<AdminTenantPage>("/api/admin/tenants?limit=1&offset=0")
-      .then((page) => setTenantTotal(page.total))
-      .catch(() => setTenantTotal(null));
+    searchOpenRef.current = searchOpen;
+  }, [searchOpen]);
+  const toggleSearch = useCallback(() => setSearchOpen(!searchOpenRef.current), []);
+  useGlobalSearchShortcuts(toggleSearch);
+  const pendingSearchKeys = useRef<{ text: string; consumed: boolean }>({ text: "", consumed: true });
+  useEffect(() => {
+    if (!searchOpen) return;
+    pendingSearchKeys.current = { text: "", consumed: false };
+    function collect(event: KeyboardEvent) {
+      if (pendingSearchKeys.current.consumed) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      if (event.target instanceof HTMLInputElement && event.target.getAttribute("role") === "combobox") return;
+      if (event.key.length === 1) {
+        pendingSearchKeys.current.text += event.key;
+        event.preventDefault();
+      } else if (event.key === "Backspace") {
+        pendingSearchKeys.current.text = pendingSearchKeys.current.text.slice(0, -1);
+        event.preventDefault();
+      }
+    }
+    window.addEventListener("keydown", collect, true); // a11y-ok: kein Shortcut - puffert Tipp-Eingaben, bis das Suchfeld montiert ist
+    return () => window.removeEventListener("keydown", collect, true);
+  }, [searchOpen]);
+  useEffect(() => {
+    const preload = () => void import("@/components/admin/admin-command-palette");
+    const idle = (window as Window & { requestIdleCallback?: (callback: () => void) => number }).requestIdleCallback;
+    if (idle) idle(preload);
+    else window.setTimeout(preload, 1500);
   }, []);
 
-  useEffect(() => {
-    if (pathname === "/admin/security") setAccountSettingsOpen(true);
-  }, [pathname]);
+  // Kompaktmodus der Sidebar (nur Icons), pro Browser gemerkt
+  const [compact, setCompact] = useState(false);
+  useEffect(() => setCompact(readCompact()), []);
+  const toggleCompact = useCallback(() => {
+    setCompact((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(COMPACT_KEY, next ? "compact" : "expanded");
+      } catch {
+        // ohne Speicher gilt der Zustand nur bis zum Neuladen
+      }
+      return next;
+    });
+  }, []);
+  useShortcut("admin.toggleSidebar", toggleCompact);
 
-  const activeLink = allNavLinks.find((link) => isActiveLink(link.href, pathname));
-  const activeNavGroup = navGroups.find((group) => group.links.some((link) => isActiveLink(link.href, pathname)))?.titleKey ?? null;
-  const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(activeNavGroup);
-  useEffect(() => {
-    setExpandedNavGroup(activeNavGroup);
-  }, [activeNavGroup, pathname]);
-  // The backend's require_admin_write already rejects every create/update/delete for a
-  // "support"-role admin with a 403 (see core/admin_security.py) - but until this fix,
-  // nothing in the frontend ever read session.admin.role at all (audit finding,
-  // 2026-08-25), so a support admin saw the exact same fully-interactive write UI as an
-  // owner and only discovered the restriction as a confusing failed-request error deep
-  // into some action. This banner makes the actual access level visible up front instead.
-  const isReadOnlyAdmin = session.admin?.role === "support";
+  // Zähler für Sidebar und Glocke: ein Request (GET /api/admin/nav-counts), jede Minute bei sichtbarem Tab
+  const [counts, setCounts] = useState<AdminNavCounts | null>(null);
+  const loadCounts = useCallback(() => {
+    browserApiFetch<AdminNavCounts>("/api/admin/nav-counts")
+      .then(setCounts)
+      .catch(() => setCounts(null));
+  }, []);
+  useEffect(() => loadCounts(), [loadCounts]);
+  useVisibleInterval(loadCounts, COUNTS_INTERVAL_MS);
+  const attention = attentionItems(counts, role);
+  const attentionTotal = attention.reduce((sum, item) => sum + item.count, 0);
+
+  const avatarTriggerRef = useRef<HTMLButtonElement>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isReadOnlyAdmin = role === "support";
+  const isProduction = environment === "production";
+
+  function selectTheme(next: ThemePreference) {
+    try {
+      window.localStorage.setItem("hocx-theme", next);
+    } catch {
+      // Darstellung gilt dann nur für diese Seite
+    }
+    document.documentElement.dataset.themePreference = next;
+  }
 
   async function logout() {
     await browserApiFetch("/api/admin/auth/logout", { method: "POST" });
     router.replace("/admin/login");
   }
 
+  function runPaletteAction(action: AdminPaletteAction) {
+    if (action === "shortcuts") setShortcutHelpOpen(true);
+    else if (action === "logout") void logout();
+    else selectTheme(action === "theme-light" ? "light" : action === "theme-dark" ? "dark" : "auto");
+  }
+
+  const renderLink = (link: AdminNavLink) => {
+    const active = breadcrumb.link?.href === link.href || (link.href === "/admin" && pathname === "/admin");
+    const count = linkCount(link, counts);
+    const label = t(link.labelKey);
+    return (
+      <Link
+        href={link.href as Route}
+        key={link.href}
+        className={active ? "nav-link nav-link-active" : "nav-link"}
+        aria-current={active ? "page" : undefined}
+        aria-label={compact ? (count !== null ? t("navWithCount", { label, count }) : label) : undefined}
+        title={compact ? label : undefined}
+        onClick={() => setMobileNavOpen(false)}
+      >
+        <AdminNavIcon name={link.icon} />
+        <span className="nav-link-label">{label}</span>
+        {count !== null ? <span className="admin-nav-count">{count}</span> : null}
+      </Link>
+    );
+  };
+
+  const searchTrigger = (extraClass: string) => (
+    <button type="button" className={`global-search-trigger ${extraClass}`} onClick={() => setSearchOpen(true)} aria-keyshortcuts="Control+K Meta+K" aria-label={compact && extraClass === "admin-sidebar-search" ? t("search.title") : undefined}>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="5.25" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <span className="global-search-trigger-label">{tCommon("globalSearch")}</span>
+      <kbd className="global-search-kbd">{shortcut("K")}</kbd>
+    </button>
+  );
+
   return (
-    <ToastProvider>
-    <ConfirmProvider>
-    <div className="app-frame">
+    <>
+    <div className={compact ? "app-frame admin-frame admin-frame-compact" : "app-frame admin-frame"}>
       <SkipLink />
       <div className="shell">
-        {mobileNavOpen && (
-          <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
-        )}
-        <aside className={mobileNavOpen ? "sidebar sidebar-open" : "sidebar"}>
+        {mobileNavOpen && <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />}
+        <aside className={mobileNavOpen ? "sidebar admin-sidebar sidebar-open" : "sidebar admin-sidebar"}>
           <div className="brand-lockup">
             <div className="brand-mark">hX</div>
-            <div>
+            <div className="admin-brand-copy">
               <div className="eyebrow">hocX</div>
               <h2 className="sidebar-title">{t("title")}</h2>
             </div>
           </div>
-          <p className="muted sidebar-copy">{t("tagline")}</p>
-          {/* Wie die Seitenleiste der App (app-shell.tsx): Abschnitte klappen auf und zu, der
-              Abschnitt der aktuellen Seite ist offen, ein Klick öffnet einen anderen. */}
-          <nav className="sidebar-nav admin-sidebar-nav">
+          {searchTrigger("admin-sidebar-search")}
+          <nav className="sidebar-nav admin-sidebar-nav" aria-label={t("mainNav")}>
             {navGroups.map((group) => {
-              const renderLink = (link: AdminNavLink) => (
-                <Link
-                  href={link.href as Route}
-                  key={link.href}
-                  className={isActiveLink(link.href, pathname) ? "nav-link nav-link-active" : "nav-link"}
-                  aria-current={isActiveLink(link.href, pathname) ? "page" : undefined}
-                  onClick={() => setMobileNavOpen(false)}
-                >
-                  <AdminNavIcon name={link.icon} />
-                  <span className="nav-link-label">{t(link.labelKey)}</span>
-                  {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
-                </Link>
-              );
-              if (group.titleKey === null) {
-                return (
-                  <div className="nav-links" key="ungrouped">
-                    {group.links.map(renderLink)}
-                  </div>
-                );
-              }
-              const isExpanded = expandedNavGroup === group.titleKey;
+              const count = groupCount(group, counts);
               return (
-                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.titleKey}>
-                  <button
-                    type="button"
-                    className="nav-group-label"
-                    aria-expanded={isExpanded}
-                    onClick={() => setExpandedNavGroup(group.titleKey)}
-                  >
-                    <span>{t(group.titleKey)}</span>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </button>
-                  {isExpanded && <div className="nav-links">{group.links.map(renderLink)}</div>}
+                <div className="admin-nav-group" key={group.id}>
+                  {group.titleKey ? (
+                    <div className="admin-nav-group-title">
+                      <span className="admin-nav-group-label">{t(group.titleKey)}</span>
+                      {count !== null ? <span className="admin-nav-count admin-nav-count-alert">{count}</span> : null}
+                    </div>
+                  ) : null}
+                  <div className="nav-links">{group.links.map(renderLink)}</div>
                 </div>
               );
             })}
           </nav>
           <div className="sidebar-footer">
             <div className="admin-identity">
-              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountSettings")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)} onKeyDown={menuButtonKeyDown(avatarMenuOpen, setAvatarMenuOpen)}>
+              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountMenu")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)} onKeyDown={menuButtonKeyDown(avatarMenuOpen, setAvatarMenuOpen)}>
                 <span className="identity-avatar admin-identity-avatar">{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
               </button>
               <div className="admin-identity-copy">
                 <strong>{session.admin?.display_name ?? "..."}</strong>
-                <div className="identity-subtle">{session.admin?.email}</div>
+                <div className="identity-subtle">{role ? t(`roles.${role}`) : null}</div>
               </div>
-              <button type="button" className="button-ghost admin-identity-logout" onClick={() => void logout()}>
-                {t("logout")}
-              </button>
             </div>
+            <button type="button" className="button-ghost admin-compact-toggle" onClick={toggleCompact} aria-pressed={compact} aria-label={compact ? t("expandSidebar") : t("compactSidebar")}>
+              <span aria-hidden="true">{compact ? "»" : "«"}</span>
+              <span className="nav-link-label">{t("compactSidebar")}</span>
+            </button>
             <CopyrightNotice />
           </div>
         </aside>
@@ -321,29 +259,77 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               {mobileNavOpen ? t("menuToggleClose") : <span aria-hidden="true">☰</span>}
             </button>
             <nav className="topbar-breadcrumb admin-breadcrumb" aria-label={t("breadcrumbNav")}>
-              {activeLink && activeLink.href !== "/admin" ? (
+              {breadcrumb.link ? (
                 <>
-                  <Link href="/admin" className="topbar-breadcrumb-group">
-                    {t("title")}
-                  </Link>
-                  <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
-                  <span aria-current="page">{t(activeLink.labelKey)}</span>
+                  {breadcrumb.groupTitleKey ? (
+                    <>
+                      <span className="topbar-breadcrumb-group">{t(breadcrumb.groupTitleKey)}</span>
+                      <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
+                    </>
+                  ) : null}
+                  {breadcrumb.nested ? (
+                    <>
+                      <Link href={breadcrumb.link.href as Route} className="topbar-breadcrumb-group">{t(breadcrumb.link.labelKey)}</Link>
+                      <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
+                      <span aria-current="page">{t("detail")}</span>
+                    </>
+                  ) : (
+                    <span aria-current="page">{t(breadcrumb.link.labelKey)}</span>
+                  )}
                 </>
               ) : (
-                <span aria-current="page">{t("title")}</span>
+                <span aria-current="page">{t("nav.dashboard")}</span>
               )}
             </nav>
-          </header>
-          {isReadOnlyAdmin && (
-            <div className="admin-readonly-banner">
-              {t("readOnlyBanner")}
+            <div className="admin-topbar-actions">
+              {searchTrigger("admin-topbar-search")}
+              <button
+                ref={bellRef}
+                type="button"
+                className="button-icon admin-bell"
+                aria-label={t("attention.label", { count: attentionTotal })}
+                aria-haspopup="dialog"
+                aria-expanded={bellOpen}
+                onClick={() => setBellOpen((current) => !current)}
+              >
+                <AdminNavIcon name="notifications" />
+                {attentionTotal > 0 ? <span className="admin-bell-count" aria-hidden="true">{attentionTotal}</span> : null}
+              </button>
+              {!isProduction ? (
+                <span className="admin-env-badge">
+                  <Badge variant={environment === "test" ? "warning" : "info"} dot>{t(`environments.${environment === "test" ? "test" : "development"}`)}</Badge>
+                </span>
+              ) : null}
             </div>
-          )}
+          </header>
+          {isReadOnlyAdmin && <div className="admin-readonly-banner">{t("readOnlyBanner")}</div>}
           <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">{children}</main>
         </div>
       </div>
       {shortcutHelpOpen ? <ShortcutHelp open onClose={() => setShortcutHelpOpen(false)} /> : null}
+      {searchOpen ? (
+        <AdminCommandPalette open onClose={() => setSearchOpen(false)} navGroups={navGroups} adminId={session.admin?.id ?? null} onAction={runPaletteAction} pendingKeys={pendingSearchKeys} />
+      ) : null}
     </div>
+    <Popover open={bellOpen} onOpenChange={setBellOpen} anchorRef={bellRef} align="end">
+      <div className="admin-attention" role="dialog" aria-label={t("attention.title")}>
+        <div className="admin-attention-title">{t("attention.title")}</div>
+        {attention.length === 0 ? (
+          <p className="muted admin-attention-empty">{t("attention.empty")}</p>
+        ) : (
+          <ul className="admin-attention-list">
+            {attention.map((item) => (
+              <li key={item.key}>
+                <Link href={item.href as Route} className="admin-attention-item" onClick={() => setBellOpen(false)}>
+                  <span>{t(`attention.items.${item.key}`, { count: item.count })}</span>
+                  <span aria-hidden="true">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Popover>
     <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
       <Menu>
         <div className="menu-header">
@@ -351,14 +337,15 @@ export function AdminShell({ children, session }: { children: ReactNode; session
           <div className="menu-header-role">{session.admin?.email}</div>
         </div>
         <MenuDivider />
-        <MenuItem onSelect={() => { setAvatarMenuOpen(false); setMobileNavOpen(false); setAccountSettingsOpen(true); }}>
-          {t("accountSettings")}
-        </MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); setMobileNavOpen(false); router.push("/admin/account"); }}>{t("accountSettings")}</MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); selectTheme("light"); }}>{t("actions.themeLight")}</MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); selectTheme("dark"); }}>{t("actions.themeDark")}</MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); selectTheme("auto"); }}>{t("actions.themeAuto")}</MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); setShortcutHelpOpen(true); }}>{t("actions.shortcuts")}</MenuItem>
+        <MenuDivider />
         <MenuItem onSelect={() => { setAvatarMenuOpen(false); void logout(); }}>{t("logout")}</MenuItem>
       </Menu>
     </Popover>
-    <AdminAccountSettings open={accountSettingsOpen} onClose={() => { setAccountSettingsOpen(false); if (pathname === "/admin/security") router.replace("/admin"); }} />
-    </ConfirmProvider>
-    </ToastProvider>
+    </>
   );
 }

@@ -57,7 +57,7 @@ test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit 
     await page.waitForURL("**/admin");
 
     // Selbstverwaltung: der letzte Passkey ist nicht entfernbar, ein zweiter schon
-    await page.goto("/admin/security");
+    await page.goto("/admin/account");
     await expect(page.locator(".security-factor-card")).toHaveCount(1);
     await expect(page.locator(".security-factor-card").getByRole("button", { name: "Entfernen" })).toBeDisabled();
     const overview = await (await context.request.get("/api/admin/mfa")).json();

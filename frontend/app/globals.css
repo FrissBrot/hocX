@@ -15346,6 +15346,14 @@ a.export-step-meta {
   min-width: 0;
 }
 
+/* Treffer-Hervorhebung in der Befehlspalette (Mandant und Admin) */
+.global-search-hit {
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: inherit;
+  font-weight: 700;
+}
+
 .global-search-item-title {
   overflow: hidden;
   font-size: var(--text-base);

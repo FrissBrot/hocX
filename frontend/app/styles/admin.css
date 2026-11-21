@@ -668,3 +668,199 @@
   font-size: var(--text-sm);
   overflow-x: auto;
 }
+
+/* ── Admin-Konsole (Redesign Phase B): Sidebar A–G, Kompaktmodus, Kopfleiste ───────────── */
+
+.admin-sidebar {
+  gap: var(--space-4);
+}
+
+.admin-sidebar .admin-sidebar-search {
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+
+.admin-sidebar-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.admin-nav-group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.admin-nav-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-nav-count-alert {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.admin-compact-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Kompaktmodus: nur Icons, 64 px breite Sidebar (Beschriftung bleibt für Screenreader im aria-label) */
+@media (min-width: 901px) {
+  .admin-frame-compact .shell {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .admin-frame-compact .admin-sidebar {
+    padding: var(--space-3) var(--space-2);
+    align-items: center;
+  }
+
+  .admin-frame-compact .admin-sidebar .nav-link-label,
+  .admin-frame-compact .admin-sidebar .global-search-trigger-label,
+  .admin-frame-compact .admin-sidebar .global-search-kbd,
+  .admin-frame-compact .admin-brand-copy,
+  .admin-frame-compact .admin-identity-copy,
+  .admin-frame-compact .admin-nav-group-label,
+  .admin-frame-compact .sidebar-footer .copyright-notice {
+    display: none;
+  }
+
+  .admin-frame-compact .admin-sidebar .nav-link {
+    justify-content: center;
+    padding-inline: 0;
+    position: relative;
+  }
+
+  .admin-frame-compact .admin-sidebar .admin-nav-count {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+    font-size: var(--text-xs);
+  }
+
+  .admin-frame-compact .admin-nav-group-title {
+    justify-content: center;
+    padding: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .admin-frame-compact .admin-sidebar .admin-sidebar-search {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .admin-frame-compact .admin-compact-toggle {
+    justify-content: center;
+  }
+}
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.admin-topbar-actions .admin-topbar-search {
+  margin-left: 0;
+}
+
+.admin-bell {
+  position: relative;
+}
+
+.admin-bell-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: var(--on-solid);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.admin-env-badge {
+  display: inline-flex;
+}
+
+.admin-attention {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 260px;
+  padding: var(--space-3);
+}
+
+.admin-attention-title {
+  font-weight: 600;
+}
+
+.admin-attention-empty {
+  margin: 0;
+}
+
+.admin-attention-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-attention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.admin-attention-item:hover,
+.admin-attention-item:focus-visible {
+  background: var(--accent-soft);
+}
+
+@media (max-width: 640px) {
+  .admin-topbar-actions .admin-topbar-search {
+    min-width: 0;
+  }
+
+  .admin-topbar-actions .admin-topbar-search .global-search-trigger-label,
+  .admin-topbar-actions .admin-topbar-search .global-search-kbd {
+    display: none;
+  }
+}

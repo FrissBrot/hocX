@@ -45,7 +45,7 @@ export type ShortcutDefinition = {
   overridesBrowser?: boolean;
 };
 
-export const SHORTCUT_GROUPS = ["global", "lists", "dialogs", "reorder", "protocol", "designer", "media"] as const;
+export const SHORTCUT_GROUPS = ["global", "lists", "dialogs", "reorder", "protocol", "designer", "media", "admin"] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 /** Kombinationen, die Browser, Betriebssystem oder Screenreader brauchen - nie belegen. */
@@ -70,6 +70,8 @@ export const SHORTCUTS = [
   { id: "global.help", keys: ["?"], scope: "global", group: "global" },
   // Im Suchfenster (global-search.tsx): Strg+F übernimmt den getippten Begriff in die Listensuche
   // der Seite. Das Suchfenster behandelt die Taste selbst, daher hier nur zur Anzeige.
+  // Plattform-Admin (admin-shell.tsx): Sidebar kompakt/breit. «[» statt Mod+B (Browser: Lesezeichen)
+  { id: "admin.toggleSidebar", keys: ["["], scope: "global", group: "admin" },
   { id: "search.toListSearch", keys: ["Mod+F"], overridesBrowser: true, scope: "component", group: "global", kind: "standard" },
 
   // ── Standard-Interaktionen (Bausteine, nur Hilfe) ────────────────────────
