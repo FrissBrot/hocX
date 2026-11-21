@@ -14,6 +14,7 @@ abgabebox-backend/app/maintenance.py (Abgabebox) und in run_advisory_locked_loop
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -458,15 +459,38 @@ def open_deploy_windows(db: Session) -> list[MaintenanceWindow]:
     ).all())
 
 
-def begin_deploy_window(db: Session, *, version: str | None) -> tuple[MaintenanceWindow, bool]:
+# Versionen erscheinen öffentlich auf der Update-Seite («v1.5.0 → v1.5.1»): nur kurze,
+# harmlose Kennungen (Ziffern, Buchstaben, . _ + -), alles andere wird verworfen.
+_VERSION_RE = re.compile(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")
+
+
+def clean_version(value: str | None) -> str | None:
+    value = (value or "").strip()
+    return value if _VERSION_RE.fullmatch(value) else None
+
+
+def _deploy_versions(from_version: str | None, to_version: str | None) -> dict[str, str]:
+    versions = {"from_version": clean_version(from_version), "to_version": clean_version(to_version)}
+    return {key: value for key, value in versions.items() if value}
+
+
+def begin_deploy_window(db: Session, *, version: str | None, from_version: str | None = None) -> tuple[MaintenanceWindow, bool]:
     """Volle Wartung für die Dauer eines Updates, sofort aktiv (ohne Vorbereitungszeit - das
     Update startet die Container ohnehin neu). Idempotent: läuft schon ein Deploy-Fenster, wird
-    es wiederverwendet. Gibt (Fenster, neu_angelegt) zurück. Der Aufrufer committet."""
+    es wiederverwendet. Gibt (Fenster, neu_angelegt) zurück. Der Aufrufer committet.
+    Alte und neue Version stehen in ``progress`` (öffentlich auf der Update-Seite)."""
+    versions = _deploy_versions(from_version, version)
     existing = open_deploy_windows(db)
     if existing:
         window = existing[0]
         if window.state == "preparing":
             transition(db, window, "active", actor_email=DEPLOY_ACTOR, details={"source": "deploy"})
+        if versions and window.progress != versions:
+            # Ein erneuter Lauf (z. B. nach Abbruch) zeigt die Versionen dieses Laufs.
+            window.progress = versions
+            window.updated_at = _now()
+            db.flush()
+            invalidate_cache()
         return window, False
     window = create_window(
         db,
@@ -483,6 +507,7 @@ def begin_deploy_window(db: Session, *, version: str | None) -> tuple[Maintenanc
             "confidence": "planned", "rate_basis": "deploy", "reserve_basis": "deploy",
         },
     )
+    window.progress = versions
     transition(db, window, "active", actor_email=DEPLOY_ACTOR, details={"source": "deploy"})
     return window, True
 
@@ -574,9 +599,16 @@ def public_status(db: Session) -> dict[str, Any]:
     ).all()
     full = [window for window in blocking if window.kind == "full"]
     relevant = full or blocking
+    # «update» nur, wenn ausschliesslich Deploy-Fenster sperren: läuft daneben eine geplante oder
+    # manuelle Wartung, kommt hocX nach dem Update nicht zurück - dann zählt die Wartung.
+    update = bool(full) and all(window.source_job_type == DEPLOY_JOB_TYPE for window in full)
+    versions = (full[0].progress or {}) if update else {}
     status: dict[str, Any] = {
         "active": bool(full),
         "partial": bool(blocking) and not full,
+        "kind": ("update" if update else "maintenance") if blocking else None,
+        "from_version": clean_version(versions.get("from_version")) if update else None,
+        "to_version": clean_version(versions.get("to_version") or full[0].source_job_id) if update else None,
         "block_scope": "all" if full else ("writes" if any(w.block_scope == "writes" for w in blocking) else ("uploads" if blocking else None)),
         "reason_code": relevant[0].reason_code if relevant else None,
         "messages": relevant[0].public_message if relevant else {},

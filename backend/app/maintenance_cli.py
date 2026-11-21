@@ -1,6 +1,6 @@
 """Wartungsmodus während eines Updates - aufgerufen von scripts/deploy.sh (RUNBOOK Abschnitt 20).
 
-    docker compose run --rm --no-deps backend python -m app.maintenance_cli begin-deploy --version <v>
+    docker compose run --rm --no-deps backend python -m app.maintenance_cli begin-deploy --version <v> [--from-version <alt>]
     docker compose run --rm --no-deps backend python -m app.maintenance_cli end-deploy --outcome success
     docker compose run --rm --no-deps backend python -m app.maintenance_cli status
 
@@ -30,17 +30,18 @@ def _tables_exist(db) -> bool:
     )).scalar())
 
 
-def begin_deploy(db, *, version: str | None) -> str:
+def begin_deploy(db, *, version: str | None, from_version: str | None = None) -> str:
     from app.services import maintenance_service
     from app.services.audit_service import AuditService
 
     if not _tables_exist(db):
         return "übersprungen (Wartungstabellen fehlen - erste Installation)"
-    window, created = maintenance_service.begin_deploy_window(db, version=version)
+    window, created = maintenance_service.begin_deploy_window(db, version=version, from_version=from_version)
     db.commit()
     AuditService().log(
         db, action="admin.maintenance_deploy_started", actor_email=maintenance_service.DEPLOY_ACTOR,
-        entity_type="maintenance_window", details={"window_id": str(window.id), "version": version, "created": created},
+        entity_type="maintenance_window",
+        details={"window_id": str(window.id), "version": version, "from_version": from_version, "created": created},
     )
     return f"Wartung aktiv (Fenster {window.id}, {'neu' if created else 'bereits offen'})"
 
@@ -78,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.maintenance_cli", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     begin = sub.add_parser("begin-deploy", help="Wartung für das Update starten (idempotent)")
-    begin.add_argument("--version", default=None, help="Ziel-Release (nur für Verlauf und Audit)")
+    begin.add_argument("--version", default=None, help="Ziel-Release (Verlauf, Audit, öffentliche Update-Seite)")
+    begin.add_argument("--from-version", default=None, help="laufendes Release (Verlauf, Audit, öffentliche Update-Seite)")
     end = sub.add_parser("end-deploy", help="Deploy-Wartung beenden (idempotent)")
     end.add_argument("--outcome", choices=OUTCOMES, default="success")
     sub.add_parser("status", help="offene Deploy-Fenster anzeigen")
@@ -89,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with SessionLocal() as db:
             if args.command == "begin-deploy":
-                message = begin_deploy(db, version=args.version)
+                message = begin_deploy(db, version=args.version, from_version=args.from_version)
             elif args.command == "end-deploy":
                 message = end_deploy(db, outcome=args.outcome)
             else:

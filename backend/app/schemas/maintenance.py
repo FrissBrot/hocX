@@ -20,6 +20,10 @@ class PublicMaintenanceStatus(BaseModel):
 
     active: bool
     partial: bool
+    # update = nur das Deploy-Fenster sperrt (Update-Seite), maintenance = jede andere Sperre.
+    kind: Literal["update", "maintenance"] | None = None
+    from_version: str | None = None
+    to_version: str | None = None
     block_scope: str | None = None
     reason_code: str | None = None
     messages: dict[str, str] = Field(default_factory=dict)
