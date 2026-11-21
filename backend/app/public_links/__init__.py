@@ -97,7 +97,7 @@ EXEMPT_PUBLIC_ROUTES: dict[str, str] = {
     "/api/public/maintenance-status": "öffentlicher Wartungsstatus",
     "/api/public/plans": "Preise der Website, keine Daten einer Organisation",
     "/api/public/plan-comparison": "Funktionsvergleich der Website, keine Daten einer Organisation",
-    "/api/public/customers": "Namen der Organisationen, die auf der Website erscheinen wollen (show_on_website), sonst nichts",
+    "/api/public/customers": "Namen und Logos der Organisationen, die auf der Website erscheinen wollen (show_on_website), sonst nichts; Logo nur über nicht erratbare Kennung (HMAC)",
     "/api/system-status/summary": "Plattform-Statusseite mit eigenem Token, kein Mandant",
     "/api/tenants/{tenant_id}/profile-image": "Logo der Organisation (Login-Seite), öffentlich ohne Token",
 }

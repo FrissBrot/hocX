@@ -794,7 +794,7 @@
       "userLimitHelp": "Vuoto = vale il limite del piano. Attualmente {count} utenti{suffix}",
       "userLimitExceeded": " – limite raggiunto o superato.",
       "showOnWebsite": "Mostra come cliente sul sito web",
-      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’organizzazione.",
+      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (nome e logo). Attivare solo con il consenso dell’organizzazione.",
       "contractEnd": "Fine del contratto",
       "contractEndHelp": "Vuoto = senza scadenza. Dopo la fine del contratto più il periodo di export, /admin/system segnala che i dati del mandante vanno eliminati."
     },

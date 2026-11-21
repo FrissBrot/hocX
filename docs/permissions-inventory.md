@@ -6,11 +6,11 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 613 (Plattform-Admin: 140)
+- Routen gesamt: 614 (Plattform-Admin: 140)
 - Mandanten-Routen mit Rechteprüfung: 385
-- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 88
+- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
-- Routen, die Dateiinhalt ausliefern: 22
+- Routen, die Dateiinhalt ausliefern: 23
 
 ## Lücken (Routen ohne Prüfung und ohne Begründung)
 
@@ -41,6 +41,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/documents/{document_id}/versions/{version_id}/files/{role}` | managed_documents.get_document_file | meetings.read |
 | `GET /api/files/trash/{file_id}/thumbnail` | files.get_trash_thumbnail | files.manage oder photos.manage |
 | `GET /api/public/calendar/{token}.ics` | calendar_feeds.get_calendar_feed | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
+| `GET /api/public/customers/logos/{key}.png` | public_catalog.get_public_customer_logo | Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404 |
 | `GET /api/public/share/{token}/download` | public_share.download_public_share_all | öffentliche Freigabelinks: Token + Rate-Limit (share_link_service) |
 | `GET /api/public/share/{token}/files/{file_id}/download` | public_share.download_public_share_file | öffentliche Freigabelinks: Token + Rate-Limit (share_link_service) |
 | `GET /api/public/share/{token}/files/{file_id}/thumbnail` | public_share.get_public_share_thumbnail | öffentliche Freigabelinks: Token + Rate-Limit (share_link_service) |
@@ -97,6 +98,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/fines/open-summary` | Summe der eigenen Bussen; alle nur mit reports.personal (im Rumpf, wie list_fines) |
 | `GET /api/public/calendar/{token}.ics` | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
 | `GET /api/public/customers` | öffentlicher Preis-/Kundenkatalog der Website |
+| `GET /api/public/customers/logos/{key}.png` | Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404 |
 | `GET /api/public/maintenance-status` | öffentlicher Wartungsstatus |
 | `GET /api/public/plan-comparison` | öffentlicher Preis-/Kundenkatalog der Website |
 | `GET /api/public/plans` | öffentlicher Preis-/Kundenkatalog der Website |
@@ -441,6 +443,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/public-links/partner-history` | settings.manage |
 | `GET /api/public/calendar/{token}.ics` | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
 | `GET /api/public/customers` | öffentlicher Preis-/Kundenkatalog der Website |
+| `GET /api/public/customers/logos/{key}.png` | Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404 |
 | `GET /api/public/maintenance-status` | öffentlicher Wartungsstatus |
 | `GET /api/public/plan-comparison` | öffentlicher Preis-/Kundenkatalog der Website |
 | `GET /api/public/plans` | öffentlicher Preis-/Kundenkatalog der Website |

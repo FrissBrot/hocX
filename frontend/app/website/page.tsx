@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
+import { WebsiteCustomers } from "@/components/website/website-customers";
 import { WebsiteLanguageSwitcher } from "@/components/website/website-language-switcher";
 import { WebsitePlanComparison } from "@/components/website/website-plan-comparison";
 import { WebsitePricing } from "@/components/website/website-pricing";
@@ -176,16 +177,7 @@ export default async function WebsitePage() {
           </div>
         </section>
 
-        {customers.length > 0 ? (
-          <section className="ws-container ws-customers" aria-label={t("customers.label")}>
-            <span className="ws-customers-label">{t("customers.label")}</span>
-            {customers.map((customer, index) => (
-              <span key={`${customer.name}-${index}`} className="ws-customer">
-                {customer.name}
-              </span>
-            ))}
-          </section>
-        ) : null}
+        <WebsiteCustomers customers={customers} />
 
         <section id="ablauf" className="ws-container ws-section">
           <div className="ws-section-intro-split">

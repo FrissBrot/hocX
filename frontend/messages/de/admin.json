@@ -794,7 +794,7 @@
       "userLimitHelp": "Leer = Plan-Limit gilt. Aktuell {count} Benutzer{suffix}",
       "userLimitExceeded": " – Limit erreicht oder überschritten.",
       "showOnWebsite": "Auf der Website als Kunde anzeigen",
-      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis der Organisation aktivieren.",
+      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (Name und Logo). Nur mit Einverständnis der Organisation aktivieren.",
       "contractEnd": "Vertragsende",
       "contractEndHelp": "Leer = unbefristet. Nach Vertragsende plus Exportfrist meldet /admin/system, dass die Daten des Mandanten zu löschen sind."
     },

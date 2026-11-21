@@ -30,6 +30,7 @@ from app.core.objstore_client import (
     InvalidObjectKey,
     ObjectInfo,
     ObjectNotFound,
+    ObjectTooLarge,
     ObjectStore,
     StorageError,
     StorageUnavailable,
@@ -43,7 +44,7 @@ MAIN = "main"
 ABGABEBOX = "abgabebox"
 
 __all__ = [
-    "ABGABEBOX", "MAIN", "InvalidObjectKey", "ObjectInfo", "ObjectNotFound", "StorageError", "StorageUnavailable",
+    "ABGABEBOX", "MAIN", "InvalidObjectKey", "ObjectInfo", "ObjectNotFound", "ObjectTooLarge", "StorageError", "StorageUnavailable",
     "StorageWriteFenced", "delete_prefix", "get_object_store", "key_from_legacy_path", "materialize_prefix",
     "new_object_key", "object_response", "read_bytes_or_404", "safe_suffix", "upload_directory", "validate_key",
     "namespace_for_root", "storage_work_dir",
