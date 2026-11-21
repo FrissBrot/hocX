@@ -668,6 +668,9 @@ class AuditLogEntryRead(BaseModel):
     tenant_name: str | None = None
     actor_email: str | None = None
     actor_name: str | None = None
+    # 1.5.1: Art und öffentliche ID des Akteurs (Konto bzw. Plattform-Admin) für «Alle von …»
+    actor_kind: Literal["user", "admin", "system"] | None = None
+    actor_id: uuid.UUID | None = None
     ip_hash: str | None = None
     entity_type: str | None = None
     entity_id: int | None = None
@@ -677,3 +680,4 @@ class AuditLogEntryRead(BaseModel):
 class AuditLogPage(BaseModel):
     items: list[AuditLogEntryRead]
     total: int
+    retention_days: int | None = None

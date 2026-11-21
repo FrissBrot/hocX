@@ -164,7 +164,8 @@
       "role": "Ruolo",
       "public_link": "Link pubblico",
       "context_visibility": "Visibilità dei file",
-      "activity": "Cronologia"
+      "activity": "Cronologia",
+      "todo_fine": "Multa per attività"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",
@@ -325,7 +326,9 @@
       "designer_deselect": "Annullare la selezione",
       "media_previous": "Foto o file precedente",
       "media_next": "Foto o file successivo",
-      "admin_toggleSidebar": "Mostra la barra laterale compatta o estesa"
+      "admin_toggleSidebar": "Mostra la barra laterale compatta o estesa",
+      "admin_auditNext": "Voce successiva del registro di audit",
+      "admin_auditPrevious": "Voce precedente del registro di audit"
     }
   },
   "numberStepper": {

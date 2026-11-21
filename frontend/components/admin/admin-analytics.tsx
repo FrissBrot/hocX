@@ -88,7 +88,7 @@ export function AdminAnalytics({ isOwner }: { isOwner: boolean }) {
   );
 
   return (
-    <div className="grid">
+    <div className="grid admin-analytics-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("title")}</h1>

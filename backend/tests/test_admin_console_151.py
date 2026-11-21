@@ -456,3 +456,46 @@ def test_threat_windows_cover_every_rule(db):
                                                  "cross_tenant", "tenant", "limiter"}
     for threat in threats.detect(db):
         assert threat.window_minutes > 0
+
+
+# ── Audit-Log-Design: Zeitleiste, Bereiche, Einzeleintrag ──────────────────────────────────
+
+
+def test_audit_timeline_aggregates_with_same_filters_and_rights(db):
+    owner = _admin(db)
+    client = _client(db, owner)
+    db.execute(text(
+        "INSERT INTO audit_log (action, outcome, actor_email, ip_hash, created_at) VALUES "
+        "('zz151.created', 'success', :email, 'abcd1234ef', now() - interval '1 hour'), "
+        "('zz151.login_failed', 'failure', :email, 'abcd1234ef', now() - interval '2 hours'), "
+        "('yy151.deleted', 'success', NULL, 'ffff0000aa', now() - interval '3 hours'), "
+        "('zz151.created', 'success', :email, NULL, now() - interval '20 days')"
+    ), {"email": owner.email})
+    data = client.get("/api/admin/audit-log/timeline?range=24h&category=zz151").json()
+    assert len(data["buckets"]) == 24
+    assert sum(b["success"] for b in data["buckets"]) == 1 and sum(b["failure"] for b in data["buckets"]) == 1
+    assert data["totals"]["events"] == 2 and data["totals"]["failures"] == 1 and data["totals"]["persons"] == 1 and data["totals"]["sources"] == 1
+    # Bereichs-Zähler ohne den Bereichsfilter selbst
+    assert data["by_category"]["zz151"] == 2 and data["by_category"]["yy151"] == 1
+    assert data["retention_days"] > 0
+    listed = client.get("/api/admin/audit-log?range=24h&category=zz151&category=yy151&source=abcd").json()
+    assert listed["total"] == 2 and listed["retention_days"] > 0
+    assert client.get("/api/admin/audit-log?category=drop;table").status_code == 422
+    assert client.get("/api/admin/audit-log?source=xyz").status_code == 422
+    support = _client(db, _admin(db, "support"))
+    assert support.get("/api/admin/audit-log/timeline").status_code == 403
+    assert support.get("/api/admin/audit-log/entries/1").status_code == 403
+
+
+def test_audit_entry_with_context_of_same_person(db):
+    owner = _admin(db)
+    client = _client(db, owner)
+    ids = db.execute(text(
+        "INSERT INTO audit_log (action, actor_email, created_at) VALUES "
+        "('admin.c151_a', :email, now() - interval '2 hours'), ('admin.c151_b', :email, now() - interval '1 hour'), "
+        "('admin.c151_c', 'jemand@example.com', now() - interval '1 hour'), ('admin.c151_d', :email, now() - interval '3 days') RETURNING id"
+    ), {"email": owner.email}).scalars().all()
+    data = client.get(f"/api/admin/audit-log/entries/{ids[1]}").json()
+    assert data["entry"]["actor_kind"] == "admin" and data["entry"]["actor_id"] == str(owner.admin_public_id)
+    assert [item["action"] for item in data["context"]] == ["admin.c151_a", "admin.c151_b"]
+    assert client.get("/api/admin/audit-log/entries/999999999").status_code == 404

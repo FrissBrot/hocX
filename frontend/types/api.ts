@@ -2733,13 +2733,16 @@ export type AuditLogEntry = {
   tenant_name: string | null;
   actor_email: string | null;
   actor_name: string | null;
+  /** 1.5.1: Art und öffentliche ID des Akteurs (für «Alle von …») */
+  actor_kind?: "user" | "admin" | "system" | null;
+  actor_id?: string | null;
   ip_hash: string | null;
   entity_type: string | null;
   entity_id: number | null;
   details: Record<string, unknown>;
 };
 
-export type AuditLogPage = { items: AuditLogEntry[]; total: number };
+export type AuditLogPage = { items: AuditLogEntry[]; total: number; retention_days?: number | null };
 
 // Anliegen (backend app/schemas/agenda.py)
 export type AgendaScheduleKind = "next_meeting" | "month";

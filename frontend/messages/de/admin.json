@@ -1409,7 +1409,7 @@
   },
   "auditLog": {
     "title": "Audit-Log",
-    "description": "Sicherheits- und Änderungsereignisse aller Mandanten. Die Quelle ist ein gehashter Fingerprint des Netzes, nicht die IP-Adresse.",
+    "description": "Sicherheits- und Änderungsereignisse aller Mandanten. Die Quelle ist ein gehashter Netzwerk-Fingerprint, nie die IP-Adresse.",
     "filterAll": "Alle",
     "filterFailures": "Fehlgeschlagen",
     "tenant": "Mandant",
@@ -1443,7 +1443,84 @@
     "entityId": "Entitäts-ID",
     "actorUserFilter": "Gefiltert auf ein Benutzerkonto (aus einem Link).",
     "colEntity": "Entität",
-    "detailEntity": "Entität"
+    "detailEntity": "Entität",
+    "facts": {
+      "appendOnly": "Unveränderlich: die Anwendung kann Einträge nur anfügen, nicht ändern oder löschen. Werden eine Person oder ein Mandant gelöscht, entfernt hocX E-Mail und Quelle aus ihren Einträgen; der Vorgang selbst bleibt.",
+      "retention": "Aufbewahrung {days, number} Tage, danach automatisch gelöscht",
+      "viewLogged": "Das Ansehen dieser Seite wird protokolliert"
+    },
+    "live": {
+      "on": "Live",
+      "off": "Live aus"
+    },
+    "filtersLabel": "Filter",
+    "ranges": {
+      "24h": "24 h",
+      "7d": "7 Tage",
+      "30d": "30 Tage",
+      "90d": "90 Tage"
+    },
+    "areaLabel": "Bereich",
+    "areas": {
+      "auth": "Anmeldung",
+      "content": "Inhalte",
+      "finance": "Finanzen",
+      "admin": "Verwaltung",
+      "privacy": "Datenschutz",
+      "other": "Sonstiges"
+    },
+    "reset": "Filter zurücksetzen",
+    "emptyTitle": "Keine Ereignisse für diese Filter",
+    "emptyHint": "Zeitraum erweitern oder Filter zurücksetzen.",
+    "days": {
+      "today": "Heute · {date}",
+      "yesterday": "Gestern · {date}"
+    },
+    "dayMeta": "{count, plural, one {# Ereignis} other {# Ereignisse}}{failures, plural, =0 {} other { · # fehlgeschlagen}}",
+    "openEntry": "Eintrag {time}, {action} anzeigen",
+    "platform": "Plattform",
+    "shown": "{shown, number} von {total, number} angezeigt",
+    "none": "0 Einträge",
+    "navigateHint": "navigieren",
+    "loadMore": "Weitere laden",
+    "active": {
+      "actorSelected": "Gleiche Person",
+      "source": "Quelle {source}",
+      "entity": "Objekt {entity}",
+      "remove": "Filter «{filter}» entfernen"
+    },
+    "stats": {
+      "events": "Ereignisse",
+      "failures": "Fehlgeschlagen · {share, number} %",
+      "persons": "Personen",
+      "sources": "Quellen"
+    },
+    "timelineSummary": "{events, number} Ereignisse im Zeitraum, davon {failures, number} fehlgeschlagen.",
+    "timelineLabel": "Zeitleiste der Ereignisse",
+    "barTitle": "{time}: {count, number} Ereignisse, {failures, number} fehlgeschlagen",
+    "now": "jetzt",
+    "showTable": "Daten als Tabelle",
+    "detail": {
+      "previous": "Vorheriger Eintrag",
+      "next": "Nächster Eintrag",
+      "close": "Detail schliessen",
+      "time": "Zeit",
+      "email": "E-Mail",
+      "change": "Änderung",
+      "before": "Vorher:",
+      "after": "Nachher:",
+      "context": "Im Zusammenhang · gleiche Person",
+      "raw": "Rohdaten",
+      "copyJson": "JSON kopieren",
+      "jsonCopied": "JSON kopiert",
+      "copyLink": "Link zum Eintrag kopieren",
+      "linkCopied": "Link kopiert"
+    },
+    "pivot": {
+      "person": "Alle dieser Person",
+      "source": "Gleiche Quelle",
+      "action": "Gleiche Aktion"
+    }
   },
   "emailLog": {
     "title": "Versandprotokoll",

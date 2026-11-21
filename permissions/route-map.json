@@ -44,8 +44,18 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/audit-log/entries/{entry_id}": {
+      "handler": "admin.get_audit_log_entry",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/audit-log/filter-options": {
       "handler": "admin.audit_log_filter_options",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/audit-log/timeline": {
+      "handler": "admin.audit_log_timeline",
       "platform": true,
       "admin_level": "O"
     },

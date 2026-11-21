@@ -1,4 +1,5 @@
 import tempfile
+from dataclasses import dataclass
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -20,6 +21,7 @@ from app.auth_security import events as auth_events
 from app.core.admin_origin import admin_request_hostname, expected_admin_origin
 from app.core.admin_step_up import normalize_step_up_path, require_step_up
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
+from app.core.config import settings
 from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
@@ -234,26 +236,75 @@ def list_error_log_groups(
     return error_log_service.group_errors(db, tenant_id=internal_tenant_id, source=source, date_from=date_from, date_to=date_to)
 
 
-@router.get("/audit-log", response_model=AuditLogPage)
-def list_audit_log(
+@dataclass
+class AuditFilter:
+    """Gemeinsame Filter für Liste, Zeitleiste und Einzeleintrag des Audit-Logs (Owner-Regeln wie die Liste)."""
+
+    tenant_id: int | None = None
+    action: str | None = None
+    outcome: str | None = None
+    start: datetime | None = None
+    end: datetime | None = None
+    actor_kind: str | None = None
+    actor_email: str | None = None
+    actor_user_id: int | None = None
+    entity_type: str | None = None
+    entity_id: int | None = None
+    categories: list[str] | None = None
+    source: str | None = None
+
+    def params(self) -> dict:
+        return {
+            "tenant_id": self.tenant_id, "action": prefix_pattern(self.action) if self.action else None, "outcome": self.outcome,
+            "start": self.start, "end": self.end, "actor_kind": self.actor_kind, "actor_email": self.actor_email,
+            "actor_user_id": self.actor_user_id, "entity_type": self.entity_type, "entity_id": self.entity_id,
+            "categories": self.categories, "source": prefix_pattern(self.source) if self.source else None,
+        }
+
+
+# Akteur-Art: Plattform-Admins schreiben nur actor_email (ohne actor_user_id), Konten
+# actor_user_id, System/Hintergrund keines von beiden. Bereich = Teil der Aktion vor dem ersten Punkt.
+AUDIT_FILTER_SQL = """
+    WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
+      AND (CAST(:action AS text) IS NULL OR l.action LIKE :action ESCAPE '\\')
+      AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)
+      AND (CAST(:start AS timestamptz) IS NULL OR l.created_at >= :start)
+      AND (CAST(:end AS timestamptz) IS NULL OR l.created_at < :end)
+      AND (CAST(:actor_kind AS text) IS NULL
+           OR (:actor_kind = 'user' AND l.actor_user_id IS NOT NULL)
+           OR (:actor_kind = 'admin' AND l.actor_user_id IS NULL AND l.actor_email IS NOT NULL)
+           OR (:actor_kind = 'system' AND l.actor_user_id IS NULL AND l.actor_email IS NULL))
+      AND (CAST(:actor_email AS text) IS NULL OR l.actor_email = :actor_email)
+      AND (CAST(:actor_user_id AS bigint) IS NULL OR l.actor_user_id = :actor_user_id)
+      AND (CAST(:entity_type AS text) IS NULL OR l.entity_type = :entity_type)
+      AND (CAST(:entity_id AS bigint) IS NULL OR l.entity_id = :entity_id)
+      AND (CAST(:categories AS text[]) IS NULL OR split_part(l.action, '.', 1) = ANY(CAST(:categories AS text[])))
+      AND (CAST(:source AS text) IS NULL OR l.ip_hash LIKE :source ESCAPE '\\')"""
+
+AUDIT_RANGES = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30), "90d": timedelta(days=90)}
+AuditRange = Literal["24h", "7d", "30d", "90d"]
+
+
+def audit_filter(
+    db: Session = Depends(get_db),
     tenant_id: uuid.UUID | None = None,
     action: str | None = Query(default=None, max_length=100),
     outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
     date_from: date | None = Query(None, alias="from"),
     date_to: date | None = Query(None, alias="to"),
+    range_: AuditRange | None = Query(None, alias="range"),
     actor_kind: Literal["admin", "user", "system"] | None = None,
     actor_id: uuid.UUID | None = None,
     entity_type: str | None = Query(default=None, max_length=64, pattern=r"^[a-z0-9_.]+$"),
     entity_id: int | None = Query(default=None, ge=1),
-    limit: int = Query(50, gt=0, le=200),
-    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
-    db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(require_admin_owner),
-):
-    """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
-    Präfix (``user.login`` trifft auch ``user.login_failed``). 1.5.1: Zeitraum (``from``/``to``,
-    Kalendertage Europe/Zurich, inklusive), Akteur (Art und öffentliche ID - nie die E-Mail in der
-    URL) und Entität (Typ-Code und ID)."""
+    category: list[str] | None = Query(default=None, max_length=60),
+    source: str | None = Query(default=None, pattern=r"^[0-9a-f]{4,64}$"),
+) -> AuditFilter:
+    """Filter aus der Anfrage: nur IDs und Codes (Akteur über öffentliche ID, nie über die E-Mail;
+    Quelle als Präfix des gekürzten Hashes). ``range`` (24h/7d/30d/90d) geht vor from/to."""
+    for code in category or []:
+        if not code or len(code) > 64 or not all(ch.isalnum() or ch == "_" for ch in code):
+            raise HTTPException(status_code=422, detail="Ungültiger Bereich")
     actor_email = None
     actor_user_id = None
     if actor_id is not None:
@@ -265,72 +316,140 @@ def list_audit_log(
             actor_user_id = _resolve_user_id(db, actor_id)
         else:
             raise HTTPException(status_code=422, detail="actor_id braucht actor_kind admin oder user")
-    start = datetime.combine(date_from, datetime.min.time(), tzinfo=_ZURICH) if date_from else None
-    end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=_ZURICH) if date_to else None
-    params = {
-        "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
-        "action": prefix_pattern(action) if action else None,
-        "outcome": outcome,
-        "start": start,
-        "end": end,
-        "actor_kind": actor_kind,
-        "actor_email": actor_email,
-        "actor_user_id": actor_user_id,
-        "entity_type": entity_type,
-        "entity_id": entity_id,
-        "limit": limit,
-        "offset": offset,
-    }
-    # Akteur-Art: Plattform-Admins schreiben nur actor_email (ohne actor_user_id), Konten
-    # actor_user_id, System/Hintergrund keines von beiden.
-    filters = """
-        WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
-          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action ESCAPE '\\')
-          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)
-          AND (CAST(:start AS timestamptz) IS NULL OR l.created_at >= :start)
-          AND (CAST(:end AS timestamptz) IS NULL OR l.created_at < :end)
-          AND (CAST(:actor_kind AS text) IS NULL
-               OR (:actor_kind = 'user' AND l.actor_user_id IS NOT NULL)
-               OR (:actor_kind = 'admin' AND l.actor_user_id IS NULL AND l.actor_email IS NOT NULL)
-               OR (:actor_kind = 'system' AND l.actor_user_id IS NULL AND l.actor_email IS NULL))
-          AND (CAST(:actor_email AS text) IS NULL OR l.actor_email = :actor_email)
-          AND (CAST(:actor_user_id AS bigint) IS NULL OR l.actor_user_id = :actor_user_id)
-          AND (CAST(:entity_type AS text) IS NULL OR l.entity_type = :entity_type)
-          AND (CAST(:entity_id AS bigint) IS NULL OR l.entity_id = :entity_id)"""
-    rows = db.execute(
-        text(
-            """
-            SELECT l.id, l.created_at, l.action, l.outcome, t.public_id AS tenant_public_id, t.name AS tenant_name,
-                   COALESCE(u.email, l.actor_email) AS actor_email, u.display_name AS actor_name, l.ip_hash,
-                   l.entity_type, l.entity_id, l.details_json
-            FROM audit_log l
-            LEFT JOIN tenant t ON t.id = l.tenant_id
-            LEFT JOIN app_user u ON u.id = l.actor_user_id"""
-            + filters
-            + """
-            ORDER BY l.created_at DESC, l.id DESC
-            LIMIT :limit OFFSET :offset
-            """
-        ),
-        params,
-    ).all()
-    total = db.scalar(text("SELECT count(*) FROM audit_log l" + filters), params) or 0
-    page = AuditLogPage(
-        items=[
-            AuditLogEntryRead(
-                id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
-                tenant_id=row.tenant_public_id, tenant_name=row.tenant_name, actor_email=row.actor_email,
-                actor_name=row.actor_name, ip_hash=row.ip_hash, entity_type=row.entity_type,
-                entity_id=row.entity_id, details=row.details_json or {},
-            )
-            for row in rows
-        ],
-        total=total,
+    if range_ is not None:
+        start, end = datetime.now(timezone.utc) - AUDIT_RANGES[range_], None
+    else:
+        start = datetime.combine(date_from, datetime.min.time(), tzinfo=_ZURICH) if date_from else None
+        end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=_ZURICH) if date_to else None
+    return AuditFilter(
+        tenant_id=_resolve_tenant_id(db, tenant_id) if tenant_id is not None else None, action=action, outcome=outcome,
+        start=start, end=end, actor_kind=actor_kind, actor_email=actor_email, actor_user_id=actor_user_id,
+        entity_type=entity_type, entity_id=entity_id, categories=list(category) if category else None, source=source,
     )
+
+
+_AUDIT_SELECT = """
+    SELECT l.id, l.created_at, l.action, l.outcome, t.public_id AS tenant_public_id, t.name AS tenant_name,
+           COALESCE(u.email, l.actor_email) AS actor_email,
+           COALESCE(u.display_name, pa.display_name) AS actor_name,
+           CASE WHEN l.actor_user_id IS NOT NULL THEN 'user' WHEN l.actor_email IS NOT NULL THEN 'admin' ELSE 'system' END AS actor_kind,
+           COALESCE(u.public_id, pa.public_id) AS actor_public_id,
+           l.ip_hash, l.entity_type, l.entity_id, l.details_json
+    FROM audit_log l
+    LEFT JOIN tenant t ON t.id = l.tenant_id
+    LEFT JOIN app_user u ON u.id = l.actor_user_id
+    LEFT JOIN platform_admin pa ON l.actor_user_id IS NULL AND pa.email = l.actor_email"""
+
+
+def _audit_entry(row) -> AuditLogEntryRead:
+    return AuditLogEntryRead(
+        id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
+        tenant_id=row.tenant_public_id, tenant_name=row.tenant_name, actor_email=row.actor_email,
+        actor_name=row.actor_name, actor_kind=row.actor_kind, actor_id=row.actor_public_id, ip_hash=row.ip_hash,
+        entity_type=row.entity_type, entity_id=row.entity_id, details=row.details_json or {},
+    )
+
+
+@router.get("/audit-log", response_model=AuditLogPage)
+def list_audit_log(
+    filters: AuditFilter = Depends(audit_filter),
+    limit: int = Query(50, gt=0, le=200),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
+    Präfix (``user.login`` trifft auch ``user.login_failed``). 1.5.1: Zeitraum (``range`` bzw.
+    ``from``/``to``), Akteur (Art und öffentliche ID), Entität, Bereich (``category``) und Quelle."""
+    params = {**filters.params(), "limit": limit, "offset": offset}
+    rows = db.execute(
+        text(_AUDIT_SELECT + AUDIT_FILTER_SQL + " ORDER BY l.created_at DESC, l.id DESC LIMIT :limit OFFSET :offset"), params,
+    ).all()
+    total = db.scalar(text("SELECT count(*) FROM audit_log l" + AUDIT_FILTER_SQL), params) or 0
+    page = AuditLogPage(items=[_audit_entry(row) for row in rows], total=total, retention_days=settings.audit_log_retention_days)
     # Ansehen protokollieren (Admin-Redesign §8.1 Nr. 3), gedrosselt: höchstens ein Eintrag pro
     # Admin in 10 Minuten. Erst am Ende, weil audit.log committet.
-    _audit_audit_log_view(db, current_admin, params["tenant_id"])
+    _audit_audit_log_view(db, current_admin, filters.tenant_id)
     return page
+
+
+# Zeitleiste: höchstens so viele Balken; Breite je Zeitraum
+AUDIT_TIMELINE_BUCKETS = {"24h": 24, "7d": 28, "30d": 30, "90d": 30}
+
+
+@router.get("/audit-log/timeline")
+def audit_log_timeline(
+    filters: AuditFilter = Depends(audit_filter),
+    range_: AuditRange = Query("7d", alias="range"),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Schlanke Aggregate für Zeitleiste, Kennzahlen und Bereichs-Zähler - dieselben Filter und
+    Rechte wie die Liste, nur Zählwerte (keine Einträge, keine Personendaten). Die Bereichs-Zähler
+    ignorieren den Bereichsfilter selbst (sonst zeigten abgewählte Chips 0)."""
+    buckets = AUDIT_TIMELINE_BUCKETS[range_]
+    span = AUDIT_RANGES[range_]
+    now = datetime.now(timezone.utc)
+    start = now - span
+    width_seconds = span.total_seconds() / buckets
+    params = {**filters.params(), "start": start, "end": None, "bucket_start": start, "width": width_seconds, "buckets": buckets}
+    bars = [{"start": (start + timedelta(seconds=width_seconds * index)).isoformat(), "success": 0, "failure": 0} for index in range(buckets)]
+    for index, outcome, count in db.execute(
+        text(
+            "SELECT LEAST(:buckets - 1, floor(extract(epoch FROM (l.created_at - CAST(:bucket_start AS timestamptz))) / :width))::int AS bucket, "
+            "l.outcome, count(*) FROM audit_log l" + AUDIT_FILTER_SQL + " GROUP BY 1, 2"
+        ),
+        params,
+    ):
+        if 0 <= index < buckets and outcome in ("success", "failure"):
+            bars[index][outcome] += int(count)
+    totals = db.execute(
+        text(
+            "SELECT count(*) AS events, count(*) FILTER (WHERE l.outcome = 'failure') AS failures, "
+            "count(DISTINCT coalesce(CAST(l.actor_user_id AS text), l.actor_email)) AS persons, count(DISTINCT l.ip_hash) AS sources "
+            "FROM audit_log l" + AUDIT_FILTER_SQL
+        ),
+        params,
+    ).mappings().one()
+    by_category = dict(db.execute(
+        text("SELECT split_part(l.action, '.', 1), count(*) FROM audit_log l" + AUDIT_FILTER_SQL + " GROUP BY 1"),
+        {**params, "categories": None},
+    ).all())
+    return {
+        "range": range_, "bucket_seconds": int(width_seconds), "buckets": bars, "totals": dict(totals),
+        "by_category": {key: int(value) for key, value in by_category.items()}, "retention_days": settings.audit_log_retention_days,
+    }
+
+
+AUDIT_CONTEXT_HOURS = 6
+
+
+@router.get("/audit-log/entries/{entry_id}")
+def get_audit_log_entry(entry_id: int, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Einzeleintrag für den Link zum Eintrag (?entry=<id>) und «Im Zusammenhang · gleiche Person»
+    (gleicher Akteur, ±6 h, höchstens 9 Einträge). Ansehen wie die Liste protokolliert."""
+    row = db.execute(text(_AUDIT_SELECT + " WHERE l.id = :id"), {"id": entry_id}).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    raw = db.execute(text("SELECT actor_user_id, actor_email, tenant_id FROM audit_log WHERE id = :id"), {"id": entry_id}).one()
+    context = []
+    if raw.actor_user_id is not None or raw.actor_email is not None:
+        context = [
+            _audit_entry(item)
+            for item in db.execute(
+                text(
+                    _AUDIT_SELECT + " WHERE l.created_at BETWEEN CAST(:at AS timestamptz) - make_interval(hours => :hours) "
+                    "AND CAST(:at AS timestamptz) + make_interval(hours => :hours) "
+                    "AND ((CAST(:user_id AS bigint) IS NOT NULL AND l.actor_user_id = :user_id) "
+                    "  OR (CAST(:user_id AS bigint) IS NULL AND l.actor_user_id IS NULL AND l.actor_email = :email)) "
+                    "ORDER BY abs(extract(epoch FROM (l.created_at - CAST(:at AS timestamptz)))) LIMIT 9"
+                ),
+                {"at": row.created_at, "hours": AUDIT_CONTEXT_HOURS, "user_id": raw.actor_user_id, "email": raw.actor_email},
+            )
+        ]
+        context.sort(key=lambda item: item.created_at)
+    _audit_audit_log_view(db, current_admin, raw.tenant_id)
+    return {"entry": _audit_entry(row), "context": context}
 
 
 _ZURICH = ZoneInfo("Europe/Zurich")

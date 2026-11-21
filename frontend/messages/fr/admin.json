@@ -1409,7 +1409,7 @@
   },
   "auditLog": {
     "title": "Journal d’audit",
-    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte hachée du réseau, pas l’adresse IP.",
+    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte réseau hachée, jamais l'adresse IP.",
     "filterAll": "Tous",
     "filterFailures": "Échoués",
     "tenant": "Mandant",
@@ -1443,7 +1443,84 @@
     "entityId": "ID de l'entité",
     "actorUserFilter": "Filtré sur un compte utilisateur (depuis un lien).",
     "colEntity": "Entité",
-    "detailEntity": "Entité"
+    "detailEntity": "Entité",
+    "facts": {
+      "appendOnly": "Inaltérable : l'application peut seulement ajouter des entrées, ni les modifier ni les supprimer. Lorsqu'une personne ou un mandant est supprimé, hocX retire l'e-mail et la source de leurs entrées ; l'événement reste.",
+      "retention": "Conservé {days, number} jours, puis supprimé automatiquement",
+      "viewLogged": "La consultation de cette page est journalisée"
+    },
+    "live": {
+      "on": "En direct",
+      "off": "Direct désactivé"
+    },
+    "filtersLabel": "Filtres",
+    "ranges": {
+      "24h": "24 h",
+      "7d": "7 jours",
+      "30d": "30 jours",
+      "90d": "90 jours"
+    },
+    "areaLabel": "Domaine",
+    "areas": {
+      "auth": "Connexion",
+      "content": "Contenus",
+      "finance": "Finances",
+      "admin": "Administration",
+      "privacy": "Protection des données",
+      "other": "Autres"
+    },
+    "reset": "Réinitialiser les filtres",
+    "emptyTitle": "Aucun événement pour ces filtres",
+    "emptyHint": "Élargissez la période ou réinitialisez les filtres.",
+    "days": {
+      "today": "Aujourd'hui · {date}",
+      "yesterday": "Hier · {date}"
+    },
+    "dayMeta": "{count, plural, one {# événement} other {# événements}}{failures, plural, =0 {} other { · # en échec}}",
+    "openEntry": "Afficher l'entrée {time}, {action}",
+    "platform": "Plateforme",
+    "shown": "{shown, number} sur {total, number} affichés",
+    "none": "0 entrée",
+    "navigateHint": "naviguer",
+    "loadMore": "Charger plus",
+    "active": {
+      "actorSelected": "Même personne",
+      "source": "Source {source}",
+      "entity": "Objet {entity}",
+      "remove": "Retirer le filtre « {filter} »"
+    },
+    "stats": {
+      "events": "Événements",
+      "failures": "En échec · {share, number} %",
+      "persons": "Personnes",
+      "sources": "Sources"
+    },
+    "timelineSummary": "{events, number} événements sur la période, dont {failures, number} en échec.",
+    "timelineLabel": "Chronologie des événements",
+    "barTitle": "{time} : {count, number} événements, {failures, number} en échec",
+    "now": "maintenant",
+    "showTable": "Données sous forme de tableau",
+    "detail": {
+      "previous": "Entrée précédente",
+      "next": "Entrée suivante",
+      "close": "Fermer le détail",
+      "time": "Moment",
+      "email": "E-mail",
+      "change": "Modification",
+      "before": "Avant :",
+      "after": "Après :",
+      "context": "Dans le contexte · même personne",
+      "raw": "Données brutes",
+      "copyJson": "Copier le JSON",
+      "jsonCopied": "JSON copié",
+      "copyLink": "Copier le lien vers l'entrée",
+      "linkCopied": "Lien copié"
+    },
+    "pivot": {
+      "person": "Tout de cette personne",
+      "source": "Même source",
+      "action": "Même action"
+    }
   },
   "emailLog": {
     "title": "Journal d'envoi",

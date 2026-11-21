@@ -130,6 +130,36 @@ test.describe("Admin-Konsole", () => {
     expect(page.url()).not.toMatch(/%40|@/);
   });
 
+  test("Audit-Log (Design): Bereiche, Zeitleiste, J/K-Detail und Link zum Eintrag", async ({ page }) => {
+    await expectHealthyPage(page, "/admin/security/audit?range=30d");
+    await expect(page.getByText("Das Ansehen dieser Seite wird protokolliert")).toBeVisible();
+    await expect(page.getByRole("img", { name: "Zeitleiste der Ereignisse" })).toBeVisible();
+    const firstRow = page.locator("tr.audit-row").first();
+    await expect(firstRow).toBeVisible();
+    await page.locator("main#main-content").focus();
+    await page.keyboard.press("j");
+    const detail = page.locator("aside.audit-detail");
+    await expect(detail).toBeVisible();
+    await expect(page).toHaveURL(/entry=\d+/);
+    const entryId = /entry=(\d+)/.exec(page.url())?.[1];
+    await page.keyboard.press("j");
+    await expect(page).not.toHaveURL(new RegExp(`entry=${entryId}(&|$)`));
+    await page.keyboard.press("k");
+    await expect(page).toHaveURL(new RegExp(`entry=${entryId}(&|$)`));
+    // Link zum Eintrag: öffnet direkt die Detail-Spalte
+    await expectHealthyPage(page, `/admin/security/audit?entry=${entryId}`);
+    await expect(page.locator("aside.audit-detail")).toBeVisible();
+    // Bereichs-Chip als Code in der URL
+    await page.getByRole("button", { name: /^Anmeldung/ }).click();
+    await expect(page).toHaveURL(/area=auth/);
+    expect(page.url()).not.toMatch(/%40|@/);
+    // 390 px: die Seite wird nicht breiter als der Viewport (Tabelle und Reiter scrollen in sich)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/admin/security/audit?range=30d");
+    await expect(page.locator("tr.audit-row").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
   test("Sicherheits-Dashboard liest nur Pseudonyme, Richtlinien ohne Geheimnisse", async ({ page }) => {
     await expectHealthyPage(page, "/admin/security");
     const policy = await page.request.get("/api/admin/auth-security/policy");

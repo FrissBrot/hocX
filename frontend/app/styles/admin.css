@@ -686,8 +686,13 @@
 
 .audit-log-details-list dd,
 .admin-key-value dd {
+  min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.admin-key-value dd code {
+  word-break: break-all;
 }
 
 /* Liste ohne Aufzählungszeichen (Einstellungen › Sicherheit) */
@@ -967,4 +972,11 @@
   .admin-topbar-actions .admin-topbar-search .global-search-kbd {
     display: none;
   }
+}
+
+/* Seiten mit breiten Tabellen/Diagrammen: eine Spalte, die nie breiter als der Platz wird (390 px) */
+.admin-status-page,
+.admin-analytics-page {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }

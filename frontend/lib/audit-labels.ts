@@ -23,7 +23,7 @@ export const AUDIT_CATEGORIES = [
   "document_template", "document_verification", "event", "finance_account", "finance_transaction", "fine",
   "fine_tariff", "identity_verification", "participant", "personal_data", "privacy_settings", "protocol", "public_link",
   "retention", "role", "submission_assignment", "submission_file", "submission_upload", "table_snapshot",
-  "task_package", "template", "tenant", "todo", "user",
+  "task_package", "template", "tenant", "todo", "todo_fine", "user",
 ] as const;
 
 export function auditVerb(action: string): AuditVerb {
@@ -59,4 +59,63 @@ export function describeAuditAction(action: string, t: TFunc): string {
   const verb = auditVerb(action);
   const verbLabel = verb === "other" ? humanizeCode(action.slice(action.indexOf(".") + 1)) : t(`verbs.${verb}`);
   return `${categoryLabel} · ${verbLabel}`;
+}
+
+// ── Bereiche des Plattform-Audit-Logs (1.5.1, Design «hocX Audit-Log») ─────────────────────────
+// Einzige Zuordnung Bereich → Kategorien: Filter-Chips, Zähler (Backend zählt je Kategorie) und
+// Farbpunkte lesen sie. Übersetzung `admin.auditLog.areas.<bereich>`.
+
+export const AUDIT_AREAS = ["auth", "content", "finance", "admin", "privacy"] as const;
+export type AuditArea = (typeof AUDIT_AREAS)[number];
+
+const AREA_BY_CATEGORY: Record<string, AuditArea> = {
+  user: "auth",
+  calendar_feed: "content", context_visibility: "content", document: "content", document_asset: "content", document_brand: "content",
+  document_settings: "content", document_template: "content", document_verification: "content", event: "content", participant: "content",
+  protocol: "content", submission_assignment: "content", submission_file: "content", submission_upload: "content", table_snapshot: "content",
+  task_package: "content", template: "content", todo: "content",
+  finance_account: "finance", finance_transaction: "finance", fine: "finance", fine_tariff: "finance", todo_fine: "finance",
+  admin: "admin", backup: "admin", identity_verification: "admin", role: "admin", tenant: "admin",
+  personal_data: "privacy", privacy_settings: "privacy", public_link: "privacy", retention: "privacy", activity: "privacy",
+};
+
+export function auditCategory(action: string): string {
+  return action.split(".", 1)[0];
+}
+
+/** Bereich einer Aktion; unbekannte Kategorien gehören zu keinem Bereich (null). */
+export function auditArea(action: string): AuditArea | null {
+  return AREA_BY_CATEGORY[auditCategory(action)] ?? null;
+}
+
+/** Kategorien eines Bereichs (für den Filter `category=` der API). */
+export function auditAreaCategories(area: AuditArea): string[] {
+  return Object.entries(AREA_BY_CATEGORY).filter(([, value]) => value === area).map(([category]) => category);
+}
+
+/** Zähler je Bereich aus den Zählern je Kategorie (GET /api/admin/audit-log/timeline). */
+export function countByArea(byCategory: Record<string, number>): Record<AuditArea, number> {
+  const result = Object.fromEntries(AUDIT_AREAS.map((area) => [area, 0])) as Record<AuditArea, number>;
+  for (const [category, count] of Object.entries(byCategory)) {
+    const area = AREA_BY_CATEGORY[category];
+    if (area) result[area] += count;
+  }
+  return result;
+}
+
+/** «Bereich · Verb» für das Plattform-Audit-Log. Unbekannte Kategorien oder Vorgänge erscheinen als
+ * Code (nicht geraten «lesbar»), damit nichts falsch übersetzt wird. */
+export function auditActionLabel(action: string, t: TFunc): { label: string; known: boolean } {
+  const category = auditCategory(action);
+  const verb = auditVerb(action);
+  if (!(AUDIT_CATEGORIES as readonly string[]).includes(category) || verb === "other") return { label: action, known: false };
+  return { label: `${t(`categories.${category}`)} · ${t(`verbs.${verb}`)}`, known: true };
+}
+
+/** Initialen für den Avatar «Von» (zwei Buchstaben, aus Name oder E-Mail). */
+export function auditInitials(name: string | null | undefined): string {
+  const source = (name ?? "").trim();
+  if (!source) return "·";
+  const parts = source.includes("@") ? [source] : source.split(/[\s-]+/).filter(Boolean);
+  return parts.map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }

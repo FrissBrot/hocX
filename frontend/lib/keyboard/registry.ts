@@ -72,6 +72,9 @@ export const SHORTCUTS = [
   // der Seite. Das Suchfenster behandelt die Taste selbst, daher hier nur zur Anzeige.
   // Plattform-Admin (admin-shell.tsx): Sidebar kompakt/breit. «[» statt Mod+B (Browser: Lesezeichen)
   { id: "admin.toggleSidebar", keys: ["["], scope: "global", group: "admin" },
+  // Audit-Log (admin-audit-log.tsx): nächster/vorheriger Eintrag in der Detail-Spalte
+  { id: "admin.auditNext", keys: ["J"], scope: "page", group: "admin" },
+  { id: "admin.auditPrevious", keys: ["K"], scope: "page", group: "admin" },
   { id: "search.toListSearch", keys: ["Mod+F"], overridesBrowser: true, scope: "component", group: "global", kind: "standard" },
 
   // ── Standard-Interaktionen (Bausteine, nur Hilfe) ────────────────────────

@@ -449,6 +449,8 @@ pre {
   min-width: 0;
   min-height: 0;
   display: grid;
+  /* Spalte nie breiter als der Platz: breite Tabellen scrollen in sich (390 px) */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-4);
 }
@@ -3479,6 +3481,9 @@ button.table-row-link.table-row-toggle {
 
 .route-tabs {
   margin-bottom: var(--space-4);
+  /* Viele Reiter (z. B. Sicherheitsbereich) scrollen quer statt die Seite auf 390 px zu verbreitern */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .route-tabs .tabs-trigger {
@@ -6156,7 +6161,8 @@ button.table-row-link.table-row-toggle {
 
 @media (max-width: 1100px) {
   .shell {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): breite Inhalte (Tabellen, Reiter) scrollen in sich statt die Seite zu verbreitern */
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {

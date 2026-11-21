@@ -164,7 +164,8 @@
       "role": "Rolle",
       "public_link": "Öffentlicher Link",
       "context_visibility": "Sichtbarkeit von Dateien",
-      "activity": "Verlauf"
+      "activity": "Verlauf",
+      "todo_fine": "Pendenzen-Busse"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",
@@ -325,7 +326,9 @@
       "designer_deselect": "Auswahl aufheben",
       "media_previous": "Vorheriges Foto bzw. vorherige Datei",
       "media_next": "Nächstes Foto bzw. nächste Datei",
-      "admin_toggleSidebar": "Seitenleiste kompakt oder breit anzeigen"
+      "admin_toggleSidebar": "Seitenleiste kompakt oder breit anzeigen",
+      "admin_auditNext": "Nächster Eintrag im Audit-Log",
+      "admin_auditPrevious": "Vorheriger Eintrag im Audit-Log"
     }
   },
   "numberStepper": {

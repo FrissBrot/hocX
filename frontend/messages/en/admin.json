@@ -1409,7 +1409,7 @@
   },
   "auditLog": {
     "title": "Audit log",
-    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, not the IP address.",
+    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, never the IP address.",
     "filterAll": "All",
     "filterFailures": "Failed",
     "tenant": "Tenant",
@@ -1443,7 +1443,84 @@
     "entityId": "Entity ID",
     "actorUserFilter": "Filtered to one user account (from a link).",
     "colEntity": "Entity",
-    "detailEntity": "Entity"
+    "detailEntity": "Entity",
+    "facts": {
+      "appendOnly": "Immutable: the application can only append entries, not change or delete them. When a person or tenant is deleted, hocX removes email and source from their entries; the event itself remains.",
+      "retention": "Kept for {days, number} days, then deleted automatically",
+      "viewLogged": "Viewing this page is logged"
+    },
+    "live": {
+      "on": "Live",
+      "off": "Live off"
+    },
+    "filtersLabel": "Filters",
+    "ranges": {
+      "24h": "24 h",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days"
+    },
+    "areaLabel": "Area",
+    "areas": {
+      "auth": "Sign-in",
+      "content": "Content",
+      "finance": "Finance",
+      "admin": "Administration",
+      "privacy": "Privacy",
+      "other": "Other"
+    },
+    "reset": "Reset filters",
+    "emptyTitle": "No events for these filters",
+    "emptyHint": "Widen the period or reset the filters.",
+    "days": {
+      "today": "Today · {date}",
+      "yesterday": "Yesterday · {date}"
+    },
+    "dayMeta": "{count, plural, one {# event} other {# events}}{failures, plural, =0 {} other { · # failed}}",
+    "openEntry": "Show entry {time}, {action}",
+    "platform": "Platform",
+    "shown": "{shown, number} of {total, number} shown",
+    "none": "0 entries",
+    "navigateHint": "navigate",
+    "loadMore": "Load more",
+    "active": {
+      "actorSelected": "Same person",
+      "source": "Source {source}",
+      "entity": "Object {entity}",
+      "remove": "Remove filter «{filter}»"
+    },
+    "stats": {
+      "events": "Events",
+      "failures": "Failed · {share, number} %",
+      "persons": "People",
+      "sources": "Sources"
+    },
+    "timelineSummary": "{events, number} events in the period, {failures, number} of them failed.",
+    "timelineLabel": "Event timeline",
+    "barTitle": "{time}: {count, number} events, {failures, number} failed",
+    "now": "now",
+    "showTable": "Data as table",
+    "detail": {
+      "previous": "Previous entry",
+      "next": "Next entry",
+      "close": "Close details",
+      "time": "Time",
+      "email": "Email",
+      "change": "Change",
+      "before": "Before:",
+      "after": "After:",
+      "context": "In context · same person",
+      "raw": "Raw data",
+      "copyJson": "Copy JSON",
+      "jsonCopied": "JSON copied",
+      "copyLink": "Copy link to entry",
+      "linkCopied": "Link copied"
+    },
+    "pivot": {
+      "person": "All by this person",
+      "source": "Same source",
+      "action": "Same action"
+    }
   },
   "emailLog": {
     "title": "Delivery log",
