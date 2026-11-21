@@ -21,103 +21,193 @@
       "css_gzip_kb": 47,
       "css_raw_kb": 305
     },
-    "/admin": {
+    "/admin/(console)": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/account": {
       "js_gzip_kb": 232,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
     },
-    "/admin/admins": {
-      "js_gzip_kb": 236,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/audit": {
-      "js_gzip_kb": 238,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/backups": {
-      "js_gzip_kb": 247,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/cashflow": {
-      "js_gzip_kb": 247,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/document-templates": {
-      "js_gzip_kb": 236,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/domains": {
+    "/admin/(console)/admins": {
       "js_gzip_kb": 235,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
     },
-    "/admin/error-logs": {
-      "js_gzip_kb": 236,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
+    "/admin/(console)/analytics": {
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
     },
-    "/admin/jobs": {
+    "/admin/(console)/audit": {
+      "js_gzip_kb": 229,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/backups": {
+      "js_gzip_kb": 248,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/cashflow": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/document-templates": {
+      "js_gzip_kb": 233,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/domains": {
+      "js_gzip_kb": 232,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/error-logs": {
       "js_gzip_kb": 237,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/jobs": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/maintenance": {
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/notifications": {
+      "js_gzip_kb": 229,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/operations/delivery": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/plans": {
+      "js_gzip_kb": 247,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security/alerts": {
+      "js_gzip_kb": 231,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security/audit": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security/blocks": {
+      "js_gzip_kb": 238,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security/events": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/security/policy": {
+      "js_gzip_kb": 231,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/settings/notifications": {
+      "js_gzip_kb": 239,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/storage": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/system": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants": {
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]": {
+      "js_gzip_kb": 239,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/activity": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/domains": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/profile": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/storage": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/subscription": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/technical": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/users": {
+      "js_gzip_kb": 259,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/verification": {
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/upload-pipeline": {
+      "js_gzip_kb": 248,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/users": {
+      "js_gzip_kb": 257,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
+    },
+    "/admin/(console)/verifications": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 378
     },
     "/admin/login": {
       "js_gzip_kb": 221,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/maintenance": {
-      "js_gzip_kb": 243,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/notifications": {
-      "js_gzip_kb": 241,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/plans": {
-      "js_gzip_kb": 249,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/security": {
-      "js_gzip_kb": 232,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/storage": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/system": {
-      "js_gzip_kb": 239,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/tenants": {
-      "js_gzip_kb": 243,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/upload-pipeline": {
-      "js_gzip_kb": 242,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/users": {
-      "js_gzip_kb": 254,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
-    },
-    "/admin/verifications": {
-      "js_gzip_kb": 237,
       "css_gzip_kb": 55,
       "css_raw_kb": 345
     },
@@ -302,9 +392,9 @@
       "css_raw_kb": 317
     },
     "/submission-assignments": {
-      "js_gzip_kb": 282,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 341
+      "js_gzip_kb": 304,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 385
     },
     "/task-packages": {
       "js_gzip_kb": 296,
@@ -355,6 +445,11 @@
       "js_gzip_kb": 251,
       "css_gzip_kb": 50,
       "css_raw_kb": 322
+    },
+    "/tenant-settings/security": {
+      "js_gzip_kb": 261,
+      "css_gzip_kb": 53,
+      "css_raw_kb": 340
     },
     "/tenant-settings/verification": {
       "js_gzip_kb": 252,

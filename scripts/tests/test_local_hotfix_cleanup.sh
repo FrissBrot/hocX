@@ -20,6 +20,7 @@ retire_local_compose_hotfixes "$WORK" 2> /dev/null || true
 # 2. Release mit Korrektur im Standardnetz (1.4.1/1.4.2): Laden lässt die Datei unangetastet
 #    (Rollback braucht sie noch); erst retire_local_compose_hotfixes (deploy.sh nach erfolgreichem
 #    Update) verschiebt sie nach backups/
+# shellcheck disable=SC2016 # Platzhalter steht wörtlich in der Compose-Datei
 sed 's/traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge/traefik.docker.network=${COMPOSE_PROJECT_NAME}_default/' \
   "$REPO_DIR/docker-compose.release.yml" > "$WORK/docker-compose.release.yml"
 args=(); append_local_compose_override "$WORK" args 2> /dev/null
@@ -32,6 +33,7 @@ ls "$WORK"/backups/docker-compose.local.yml.hotfix-* > /dev/null
 #     zwingen (504) - er wird nicht mehr geladen und nach dem Update entfernt
 rm -rf "$WORK/backups"
 cp "$REPO_DIR/docker-compose.release.yml" "$WORK/"
+# shellcheck disable=SC2016 # wörtlicher Platzhalter aus der Compose-Datei
 grep -q 'traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge' "$WORK/docker-compose.release.yml" || { echo "Fall 2c: Release setzt kein Netz edge" >&2; exit 1; }
 printf '%b' "$HOTFIX" > "$WORK/docker-compose.local.yml"
 args=(); append_local_compose_override "$WORK" args 2> /dev/null
