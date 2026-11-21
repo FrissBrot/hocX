@@ -7,6 +7,7 @@
   "appliedOnSaveHint": "Will be applied when saving.",
   "assignedToLabel": "Assigned to",
   "autoClosedBySubmission": "Closed automatically by a submission",
+  "autoClosedShort": "completes with the submission",
   "autoClosedHint": "Completed automatically as soon as the file is submitted.",
   "chooseEventOption": "Choose an event…",
   "clipboardUnavailable": "Clipboard not available",
@@ -137,8 +138,7 @@
   },
   "personal": {
     "pageTitle": "My tasks",
-    "pageIntro": "Your open to-dos and submissions, sorted by due date.",
-    "allTodosLink": "All to-dos →"
+    "pageIntro": "Your open to-dos and submissions, sorted by due date."
   },
   "v2": {
     "viewList": "List",

@@ -312,6 +312,7 @@ button.table-row-link.todo-v2-task { font-weight: 600; } /* Knopf-Variante behä
 .table-row-done .todo-v2-task { text-decoration: line-through; color: var(--muted); }
 
 .todo-v2-source { margin-top: 2px; font-size: var(--text-sm); color: var(--muted); }
+.todo-v2-source-auto { color: var(--accent); }
 
 .todo-v2-tag {
   display: inline-flex;

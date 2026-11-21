@@ -7,6 +7,7 @@
   "appliedOnSaveHint": "Wird beim Speichern übernommen.",
   "assignedToLabel": "Zugewiesen an",
   "autoClosedBySubmission": "Wird automatisch durch Abgabe geschlossen",
+  "autoClosedShort": "erledigt sich mit der Abgabe",
   "autoClosedHint": "Wird automatisch erledigt, sobald die Datei eingereicht ist.",
   "chooseEventOption": "Termin wählen…",
   "clipboardUnavailable": "Zwischenablage nicht verfügbar",
@@ -137,8 +138,7 @@
   },
   "personal": {
     "pageTitle": "Meine Aufgaben",
-    "pageIntro": "Deine offenen Pendenzen und Abgaben, nach Fälligkeit sortiert.",
-    "allTodosLink": "Alle Pendenzen →"
+    "pageIntro": "Deine offenen Pendenzen und Abgaben, nach Fälligkeit sortiert."
   },
   "v2": {
     "viewList": "Liste",

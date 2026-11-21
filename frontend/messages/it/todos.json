@@ -7,6 +7,7 @@
   "appliedOnSaveHint": "Verrà applicato al salvataggio.",
   "assignedToLabel": "Assegnata a",
   "autoClosedBySubmission": "Chiusa automaticamente da una consegna",
+  "autoClosedShort": "si completa con la consegna",
   "autoClosedHint": "Completata automaticamente non appena il file viene consegnato.",
   "chooseEventOption": "Scegli un evento…",
   "clipboardUnavailable": "Appunti non disponibili",
@@ -137,8 +138,7 @@
   },
   "personal": {
     "pageTitle": "I miei compiti",
-    "pageIntro": "I tuoi compiti e consegne aperti, ordinati per scadenza.",
-    "allTodosLink": "Tutti i compiti →"
+    "pageIntro": "I tuoi compiti e consegne aperti, ordinati per scadenza."
   },
   "v2": {
     "viewList": "Elenco",

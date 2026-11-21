@@ -76,9 +76,11 @@ test("Einstellungen: Knopf über der Benutzerkarte führt zur Übersicht mit Suc
   await expect(page.locator(".topbar-breadcrumb")).toContainText("Datenschutz");
 });
 
-test("Meine Aufgaben verlinkt auf alle Pendenzen", async ({ page }) => {
+test("Meine Aufgaben wechselt über den Schalter auf alle Pendenzen", async ({ page }) => {
   await page.goto("/my-tasks");
   await expect(page.getByRole("heading", { name: "Meine Aufgaben", level: 1 })).toBeVisible();
-  await page.getByRole("link", { name: "Alle Pendenzen →" }).click();
+  const scope = page.getByRole("tab", { name: "Meine", exact: true });
+  await expect(scope).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Alle", exact: true }).first().click();
   await expect(page).toHaveURL(/\/todos$/);
 });

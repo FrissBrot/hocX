@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { DataTable } from "@/components/ui/data-table";
@@ -75,6 +75,7 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
   const showToast = useToast();
   const today = useMemo(() => todayIso(), []);
   const { tagConfig } = useTagConfig();
+  const router = useRouter();
   const [scope, setScope] = useState<"all" | "my">(allTodos !== null ? "all" : "my");
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -291,13 +292,7 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
           </p>
         </div>
         <div className="table-toolbar-actions todo-v2-actions">
-          {personal ? (
-            <Link href="/todos" className="button-secondary button-ghost">
-              {t("personal.allTodosLink")}
-            </Link>
-          ) : (
-            <FilterTabs options={viewOptions} value={view} onChange={setView} />
-          )}
+          {personal ? null : <FilterTabs options={viewOptions} value={view} onChange={setView} />}
           <button type="button" className="button-secondary" onClick={() => setCalendarOpen(true)}>
             <MobileIcon name="calendar" size={16} />
             {t("v2.calendarButton")}
@@ -318,7 +313,12 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
       {hasNoTodos ? null : (
       <div className="list-filter-row todo-v2-filters">
         <div className="table-toolbar-actions">
-          {allTodos !== null && <FilterTabs options={scopeOptions} value={scope} onChange={setScope} />}
+          {personal ? (
+            // «Meine Aufgaben» zeigt denselben Schalter wie Aufgaben › Pendenzen; «Alle» wechselt dorthin.
+            <FilterTabs options={scopeOptions} value="my" onChange={(value) => value === "all" && router.push("/todos")} />
+          ) : (
+            allTodos !== null && <FilterTabs options={scopeOptions} value={scope} onChange={setScope} />
+          )}
           <FilterTabs
             options={[
               { value: "open", label: t("statusOpenLabel"), count: counts.open },
@@ -433,7 +433,14 @@ export function TodoListView({ allTodos, myTodos, session, canEdit = true, todoB
                       <TodoTagChips tags={todo.tags ?? []} tagConfig={tagConfig} />
                       {!isDone && runningFines.has(todo.id) ? <Badge variant="danger">{t("fineRunningBadge")}</Badge> : null}
                     </div>
-                    <div className="todo-v2-source">{todoSourceLabel(todo, t)}</div>
+                    <div className="todo-v2-source">
+                      {todoSourceLabel(todo, t)}
+                      {!isDone && todo.submission_assignment_id && info.kind !== "submission" ? (
+                        // Abgabe-Pendenz MIT Datum: steht nach Datum einsortiert, «Fällig» zeigt nur das Datum.
+                        // Ohne Datum sagt es schon die Gruppe «Schliesst mit Abgabe» und «Mit Abgabe» unter Fällig.
+                        <span className="todo-v2-source-auto"> · {t("autoClosedShort")}</span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="todo-v2-assigned-cell">
                     <TodoAssigneeStack assignees={todoAssignees(todo, nameById)} />

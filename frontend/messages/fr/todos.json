@@ -7,6 +7,7 @@
   "appliedOnSaveHint": "Sera appliqué lors de l'enregistrement.",
   "assignedToLabel": "Assignée à",
   "autoClosedBySubmission": "Fermée automatiquement par une remise",
+  "autoClosedShort": "se termine avec la remise",
   "autoClosedHint": "Terminée automatiquement dès que le fichier est remis.",
   "chooseEventOption": "Choisir un événement…",
   "clipboardUnavailable": "Presse-papiers indisponible",
@@ -137,8 +138,7 @@
   },
   "personal": {
     "pageTitle": "Mes tâches",
-    "pageIntro": "Tes tâches et remises ouvertes, triées par échéance.",
-    "allTodosLink": "Toutes les tâches →"
+    "pageIntro": "Tes tâches et remises ouvertes, triées par échéance."
   },
   "v2": {
     "viewList": "Liste",
