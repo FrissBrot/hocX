@@ -58,4 +58,35 @@ describe("GlobalSearch", () => {
     await act(async () => { fireEvent.click(block); });
     await waitFor(() => expect(push).toHaveBeenCalledWith("/elements?open=e1&block=2"));
   });
+
+  it("zeigt Listen als eigene Gruppe mit Hervorhebung, öffnet sie und merkt sie nicht", async () => {
+    window.localStorage.clear();
+    fetchMock.mockImplementation((url: string, init?: { body?: string }) => {
+      if (url === "/api/roles") return Promise.resolve([]);
+      // Suchbegriff im Body, nicht in der Adresse
+      expect(url).toBe("/api/search");
+      expect(JSON.parse(init?.body ?? "{}")).toEqual({ q: "getranke" });
+      return Promise.resolve({
+        people: [], files: [], elements: [], blocks: [],
+        lists: [{ id: "l1", name: "Getränkeliste", description: "Wer bringt was" }],
+      });
+    });
+    renderSearch();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "getranke" } });
+    const option = await screen.findByRole("option", { name: /Getränkeliste/ });
+    expect(screen.getAllByRole("option")[0]).toBe(option);
+    expect(screen.getByText("Listen")).toHaveClass("global-search-group");
+    expect(option.querySelector("mark.global-search-hit")?.textContent).toBe("Getränke");
+    await act(async () => { fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" }); });
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/lists?open=l1"));
+    expect(window.localStorage.getItem("hocx-search-recent")).toBeNull();
+  });
+
+  it("fragt ohne meetings.edit keine Listen ab", async () => {
+    const reader = { ...session, permissions: ["meetings.read"], roles: [] } as unknown as SessionInfo;
+    render(<GlobalSearch open onClose={vi.fn()} session={reader} listInput={null} onAction={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "amtli" } });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/search", expect.anything());
+  });
 });

@@ -469,7 +469,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/roles/catalog` | access.manage |
 | `DELETE /api/roles/{role_id}` | access.manage |
 | `PATCH /api/roles/{role_id}` | access.manage · Feature custom_roles |
-| `POST /api/search` | files.read oder participants.read oder photos.read oder templates.edit |
+| `POST /api/search` | files.read oder meetings.edit oder participants.read oder photos.read oder templates.edit |
 | `GET /api/share-links` | sharing.public |
 | `POST /api/share-links` | sharing.public + files.read oder photos.read · je nach Fall: files.read, photos.read · Feature photo_sharing |
 | `DELETE /api/share-links/{share_link_id}` | sharing.public |

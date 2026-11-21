@@ -5,7 +5,9 @@ in der Datenbank steht - und nur Gruppen, deren Seite die Person auch öffnen da
 - Personen mit participants.manage (Seite /participants),
 - Dateien und Fotos mit files.manage (Seiten /files, /photos), über dieselbe Abfrage wie die
   Dateiliste (FileService.list_tenant_files) und damit mit derselben Mandantentrennung,
-- Elemente der Bibliothek und ihre Blöcke mit templates.edit (Seite /elements).
+- Elemente der Bibliothek und ihre Blöcke mit templates.edit (Seite /elements),
+- strukturierte Listen mit meetings.edit (Seite /lists, dieselbe Prüfung wie routes/lists.py; eine
+  Sichtbarkeit je Liste gibt es nicht). Nur der Name wird durchsucht, nie die Einträge.
 Rollen sucht das Frontend selbst (GET /api/roles, übersetzte Namen der Standardrollen).
 POST statt GET, obwohl nur gelesen wird: der Suchtext (oft ein Personenname) gehört nicht in
 Adresszeile und Zugriffslogs. Rate-Limit je Konto, weil das Frontend beim Tippen (verzögert)
@@ -21,8 +23,8 @@ from app.core.db import get_db
 from app.core.permissions import P
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_any_permission
-from app.models.entities import ElementDefinition, Participant
-from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchPerson
+from app.models.entities import ElementDefinition, ListDefinition, Participant
+from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchList, SearchPerson
 from app.services.file_service import FileService
 from app.services import context_visibility_service
 from app.core.sql_like import contains_pattern
@@ -115,6 +117,19 @@ def search_elements(db: Session, tenant_id: int, query: str, limit: int = GROUP_
     return [SearchElement(id=row.public_id, title=row.display_title or row.title, description=row.description) for row in rows]
 
 
+def search_lists(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT) -> list[SearchList]:
+    """Strukturierte Listen nach Namen (wie GET /api/lists: alle Listen des Mandanten, auch inaktive)."""
+    pattern = _like_pattern(query)
+    name = _fold(ListDefinition.name)
+    rows = db.execute(
+        select(ListDefinition.public_id, ListDefinition.name, ListDefinition.description)
+        .where(ListDefinition.tenant_id == tenant_id, name.like(pattern, escape="\\"))
+        .order_by(name.like(pattern[1:], escape="\\").desc(), ListDefinition.name.asc(), ListDefinition.id.asc())
+        .limit(limit)
+    ).all()
+    return [SearchList(id=row.public_id, name=row.name, description=row.description or None) for row in rows]
+
+
 # Blöcke stehen als JSON-Liste in configuration_json.blocks (Titel, Blocktitel). Nur gebundene
 # Parameter; die Faltung entspricht _fold.
 _BLOCK_SQL = text(
@@ -160,7 +175,7 @@ def global_search(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_any_permission(user, P.PARTICIPANTS_READ, P.FILES_READ, P.PHOTOS_READ, P.TEMPLATES_EDIT)
+    require_any_permission(user, P.PARTICIPANTS_READ, P.FILES_READ, P.PHOTOS_READ, P.TEMPLATES_EDIT, P.MEETINGS_EDIT)
     tenant_id = user.current_tenant_id
     if tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -180,4 +195,5 @@ def global_search(
         ),
         elements=search_elements(db, tenant_id, query) if templates else [],
         blocks=search_blocks(db, tenant_id, query) if templates else [],
+        lists=search_lists(db, tenant_id, query) if user.can(P.MEETINGS_EDIT) else [],
     )

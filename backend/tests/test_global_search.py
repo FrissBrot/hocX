@@ -10,7 +10,14 @@ from fastapi import HTTPException
 from app.api.routes import search as route
 from app.schemas.files import FileOverviewItem
 from app.schemas.search import GlobalSearchQuery
-from tests.factories import make_current_user, make_element_definition, make_participant, make_tenant
+from tests.factories import (
+    make_current_user,
+    make_element_definition,
+    make_list_definition,
+    make_list_entry,
+    make_participant,
+    make_tenant,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -134,3 +141,39 @@ def test_elements_and_blocks_only_library_of_own_tenant(db, tenants, monkeypatch
     people_only = make_current_user(own.id, permissions=frozenset({"participants.read"}))
     result = route.global_search(GlobalSearchQuery.model_construct(q="kuche"), db=db, user=people_only)
     assert result.elements == [] and result.blocks == []
+
+
+def test_lists_by_name_only_own_tenant_and_with_permission(db, tenants, monkeypatch):
+    """Listen (Ctrl+K): nur Name, nur eigener Mandant, Umlaute egal, «beginnt mit» zuerst, nur mit
+    meetings.edit (wie GET /api/lists); Einträge werden nie durchsucht."""
+    own, other = tenants
+    monkeypatch.setattr(route, "search_files", lambda *args, **kwargs: [])
+    amtli = make_list_definition(db, own.id, "Ämtliliste")
+    make_list_definition(db, own.id, "Haus-Ämtli")
+    make_list_definition(db, own.id, "Material")
+    make_list_definition(db, own.id, "50% Rabatt")
+    make_list_definition(db, other.id, "Ämtli fremd")
+    material = db.query(route.ListDefinition).filter_by(tenant_id=own.id, name="Material").one()
+    make_list_entry(db, material.id, first_value={"text": "Ämtli-Schlüssel"})
+    db.flush()
+
+    writer = make_current_user(own.id, permissions=frozenset({"meetings.edit"}))
+    result = route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=writer)
+    # Präfix-Treffer zuerst, fremder Mandant und Eintrag «Ämtli-Schlüssel» nicht
+    assert [item.name for item in result.lists] == ["Ämtliliste", "Haus-Ämtli"]
+    assert result.lists[0].id == amtli.public_id
+    assert result.people == [] and result.elements == []
+    assert [item.name for item in route.global_search(GlobalSearchQuery.model_construct(q="ÄMTLI"), db=db, user=writer).lists] == ["Ämtliliste", "Haus-Ämtli"]
+    assert [item.name for item in route.global_search(GlobalSearchQuery.model_construct(q="0%"), db=db, user=writer).lists] == ["50% Rabatt"]
+    assert route.global_search(GlobalSearchQuery.model_construct(q="schlussel"), db=db, user=writer).lists == []
+
+    foreign = make_current_user(other.id, permissions=frozenset({"meetings.edit"}))
+    assert [item.name for item in route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=foreign).lists] == ["Ämtli fremd"]
+
+    people_only = make_current_user(own.id, permissions=frozenset({"participants.read"}))
+    assert route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=people_only).lists == []
+
+    for i in range(route.GROUP_LIMIT + 2):
+        make_list_definition(db, own.id, f"Ämtli {i}")
+    db.flush()
+    assert len(route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=writer).lists) == route.GROUP_LIMIT

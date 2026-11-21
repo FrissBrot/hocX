@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { MobileIcon } from "@/components/mobile/mobile-icons";
@@ -67,11 +67,14 @@ export function MobileLists({
   initialEntriesByList,
   participants,
   events,
+  autoOpenId = null,
 }: {
   initialLists: StructuredListDefinition[];
   initialEntriesByList: Record<string, StructuredListEntry[]>;
   participants: ParticipantSummary[];
   events: EventSummary[];
+  /** Liste, die direkt geöffnet wird (?open=<id>, z. B. aus der globalen Suche) */
+  autoOpenId?: string | null;
 }) {
   const t = useTranslations("lists");
   const tMobile = useTranslations("mobile");
@@ -83,7 +86,13 @@ export function MobileLists({
   const [lists, setLists] = useState(initialLists);
   const [entries, setEntries] = useState(initialEntriesByList);
   const [search, setSearch] = useState("");
-  const [openListId, setOpenListId] = useState<string | null>(null);
+  const [openListId, setOpenListId] = useState<string | null>(
+    autoOpenId && initialLists.some((list) => list.id === autoOpenId) ? autoOpenId : null
+  );
+  useEffect(() => {
+    if (autoOpenId && lists.some((list) => list.id === autoOpenId)) setOpenListId(autoOpenId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenId]);
   const [listForm, setListForm] = useState<StructuredListDefinition | "new" | null>(null);
   const [entryForm, setEntryForm] = useState<StructuredListEntry | "new" | null>(null);
   const [listActions, setListActions] = useState(false);

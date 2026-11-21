@@ -19,7 +19,8 @@
     "people": "People",
     "files": "Files",
     "roles": "Roles",
-    "elements": "Elements and blocks"
+    "elements": "Elements and blocks",
+    "lists": "Lists"
   },
   "keywords": {
     "dashboard": "start overview home Dashboard page main page",

@@ -21,7 +21,7 @@ const REMOTE_DEBOUNCE_MS = 200;
 const MIN_REMOTE_LENGTH = 2;
 const RECENT_KEY = "hocx-search-recent";
 const RECENT_LIMIT = 6;
-const GROUP_ORDER: SearchGroup[] = ["list", "recent", "pages", "settings", "roles", "elements", "people", "files"];
+const GROUP_ORDER: SearchGroup[] = ["list", "recent", "pages", "settings", "roles", "elements", "lists", "people", "files"];
 
 export type GlobalSearchAction = "profile" | "theme-light" | "theme-dark" | "theme-auto";
 
@@ -55,7 +55,7 @@ function rememberRecent(userId: string | null, entry: SearchEntry) {
 /**
  * Globale Suche (Ctrl+K / ⌘K, Knopf in der Kopfleiste, mobil unter «Mehr»): Menüs und
  * Einstellungen aus der Navigation (sofort, ohne Server), Personen und Dateien über
- * GET /api/search (nur mit participants.manage bzw. files.manage). Hat die Seite eine Liste mit
+ * POST /api/search (Personen, Dateien, Elemente und Listen, je nach Berechtigung). Hat die Seite eine Liste mit
  * Suchfeld, steht «In dieser Liste suchen» zuoberst.
  */
 export function GlobalSearch({
@@ -87,6 +87,7 @@ export function GlobalSearch({
   const searchesPeople = can(session, "participants.read");
   const searchesFiles = can(session, "files.read") || can(session, "photos.read");
   const searchesElements = can(session, "templates.edit");
+  const searchesLists = can(session, "meetings.edit");
   const searchesRoles = can(session, "access.manage");
   const [roles, setRoles] = useState<RoleRead[] | null>(null);
   const shortcut = useShortcutLabel();
@@ -151,7 +152,7 @@ export function GlobalSearch({
 
   // Personen und Dateien: nach einer kurzen Tipppause, veraltete Anfragen werden abgebrochen
   useEffect(() => {
-    if (!open || (!searchesPeople && !searchesFiles && !searchesElements) || trimmed.length < MIN_REMOTE_LENGTH) {
+    if (!open || (!searchesPeople && !searchesFiles && !searchesElements && !searchesLists) || trimmed.length < MIN_REMOTE_LENGTH) {
       setRemote(null);
       setRemoteState("idle");
       return;
@@ -164,7 +165,7 @@ export function GlobalSearch({
         .catch(() => { if (!controller.signal.aborted) { setRemote(null); setRemoteState("error"); } });
     }, REMOTE_DEBOUNCE_MS);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, trimmed, searchesPeople, searchesFiles, searchesElements]);
+  }, [open, trimmed, searchesPeople, searchesFiles, searchesElements, searchesLists]);
 
   const entries = useMemo<SearchEntry[]>(() => {
     if (!trimmed) {
@@ -203,6 +204,17 @@ export function GlobalSearch({
         sublabel: t("blockIn", { element: block.element_title }),
         icon: "elements",
         href: `/elements?open=${block.element_id}&block=${block.block_id}`,
+      });
+    }
+    // Listen nur nach Namen; nicht in «Zuletzt geöffnet» (rememberRecent nimmt nur Menüs/Einstellungen)
+    for (const list of remote?.lists ?? []) {
+      result.push({
+        id: `lists:${list.id}`,
+        group: "lists",
+        label: list.name,
+        sublabel: list.description || undefined,
+        icon: "lists",
+        href: `/lists?open=${list.id}`,
       });
     }
     for (const person of remote?.people ?? []) {

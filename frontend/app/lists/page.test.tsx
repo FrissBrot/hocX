@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 const { fetchMock, fetchAllMock, managerMock } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   fetchAllMock: vi.fn(),
-  managerMock: vi.fn((_props: { availableEvents: unknown[] }) => null),
+  managerMock: vi.fn((_props: { availableEvents: unknown[]; autoOpenId?: string | null }) => null),
 }));
 vi.mock("@/lib/api/server", () => ({
   backendFetchWithSession: fetchMock,
@@ -33,8 +33,10 @@ it("übergibt alle Termine, nicht nur die erste Seite", async () => {
   fetchMock.mockImplementation(async (path: string) => (path.startsWith("/api/events") ? events(100) : []));
   fetchAllMock.mockImplementation(async (path: string) => (path.startsWith("/api/events") ? events(250) : []));
 
-  render(await ListsPage());
+  render(await ListsPage({ searchParams: Promise.resolve({ open: "l2" }) }));
 
   expect(managerMock).toHaveBeenCalled();
   expect(managerMock.mock.calls[0][0].availableEvents).toHaveLength(250);
+  // ?open=<id> aus der globalen Suche wählt die Liste
+  expect(managerMock.mock.calls[0][0].autoOpenId).toBe("l2");
 });

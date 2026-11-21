@@ -36,6 +36,13 @@ class SearchBlock(BaseModel):
     title: str
 
 
+class SearchList(BaseModel):
+    """Strukturierte Liste (Seite /lists), nur Name und Beschreibung, keine Einträge."""
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+
+
 class GlobalSearchQuery(BaseModel):
     q: str = Field(min_length=2, max_length=100)
 
@@ -45,3 +52,4 @@ class GlobalSearchRead(BaseModel):
     files: list[SearchFile]
     elements: list[SearchElement] = []
     blocks: list[SearchBlock] = []
+    lists: list[SearchList] = []
