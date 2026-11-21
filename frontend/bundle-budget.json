@@ -126,10 +126,25 @@
       "css_gzip_kb": 59,
       "css_raw_kb": 378
     },
+    "/admin/(console)/settings/integrations": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
+    },
     "/admin/(console)/settings/notifications": {
       "js_gzip_kb": 239,
       "css_gzip_kb": 59,
       "css_raw_kb": 378
+    },
+    "/admin/(console)/settings/security": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
+    },
+    "/admin/(console)/settings/system": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
     },
     "/admin/(console)/storage": {
       "js_gzip_kb": 246,
@@ -161,10 +176,20 @@
       "css_gzip_kb": 59,
       "css_raw_kb": 378
     },
+    "/admin/(console)/tenants/[id]/features": {
+      "js_gzip_kb": 244,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
+    },
     "/admin/(console)/tenants/[id]/profile": {
       "js_gzip_kb": 259,
       "css_gzip_kb": 59,
       "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/security": {
+      "js_gzip_kb": 244,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
     },
     "/admin/(console)/tenants/[id]/storage": {
       "js_gzip_kb": 259,
@@ -180,6 +205,11 @@
       "js_gzip_kb": 259,
       "css_gzip_kb": 59,
       "css_raw_kb": 378
+    },
+    "/admin/(console)/tenants/[id]/usage": {
+      "js_gzip_kb": 244,
+      "css_gzip_kb": 61,
+      "css_raw_kb": 387
     },
     "/admin/(console)/tenants/[id]/users": {
       "js_gzip_kb": 259,
@@ -208,8 +238,8 @@
     },
     "/admin/login": {
       "js_gzip_kb": 221,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 345
+      "css_gzip_kb": 58,
+      "css_raw_kb": 354
     },
     "/agenda": {
       "js_gzip_kb": 242,
@@ -279,7 +309,7 @@
     "/elements": {
       "js_gzip_kb": 522,
       "css_gzip_kb": 62,
-      "css_raw_kb": 386
+      "css_raw_kb": 392
     },
     "/events": {
       "js_gzip_kb": 275,
@@ -289,7 +319,7 @@
     "/files": {
       "js_gzip_kb": 267,
       "css_gzip_kb": 57,
-      "css_raw_kb": 351
+      "css_raw_kb": 358
     },
     "/finances": {
       "js_gzip_kb": 267,
@@ -348,13 +378,13 @@
     },
     "/photos": {
       "js_gzip_kb": 287,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 346
+      "css_gzip_kb": 58,
+      "css_raw_kb": 353
     },
     "/photos/submissions": {
       "js_gzip_kb": 240,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 346
+      "css_gzip_kb": 58,
+      "css_raw_kb": 353
     },
     "/protocols": {
       "js_gzip_kb": 258,
@@ -398,8 +428,8 @@
     },
     "/task-packages": {
       "js_gzip_kb": 296,
-      "css_gzip_kb": 56,
-      "css_raw_kb": 349
+      "css_gzip_kb": 59,
+      "css_raw_kb": 356
     },
     "/templates": {
       "js_gzip_kb": 550,
@@ -446,6 +476,11 @@
       "css_gzip_kb": 50,
       "css_raw_kb": 322
     },
+    "/tenant-settings/search": {
+      "js_gzip_kb": 262,
+      "css_gzip_kb": 53,
+      "css_raw_kb": 340
+    },
     "/tenant-settings/security": {
       "js_gzip_kb": 261,
       "css_gzip_kb": 53,
@@ -468,23 +503,23 @@
     },
     "/tools": {
       "js_gzip_kb": 206,
-      "css_gzip_kb": 57,
-      "css_raw_kb": 355
+      "css_gzip_kb": 60,
+      "css_raw_kb": 361
     },
     "/tools/import": {
       "js_gzip_kb": 290,
-      "css_gzip_kb": 57,
-      "css_raw_kb": 355
+      "css_gzip_kb": 60,
+      "css_raw_kb": 361
     },
     "/tools/import/[id]": {
       "js_gzip_kb": 312,
-      "css_gzip_kb": 57,
-      "css_raw_kb": 355
+      "css_gzip_kb": 60,
+      "css_raw_kb": 361
     },
     "/tools/word-import": {
       "js_gzip_kb": 312,
-      "css_gzip_kb": 57,
-      "css_raw_kb": 355
+      "css_gzip_kb": 60,
+      "css_raw_kb": 361
     },
     "/users": {
       "js_gzip_kb": 251,
