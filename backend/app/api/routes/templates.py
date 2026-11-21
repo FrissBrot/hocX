@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.core.db import get_db
+from app.api.routes.protocol_elements import broadcast_template_block_config
 from app.models.entities import ElementDefinition, Template, TemplateElement
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -376,9 +377,11 @@ def patch_element_definition(
 ):
     require_permission(user, P.TEMPLATES_EDIT)
     current = _get_element_definition_or_404(db, element_definition_id, user)
+    changed_protocol_blocks: list = []
     try:
         element_definition = element_definition_service.update_element_definition(
-            db, current.id, payload, can_configure_fines=user.can(P.FINANCES_READ)
+            db, current.id, payload, can_configure_fines=user.can(P.FINANCES_READ),
+            changed_protocol_blocks=changed_protocol_blocks,
         )
     except FineListPermissionError as exc:
         # Geprüft wird vor jedem Schreiben: nichts zurückzurollen
@@ -391,6 +394,9 @@ def patch_element_definition(
         raise HTTPException(status_code=400, detail="Element definition could not be updated") from exc
     if element_definition is None:
         raise HTTPException(status_code=404, detail="Element definition not found")
+    # Geplante Protokolle mit angepasster Feldanordnung «aus Termin/Pendenz» live nachziehen
+    for block in changed_protocol_blocks:
+        broadcast_template_block_config(db, block, user)
     return element_definition
 
 

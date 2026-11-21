@@ -72,6 +72,25 @@ def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, us
     )
 
 
+def broadcast_template_block_config(db: Session, block: ProtocolElementBlock, user: CurrentUser) -> None:
+    """Block-Konfiguration, die eine Vorlagenänderung angepasst hat (z. B. Feldanordnung «aus
+    Termin», element_definition_service.propagate_source_fields), an offene Editoren des Protokolls.
+    Wie _broadcast_block_update, aber ohne Nutzer-ID: die Änderung stammt nicht aus diesem
+    Protokoll, also sollen auch eigene Tabs mit dem Protokoll sie übernehmen."""
+    read = _block_to_read(db, block)
+    element = db.get(ProtocolElement, block.protocol_element_id)
+    publish_best_effort(
+        protocol_channel(element.protocol_id),
+        json.dumps({
+            "type": "field_update",
+            "field_key": f"block-{read.id}",
+            "patch": {"configuration_snapshot_json": read.configuration_snapshot_json, "config_version": read.config_version},
+            "user_id": None,
+            "display_name": user.display_name,
+        }, default=str),
+    )
+
+
 def _ensure_readable_protocol_or_404(db: Session, user: CurrentUser, protocol_id: int | None, detail: str) -> None:
     """Wie access_service.ensure_can_read_protocol, aber mit 404 statt 403: Wer ein Protokoll
     (z. B. einen Entwurf) nicht lesen darf, erfährt auch nicht, dass es existiert

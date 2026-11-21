@@ -1,7 +1,17 @@
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Event, Participant, Template, TemplateElement, Tenant
+from app.models import (
+    ElementDefinition,
+    Event,
+    Participant,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    Template,
+    TemplateElement,
+    Tenant,
+)
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -13,6 +23,15 @@ from app.core.element_types import allows_multiple_values, element_type_code, is
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_config import upgrade_definition_block, validate_block_config
 from app.services.list_service import lock_linked_list_definitions
+
+
+# Felder aus Termin bzw. Pendenz eines Blocks «Pro Termin»/«Pro Pendenz» (Auswahl, Labels,
+# Reihenfolge) je Wiederholungsquelle. Reine Darstellung: die Werte kommen live aus dem Termin
+# bzw. der Pendenz, im Protokoll wird diese Liste nie bearbeitet.
+SOURCE_FIELD_KEYS = {"event": "event_fields", "todo": "todo_fields"}
+# Protokolle, die eine geänderte Feldanordnung übernehmen: noch nicht durchgeführte. Durchgeführte
+# und abgeschlossene behalten ihren Stand (abgeschlossene sind eingefroren).
+SOURCE_FIELD_PROPAGATION_STATUSES = ("geplant", "vorbereitet")
 
 
 class FineListPermissionError(PermissionError):
@@ -247,23 +266,106 @@ class ElementDefinitionService:
         created = self.repository.create(db, entity)
         return self._read_model(db, created)
 
-    def update_element_definition(self, db: Session, element_definition_id: int, payload: ElementDefinitionUpdate, *, can_configure_fines: bool = True):
+    def update_element_definition(
+        self,
+        db: Session,
+        element_definition_id: int,
+        payload: ElementDefinitionUpdate,
+        *,
+        can_configure_fines: bool = True,
+        changed_protocol_blocks: list[ProtocolElementBlock] | None = None,
+    ):
+        """changed_protocol_blocks sammelt (falls übergeben) die Protokollblöcke, deren Feldanordnung
+        «aus Termin/Pendenz» angepasst wurde - die Route meldet sie offenen Editoren."""
         entity = self.repository.get(db, element_definition_id)
         if entity is None:
             return None
 
         values = payload.model_dump(exclude_unset=True)
         if "blocks" in values:
+            previous_blocks = (entity.configuration_json or {}).get("blocks") or []
             normalized_blocks = self._normalize_blocks(db, values.pop("blocks"), tenant_id=entity.tenant_id)
-            ensure_fine_lists_allowed((entity.configuration_json or {}).get("blocks"), normalized_blocks, can_configure_fines=can_configure_fines)
+            ensure_fine_lists_allowed(previous_blocks, normalized_blocks, can_configure_fines=can_configure_fines)
             self._validate_linked_lists(db, normalized_blocks, tenant_id=entity.tenant_id)
             values["configuration_json"] = {"blocks": normalized_blocks}
+            # Im selben Commit wie die Definition (repository.update committet)
+            changed_blocks = self.propagate_source_fields(db, entity, previous_blocks, normalized_blocks)
+            if changed_protocol_blocks is not None:
+                changed_protocol_blocks.extend(changed_blocks)
         if "title" in values:
             values["display_title"] = values["title"]
         if not values:
             return self._read_model(db, entity)
         updated = self.repository.update(db, entity, values)
         return self._read_model(db, updated)
+
+    def propagate_source_fields(
+        self, db: Session, entity: ElementDefinition, previous_blocks: list[dict], blocks: list[dict]
+    ) -> list[ProtocolElementBlock]:
+        """Feldanordnung «aus Termin/Pendenz» (event_fields/todo_fields: Auswahl, Labels,
+        Reihenfolge) in die Blöcke noch nicht durchgeführter Protokolle übernehmen.
+
+        Protokollblöcke tragen einen Schnappschuss der Block-Konfiguration; ohne diesen Abgleich
+        zeigte ein bereits geplantes Protokoll (und sein PDF) die Felder weiter in der alten
+        Reihenfolge, bis jemand «Mit Vorlage abgleichen» auslöste. Die Liste ist reine
+        Darstellung (Werte kommen live aus Termin/Pendenz, im Protokoll wird sie nie bearbeitet),
+        darum wird sie ersetzt statt zusammengeführt. Betroffen sind Protokolle der Vorlagen, deren
+        Traktandum diese Definition aktuell verwendet (nach «nur in dieser Vorlage ändern» gilt
+        also die Kopie), Zuordnung des Blocks wie beim Vorlagen-Abgleich über source_sort_index
+        (Stand vor dem Speichern), Elementtyp und Wiederholungsquelle. Mandant: Protokoll und
+        Vorlage gehören dem Mandanten der Definition."""
+        previous_sort_index = {
+            str(block.get("id")): block.get("sort_index", 0) for block in previous_blocks if isinstance(block, dict)
+        }
+        targets: dict[tuple[int, int], dict] = {}
+        for block in blocks:
+            sort_index = previous_sort_index.get(str(block.get("id")))
+            config = block.get("configuration_json") or {}
+            fields = {
+                source: config[key] for source, key in SOURCE_FIELD_KEYS.items() if isinstance(config.get(key), list)
+            }
+            if sort_index is None or not fields:
+                continue
+            targets[(int(sort_index), int(block["element_type_id"]))] = fields
+        if not targets:
+            return []
+
+        template_element_ids = (
+            select(TemplateElement.id)
+            .join(Template, Template.id == TemplateElement.template_id)
+            .where(TemplateElement.element_definition_id == entity.id, Template.tenant_id == entity.tenant_id)
+        )
+        candidates = db.scalars(
+            select(ProtocolElementBlock)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .join(Protocol, Protocol.id == ProtocolElement.protocol_id)
+            .where(
+                Protocol.tenant_id == entity.tenant_id,
+                Protocol.status.in_(SOURCE_FIELD_PROPAGATION_STATUSES),
+                ProtocolElement.template_element_id.in_(template_element_ids),
+                ProtocolElementBlock.element_type_id.in_({element_type_id for _, element_type_id in targets}),
+            )
+            .order_by(ProtocolElementBlock.id)
+            # Zeilensperre wie beim Bearbeiten im Protokoll (CONC-005); config_version steigt per Trigger
+            .with_for_update(of=ProtocolElementBlock)
+        ).all()
+        changed: list[ProtocolElementBlock] = []
+        for protocol_block in candidates:
+            config = protocol_block.configuration_snapshot_json or {}
+            source = str(config.get("repeat_source_type") or "")
+            key = SOURCE_FIELD_KEYS.get(source)
+            try:
+                fields = targets.get((int(config.get("source_sort_index")), protocol_block.element_type_id))
+            except (TypeError, ValueError):
+                continue
+            if key is None or fields is None or source not in fields or config.get(key) == fields[source]:
+                continue
+            protocol_block.configuration_snapshot_json = {**config, key: fields[source]}
+            db.add(protocol_block)
+            changed.append(protocol_block)
+        if changed:
+            db.flush()
+        return changed
 
     def copy_element_definition(self, db: Session, source: ElementDefinition, *, is_library: bool = False) -> ElementDefinition:
         """Eigenständige Kopie (gleiche Block-IDs, damit Vorlagen-Übersteuerungen weiter passen)."""
