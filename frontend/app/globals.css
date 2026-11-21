@@ -3814,6 +3814,10 @@ button.table-row-link.table-row-toggle {
   box-shadow: none;
 }
 
+.photo-viewer-sidebar .keyword-input .tag-input-text {
+  width: 104px;
+}
+
 .photo-viewer-sidebar .keyword-section-hint,
 .photo-viewer-sidebar .keyword-input-empty {
   color: var(--pv-muted);
@@ -3828,6 +3832,7 @@ button.table-row-link.table-row-toggle {
 
 .keyword-bulk-toggle {
   display: inline-flex;
+  width: auto;
   align-items: center;
   gap: var(--space-1);
   min-height: 32px;
