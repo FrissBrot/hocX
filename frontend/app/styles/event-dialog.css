@@ -117,6 +117,35 @@ a.event-special-field-tag:hover { background: var(--accent-soft); color: var(--a
   align-content: start;
 }
 
+/* Desktop: feste Dialoghöhe für alle Reiter. Kopf und Reiterleiste bleiben stehen, nur der Inhalt des
+   Reiters scrollt - der Dialog springt beim Wechsel zwischen Übersicht, Teilnehmern und Feldern nicht. */
+@media (min-width: 901px) {
+  .event-dialog.modal-shell {
+    height: min(880px, calc(100dvh - 2 * clamp(16px, 2.5vw, 28px)));
+  }
+
+  .event-dialog > .modal-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0;
+  }
+
+  .event-dialog .tabs {
+    flex: 1 1 auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .event-dialog .tabs-panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .event-dialog .event-dialog-overview {
+    min-height: 100%;
+  }
+}
+
 .event-dialog-head {
   display: flex;
   align-items: flex-start;
