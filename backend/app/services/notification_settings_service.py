@@ -58,9 +58,12 @@ class NotificationSettingsService:
             db.refresh(row)
         return row
 
-    def read(self, db: Session) -> NotificationSettingsRead:
+    def read(self, db: Session, *, reveal_status_token: bool = False) -> NotificationSettingsRead:
+        """Status-Token nur direkt nach dem Rotieren im Klartext (Admin-Redesign §8.1 Nr. 5);
+        sonst nur «gesetzt» und die letzten vier Zeichen zum Wiedererkennen in Uptime Kuma."""
         row = self.get_row(db)
-        status_token = decrypt_secret(row.status_token_encrypted) if row.status_token_encrypted else None
+        decrypted = decrypt_secret(row.status_token_encrypted) if row.status_token_encrypted else None
+        status_token = decrypted if reveal_status_token else None
         return NotificationSettingsRead(
             ntfy_enabled=row.ntfy_enabled,
             ntfy_server_url=row.ntfy_server_url,
@@ -70,6 +73,8 @@ class NotificationSettingsService:
             reminder_hours=row.reminder_hours,
             status_token=status_token,
             status_url=_status_url(status_token),
+            status_token_set=decrypted is not None,
+            status_token_hint=decrypted[-4:] if decrypted else None,
             last_sent_at=row.last_sent_at,
             last_send_error=row.last_send_error,
             last_send_error_at=row.last_send_error_at,
@@ -104,7 +109,7 @@ class NotificationSettingsService:
         row.status_token_encrypted = encrypt_secret(token)
         row.updated_at = datetime.now(timezone.utc)
         db.commit()
-        return self.read(db)
+        return self.read(db, reveal_status_token=True)
 
     def verify_status_token(self, db: Session, token: str | None) -> bool:
         row = db.get(PlatformNotificationSettings, 1)

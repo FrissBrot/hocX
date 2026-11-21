@@ -175,6 +175,8 @@ export function buildSettingsNav(session: NavSession | null): SettingsGroup[] {
         ...(can(session, "sharing.public") ? [{ href: "/shared-links", labelKey: "sharedLinks", icon: "share" as const }] : []),
         // Aktivitätsprotokoll ist ein eigenes Recht (activity.read, Plan «Berechtigungen» Phase 3)
         ...(can(session, "activity.read") ? [{ href: "/tenant-settings/activity", labelKey: "activity", icon: "activity" as const }] : []),
+        // Sicherheit & Anmeldungen: eigenes Recht security.read (Standardrolle admin, Admin-Redesign Phase E)
+        ...(can(session, "security.read") ? [{ href: "/tenant-settings/security", labelKey: "securityLogins", icon: "activity" as const }] : []),
         // Wie bisher nur in der Administration sichtbar (Navigation wie vor RBAC: Rolle admin).
         ...(managesTemplates ? [{ href: "/tools/import", labelKey: "import", icon: "tools" as const, match: ["/tools"] }] : []),
       ],

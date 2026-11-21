@@ -461,5 +461,77 @@
     "domainHintNone": "Ancora nessun dominio proprio: hocX funziona all'indirizzo comune.",
     "domainHintManage": "Domini e autenticità",
     "financeDescription": "Una valuta per tutti i conti e le multe dell'associazione."
+  },
+  "security": {
+    "title": "Sicurezza e accessi",
+    "description": "Avvisi e attività di accesso degli account della vostra organizzazione negli ultimi 7 giorni. Gli indirizzi IP non vengono mostrati.",
+    "summary": {
+      "failures24h": "Tentativi falliti 24 h",
+      "accountsWithFailures": "Account con tentativi falliti 24 h",
+      "newDeviceLogins": "Accessi da nuovi dispositivi (7 g)",
+      "blocked24h": "Tentativi respinti 24 h"
+    },
+    "warningsTitle": "Avvisi",
+    "warningsEmpty": "Nessun avviso negli ultimi 7 giorni.",
+    "warnings": {
+      "account_attack": "{name}: {count, plural, one {# tentativo fallito} other {# tentativi falliti}} in 24 ore",
+      "privileged_new_device": "{name} (amministratore) ha effettuato l’accesso da un nuovo dispositivo",
+      "mfa_removed": "{name}: secondo fattore rimosso",
+      "account_locked": "{name}: tentativi di accesso bloccati"
+    },
+    "accountsTitle": "Attività di accesso per account",
+    "accountsEmpty": "Nessun account con accesso.",
+    "columns": {
+      "account": "Account",
+      "lastLogin": "Ultimo accesso",
+      "failures": "Tentativi falliti 7 g",
+      "sessions": "Sessioni attive",
+      "actions": "Azioni",
+      "time": "Ora",
+      "event": "Evento",
+      "outcome": "Esito",
+      "device": "Dispositivo",
+      "risk": "Rischio",
+      "warning": "Avviso",
+      "when": "Ultima volta"
+    },
+    "never": "Mai",
+    "revoke": "Termina sessioni",
+    "revokeConfirm": "Terminare tutte le sessioni di {name}? La persona dovrà accedere di nuovo su tutti i dispositivi.",
+    "revoked": "{count, plural, =0 {Sessioni terminate.} one {# sessione terminata.} other {# sessioni terminate.}}",
+    "revokeFailed": "Impossibile terminare le sessioni.",
+    "eventsTitle": "Ultimi eventi",
+    "eventsEmpty": "Nessun evento negli ultimi 7 giorni.",
+    "events": {
+      "login_password": "Verifica password",
+      "login_locked": "Tentativo bloccato",
+      "login_challenge": "Verifica aggiuntiva",
+      "login_mfa_totp": "Codice (TOTP)",
+      "login_mfa_passkey": "Passkey",
+      "login_success": "Accesso",
+      "mfa_enroll": "Secondo fattore aggiunto",
+      "mfa_remove": "Secondo fattore rimosso",
+      "session_revoke": "Sessioni terminate",
+      "session_logout": "Disconnessione",
+      "reset_request": "Reimpostazione richiesta",
+      "reset_complete": "Password reimpostata",
+      "password_change": "Password modificata",
+      "stepup_success": "Conferma",
+      "stepup_failure": "Conferma fallita"
+    },
+    "outcomes": {
+      "success": "Riuscito",
+      "failure": "Fallito",
+      "blocked": "Bloccato",
+      "challenged": "Verifica aggiuntiva",
+      "info": "Info"
+    },
+    "risk": {
+      "normal": "Normale",
+      "moderate": "Elevato",
+      "high": "Alto",
+      "critical": "Critico"
+    },
+    "loadFailed": "Impossibile caricare i dati."
   }
 }

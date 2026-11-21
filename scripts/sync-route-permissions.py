@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import importlib.util
 import json
 import sys
@@ -292,6 +293,16 @@ def build() -> dict[str, dict]:
                     defaults = " ".join(ast.unparse(value) for value in node.args.defaults + node.args.kw_defaults if value is not None)
                     if module_admin or any(name in defaults for name in ADMIN_DEPENDENCIES):
                         entry["platform"] = True
+                        # Stufe der Admin-Prüfung (Admin-Redesign §8.1 Nr. 2): A = jeder Admin,
+                        # W = require_admin_write, O = require_admin_owner, dazu der Step-up-Zweck -
+                        # damit eine abgeschwächte Prüfung im Diff dieser Datei auffällt.
+                        whole = ast.unparse(node)
+                        owner = "require_admin_owner" in whole
+                        write = "require_admin_write" in whole
+                        entry["admin_level"] = "O+W" if owner and write else "O" if owner else "W" if write else "A"
+                        purposes = sorted(set(re.findall(r"(?:require_step_up|step_up_proof)\(['\"]([\w-]+)['\"]\)", whole)))
+                        if purposes:
+                            entry["step_up"] = ", ".join(purposes)
                 note = allowed.get(f"{module}.{node.name}") or allowed.get(f"{module}.*")
                 if module == "admin_auth":
                     note = "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
@@ -368,7 +379,7 @@ def render_inventory(routes: dict[str, dict]) -> str:
         if entry.get("requires_if"):
             text += (" · " if text else "") + "je nach Fall: " + ", ".join(entry["requires_if"])
         if entry.get("platform"):
-            text = "Plattform-Admin"
+            text = f"Plattform-Admin ({entry.get('admin_level', 'A')})" + (f", Step-up {entry['step_up']}" if entry.get("step_up") else "")
         if entry.get("note"):
             text = (text + " · " if text else "") + entry["note"]
         if entry.get("features"):

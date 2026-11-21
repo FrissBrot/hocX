@@ -223,6 +223,13 @@
       "implies": []
     },
     {
+      "key": "security.read",
+      "area": "administration",
+      "feature": null,
+      "requires_mfa": true,
+      "implies": []
+    },
+    {
       "key": "access.manage",
       "area": "administration",
       "feature": null,

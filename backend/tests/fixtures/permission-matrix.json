@@ -73,6 +73,12 @@
         "writer"
       ]
     },
+    "POST /api/auth-security/accounts/{user_id}/revoke-sessions": {
+      "handler": "auth_security.revoke_account_sessions",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/auth-security/activity": {
       "handler": "auth_security.tenant_login_activity",
       "allowed": [

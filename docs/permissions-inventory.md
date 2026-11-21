@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 601 (Plattform-Admin: 129)
-- Mandanten-Routen mit Rechteprüfung: 384
+- Routen gesamt: 613 (Plattform-Admin: 140)
+- Mandanten-Routen mit Rechteprüfung: 385
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 88
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 22
@@ -31,8 +31,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 
 | Route | Handler | Prüfung |
 |---|---|---|
-| `GET /api/admin/storage/migrations/{migration_id}/report` | admin_storage.download_report | Plattform-Admin |
-| `POST /api/admin/tenants/{tenant_id}/export` | admin.export_tenant | Plattform-Admin |
+| `GET /api/admin/storage/migrations/{migration_id}/report` | admin_storage.download_report | Plattform-Admin (O) |
+| `POST /api/admin/tenants/{tenant_id}/export` | admin.export_tenant | Plattform-Admin (W), Step-up tenant-export |
 | `GET /api/document-assets/{asset_id}/content` | document_studio.get_document_asset_content | meetings.read |
 | `GET /api/document-studio/examples/{example_key}/thumbnail` | document_studio.get_design_example_thumbnail | meetings.read |
 | `GET /api/document-studio/fonts/{file_name}` | document_studio.get_builtin_font | meetings.read |
@@ -168,7 +168,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/agenda-items/{item_id}` | meetings.edit |
 | `PATCH /api/agenda-items/{item_id}` | meetings.edit |
 | `POST /api/agenda-items/{item_id}/postpone` | meetings.edit |
-| `GET /api/auth-security/activity` | access.manage |
+| `POST /api/auth-security/accounts/{user_id}/revoke-sessions` | access.manage |
+| `GET /api/auth-security/activity` | security.read |
 | `POST /api/auth/account-link/complete` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `POST /api/auth/account-link/preview` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/auth/bridge` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |

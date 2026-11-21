@@ -38,6 +38,8 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     admin_url: null,
     reminder_hours: 6,
     status_token: null,
+    status_token_set: false,
+    status_token_hint: null,
     status_url: null,
     last_sent_at: null,
     last_send_error: null,

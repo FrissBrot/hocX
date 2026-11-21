@@ -204,6 +204,12 @@
         "label": "View activity log",
         "description": "Who changed what and when (organisation activity log)."
       }
+    },
+    "security": {
+      "read": {
+        "label": "View security & sign-ins",
+        "description": "Security warnings and sign-in activity of this organisation's accounts (without IP addresses)."
+      }
     }
   },
   "permissionsHelp": "A role bundles permissions; an account gets all permissions of its roles. «MFA» means: whoever has it signs in with a second factor. «Module not booked»: only takes effect with that subscription module. Greyed out: you do not have it yourself, or it follows from another permission.",

@@ -106,7 +106,7 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
   }
 
   async function rotateStatusToken() {
-    if (settings.status_token) {
+    if (settings.status_token_set) {
       const confirmed = await confirm({ message: t("rotateConfirm"), tone: "danger", confirmLabel: t("rotate") });
       if (!confirmed) return;
     }
@@ -224,15 +224,18 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
           description={t("statusDescription")}
           actions={
             <button type="button" className="button-secondary" onClick={() => void rotateStatusToken()}>
-              {settings.status_token ? t("rotate") : t("createToken")}
+              {settings.status_token_set ? t("rotate") : t("createToken")}
             </button>
           }
         />
         {settings.status_url ? (
           <div className="grid">
+            <StatusBanner tone="warning" message={t("statusTokenOnce")} />
             <CopyField label={t("statusUrl")} value={settings.status_url} />
             <p className="muted admin-job-description">{t("statusHelp")}</p>
           </div>
+        ) : settings.status_token_set ? (
+          <p className="muted">{t("statusTokenMasked", { hint: settings.status_token_hint ?? "" })}</p>
         ) : (
           <p className="muted">{t("noStatusToken")}</p>
         )}

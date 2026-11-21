@@ -32,6 +32,7 @@ class P(StrEnum):
     SUBMISSIONS_MANAGE = "submissions.manage"
     SETTINGS_MANAGE = "settings.manage"
     ACTIVITY_READ = "activity.read"
+    SECURITY_READ = "security.read"
     ACCESS_MANAGE = "access.manage"
     DATA_EXPORT = "data.export"
 
@@ -74,6 +75,7 @@ CATALOG: dict[P, PermissionDef] = {
     P.SUBMISSIONS_MANAGE: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=(P.SUBMISSIONS_READ,)),
     P.SETTINGS_MANAGE: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.ACTIVITY_READ: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
+    P.SECURITY_READ: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.ACCESS_MANAGE: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.DATA_EXPORT: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
 }

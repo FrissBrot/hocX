@@ -9,39 +9,82 @@
     },
     "GET /api/admin/admins": {
       "handler": "admin.list_admins",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "POST /api/admin/admins": {
       "handler": "admin.create_admin",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "admin-manage"
     },
     "PATCH /api/admin/admins/{admin_id}": {
       "handler": "admin.update_admin",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "admin-manage"
+    },
+    "GET /api/admin/analytics/errors": {
+      "handler": "admin_analytics.analytics_errors",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/analytics/usage": {
+      "handler": "admin_analytics.analytics_usage",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/analytics/{series}": {
+      "handler": "admin_analytics.analytics_series",
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/audit-log": {
       "handler": "admin.list_audit_log",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/alerts": {
+      "handler": "admin_auth_security.auth_security_alerts",
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.auth_security_blocks",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.create_block",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "platform-settings"
     },
     "DELETE /api/admin/auth-security/blocks/{subject}": {
       "handler": "admin_auth_security.delete_block",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "platform-settings"
     },
     "GET /api/admin/auth-security/events": {
       "handler": "admin_auth_security.auth_security_events",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
+    },
+    "GET /api/admin/auth-security/overview": {
+      "handler": "admin_auth_security.auth_security_overview",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/policy": {
+      "handler": "admin_auth_security.auth_security_policy",
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/auth-security/summary": {
       "handler": "admin_auth_security.auth_security_summary",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/auth/health": {
       "handler": "admin_auth.health",
@@ -77,485 +120,655 @@
     },
     "GET /api/admin/backups": {
       "handler": "admin_backups.backup_jobs",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/backups": {
       "handler": "admin_backups.create_backup",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/backups/restore-test": {
       "handler": "admin_backups.create_restore_test",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/backups/sets": {
       "handler": "admin_backups.backup_sets",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/backups/sets/{set_id}/tenants": {
       "handler": "admin_backups.backup_set_tenants",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/backups/settings": {
       "handler": "admin_backups.backup_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PUT /api/admin/backups/settings": {
       "handler": "admin_backups.update_backup_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "backup-settings"
     },
     "GET /api/admin/backups/status": {
       "handler": "admin_backups.backup_status",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/backups/{job_id}": {
       "handler": "admin_backups.backup_job",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/backups/{job_id}/cancel": {
       "handler": "admin_backups.cancel_backup",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/backups/{job_id}/verify": {
       "handler": "admin_backups.verify_backup",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/cashflow/charges": {
       "handler": "admin_cashflow.list_charges",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PATCH /api/admin/cashflow/charges/{charge_id}": {
       "handler": "admin_cashflow.update_charge",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/cashflow/charges/{charge_id}/recalculate": {
       "handler": "admin_cashflow.recalculate_charge",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/cashflow/costs": {
       "handler": "admin_cashflow.list_costs",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/cashflow/costs": {
       "handler": "admin_cashflow.create_cost",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "DELETE /api/admin/cashflow/costs/{cost_id}": {
       "handler": "admin_cashflow.delete_cost",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "PUT /api/admin/cashflow/costs/{cost_id}": {
       "handler": "admin_cashflow.update_cost",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "PATCH /api/admin/cashflow/costs/{cost_id}/status": {
       "handler": "admin_cashflow.set_cost_status",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/cashflow/overview": {
       "handler": "admin_cashflow.cashflow_overview",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/catalog/export": {
       "handler": "admin.export_catalog",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/catalog/import": {
       "handler": "admin.apply_catalog_import",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "catalog-change"
     },
     "POST /api/admin/catalog/import/preview": {
       "handler": "admin.preview_catalog_import",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/document-templates": {
       "handler": "admin_document_templates.list_system_templates",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/document-templates/{template_id}/archive": {
       "handler": "admin_document_templates.archive_system_template",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/document-templates/{template_id}/platform-default": {
       "handler": "admin_document_templates.set_platform_default",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/domains": {
       "handler": "admin.list_domains",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "DELETE /api/admin/domains/{domain_id}": {
       "handler": "admin.delete_domain",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/error-logs": {
       "handler": "admin.list_error_logs",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/error-logs/filter-options": {
       "handler": "admin.error_log_filter_options",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/error-logs/groups": {
+      "handler": "admin.list_error_log_groups",
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/features": {
       "handler": "admin.list_features",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PUT /api/admin/features/{code}": {
       "handler": "admin.update_feature",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "catalog-change"
     },
     "GET /api/admin/identity-verification-requests": {
       "handler": "admin_identity_verification.list_identity_verification_requests",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/jobs": {
       "handler": "admin.get_job_status",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/jobs/{job_name}/runs": {
       "handler": "admin.list_job_runs",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/maintenance": {
       "handler": "admin_maintenance.maintenance_overview",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/maintenance": {
       "handler": "admin_maintenance.create_maintenance",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/maintenance/{window_id}": {
       "handler": "admin_maintenance.get_maintenance_window",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PATCH /api/admin/maintenance/{window_id}": {
       "handler": "admin_maintenance.update_maintenance",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/maintenance/{window_id}/cancel": {
       "handler": "admin_maintenance.cancel_maintenance",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/maintenance/{window_id}/release": {
       "handler": "admin_maintenance.release_maintenance",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/maintenance/{window_id}/start": {
       "handler": "admin_maintenance.start_maintenance",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/mfa": {
       "handler": "admin.get_my_admin_mfa",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "DELETE /api/admin/mfa/factors/{factor_id}": {
       "handler": "admin.delete_my_admin_mfa_factor",
-      "platform": true
+      "platform": true,
+      "admin_level": "A",
+      "step_up": "passkey-manage"
     },
     "POST /api/admin/mfa/passkeys/complete": {
       "handler": "admin.complete_my_admin_passkey_registration",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/mfa/passkeys/start": {
       "handler": "admin.start_my_admin_passkey_registration",
-      "platform": true
+      "platform": true,
+      "admin_level": "A",
+      "step_up": "passkey-manage"
     },
     "POST /api/admin/mfa/step-up/start": {
       "handler": "admin.start_my_admin_step_up",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
+    },
+    "GET /api/admin/nav-counts": {
+      "handler": "admin_overview.get_nav_counts",
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/notifications": {
       "handler": "admin.get_notification_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "PUT /api/admin/notifications": {
       "handler": "admin.update_notification_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "platform-settings"
     },
     "GET /api/admin/notifications/email": {
       "handler": "admin.get_email_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "PUT /api/admin/notifications/email": {
       "handler": "admin.update_email_settings",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "platform-settings"
     },
     "POST /api/admin/notifications/email/test": {
       "handler": "admin.send_test_email",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/notifications/log": {
       "handler": "admin.list_notification_log",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "POST /api/admin/notifications/status-token": {
       "handler": "admin.rotate_status_token",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "platform-settings"
     },
     "POST /api/admin/notifications/test": {
       "handler": "admin.send_test_notification",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
+    },
+    "GET /api/admin/overview": {
+      "handler": "admin_overview.get_overview",
+      "platform": true,
+      "admin_level": "A"
+    },
+    "GET /api/admin/overview/series": {
+      "handler": "admin_overview.get_overview_series",
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/plans": {
       "handler": "admin.list_plans",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/plans": {
       "handler": "admin.create_plan",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "DELETE /api/admin/plans/{code}": {
       "handler": "admin.delete_plan",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "catalog-change"
     },
     "PUT /api/admin/plans/{code}": {
       "handler": "admin.upsert_plan",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/restores": {
       "handler": "admin_backups.restore_jobs",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/restores": {
       "handler": "admin_backups.create_restore",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "backup-restore"
     },
     "POST /api/admin/restores/preview": {
       "handler": "admin_backups.restore_preview",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/restores/{restore_id}": {
       "handler": "admin_backups.restore_job",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/restores/{restore_id}/cancel": {
       "handler": "admin_backups.cancel_restore",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
+    },
+    "POST /api/admin/search": {
+      "handler": "admin_overview.search",
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/storage-packages": {
       "handler": "admin.list_storage_packages",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/storage-packages": {
       "handler": "admin.create_storage_package",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "DELETE /api/admin/storage-packages/{code}": {
       "handler": "admin.delete_storage_package",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "catalog-change"
     },
     "PUT /api/admin/storage-packages/{code}": {
       "handler": "admin.upsert_storage_package",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/generations/{generation_id}/purge": {
       "handler": "admin_storage.purge_generation",
-      "platform": true
+      "platform": true,
+      "admin_level": "O+W",
+      "step_up": "storage-destructive"
     },
     "POST /api/admin/storage/local-s3/request": {
       "handler": "admin_storage.request_local_s3",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/storage/migrations": {
       "handler": "admin_storage.list_migrations",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/storage/migrations": {
       "handler": "admin_storage.create_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "storage-destructive"
     },
     "GET /api/admin/storage/migrations/{migration_id}": {
       "handler": "admin_storage.get_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/storage/migrations/{migration_id}/accept-missing": {
       "handler": "admin_storage.accept_missing_objects",
-      "platform": true
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "storage-destructive"
     },
     "POST /api/admin/storage/migrations/{migration_id}/acknowledge-rollback": {
       "handler": "admin_storage.acknowledge_rollback",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/migrations/{migration_id}/cancel": {
       "handler": "admin_storage.cancel_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/migrations/{migration_id}/confirm-cutover": {
       "handler": "admin_storage.confirm_cutover",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "storage-destructive"
     },
     "GET /api/admin/storage/migrations/{migration_id}/objects": {
       "handler": "admin_storage.list_migration_objects",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "POST /api/admin/storage/migrations/{migration_id}/pause": {
       "handler": "admin_storage.pause_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/storage/migrations/{migration_id}/report": {
       "handler": "admin_storage.download_report",
       "platform": true,
+      "admin_level": "O",
       "serves_files": true
     },
     "POST /api/admin/storage/migrations/{migration_id}/resume": {
       "handler": "admin_storage.resume_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/migrations/{migration_id}/retry-failed": {
       "handler": "admin_storage.retry_failed_objects",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/migrations/{migration_id}/start": {
       "handler": "admin_storage.start_migration",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/storage/overview": {
       "handler": "admin_storage.storage_overview",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/storage/profiles": {
       "handler": "admin_storage.list_profiles",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/storage/profiles": {
       "handler": "admin_storage.create_profile",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "DELETE /api/admin/storage/profiles/{profile_id}": {
       "handler": "admin_storage.delete_profile",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "storage-destructive"
     },
     "PATCH /api/admin/storage/profiles/{profile_id}": {
       "handler": "admin_storage.update_profile",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/storage/profiles/{profile_id}/test": {
       "handler": "admin_storage.test_profile",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/system-status": {
       "handler": "admin.get_system_status",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/tenants": {
       "handler": "admin.list_tenants",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/tenants": {
       "handler": "admin.create_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/tenants/import": {
       "handler": "admin.import_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "DELETE /api/admin/tenants/{tenant_id}": {
       "handler": "admin.delete_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "tenant-delete"
     },
     "GET /api/admin/tenants/{tenant_id}": {
       "handler": "admin.get_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PATCH /api/admin/tenants/{tenant_id}": {
       "handler": "admin.update_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/tenants/{tenant_id}/cleanup": {
       "handler": "admin.cleanup_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "tenant-delete"
     },
     "GET /api/admin/tenants/{tenant_id}/cleanup/preview": {
       "handler": "admin.preview_tenant_cleanup",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/tenants/{tenant_id}/clone": {
       "handler": "admin.clone_tenant",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "tenant-export"
     },
     "POST /api/admin/tenants/{tenant_id}/export": {
       "handler": "admin.export_tenant",
       "platform": true,
+      "admin_level": "W",
+      "step_up": "tenant-export",
       "serves_files": true
     },
     "PUT /api/admin/tenants/{tenant_id}/features": {
       "handler": "admin.update_tenant_features",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/tenants/{tenant_id}/identity-verification": {
       "handler": "admin_identity_verification.get_tenant_identity_verification",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "POST /api/admin/tenants/{tenant_id}/identity-verification/approve": {
       "handler": "admin_identity_verification.approve_identity_verification",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/tenants/{tenant_id}/identity-verification/reject": {
       "handler": "admin_identity_verification.reject_identity_verification",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "POST /api/admin/tenants/{tenant_id}/identity-verification/revoke": {
       "handler": "admin_identity_verification.revoke_identity_verification",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/tenants/{tenant_id}/profile-image": {
       "handler": "admin.tenant_profile_image",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "GET /api/admin/tenants/{tenant_id}/storage": {
       "handler": "admin.get_tenant_storage",
-      "platform": true
+      "platform": true,
+      "admin_level": "A"
     },
     "PUT /api/admin/tenants/{tenant_id}/storage-packages": {
       "handler": "admin.update_tenant_storage_packages",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "PATCH /api/admin/tenants/{tenant_id}/subscription": {
       "handler": "admin.update_tenant_subscription",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/tenants/{tenant_id}/users": {
       "handler": "admin.list_tenant_users",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "DELETE /api/admin/tenants/{tenant_id}/users/{user_id}": {
       "handler": "admin.delete_tenant_user",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-manage"
     },
     "PUT /api/admin/tenants/{tenant_id}/users/{user_id}": {
       "handler": "admin.set_tenant_user_role",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-manage"
     },
     "PUT /api/admin/tenants/{tenant_id}/website-listing": {
       "handler": "admin.update_tenant_website_listing",
-      "platform": true
+      "platform": true,
+      "admin_level": "W"
     },
     "GET /api/admin/upload-pipeline-status": {
       "handler": "admin.get_upload_pipeline_status",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "GET /api/admin/users": {
       "handler": "admin.list_users",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "POST /api/admin/users": {
       "handler": "admin.create_user",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-manage"
     },
     "GET /api/admin/users/{user_id}": {
       "handler": "admin.get_user",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "PATCH /api/admin/users/{user_id}": {
       "handler": "admin.update_user",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-manage"
     },
     "GET /api/admin/users/{user_id}/mfa": {
       "handler": "admin.get_user_mfa",
-      "platform": true
+      "platform": true,
+      "admin_level": "O"
     },
     "DELETE /api/admin/users/{user_id}/mfa/factors/{factor_id}": {
       "handler": "admin.delete_user_mfa_factor",
-      "platform": true
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "user-mfa-reset"
     },
     "GET /api/agenda-items": {
       "handler": "agenda_items.list_agenda_items",
@@ -605,10 +818,16 @@
         "meetings.edit"
       ]
     },
+    "POST /api/auth-security/accounts/{user_id}/revoke-sessions": {
+      "handler": "auth_security.revoke_account_sessions",
+      "requires": [
+        "access.manage"
+      ]
+    },
     "GET /api/auth-security/activity": {
       "handler": "auth_security.tenant_login_activity",
       "requires": [
-        "access.manage"
+        "security.read"
       ]
     },
     "POST /api/auth/account-link/complete": {

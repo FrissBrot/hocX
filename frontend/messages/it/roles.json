@@ -204,6 +204,12 @@
         "label": "Vedere il registro attività",
         "description": "Chi ha modificato cosa e quando (registro dell’organizzazione)."
       }
+    },
+    "security": {
+      "read": {
+        "label": "Vedere sicurezza e accessi",
+        "description": "Avvisi di sicurezza e attività di accesso degli account dell’organizzazione (senza indirizzi IP)."
+      }
     }
   },
   "permissionsHelp": "Un ruolo raggruppa autorizzazioni; un account riceve tutte le autorizzazioni dei suoi ruoli. «MFA»: chi la possiede accede con un secondo fattore. «Modulo non prenotato»: vale solo con quel modulo dell'abbonamento. In grigio: non la possiedi tu stesso oppure deriva da un'altra autorizzazione.",

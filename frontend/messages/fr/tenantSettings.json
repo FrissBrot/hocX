@@ -461,5 +461,77 @@
     "domainHintNone": "Pas encore de domaine propre : hocX fonctionne sous l'adresse commune.",
     "domainHintManage": "Domaines et authenticité",
     "financeDescription": "Une devise pour tous les comptes et amendes de l'association."
+  },
+  "security": {
+    "title": "Sécurité et connexions",
+    "description": "Alertes et activité de connexion des comptes de votre organisation sur les 7 derniers jours. Les adresses IP ne sont pas affichées.",
+    "summary": {
+      "failures24h": "Échecs 24 h",
+      "accountsWithFailures": "Comptes avec échecs 24 h",
+      "newDeviceLogins": "Connexions depuis de nouveaux appareils (7 j)",
+      "blocked24h": "Tentatives refusées 24 h"
+    },
+    "warningsTitle": "Alertes",
+    "warningsEmpty": "Aucune alerte durant les 7 derniers jours.",
+    "warnings": {
+      "account_attack": "{name} : {count, plural, one {# tentative échouée} other {# tentatives échouées}} en 24 heures",
+      "privileged_new_device": "{name} (administrateur) s’est connecté depuis un nouvel appareil",
+      "mfa_removed": "{name} : second facteur supprimé",
+      "account_locked": "{name} : des tentatives de connexion ont été bloquées"
+    },
+    "accountsTitle": "Activité de connexion par compte",
+    "accountsEmpty": "Aucun compte avec connexion.",
+    "columns": {
+      "account": "Compte",
+      "lastLogin": "Dernière connexion",
+      "failures": "Échecs 7 j",
+      "sessions": "Sessions actives",
+      "actions": "Actions",
+      "time": "Heure",
+      "event": "Événement",
+      "outcome": "Résultat",
+      "device": "Appareil",
+      "risk": "Risque",
+      "warning": "Alerte",
+      "when": "Dernière fois"
+    },
+    "never": "Jamais",
+    "revoke": "Terminer les sessions",
+    "revokeConfirm": "Terminer toutes les sessions de {name} ? La personne devra se reconnecter sur tous ses appareils.",
+    "revoked": "{count, plural, =0 {Sessions terminées.} one {# session terminée.} other {# sessions terminées.}}",
+    "revokeFailed": "Les sessions n’ont pas pu être terminées.",
+    "eventsTitle": "Derniers événements",
+    "eventsEmpty": "Aucun événement durant les 7 derniers jours.",
+    "events": {
+      "login_password": "Contrôle du mot de passe",
+      "login_locked": "Tentative bloquée",
+      "login_challenge": "Contrôle supplémentaire",
+      "login_mfa_totp": "Code (TOTP)",
+      "login_mfa_passkey": "Passkey",
+      "login_success": "Connexion",
+      "mfa_enroll": "Second facteur ajouté",
+      "mfa_remove": "Second facteur supprimé",
+      "session_revoke": "Sessions terminées",
+      "session_logout": "Déconnexion",
+      "reset_request": "Réinitialisation demandée",
+      "reset_complete": "Mot de passe réinitialisé",
+      "password_change": "Mot de passe modifié",
+      "stepup_success": "Confirmation",
+      "stepup_failure": "Confirmation échouée"
+    },
+    "outcomes": {
+      "success": "Réussite",
+      "failure": "Échec",
+      "blocked": "Bloqué",
+      "challenged": "Contrôle supplémentaire",
+      "info": "Info"
+    },
+    "risk": {
+      "normal": "Normal",
+      "moderate": "Accru",
+      "high": "Élevé",
+      "critical": "Critique"
+    },
+    "loadFailed": "Les données n’ont pas pu être chargées."
   }
 }

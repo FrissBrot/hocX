@@ -1,1 +1,177 @@
-{}
+{
+  "tabsLabel": "Security area",
+  "tabs": {
+    "overview": "Overview",
+    "events": "Sign-in events",
+    "blocks": "Blocks",
+    "alerts": "Alerts",
+    "audit": "Audit log",
+    "policy": "Policies"
+  },
+  "ownerOnly": "This view is only available to owners.",
+  "loadFailed": "The data could not be loaded.",
+  "refresh": "Refresh",
+  "outcomes": {
+    "all": "All",
+    "success": "Success",
+    "failure": "Failure",
+    "blocked": "Blocked",
+    "challenged": "Extra check",
+    "info": "Info"
+  },
+  "severity": {
+    "critical": "Critical",
+    "warning": "Warning"
+  },
+  "overview": {
+    "title": "Security",
+    "description": "Sign-in protection across the whole platform: alerts, failed attempts, blocks. Addresses only appear as shortened pseudonyms.",
+    "tiles": {
+      "openAlerts": "Open alerts",
+      "criticalAlerts": "{count, plural, =0 {none critical} one {# critical} other {# critical}}",
+      "failures": "Failed attempts 24 h",
+      "previous": "Previous day: {count, number}",
+      "activeBlocks": "Active blocks",
+      "blocked": "Rejected 24 h: {count, number}",
+      "adminLogins": "Admin sign-ins 24 h"
+    },
+    "chartTitle": "Sign-ins in the last 48 hours",
+    "chartSummary": "{failures, number} failed attempts and {successes, number} successful sign-ins in 48 hours, in 5-minute buckets.",
+    "showTable": "Data as table",
+    "showChart": "As chart",
+    "chartEmpty": "There were no sign-in events in the last 48 hours.",
+    "series": {
+      "failures": "Failed",
+      "successes": "Successful",
+      "blocked": "Blocked"
+    },
+    "columns": {
+      "bucket": "Time",
+      "failures": "Failed",
+      "successes": "Successful",
+      "blocked": "Blocked",
+      "network": "Network (pseudonym)",
+      "account": "Account (pseudonym)",
+      "accounts": "Accounts",
+      "networks": "Networks",
+      "tenants": "Tenants",
+      "lastSeen": "Last seen"
+    },
+    "topNetworks": "Conspicuous networks (24 h)",
+    "topAccounts": "Affected accounts (24 h)",
+    "noTopNetworks": "No failed attempts from single networks.",
+    "noTopAccounts": "No accounts with failed attempts.",
+    "alertsTitle": "Current alerts",
+    "allAlerts": "All alerts",
+    "auditLink": "Open audit log"
+  },
+  "events": {
+    "title": "Sign-in events",
+    "description": "Latest events of the sign-in protection. Accounts, networks and devices only appear as shortened pseudonyms.",
+    "typeLabel": "Event type",
+    "typeAll": "All types",
+    "outcomeLabel": "Outcome",
+    "columns": {
+      "time": "Time",
+      "type": "Event",
+      "outcome": "Outcome",
+      "actor": "Actor",
+      "tenant": "Tenant",
+      "subject": "Account",
+      "network": "Network",
+      "risk": "Risk",
+      "client": "Device"
+    },
+    "actorKinds": {
+      "user": "User",
+      "admin": "Platform admin",
+      "anonymous": "Unknown",
+      "system": "System"
+    },
+    "empty": "No events for this selection.",
+    "previous": "Newer",
+    "next": "Older",
+    "pageInfo": "Entries {from, number}–{to, number}"
+  },
+  "blocks": {
+    "title": "Blocks",
+    "description": "Active IP blocks of the sign-in protection. Setting and lifting require a passkey confirmation.",
+    "add": "Manual block",
+    "columns": {
+      "subject": "Source (pseudonym)",
+      "scope": "Scope",
+      "stage": "Stage",
+      "kind": "Type",
+      "reason": "Reason",
+      "until": "Until",
+      "actions": "Actions"
+    },
+    "scopes": {
+      "source": "Single address",
+      "net": "Network"
+    },
+    "manual": "Manual",
+    "automatic": "Automatic",
+    "unblock": "Unblock",
+    "unblockConfirm": "Lift the block for {subject}? Sign-ins from this source will be possible again.",
+    "unblocked": "Block lifted.",
+    "created": "Block set.",
+    "failed": "The action failed: {message}",
+    "empty": "No source is currently blocked.",
+    "modalTitle": "Manual block",
+    "ipLabel": "IP address",
+    "ipHelp": "Hashed when saved and never stored in plain text.",
+    "scopeLabel": "Scope",
+    "minutesLabel": "Duration in minutes",
+    "minutesHelp": "At most {max, number} minutes.",
+    "reasonLabel": "Reason",
+    "save": "Block",
+    "cancel": "Cancel",
+    "readOnly": "Only owners can set or lift blocks."
+  },
+  "alerts": {
+    "title": "Alerts",
+    "description": "Currently triggered alert rules of the sign-in protection. The same rules also notify via ntfy.",
+    "empty": "No alert rule is currently triggered.",
+    "columns": {
+      "severity": "Severity",
+      "rule": "Rule",
+      "subject": "Affected (pseudonym)",
+      "key": "Key"
+    },
+    "rules": {
+      "stuffing": "Credential stuffing: many failures from many networks",
+      "spraying": "Password spraying from one network",
+      "account_attack": "Account under attack",
+      "admin_mfa": "Failed admin MFA",
+      "admin_new_device": "Platform sign-in from a new device",
+      "blocks": "Many IP blocks",
+      "network": "Many failures from one network",
+      "cross_tenant": "Attack pattern across several tenants",
+      "tenant": "Many accounts of one tenant with failures",
+      "limiter": "Sign-in protection (Redis) disrupted",
+      "unknown": "Other rule"
+    }
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "Admin and tenant actions with their outcome."
+  },
+  "policy": {
+    "title": "Policies",
+    "description": "Effective settings of the sign-in protection (display only, without secrets). They are changed in the server configuration.",
+    "setting": "Setting",
+    "value": "Value",
+    "yes": "Yes",
+    "no": "No",
+    "groups": {
+      "sessions": "Sessions",
+      "limits": "Limits and rate limits",
+      "blocks": "Blocks",
+      "risk": "Risk assessment",
+      "step_up": "Confirmation (step-up)",
+      "alerts": "Alert rules",
+      "retention": "Retention"
+    }
+  }
+}

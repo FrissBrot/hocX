@@ -1,1 +1,92 @@
 /* Admin-Redesign: Klassen fuer den Bereich security (nur Tokens, Light/Dark). */
+
+.admin-security-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-security-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.admin-security-tile-link:hover,
+.admin-security-tile-link:focus-visible {
+  border-color: var(--accent);
+}
+
+.admin-security-tile-label {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-security-tile-value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.admin-security-tile-hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-security-tile-warning {
+  border-color: var(--warning);
+}
+
+.admin-security-tile-danger {
+  border-color: var(--danger);
+}
+
+.admin-security-chart {
+  min-height: 240px;
+}
+
+.admin-security-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-security-toolbar,
+.admin-security-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.admin-security-pager {
+  justify-content: space-between;
+}
+
+.admin-security-type-filter {
+  min-width: 220px;
+}
+
+.admin-security-inline-link {
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .admin-security-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-security-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-security-tiles {
+    grid-template-columns: 1fr;
+  }
+}

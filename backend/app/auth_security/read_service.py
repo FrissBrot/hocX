@@ -3,7 +3,7 @@
 Plattform (``/api/admin/auth-security/*``): Zeitreihe, auffällige Netze und Konten (nur gekürzte
 Pseudonyme), aktive Sperren, letzte Ereignisse.
 
-Mandant (``/api/auth-security/activity``, Recht ``access.manage``): nur eigene Konten,
+Mandant (``/api/auth-security/activity``, Recht ``security.read``): nur eigene Konten,
 datensparsam - letzte Anmeldung, Fehlversuche, aktive Sitzungen, Ereignisse ohne Netz-/Geräte-
 Pseudonyme und ohne Risikowert (nur die Klasse). Immer mit ``tenant_id``-Filter UND RLS.
 """
@@ -155,3 +155,70 @@ def tenant_summary(db: Session, tenant_id: int) -> dict:
         {"tenant_id": tenant_id},
     ).mappings().one()
     return dict(row)
+
+
+# Warnungen der eigenen Organisation (Seite «Sicherheit & Anmeldungen», Recht security.read).
+# Je Warnung nur Konto (öffentliche ID, Anzeigename), Anzahl und Zeitpunkt - keine Adressen, keine
+# Netz-/Geräte-Pseudonyme, kein Risikowert.
+TENANT_ACCOUNT_ATTACK_FAILURES = 10
+
+
+def tenant_warnings(db: Session, tenant_id: int) -> list[dict]:
+    rows = db.execute(
+        text(
+            # Gesperrte Versuche tragen nur den Subjekt-Hash: das Konto über frühere Ereignisse desselben
+            # Subjekts im selben Mandanten auflösen (kein Hash verlässt die Abfrage).
+            "WITH ev0 AS (SELECT e.actor_user_id, e.subject_hash, e.event_type, e.outcome, e.ts, e.details FROM auth_event e "
+            " WHERE e.tenant_id = :tenant_id AND e.ts > now() - interval '7 days'), "
+            "ev AS (SELECT coalesce(ev0.actor_user_id, (SELECT max(x.actor_user_id) FROM auth_event x WHERE x.tenant_id = :tenant_id "
+            " AND x.subject_hash = ev0.subject_hash AND x.actor_user_id IS NOT NULL)) AS actor_user_id, ev0.event_type, ev0.outcome, ev0.ts, ev0.details "
+            " FROM ev0 WHERE ev0.actor_user_id IS NOT NULL OR ev0.event_type = 'login.locked'), "
+            "admins AS (SELECT ur.user_id FROM user_role ur JOIN tenant_role r ON r.id = ur.role_id "
+            " WHERE r.tenant_id = :tenant_id AND r.system_key = 'admin'), "
+            "w AS ("
+            " SELECT 'account_attack' AS kind, actor_user_id, count(*) AS count, max(ts) AS last_at FROM ev "
+            "  WHERE outcome = 'failure' AND ts > now() - interval '24 hours' GROUP BY actor_user_id HAVING count(*) >= :attack "
+            " UNION ALL "
+            " SELECT 'privileged_new_device', actor_user_id, count(*), max(ts) FROM ev "
+            "  WHERE event_type = 'login.success' AND (details->>'new_device')::boolean AND actor_user_id IN (SELECT user_id FROM admins) "
+            "  GROUP BY actor_user_id "
+            " UNION ALL "
+            " SELECT 'mfa_removed', actor_user_id, count(*), max(ts) FROM ev WHERE event_type = 'mfa.remove' AND outcome = 'success' GROUP BY actor_user_id "
+            " UNION ALL "
+            " SELECT 'account_locked', actor_user_id, count(*), max(ts) FROM ev WHERE event_type = 'login.locked' GROUP BY actor_user_id"
+            ") "
+            "SELECT w.kind, u.public_id AS user_id, u.display_name, w.count, w.last_at FROM w "
+            "JOIN app_user u ON u.id = w.actor_user_id AND u.tenant_id = :tenant_id ORDER BY w.last_at DESC LIMIT 100"
+        ),
+        {"tenant_id": tenant_id, "attack": TENANT_ACCOUNT_ATTACK_FAILURES},
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
+# ── Plattform: Warnungen (Alarmregeln live) ─────────────────────────────
+
+
+def platform_alerts(db: Session) -> list[dict]:
+    """Aktuell ausgelöste Alarmregeln (``threats.detect``), dieselben Schlüssel wie im Systemmonitor."""
+    from app.auth_security import threats
+
+    return [
+        {"key": threat.key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity, "title": threat.title, "message": threat.message}
+        for threat in threats.detect(db)
+    ]
+
+
+def platform_counters(db: Session) -> dict:
+    """Kennzahlen für die Kacheln der Sicherheits-Übersicht (24 h)."""
+    row = db.execute(
+        text(
+            "SELECT count(*) FILTER (WHERE outcome = 'failure') AS failures_24h, "
+            "count(*) FILTER (WHERE event_type = 'admin.login.success') AS admin_logins_24h, "
+            "count(*) FILTER (WHERE outcome = 'blocked') AS blocked_24h "
+            "FROM auth_event WHERE ts > now() - interval '24 hours'"
+        )
+    ).mappings().one()
+    previous = db.scalar(
+        text("SELECT count(*) FROM auth_event WHERE outcome = 'failure' AND ts BETWEEN now() - interval '48 hours' AND now() - interval '24 hours'")
+    )
+    return {**dict(row), "failures_prev_24h": int(previous or 0)}

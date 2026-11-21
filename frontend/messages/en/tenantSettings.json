@@ -461,5 +461,77 @@
     "domainHintNone": "No custom domain yet: hocX runs under the shared address.",
     "domainHintManage": "Domains & authenticity",
     "financeDescription": "One currency for all accounts and fines of your organisation."
+  },
+  "security": {
+    "title": "Security & sign-ins",
+    "description": "Warnings and sign-in activity of your organisation's accounts over the last 7 days. IP addresses are not shown.",
+    "summary": {
+      "failures24h": "Failed attempts 24 h",
+      "accountsWithFailures": "Accounts with failed attempts 24 h",
+      "newDeviceLogins": "Sign-ins from new devices (7 d)",
+      "blocked24h": "Rejected attempts 24 h"
+    },
+    "warningsTitle": "Warnings",
+    "warningsEmpty": "No warnings in the last 7 days.",
+    "warnings": {
+      "account_attack": "{name}: {count, plural, one {# failed attempt} other {# failed attempts}} in 24 hours",
+      "privileged_new_device": "{name} (administrator) signed in from a new device",
+      "mfa_removed": "{name}: second factor removed",
+      "account_locked": "{name}: sign-in attempts were blocked"
+    },
+    "accountsTitle": "Sign-in activity per account",
+    "accountsEmpty": "No accounts with sign-in.",
+    "columns": {
+      "account": "Account",
+      "lastLogin": "Last sign-in",
+      "failures": "Failed attempts 7 d",
+      "sessions": "Active sessions",
+      "actions": "Actions",
+      "time": "Time",
+      "event": "Event",
+      "outcome": "Outcome",
+      "device": "Device",
+      "risk": "Risk",
+      "warning": "Warning",
+      "when": "Last"
+    },
+    "never": "Never",
+    "revoke": "End sessions",
+    "revokeConfirm": "End all sessions of {name}? The person has to sign in again on all devices.",
+    "revoked": "{count, plural, =0 {Sessions ended.} one {# session ended.} other {# sessions ended.}}",
+    "revokeFailed": "Sessions could not be ended.",
+    "eventsTitle": "Latest events",
+    "eventsEmpty": "No events in the last 7 days.",
+    "events": {
+      "login_password": "Password check",
+      "login_locked": "Blocked attempt",
+      "login_challenge": "Additional check",
+      "login_mfa_totp": "Code (TOTP)",
+      "login_mfa_passkey": "Passkey",
+      "login_success": "Sign-in",
+      "mfa_enroll": "Second factor added",
+      "mfa_remove": "Second factor removed",
+      "session_revoke": "Sessions ended",
+      "session_logout": "Sign-out",
+      "reset_request": "Password reset requested",
+      "reset_complete": "Password reset",
+      "password_change": "Password changed",
+      "stepup_success": "Confirmation",
+      "stepup_failure": "Confirmation failed"
+    },
+    "outcomes": {
+      "success": "Success",
+      "failure": "Failure",
+      "blocked": "Blocked",
+      "challenged": "Extra check",
+      "info": "Info"
+    },
+    "risk": {
+      "normal": "Normal",
+      "moderate": "Elevated",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "loadFailed": "The data could not be loaded."
   }
 }
