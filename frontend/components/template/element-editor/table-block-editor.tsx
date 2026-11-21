@@ -78,6 +78,16 @@ export function orderedFields(saved: unknown, all: readonly string[]): EventFiel
 
 /** Aktiviertes Feld `field` innerhalb der aktivierten Felder an die Position von `target` (bzw. um
  * `offset`) schieben; deaktivierte Felder folgen danach in ihrer bisherigen Reihenfolge. */
+/** Wo die gezogene Zeile landet (moveItem): nach unten gezogen hinter, nach oben vor das Ziel. */
+export function dropSide(fromIndex: number, targetIndex: number): "before" | "after" | null {
+  if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) return null;
+  return fromIndex < targetIndex ? "after" : "before";
+}
+
+function dropClass(side: "before" | "after" | null): string {
+  return side ? ` table-block-row-drop table-block-row-drop-${side}` : "";
+}
+
 export function moveEnabledField(fields: EventFieldConfig[], field: string, to: { target: string } | { offset: number }): EventFieldConfig[] {
   const enabled = fields.filter((entry) => entry.enabled);
   const from = enabled.findIndex((entry) => entry.field === field);
@@ -375,6 +385,8 @@ export function TableBlockSection({
   const { sourceFieldValue, rowPreview } = useValueTexts(data);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedField, setDraggedField] = useState<string | null>(null);
+  // Ziel der laufenden Ziehbewegung: die Einfügelinie zeigt, wo die Zeile landet
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const setConfig = (next: Record<string, unknown>) => onChange({ ...form, config: { ...form.config, ...next } });
   const rows = (form.config.rows ?? []) as TableRow[];
   const setRows = (next: TableRow[]) => setConfig({ rows: next });
@@ -414,6 +426,7 @@ export function TableBlockSection({
     event.preventDefault();
     if (draggedField && draggedField !== target) moveField(draggedField, { target });
     setDraggedField(null);
+    setDragOverKey(null);
   };
   const updateRow = (next: TableRow) => setRows(rows.map((row) => (row.id === next.id ? next : row)));
   const moveRow = (index: number, offset: number) => setRows(moveItem(rows, index, index + offset));
@@ -428,6 +441,7 @@ export function TableBlockSection({
       setRows(moveItem(rows, rows.findIndex((row) => row.id === draggedId), rows.findIndex((row) => row.id === targetId)));
     }
     setDraggedId(null);
+    setDragOverKey(null);
   };
   const chooseSource = (source: "manual" | "list") => {
     if (source === "manual") setConfig({ linked_list_id: null });
@@ -501,10 +515,11 @@ export function TableBlockSection({
                     key={key}
                     draggable
                     onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedField(field.field); }}
-                    onDragOver={(event) => { if (draggedField) event.preventDefault(); }}
+                    onDragOver={(event) => { if (draggedField) { event.preventDefault(); if (dragOverKey !== key) setDragOverKey(key); } }}
+                    onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && dragOverKey === key) setDragOverKey(null); }}
                     onDrop={(event) => dropOnField(event, field.field)}
-                    onDragEnd={() => setDraggedField(null)}
-                    className={`table-block-row table-block-row-event${open ? " table-block-row-open" : ""}${draggedField === field.field ? " table-block-row-dragging" : ""}`}
+                    onDragEnd={() => { setDraggedField(null); setDragOverKey(null); }}
+                    className={`table-block-row table-block-row-event${open ? " table-block-row-open" : ""}${draggedField === field.field ? " table-block-row-dragging" : ""}${dropClass(dragOverKey === key && draggedField ? dropSide(enabledFields.findIndex((entry) => entry.field === draggedField), index) : null)}`}
                   >
                     <button type="button" className="table-block-row-head" aria-expanded={open} onClick={() => toggleOpen(key)}>
                       <span className="table-block-row-lead table-block-row-lead-event"><LinkIcon size={15} /></span>
@@ -568,10 +583,11 @@ export function TableBlockSection({
                   key={key}
                   draggable
                   onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedId(row.id); }}
-                  onDragOver={(event) => { if (draggedId) event.preventDefault(); }}
+                  onDragOver={(event) => { if (draggedId) { event.preventDefault(); if (dragOverKey !== key) setDragOverKey(key); } }}
+                  onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && dragOverKey === key) setDragOverKey(null); }}
                   onDrop={(event) => dropOn(event, row.id)}
-                  onDragEnd={() => setDraggedId(null)}
-                  className={`table-block-row${open ? " table-block-row-open" : ""}${draggedId === row.id ? " table-block-row-dragging" : ""}`}
+                  onDragEnd={() => { setDraggedId(null); setDragOverKey(null); }}
+                  className={`table-block-row${open ? " table-block-row-open" : ""}${draggedId === row.id ? " table-block-row-dragging" : ""}${dropClass(dragOverKey === key && draggedId ? dropSide(rows.findIndex((entry) => entry.id === draggedId), index) : null)}`}
                 >
                   <button type="button" className="table-block-row-head" aria-expanded={open} onClick={() => toggleOpen(key)}>
                     <span className="table-block-row-lead table-block-row-number">{index + 1}</span>
