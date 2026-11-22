@@ -53,7 +53,9 @@ genau diesem Namen, wird es ergänzt statt ein zweites anzulegen (bei mehreren g
 
 **Aufnahmedatum:** Es gilt immer das Datum aus der Datei (EXIF). Fehlt es, übernimmt hocX bei Google
 Takeout das Datum aus der Metadaten-Datei (`photoTakenTime`), sonst das Datum einer Datumsregel. Beide
-erscheinen als «geschätzt».
+erscheinen als «geschätzt». Bekannte Einschränkung: Das Takeout-Datum wird nur aus ZIP-Archiven
+gelesen und nur, wenn die Metadaten-Datei im selben Teilarchiv liegt wie das Foto - nicht beim
+Hochladen eines entpackten Takeout-Ordners.
 
 Zusätzlich lassen sich die **Ordnernamen als Tags** übernehmen (nichtssagende Namen wie «Neuer
 Ordner» oder «Desktop» werden ausgelassen). hocX kennt keine Ordner in der Ablage: die

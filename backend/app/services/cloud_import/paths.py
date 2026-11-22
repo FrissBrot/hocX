@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import PurePosixPath
+from zoneinfo import ZoneInfo
 
 from app.services.upload_pipeline import DOCUMENT_UPLOAD_EXTENSIONS, GALLERY_DIRECT_IMAGE_MAX_BYTES, MAX_UPLOAD_BYTES
 
@@ -124,6 +125,7 @@ def is_takeout_sidecar(path: str) -> bool:
 # Name höchstens ~51 Zeichen) und bei gleichen Namen mit Zähler «IMG_1.jpg(1).json» für «IMG_1(1).jpg».
 # Ausgewertet wird nur photoTakenTime.timestamp; das Datum gilt nur, wenn die Datei selbst keins hat.
 TAKEOUT_JSON_MAX_BYTES = 64 * 1024
+TAKEOUT_DATE_ZONE = ZoneInfo("Europe/Zurich")
 _SUPPLEMENTAL = "supplemental-metadata"
 _COUNTER = re.compile(r"^(.*)\((\d{1,4})\)$")
 # Google kürzt den JSON-Dateinamen auf rund 51 Zeichen - kürzere Namen gelten nie als gekürzt.
@@ -199,7 +201,7 @@ def match_takeout_sidecars(all_paths: list[str]) -> dict[str, str]:
 def parse_takeout_date(data: bytes) -> "date | None":
     """photoTakenTime.timestamp (Sekunden, UTC) als Kalenderdatum; None bei allem Unerwarteten."""
     import json
-    from datetime import UTC, date, datetime
+    from datetime import date, datetime
 
     if len(data) > TAKEOUT_JSON_MAX_BYTES:
         return None
@@ -207,9 +209,12 @@ def parse_takeout_date(data: bytes) -> "date | None":
         document = json.loads(data.decode("utf-8"))
         raw = document["photoTakenTime"]["timestamp"]
         seconds = int(str(raw).strip())
-        taken = datetime.fromtimestamp(seconds, UTC).date()
+        # Kalendertag in der Zeitzone des Vereins: hocX hat keine Mandanten-Zeitzone, Datumsangaben
+        # laufen überall in Europe/Zurich (z. B. activity.py, protocol_repository.py). Ein Foto kurz
+        # nach Mitternacht Ortszeit wäre als UTC-Datum sonst einen Tag zu früh.
+        taken = datetime.fromtimestamp(seconds, TAKEOUT_DATE_ZONE).date()
     except (ValueError, KeyError, TypeError, OverflowError, OSError, UnicodeDecodeError, AttributeError, RecursionError):
         return None
-    if seconds <= 0 or taken < date(1826, 1, 1) or taken > datetime.now(UTC).date():
+    if seconds <= 0 or taken < date(1826, 1, 1) or taken > datetime.now(TAKEOUT_DATE_ZONE).date():
         return None
     return taken

@@ -52,8 +52,11 @@ Ordner-Upload, Regel-Engine, Hintergrundverarbeitung, Bericht. Microsoft- und Go
 - Takeout: beim Hochladen eines Archivs werden die Metadaten-JSON im selben Ordner zugeordnet
   (`.json`, `.supplemental-metadata.json` und gekürzte Formen, Zähler `(n)`), je höchstens 64 KiB
   gelesen und `photoTakenTime.timestamp` als `hint_date` gespeichert. Rangfolge EXIF > Takeout > Regel;
-  `date_source` (`takeout`/`rule`) erscheint in Vorschau und Bericht. JSON in einem anderen
-  Teilarchiv als das Foto wird nicht zugeordnet.
+  `date_source` (`takeout`/`rule`) erscheint in Vorschau und Bericht. Der Zeitstempel wird als
+  Kalendertag in Europe/Zurich übernommen (hocX hat keine Mandanten-Zeitzone; gleiche Zone wie die
+  übrigen Datumsangaben).
+- Bekannte Einschränkungen (P0): JSON in einem anderen Teilarchiv als das Foto wird nicht zugeordnet;
+  bei einem Ordner-Upload (entpacktes Takeout) werden die JSON nicht ausgewertet.
 
 ## Planner-Statistik
 

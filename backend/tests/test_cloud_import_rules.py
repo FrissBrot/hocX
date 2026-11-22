@@ -313,3 +313,22 @@ def test_takeout_matching_stays_fast_with_many_unmatched_files():
     started = time.monotonic()
     assert paths.match_takeout_sidecars(listing) == {}
     assert time.monotonic() - started < 3.0
+
+
+
+@pytest.mark.parametrize(
+    ("utc", "expected"),
+    [
+        # 00:30 Ortszeit (Sommerzeit, UTC+2) = 22:30 UTC am Vortag -> Kalendertag des Fotos zählt
+        ((2018, 6, 2, 22, 30), date(2018, 6, 3)),
+        # 23:50 Ortszeit (Winterzeit, UTC+1) = 22:50 UTC am selben Tag
+        ((2019, 1, 5, 22, 50), date(2019, 1, 5)),
+        # 00:10 Ortszeit im Winter = 23:10 UTC am Vortag
+        ((2019, 1, 5, 23, 10), date(2019, 1, 6)),
+    ],
+)
+def test_takeout_date_uses_the_local_calendar_day(utc, expected):
+    from datetime import UTC, datetime
+
+    seconds = int(datetime(*utc, tzinfo=UTC).timestamp())
+    assert paths.parse_takeout_date(f'{{"photoTakenTime": {{"timestamp": "{seconds}"}}}}'.encode()) == expected
