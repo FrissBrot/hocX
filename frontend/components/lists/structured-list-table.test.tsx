@@ -211,9 +211,19 @@ it("zeigt den bestehenden Status als Pille", () => {
     editable={false} protocolView={{ highlightEmpty: true }}
     entryTrackedStatusById={{ a: { status: "added" }, c: { status: "removed" } }}
     onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
-  expect(screen.getByText("3 Einträge · 3 brauchen Aufmerksamkeit")).toBeInTheDocument();
+  // Nur offene Zeilen zählen; Neu (a) und Entfernt (c) nicht
+  expect(screen.getByText("3 Einträge · 1 braucht Aufmerksamkeit")).toBeInTheDocument();
   const rowOf = (label: string) => screen.getByText(label).closest("tr") as HTMLElement;
   expect(rowOf("Material").querySelector(".badge-success")?.textContent).toBe("Neu");
   expect(rowOf("Coach").querySelector(".badge-warning")?.textContent).toBe("Offen");
   expect(rowOf("Zelt").querySelector(".badge-danger")?.textContent).toBe("Entfernt");
+});
+
+it("zählt als Aufmerksamkeit nur unbesetzte Zeilen, auch ohne «Leere hervorheben»", () => {
+  render(<StructuredListTable definition={protocolDefinition} entries={sortEntries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: false }}
+    entryTrackedStatusById={{ a: { status: "changed", before: { c1: { text_value: "Material" }, c2: { participant_ids: [] } } } }}
+    onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  expect(screen.getByText("3 Einträge · 1 braucht Aufmerksamkeit")).toBeInTheDocument();
+  expect(screen.getByText("Material").closest("tr")?.querySelector(".badge-success")?.textContent).toBe("Geändert");
 });

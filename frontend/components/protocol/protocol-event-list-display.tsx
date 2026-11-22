@@ -67,7 +67,7 @@ export function EventDateTile({
   const parts = formatDateTileParts(date, locale);
   const hasEnd = !!endDate && endDate !== date;
   // Tag-Farbe ist ein Laufzeitwert (Tag-Konfiguration) - nur als Variable, die Optik kommt aus der Klasse
-  const style = color ? ({ "--protocol-event-tile-color": color } as CSSProperties) : undefined;
+  const style = color ? ({ "--tag-color": color } as CSSProperties) : undefined;
   return (
     <div className="protocol-event-date">
       <span className="protocol-event-tile" style={style} aria-hidden="true">
@@ -95,8 +95,8 @@ export function EventTagLine({ tag, tagConfig }: { tag: string | null | undefine
         return (
           <span
             key={item}
-            className={`protocol-event-tag${color ? " protocol-event-tag-colored" : ""}`}
-            style={color ? ({ "--protocol-event-tile-color": color } as CSSProperties) : undefined}
+            className="protocol-event-tag"
+            style={color ? ({ "--tag-color": color } as CSSProperties) : undefined}
           >
             <span className="protocol-event-tag-dot" aria-hidden="true" />
             {item}

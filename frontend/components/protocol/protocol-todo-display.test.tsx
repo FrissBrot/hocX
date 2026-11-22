@@ -56,6 +56,21 @@ describe("TodoMiniMenu als Fälligkeits-Badge", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "Kein Enddatum" })).toBeInTheDocument();
   });
+
+  it("setzt den Fokus beim Öffnen ins Menü und gibt ihn mit Escape an das Badge zurück", () => {
+    render(
+      <TodoMiniMenu label="Kein Enddatum">
+        {() => <button type="button">Kein Enddatum wählen</button>}
+      </TodoMiniMenu>
+    );
+    const trigger = screen.getByRole("button", { name: /Kein Enddatum/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "Kein Enddatum wählen" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Kein Enddatum wählen" }), { key: "Escape" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveFocus();
+  });
 });
 
 describe("Fortschritt und Initialen", () => {

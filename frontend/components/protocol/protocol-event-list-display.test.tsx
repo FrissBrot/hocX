@@ -99,7 +99,7 @@ describe("Kachel und Tags", () => {
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("bis 06.12.2026")).toBeInTheDocument();
     const tile = document.querySelector(".protocol-event-tile") as HTMLElement;
-    expect(tile.style.getPropertyValue("--protocol-event-tile-color")).toBe("#2563eb");
+    expect(tile.style.getPropertyValue("--tag-color")).toBe("#2563eb");
     expect(document.querySelector(".visually-hidden")?.textContent).toContain("05.12.2026");
   });
 

@@ -766,8 +766,9 @@ export function StructuredListTable({
           return activeProtocolSort.direction === "desc" ? -compared : compared;
         })
       : filteredRows;
-    // «brauchen Aufmerksamkeit» = Zeilen mit einer Status-Pille (offen/neu/geändert/entfernt)
-    const attentionCount = rows.filter((row) => row.removed || !!row.tracked || (highlightEmpty && !row.filled)).length;
+    // «brauchen Aufmerksamkeit» = nur offene/unbesetzte Zeilen (User-Entscheid); neu, geändert und
+    // entfernt zählen nicht, ihre Pillen bleiben trotzdem
+    const attentionCount = openCount;
     const cycleSort = (column: StructuredListColumnKey) => setProtocolSort((current) =>
       current?.column !== column ? { column, direction: "asc" }
         : current.direction === "asc" ? { column, direction: "desc" }

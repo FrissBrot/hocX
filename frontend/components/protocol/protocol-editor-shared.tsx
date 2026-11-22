@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
-import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
+import { usePopoverPosition, usePopoverDismiss, usePopoverFocus } from "@/components/ui/popover";
 import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
@@ -557,9 +557,11 @@ export function TodoMiniMenu({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const popoverStyle = usePopoverPosition(open, triggerRef, align, 6, { minWidth: 220 });
   usePopoverDismiss(open, () => setOpen(false), [triggerRef, panelRef]);
+  // Tastatur: beim Öffnen Fokus auf den ersten Eintrag, Escape zurück auf den Auslöser
+  const focus = usePopoverFocus({ open, panelRef, anchorRef: triggerRef, onClose: () => setOpen(false), mode: "dialog" });
 
   const popover = open && typeof document !== "undefined" ? createPortal(
-    <div ref={panelRef} id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu">
+    <div ref={panelRef} id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu" onKeyDown={focus.onKeyDown} onFocus={focus.onFocus}>
       {children(() => setOpen(false))}
     </div>,
     document.body

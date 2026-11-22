@@ -2050,6 +2050,20 @@ function FocusedElementEditorImpl({
                                   }}
                                 />
                               </div>
+                              {/* Freies Datum direkt im Menü (früher als Feld in der Zeile): Eingabe TT.MM.JJJJ oder Kalender */}
+                              <div className="mini-menu-section">
+                                <label className="field-stack todo-due-menu-date">
+                                  <span className="field-label">{t("freeDate")}</span>
+                                  <DateInput
+                                    value={todo.due_date && !todo.due_event_id && !todo.due_marker ? todo.due_date : ""}
+                                    onChange={(value) => {
+                                      // Leeren beim Tippen speichert nichts; «Kein Enddatum» entfernt das Datum
+                                      if (!value) return;
+                                      void updateTodo(block.id, todo.id, { due_date: value, due_event_id: null, due_marker: null });
+                                    }}
+                                  />
+                                </label>
+                              </div>
                               {/* Immer mit Suche: smarte Datumsvorschläge auch ohne Termine */}
                               <div className="mini-menu-section">
                                   {todoDueEvents.length ? <div className="mini-menu-section-title">{t("eventsLabel")}</div> : null}
@@ -2077,29 +2091,7 @@ function FocusedElementEditorImpl({
                               </>
                               )}
                             </TodoMiniMenu>
-                            {(todo.due_marker || todo.due_event_id || todo.due_date) ? (
-                              <div className="todo-due-inline">
-                                {todo.due_date && !todo.due_event_id && !todo.due_marker ? (
-                                  <DateInput
-                                    value={todo.due_date}
-                                    readOnly={!blockEditable}
-                                    onChange={(value) => {
-                                      if (!blockEditable) return;
-                                      void updateTodo(block.id, todo.id, {
-                                        due_date: value || null,
-                                        due_event_id: null,
-                                        due_marker: null,
-                                      });
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="pill">
-                                    {formatDate(todo.resolved_due_date ?? todo.due_date) || todo.resolved_due_label || ""}
-                                    {formatDate(todo.resolved_due_date ?? todo.due_date) && todo.resolved_due_label ? ` (${todo.resolved_due_label})` : ""}
-                                  </span>
-                                )}
-                              </div>
-                            ) : null}
+                            {/* Freies Datum nur noch im Fälligkeitsmenü (User-Entscheid), die Zeile bleibt kompakt */}
                           </div>
                           )}
                           {((todo.tags ?? []).length > 0 || todo.submission_assignment_id) && (

@@ -1,17 +1,5 @@
 /* Bereichs-CSS, geladen nur von: protocols. Siehe design/DESIGN.md Abschnitt 10. */
 
-.block-list {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.block-active {
-  border-color: color-mix(in srgb, var(--accent) 44%, transparent 56%);
-  box-shadow:
-    var(--shadow-soft),
-    0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent 76%);
-}
-
 .dropdown-hint {
   padding: 2px var(--space-2);
   border: 1px solid var(--border);
@@ -155,19 +143,6 @@
   .protocol-cycle-older-action { margin-left: 0; width: 100%; }
 }
 
-.block-editor-form {
-  gap: var(--space-4);
-}
-
-.element-edit-modal .block-editor-form { min-width: 0; }
-
-.block-editor-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
 .pdf-icon-link {
   --button-hover-bg: color-mix(in srgb, var(--accent) 22%, transparent 78%);
   display: inline-flex;
@@ -289,330 +264,45 @@
   opacity: 0.55;
 }
 
-.block-type-preview-box {
-  border-radius: var(--radius-md);
-}
-
-.block-type-preview-box {
-  width: 100%;
-  min-height: 78px;
-  border: 1px dashed color-mix(in srgb, var(--accent) 30%, transparent 70%);
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
-}
-
-/* ── Protokoll-Kopf (Design «Protokoll-Header», Variante 1b «Mit Workflow-Leiste») ──
-   Karte mit oberer Zeile (Zurück, Titel, Meta, Aktionen) und getönter Workflow-Leiste. Ab 901 px
-   steht der Kopf über dem scrollenden Dokument (Flex-Spalte, siehe Media-Query unten); darunter
-   rendert die Seite den Mobile-Editor. Werte auf die nächste Token-Stufe gerundet (DESIGN.md). */
-.protocol-header {
-  display: grid;
-  position: sticky;
-  top: 12px;
-  z-index: 5;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--panel-solid);
-}
-
-.protocol-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-4) var(--space-5);
-}
-
-.protocol-header-back {
-  flex: none;
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  text-decoration: none;
-}
-
-.protocol-header-heading {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 280px;
-}
-
-.protocol-header-title {
-  margin: 0;
-  min-width: 0;
-  /* Gleiche Serif-Familie wie .page-title (kein Schrift-Token vorhanden) */
-  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.protocol-header-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px var(--space-2);
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.protocol-header-number {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text);
-}
-
-.protocol-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-  margin-left: auto;
-}
-
-.protocol-header-presence:empty {
-  display: none;
-}
-
-.protocol-header-search {
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--panel-solid);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 0 1 260px;
-  width: 260px;
-  min-width: 0;
-  min-height: 38px;
-  padding: 0 var(--space-2) 0 var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--button-bg);
-  color: var(--muted);
-  font-size: var(--text-sm);
-  font-weight: 400;
-  box-shadow: none;
-  cursor: pointer;
-  transition: border-color var(--dur-fast);
-}
-
-.protocol-header-search:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-.protocol-header-search-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.protocol-header-kbds {
-  display: inline-flex;
-  gap: 2px;
-}
-
-.protocol-header-kbd {
-  min-width: 20px;
-  padding: 0 var(--space-1);
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: var(--radius-xs);
-  background: var(--bg);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.protocol-header-icon {
-  border-radius: var(--radius-sm);
-}
-
-.protocol-header-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.protocol-workflow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) var(--space-5);
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
-}
-
-.protocol-workflow-steps {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-x: auto;
-}
-
-.protocol-workflow-step {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
-  border-radius: var(--radius-pill);
-  color: var(--muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.protocol-workflow-step + .protocol-workflow-step::before {
-  content: "";
-  width: 18px;
-  height: 1px;
-  margin-right: var(--space-2);
-  background: var(--border-strong);
-}
-
-.protocol-workflow-step-marker {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  flex: none;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 50%;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.protocol-workflow-step-done {
-  color: var(--text);
-}
-
-.protocol-workflow-step-done .protocol-workflow-step-marker {
-  border-color: var(--success);
-  background: var(--success);
-  color: var(--on-solid);
-}
-
-.protocol-workflow-step-current {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.protocol-workflow-step-current .protocol-workflow-step-marker {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-solid);
-}
-
-.protocol-workflow-notice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.protocol-workflow-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-.protocol-workflow-track {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* Schalter 32×18 mit 14-px-Knopf (Entwurf); Switch-Baustein bleibt, nur die Grösse hier */
-.protocol-workflow-switch {
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.protocol-workflow-switch .switch-track {
-  width: 32px;
-  height: 18px;
-}
-
-.protocol-workflow-switch .switch-track::after {
-  width: 14px;
-  height: 14px;
-}
-
-.protocol-workflow-switch .switch-input:checked + .switch-track::after {
-  transform: translateX(14px);
-}
-
-.protocol-workflow-cta {
-  gap: var(--space-2);
-}
-
-.protocol-workflow-help-text {
-  margin: 0 0 var(--space-3);
-}
-
-/* Schmal (der Desktop-Editor erscheint erst ab 901 px, die Regeln halten ihn trotzdem sauber):
-   Suche nur als Symbol, Schritte scrollen waagrecht, Aktionen umbrechen. */
-@media (max-width: 900px) {
-  .protocol-header-top {
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .protocol-header-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .protocol-header-search {
-    flex: none;
-    width: 38px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .protocol-header-search-label,
-  .protocol-header-kbds {
-    display: none;
-  }
-
-  .protocol-workflow {
-    padding: var(--space-2) var(--space-4);
-  }
-
-  .protocol-workflow-steps {
-    width: 100%;
-  }
-
-  .protocol-workflow-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
+/* ── Protokoll-Kopf (Design «Protokoll-Header» 1b): Karte mit oberer Zeile und getönter
+   Workflow-Leiste. Nur ab 901 px (darunter rendert die Seite den Mobile-Editor), daher ohne
+   eigene schmale Varianten. Werte auf die nächste Token-Stufe gerundet (DESIGN.md). */
+.protocol-header { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel-solid); overflow: hidden; }
+.protocol-header-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); }
+.protocol-header-back, .protocol-header-icon { border-radius: var(--radius-sm); }
+.protocol-header-heading { display: grid; gap: 2px; flex: 1 1 280px; min-width: 0; }
+/* Serif wie .page-title (kein Schrift-Token vorhanden) */
+.protocol-header-title { margin: 0; font: 600 var(--text-2xl)/1.2 "Canela", "Iowan Old Style", "Palatino Linotype", serif; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.protocol-header-meta { display: flex; flex-wrap: wrap; gap: 2px var(--space-2); margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.protocol-header-number, .protocol-header-kbd { font-family: var(--font-mono); font-size: var(--text-xs); }
+.protocol-header-number { color: var(--text); }
+.protocol-header-actions, .protocol-header-search, .protocol-workflow-step, .protocol-workflow-actions, .protocol-workflow-track { display: flex; align-items: center; gap: var(--space-2); }
+.protocol-header-actions { margin-left: auto; }
+.protocol-header-presence:empty { display: none; }
+.protocol-header-search { --button-bg: var(--panel-solid); --button-hover-bg: var(--panel-solid); width: 260px; min-height: 38px; padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--button-bg); color: var(--muted); font-size: var(--text-sm); font-weight: 400; }
+.protocol-header-search:hover { border-color: var(--border-strong); color: var(--text); }
+.protocol-header-search-label { flex: 1; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.protocol-header-kbd { min-width: 20px; padding: 0 var(--space-1); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: var(--radius-xs); background: var(--bg); line-height: 1.5; }
+.protocol-header-icon svg { width: 16px; height: 16px; }
+.protocol-header-kbds, .protocol-workflow-cta { display: inline-flex; gap: 2px; }
+.protocol-workflow-cta { gap: var(--space-2); }
+.protocol-workflow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 4%, var(--panel-solid)); }
+.protocol-workflow-steps { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: 0; list-style: none; overflow-x: auto; }
+.protocol-workflow-step { flex: none; padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1); border-radius: var(--radius-pill); color: var(--muted); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+.protocol-workflow-step + .protocol-workflow-step::before { content: ""; width: 18px; height: 1px; margin-right: var(--space-2); background: var(--border-strong); }
+.protocol-workflow-step-marker { display: grid; place-items: center; width: 16px; height: 16px; border: 1.5px solid var(--border-strong); border-radius: 50%; font-size: var(--text-xs); font-weight: 700; line-height: 1; }
+.protocol-workflow-step-done { color: var(--text); }
+.protocol-workflow-step-current { background: var(--accent-soft); color: var(--accent); }
+.protocol-workflow-step-done .protocol-workflow-step-marker { border-color: var(--success); background: var(--success); color: var(--on-solid); }
+.protocol-workflow-step-current .protocol-workflow-step-marker { border-color: var(--accent); background: var(--accent); color: var(--on-solid); }
+.protocol-workflow-notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.protocol-workflow-actions { gap: var(--space-4); margin-left: auto; }
+.protocol-workflow-track { gap: var(--space-1); }
+/* Schalter 32×18 mit 14-px-Knopf; der Switch-Baustein bleibt */
+.protocol-workflow-switch { align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: 600; }
+.protocol-workflow-switch .switch-track { width: 32px; height: 18px; }
+.protocol-workflow-switch .switch-track::after { width: 14px; height: 14px; }
+.protocol-workflow-help-text { margin: 0 0 var(--space-3); }
 
 .protocol-document-shell {
   display: grid;
@@ -959,147 +649,27 @@
   color: var(--accent);
 }
 
-/* ── Pendenzen-Block als Tabelle (Entwurf: Checkbox 52 | Aufgabe | Verantwortlich 170 | Fällig 140).
-   Die Zeilen bleiben Karten (<article>) mit allen Bedienelementen; das Raster legt sie in Spalten,
-   Menü und «Löschen» stehen in einer zusätzlichen Aktionsspalte rechts. */
-.todo-list-table {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 318px auto auto;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg) 35%, var(--panel-solid));
-}
-
-/* Kopf und Zeilen teilen die Spalten des Containers (subgrid), auch die Aktionsspalten */
-.todo-table-head,
-.todo-list-table > .todo-card {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  column-gap: var(--space-3);
-  align-items: center;
-}
-
-.todo-table-head {
-  padding: var(--space-3) var(--space-4) var(--space-3) 0;
-  background: color-mix(in srgb, var(--bg) 60%, var(--panel-solid));
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.todo-table-head-meta {
-  display: grid;
-  grid-template-columns: 170px 140px;
-  column-gap: var(--space-2);
-}
-
-.todo-list-table > .todo-card {
-  row-gap: var(--space-1);
-  padding: var(--space-3) var(--space-4) var(--space-3) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-}
-
-.todo-list-table > .todo-card:last-child {
-  border-bottom: 0;
-}
-
-.todo-list-table > .todo-card:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
-
-.todo-list-table > .todo-card > .todo-toggle {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  justify-self: center;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  min-height: 22px;
-  border: 2px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  --button-bg: transparent;
-  --button-hover-bg: var(--accent-soft);
-  color: transparent;
-}
-
-.todo-list-table > .todo-card > .todo-toggle-done {
-  border-color: var(--success);
-  --button-bg: var(--success);
-  --button-hover-bg: var(--success);
-  color: var(--on-solid);
-}
-
-.todo-list-table > .todo-card > .todo-toggle-done:hover:not(:disabled) {
-  --button-bg: var(--success);
-}
-
-.todo-list-table > .todo-card > .todo-main {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.todo-list-table > .todo-card .todo-input {
-  font-weight: 500;
-}
-
-.todo-list-table > .todo-card > .todo-tags-row {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.todo-list-table > .todo-card > .todo-inline-meta {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  display: grid;
-  grid-template-columns: 170px 140px;
-  column-gap: var(--space-2);
-  row-gap: var(--space-1);
-  align-items: center;
-}
-
-.todo-list-table > .todo-card > .todo-inline-meta .mini-menu-compact {
-  min-width: 0;
-}
-
-/* Freies Datum: das bestehende Datumsfeld bleibt, unter Verantwortlich/Fällig */
-.todo-list-table > .todo-card > .todo-inline-meta .todo-due-inline {
-  grid-column: 1 / -1;
-  justify-self: end;
-}
-
-.todo-list-table > .todo-card > .action-menu-wrap {
-  grid-column: 4;
-  grid-row: 1 / span 2;
-}
-
-/* Kompakt statt zeilenbreit (globale button-Regel); Höhe bleibt die der Variante */
-.todo-list-table > .todo-card > .todo-delete {
-  grid-column: 5;
-  grid-row: 1 / span 2;
-  width: auto;
-}
-
-.todo-list-table > .todo-card.todo-card-done {
-  opacity: 0.6;
-}
-
-.grid:has(> .todo-list-table) > .todo-create-inline {
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) auto;
-  align-items: center;
-}
-
-.grid:has(> .todo-list-table) > .todo-create-inline input {
-  min-height: 44px;
-  border-radius: var(--radius-md);
-}
-
-.grid:has(> .todo-list-table) > .todo-create-inline > .button-primary {
-  width: auto;
-  border-radius: var(--radius-md);
-}
+/* Pendenzen-Block als Tabelle (Checkbox 52 | Aufgabe | Verantwortlich 170 | Fällig 140 | Aktionen):
+   die Zeilen bleiben Karten mit allen Bedienelementen, Kopf und Zeilen teilen die Spalten (subgrid). */
+.todo-list-table { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(318px, max-content) auto auto; border-radius: var(--radius-md); }
+.todo-table-head, .todo-list-table > .todo-card { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4) var(--space-3) 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.todo-table-head { background: color-mix(in srgb, var(--bg) 60%, var(--panel-solid)); color: var(--muted); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.todo-table-head-meta > :first-child, .todo-list-table .todo-inline-meta > .mini-menu:first-child { flex: none; width: 170px; min-width: 0; }
+.todo-list-table .todo-inline-meta > .mini-menu { min-width: 0; }
+.todo-list-table > :last-child { border-bottom: 0; }
+.todo-list-table > .todo-card:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.todo-list-table .todo-card > * { grid-row: 1 / span 2; }
+.todo-list-table .todo-toggle { justify-self: center; width: 22px; min-width: 22px; height: 22px; min-height: 22px; border: 2px solid var(--border-strong); border-radius: var(--radius-sm); --button-bg: transparent; color: transparent; }
+.todo-list-table .todo-toggle-done { border-color: var(--success); --button-bg: var(--success); --button-hover-bg: var(--success); color: var(--on-solid); }
+.todo-list-table .todo-card > .todo-main { grid-row: 1; grid-column: 2; }
+.todo-list-table .todo-card > .todo-tags-row { grid-row: 2; grid-column: 2; }
+.todo-list-table .todo-card > .todo-inline-meta { grid-column: 3; }
+.todo-list-table .todo-input { font-weight: 500; }
+/* «Löschen» kompakt statt zeilenbreit (globale button-Regel); Höhe bleibt die der Variante */
+.todo-list-table .todo-delete, .grid:has(> .todo-list-table) > .todo-create-inline > .button-primary { width: auto; }
+.todo-list-table > .todo-card-done { opacity: 0.6; }
+.grid:has(> .todo-list-table) > .todo-create-inline { grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) auto; align-items: center; }
+.grid:has(> .todo-list-table) > .todo-create-inline input { min-height: 44px; border-radius: var(--radius-md); }
 
 .todo-tags-row {
   display: flex;
@@ -1296,6 +866,25 @@
 .todo-card-done {
   opacity: 0.65;
 }
+
+/* Pendenzen im Protokoll (Design «Termine, Listen & Pendenzen»): Erledigte durchgestrichen an ihrer
+   Position, Fortschritt, Fälligkeits-Badge (Auslöser des Fälligkeitsmenüs), Initialen. */
+.todo-card-strike .todo-input, .todo-card-strike .todo-task-text { color: var(--muted); text-decoration: line-through; }
+.todo-progress, .todo-table-head-meta, .todo-list-table .todo-inline-meta { display: flex; align-items: center; gap: var(--space-2) var(--space-3); }
+.todo-progress { flex-wrap: wrap; }
+.todo-list-table .todo-inline-meta { flex-wrap: nowrap; }
+.todo-progress-summary { margin-right: auto; color: var(--muted); font-size: var(--text-sm); }
+.todo-progress-track { flex: 0 1 220px; min-width: 180px; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: var(--neutral-bg); }
+.todo-progress-bar { display: block; height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--success) 65%, var(--panel-solid)), var(--success)); }
+.todo-progress-count { color: var(--success); font-size: var(--text-xs); font-weight: 700; }
+.tag-filter-chip-count { margin-left: var(--space-1); opacity: 0.7; }
+.todo-inline-meta .todo-due-trigger { --button-bg: var(--neutral-bg); --button-hover-bg: var(--neutral-bg); min-height: 26px; padding: 2px var(--space-2); border-color: transparent; border-radius: var(--radius-sm); color: var(--neutral-fg); font-weight: 600; }
+.todo-inline-meta .todo-due-trigger-overdue { --button-bg: var(--danger-bg); --button-hover-bg: var(--danger-bg); color: var(--danger-fg); }
+.todo-inline-meta .todo-due-trigger-soon { --button-bg: var(--warning-bg); --button-hover-bg: var(--warning-bg); color: var(--warning-fg); }
+.todo-due-tone-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.todo-assignee-avatar { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); font-weight: 700; }
+.todo-inline-meta .mini-menu-trigger:has(.todo-assignee-avatar), .todo-inline-meta .todo-due-trigger { justify-content: flex-start; gap: var(--space-2); }
+.todo-inline-meta .mini-menu-trigger:has(.todo-assignee-avatar) .mini-menu-trigger-icon, .todo-due-trigger .mini-menu-trigger-icon { margin-left: auto; color: inherit; }
 
 .todo-list-pending {
   border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
@@ -1998,226 +1587,36 @@
   text-decoration: line-through;
 }
 
-/* ── Terminliste im Protokoll (Design «Termine, Listen & Pendenzen») ──
-   Nur der Anzeigezweig im Protokoll-Editor trägt .protocol-event-*; Matrix, Stammlisten und
-   die Terminübersicht nutzen weiter die gemeinsamen .event-table-Regeln. Gemeinsame
-   Tabellenoptik mit der Stammliste: .protocol-event-table / .linked-list-table (unten). */
-.protocol-event-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-}
-
-.protocol-event-summary {
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-/* Segmented Control Alle/Kommend: aktiver Knopf mit Akzent-Tönung */
-.protocol-event-toolbar .filter-tabs-option {
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.protocol-event-toolbar .filter-tabs-option-active,
-.protocol-event-toolbar .filter-tabs-option-active:hover {
-  --button-bg: var(--accent-soft);
-  --button-hover-bg: var(--accent-soft);
-  color: var(--accent);
-}
-
-.protocol-event-wrap.event-table-wrap-scrollable {
-  max-height: 420px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg) 35%, var(--panel-solid));
-}
-
-.protocol-event-table .protocol-event-date-col {
-  width: 110px;
-}
-
-.protocol-event-table tbody tr.event-row-past {
-  opacity: 0.5;
-}
-
-.protocol-event-date {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.protocol-event-tile {
-  --protocol-event-tile-color: var(--accent);
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  flex: none;
-  width: 40px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel-solid);
-  line-height: 1.15;
-}
-
-.protocol-event-tile-month {
-  align-self: stretch;
-  padding: 1px 0;
-  background: color-mix(in srgb, var(--protocol-event-tile-color) 22%, var(--panel-solid));
-  color: color-mix(in srgb, var(--protocol-event-tile-color) 80%, var(--text));
-  font-size: var(--text-xs);
-  font-weight: 700;
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.protocol-event-tile-day {
-  padding: 2px 0 3px;
-  color: var(--text);
-  font-size: var(--text-lg);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.protocol-event-date-side {
-  display: grid;
-  gap: 2px;
-}
-
-.protocol-event-tile-weekday {
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.protocol-event-until {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-
-.protocol-event-title-cell {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.protocol-event-title {
-  color: var(--text);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.protocol-event-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-}
-
-.protocol-event-tag {
-  --protocol-event-tile-color: var(--border-strong);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-/* Tag-Name in der Tag-Farbe, zur Lesbarkeit leicht zur Textfarbe gemischt */
-.protocol-event-tag-colored {
-  color: color-mix(in srgb, var(--protocol-event-tile-color) 78%, var(--text));
-}
-
-.protocol-event-tag-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--protocol-event-tile-color);
-}
-
-.protocol-event-location {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--muted);
-}
-
-.protocol-event-location svg {
-  flex: none;
-}
-
-.protocol-event-table tbody tr.protocol-event-separator td,
-.protocol-event-table tbody tr.protocol-event-separator:hover td {
-  padding: var(--space-1) var(--space-4);
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid));
-  border-top: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.protocol-event-separator-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: var(--space-2);
-  border-radius: 50%;
-  background: var(--accent);
-  outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  vertical-align: middle;
-}
-
-.protocol-event-separator-label {
-  color: var(--accent);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  vertical-align: middle;
-}
-
-.event-row-cancelled .protocol-event-tile,
-.event-row-cancelled .protocol-event-tags {
-  text-decoration: none;
-}
-
-/* Gemeinsame Tabellenoptik Termine/Stammliste im Protokoll (Entwurf: Kopf 11 px/700 versal,
-   eigener Kopf-Hintergrund, Zeilen 10–12/16, halbtransparente Linien, Hover-Tönung) */
-.protocol-event-table th {
-  padding: var(--space-3) var(--space-4);
-  background: color-mix(in srgb, var(--bg) 60%, var(--panel-solid));
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.protocol-event-table td {
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-}
-
-.protocol-event-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.protocol-event-table tbody tr:not(.protocol-event-separator):hover td {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
-
-@media (max-width: 640px) {
-  .protocol-event-toolbar .filter-tabs {
-    width: 100%;
-  }
-
-  .protocol-event-wrap.event-table-wrap-scrollable {
-    max-height: 60vh;
-  }
-}
+/* ── Terminliste im Protokoll (Design «Termine, Listen & Pendenzen»): nur der Anzeigezweig trägt
+   .protocol-event-*; Matrix, Stammlisten und Terminübersicht behalten die .event-table-Regeln. */
+.protocol-event-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.protocol-event-summary { color: var(--muted); font-size: var(--text-sm); }
+.protocol-event-toolbar .filter-tabs-option { font-size: var(--text-sm); font-weight: 600; }
+.protocol-event-toolbar .filter-tabs-option-active { --button-bg: var(--accent-soft); --button-hover-bg: var(--accent-soft); color: var(--accent); }
+.protocol-event-wrap.event-table-wrap-scrollable { max-height: 420px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--bg) 35%, var(--panel-solid)); }
+.protocol-event-date-col { width: 110px; }
+.protocol-event-table tr.event-row-past { opacity: 0.5; }
+.protocol-event-date, .protocol-event-tag, .protocol-event-location { display: flex; align-items: center; gap: var(--space-2); }
+.protocol-event-tile { --tag-color: var(--accent); display: grid; flex: none; width: 40px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); line-height: 1.15; text-align: center; }
+.protocol-event-tile-month { padding: 1px 0; background: color-mix(in srgb, var(--tag-color) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--tag-color) 80%, var(--text)); font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; }
+.protocol-event-tile-day { padding: 2px 0 3px; font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.protocol-event-date-side, .protocol-event-title-cell { display: grid; gap: 2px; }
+.protocol-event-tile-weekday, .protocol-event-location { color: var(--muted); }
+.protocol-event-until { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.protocol-event-title { font-weight: 600; overflow-wrap: anywhere; }
+.protocol-event-tags { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+/* Tag-Name in Tag-Farbe, zur Lesbarkeit leicht zur Textfarbe gemischt */
+.protocol-event-tag { --tag-color: var(--border-strong); gap: var(--space-1); color: color-mix(in srgb, var(--tag-color) 78%, var(--text)); font-size: var(--text-xs); font-weight: 600; }
+.protocol-event-tag-dot, .protocol-event-separator-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--tag-color); }
+.protocol-event-location { gap: var(--space-1); }
+.protocol-event-table tr.protocol-event-separator td { padding: var(--space-1) var(--space-4); background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid)); border-top: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.protocol-event-separator-dot { --tag-color: var(--accent); display: inline-block; margin-right: var(--space-2); outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); vertical-align: middle; }
+.event-row-cancelled .protocol-event-tile, .event-row-cancelled .protocol-event-tags { text-decoration: none; }
+/* Tabellenoptik des Entwurfs: Kopf 12/700 versal mit eigenem Hintergrund, halbtransparente Linien */
+.protocol-event-table th { padding: var(--space-3) var(--space-4); background: color-mix(in srgb, var(--bg) 60%, var(--panel-solid)); font-weight: 700; letter-spacing: 0.12em; }
+.protocol-event-table td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.protocol-event-table tr:last-child td { border-bottom: 0; }
+.protocol-event-table tbody tr:not(.protocol-event-separator):hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 
 /* ── Matrix im Protokoll-Editor (Design «Protokoll-Editor v2», matrix-board.tsx) ── */
 .matrix-board {
@@ -2764,10 +2163,6 @@
   overflow: hidden;
 }
 
-.todo-card-compact-slim {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
 .todo-task-text {
   display: block;
   padding: 2px 0;
@@ -3065,7 +2460,6 @@
   }
 
   .protocol-header {
-    position: static;
     flex-shrink: 0;
   }
 
@@ -3080,9 +2474,6 @@
     align-items: stretch;
   }
 
-  .protocol-header {
-    gap: var(--space-2);
-  }
 
   .protocol-panel-document .pill {
     min-height: 30px;
@@ -4118,13 +3509,6 @@
 
 .fine-delete-btn:hover { --button-bg: color-mix(in srgb, var(--danger) 12%, var(--panel)); background: var(--button-bg); }
 
-.fine-row-highlight {
-  animation: fine-row-flash 1.8s ease-out forwards;
-  border-radius: var(--radius-sm);
-  outline: 2px solid color-mix(in srgb, var(--warning) 60%, transparent);
-  outline-offset: 2px;
-}
-
 @media (max-width: 640px) {
 .protocol-doc-section {
     padding: var(--space-4);
@@ -4856,11 +4240,3 @@
 
 .form-block-source-value { min-height: 36px; display: flex; align-items: center; padding: var(--space-2) var(--space-3); font-size: var(--text-base); overflow-wrap: anywhere; }
 
-/* Fälligkeits-Badge in der Tabellenzeile: so breit wie sein Text */
-.todo-list-table > .todo-card > .todo-inline-meta .mini-menu:has(.todo-due-trigger) {
-  justify-self: start;
-}
-
-.todo-list-table > .todo-card > .todo-inline-meta .mini-menu-trigger.todo-due-trigger {
-  width: auto;
-}

@@ -155,9 +155,21 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
     await todoBlockLocator.screenshot({ path: `test-results/protocol-tables-todos-only-${theme}-1440.png` });
   }
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-  // Fälligkeits-Badge bleibt Auslöser des Fälligkeitsmenüs
+  // Fälligkeits-Badge bleibt Auslöser des Fälligkeitsmenüs; das freie Datum steht nur noch dort
+  await expect(cards.locator(".todo-due-inline")).toHaveCount(0);
   await cards.nth(1).locator(".todo-due-trigger").click();
   await expect(page.locator("#due-date-portal")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#due-date-portal")).toHaveCount(0);
+  // Tastatur: Badge fokussieren, Enter öffnet, Datum tippen, Enter übernimmt
+  await cards.nth(3).locator(".todo-due-trigger").focus();
+  await page.keyboard.press("Enter");
+  const dateField = page.locator("#due-date-portal").getByRole("textbox", { name: /Freies Datum/ });
+  await dateField.focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("15.01.2027");
+  await page.keyboard.press("Enter");
+  await expect(cards.nth(3).locator(".todo-due-trigger")).toContainText("15.01.2027");
   await page.keyboard.press("Escape");
 
   // Export-Menü im Kopf
