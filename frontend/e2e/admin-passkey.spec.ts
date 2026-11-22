@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { test, expect, request } from "@playwright/test";
 import { authFiles, platformAdminPasskeyFile } from "./auth";
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
@@ -9,7 +10,9 @@ import { addVirtualAuthenticator } from "./webauthn";
 // akzeptiert es. Die Specs laufen deshalb auf "localhost" statt PLAYWRIGHT_BASE_URL (127.0.0.1);
 // ohne Admin-Domain (E2E-Stack) leitet das Backend RP-ID und Origin aus dem Origin des Browsers ab.
 const localhostBaseURL = (process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000").replace("127.0.0.1", "localhost");
-const password = process.env.E2E_USER_PASSWORD ?? "ChangeMe123!";
+// Plattform-Admin-Konten haben seit 1.5.1 dieselbe Passwortregel wie Konten (inkl. Leak-Prüfung):
+// Passwort zur Laufzeit erzeugen, nie ein bekanntes Testpasswort.
+const password = `Adm-${randomBytes(12).toString("base64url")}-9z`;
 
 test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit Passkey", async ({ browser }) => {
   // Admin anlegen braucht eine Passkey-Bestätigung (Review M2): mit dem Software-Passkey aus auth.setup.ts

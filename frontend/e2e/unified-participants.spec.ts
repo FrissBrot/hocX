@@ -23,10 +23,21 @@ test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", 
 
     // Login per Passwort vergeben
     await page.getByRole("button", { name: "Passwort setzen", exact: true }).click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "Login für Identität" });
     // Passwortregel (backend app/core/password_policy.py): zur Laufzeit, ohne häufige Wörter
     await dialog.getByLabel(/^Passwort/).fill(`Pers-${randomBytes(12).toString("base64url")}-7q`);
     await dialog.getByRole("button", { name: "Login aktivieren", exact: true }).click();
+    // Ist die Anmeldung der Testsitzung älter als auth_step_up_admin_minutes (15 min, im vollen
+    // Lauf je nach Reihenfolge), verlangt das Backend erst «Identität bestätigen» - mit Passwort.
+    const stepUp = page.getByRole("dialog", { name: "Identität bestätigen" });
+    await expect.poll(async () => (await stepUp.isVisible()) || !(await dialog.isVisible()), { timeout: 10_000 }).toBe(true);
+    if (await stepUp.isVisible().catch(() => false)) {
+      const passwordMethod = stepUp.getByRole("tab", { name: "Passwort", exact: true }).or(stepUp.getByRole("radio", { name: "Passwort", exact: true }));
+      if (await passwordMethod.count()) await passwordMethod.first().click();
+      await stepUp.getByLabel("Dein Passwort").fill(process.env.E2E_USER_PASSWORD ?? "ChangeMe123!");
+      await stepUp.getByRole("button", { name: "Bestätigen", exact: true }).click();
+      await expect(stepUp).not.toBeVisible();
+    }
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText("Login aktiv", { exact: true }).first()).toBeVisible();
     const updatedUsers = await (await request.get("/api/users")).json();
