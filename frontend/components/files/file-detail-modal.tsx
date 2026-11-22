@@ -339,8 +339,8 @@ export function FileDetailModal({
           <ActionIcon name="lock" />
           {item.origin_tag}
         </span>
-        <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder={t("detail.tagPlaceholder")} readOnly={trashed} offerCreate />
-        {quickTags.length > 0 && !trashed ? (
+        <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder={t("detail.tagPlaceholder")} readOnly={trashed || !canManage} offerCreate />
+        {quickTags.length > 0 && !trashed && canManage ? (
           <div className="file-detail-quick-tags">
             <span className="muted">{t("detail.frequentTags")}</span>
             {quickTags.map((tag) => (
@@ -352,7 +352,7 @@ export function FileDetailModal({
         ) : null}
       </section>
 
-      <FileKeywords fileId={item.id} readOnly={trashed} className="file-detail-section" titleClassName="file-detail-section-title" />
+      <FileKeywords fileId={item.id} readOnly={trashed || !canManage} className="file-detail-section" titleClassName="file-detail-section-title" />
 
       {item.document ? (
         <DocumentStatusSection detail={detail} versionId={versionId} scanStatus={item.scan_status} onReload={documentState.reload} />
