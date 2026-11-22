@@ -504,22 +504,22 @@
     "/tools": {
       "js_gzip_kb": 206,
       "css_gzip_kb": 60,
-      "css_raw_kb": 361
+      "css_raw_kb": 363
     },
     "/tools/import": {
       "js_gzip_kb": 290,
       "css_gzip_kb": 60,
-      "css_raw_kb": 361
+      "css_raw_kb": 363
     },
     "/tools/import/[id]": {
       "js_gzip_kb": 312,
       "css_gzip_kb": 60,
-      "css_raw_kb": 361
+      "css_raw_kb": 363
     },
     "/tools/word-import": {
       "js_gzip_kb": 312,
       "css_gzip_kb": 60,
-      "css_raw_kb": 361
+      "css_raw_kb": 363
     },
     "/users": {
       "js_gzip_kb": 251,

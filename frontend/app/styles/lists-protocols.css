@@ -192,7 +192,7 @@
 /* Suche und Ansichts-Sortierung (nur Anzeige, Design «Termine, Listen & Pendenzen») */
 .linked-list-search { flex: 0 1 240px; margin-left: auto; }
 
-.linked-list-sort { --button-bg: transparent; --button-hover-bg: transparent; display: inline-flex; align-items: center; gap: var(--space-1); min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs); background: var(--button-bg); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.linked-list-sort { --button-bg: transparent; --button-hover-bg: transparent; display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs); background: var(--button-bg); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 
 .linked-list-sort:hover { color: var(--text); }
 
