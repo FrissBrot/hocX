@@ -79,6 +79,9 @@ type Item = {
   above: boolean;
   /** Ganz zu: Inhalt wird nicht gerendert (SKIPPED_CLASS), Höhe bleibt die gemessene. */
   skipped: boolean;
+  /** Innenabstand und Rahmen oben/unten des Inhalts (einmal gelesen): contain-intrinsic-height
+   * gilt für die Inhaltsbox, die gemessene Höhe für die ganze Box. */
+  boxExtra: number | null;
 };
 
 /** Klasse am Inhalt eines ganz zugeklappten Punkts (protocol.css: content-visibility). Der
@@ -91,8 +94,13 @@ export const SKIPPED_CLASS = "protocol-doc-section-skipped";
 function setSkipped(item: Item, skipped: boolean, height: number) {
   if (item.skipped === skipped) return;
   item.skipped = skipped;
+  if (skipped && item.boxExtra === null) {
+    const style = getComputedStyle(item.inner);
+    item.boxExtra = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"]
+      .reduce((sum, key) => sum + (parseFloat(style[key as "paddingTop"]) || 0), 0);
+  }
   item.inner.classList.toggle(SKIPPED_CLASS, skipped);
-  if (skipped) item.inner.style.setProperty("contain-intrinsic-height", `auto ${height}px`);
+  if (skipped) item.inner.style.setProperty("contain-intrinsic-height", `${Math.max(0, height - (item.boxExtra ?? 0))}px`);
   else item.inner.style.removeProperty("contain-intrinsic-height");
 }
 
@@ -130,7 +138,7 @@ export function createAccordionEngine(
       if (!section || !body || !inner) return [];
       const id = section.id.replace("protocol-element-", "");
       const known = previous.get(id);
-      return [{ id, section, body, inner, metrics: null, open: known?.open ?? -1, above: known?.above ?? false, skipped: known?.skipped ?? false }];
+      return [{ id, section, body, inner, metrics: null, open: known?.open ?? -1, above: known?.above ?? false, skipped: known?.skipped ?? false, boxExtra: known?.boxExtra ?? null }];
     });
     anchorIndex = Math.max(0, items.findIndex((item) => item.id === previousAnchor));
     gap = parseFloat(getComputedStyle(container).rowGap) || 0;

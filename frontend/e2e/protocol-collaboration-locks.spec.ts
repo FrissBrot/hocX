@@ -43,7 +43,10 @@ test("Sperre eines Textblocks erscheint nur bei diesem Block und verschwindet na
   const writerCards = writerPage.locator(".editor-block-card");
   const adminEditor = adminPage.locator(".editor-block-card").nth(0).locator(".rich-text-editor-content");
   await adminEditor.click();
+  // Gespeichert (und an die anderen verteilt) wird entprellt, solange die Sperre gilt
+  const saved = adminPage.waitForResponse((response) => response.url().endsWith("/text") && response.request().method() === "PUT");
   await adminPage.keyboard.type("Hallo zusammen");
+  await saved;
 
   // Gesperrt mit Namen, nur dieser Block, Feld nicht editierbar
   await expect(writerCards.nth(0)).toHaveClass(/editor-block-card-locked/);
@@ -58,11 +61,13 @@ test("Sperre eines Textblocks erscheint nur bei diesem Block und verschwindet na
   await expect(adminCards.nth(1)).toHaveClass(/editor-block-card-locked/);
   await expect(adminCards.nth(0)).not.toHaveClass(/editor-block-card-locked/);
 
-  // Admin verlässt Block A: beim Schreibenden wieder frei, der Text ist angekommen
+  // Der Text ist bei der anderen Person angekommen
+  await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toContainText("Hallo zusammen", { timeout: 15_000 });
+
+  // Admin verlässt Block A: beim Schreibenden wieder frei
   await adminPage.locator(".protocol-quicknav").click({ position: { x: 5, y: 5 } });
   await expect(writerCards.nth(0)).not.toHaveClass(/editor-block-card-locked/);
   await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toHaveAttribute("contenteditable", "true");
-  await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toContainText("Hallo zusammen", { timeout: 15_000 });
 
   await adminPage.context().close();
   await writerPage.context().close();

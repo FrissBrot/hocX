@@ -177,7 +177,7 @@ describe("createAccordionEngine", () => {
     // Punkt 0 offen, weit entfernte Punkte zu
     expect(inners[0].classList.contains(SKIPPED_CLASS)).toBe(false);
     expect(inners[5].classList.contains(SKIPPED_CLASS)).toBe(true);
-    expect(inners[5].style.getPropertyValue("contain-intrinsic-height")).toBe("auto 320px");
+    expect(inners[5].style.getPropertyValue("contain-intrinsic-height")).toBe("320px");
     // Direkter Nachbar des Bezugs bleibt gerendert (Tab springt hinein)
     expect(inners[1].classList.contains(SKIPPED_CLASS)).toBe(false);
     // Sprungziel mit Autofokus: sofort und auch nach der nächsten Rechnung gerendert
