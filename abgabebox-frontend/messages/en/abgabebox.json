@@ -68,7 +68,7 @@
     "hintMaxFilesRemaining": "{count, plural, one {max. # more file} other {max. # more files}}",
     "hintPerFile": "{size} MB each",
     "hintTotal": "150 MB in total maximum",
-    "removeFile": "Remove",
+    "removeFile": "Remove {filename}",
     "offlineNotice": "Offline – uploads are only possible once the connection is restored. Your selection stays in this tab.",
     "alreadyUploaded": "{count, plural, one {# file already uploaded for this submission.} other {# files already uploaded for this submission.}}",
     "captchaDone": "✓ Security check completed",
