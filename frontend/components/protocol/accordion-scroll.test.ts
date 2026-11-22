@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ACCORDION_RAMP, accordionOpenness, type AccordionMetrics } from "./accordion-scroll";
+import { ACCORDION_RAMP, accordionOpenness, createAccordionEngine, type AccordionMetrics } from "./accordion-scroll";
 
 const options = { center: 400, gap: 16, ramp: 200 };
 const points = (count: number, body = 600): AccordionMetrics[] => Array.from({ length: count }, () => ({ collapsed: 80, body }));
@@ -75,3 +75,99 @@ describe("accordionOpenness", () => {
     expect(ACCORDION_RAMP).toBeGreaterThan(100);
   });
 });
+
+describe("createAccordionEngine", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  /** Dokument mit `count` Punkten; zählt, wie oft die Höhe jedes Elements gelesen wird. */
+  function setup(count: number) {
+    const reads = new Map<HTMLElement, number>();
+    const measured = (element: HTMLElement, height: number) => {
+      Object.defineProperty(element, "offsetHeight", {
+        configurable: true,
+        get: () => {
+          reads.set(element, (reads.get(element) ?? 0) + 1);
+          return height;
+        },
+      });
+    };
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { configurable: true, value: 800 });
+    const inners: HTMLElement[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const wrap = document.createElement("div");
+      wrap.className = "protocol-doc-section-wrap";
+      const section = document.createElement("section");
+      section.className = "protocol-doc-section";
+      section.id = `protocol-element-p${index}`;
+      const body = document.createElement("div");
+      body.className = "protocol-doc-section-body";
+      const inner = document.createElement("div");
+      body.append(inner);
+      section.append(body);
+      wrap.append(section);
+      container.append(wrap);
+      measured(section, 400);
+      measured(body, 320);
+      measured(inner, 320);
+      inners.push(inner);
+    }
+    document.body.append(container);
+    let resize: ResizeObserverCallback = () => {};
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { resize = callback; }
+      observe() {}
+      disconnect() {}
+    });
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const runFrames = () => { while (frames.length) frames.shift()!(0); };
+    return { container, inners, reads, runFrames, resize: (targets: HTMLElement[]) => resize(targets.map((target) => ({ target }) as ResizeObserverEntry), {} as ResizeObserver) };
+  }
+
+  it("misst bei einer Grössenänderung nur den geänderten Punkt neu", () => {
+    const { container, inners, reads, runFrames, resize } = setup(6);
+    const engine = createAccordionEngine(container, { onActiveChange: () => {} });
+    // Erste Rechnung misst alle Punkte
+    expect(reads.get(inners[5])).toBe(1);
+    reads.clear();
+
+    resize([inners[2]]);
+    runFrames();
+
+    expect(reads.get(inners[2])).toBe(1);
+    for (const [element, count] of reads) {
+      // Gelesen werden nur Punkt 2 selbst (Abschnitt, Rahmen, Inhalt)
+      expect(element.closest("section")?.id, `${count} Lesungen ausserhalb von Punkt 2`).toBe("protocol-element-p2");
+    }
+    engine.destroy();
+  });
+
+  it("verwirft bei einer Änderung der Fenstergrösse weiterhin alle Masse", () => {
+    const { container, inners, reads, runFrames } = setup(4);
+    const engine = createAccordionEngine(container, { onActiveChange: () => {} });
+    reads.clear();
+
+    window.dispatchEvent(new Event("resize"));
+    runFrames();
+
+    for (const inner of inners) expect(reads.get(inner)).toBe(1);
+    engine.destroy();
+  });
+
+  it("setzt Öffnungsgrad und Abstandshalter wie bisher als Custom Properties", () => {
+    const { container, runFrames } = setup(4);
+    const engine = createAccordionEngine(container, { onActiveChange: () => {} });
+    runFrames();
+    const sections = Array.from(container.querySelectorAll<HTMLElement>(".protocol-doc-section"));
+    expect(sections[0].style.getPropertyValue("--open")).toBe("1.000");
+    expect(container.style.getPropertyValue("--accordion-below")).toMatch(/px$/);
+    engine.destroy();
+    expect(container.style.getPropertyValue("--accordion-below")).toBe("");
+  });
+});
+

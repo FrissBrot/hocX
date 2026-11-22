@@ -194,8 +194,20 @@ export function createAccordionEngine(
     schedule();
   }
 
-  // Inhalte ändern ihre Höhe (Tippen, Bilder, Daten): neu messen
-  const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(relayout);
+  /** Nur die Punkte neu messen, deren Inhalt seine Höhe geändert hat (Tippen, Bilder, Daten) -
+   * vorher verwarf jede Änderung die Masse aller Punkte (zwei offsetHeight-Lesungen je Punkt). */
+  function remeasure(entries: ResizeObserverEntry[]) {
+    let changed = false;
+    for (const entry of entries) {
+      const item = items.find((candidate) => candidate.inner === entry.target);
+      if (!item) continue;
+      item.metrics = null;
+      changed = true;
+    }
+    if (changed) schedule();
+  }
+
+  const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(remeasure);
   function observe() {
     resizeObserver?.disconnect();
     collect();
