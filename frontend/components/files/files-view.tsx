@@ -75,9 +75,11 @@ type Props = {
   canDelete?: boolean;
   /** files.manage oder photos.manage: Papierkorb öffnen. */
   canOpenTrash?: boolean;
+  /** sharing.public + Abo «Fotos teilen»: öffentlichen Link erstellen (sonst 403 im Backend). */
+  canShare?: boolean;
 };
 
-export function FilesView({ initialItems, canDelete = false, canOpenTrash = false }: Props) {
+export function FilesView({ initialItems, canDelete = false, canOpenTrash = false, canShare = false }: Props) {
   const t = useTranslations("files");
   const router = useRouter();
   const showToast = useToast();
@@ -136,7 +138,8 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
       setDroppedFiles(files);
       setUploadModalOpen(true);
     },
-    !uploadModalOpen && detailItem === null,
+    // Hochladen nur mit files.manage (canDelete) - sonst lehnt das Backend ab (403).
+    canDelete && !uploadModalOpen && detailItem === null,
   );
 
   function buildUrl(skip: number) {
@@ -256,7 +259,7 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
 
   const actionsFor = useFileActions({
     onOpenDetail: setDetailItem,
-    onShare: setShareItem,
+    onShare: canShare ? setShareItem : undefined,
     onChanged: () => void reloadFromStart(),
     onTrash: canDelete ? (item) => void moveToTrash(item) : undefined,
   });
@@ -315,7 +318,7 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
                 {t("trash.open")}
               </button>
             ) : null}
-            {hasNoFiles ? null : (
+            {hasNoFiles || !canDelete ? null : (
               <button type="button" className="button-primary" onClick={openUpload}>
                 {t("view.uploadButton")}
               </button>
@@ -329,9 +332,11 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
           title={t("view.emptyTitle")}
           description={t("view.emptyDescription")}
           actions={
-            <button type="button" className="button-primary" onClick={openUpload}>
-              {t("view.uploadButton")}
-            </button>
+            canDelete ? (
+              <button type="button" className="button-primary" onClick={openUpload}>
+                {t("view.uploadButton")}
+              </button>
+            ) : undefined
           }
           hint={t("view.emptyHint")}
         />
@@ -389,7 +394,7 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
       {view === "grid" ? (
         <FilesGrid items={items} onOpenDetail={setDetailItem} actionsFor={actionsFor} selection={selection} />
       ) : (
-        <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} actionsFor={actionsFor} selection={selection} />
+        <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={canShare ? setShareItem : undefined} actionsFor={actionsFor} selection={selection} />
       )}
       </div>
       )}
@@ -448,10 +453,14 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
           frequentTags={frequentTags}
           canManage={canDelete}
           onRenamed={(name) => handleRenamed(detailItem.id, name)}
-          onShare={() => {
-            setShareItem(detailItem);
-            setDetailItem(null);
-          }}
+          onShare={
+            canShare
+              ? () => {
+                  setShareItem(detailItem);
+                  setDetailItem(null);
+                }
+              : undefined
+          }
           onTrashed={(trashed) => setItems((current) => current.filter((entry) => entry.id !== trashed.id))}
           position={detailIndex >= 0 ? { index: detailIndex, total: items.length } : undefined}
           onStep={(direction) => {

@@ -221,7 +221,7 @@ describe("FileDetailModal: Element der Abgabe und Blättern", () => {
     const onStep = vi.fn();
     render(
       <FileDetailModal item={makeItem({ document: null })} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}}
-        onStep={onStep} position={{ index: 1, total: 3 }} />
+        onStep={onStep} position={{ index: 1, total: 3 }} canManage />
     );
     expect(screen.getByText("2 von 3")).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "ArrowRight" });

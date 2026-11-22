@@ -35,6 +35,8 @@ EXPORT_TTL = timedelta(days=7)
 # Ein Bau, der so lange "running" bleibt, ist mit dem Prozess gestorben (Neustart, OOM).
 STALE_RUNNING = timedelta(hours=6)
 ACTIVE_STATUSES = ("queued", "running")
+# Namensraum für pg_advisory_xact_lock(ns, tenant_id) in request_export
+EXPORT_REQUEST_LOCK_NAMESPACE = 909100014
 
 
 class ExportInProgress(Exception):
@@ -58,6 +60,9 @@ def _fmt_date(value: date | datetime | None) -> str:
 
 def request_export(db: Session, *, tenant_id: int, user_id: int, password: str, include_files: bool, language: str | None) -> TenantDataExport:
     secret = validate_password(password)
+    # Prüfen und Anlegen unter einer Sperre je Mandant (bis Commit/Rollback): sonst sahen zwei
+    # gleichzeitige Anfragen beide «keiner aktiv» und der Worker baute den Export zweimal.
+    db.execute(sql("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": EXPORT_REQUEST_LOCK_NAMESPACE, "tenant_id": tenant_id})
     active = db.scalar(
         select(TenantDataExport.id).where(TenantDataExport.tenant_id == tenant_id, TenantDataExport.status.in_(ACTIVE_STATUSES))
     )

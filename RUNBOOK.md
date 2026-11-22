@@ -1276,8 +1276,9 @@ Ausgehend braucht das Backend dafür HTTPS zu `api.pwnedpasswords.com`; ohne Int
 ### Länder-Geolocation (Signal «neues Land»)
 
 Der job-worker lädt monatlich DB-IP «IP to Country Lite» (CC BY 4.0, ohne Konto,
-`https://download.db-ip.com/free/dbip-country-lite-JJJJ-MM.mmdb.gz`), prüft die Datei (Typ «Country»,
-IPv6-Baum, Grösse, Erstelldatum, Stichproben) und ersetzt die alte atomar im Volume `geoip_data`
+`https://download.db-ip.com/free/dbip-country-lite-JJJJ-MM.mmdb.gz`), prüft die Datei gegen die SHA1-Prüfsumme
+der offiziellen Download-Seite (`https://db-ip.com/db/download/ip-to-country-lite`; ohne passende Prüfsumme
+wird nichts übernommen), dann inhaltlich (Typ «Country», IPv6-Baum, Grösse, Erstelldatum, Stichproben) und ersetzt die alte atomar im Volume `geoip_data`
 (`/var/lib/hocx/geoip`, Backend nur lesend). Job `geoip_update` unter `/admin/jobs` (täglicher Tick,
 Download nur bei neuer Monatsausgabe). Gespeichert wird nur der Ländercode (`auth_event.src_country`,
 `auth_session.country`, `auth_known_device.last_country`, Migration `0215_auth_geo_country`), nie die IP;

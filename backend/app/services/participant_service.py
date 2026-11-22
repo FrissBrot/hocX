@@ -261,8 +261,18 @@ class ParticipantService:
         failures: list[Exception] = []
 
         # Zeilenlimit vor dem ersten Insert prüfen (CsvTooManyRows -> 400), nicht erst nach 2000 Zeilen.
-        csv_rows = list(limit_csv_rows(reader))
+        # csv.Error (z. B. Feld über 128 KiB) ist ein Eingabefehler: als ValueError weiter, damit
+        # die Route mit 400 statt 500 antwortet (wie der Termin-Import, event_service.py).
+        try:
+            csv_rows = list(limit_csv_rows(reader))
+        except csv.Error as exc:
+            raise ValueError("CSV file could not be read") from exc
         for i, row in enumerate(csv_rows, start=2):
+            # NUL-Zeichen kann PostgreSQL nicht speichern: kaputte Zeile, kein Systemfehler fürs
+            # Fehlerprotokoll (der INSERT wäre sonst unten als «unerwartet» protokolliert worden).
+            if any("\x00" in value for value in row.values() if isinstance(value, str)):
+                errors.append(str(i))
+                continue
             try:
                 first_name = _csv_field(row, "first_name")
                 last_name = _csv_field(row, "last_name")

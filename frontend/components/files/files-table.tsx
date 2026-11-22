@@ -25,7 +25,8 @@ export function FilesTable({
   items: FileOverviewItem[];
   onOpenDetail: (item: FileOverviewItem) => void;
   onNavigate: (href: string) => void;
-  onShare: (item: FileOverviewItem) => void;
+  /** Fehlt ohne sharing.public bzw. Abo «Fotos teilen»: kein Teilen-Knopf. */
+  onShare?: (item: FileOverviewItem) => void;
   actionsFor: (item: FileOverviewItem) => ActionMenuItem[];
   /** Mehrfachauswahl (files.manage): Kästchen je Zeile und «alle geladenen» im Kopf. */
   selection?: { selected: Set<string>; onToggle: (id: string) => void; onToggleAll: () => void };
@@ -123,15 +124,17 @@ export function FilesTable({
                 >
                   <ActionIcon name="download" />
                 </a>
-                <button
-                  type="button"
-                  className="button-secondary button-icon"
-                  aria-label={t("table.share")}
-                  title={t("table.share")}
-                  onClick={() => onShare(item)}
-                >
-                  <ActionIcon name="link" />
-                </button>
+                {onShare ? (
+                  <button
+                    type="button"
+                    className="button-secondary button-icon"
+                    aria-label={t("table.share")}
+                    title={t("table.share")}
+                    onClick={() => onShare(item)}
+                  >
+                    <ActionIcon name="link" />
+                  </button>
+                ) : null}
                 <ActionMenu items={actionsFor(item)} ariaLabel={t("menu.more")} />
               </div>
             </td>

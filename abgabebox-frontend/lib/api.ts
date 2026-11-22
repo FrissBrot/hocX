@@ -46,8 +46,20 @@ function isTransientStatus(status: number): boolean {
   return status >= 500 || status === 429 || status === 408;
 }
 
+// Abgabebox für den Verein abgeschaltet (Backend 403 FEATURE_DISABLED). Die Unterseiten zeigen
+// dann denselben Hinweis wie die Abgabenliste statt «Seite nicht gefunden» - direkt geteilte
+// Links auf eine Abgabe oder ein Dokument sind der Normalfall.
+export class AbgabeboxFeatureDisabledError extends Error {
+  constructor() {
+    super("Abgabebox fuer diesen Verein deaktiviert (HTTP 403)"); // i18n-ok: nur intern, Seite zeigt eigenen Text
+  }
+}
+
 async function fetchJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url, { cache: "no-store" });
+  if (response.status === 403) {
+    throw new AbgabeboxFeatureDisabledError();
+  }
   if (isTransientStatus(response.status)) {
     throw new AbgabeboxUnavailableError(response.status);
   }

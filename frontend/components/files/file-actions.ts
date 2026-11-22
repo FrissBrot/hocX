@@ -31,7 +31,8 @@ export function useFileActions({
   onTrash,
 }: {
   onOpenDetail: (item: FileOverviewItem) => void;
-  onShare: (item: FileOverviewItem) => void;
+  /** Fehlt ohne sharing.public bzw. Abo «Fotos teilen»: kein Menüeintrag «Teilen». */
+  onShare?: (item: FileOverviewItem) => void;
   /** Nach «Erneut verarbeiten»: Liste neu laden. */
   onChanged?: () => void;
   /** «In den Papierkorb» - nur für Direkt-Uploads und mit files.manage (Papierkorb, Migration 0199). */
@@ -63,7 +64,7 @@ export function useFileActions({
         onClick: () => downloadUrl(item.content_url),
       });
     }
-    items.push({ label: t("table.share"), onClick: () => onShare(item) });
+    if (onShare) items.push({ label: t("table.share"), onClick: () => onShare(item) });
     items.push({ label: t("menu.details"), onClick: () => onOpenDetail(item) });
     if (document && document.version_count > 1) {
       items.push({ label: t("menu.versions", { count: document.version_count }), onClick: () => onOpenDetail(item) });

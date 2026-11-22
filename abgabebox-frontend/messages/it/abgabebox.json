@@ -68,7 +68,7 @@
     "hintMaxFilesRemaining": "{count, plural, one {max. # file aggiuntivo} other {max. # file aggiuntivi}}",
     "hintPerFile": "{size} MB ciascuno",
     "hintTotal": "massimo 150 MB in totale",
-    "removeFile": "Rimuovi",
+    "removeFile": "Rimuovi {filename}",
     "offlineNotice": "Offline – i caricamenti sono possibili solo dopo il ripristino della connessione. La selezione rimane in questa scheda.",
     "alreadyUploaded": "{count, plural, one {Già # file caricato per questa consegna.} other {Già # file caricati per questa consegna.}}",
     "captchaDone": "✓ Verifica di sicurezza completata",
@@ -91,10 +91,32 @@
       "connectionLost": "Connessione interrotta durante il caricamento. Verifica se la consegna è già arrivata prima di inviare di nuovo.",
       "tooManyFiles": "È consentito un massimo di 50 file per caricamento.",
       "selectionTooLarge": "La selezione supera 150 MB. Suddividila in più caricamenti.",
-      "maxFilesTotal": "È consentito un massimo di {maxFiles} file in totale ({remaining} ancora possibili)",
+      "maxFilesTotal": "È consentito un massimo di {maxFiles, number} file in totale ({remaining, number} ancora possibili)",
       "unsupportedType": "\"{filename}\" non può essere accettato: {kind, select, missing {i file senza estensione non sono consentiti} other {l'estensione .{extension} non è consentita}}. Consentiti: {allowed}.",
       "disallowedType": "\"{filename}\" ha un formato file non consentito (consentiti: {allowed})",
-      "fileTooLarge": "\"{filename}\" è troppo grande (max. {maxFileSizeMb} MB)"
+      "fileTooLarge": "\"{filename}\" è troppo grande (max. {maxFileSizeMb} MB)",
+      "server": {
+        "not_found": "Questa consegna non è stata trovata. Controlla il link.",
+        "feature_disabled": "La casella di consegna non è attualmente disponibile per questa organizzazione.",
+        "element_closed": "Per questo documento non si accettano più consegne.",
+        "captcha_invalid": "Il controllo di sicurezza non è riuscito. Ricarica la pagina.",
+        "captcha_expired": "Il controllo di sicurezza è scaduto – è in fase di rinnovo, attendi un attimo",
+        "no_file": "Seleziona almeno un file",
+        "too_many_files_request": "È consentito un massimo di {max, number} file per caricamento.",
+        "file_type_not_allowed": "I file con estensione .{extension} non sono accettati.",
+        "file_too_large": "Un file è troppo grande (max. {maxMb, number} MB).",
+        "upload_too_large": "Il caricamento è complessivamente troppo grande. Suddividilo in più caricamenti.",
+        "content_mismatch": "Il contenuto di un file non corrisponde all'estensione .{extension}.",
+        "storage_limit": "Lo spazio di archiviazione dell'organizzazione è pieno. Contatta l'organizzazione.",
+        "too_many_files_total": "È consentito un massimo di {maxFiles, number} file in totale ({remaining, number} ancora possibili)",
+        "save_failed": "Non è stato possibile salvare il file. Riprova.",
+        "malware": "Uno o più file sono stati classificati come malware e non sono stati accettati.",
+        "scan_failed": "Non è stato possibile verificare un file per malware (max. 100 MB). Invia un file più piccolo.",
+        "upload_busy": "Altri file sono in elaborazione – riprova tra poco.",
+        "db_busy": "La casella di consegna è sovraccarica. Riprova tra poco.",
+        "storage_write_fenced": "Il caricamento è temporaneamente bloccato. Riprova tra poco.",
+        "maintenance": "La casella di consegna è in manutenzione. Riprova più tardi."
+      }
     },
     "dropLabelRelease": "Rilascia per aggiungere",
     "captchaTitle": "Controllo di sicurezza",
@@ -115,7 +137,10 @@
     "progressUploading": "Caricamento in corso …",
     "progressPercent": "{percent} %",
     "progressProcessing": "Verifica in corso …",
-    "progressProcessingHint": "I file sono stati trasferiti e ora vengono verificati (virus e formato). Lascia aperta questa pagina."
+    "progressProcessingHint": "I file sono stati trasferiti e ora vengono verificati (virus e formato). Lascia aperta questa pagina.",
+    "limitReachedTitle": "Consegna completa",
+    "limitReached": "{count, plural, one {Il file consentito per questo documento è già stato consegnato. Non si accettano altri file.} other {Tutti i # file consentiti per questo documento sono già stati consegnati. Non si accettano altri file.}}",
+    "duplicateWarning": "«{filename}» è simile a un'immagine già caricata in questa consegna."
   },
   "language": {
     "label": "Lingua"

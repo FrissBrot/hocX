@@ -117,7 +117,7 @@ describe("FilesView (Dateien)", () => {
       id: "d1", status: "processing" as const, processing_stage: "scan" as const, pdf_status: "queued" as const, extraction_status: null,
       pdf_url: null, pdf_download_url: null, version_count: 1, current_version_number: 1, current_version_label: null, detail_url: "/api/documents/d1",
     };
-    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Vereinsreglement.docx", document })]} />);
+    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Vereinsreglement.docx", document })]}  canShare />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Wird verarbeitet · Virenprüfung");
     expect(screen.queryByText("In Verarbeitung", { selector: ".badge" })).not.toBeInTheDocument();
@@ -169,7 +169,7 @@ describe("FilesView (Dateien)", () => {
   });
 
   it("opens the document upload window from the header button", () => {
-    render(<FilesView initialItems={[]} />);
+    render(<FilesView initialItems={[]} canDelete />);
     expect(screen.queryByText("Dateien hochladen", { selector: "h2" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Dateien hochladen" }));
@@ -179,7 +179,7 @@ describe("FilesView (Dateien)", () => {
   });
 
   it("opens the upload window with the files dropped anywhere on the page already queued", () => {
-    render(<FilesView initialItems={[]} />);
+    render(<FilesView initialItems={[]} canDelete />);
     const pdf = new File(["x"], "bericht.pdf", { type: "application/pdf" });
     const photo = new File(["x"], "foto.jpg", { type: "image/jpeg" });
 
@@ -203,5 +203,23 @@ describe("FilesView (Dateien)", () => {
       window.dispatchEvent(drop);
     });
     expect(screen.queryByText("Dateien hochladen", { selector: "h2" })).not.toBeInTheDocument();
+  });
+
+  it("offers no upload, sharing or tag editing to accounts that may only read files", () => {
+    // Nachtlauf 2026-11-22 (dateien-fotos/rechte): Konto mit files.read ohne files.manage bzw. ohne
+    // sharing.public sah «Hochladen» und «Teilen» - das Backend lehnte mit 403 ab.
+    const { unmount } = render(<FilesView initialItems={[]} />);
+    expect(screen.queryByRole("button", { name: "+ Dateien hochladen" })).not.toBeInTheDocument();
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: { types: ["Files"], files: [new File(["x"], "bericht.pdf", { type: "application/pdf" })] } });
+    act(() => {
+      window.dispatchEvent(drop);
+    });
+    expect(screen.queryByText("Dateien hochladen", { selector: "h2" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Statuten.pdf" })]} />);
+    expect(screen.queryByRole("button", { name: "+ Dateien hochladen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Teilen" })).not.toBeInTheDocument();
   });
 });

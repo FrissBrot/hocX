@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.locale_config_generated import SUPPORTED_LOCALES
+from app.schemas.base import clean_display_name, reject_null
 from app.schemas.role import RoleRef
 
 # Standardrollen je Mandant (tenant_role.system_key, permissions/catalog.json).
@@ -134,6 +135,8 @@ class UserCreate(UserBase):
     tenant_id: uuid.UUID | None = None
     login_enabled: bool = False
 
+    _clean_display_name = field_validator("display_name")(clean_display_name)
+
     @model_validator(mode="after")
     def _login_credentials(self) -> "UserCreate":
         if self.login_enabled and (not self.email or not self.email.strip() or not self.password):
@@ -164,6 +167,8 @@ class UserUpdate(BaseModel):
     notify_without_login: bool | None = None
 
     _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
+    _clean_display_name = field_validator("display_name")(clean_display_name)
+    _reject_null = field_validator("is_active")(reject_null)
 
 
 class UserSelfUpdate(BaseModel):

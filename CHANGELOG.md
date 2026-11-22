@@ -8,22 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Behoben
-
-- **Fotosuche in grossen Mandanten nicht mehr minutenlang:** Nach einigen Suchen auf derselben
-  Datenbankverbindung (psycopg bereitet Abfragen nach 5 Ausführungen serverseitig vor) wechselte Postgres
-  auf einen generischen Plan ohne Mandantenwert. Geschätzt für einen kleinen Mandanten, las er bei einem
-  Mandanten mit 10 000 Fotos die ganze Dateiübersicht je Treffer neu (über 200 s statt 0.2 s). Alle
-  Verbindungen des Backends und der Worker planen jetzt immer mit den echten Werten
-  (`plan_cache_mode=force_custom_plan`, `app/core/db.py`); keine Migration, keine neue Einstellung.
-
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
 Warnungen quittieren, Exporte, Admin-Tabellen), Erkennung eines gestörten Maildienstes, Ablehnung
 geleakter Passwörter und Risikosignal «neues Land», eine einheitliche Update-/Wartungsseite, die neue
 Foto-Ansicht, Keywords und Synonyme in der Suche, Listen in der globalen Suche, Dateiablage per
-Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.5.0 mit
+Drag-and-Drop in Pendenzen und Kundenlogos auf der Website, dazu ein schnellerer Protokoll-Editor,
+Korrekturen aus dem Nachtlauf (Abgabebox, Dateien, Mitglieder) und eine schnelle Fotosuche auch in
+grossen Mandanten. Update direkt von 1.5.0 mit
 `./scripts/deploy.sh <test|prod>`; sieben Migrationen (0209–0218).
 
 ### Update
@@ -38,7 +31,9 @@ Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.
   `PASSWORD_LEAK_MIN_COUNT`, `GEOIP_AUTO_UPDATE` (Standard an) und optional `HOCX_STATUS_PAGE_URL`
   (https, Link auf der Update-Seite, wenn ein Update länger als 15 Minuten dauert).
 - **Ausgehende Verbindungen:** das Backend braucht HTTPS zu `api.pwnedpasswords.com` (Leak-Prüfung neuer
-  Passwörter), der job-worker HTTPS zu `download.db-ip.com` (Länder-Datenbank). Ohne Internet:
+  Passwörter), der job-worker HTTPS zu `download.db-ip.com` (Länder-Datenbank) **und zu `db-ip.com`**
+  (Download-Seite mit den Prüfsummen). Ohne Zugang zur Seite übernimmt der Job `geoip_update` keine neue
+  Länder-Datenbank (die vorhandene bleibt, der Job meldet einen Fehler). Ohne Internet:
   `PASSWORD_LEAK_CHECK=local-only` (lokale Liste im Image) und `GEOIP_AUTO_UPDATE=false` (RUNBOOK Abschnitt 23).
 - **Neues Volume `geoip_data`** (job-worker schreibt, Backend liest); der Job `geoip_update` lädt die
   Datenbank beim ersten Tick. Fehlt sie, entfällt nur das Signal «neues Land» (Systemstatus «nicht eingerichtet»).
@@ -56,6 +51,8 @@ Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.
   sofort mit «Anmeldung aktuell nicht möglich» abgewiesen; der Systemstatus zeigt die neue Prüfung
   «E-Mail-Versand» (ntfy-Alarm `email:smtp:<grund>`).
 - Neue Abhängigkeit `maxminddb==3.2.0` (Apache-2.0); neuer Hintergrundjob `geoip_update` (Lock-ID 202600045).
+- Traefik 3.7.19 (Patch), Python-Pakete mit Patch-/Minor-Updates (u. a. FastAPI 0.162.2, Pydantic 2.14.3,
+  pypdfium2 5.15 mit PDFium-Sicherheitskorrekturen), pdfjs-dist 6.5 in der Abgabebox; Playwright bleibt 1.64.1.
 
 **Migrationen im Detail:**
 
@@ -82,6 +79,9 @@ Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.
 - **Risikosignal «neues Land»:** Land der Anmeldung lokal aus DB-IP «IP to Country Lite» (CC BY 4.0);
   Land in 90 Tagen erfolgreicher Anmeldungen nie gesehen → 10 Punkte, allein nie entscheidend, ohne
   Baseline kein Signal. Gespeichert wird nur der Ländercode, nie die IP.
+- **GeoIP-Datenbank nur mit passender Prüfsumme (N-1):** `geoip_update` vergleicht die entpackte MMDB-Datei
+  mit dem SHA1, den DB-IP auf der offiziellen Download-Seite (`db-ip.com`) veröffentlicht (eine Signatur
+  bietet DB-IP nicht an). Weicht er ab oder fehlt er, wird die Datei nicht übernommen.
 - **Vereinslogo-Route `/api/tenants/{id}/profile-image` nicht mehr für alle öffentlich:** ohne Anmeldung
   nur, wo hocX das Logo ohnehin öffentlich zeigt (eigene App-Domain, Prüfseite mit Vereinsidentität),
   angemeldet nur eigener Mandant und vertraute Partner; sonst einheitlich 404. Rate-Limit, Cache nur
@@ -133,6 +133,34 @@ Drag-and-Drop in Pendenzen und Kundenlogos auf der Website. Update direkt von 1.
 - **Vorlagen:** Einfügelinie beim Ziehen von Terminfeldern und Tabellenzeilen.
 - **Pendenzen:** Escape in der Dateisuche schliesst nur die Trefferliste, nicht den Dialog.
 - Ablage: mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
+
+### Behoben
+
+- **Fotosuche in grossen Mandanten nicht mehr minutenlang:** Nach einigen Suchen auf derselben
+  Datenbankverbindung (psycopg bereitet Abfragen nach 5 Ausführungen serverseitig vor) wechselte Postgres
+  auf einen generischen Plan ohne Mandantenwert. Geschätzt für einen kleinen Mandanten, las er bei einem
+  Mandanten mit 10 000 Fotos die ganze Dateiübersicht je Treffer neu (über 200 s statt 0.2 s). Alle
+  Verbindungen des Backends und der Worker planen jetzt immer mit den echten Werten
+  (`plan_cache_mode=force_custom_plan`, `app/core/db.py`); keine Migration, keine neue Einstellung.
+- **Text-Editor:** Die Toolbar zeigt Fett, Kursiv, Listen und Rückgängig/Wiederholen nach Tastenkürzeln,
+  Markdown-Eingaberegeln und im formatierten Text sofort an (vorher blieb z. B. «B» nach Strg/⌘+B
+  unmarkiert). Die Listen-Knöpfe nennen ihr Kürzel im Tooltip.
+- **Einstellungen:** Die Karte «Suche & Synonyme» zeigt ihre Beschreibung statt des rohen Schlüssels
+  (alle Sprachen).
+- **Abgabebox:** Upload-Fehler und Hinweise auf ähnliche Bilder erscheinen in der gewählten Sprache statt
+  auf Deutsch (stabile Fehlercodes); Fehlermeldungen werden von Screenreadern angesagt und Entfernen-Knöpfe
+  nennen ihre Datei; ist das Dateikontingent eines Dokuments ausgeschöpft, erscheint «Abgabe vollständig»
+  statt eines Formulars, das jede Auswahl ablehnt; eine abgeschaltete Abgabebox wird auch auf direkt geteilten
+  Abgabe-Links erklärt (statt «nicht gefunden»); die Prüfseite zeigt das Erstelldatum nach Schweizer Zeit.
+- **Dateien und Fotos:** Hochladen, Teilen, Tags/Stichwörter und Album-Aktionen erscheinen nur noch mit
+  passendem Recht bzw. Abo (vorher endeten sie mit 403).
+- **Papierkorb:** Wiederherstellen und endgültiges Löschen (auch durch den Job) sperren die Datei; eine
+  gleichzeitig wiederhergestellte Datei wird nicht mehr gelöscht.
+- **Aufbewahrung:** Vorschläge werden vor dem Umsetzen nach der aktuellen Regel neu geprüft; nach gelockerter
+  Regel oder inzwischen verknüpftem Bild wird nichts mehr gelöscht.
+- **Gesamtexport:** gleichzeitige Anfragen legen nur noch einen Auftrag an.
+- **Mitglieder:** leerer Name oder `null` beim Bearbeiten wird abgelehnt (422) statt die Mitgliederliste zu
+  brechen; kaputte CSV-Dateien ergeben 400 statt 500; überlange ID-Listen der Massenaktionen 422 statt 500.
 
 ### Neu
 

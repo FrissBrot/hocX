@@ -97,6 +97,13 @@ describe("FileDetailModal v2", () => {
     expect(screen.getByText("Löschen braucht die Berechtigung «Dateien verwalten».")).toBeInTheDocument();
   });
 
+  it("ohne Recht keine Tag-Bearbeitung (Nachtlauf 2026-11-22: PATCH /tags lehnte mit 403 ab)", () => {
+    browserApiFetchMock.mockResolvedValue(null);
+    render(<FileDetailModal item={makeItem({ tags: [] })} tagSuggestions={["Lager"]} frequentTags={["Lager", "Bericht"]} onClose={noop} onNavigate={noop} onTagsSaved={noop} />);
+    expect(screen.queryByPlaceholderText("Tag hinzufügen…")).not.toBeInTheDocument();
+    expect(screen.queryByText("Häufig:")).not.toBeInTheDocument();
+  });
+
   it("legt nach Bestätigung im Fuss in den Papierkorb und stellt wieder her", async () => {
     browserApiFetchMock.mockImplementation(async (url: string) => {
       if (url === "/api/files/trash" || url === "/api/files/trash/restore") return { file_ids: ["file-1"], errors: [] };
@@ -148,7 +155,7 @@ describe("FileDetailModal v2", () => {
     const onStep = vi.fn();
     render(
       <FileDetailModal item={makeItem()} tagSuggestions={[]} frequentTags={["Lager", "Bericht"]} onClose={noop} onNavigate={noop}
-        onTagsSaved={onTagsSaved} onStep={onStep} position={{ index: 0, total: 2 }} />
+        onTagsSaved={onTagsSaved} onStep={onStep} position={{ index: 0, total: 2 }} canManage />
     );
     expect(screen.getByText("Häufig:")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Bericht" }));
@@ -159,7 +166,7 @@ describe("FileDetailModal v2", () => {
 
   it("bietet beim Tippen eines neuen Tags «neu erstellen» an", () => {
     browserApiFetchMock.mockResolvedValue(null);
-    render(<FileDetailModal item={makeItem({ tags: [] })} tagSuggestions={["Lager"]} onClose={noop} onNavigate={noop} onTagsSaved={noop} />);
+    render(<FileDetailModal item={makeItem({ tags: [] })} tagSuggestions={["Lager"]} onClose={noop} onNavigate={noop} onTagsSaved={noop} canManage />);
     const field = screen.getByPlaceholderText("Tag hinzufügen…");
     fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "Neu" } });

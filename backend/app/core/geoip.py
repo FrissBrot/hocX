@@ -3,7 +3,8 @@
 Quelle: DB-IP «IP to Country Lite» (https://db-ip.com, Lizenz CC BY 4.0, ohne Konto) als MMDB-Datei
 unter ``GEOIP_DB_PATH``. Den Download und die monatliche Aktualisierung macht der Job
 ``geoip_update`` im job-worker (``update_database``); Backend und job-worker teilen sich dafür ein
-Volume (Backend nur lesend).
+Volume (Backend nur lesend). Übernommen wird eine neue Datei nur, wenn ihr SHA1 zur Prüfsumme auf der
+offiziellen Download-Seite passt (DB-IP bietet keine Signatur) und sie die Plausibilitätsprüfung besteht.
 
 Gespeichert wird nur der Ländercode (ISO 3166-1 alpha-2), nie die IP. Fehlt die Datei oder ist sie
 unlesbar, liefert ``country_for`` None - das Signal entfällt still (Systemmonitor «nicht
@@ -12,6 +13,8 @@ eingerichtet», kein Alarm). Private, lokale und reservierte Adressen werden nic
 from __future__ import annotations
 
 import gzip
+import hashlib
+import hmac
 import ipaddress
 import logging
 import os
@@ -30,6 +33,17 @@ from app.core.config import settings
 _logger = logging.getLogger(__name__)
 
 DOWNLOAD_URL = "https://download.db-ip.com/free/dbip-country-lite-{month}.mmdb.gz"
+# Offizielle Download-Seite: nennt je Ausgabe MD5 und SHA1 der ENTPACKTEN MMDB-Datei (eine Signatur
+# bietet DB-IP nicht an). Die Seite liegt auf einem anderen Host als die Datei (db-ip.com vs.
+# download.db-ip.com); übernommen wird eine Datei nur, wenn ihr SHA1 zur Seite passt.
+CHECKSUM_PAGE_URL = "https://db-ip.com/db/download/ip-to-country-lite"
+MAX_CHECKSUM_PAGE_BYTES = 2 * 1024 * 1024
+_CHECKSUM_ENTRY = re.compile(
+    r"SHA1SUM\s*</dt>\s*<dd[^>]*>\s*([0-9a-fA-F]{40})\s*</dd>"
+    r"(?:(?!SHA1SUM).){0,4000}?"
+    r"(https://download\.db-ip\.com/free/dbip-country-lite-\d{4}-\d{2}\.mmdb\.gz)",
+    re.S,
+)
 USER_AGENT = "hocx-geoip-update"
 ATTRIBUTION = "IP to Country Lite by DB-IP (https://db-ip.com), CC BY 4.0"
 # Grenzen für den Download (die Datei hat ~5 MB gepackt, ~8 MB entpackt)
@@ -262,6 +276,32 @@ def _download(url: str, target: Path) -> None:
         packed.unlink(missing_ok=True)
 
 
+def parse_checksums(page: str) -> dict[str, str]:
+    """SHA1 der entpackten MMDB je Download-URL aus der Download-Seite (nur MMDB-Einträge)."""
+    return {url: sha1.lower() for sha1, url in _CHECKSUM_ENTRY.findall(page)}
+
+
+def _published_checksums() -> dict[str, str]:
+    """Download-Seite laden (Grössenlimit, keine Weiterleitungen) und die Prüfsummen auslesen."""
+    request = urllib.request.Request(CHECKSUM_PAGE_URL, headers={"User-Agent": USER_AGENT})
+    try:
+        with _opener.open(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:  # noqa: S310 - feste HTTPS-URL
+            body = response.read(MAX_CHECKSUM_PAGE_BYTES + 1)
+    except (urllib.error.URLError, OSError) as exc:
+        raise GeoIPUpdateError(f"Prüfsummen nicht abrufbar ({type(exc).__name__})") from exc
+    if len(body) > MAX_CHECKSUM_PAGE_BYTES:
+        raise GeoIPUpdateError("Prüfsummen-Seite zu gross")
+    return parse_checksums(body.decode("utf-8", errors="replace"))
+
+
+def file_sha1(path: Path) -> str:
+    digest = hashlib.sha1(usedforsecurity=False)  # Vergleichswert der Quelle ist SHA1
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _unpack(packed: Path, target: Path) -> None:
     written = 0
     try:
@@ -291,14 +331,17 @@ def _current_build_month(path: Path) -> str | None:
         return None
 
 
-def update_database(*, now: datetime | None = None, download=None) -> dict:
+def update_database(*, now: datetime | None = None, download=None, checksums=None) -> dict:
     """Lädt die Datenbank des laufenden Monats, falls die vorhandene älter ist (sonst nichts).
     Anfang Monat ist die neue Datei evtl. noch nicht veröffentlicht: dann bleibt die alte; fehlt
-    jede Datei, wird die des Vormonats geladen. Ersetzt atomar und nur nach bestandener Prüfung."""
+    jede Datei, wird die des Vormonats geladen. Ersetzt atomar und nur nach bestandener Prüfung:
+    SHA1 wie auf der Download-Seite veröffentlicht (``checksums``, sonst ``_published_checksums``),
+    danach ``validate_file``. Ohne veröffentlichte Prüfsumme wird eine Ausgabe nicht geladen."""
     if not settings.geoip_auto_update:
         return {"skipped": "disabled"}
     now = now or datetime.now(UTC)
     download = download or _download
+    checksums = checksums or _published_checksums
     path = _path()
     current_month = _current_build_month(path)
     months = _months(now)
@@ -306,9 +349,15 @@ def update_database(*, now: datetime | None = None, download=None) -> dict:
         return {"skipped": "current", "build_month": current_month}
     candidates = months if current_month is None or current_month < months[1] else months[:1]
     path.parent.mkdir(parents=True, exist_ok=True)
+    published = checksums()
     last_error: str | None = None
     for month in candidates:
         url = DOWNLOAD_URL.format(month=month)
+        expected = published.get(url)
+        if expected is None:
+            # Die Seite nennt nur die aktuelle Ausgabe: ohne Prüfsumme gilt der Monat als nicht verfügbar
+            last_error = f"{month}: keine Prüfsumme veröffentlicht"
+            continue
         handle, temp_name = tempfile.mkstemp(prefix=".geoip-", suffix=".mmdb", dir=path.parent)
         os.close(handle)
         temp = Path(temp_name)
@@ -322,12 +371,14 @@ def update_database(*, now: datetime | None = None, download=None) -> dict:
                 raise GeoIPUpdateError(f"HTTP {exc.code}") from exc
             except (urllib.error.URLError, OSError) as exc:
                 raise GeoIPUpdateError(f"Download fehlgeschlagen ({type(exc).__name__})") from exc
+            if not hmac.compare_digest(file_sha1(temp), expected.lower()):
+                raise GeoIPUpdateError(f"Prüfsumme passt nicht ({month})")
             info = validate_file(temp, now=now)
             os.chmod(temp, 0o640)
             os.replace(temp, path)
             reset()
             _logger.info("GeoIP-Datenbank aktualisiert (%s)", info.get("build_date"))
-            return {"updated": month, **info}
+            return {"updated": month, "sha1": expected.lower(), **info}
         finally:
             temp.unlink(missing_ok=True)
     if current_month is not None:

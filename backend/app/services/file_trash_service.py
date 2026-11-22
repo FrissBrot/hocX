@@ -243,6 +243,20 @@ def _resolve(db: Session, user: CurrentUser, file_ids: list[uuid.UUID]) -> tuple
     return found, errors
 
 
+def _lock_still_trashed(db: Session, stored_file_id: int) -> bool:
+    """Zeile sperren und unter der Sperre neu prüfen, ob sie noch im Papierkorb liegt.
+    Wiederherstellen und endgültiges Löschen (Anfrage oder Job file_trash_purge) prüften ohne
+    Sperre: der Job löschte eine gleichzeitig wiederhergestellte Datei trotzdem, und
+    «Wiederherstellen» meldete Erfolg für eine gleichzeitig gelöschte. Wer zuerst sperrt,
+    gewinnt; der andere sieht danach den neuen Stand (READ COMMITTED wertet die Bedingung neu aus)."""
+    return db.scalar(
+        select(StoredFile.id)
+        .where(StoredFile.id == stored_file_id, StoredFile.deleted_at.is_not(None))
+        .with_for_update()
+        .execution_options(include_trashed=True)
+    ) is not None
+
+
 # ── Wiederherstellen ─────────────────────────────────────────────────────────────────────────
 
 
@@ -252,6 +266,9 @@ def restore(db: Session, user: CurrentUser, file_ids: list[uuid.UUID]) -> tuple[
         found, errors = _resolve(db, user, file_ids)
         restored: list[uuid.UUID] = []
         for stored_file in found:
+            if not _lock_still_trashed(db, stored_file.id):
+                errors.append("Datei nicht im Papierkorb")
+                continue
             group = _group_ids(db, stored_file.id)
             db.execute(
                 update(StoredFile)
@@ -296,6 +313,9 @@ def purge(db: Session, user: CurrentUser, file_ids: list[uuid.UUID]) -> tuple[li
         found, errors = _resolve(db, user, file_ids)
         purged: list[uuid.UUID] = []
         for stored_file in found:
+            if not _lock_still_trashed(db, stored_file.id):
+                errors.append("Datei nicht im Papierkorb")
+                continue
             public_id, name, internal_id = stored_file.public_id, stored_file.original_name, stored_file.id
             _purge_one(db, stored_file, eraser)
             _audit.log(
@@ -355,8 +375,12 @@ def purge_expired(db: Session, *, now: datetime | None = None, limit: int = PURG
         for stored_file_id, tenant_id in candidates:
             eraser = _eraser()
             try:
-                stored_file = db.get(StoredFile, stored_file_id)
-                if stored_file is None or stored_file.deleted_at is None:
+                if not _lock_still_trashed(db, stored_file_id):
+                    db.commit()  # Sperre freigeben
+                    continue
+                stored_file = db.get(StoredFile, stored_file_id, populate_existing=True)
+                if stored_file is None or stored_file.deleted_at is None or stored_file.deleted_at > cutoff:
+                    db.commit()
                     continue
                 name = stored_file.original_name
                 _purge_one(db, stored_file, eraser)

@@ -11,7 +11,9 @@ import { publicApiUrl } from "@/lib/api";
 import { canUploadMoreAfterSuccess, isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 import { sendUpload, type UploadPhase } from "@/lib/upload-request";
+import { duplicateWarnings, serverErrorMessage } from "@/lib/upload-error";
 import { UploadProgress } from "@/components/upload-progress";
+import { UploadErrorMessage, UploadFileList } from "@/components/upload-file-list";
 
 type Props = {
   linkToken: string;
@@ -111,12 +113,6 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setError(null);
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   // Laeuft einmal pro Seitenaufruf, sobald FriendlyCaptcha eine Loesung liefert - tauscht sie
@@ -222,14 +218,13 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
           requestFreshCaptcha();
           throw new UploadMessageError(t("errors.captchaExpired"));
         }
+        // Kuratierte Fehler tragen einen stabilen Code (abgabebox-backend/app/public_errors.py),
+        // das deutsche `detail` wird nie angezeigt.
         const body = await response.json().catch(() => null);
-        // body?.detail kommt direkt vom Backend (abgabebox-backend liefert aktuell kuratierten
-        // Freitext, keine stabilen Fehlercodes) - kann hier noch nicht lokalisiert werden, siehe
-        // CLAUDE.md Abschnitt i18n Punkt 10 (kein unnoetiger Umbau des Error-Handlings).
-        throw new UploadMessageError(typeof body?.detail === "string" ? body.detail : t("errors.uploadFailedGeneric"));
+        throw new UploadMessageError(serverErrorMessage(t, body));
       }
       const result = await response.json().catch(() => null);
-      setWarnings(result?.image_duplicate_warnings ?? []);
+      setWarnings(duplicateWarnings(t, result));
       setElementClosed(result?.element_closed === true);
       setUploadedSoFar((prev) => prev + files.length);
       setReceipt({ files: files.length, at: new Date() });
@@ -306,6 +301,27 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     );
   }
 
+  // Kontingent schon beim Öffnen ausgeschöpft (max. Dateien erreicht, Dokument ohne auto_close
+  // weiter offen): kein Formular, das jede Auswahl ablehnt und «max. 0 weitere Dateien» anzeigt.
+  if (remaining === 0) {
+    return (
+      <div className="card" role="status">
+        <h2>{t("limitReachedTitle")}</h2>
+        <p className="muted">{t("limitReached", { count: maxFiles ?? 0 })}</p>
+        <div className="upload-success-actions">
+          {singleElement ? null : (
+            <Link href={`/${linkToken}/${assignmentSlug}`} className="button">
+              {t("otherElement")}
+            </Link>
+          )}
+          <Link href={`/${linkToken}`} className="button button-outline">
+            {t("toOverview")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const captchaReady = Boolean(captchaSessionToken);
   const submitDisabled = submitting || files.length === 0;
 
@@ -361,27 +377,11 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
         </div>
       </div>
 
-      {files.length > 0 && (
-        <ul className="file-list">
-          {files.map((file, i) => {
-            const ext = fileExtension(file.name);
-            return (
-              <li key={i} className="file-item">
-                <span className={`file-ext file-ext-${extensionTone(ext)}`} aria-hidden="true">{ext || "·"}</span>
-                <span className="file-text">
-                  <span className="file-name">{file.name}</span>
-                  <span className="file-size">{formatSize(file.size)}</span>
-                </span>
-                <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label={t("removeFile")}>✕</button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <UploadFileList files={files} onRemove={removeFile} />
 
       {submitting && progress ? <UploadProgress progress={progress} /> : null}
 
-      {error && <p className="error">{error}</p>}
+      <UploadErrorMessage message={error} />
       {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
 
       {/* Nur relevant, wenn ein Bild ausgewählt ist: andere Dateien tragen keinen Standort */}
@@ -446,17 +446,4 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       </div>
     </form>
   );
-}
-
-function fileExtension(name: string): string {
-  const parts = name.split(".");
-  return parts.length > 1 ? (parts.pop() ?? "").toUpperCase().slice(0, 4) : "";
-}
-
-// Farbton des Dateityp-Kaestchens: PDF rot, Word blau, Bilder/Tabellen gruen, sonst neutral.
-function extensionTone(ext: string): "danger" | "info" | "success" | "neutral" {
-  if (ext === "PDF") return "danger";
-  if (ext === "DOC" || ext === "DOCX" || ext === "ODT") return "info";
-  if (["JPG", "JPEG", "PNG", "HEIC", "HEIF", "WEBP", "GIF", "XLS", "XLSX", "CSV", "ODS"].includes(ext)) return "success";
-  return "neutral";
 }

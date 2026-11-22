@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AbgabeboxUnavailableError, getAssignmentDetail, listAssignments } from "./api";
+import { AbgabeboxFeatureDisabledError, AbgabeboxUnavailableError, getAssignmentDetail, listAssignments, listElements } from "./api";
 
 function respond(status: number, body: unknown = {}) {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status })));
@@ -18,6 +18,12 @@ describe("Abgabebox-API (Audit MAIN-FE-012)", () => {
   it("unterscheidet das gesperrte Feature (403)", async () => {
     respond(403);
     await expect(listAssignments("tok")).resolves.toEqual({ status: "feature_disabled" });
+  });
+
+  it("meldet das gesperrte Feature auch bei Abgabe und Dokumenten (direkt geteilter Link)", async () => {
+    respond(403);
+    await expect(getAssignmentDetail("tok", "a")).rejects.toBeInstanceOf(AbgabeboxFeatureDisabledError);
+    await expect(listElements("tok", "a")).rejects.toBeInstanceOf(AbgabeboxFeatureDisabledError);
   });
 
   it.each([500, 502, 503, 429])("wirft bei voruebergehender Stoerung (%i) statt notFound", async (status) => {

@@ -90,3 +90,24 @@ class PublicIdModel(BaseModel):
             mapping = public_id_service.resolve_public_ids(db, model, internal_ids)
             values[field] = [mapping[i] for i in internal_ids if i in mapping]
         return values
+
+
+def clean_display_name(value: str | None) -> str:
+    """Anzeigename einer Person beim Anlegen/Bearbeiten: ausdrückliches null und leere bzw. nur aus
+    Leerzeichen bestehende Namen sind Eingabefehler (422). Ein leerer Name scheiterte sonst erst
+    an der Antwort-Validierung (ParticipantRead, min_length=1) - nach dem Speichern, womit auch
+    GET /participants für den ganzen Mandanten mit 500 abbrach (Bug-Bounty 2026-11-22)."""
+    if value is None:
+        raise ValueError("display_name must not be null")
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError("display_name must not be blank")
+    return cleaned
+
+
+def reject_null(value):
+    """Teil-Update: Weglassen ist erlaubt, ausdrückliches null für eine NOT-NULL-Spalte nicht
+    (sonst IntegrityError -> Eintrag im Fehlerprotokoll)."""
+    if value is None:
+        raise ValueError("must not be null")
+    return value
