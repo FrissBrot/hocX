@@ -249,9 +249,11 @@
   "richTextEditor": {
     "bold": "Bold ({shortcut})",
     "bulletList": "Bullet list",
+    "bulletListShortcut": "Bullet list ({shortcut})",
     "italic": "Italic ({shortcut})",
     "openLink": "{modifier} + click opens the link",
     "orderedList": "Numbered list",
+    "orderedListShortcut": "Numbered list ({shortcut})",
     "toolbar": "Text formatting"
   },
   "keys": {

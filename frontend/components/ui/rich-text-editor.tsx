@@ -1,6 +1,6 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, useEditorState, EditorContent } from "@tiptap/react";
 import { liftListItem } from "prosemirror-schema-list";
 import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
@@ -8,7 +8,13 @@ import { useTranslations } from "next-intl";
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
 import { Autolink } from "@/components/ui/autolink-extension";
 import { richTextMarkdownExtensions, type MarkdownStorage } from "@/components/ui/rich-text-markdown";
-import { isApplePlatform, useShortcutLabel } from "@/lib/search/shortcuts";
+import { formatCombo, type KeyNameTranslator } from "@/lib/keyboard/registry";
+import { isApplePlatform, useIsApple, useShortcutLabel } from "@/lib/search/shortcuts";
+
+// Tastenkürzel der Toolbar-Knöpfe (Tiptap-StarterKit, Mod = Strg bzw. ⌘)
+const BULLET_LIST_COMBO = "Mod+Shift+8";
+const ORDERED_LIST_COMBO = "Mod+Shift+7";
+const NO_FORMATS = { bold: false, italic: false, bulletList: false, orderedList: false };
 
 type RichTextEditorProps = {
   value: string;
@@ -25,6 +31,8 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
   const t = useTranslations("common.richTextEditor");
   const shortcut = useShortcutLabel();
   const tKeys = useTranslations("common.keys");
+  const apple = useIsApple();
+  const combo = (keys: string) => formatCombo(keys, apple, tKeys as unknown as KeyNameTranslator);
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   // Read via ref inside the tracked-changes plugin's decorations() callback so
@@ -65,6 +73,22 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
       },
     },
   });
+
+  // Aktive Formate für die Toolbar. Tiptap v3 rendert die Komponente bei Transaktionen nicht mehr
+  // neu: ohne Abo blieb «B» nach Strg/⌘+B (ohne Auswahl), nach einem Klick auf «B» oder beim
+  // Bewegen des Cursors in fetten Text unmarkiert - das Kürzel wirkte, als ginge es nicht.
+  const formats = useEditorState({
+    editor,
+    selector: ({ editor: current }) =>
+      current
+        ? {
+            bold: current.isActive("bold"),
+            italic: current.isActive("italic"),
+            bulletList: current.isActive("bulletList"),
+            orderedList: current.isActive("orderedList"),
+          }
+        : NO_FORMATS,
+  }) ?? NO_FORMATS;
 
   // Keep ref in sync
   useEffect(() => { editorRef.current = editor; }, [editor]);
@@ -136,47 +160,51 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
         <div className="rich-text-toolbar" role="toolbar" aria-label={t("toolbar")}>
           <button
             type="button"
-            className={`rich-text-btn${editor?.isActive("bold") ? " active" : ""}`}
-            aria-pressed={editor?.isActive("bold") ?? false}
+            className={`rich-text-btn${formats.bold ? " active" : ""}`}
+            aria-pressed={formats.bold}
             // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor?.chain().focus().toggleBold().run()}
             title={t("bold", { shortcut: shortcut("B") })}
+            aria-keyshortcuts="Control+B Meta+B"
           >
             <strong>B</strong>
           </button>
           <button
             type="button"
-            className={`rich-text-btn${editor?.isActive("italic") ? " active" : ""}`}
-            aria-pressed={editor?.isActive("italic") ?? false}
+            className={`rich-text-btn${formats.italic ? " active" : ""}`}
+            aria-pressed={formats.italic}
             // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor?.chain().focus().toggleItalic().run()}
             title={t("italic", { shortcut: shortcut("I") })}
+            aria-keyshortcuts="Control+I Meta+I"
           >
             <em>I</em>
           </button>
           <div className="rich-text-toolbar-sep" />
           <button
             type="button"
-            className={`rich-text-btn${editor?.isActive("bulletList") ? " active" : ""}`}
-            aria-pressed={editor?.isActive("bulletList") ?? false}
+            className={`rich-text-btn${formats.bulletList ? " active" : ""}`}
+            aria-pressed={formats.bulletList}
             // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor?.chain().focus().toggleBulletList().run()}
-            title={t("bulletList")}
+            title={t("bulletListShortcut", { shortcut: combo(BULLET_LIST_COMBO) })}
+            aria-keyshortcuts="Control+Shift+8 Meta+Shift+8"
             aria-label={t("bulletList")}
           >
             ≡
           </button>
           <button
             type="button"
-            className={`rich-text-btn${editor?.isActive("orderedList") ? " active" : ""}`}
-            aria-pressed={editor?.isActive("orderedList") ?? false}
+            className={`rich-text-btn${formats.orderedList ? " active" : ""}`}
+            aria-pressed={formats.orderedList}
             // Maus: Fokus bleibt im Text (mousedown), ausgelöst wird per click - so auch mit Enter/Leertaste
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-            title={t("orderedList")}
+            title={t("orderedListShortcut", { shortcut: combo(ORDERED_LIST_COMBO) })}
+            aria-keyshortcuts="Control+Shift+7 Meta+Shift+7"
             aria-label={t("orderedList")}
           >
             1≡

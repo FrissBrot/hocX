@@ -249,9 +249,11 @@
   "richTextEditor": {
     "bold": "Grassetto ({shortcut})",
     "bulletList": "Elenco puntato",
+    "bulletListShortcut": "Elenco puntato ({shortcut})",
     "italic": "Corsivo ({shortcut})",
     "openLink": "{modifier} + clic apre il link",
     "orderedList": "Elenco numerato",
+    "orderedListShortcut": "Elenco numerato ({shortcut})",
     "toolbar": "Formattazione"
   },
   "keys": {

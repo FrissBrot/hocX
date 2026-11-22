@@ -249,9 +249,11 @@
   "richTextEditor": {
     "bold": "Gras ({shortcut})",
     "bulletList": "Liste à puces",
+    "bulletListShortcut": "Liste à puces ({shortcut})",
     "italic": "Italique ({shortcut})",
     "openLink": "{modifier} + clic ouvre le lien",
     "orderedList": "Liste numérotée",
+    "orderedListShortcut": "Liste numérotée ({shortcut})",
     "toolbar": "Mise en forme"
   },
   "keys": {
