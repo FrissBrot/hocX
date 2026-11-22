@@ -4,10 +4,10 @@ import uuid
 from datetime import date, datetime
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.entities import Tenant
-from app.schemas.base import PublicIdModel
+from app.schemas.base import PublicIdModel, clean_display_name, reject_null
 from app.schemas.role import RoleRef
 
 
@@ -28,7 +28,7 @@ class ParticipantBase(BaseModel):
 
 
 class ParticipantCreate(ParticipantBase):
-    pass
+    _clean_display_name = field_validator("display_name")(clean_display_name)
 
 
 class ParticipantUpdate(BaseModel):
@@ -45,6 +45,9 @@ class ParticipantUpdate(BaseModel):
     left_at: date | None = None
     # E-Mail-Benachrichtigungen für Personen ohne Login (Migration 0170) - nur der Admin schaltet sie ein.
     notify_without_login: bool | None = None
+
+    _clean_display_name = field_validator("display_name")(clean_display_name)
+    _reject_null = field_validator("is_active")(reject_null)
 
     @model_validator(mode="after")
     def _check_date_order(self) -> "ParticipantUpdate":
