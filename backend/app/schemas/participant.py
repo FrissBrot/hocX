@@ -87,17 +87,23 @@ class ParticipantImportResult(BaseModel):
     errors: list[str]
 
 
+# Obergrenze für ID-Listen ohne eigene Grenze: so viele Personen, wie GET /participants höchstens
+# liefert (limit le=2000). Ohne Grenze sprengten > 65 535 IDs die Parametergrenze von PostgreSQL
+# in resolve_internal_ids (500 statt 422, Bug-Bounty 2026-11-22).
+MAX_PARTICIPANT_ID_LIST = 2000
+
+
 class TemplateParticipantAssignmentUpdate(BaseModel):
-    participant_ids: list[uuid.UUID] = Field(default_factory=list)
-    participants: list[TemplateParticipantAssignment] | None = None
+    participant_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_PARTICIPANT_ID_LIST)
+    participants: list[TemplateParticipantAssignment] | None = Field(default=None, max_length=MAX_PARTICIPANT_ID_LIST)
 
 
 class ParticipantTemplateAssignmentUpdate(BaseModel):
-    template_ids: list[uuid.UUID]
+    template_ids: list[uuid.UUID] = Field(max_length=MAX_PARTICIPANT_ID_LIST)
 
 
 class ParticipantBulkDelete(BaseModel):
-    participant_ids: list[uuid.UUID]
+    participant_ids: list[uuid.UUID] = Field(max_length=MAX_PARTICIPANT_ID_LIST)
 
 
 class ParticipantInviteRead(BaseModel):
