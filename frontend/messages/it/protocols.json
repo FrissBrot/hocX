@@ -270,7 +270,28 @@
     "workflowHelpTopic": "Stato e modalità di lavoro",
     "workflowHelp": "Quattro passi: pianificato (preparazione), preparato (seduta), svolto (rielaborazione), concluso. La finalizzazione congela il verbale, genera il PDF firmato e avvisa i responsabili dei compiti aperti.",
     "trackChangesHelpTopic": "Traccia modifiche",
-    "trackChangesHelp": "Durante la preparazione segna in rosso ciò che è cambiato rispetto all’ultimo verbale finalizzato di questo modello. Dalla seduta non si aggiungono nuovi segni; alla finalizzazione spariscono tutti."
+    "trackChangesHelp": "Durante la preparazione segna in rosso ciò che è cambiato rispetto all’ultimo verbale finalizzato di questo modello. Dalla seduta non si aggiungono nuovi segni; alla finalizzazione spariscono tutti.",
+    "header": {
+      "back": "Torna ai verbali",
+      "created": "Creato il {date}",
+      "templateVersion": "Modello v{version, number}",
+      "searchLabel": "Cerca nel verbale …",
+      "searchAria": "Cerca nel verbale ({shortcut})",
+      "exportMenu": "Esporta",
+      "openPdf": "Apri PDF",
+      "pdfBusy": "Creazione PDF …",
+      "exportDialog": "Esporta …",
+      "moreMenu": "Altre azioni",
+      "workflowHelpItem": "Aiuto sul flusso",
+      "workflowLabel": "Flusso del verbale",
+      "stepPlanned": "Pianificato · Preparazione",
+      "stepSession": "Seduta",
+      "stepPostProcessing": "Rielaborazione",
+      "stepDone": "Concluso",
+      "stepDoneHint": "completato",
+      "templateReload": "Ricarica",
+      "trackChanges": "Traccia modifiche"
+    }
   },
   "embeddedBlock": {
     "attendance": "Presenza",

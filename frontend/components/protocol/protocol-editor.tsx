@@ -1,6 +1,5 @@
 "use client";
 
-import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { announce } from "@/lib/a11y/announce";
 import { reorderKeyDown } from "@/lib/a11y/reorder";
@@ -10,8 +9,7 @@ import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
 import { mergeEventPatches } from "@/lib/utils/event-patch";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
-import { formatDateTime } from "@/lib/utils/format";
+import { useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
@@ -21,24 +19,21 @@ import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-
 import type { QuickTodoFineAccess } from "@/components/protocol/quick-todo-fine";
 import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submission-from-todo";
 import { Modal } from "@/components/ui/modal";
-import { HelpPopover } from "@/components/ui/help-popover";
-import { Badge } from "@/components/ui/badge";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
 import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
+import { ProtocolHeader } from "@/components/protocol/protocol-header";
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { useStableCallbacks } from "@/lib/hooks/use-stable-callbacks";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
-import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
-import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import { templateChangedSinceSync, useTemplateSync } from "@/components/protocol/use-template-sync";
 import {
   AttendanceFine,
@@ -63,8 +58,6 @@ import {
 import {
   ProtocolEventDraft,
   TODO_STATUS,
-  TodoMenuOption,
-  TodoMiniMenu,
   createProtocolEventDraft,
   protocolStatusLabel,
   resequenceProtocolElements,
@@ -161,12 +154,10 @@ export function ProtocolEditor({
   useEffect(() => setReducedMotion(prefersReducedMotion()), []);
   const wheelActive = wheelEnabled && accordionEnabled && !reducedMotion;
   const t = useTranslations("protocols.editor");
-  const shortcut = useShortcutLabel();
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
   const tCommon = useTranslations("common");
   const tKeyboard = useTranslations("common.keyboard");
-  const locale = useLocale();
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
@@ -2187,87 +2178,33 @@ export function ProtocolEditor({
     <ParticipantDirectoryContext.Provider value={directoryWithSnapshotNames}>
     {/* data-own-find: Ctrl+F öffnet hier die Kapitelsuche des Editors, nicht die Listensuche der Shell */}
     <div className="grid" ref={editorRef} data-own-find>
-      <div className="protocol-document-header">
-        <a href="/protocols" className="button-secondary protocol-document-back">{t("backToProtocols")}</a>
-        <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
-          {protocolStatusLabel(protocolStatus, tRoot)}
-        </Badge>
-        <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
-        <div className="protocol-document-actions">
-          <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
-            {t("searchButton")} <span className="dropdown-hint">{t("ctrlFHint", { shortcut: shortcut("F") })}</span>
-          </button>
-          <button
-            type="button"
-            className="button-ghost"
-            disabled={pdfBusyByProtocol[protocol.id]}
-            onClick={() => openOrGeneratePdf(protocol)}
-          >
-            {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
-          </button>
-          <DocumentExportButton className="button-ghost" context={{ documentType: "protocol", protocolId: protocol.id }} />
-          {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
-            <button
-              type="button"
-              className="button-primary"
-              disabled={transitioningStatus}
-              onClick={() => void transitionStatus()}
-            >
-              {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="status-row">
-        <span className="pill">{protocol.protocol_number}</span>
-        <span className="pill">
-          {workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}{" "}
-          <HelpPopover topic={t("workflowHelpTopic")} docs={{ page: "protokolle", anchor: "status" }}>
-            {t("workflowHelp")}
-          </HelpPopover>
-        </span>
-        {protocol.created_at && (
-          <span className="pill">{t("createdAtPill", { date: formatDateTime(protocol.created_at, locale) })}</span>
-        )}
-        {protocol.template_version != null && (
-          <span className="pill">{t("templateVersionPill", { version: protocol.template_version })}</span>
-        )}
-        {/* Vorlage seit Erstellen/letztem Abgleich geändert: nur solange noch nicht durchgeführt */}
-        {!isReadOnly && templateChangedSinceSync({ ...protocol, status: protocolStatus }) && (
-          <>
-            <Badge variant="warning">{t("templateChangedHint")}</Badge>
-            <button type="button" className="button-secondary" disabled={templateSyncing} onClick={() => void reloadFromTemplate()}>
-              {t("templateChangedReload")}
-            </button>
-          </>
-        )}
-        {protocol.import_source_url && (
-          <a
-            className="pill"
-            href={protocol.import_source_url}
-            title={protocol.import_source_filename ?? undefined}
-          >
-            {t("openOriginalDocument")}
-          </a>
-        )}
-        {protocolStatus === "geplant" && !isReadOnly && (
-          <HelpPopover topic={t("trackChangesHelpTopic")} docs={{ page: "protokolle", anchor: "nachverfolgen" }}>
-            {t("trackChangesHelp")}
-          </HelpPopover>
-        )}
-        {protocolStatus === "geplant" && !isReadOnly && (
-          <TodoMiniMenu label={trackChangesEnabled ? t("trackChangesOn") : t("trackChangesOff")} compact>
-            {(close) => (
-              <>
-                <TodoMenuOption label={t("onLabel")} active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
-                <TodoMenuOption label={t("offLabel")} active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
-              </>
-            )}
-          </TodoMiniMenu>
-        )}
-        <CollaborationPresenceBar users={collab.otherPresence} connected={collab.connected} />
-      </div>
+      <ProtocolHeader
+        title={protocol.title || protocol.protocol_number}
+        protocolNumber={protocol.protocol_number}
+        createdAt={protocol.created_at}
+        templateVersion={protocol.template_version}
+        status={protocolStatus}
+        isReadOnly={isReadOnly}
+        ctaLabel={!isReadOnly ? workflowMeta[protocolStatus]?.ctaLabel || undefined : undefined}
+        ctaBusy={transitioningStatus}
+        onCta={() => void transitionStatus()}
+        trackChanges={{
+          visible: protocolStatus === "geplant" && !isReadOnly,
+          enabled: trackChangesEnabled,
+          onChange: (enabled) => void setTrackChangesEnabled(enabled),
+        }}
+        // Vorlage seit Erstellen/letztem Abgleich geändert: nur solange noch nicht durchgeführt
+        templateChange={{
+          visible: !isReadOnly && templateChangedSinceSync({ ...protocol, status: protocolStatus }),
+          busy: templateSyncing,
+          onReload: () => void reloadFromTemplate(),
+        }}
+        importSource={protocol.import_source_url ? { url: protocol.import_source_url, filename: protocol.import_source_filename } : null}
+        onOpenSearch={() => setSearchOpen(true)}
+        pdf={{ busy: !!pdfBusyByProtocol[protocol.id], onOpen: () => openOrGeneratePdf(protocol) }}
+        protocolId={protocol.id}
+        presence={<CollaborationPresenceBar users={collab.otherPresence} connected={collab.connected} />}
+      />
 
       <Modal
         open={showStatusChangeWarning}

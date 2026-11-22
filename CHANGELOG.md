@@ -21,6 +21,13 @@ Installationen aktualisieren können.
   nicht gespeichert). Pendenzen: erledigte durchgestrichen an ihrer Stelle, Fälligkeit farbig
   (rot überfällig, gelb innerhalb von 14 Tagen wie in der Pendenzen-Übersicht), Fortschritt in %,
   Zähler an den Tag-Filtern und Initialen bei den Zuständigen.
+- **Protokoll-Editor: neuer Kopf mit Workflow-Leiste.** Oben Zurück-Symbol, Titel und Meta-Zeile
+  (Protokollnummer · Erstellt · Vorlage vN), Suchfeld-Knopf mit Tastenkürzel, Export-Menü («PDF
+  öffnen», «Exportieren …») und «⋯» («Original-Dokument öffnen», «Hilfe zum Ablauf»). Darunter die
+  vier Schritte (Geplant · Vorbereitung, Sitzung, Nachbearbeitung, Abgeschlossen; nur Anzeige),
+  der Hinweis «Vorlage wurde geändert» mit «Neu laden», der Schalter «Nachverfolgen» (statt
+  An/Aus-Menü) und der Hauptknopf. Abläufe, Bedingungen und Rückfragen beim Statuswechsel sind
+  unverändert.
 
 ## [1.5.1] - 2026-11-22
 

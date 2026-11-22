@@ -6562,10 +6562,6 @@ button.table-row-link.table-row-toggle {
     padding: var(--space-3) var(--space-4);
   }
 
-  .protocol-document-actions button {
-    min-height: 40px;
-    padding-block: var(--space-2);
-  }
 }
 
 @keyframes protocol-editor-zoom-out {

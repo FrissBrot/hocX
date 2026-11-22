@@ -270,7 +270,28 @@
     "workflowHelpTopic": "Status und Arbeitsmodus",
     "workflowHelp": "Vier Schritte: geplant (Vorbereitung), vorbereitet (Sitzung), durchgeführt (Nachbearbeitung), abgeschlossen. Beim Abschliessen wird das Protokoll eingefroren, das signierte PDF erzeugt und die Verantwortlichen offener Pendenzen werden benachrichtigt.",
     "trackChangesHelpTopic": "Änderungen nachverfolgen",
-    "trackChangesHelp": "Markiert in der Vorbereitung rot, was sich gegenüber dem letzten abgeschlossenen Protokoll dieser Vorlage geändert hat. Ab der Sitzung kommen keine neuen Markierungen dazu; beim Abschliessen verschwinden alle."
+    "trackChangesHelp": "Markiert in der Vorbereitung rot, was sich gegenüber dem letzten abgeschlossenen Protokoll dieser Vorlage geändert hat. Ab der Sitzung kommen keine neuen Markierungen dazu; beim Abschliessen verschwinden alle.",
+    "header": {
+      "back": "Zurück zu den Protokollen",
+      "created": "Erstellt {date}",
+      "templateVersion": "Vorlage v{version, number}",
+      "searchLabel": "Im Protokoll suchen …",
+      "searchAria": "Im Protokoll suchen ({shortcut})",
+      "exportMenu": "Exportieren",
+      "openPdf": "PDF öffnen",
+      "pdfBusy": "PDF wird erstellt …",
+      "exportDialog": "Exportieren …",
+      "moreMenu": "Weitere Aktionen",
+      "workflowHelpItem": "Hilfe zum Ablauf",
+      "workflowLabel": "Ablauf des Protokolls",
+      "stepPlanned": "Geplant · Vorbereitung",
+      "stepSession": "Sitzung",
+      "stepPostProcessing": "Nachbearbeitung",
+      "stepDone": "Abgeschlossen",
+      "stepDoneHint": "erledigt",
+      "templateReload": "Neu laden",
+      "trackChanges": "Nachverfolgen"
+    }
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",

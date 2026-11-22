@@ -270,7 +270,28 @@
     "workflowHelpTopic": "Statut et mode de travail",
     "workflowHelp": "Quatre étapes : planifié (préparation), préparé (séance), tenu (post-traitement), terminé. La finalisation fige le procès-verbal, génère le PDF signé et avertit les responsables des tâches ouvertes.",
     "trackChangesHelpTopic": "Suivi des modifications",
-    "trackChangesHelp": "Pendant la préparation, marque en rouge ce qui a changé par rapport au dernier procès-verbal finalisé de ce modèle. Dès la séance, aucune nouvelle marque n’est ajoutée ; toutes disparaissent à la finalisation."
+    "trackChangesHelp": "Pendant la préparation, marque en rouge ce qui a changé par rapport au dernier procès-verbal finalisé de ce modèle. Dès la séance, aucune nouvelle marque n’est ajoutée ; toutes disparaissent à la finalisation.",
+    "header": {
+      "back": "Retour aux procès-verbaux",
+      "created": "Créé le {date}",
+      "templateVersion": "Modèle v{version, number}",
+      "searchLabel": "Rechercher dans le procès-verbal …",
+      "searchAria": "Rechercher dans le procès-verbal ({shortcut})",
+      "exportMenu": "Exporter",
+      "openPdf": "Ouvrir le PDF",
+      "pdfBusy": "Création du PDF …",
+      "exportDialog": "Exporter …",
+      "moreMenu": "Autres actions",
+      "workflowHelpItem": "Aide sur le déroulement",
+      "workflowLabel": "Déroulement du procès-verbal",
+      "stepPlanned": "Planifié · Préparation",
+      "stepSession": "Séance",
+      "stepPostProcessing": "Finalisation",
+      "stepDone": "Clôturé",
+      "stepDoneHint": "terminé",
+      "templateReload": "Recharger",
+      "trackChanges": "Suivre les modifications"
+    }
   },
   "embeddedBlock": {
     "attendance": "Présence",

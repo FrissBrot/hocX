@@ -270,7 +270,28 @@
     "workflowHelpTopic": "Status and working mode",
     "workflowHelp": "Four steps: planned (preparation), prepared (session), held (post-processing), completed. Finishing freezes the minutes, creates the signed PDF and notifies the people responsible for open to-dos.",
     "trackChangesHelpTopic": "Track changes",
-    "trackChangesHelp": "During preparation, marks in red what has changed compared to the last finished minutes of this template. From the session on no new marks are added; all of them disappear when the minutes are finished."
+    "trackChangesHelp": "During preparation, marks in red what has changed compared to the last finished minutes of this template. From the session on no new marks are added; all of them disappear when the minutes are finished.",
+    "header": {
+      "back": "Back to minutes",
+      "created": "Created {date}",
+      "templateVersion": "Template v{version, number}",
+      "searchLabel": "Search in minutes …",
+      "searchAria": "Search in minutes ({shortcut})",
+      "exportMenu": "Export",
+      "openPdf": "Open PDF",
+      "pdfBusy": "Creating PDF …",
+      "exportDialog": "Export …",
+      "moreMenu": "More actions",
+      "workflowHelpItem": "Help on the workflow",
+      "workflowLabel": "Minutes workflow",
+      "stepPlanned": "Planned · Preparation",
+      "stepSession": "Meeting",
+      "stepPostProcessing": "Follow-up",
+      "stepDone": "Completed",
+      "stepDoneHint": "done",
+      "templateReload": "Reload",
+      "trackChanges": "Track changes"
+    }
   },
   "embeddedBlock": {
     "attendance": "Attendance",
