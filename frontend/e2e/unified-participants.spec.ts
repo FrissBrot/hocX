@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 
 // Konzept «Personen an einem Ort»: Login und Stammdaten einer Person auf der Personenseite.
 test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", async ({ request, page }) => {
+  // Erstkompilierung der Detailroute und ggf. «Identität bestätigen» brauchen im vollen Lauf mehr als 45 s
+  test.setTimeout(90_000);
   const name = `Identität ${Date.now()}`;
   const response = await request.post("/api/participants", {
     data: { display_name: name, email: `identity-${Date.now()}@example.invalid` },
