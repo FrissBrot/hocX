@@ -61,6 +61,11 @@ identische Bilder werden gespeichert und nur mit einem Hinweis gemeldet. Ein Fot
 der [Virenprüfung](#virenpruefung) gesperrt ist, zählt nicht als vorhanden – du kannst es
 einfach erneut hochladen.
 
+**Nach dem Upload:** Jeder Upload erscheint im [Upload-Verlauf](upload-verlauf.md). Über
+**Bearbeiten** in der Zusammenfassung oder **Uploads** im Seitenkopf bearbeitest du alle Fotos eines
+Uploads auf einmal (Tags, Album, Termin, Aufnahmedatum) und verschiebst die Zeit einer falsch
+gestellten Kamera – mit Vorschau und Rückgängig.
+
 ## Virenprüfung {#virenpruefung}
 
 Jede hochgeladene Datei wird auf Schadsoftware geprüft, bevor sie überall sichtbar ist. In der

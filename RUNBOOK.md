@@ -1384,3 +1384,25 @@ Einstellungen › Sicherheit & Anmeldungen (`/tenant-settings/security`, API `/a
 **Rechte-Übersicht:** `permissions/route-map.json` führt für Plattform-Routen `admin_level`
 (A = jeder Admin, W = owner schreibend, O = owner lesend) und `step_up` (Passkey-Zweck). Eine
 Herabstufung erscheint im Diff und gehört begründet in die Commit-Nachricht.
+
+## 25. Upload-Verlauf (1.6)
+
+Migrationen `0250_upload_history`, `0251_capture_change_batches`, `0252_upload_history_abgabebox`
+(Tabellen mit RLS, Spalten an `stored_file`/`gallery_upload_job`, zwei Trigger mit SECURITY
+DEFINER). Kein neues Secret, keine neue Einstellung, kein neuer periodischer Job (verlassene Vorgänge
+schliesst `log_cleanup`). Technik: `docs-site/docs/technik/upload-verlauf.md`.
+
+**Einmal nach dem Update:** Altbestand rekonstruieren (idempotent, je Mandant kurze Transaktionen,
+Ausgabe nur Zählungen; darf jederzeit wiederholt oder abgebrochen werden):
+
+```bash
+docker compose -p <projekt> <compose-dateien> exec -T backend python -m app.workers.upload_history_backfill
+# nur ein Mandant:
+docker compose -p <projekt> <compose-dateien> exec -T backend python -m app.workers.upload_history_backfill --tenant <tenant-public-id>
+```
+
+Ohne diesen Lauf funktioniert alles; ältere Dateien zeigen dann keinen Upload-Vorgang und lassen sich
+nicht über den Verlauf als Ganzes bearbeiten. Last: liest nur Datenbankzeilen (keine Dateien aus S3).
+
+**Kamera-Kürzel:** abgeleitet aus `ADMIN_AUTH_SECRET` (HKDF je Mandant). Wird dieses Secret gewechselt,
+erscheinen ältere und neuere Fotos derselben Kamera als zwei Geräte; sonst keine Folgen.
