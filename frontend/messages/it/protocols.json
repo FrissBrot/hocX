@@ -649,5 +649,19 @@
   "elementPointNumber": "Punto {number}",
   "participantPickerSelected": "{count, plural, one {# selezionato} other {# selezionati}}",
   "participantPickerVisible": "{count} visibili",
-  "todoActions": "Azioni dell'attività"
+  "todoActions": "Azioni dell'attività",
+  "tables": {
+    "eventUntil": "fino al {date}",
+    "eventSummary": "{upcoming} in arrivo · {past} passati",
+    "eventFilterAll": "Tutti",
+    "eventFilterUpcoming": "In arrivo",
+    "eventSeparatorFrom": "Dalla seduta",
+    "eventSeparatorFromDate": "Dalla seduta del {date}",
+    "eventSeparatorBefore": "Prima della seduta",
+    "eventSeparatorBeforeDate": "Prima della seduta del {date}",
+    "todoOverdue": "scaduta",
+    "todoDueSoon": "in scadenza",
+    "todoProgress": "{done} di {total} completate",
+    "todoProgressPercent": "{done} di {total} completate · {percent}%"
+  }
 }

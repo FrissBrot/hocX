@@ -1597,6 +1597,159 @@
   text-decoration: line-through;
 }
 
+/* ── Terminliste im Protokoll (Design «Termine, Listen & Pendenzen») ──
+   Nur der Anzeigezweig im Protokoll-Editor trägt .protocol-event-*; Matrix, Stammlisten und
+   die Terminübersicht nutzen weiter die gemeinsamen .event-table-Regeln. */
+.protocol-event-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.protocol-event-summary {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.protocol-event-wrap.event-table-wrap-scrollable {
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.protocol-event-table td {
+  vertical-align: middle;
+}
+
+.protocol-event-table .protocol-event-date-col {
+  width: 1%;
+}
+
+.protocol-event-date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.protocol-event-tile {
+  --protocol-event-tile-color: var(--accent);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  width: 48px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  line-height: 1.15;
+}
+
+.protocol-event-tile-month {
+  align-self: stretch;
+  padding: 1px 0;
+  background: color-mix(in srgb, var(--protocol-event-tile-color) 26%, var(--panel-solid));
+  color: color-mix(in srgb, var(--protocol-event-tile-color) 62%, var(--text));
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.protocol-event-tile-day {
+  padding-top: 2px;
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.protocol-event-tile-weekday {
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.protocol-event-until {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.protocol-event-title-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.protocol-event-title {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.protocol-event-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.protocol-event-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.protocol-event-tag-dot {
+  --protocol-event-tile-color: var(--border-strong);
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--protocol-event-tile-color);
+}
+
+.protocol-event-table tbody tr.protocol-event-separator td,
+.protocol-event-table tbody tr.protocol-event-separator:hover td {
+  padding: var(--space-1) var(--space-3);
+  background: var(--accent-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.protocol-event-separator-label {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-row-cancelled .protocol-event-tile,
+.event-row-cancelled .protocol-event-tags {
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .protocol-event-toolbar .filter-tabs {
+    width: 100%;
+  }
+
+  .protocol-event-date {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .protocol-event-wrap.event-table-wrap-scrollable {
+    max-height: 60vh;
+  }
+}
+
 /* ── Matrix im Protokoll-Editor (Design «Protokoll-Editor v2», matrix-board.tsx) ── */
 .matrix-board {
   display: grid;

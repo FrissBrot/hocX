@@ -649,5 +649,19 @@
   "elementPointNumber": "Punkt {number}",
   "participantPickerSelected": "{count} ausgewählt",
   "participantPickerVisible": "{count} sichtbar",
-  "todoActions": "Aktionen zur Pendenz"
+  "todoActions": "Aktionen zur Pendenz",
+  "tables": {
+    "eventUntil": "bis {date}",
+    "eventSummary": "{upcoming} kommend · {past} vergangen",
+    "eventFilterAll": "Alle",
+    "eventFilterUpcoming": "Kommend",
+    "eventSeparatorFrom": "Ab Sitzung",
+    "eventSeparatorFromDate": "Ab Sitzung vom {date}",
+    "eventSeparatorBefore": "Vor der Sitzung",
+    "eventSeparatorBeforeDate": "Vor der Sitzung vom {date}",
+    "todoOverdue": "überfällig",
+    "todoDueSoon": "bald fällig",
+    "todoProgress": "{done} von {total} erledigt",
+    "todoProgressPercent": "{done} von {total} erledigt · {percent} %"
+  }
 }

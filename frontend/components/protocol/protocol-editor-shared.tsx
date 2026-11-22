@@ -536,11 +536,17 @@ export function TodoMiniMenu({
   label,
   compact = false,
   align = "start",
+  triggerClassName,
+  leading,
   children,
 }: {
   label: string;
   compact?: boolean;
   align?: "start" | "end";
+  /** Zusatzklasse am Auslöser, z. B. Fälligkeitsfarbe (todo-due-trigger-overdue) */
+  triggerClassName?: string;
+  /** Vor dem Text im Auslöser, z. B. Screenreader-Hinweis «überfällig» */
+  leading?: ReactNode;
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -561,11 +567,12 @@ export function TodoMiniMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={`mini-menu-trigger${open ? " mini-menu-trigger-open" : ""}`}
+        className={`mini-menu-trigger${open ? " mini-menu-trigger-open" : ""}${triggerClassName ? ` ${triggerClassName}` : ""}`}
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
       >
+        {leading}
         <span className="mini-menu-trigger-label">{label}</span>
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>

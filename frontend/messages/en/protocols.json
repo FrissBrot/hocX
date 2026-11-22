@@ -649,5 +649,19 @@
   "elementPointNumber": "Item {number}",
   "participantPickerSelected": "{count} selected",
   "participantPickerVisible": "{count} visible",
-  "todoActions": "Todo actions"
+  "todoActions": "Todo actions",
+  "tables": {
+    "eventUntil": "until {date}",
+    "eventSummary": "{upcoming} upcoming · {past} past",
+    "eventFilterAll": "All",
+    "eventFilterUpcoming": "Upcoming",
+    "eventSeparatorFrom": "From this meeting",
+    "eventSeparatorFromDate": "From the meeting on {date}",
+    "eventSeparatorBefore": "Before this meeting",
+    "eventSeparatorBeforeDate": "Before the meeting on {date}",
+    "todoOverdue": "overdue",
+    "todoDueSoon": "due soon",
+    "todoProgress": "{done} of {total} done",
+    "todoProgressPercent": "{done} of {total} done · {percent}%"
+  }
 }

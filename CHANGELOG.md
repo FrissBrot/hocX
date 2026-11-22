@@ -8,6 +8,20 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **Protokoll-Editor: Termine, Listen und Pendenzen im neuen Design** (nur Darstellung, keine Migration,
+  PDF unverändert). Terminlisten zeigen das Datum als Kalender-Kachel (Monatsband in der Tag-Farbe,
+  Tag, Wochentag), den Tag als farbigen Punkt unter dem Titel, eine Zusammenfassung «X kommend ·
+  Y vergangen», eine Trennzeile «Ab Sitzung vom …» und – nur wenn vergangene Termine vorhanden
+  sind – den Umschalter «Alle/Kommend» (reine Ansicht, Vorlage bleibt). Die Kopfzeile ist immer
+  fixiert; Spaltenwahl, «Vergangene ausgrauen», Zeilen in Tag-Farbe und «Abgesagt» bleiben.
+  Stammlisten-Tabellen zeigen den Status (offen/neu/geändert/entfernt) als Pille, haben ein
+  Suchfeld und lassen sich per Spaltenkopf sortieren (auf, ab, zurück zur Vorlagen-Reihenfolge –
+  nicht gespeichert). Pendenzen: erledigte durchgestrichen an ihrer Stelle, Fälligkeit farbig
+  (rot überfällig, gelb innerhalb von 14 Tagen wie in der Pendenzen-Übersicht), Fortschritt in %,
+  Zähler an den Tag-Filtern und Initialen bei den Zuständigen.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,

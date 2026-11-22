@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { KeyboardEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
@@ -23,6 +23,8 @@ type Props<Id extends string | number> = {
    * ("Niemand") but callers reusing this as a generic searchable dropdown (e.g. picking
    * an existing record vs. creating a new one) pass their own, e.g. "Neu anlegen". */
   nullLabel?: string;
+  /** Vor dem Namen im Auslöser, z. B. Avatar mit Initialen (Pendenzen im Protokoll) */
+  leading?: ReactNode;
 };
 
 export function TodoAssigneeMenu<Id extends string | number = number>({
@@ -32,6 +34,7 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
   activeId,
   onChange,
   nullLabel,
+  leading,
 }: Props<Id>) {
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("todos");
@@ -101,6 +104,7 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
+        {leading}
         <span className="mini-menu-trigger-label">{label}</span>
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>

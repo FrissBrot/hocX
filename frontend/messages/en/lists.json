@@ -136,7 +136,16 @@
       "removedPerson": "Removed",
       "source": "Rows come from Master data › Master lists › {name}",
       "legendNew": "New",
-      "legendRemoved": "Removed"
+      "legendRemoved": "Removed",
+      "sortAsc": "Sort ascending",
+      "sortDesc": "Sort descending",
+      "sortReset": "Restore template order",
+      "searchPlaceholder": "Search in “{name}”",
+      "searchClear": "Clear search",
+      "statusOpen": "Open",
+      "statusAdded": "New",
+      "statusChanged": "Changed",
+      "statusRemoved": "Removed"
     }
   },
   "inactive": "inactive",

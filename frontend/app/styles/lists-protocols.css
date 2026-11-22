@@ -189,8 +189,23 @@
 
 .linked-list-legend { display: inline-flex; gap: var(--space-3); }
 
+/* Suche und Ansichts-Sortierung (nur Anzeige, Design «Termine, Listen & Pendenzen») */
+.linked-list-search { flex: 0 1 240px; margin-left: auto; }
+
+.linked-list-sort { --button-bg: transparent; --button-hover-bg: transparent; display: inline-flex; align-items: center; gap: var(--space-1); min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs); background: var(--button-bg); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+
+.linked-list-sort:hover { color: var(--text); }
+
+.linked-list-sort-mark { color: var(--border-strong); font-size: var(--text-xs); }
+
+.linked-list-sort-active, .linked-list-sort-active .linked-list-sort-mark { color: var(--accent); }
+
+.linked-list-status { display: inline-flex; margin-left: var(--space-2); vertical-align: middle; font-weight: 400; }
+
 @media (max-width: 640px) {
   .linked-list-summary .filter-tabs { width: 100%; }
+  .linked-list-search { flex: 1 1 100%; margin-left: 0; }
+  .linked-list-status { margin-left: 0; margin-top: var(--space-1); display: flex; }
   .linked-list-table th, .linked-list-table td { padding: var(--space-2) var(--space-3); }
   .linked-list-label { width: 38%; }
 }

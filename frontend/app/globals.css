@@ -4235,6 +4235,116 @@ button.table-row-link.table-row-toggle {
   font-size: var(--text-xs);
 }
 
+/* Erledigte Pendenzen im Protokoll: durchgestrichen, Position bleibt (sort_index) */
+.todo-card-strike .todo-input,
+.todo-card-strike .todo-task-text {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+.todo-card-strike .todo-input {
+  color: var(--muted);
+}
+
+/* Fortschritt «X von Y erledigt» */
+.todo-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.todo-progress-track {
+  flex: 1 1 160px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+}
+
+.todo-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.todo-progress-count {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.tag-filter-chip-count {
+  margin-left: var(--space-1);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-filter-chip-active .tag-filter-chip-count {
+  color: inherit;
+}
+
+/* Fälligkeits-Badge: Auslöser des Fälligkeitsmenüs, Farbe wie in der Pendenzen-Übersicht */
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger {
+  border-radius: var(--radius-pill);
+}
+
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger-overdue,
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger-overdue:hover {
+  --button-bg: var(--danger-bg);
+  --button-hover-bg: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger-fg);
+}
+
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger-soon,
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger-soon:hover {
+  --button-bg: var(--warning-bg);
+  --button-hover-bg: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  color: var(--warning-fg);
+}
+
+.todo-due-trigger-overdue .mini-menu-trigger-icon,
+.todo-due-trigger-soon .mini-menu-trigger-icon {
+  color: inherit;
+}
+
+.todo-due-tone-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.todo-assignee-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.todo-inline-meta .mini-menu-trigger:has(.todo-assignee-avatar),
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger {
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+.todo-inline-meta .mini-menu-trigger:has(.todo-assignee-avatar) .mini-menu-trigger-icon,
+.todo-inline-meta .mini-menu-trigger.todo-due-trigger .mini-menu-trigger-icon {
+  margin-left: auto;
+}
+
+
 .mini-menu {
   position: relative;
   min-width: 0;

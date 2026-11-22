@@ -136,7 +136,16 @@
       "removedPerson": "Entfernt",
       "source": "Zeilen kommen aus Stammdaten › Stammlisten › {name}",
       "legendNew": "Neu",
-      "legendRemoved": "Entfernt"
+      "legendRemoved": "Entfernt",
+      "sortAsc": "Aufsteigend sortieren",
+      "sortDesc": "Absteigend sortieren",
+      "sortReset": "Reihenfolge der Vorlage wiederherstellen",
+      "searchPlaceholder": "In «{name}» suchen",
+      "searchClear": "Suche leeren",
+      "statusOpen": "Offen",
+      "statusAdded": "Neu",
+      "statusChanged": "Geändert",
+      "statusRemoved": "Entfernt"
     }
   },
   "inactive": "inaktiv",

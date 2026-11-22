@@ -649,5 +649,19 @@
   "elementPointNumber": "Point {number}",
   "participantPickerSelected": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
   "participantPickerVisible": "{count, plural, one {# visible} other {# visibles}}",
-  "todoActions": "Actions de la tâche"
+  "todoActions": "Actions de la tâche",
+  "tables": {
+    "eventUntil": "jusqu’au {date}",
+    "eventSummary": "{upcoming} à venir · {past} passés",
+    "eventFilterAll": "Tous",
+    "eventFilterUpcoming": "À venir",
+    "eventSeparatorFrom": "À partir de la séance",
+    "eventSeparatorFromDate": "À partir de la séance du {date}",
+    "eventSeparatorBefore": "Avant la séance",
+    "eventSeparatorBeforeDate": "Avant la séance du {date}",
+    "todoOverdue": "en retard",
+    "todoDueSoon": "bientôt échue",
+    "todoProgress": "{done} sur {total} terminées",
+    "todoProgressPercent": "{done} sur {total} terminées · {percent} %"
+  }
 }

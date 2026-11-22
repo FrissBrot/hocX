@@ -3,7 +3,7 @@
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
-import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, Fragment, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { FinanceTransactionForm } from "@/components/protocol/finance-transaction-form";
@@ -115,6 +115,9 @@ import {
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 import { PdfOmittedHint } from "@/components/protocol/pdf-omitted-hint";
+import { TodoAssigneeAvatar, TodoDueToneHint, TodoProgress, protocolTodoDueTone, todoDueTriggerClass } from "@/components/protocol/protocol-todo-display";
+import { localDateToday } from "@/lib/utils/participant-membership";
+import { EventDateTile, EventListToolbar, EventSessionSeparator, EventTagLine, eventTagColor, eventTimeline } from "@/components/protocol/protocol-event-list-display";
 import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
@@ -330,6 +333,8 @@ function FocusedElementEditorImpl({
   // «GPS-Daten des Bildes mitsenden» je Bild-Block (Datenschutz-Audit Paket 9.3), Standard an
   const [imageGpsOff, setImageGpsOff] = useState<Record<string, boolean>>({});
   const [eventOverviewBlockId, setEventOverviewBlockId] = useState<string | null>(null);
+  // Terminliste: «Nur kommende» ist reine Ansicht je Block, nicht in der Vorlage gespeichert
+  const [eventUpcomingOnly, setEventUpcomingOnly] = useState<Record<string, boolean>>({});
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
   // Karten oder Tabelle, gilt für alle Matrizen (pro Browser gemerkt)
   const [matrixView, setMatrixView] = useState<MatrixView>("cards");
@@ -1622,8 +1627,11 @@ function FocusedElementEditorImpl({
     wraps.forEach((wrap) => {
       const upcomingRow = wrap.querySelector<HTMLElement>("tr[data-upcoming]");
       if (!upcomingRow) return;
+      // Steht die Trennzeile «Ab Sitzung» direkt davor, bleibt sie sichtbar
+      const previous = upcomingRow.previousElementSibling;
+      const target = previous instanceof HTMLElement && previous.classList.contains("protocol-event-separator") ? previous : upcomingRow;
       const theadH = wrap.querySelector<HTMLElement>("thead")?.offsetHeight ?? 0;
-      wrap.scrollTop = upcomingRow.offsetTop - theadH;
+      wrap.scrollTop = target.offsetTop - theadH;
     });
   }, [element.id]);
 
@@ -1783,14 +1791,19 @@ function FocusedElementEditorImpl({
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
           const forcedEventTag = elementType === "event_list" ? eventFilterTagText(blockEventFilter(blockConfig)) : "";
           const allowEventEndDate = elementType === "event_list" ? blockConfig.event_allow_end_date === true : false;
-          const firstUpcomingIndex = elementType === "event_list" ? editableEventRows.findIndex((row) => {
-            const endDate = row.event_end_date || row.event_date;
-            return !(protocol.protocol_date && endDate < protocol.protocol_date);
-          }) : -1;
-          const hasPastEvents = elementType === "event_list" && editableEventRows.some((row) => {
-            const endDate = row.event_end_date || row.event_date;
-            return !!(protocol.protocol_date && endDate < protocol.protocol_date);
-          });
+          // Zusammenfassung/Umschalter beziehen sich auf alle Termine des Blocks, die Tabelle
+          // zeigt mit «Kommend» nur die nicht vergangenen (reine Ansicht).
+          const blockEventTimeline = eventTimeline(editableEventRows, protocol.protocol_date);
+          const eventShowUpcomingOnly = elementType === "event_list" && blockEventTimeline.pastCount > 0 && eventUpcomingOnly[block.id] === true;
+          const displayedEventRows = eventShowUpcomingOnly
+            ? editableEventRows.filter((_, index) => !blockEventTimeline.past[index])
+            : editableEventRows;
+          const displayedEventTimeline = eventShowUpcomingOnly ? eventTimeline(displayedEventRows, protocol.protocol_date) : blockEventTimeline;
+          const firstUpcomingIndex = displayedEventTimeline.firstUpcomingIndex;
+          // Neue Darstellung nur in der Anzeige; die (Inline-)Bearbeitung behält ihre Felder
+          const eventDisplayMode = !eventListInlineEditable;
+          const eventTagInTitle = eventDisplayMode && !!editableEventColumns?.showTag && !!editableEventColumns?.showTitle;
+          const eventColumnCount = Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag && !eventTagInTitle) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showLocation) + Number(editableEventColumns?.showOrganizers) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable);
           const newEventDraft =
             elementType === "event_list" ? newEventDrafts[block.id] ?? newEventRowDraft(blockConfig) : null;
           const showNewEventRow = elementType === "event_list" ? openNewEventRows[block.id] === true : false;
@@ -1876,25 +1889,34 @@ function FocusedElementEditorImpl({
                 const allBlockTags = Array.from(new Set(blockTodos.flatMap((t) => t.tags ?? []))).sort();
                 const activeTag = todoTagFilter[block.id] ?? null;
                 const visibleTodos = activeTag ? blockTodos.filter((t) => (t.tags ?? []).includes(activeTag)) : blockTodos;
+                // Fortschritt ohne Pendenzen, die (nachverfolgt) gelöscht werden
+                const progressTodos = blockTodos.filter((item) => !(trackChangesActive && item.pending_delete));
+                const doneTodoCount = progressTodos.filter((item) => item.todo_status_code === "done").length;
+                const todoToday = localDateToday();
                 return (
                 <div className="grid">
+                  <TodoProgress done={doneTodoCount} total={progressTodos.length} />
                   {allBlockTags.length > 0 && (
                     <div className="tag-filter-bar">
                       <button
                         type="button"
                         className={`tag-filter-chip${activeTag === null ? " tag-filter-chip-active" : ""}`}
+                        aria-pressed={activeTag === null}
                         onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: null }))}
                       >
                         {t("allLabel")}
+                        <span className="tag-filter-chip-count">{blockTodos.length}</span>
                       </button>
                       {allBlockTags.map((tag) => (
                         <button
                           key={tag}
                           type="button"
                           className={`tag-filter-chip${activeTag === tag ? " tag-filter-chip-active" : ""}`}
+                          aria-pressed={activeTag === tag}
                           onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: c[block.id] === tag ? null : tag }))}
                         >
                           {tag}
+                          <span className="tag-filter-chip-count">{blockTodos.filter((item) => (item.tags ?? []).includes(tag)).length}</span>
                         </button>
                       ))}
                     </div>
@@ -1907,8 +1929,9 @@ function FocusedElementEditorImpl({
                       const isTrackedAdded = trackChangesActive && todo.tracked_change === "added";
                       const trackedBeforeTask =
                         trackChangesActive && todo.tracked_change === "changed" ? todo.tracked_change_before_json?.task : undefined;
+                      const dueTone = protocolTodoDueTone(todo, todoToday);
                       return (
-                        <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
+                        <article className={`todo-card todo-card-compact${isDone ? " todo-card-done todo-card-strike" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
                           <button
                             type="button"
                             className={`todo-toggle${isDone ? " todo-toggle-done" : ""}`}
@@ -1953,6 +1976,7 @@ function FocusedElementEditorImpl({
                           <div className="todo-inline-meta">
                             <TodoAssigneeMenu
                               label={todo.assigned_participant_name ?? t("nobody")}
+                              leading={<TodoAssigneeAvatar name={todo.assigned_participant_name} />}
                               participants={availableParticipants}
                               isOptionSelectable={(option) => isParticipantSelectable(availableParticipants.find((p) => p.id === option.id) ?? {})}
                               activeId={todo.assigned_participant_id}
@@ -1968,7 +1992,13 @@ function FocusedElementEditorImpl({
                                 void updateTodo(block.id, todo.id, { assigned_participant_id: option.id });
                               }}
                             />
-                            <TodoMiniMenu label={dueMenuLabel(todo)} compact align="end">
+                            <TodoMiniMenu
+                              label={dueMenuLabel(todo)}
+                              compact
+                              align="end"
+                              triggerClassName={todoDueTriggerClass(dueTone)}
+                              leading={<TodoDueToneHint tone={dueTone} />}
+                            >
                               {(closeMenu) => (
                               <>
                               <div className="mini-menu-section">
@@ -3062,12 +3092,20 @@ function FocusedElementEditorImpl({
                       />
                     </div>
                   )}
-                  <div className={`event-table-wrap${hasPastEvents ? " event-table-wrap-scrollable" : ""}`}>
-                    <table className="data-table event-table event-table-compact">
+                  {editableEventRows.length ? (
+                    <EventListToolbar
+                      timeline={blockEventTimeline}
+                      upcomingOnly={eventShowUpcomingOnly}
+                      onChangeUpcomingOnly={(value) => setEventUpcomingOnly((current) => ({ ...current, [block.id]: value }))}
+                    />
+                  ) : null}
+                  {/* Kopfzeile immer fixiert: der Rahmen ist immer der Scroll-Container */}
+                  <div className="event-table-wrap event-table-wrap-scrollable protocol-event-wrap">
+                    <table className={`data-table event-table event-table-compact${eventDisplayMode ? " protocol-event-table" : ""}`}>
                       <thead>
                         <tr>
-                          {editableEventColumns?.showDate ? <th>{t("dateAbbr")}</th> : null}
-                          {editableEventColumns?.showTag ? <th>{t("tagLabel")}</th> : null}
+                          {editableEventColumns?.showDate ? <th className={eventDisplayMode ? "protocol-event-date-col" : undefined}>{t("dateAbbr")}</th> : null}
+                          {editableEventColumns?.showTag && !eventTagInTitle ? <th>{t("tagLabel")}</th> : null}
                           {editableEventColumns?.showTitle ? <th>{t("titleLabel")}</th> : null}
                           {editableEventColumns?.showDescription ? <th>{t("descriptionLabel")}</th> : null}
                           {editableEventColumns?.showLocation ? <th>{t("locationLabel")}</th> : null}
@@ -3191,15 +3229,21 @@ function FocusedElementEditorImpl({
                             ) : null}
                           </tr>
                         ) : null}
-                        {editableEventRows.length ? (
-                          editableEventRows.map((eventRow, rowIndex) => {
-                            const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-                            const isPast = !!protocol.protocol_date && effectiveEndDate < protocol.protocol_date;
+                        {displayedEventRows.length ? (
+                          displayedEventRows.map((eventRow, rowIndex) => {
+                            const isPast = displayedEventTimeline.past[rowIndex];
                             const editableEventRow = eventDraftValue(eventRow);
                             const showCancelledStyle = editableEventColumns?.showCancelled && eventRow.is_cancelled;
                             return (
+                              <Fragment key={eventRow.id}>
+                              {rowIndex === displayedEventTimeline.boundaryIndex ? (
+                                <EventSessionSeparator
+                                  colSpan={eventColumnCount}
+                                  protocolDate={protocol.protocol_date}
+                                  startsUpcoming={displayedEventTimeline.boundaryStartsUpcoming}
+                                />
+                              ) : null}
                               <tr
-                                key={eventRow.id}
                                 className={`${isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
                                 style={eventRowTintStyle(eventRow.tag, tagConfig, blockConfig.event_show_tag_colors === true)}
                                 data-upcoming={rowIndex === firstUpcomingIndex ? "true" : undefined}
@@ -3233,11 +3277,15 @@ function FocusedElementEditorImpl({
                                         ) : null}
                                       </div>
                                     ) : (
-                                      formatDateRange(eventRow.event_date, eventRow.event_end_date)
+                                      <EventDateTile
+                                        date={eventRow.event_date}
+                                        endDate={eventRow.event_end_date}
+                                        color={eventTagColor(eventRow.tag, tagConfig)}
+                                      />
                                     )}
                                   </td>
                                 ) : null}
-                                {editableEventColumns?.showTag ? (
+                                {editableEventColumns?.showTag && !eventTagInTitle ? (
                                   <td>
                                     {eventListInlineEditable ? (
                                       <TagInput
@@ -3285,6 +3333,11 @@ function FocusedElementEditorImpl({
                                           })
                                         }
                                       />
+                                    ) : eventDisplayMode ? (
+                                      <div className="protocol-event-title-cell">
+                                        <span className="protocol-event-title">{eventRow.title}</span>
+                                        {eventTagInTitle ? <EventTagLine tag={eventRow.tag} tagConfig={tagConfig} /> : null}
+                                      </div>
                                     ) : (
                                       eventRow.title
                                     )}
@@ -3386,11 +3439,12 @@ function FocusedElementEditorImpl({
                                   </td>
                                 ) : null}
                               </tr>
+                              </Fragment>
                             );
                           })
                         ) : !showNewEventRow ? (
                           <tr>
-                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showLocation) + Number(editableEventColumns?.showOrganizers) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable)}>
+                            <td colSpan={eventColumnCount}>
                               <span className="muted">{t("noMatchingEventsPeriod")}</span>
                             </td>
                           </tr>

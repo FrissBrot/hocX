@@ -11,6 +11,8 @@ import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary, ProtocolTodo, TodoListItem } from "@/types/api";
 import { TODO_STATUS, TodoMenuOption, TodoMenuSearchList, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
 import { TodoTaskInput } from "@/components/protocol/todo-task-input";
+import { TodoAssigneeAvatar, TodoDueToneHint, protocolTodoDueTone, todoDueTriggerClass } from "@/components/protocol/protocol-todo-display";
+import { localDateToday } from "@/lib/utils/participant-membership";
 
 type DueDraft =
   | { type: "none" }
@@ -143,8 +145,9 @@ export function SessionTodosSection({
           const isLocked = isClosedElsewhere || isPendingDelete;
           const isTrackedAdded = trackChangesActive && todo.tracked_change === "added";
           const trackedBeforeTask = trackChangesActive && todo.tracked_change === "changed" ? todo.tracked_change_before_json?.task : undefined;
+          const dueTone = protocolTodoDueTone(todo, localDateToday());
           return (
-            <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isLocked ? " todo-card-locked" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
+            <article className={`todo-card todo-card-compact${isDone ? " todo-card-done todo-card-strike" : ""}${isLocked ? " todo-card-locked" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
               <button
                 type="button"
                 className={`todo-toggle${isDone || isLocked ? " todo-toggle-done" : ""}`}
@@ -188,11 +191,13 @@ export function SessionTodosSection({
                   <div className="todo-inline-meta">
                     <TodoAssigneeMenu
                       label={todo.assigned_participant_name ?? t("noAssignee")}
+                      leading={<TodoAssigneeAvatar name={todo.assigned_participant_name} />}
                       participants={participants}
                       activeId={todo.assigned_participant_id}
                       onChange={(option) => void onUpdate(todo.protocol_element_block_id, todo.id, { assigned_participant_id: option.id })}
                     />
-                    <TodoMiniMenu label={sessionDueLabel(todo)} compact align="end">
+                    <TodoMiniMenu label={sessionDueLabel(todo)} compact align="end"
+                      triggerClassName={todoDueTriggerClass(dueTone)} leading={<TodoDueToneHint tone={dueTone} />}>
                       {(closeMenu) => (
                         <>
                           <div className="mini-menu-section">
