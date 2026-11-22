@@ -748,3 +748,23 @@ def test_create_share_link_rejects_images_of_protocols_the_account_cannot_read(d
     assert denied.value.status_code == 404
     # Wer den Entwurf lesen darf, teilt ihn weiterhin
     share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+
+
+def test_share_link_list_hides_links_to_files_the_account_cannot_read(db):
+    """Nachtlauf 2026-11-22: die Linkliste zeigte die Token-URL eines Links auf ein Entwurfsbild
+    auch Konten, die das Bild selbst nicht öffnen dürfen (nur Dateiart geprüft)."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photographer = dataclasses.replace(writer, user_id=2, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    photo = _make_file(db, tenant.id)
+    draft_link = share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+    share_links_routes.create_share_link(ShareLinkCreate(name="Foto", file_ids=[photo.public_id]), db, writer)
+
+    assert {row.name for row in share_links_routes.list_share_links(db, writer)} == {"Entwurf", "Foto"}
+    assert [row.name for row in share_links_routes.list_share_links(db, photographer)] == ["Foto"]
+    with pytest.raises(HTTPException) as hidden:
+        share_links_routes.revoke_share_link(draft_link.id, db, photographer)
+    assert hidden.value.status_code == 404

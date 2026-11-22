@@ -13,7 +13,7 @@ from app.core.db import get_db
 from app.core.permissions import P
 from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
-from app.models.entities import ShareLink, StoredFile
+from app.models.entities import ShareLink, ShareLinkFile, StoredFile
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services.access_service import AccessService
 from app.services import context_visibility_service, photo_album_share_service, share_link_service
@@ -50,6 +50,25 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
         share_capture_date=link.share_capture_date,
         share_camera=link.share_camera,
     )
+
+
+def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink) -> bool:
+    """Datei-Link: jede Datei darin muss das Konto selbst lesen dürfen wie im Einzelabruf
+    (Protokollbilder/-exporte nur aus lesbaren Protokollen, Nachtlauf 2026-11-22) - die Token-URL
+    öffnet sie ohne Anmeldung. Album-Links folgen dem Album (bewusste Weitergabe, add_album_items)."""
+    if link.album_id is not None:
+        return True
+    internal_ids = db.scalars(
+        select(StoredFile.id)
+        .join(ShareLinkFile, ShareLinkFile.file_id == StoredFile.public_id)
+        .where(ShareLinkFile.share_link_id == link.id, StoredFile.tenant_id == link.tenant_id)
+    ).all()
+    for internal_id in internal_ids:
+        try:
+            access_service.ensure_can_read_stored_file(db, user, internal_id, allow_context_grant=False)
+        except HTTPException:
+            return False
+    return True
 
 
 MAX_LINK_FILES = 200
@@ -140,7 +159,7 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
         for row in rows
-        if share_link_service.may_see(user.can, kinds.get(row.link.id, set()))
+        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link)
     ]
 
 
@@ -154,6 +173,7 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
         link is None
         or not share_link_service.can_manage(db, link, user.current_tenant_id)
         or not share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
+        or not _may_read_link_files(db, user, link)
     ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)
