@@ -18,7 +18,7 @@ Geplant als 1.5.2 (Folgekorrekturen zu 1.5.1). Keine Migration, keine neuen Eins
   `db-ip.com` (Download-Seite mit den Prüfsummen), nicht nur zu `download.db-ip.com`. Ohne Zugang zur
   Seite übernimmt der Job keine neue Länder-Datenbank mehr (die vorhandene bleibt, der Job meldet einen Fehler).
 - Traefik 3.7.19 (Patch), Python-Pakete mit Patch-/Minor-Updates (u. a. FastAPI 0.162.2, Pydantic 2.14.3,
-  pypdfium2 5.15 mit PDFium-Sicherheitskorrekturen); E2E-Image Playwright 1.65.0.
+  pypdfium2 5.15 mit PDFium-Sicherheitskorrekturen), pdfjs-dist 6.5 in der Abgabebox.
 
 ### Sicherheit
 
