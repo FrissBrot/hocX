@@ -8,6 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- **Fotosuche in grossen Mandanten nicht mehr minutenlang:** Nach einigen Suchen auf derselben
+  Datenbankverbindung (psycopg bereitet Abfragen nach 5 Ausführungen serverseitig vor) wechselte Postgres
+  auf einen generischen Plan ohne Mandantenwert. Geschätzt für einen kleinen Mandanten, las er bei einem
+  Mandanten mit 10 000 Fotos die ganze Dateiübersicht je Treffer neu (über 200 s statt 0.2 s). Alle
+  Verbindungen des Backends und der Worker planen jetzt immer mit den echten Werten
+  (`plan_cache_mode=force_custom_plan`, `app/core/db.py`); keine Migration, keine neue Einstellung.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
