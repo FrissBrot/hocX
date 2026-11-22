@@ -166,6 +166,7 @@
       "block": "Abschnitt",
       "cancelled": "Abgesagt",
       "category": "Kategorie",
+      "channel": "Weg",
       "collected_at": "Kassiert am",
       "completed_at": "Erledigt am",
       "completed_on": "Erledigt am",
@@ -178,6 +179,7 @@
       "detail": "Detail",
       "display_name": "Anzeigename",
       "due_date": "Fällig",
+      "duplicates": "Duplikate",
       "element": "Traktandum",
       "email": "E-Mail",
       "end_date": "Enddatum",
@@ -203,9 +205,11 @@
       "organizers": "Organisation",
       "outcome": "Ergebnis",
       "participants": "Teilnehmende",
+      "person": "Person",
       "position": "Zeile",
       "preferred_language": "Sprache",
       "protocol": "Protokoll",
+      "rejected": "Abgelehnt",
       "role": "Rolle",
       "rule": "Regel",
       "sent_at": "Versendet am",
@@ -218,8 +222,10 @@
       "template": "Vorlage",
       "text": "Text",
       "title": "Titel",
+      "total": "Dateien",
       "trashed_at": "Im Papierkorb seit",
-      "type": "Art"
+      "type": "Art",
+      "uploaded": "Hochgeladen"
     },
     "file": {
       "personalPrefix": "Datenauskunft",
@@ -244,7 +250,8 @@
       "submission_elements": "Abgabe-Elemente",
       "templates": "Protokollvorlagen",
       "todo_fines": "Pendenzen-Bussen",
-      "todos": "Aufgaben"
+      "todos": "Aufgaben",
+      "uploads": "Uploads"
     },
     "tenant": {
       "attendance": {
@@ -259,7 +266,8 @@
         "finances": "Finanzen",
         "fines": "Bussen",
         "members": "Mitglieder",
-        "todos": "Aufgaben"
+        "todos": "Aufgaben",
+        "uploads": "Uploads"
       },
       "fineStatus": {
         "collected": "kassiert",
@@ -289,7 +297,8 @@
         "fines": "Bussen",
         "members": "Mitglieder",
         "todoFines": "Pendenzen-Bussen",
-        "todos": "Aufgaben"
+        "todos": "Aufgaben",
+        "uploads": "Upload-Verlauf"
       },
       "withFiles": "Fotos, Abgaben und Dokumente liegen als Originaldateien in den Ordnern Fotos, Abgaben und Dokumente.",
       "withoutFiles": "Dieser Export enthält keine Fotos, Abgaben und Dokumente (nur Tabellen und Protokoll-PDFs).",

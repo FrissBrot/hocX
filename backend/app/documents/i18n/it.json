@@ -166,6 +166,7 @@
       "block": "Sezione",
       "cancelled": "Annullato",
       "category": "Categoria",
+      "channel": "Canale",
       "collected_at": "Incassato il",
       "completed_at": "Completato il",
       "completed_on": "Completato il",
@@ -178,6 +179,7 @@
       "detail": "Dettaglio",
       "display_name": "Nome visualizzato",
       "due_date": "Scadenza",
+      "duplicates": "Duplicati",
       "element": "Punto",
       "email": "E-mail",
       "end_date": "Data di fine",
@@ -203,9 +205,11 @@
       "organizers": "Organizzazione",
       "outcome": "Esito",
       "participants": "Partecipanti",
+      "person": "Persona",
       "position": "Riga",
       "preferred_language": "Lingua",
       "protocol": "Verbale",
+      "rejected": "Rifiutati",
       "role": "Ruolo",
       "rule": "Regola",
       "sent_at": "Inviato il",
@@ -218,8 +222,10 @@
       "template": "Modello",
       "text": "Testo",
       "title": "Titolo",
+      "total": "File",
       "trashed_at": "Nel cestino dal",
-      "type": "Tipo"
+      "type": "Tipo",
+      "uploaded": "Caricati"
     },
     "file": {
       "personalPrefix": "Accesso-dati",
@@ -244,7 +250,8 @@
       "submission_elements": "Elementi di consegna",
       "templates": "Modelli di verbale",
       "todo_fines": "Multe per compiti",
-      "todos": "Attività"
+      "todos": "Attività",
+      "uploads": "Caricamenti"
     },
     "tenant": {
       "attendance": {
@@ -259,7 +266,8 @@
         "finances": "Finanze",
         "fines": "Multe",
         "members": "Membri",
-        "todos": "Compiti"
+        "todos": "Compiti",
+        "uploads": "Caricamenti"
       },
       "fineStatus": {
         "collected": "incassata",
@@ -289,7 +297,8 @@
         "fines": "Multe",
         "members": "Membri",
         "todoFines": "Multe per compiti",
-        "todos": "Compiti"
+        "todos": "Compiti",
+        "uploads": "Cronologia caricamenti"
       },
       "withFiles": "Foto, consegne e documenti sono inclusi come file originali nelle cartelle Foto, Consegne e Documenti.",
       "withoutFiles": "Questo export non contiene foto, consegne o documenti (solo tabelle e PDF dei verbali).",

@@ -166,6 +166,7 @@
       "block": "Section",
       "cancelled": "Cancelled",
       "category": "Category",
+      "channel": "Channel",
       "collected_at": "Collected on",
       "completed_at": "Completed on",
       "completed_on": "Completed on",
@@ -178,6 +179,7 @@
       "detail": "Detail",
       "display_name": "Display name",
       "due_date": "Due",
+      "duplicates": "Duplicates",
       "element": "Agenda item",
       "email": "Email",
       "end_date": "End date",
@@ -203,9 +205,11 @@
       "organizers": "Organisers",
       "outcome": "Result",
       "participants": "Participants",
+      "person": "Person",
       "position": "Row",
       "preferred_language": "Language",
       "protocol": "Protocol",
+      "rejected": "Rejected",
       "role": "Role",
       "rule": "Rule",
       "sent_at": "Sent at",
@@ -218,8 +222,10 @@
       "template": "Template",
       "text": "Text",
       "title": "Title",
+      "total": "Files",
       "trashed_at": "In trash since",
-      "type": "Type"
+      "type": "Type",
+      "uploaded": "Uploaded"
     },
     "file": {
       "personalPrefix": "Data-access",
@@ -244,7 +250,8 @@
       "submission_elements": "Submission items",
       "templates": "Protocol templates",
       "todo_fines": "Task fines",
-      "todos": "Tasks"
+      "todos": "Tasks",
+      "uploads": "Uploads"
     },
     "tenant": {
       "attendance": {
@@ -259,7 +266,8 @@
         "finances": "Finances",
         "fines": "Fines",
         "members": "Members",
-        "todos": "Tasks"
+        "todos": "Tasks",
+        "uploads": "Uploads"
       },
       "fineStatus": {
         "collected": "collected",
@@ -289,7 +297,8 @@
         "fines": "Fines",
         "members": "Members",
         "todoFines": "Task fines",
-        "todos": "Tasks"
+        "todos": "Tasks",
+        "uploads": "Upload history"
       },
       "withFiles": "Photos, submissions and documents are included as original files in the folders Photos, Submissions and Documents.",
       "withoutFiles": "This export contains no photos, submissions or documents (tables and minutes PDFs only).",

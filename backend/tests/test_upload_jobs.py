@@ -277,3 +277,31 @@ def test_discard_marks_items_as_discarded(db):
     row = db.get(UploadJob, job.id)
     db.refresh(row)
     assert (row.uploaded, row.discarded) == (0, 1)
+
+
+def test_backfill_reconstructs_exact_and_heuristic_jobs_idempotently(db):
+    from app.models.entities import GalleryImage
+    from app.services.upload_history_backfill import backfill_tenant
+
+    tenant = make_tenant(db)
+    user = _user(db, tenant.id)
+    base = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    files = []
+    for minute in (0, 4, 30):  # zwei Fotos im Abstand von 4 min, eines 26 min später
+        stored = StoredFile(
+            tenant_id=tenant.id, original_name=f"alt{minute}.jpg", mime_type="image/jpeg", storage_path=f"u/{uuid.uuid4().hex}.jpg",
+            created_by=user.user_id,
+        )
+        db.add(stored)
+        db.flush()
+        stored.created_at = base + timedelta(minutes=minute)
+        db.add(GalleryImage(tenant_id=tenant.id, stored_file_id=stored.id, created_by=user.user_id))
+        files.append(stored)
+    db.flush()
+    db.commit = db.flush  # Testtransaktion offen halten
+    report = backfill_tenant(db, tenant.id)
+    assert report.jobs == {"gallery:heuristic": 2} and report.files == 3
+    jobs = list(db.scalars(select(UploadJob).where(UploadJob.tenant_id == tenant.id)))
+    assert all(job.reconstructed and job.options["reconstruction"] == "heuristic" for job in jobs)
+    assert sorted(job.uploaded for job in jobs) == [1, 2]
+    assert backfill_tenant(db, tenant.id).files == 0
