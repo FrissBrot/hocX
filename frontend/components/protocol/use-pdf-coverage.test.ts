@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ProtocolElement } from "@/types/api";
 
@@ -24,4 +24,31 @@ describe("PDF-Abdeckung im Editor", () => {
     expect(more).toBe(typed);
     expect(pdfCoverageSignature([element("e1", [block("b1", { export_visible_snapshot: false })])], { b1: "Hallo" }, {}, {})).not.toBe(typed);
   });
+
+  it("bleibt beim Tippen stabil, ohne die Blockkonfigurationen jedes Mal zu serialisieren", () => {
+    const config = { rows: [{ id: "r1", label: "Feld" }], chart_type: "todos" };
+    const elements = [element("e1", [block("b1", { configuration_snapshot_json: config }), block("b2")])];
+    const first = pdfCoverageSignature(elements, { b1: "a" }, {}, {});
+    const stringify = vi.spyOn(JSON, "stringify");
+    try {
+      for (const text of ["ab", "abc", "abcd"]) expect(pdfCoverageSignature(elements, { b1: text }, {}, {})).toBe(first);
+      expect(stringify).not.toHaveBeenCalled();
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+
+  it("erkennt eine geänderte Konfiguration (neues Objekt) wie bisher an ihrer Länge", () => {
+    const before = pdfCoverageSignature([element("e1", [block("b1", { configuration_snapshot_json: { a: 1 } })])], {}, {}, {});
+    const after = pdfCoverageSignature([element("e1", [block("b1", { configuration_snapshot_json: { a: 1, b: "neu" } })])], {}, {}, {});
+    expect(after).not.toBe(before);
+    // Gleiche Ausgabe wie die frühere Berechnung (JSON.stringify(...).length)
+    expect(after).toContain(`:${JSON.stringify({ a: 1, b: "neu" }).length}`);
+  });
+
+  it("zählt Leerzeichen allein weiter als leer", () => {
+    const elements = [element("e1", [block("b1")])];
+    expect(pdfCoverageSignature(elements, { b1: "   \n\t" }, {}, {})).toBe(pdfCoverageSignature(elements, { b1: "" }, {}, {}));
+  });
 });
+

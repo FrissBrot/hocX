@@ -27,6 +27,22 @@ export function toPdfCoverage(response: CoverageResponse): PdfCoverage {
   };
 }
 
+// Länge der serialisierten Blockkonfiguration je Konfigurationsobjekt. Die Signatur entsteht bei
+// jedem Tastendruck neu; die Konfigurationen sind dabei unveränderte Objekte (Zustand wird nur
+// ersetzt, nie verändert) - also je Objekt nur einmal serialisieren statt jedes Mal alle
+// (Performance-Audit Protokoll-Editor 2026-11-22).
+const configSizes = new WeakMap<object, number>();
+
+function configSize(config: Record<string, unknown> | null | undefined): number {
+  if (!config) return 2; // JSON.stringify({}).length
+  let size = configSizes.get(config);
+  if (size === undefined) {
+    size = JSON.stringify(config).length;
+    configSizes.set(config, size);
+  }
+  return size;
+}
+
 /** Was die Abdeckung ändern kann: Struktur, Exportschalter und ob ein Block leer ist. Der
  * Wortlaut eines Textes zählt nicht - ein Block mit Text bleibt gleich abgedeckt. */
 export function pdfCoverageSignature(
@@ -39,8 +55,9 @@ export function pdfCoverageSignature(
     .map((element) => {
       const blocks = element.blocks.map((block) => {
         const text = textDrafts[block.id] ?? block.text_content ?? "";
-        const filled = text.trim() !== "" || (todosByBlock[block.id]?.length ?? 0) > 0 || (imagesByBlock[block.id]?.length ?? 0) > 0;
-        return `${block.id}:${block.export_visible_snapshot ? 1 : 0}${block.is_visible_snapshot ? 1 : 0}${filled ? 1 : 0}:${imagesByBlock[block.id]?.length ?? 0}:${JSON.stringify(block.configuration_snapshot_json ?? {}).length}`;
+        // /\S/ bricht beim ersten Zeichen ab, trim() kopierte den ganzen Text
+        const filled = /\S/.test(text) || (todosByBlock[block.id]?.length ?? 0) > 0 || (imagesByBlock[block.id]?.length ?? 0) > 0;
+        return `${block.id}:${block.export_visible_snapshot ? 1 : 0}${block.is_visible_snapshot ? 1 : 0}${filled ? 1 : 0}:${imagesByBlock[block.id]?.length ?? 0}:${configSize(block.configuration_snapshot_json)}`;
       });
       return `${element.id}:${element.export_visible_snapshot ? 1 : 0}[${blocks.join(",")}]`;
     })
