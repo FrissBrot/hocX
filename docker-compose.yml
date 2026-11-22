@@ -35,7 +35,7 @@ services:
   traefik:
     # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
     # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
-    image: traefik:v3.7.18@sha256:9c437ac4f09ce6f4980a8544902d3475fdf70a1a7c578729581d2535dfa7d635
+    image: traefik:v3.7.19@sha256:a6c0194dda77bcb804824580f36fa7edc56e315b1acfe933366c8b52844a78a4
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
@@ -135,7 +135,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
