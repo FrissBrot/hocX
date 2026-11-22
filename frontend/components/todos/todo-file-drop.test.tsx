@@ -62,6 +62,20 @@ function fileTransfer(files: File[], types = ["Files"]) {
   return { dataTransfer: { types, files, dropEffect: "none" } };
 }
 
+/** Shell, sobald die Dropzone lauscht: die nativen Listener hängt useElementFileDrop erst in einem
+ * Effekt nach dem Rendern an - auf langsamen CI-Runnern kam ein sofortiger Drop sonst zu früh. */
+async function readyShell() {
+  const shell = await dialogShell();
+  await waitFor(() => {
+    fireEvent.dragEnter(shell, fileTransfer([]));
+    expect(screen.getByTestId("todo-drop-overlay")).toBeInTheDocument();
+  });
+  // Leerer Drop setzt den Zähler zurück und hängt nichts an
+  fireEvent.drop(shell, fileTransfer([]));
+  await waitFor(() => expect(screen.queryByTestId("todo-drop-overlay")).toBeNull());
+  return shell;
+}
+
 async function dialogShell() {
   // Shell des aktuellen Dialogs (nicht irgendein .modal-shell im Dokument)
   const shell = (await screen.findByPlaceholderText("Hochgeladene Datei suchen …")).closest(".modal-shell");
@@ -72,7 +86,7 @@ async function dialogShell() {
 describe("Pendenz-Dialog als Dropzone", () => {
   it("zeigt das Overlay nur für Dateien und hält es über Kind-Elemente hinweg", async () => {
     mount();
-    const shell = await dialogShell();
+    const shell = await readyShell();
     const child = within(shell).getByPlaceholderText("Hochgeladene Datei suchen …");
 
     fireEvent.dragEnter(shell, fileTransfer([], ["text/plain"]));
@@ -98,7 +112,7 @@ describe("Pendenz-Dialog als Dropzone", () => {
   it("lädt eine neue Datei hoch und hängt sie an (Kopie erlaubt, kein Orakel)", async () => {
     mount();
     expect(await screen.findByText("oder ins Fenster ziehen")).toBeInTheDocument();
-    const shell = await dialogShell();
+    const shell = await readyShell();
     const file = new File(["%PDF-1.7"], "Budget.pdf", { type: "application/pdf" });
 
     fireEvent.dragEnter(shell, fileTransfer([file]));
@@ -117,7 +131,7 @@ describe("Pendenz-Dialog als Dropzone", () => {
 
   it("Bilder nur mit photos.manage als Bild hochladen", async () => {
     mount({ canUploadImages: true });
-    const shell = await dialogShell();
+    const shell = await readyShell();
     const file = new File(["png"], "foto.png", { type: "image/png" });
     fireEvent.drop(shell, fileTransfer([file]));
     await waitFor(() => expect(upload).toHaveBeenCalledOnce());
@@ -128,7 +142,7 @@ describe("Pendenz-Dialog als Dropzone", () => {
     duplicateMatches = [{ sha256: "sha-Budget.pdf", file: existing }];
     choice.mockResolvedValue("confirm");
     mount();
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["x"], "Budget.pdf")]));
 
     await waitFor(() => expect(choice).toHaveBeenCalledOnce());
@@ -146,7 +160,7 @@ describe("Pendenz-Dialog als Dropzone", () => {
     duplicateMatches = [{ sha256: "x", file: existing }];
     choice.mockResolvedValueOnce("cancel").mockResolvedValueOnce("alternative");
     mount();
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["x"], "a.pdf"), new File(["x"], "b.pdf")]));
 
     await waitFor(() => expect(upload).toHaveBeenCalledOnce());
@@ -157,7 +171,7 @@ describe("Pendenz-Dialog als Dropzone", () => {
   it("meldet Fehler des Backends und hängt nichts an", async () => {
     upload.mockResolvedValue({ items: [], errors: ["virus.pdf: wurde von der Virenprüfung als infiziert erkannt"], file_results: [] });
     mount();
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["x"], "virus.pdf")]));
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining("infiziert"), "error"));
     expect(screen.queryByRole("link", { name: /virus\.pdf/ })).toBeNull();
@@ -175,7 +189,7 @@ describe("Abbrechen und GPS", () => {
       return Promise.resolve(null);
     });
     mount({ onClose });
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["x"], "Budget.pdf")]));
     await screen.findByRole("link", { name: /Budget\.pdf/ });
 
@@ -191,7 +205,7 @@ describe("Abbrechen und GPS", () => {
     choice.mockResolvedValue("confirm");
     const onClose = vi.fn();
     mount({ onClose });
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["x"], "Budget.pdf")]));
     await screen.findByRole("link", { name: /Budget\.pdf/ });
     fireEvent.click(within(shell).getByRole("button", { name: "Abbrechen" }));
@@ -201,7 +215,7 @@ describe("Abbrechen und GPS", () => {
   it("Bild mit GPS: Rückfrage, «Ohne GPS» sendet include_gps=false, gilt für das ganze Ablegen", async () => {
     choice.mockResolvedValue("alternative");
     mount({ canUploadImages: true });
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["a"], "gps-1.jpg"), new File(["b"], "gps-2.jpg")]));
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
     expect(choice).toHaveBeenCalledOnce();
@@ -211,7 +225,7 @@ describe("Abbrechen und GPS", () => {
 
   it("Bild ohne GPS: keine Rückfrage", async () => {
     mount({ canUploadImages: true });
-    const shell = await dialogShell();
+    const shell = await readyShell();
     fireEvent.drop(shell, fileTransfer([new File(["a"], "foto.jpg")]));
     await waitFor(() => expect(upload).toHaveBeenCalledOnce());
     expect(choice).not.toHaveBeenCalled();
