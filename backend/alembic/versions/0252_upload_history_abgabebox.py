@@ -46,11 +46,22 @@ DECLARE
     v_event bigint;
     v_job uuid;
     v_inserted integer;
+    v_file_created timestamptz;
+    v_file_job uuid;
+    v_upload_created timestamptz;
 BEGIN
-    SELECT s.tenant_id, s.original_name, s.file_size_bytes, s.mime_type
-      INTO v_file_tenant, v_name, v_size, v_mime
+    SELECT s.tenant_id, s.original_name, s.file_size_bytes, s.mime_type, s.created_at, s.upload_job_id
+      INTO v_file_tenant, v_name, v_size, v_mime, v_file_created, v_file_job
       FROM stored_file s WHERE s.id = NEW.stored_file_id;
-    SELECT u.assignment_id, u.event_id INTO v_assignment, v_event FROM submission_upload u WHERE u.id = NEW.upload_id;
+    SELECT u.assignment_id, u.event_id, u.created_at INTO v_assignment, v_event, v_upload_created
+      FROM submission_upload u WHERE u.id = NEW.upload_id;
+    -- Nur frisch mit der Einreichung gespeicherte Dateien ohne Vorgang (Security-Review N-1): eine
+    -- ältere Datei des Mandanten, die jemand nachträglich verknüpft, bekommt keinen Vorgang und
+    -- ihr Name erscheint nicht im Verlauf.
+    IF v_file_job IS NOT NULL OR v_file_created IS NULL OR v_upload_created IS NULL
+       OR v_file_created < v_upload_created - interval '10 minutes' THEN
+        RETURN NEW;
+    END IF;
     SELECT a.tenant_id INTO v_assignment_tenant FROM submission_assignment a WHERE a.id = v_assignment;
     IF v_file_tenant IS NULL OR v_assignment_tenant IS DISTINCT FROM v_file_tenant THEN
         RETURN NEW;

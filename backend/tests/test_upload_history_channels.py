@@ -200,3 +200,36 @@ def test_word_import_request_is_one_job(db, monkeypatch):
     names = {item.original_name: item.status for item in db.scalars(select(UploadJobItem).where(UploadJobItem.upload_job_id == job.id))}
     assert names["notiz.txt"] == "rejected" and "protokoll.docx" in names
     assert job.status in ("done", "partial", "failed") and job.total == 2
+
+
+def test_abgabebox_trigger_ignores_an_older_file_linked_later(db, box):
+    """Security-Review N-1: eine schon vorhandene Datei des Mandanten, die nachträglich mit einer
+    Einreichung verknüpft wird, bekommt keinen Vorgang (Name bleibt aus dem Verlauf)."""
+    old = StoredFile(tenant_id=box["tenant"].id, original_name="protokollbild.jpg", mime_type="image/jpeg", storage_path="t/alt.jpg")
+    db.add(old)
+    db.flush()
+    db.execute(text("UPDATE stored_file SET created_at = now() - interval '2 days' WHERE id = :id"), {"id": old.id})
+    upload = SubmissionUpload(assignment_id=box["assignment"].id, event_id=box["event"].id, status="submitted", submitted_at=datetime.now(UTC))
+    db.add(upload)
+    db.flush()
+    db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=old.id, sort_index=0))
+    db.flush()
+    assert db.scalar(select(UploadJob).where(UploadJob.submission_upload_id == upload.id)) is None
+
+
+def test_assigned_only_scope_hides_gallery_jobs_of_foreign_submissions(db, box, monkeypatch):
+    """Security-Review M-1: Uploads mit Abgabe-Bezug folgen der Reichweite «nur zugewiesene»."""
+    from app.api.routes import upload_jobs as routes
+    from app.services import context_visibility_service, upload_job_service
+
+    tenant = box["tenant"]
+    writer = _writer(db, tenant)
+    upload_job_service.open_job(db, tenant_id=tenant.id, channel="gallery", created_by=writer.user_id, status="done",
+                                submission_assignment_id=box["assignment"].id)
+    plain = upload_job_service.open_job(db, tenant_id=tenant.id, channel="gallery", created_by=writer.user_id, status="done")
+    db.flush()
+    listed = lambda: [job.id for job in routes.list_upload_jobs(  # noqa: E731
+        mine=False, channel=None, problems=False, date_from=None, date_to=None, cursor=None, limit=50, db=db, user=writer).items]
+    assert len(listed()) == 2
+    monkeypatch.setattr(context_visibility_service, "readable_assignment_ids", lambda db_, user: set())
+    assert listed() == [plain.id]

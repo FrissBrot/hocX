@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_any_permission
+from app.core.security import CurrentUser, get_current_user, require_any_permission, require_permission
 from app.models.entities import AppUser, CycleConfig, Event, Protocol, ProtocolTodo, StoredFile, SubmissionAssignment
 from app.models.upload_history_entities import UploadJob, UploadJobItem
 from app.schemas.upload_jobs import (
@@ -40,17 +40,17 @@ from app.schemas.upload_jobs import (
 )
 from app.services import context_visibility_service, public_id_service, upload_job_service
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
+from app.services.access_service import AccessService
 from app.services.file_trash_service import may_manage
 
 router = APIRouter()
 service = FileService()
 
-# Lesen: irgendein Recht, mit dem ein Kanal sichtbar wird (die Kanäle filtert visibility_clause)
-_READ_ANY = (P.PHOTOS_MANAGE, P.FILES_MANAGE, P.FILES_IMPORT, P.MEETINGS_READ, P.SUBMISSIONS_READ, P.SETTINGS_MANAGE)
 
 
 def _require_read(user: CurrentUser) -> None:
-    require_any_permission(user, *_READ_ANY)
+    # Ausgeschrieben statt *_READ_ANY, damit route-map/Rechte-Matrix die Prüfung erkennen
+    require_any_permission(user, P.PHOTOS_MANAGE, P.FILES_MANAGE, P.FILES_IMPORT, P.MEETINGS_READ, P.SUBMISSIONS_READ, P.SETTINGS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Upload-Vorgang nicht gefunden")
 
@@ -65,7 +65,7 @@ def _counts(job: UploadJob) -> UploadJobCounts:
     )
 
 
-def _refs(db: Session, jobs: list[UploadJob], tenant_id: int) -> dict[uuid.UUID, UploadJobRef]:
+def _refs(db: Session, jobs: list[UploadJob], tenant_id: int, user: CurrentUser | None = None) -> dict[uuid.UUID, UploadJobRef]:
     """Bezug je Vorgang mit einer Abfrage je Art (nur Objekte des eigenen Mandanten)."""
     def load(model, ids, *columns):
         ids = {i for i in ids if i is not None}
@@ -91,9 +91,20 @@ def _refs(db: Session, jobs: list[UploadJob], tenant_id: int) -> dict[uuid.UUID,
             refs[job.id] = UploadJobRef(kind="cycle", id=row.public_id, label=row.name)
         elif (row := protocols.get(job.protocol_id)) is not None:
             refs[job.id] = UploadJobRef(kind="protocol", id=row.public_id, label=row.title or row.protocol_number, on_date=row.protocol_date)
-        elif (row := todos.get(job.protocol_todo_id)) is not None:
+        elif (row := todos.get(job.protocol_todo_id)) is not None and _can_read_todo(db, user, row.id):
             refs[job.id] = UploadJobRef(kind="todo", id=row.public_id, label=row.task[:120])
     return refs
+
+
+def _can_read_todo(db: Session, user: CurrentUser | None, todo_id: int) -> bool:
+    """Pendenztext nur mit Leserecht der Pendenz (Security-Review M-1)."""
+    if user is None:
+        return False
+    try:
+        AccessService().ensure_can_read_todo(db, user, todo_id)
+    except HTTPException:
+        return False
+    return True
 
 
 def _names(db: Session, jobs: list[UploadJob]) -> dict[int, str]:
@@ -133,11 +144,19 @@ def _decode_cursor(raw: str) -> tuple[datetime, uuid.UUID]:
 def create_upload_job(payload: UploadJobCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Vorgang öffnen, bevor der Browser Vorab-Abgleich und Pakete sendet. Bezug wird wie beim
     Upload geprüft (eigener Mandant); höchstens MAX_OPEN_JOBS_PER_USER offene Vorgänge je Person."""
-    require_any_permission(user, *upload_job_service.OPENABLE_CHANNELS[payload.channel])
+    require_any_permission(user, P.PHOTOS_MANAGE, P.FILES_MANAGE)
+    # Kanal-Recht: Galerie photos.manage, Ablage files.manage, Pendenz eines von beiden
+    if payload.channel == "gallery":
+        require_permission(user, P.PHOTOS_MANAGE)
+    elif payload.channel == "document":
+        require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    if upload_job_service.count_open_jobs(db, user.current_tenant_id, user.user_id) >= upload_job_service.MAX_OPEN_JOBS_PER_USER:
-        raise HTTPException(status_code=429, detail="Zu viele offene Upload-Vorgänge")
+    if (
+        upload_job_service.count_open_jobs(db, user.current_tenant_id, user.user_id) >= upload_job_service.MAX_OPEN_JOBS_PER_USER
+        or upload_job_service.count_recent_jobs(db, user.current_tenant_id, user.user_id) >= upload_job_service.MAX_JOBS_PER_USER_HOUR
+    ):
+        raise HTTPException(status_code=429, detail="Zu viele Upload-Vorgänge")
     from app.api.routes.files import _resolve_upload_target  # gleiche Prüfung wie der Upload selbst
 
     target = _resolve_upload_target(
@@ -149,6 +168,8 @@ def create_upload_job(payload: UploadJobCreate, db: Session = Depends(get_db), u
         todo = public_id_service.get_by_public_id(db, ProtocolTodo, payload.protocol_todo_id, tenant_id=user.current_tenant_id)
         if todo is None:
             raise HTTPException(status_code=404, detail="Pendenz nicht gefunden")
+        # Nur lesbare Pendenzen (Security-Review M-1): sonst verriete die Antwort deren Text
+        AccessService().ensure_can_read_todo(db, user, todo.id)
         todo_id = todo.id
     channel = "todo" if todo_id is not None else payload.channel
     job = upload_job_service.open_job(
@@ -160,7 +181,7 @@ def create_upload_job(payload: UploadJobCreate, db: Session = Depends(get_db), u
     )
     db.commit()
     db.refresh(job)
-    return _to_read(job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id))
+    return _to_read(job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id, user))
 
 
 @router.post("/upload-jobs/{job_id}/complete", response_model=UploadJobRead)
@@ -173,7 +194,7 @@ def complete_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: 
     upload_job_service.client_complete(db, job)
     db.commit()
     db.refresh(job)
-    return _to_read(job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id))
+    return _to_read(job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id, user))
 
 
 @router.post("/upload-jobs/{job_id}/client-results", status_code=204)
@@ -229,7 +250,7 @@ def list_upload_jobs(
     jobs = list(db.scalars(query.order_by(UploadJob.created_at.desc(), UploadJob.id.desc()).limit(limit + 1)))
     has_more = len(jobs) > limit
     jobs = jobs[:limit]
-    names, refs = _names(db, jobs), _refs(db, jobs, user.current_tenant_id)
+    names, refs = _names(db, jobs), _refs(db, jobs, user.current_tenant_id, user)
     return UploadJobList(
         items=[_to_read(job, user, names, refs) for job in jobs], next_cursor=_encode_cursor(jobs[-1]) if has_more and jobs else None
     )
@@ -246,7 +267,7 @@ def get_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: Curre
         .execution_options(include_trashed=True)
     ).one()
     return _to_read(
-        job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id), cls=UploadJobDetail,
+        job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id, user), cls=UploadJobDetail,
         options=job.options or {}, import_job_id=job.import_job_id, file_count=int(files[0]), image_count=int(files[1]),
         cameras=upload_job_service.camera_groups(db, job),
     )
@@ -304,13 +325,19 @@ def list_upload_job_items(
     has_more = len(rows) > limit
     rows = rows[:limit]
     states = _file_states(db, user, {i for row in rows for i in (row.stored_file_id, row.existing_file_id) if i is not None})
+
+    def visible_name(row: UploadJobItem) -> str | None:
+        # Name nicht sichtbarer Dateien bleibt verborgen (Security-Review M-1)
+        state = states.get(row.stored_file_id) if row.stored_file_id is not None else None
+        return None if state is not None and state.state == "hidden" else row.original_name
+
     deleted = UploadJobItemFile(state="deleted")
     items = []
     for row in rows:
         file = states.get(row.stored_file_id) if row.stored_file_id is not None else (deleted if row.status == "uploaded" else None)
         items.append(
             UploadJobItemRead(
-                id=row.id, position=row.position, name=row.original_name, status=row.status, reason_code=row.reason_code,
+                id=row.id, position=row.position, name=visible_name(row), status=row.status, reason_code=row.reason_code,
                 reason_params=row.reason_params or {}, source=row.source, size_bytes=row.size_bytes, mime_type=row.mime_type,
                 applied=list(row.applied or []), file=file,
                 existing_file=states.get(row.existing_file_id) if row.existing_file_id is not None else None,

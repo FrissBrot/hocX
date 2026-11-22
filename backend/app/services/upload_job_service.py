@@ -37,6 +37,8 @@ from app.models.upload_history_entities import UPLOAD_JOB_ACTIVE_STATUSES, Uploa
 OPEN_JOB_MAX_AGE = timedelta(hours=24)
 # Mengenbremse für POST /upload-jobs (offene Vorgänge je Person)
 MAX_OPEN_JOBS_PER_USER = 20
+# ... und höchstens so viele je Person und Stunde (auch sofort abgeschlossene)
+MAX_JOBS_PER_USER_HOUR = 200
 MAX_NAME_LENGTH = 255
 
 # Ergebnis der Pipeline (UploadFileResult.status/code) -> Item-Status
@@ -155,6 +157,21 @@ def count_open_jobs(db: Session, tenant_id: int, user_id: int) -> int:
                 UploadJob.created_by == user_id,
                 UploadJob.status == "open",
                 UploadJob.created_at >= _now() - OPEN_JOB_MAX_AGE,
+            )
+        )
+        or 0
+    )
+
+
+def count_recent_jobs(db: Session, tenant_id: int, user_id: int) -> int:
+    """Vom Browser geöffnete Vorgänge der letzten Stunde, unabhängig vom Status (Security-Review N-2)."""
+    return int(
+        db.scalar(
+            select(func.count()).select_from(UploadJob).where(
+                UploadJob.tenant_id == tenant_id,
+                UploadJob.created_by == user_id,
+                UploadJob.channel.in_(tuple(OPENABLE_CHANNELS)),
+                UploadJob.created_at >= _now() - timedelta(hours=1),
             )
         )
         or 0
@@ -421,12 +438,18 @@ def visibility_clause(db: Session, user, *, mine_only: bool = False):
     if not channels:
         return false()
     parts = []
+    readable = context_visibility_service.readable_assignment_ids(db, user)
     plain = [c for c in channels if c not in ("abgabebox", "submission_link", "protocol_image")]
     if plain:
-        parts.append(UploadJob.channel.in_(plain))
+        # Reichweite «nur zugewiesene» gilt auch für Galerie-/Ablage-Uploads mit Abgabe-Bezug
+        # (Security-Review M-1): Bezug und Dateinamen fremder Abgaben bleiben verborgen.
+        plain_scope = true() if readable is None else or_(
+            UploadJob.submission_assignment_id.is_(None),
+            UploadJob.submission_assignment_id.in_(list(readable)) if readable else false(),
+        )
+        parts.append(and_(UploadJob.channel.in_(plain), plain_scope))
     submission_channels = [c for c in channels if c in ("abgabebox", "submission_link")]
     if submission_channels:
-        readable = context_visibility_service.readable_assignment_ids(db, user)
         scope = true() if readable is None else (UploadJob.submission_assignment_id.in_(list(readable)) if readable else false())
         parts.append(and_(UploadJob.channel.in_(submission_channels), scope))
     if "protocol_image" in channels:

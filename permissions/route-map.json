@@ -3989,7 +3989,12 @@
       "handler": "upload_jobs.list_upload_jobs",
       "requires_any": [
         [
-          "<*_READ_ANY>"
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
         ]
       ]
     },
@@ -3997,15 +4002,25 @@
       "handler": "upload_jobs.create_upload_job",
       "requires_any": [
         [
-          "<*upload_job_service.OPENABLE_CHANNELS[payload.channel]>"
+          "files.manage",
+          "photos.manage"
         ]
+      ],
+      "requires_if": [
+        "files.manage",
+        "photos.manage"
       ]
     },
     "GET /api/upload-jobs/{job_id}": {
       "handler": "upload_jobs.get_upload_job",
       "requires_any": [
         [
-          "<*_READ_ANY>"
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
         ]
       ]
     },
@@ -4031,7 +4046,12 @@
       "handler": "upload_jobs.list_upload_job_file_ids",
       "requires_any": [
         [
-          "<*_READ_ANY>"
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
         ]
       ]
     },
@@ -4039,7 +4059,12 @@
       "handler": "upload_jobs.list_upload_job_items",
       "requires_any": [
         [
-          "<*_READ_ANY>"
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
         ]
       ]
     },

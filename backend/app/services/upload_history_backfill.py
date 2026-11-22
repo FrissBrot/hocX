@@ -29,7 +29,15 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.entities import GalleryImage, GalleryUploadJob, StoredFile, SubmissionUpload, SubmissionUploadFile, WordImportDocument
+from app.models.entities import (
+    GalleryImage,
+    GalleryUploadJob,
+    StoredFile,
+    SubmissionAssignment,
+    SubmissionUpload,
+    SubmissionUploadFile,
+    WordImportDocument,
+)
 from app.models.import_entities import ImportItem, ImportJob
 from app.models.upload_history_entities import UploadJob
 from app.services import upload_job_service
@@ -101,8 +109,10 @@ def _abgabebox(db: Session, tenant_id: int, report: BackfillReport) -> None:
     rows = db.execute(
         select(SubmissionUploadFile.upload_id, SubmissionUploadFile.stored_file_id, SubmissionUpload.assignment_id, SubmissionUpload.event_id)
         .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+        .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
         .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
-        .where(StoredFile.tenant_id == tenant_id, StoredFile.upload_job_id.is_(None))
+        # Wie der Trigger 0252: Mandant der Abgabe = Mandant der Datei (Security-Review H-3)
+        .where(StoredFile.tenant_id == tenant_id, SubmissionAssignment.tenant_id == tenant_id, StoredFile.upload_job_id.is_(None))
         .execution_options(include_trashed=True)
     ).all()
     by_upload: dict[int, list] = {}
