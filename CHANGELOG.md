@@ -133,6 +133,16 @@ grossen Mandanten. Update direkt von 1.5.0 mit
 - **Vorlagen:** Einfügelinie beim Ziehen von Terminfeldern und Tabellenzeilen.
 - **Pendenzen:** Escape in der Dateisuche schliesst nur die Trefferliste, nicht den Dialog.
 - Ablage: mit Suchtext stehen die besten Treffer zuerst (Sortierung «Beste Treffer», auch mobil).
+- **Protokoll-Editor schneller (Performance-Quick-Wins):** Das Akkordeon berechnet beim Scrollen nicht
+  mehr den Stil des ganzen Dokuments neu (Akkordeon-Variablen per `@property` nicht vererbt, Neumessen
+  nur des geänderten Punkts) - gemessen auf einem Protokoll mit 32 Punkten: Style-Neuberechnung
+  3,5 s → 0,5 s, Frames über 16,7 ms 21 % → 8 %, keine Long Tasks mehr (vorher 24). Das Bilderraster
+  lädt Vorschaubilder statt der Originale (Vollbild weiterhin Original), Diagramme (Recharts) und die
+  Bild-Analyse werden erst bei Bedarf geladen (Start-JS der Protokollseite 638 → 517 KB gzip), die
+  Statistik lädt beim Öffnen einmal statt zweimal, und Anliegen, Bussen und Leseposition kommen mit
+  der Seite statt erst nach dem Laden. Beim Tippen schreibt der Editor Entwürfe gebündelt nach
+  localStorage (spätestens nach 300 ms und sofort beim Verlassen/Schliessen des Tabs) statt bei
+  jedem Tastendruck. Aussehen und Verhalten unverändert.
 
 ### Behoben
 

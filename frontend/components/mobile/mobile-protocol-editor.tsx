@@ -29,7 +29,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { prefersReducedMotion } from "@/components/protocol/document-scroll";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
-import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
+import { isAlreadyUploadedLazy } from "@/lib/image-analysis/precheck-lazy";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import type {
@@ -237,7 +237,7 @@ export function MobileProtocolEditor({
     setSaveState("saving");
     try {
       // Vorab-Abgleich per SHA-256 (siehe protocol-editor.tsx uploadImage).
-      if (await isAlreadyUploaded(file, "protocol_image")) {
+      if (await isAlreadyUploadedLazy(file, "protocol_image")) {
         setSaveState("error");
         showToast(tProtocols("editor.imageAlreadyExists"), "error");
         return;

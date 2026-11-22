@@ -3975,7 +3975,12 @@ function FocusedElementEditorImpl({
                   <div className="image-grid">
                     {(imagesByBlock[block.id] ?? []).map((image) => (
                       <div className="card image-card" key={image.id}>
-                        <LightboxImage alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
+                        <LightboxImage
+                          alt={image.title ?? image.original_name}
+                          src={`${browserApiBaseUrl}${image.content_url}`}
+                          // Raster: verkleinerte Vorschau (gleiche Zugriffsprüfung wie das Original), Vollbild: Original
+                          previewSrc={`${browserApiBaseUrl}/api/stored-files/${encodeURIComponent(image.stored_file_id)}/thumbnail`}
+                        />
                         <p className="muted">{image.original_name}</p>
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
                           {t("deleteImageAction")}

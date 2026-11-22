@@ -39,6 +39,75 @@ const listeners = new Set<() => void>();
 let flushTimer: number | null = null;
 let retryDelayMs = 1_000;
 
+// Schreibpuffer (Performance-Audit Protokoll-Editor 2026-11-22): Entwürfe und Outbox-Einträge
+// entstehen pro Tastendruck. Statt jedes Mal localStorage zu lesen und zu schreiben (samt
+// JSON.parse/stringify der ganzen Outbox), landen sie zuerst hier und gehen gebündelt nach
+// localStorage - spätestens PERSIST_DELAY_MS nach der ersten ungespeicherten Änderung und sofort,
+// wenn der Tab verborgen, verlassen oder geschlossen wird (pagehide, visibilitychange, beforeunload).
+// Lesen berücksichtigt den Puffer, für Aufrufer ändert sich nichts.
+const PERSIST_DELAY_MS = 300;
+/** Ungespeicherte Entwürfe je Schlüssel (ohne DRAFT_PREFIX). */
+const pendingDrafts = new Map<string, string>();
+/** Ungespeicherte Outbox-Einträge je key. Beim Speichern auf den aktuellen localStorage-Stand
+ * angewendet (nicht auf eine alte Kopie), damit Änderungen eines anderen Tabs erhalten bleiben. */
+const pendingMutations = new Map<string, PendingMutation>();
+let persistTimer: number | null = null;
+let persistListenersBound = false;
+
+function readStoredOutbox(): PendingMutation[] {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(OUTBOX_KEY) ?? "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Gespeicherte Outbox plus ungespeicherte Einträge (gleiche Reihenfolge wie früher: ein neu
+ * eingereihter Eintrag steht hinten). */
+function withPendingMutations(stored: PendingMutation[]): PendingMutation[] {
+  if (pendingMutations.size === 0) return stored;
+  return [...stored.filter((item) => !pendingMutations.has(item.key)), ...pendingMutations.values()];
+}
+
+/** Schreibt den Puffer sofort nach localStorage. Läuft automatisch (Zeitgeber, Tab verlassen). */
+export function flushPendingOfflineWrites() {
+  if (typeof window === "undefined") return;
+  if (persistTimer !== null) {
+    window.clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  try {
+    for (const [key, value] of pendingDrafts) window.localStorage.setItem(`${DRAFT_PREFIX}${key}`, value);
+    pendingDrafts.clear();
+    if (pendingMutations.size > 0) {
+      const items = withPendingMutations(readStoredOutbox());
+      pendingMutations.clear();
+      window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
+    }
+  } catch {
+    // Speicher voll oder gesperrt: wie bisher ohne lokale Sicherung weiter (Senden läuft separat)
+  }
+}
+
+function onPageHidden() {
+  flushPendingOfflineWrites();
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === "hidden") flushPendingOfflineWrites();
+}
+
+function schedulePersist() {
+  if (!persistListenersBound) {
+    persistListenersBound = true;
+    window.addEventListener("pagehide", onPageHidden);
+    window.addEventListener("beforeunload", onPageHidden);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
+  if (persistTimer === null) persistTimer = window.setTimeout(flushPendingOfflineWrites, PERSIST_DELAY_MS);
+}
+
 function emit(patch: Partial<OfflineSnapshot>) {
   // Ohne Änderung kein neuer Snapshot: queueMutation läuft pro Tastendruck, und jede neue
   // Snapshot-Identität rendert alle Abonnenten (ConnectivityStatus) neu.
@@ -50,15 +119,13 @@ function emit(patch: Partial<OfflineSnapshot>) {
 
 function readOutbox(): PendingMutation[] {
   if (typeof window === "undefined") return [];
-  try {
-    const value = JSON.parse(window.localStorage.getItem(OUTBOX_KEY) ?? "[]");
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
+  return withPendingMutations(readStoredOutbox());
 }
 
+/** Schreibt die ganze Outbox sofort (Senden, Verwerfen - nicht pro Tastendruck). `items` stammt
+ * aus readOutbox() und enthält den Puffer bereits. */
 function writeOutbox(items: PendingMutation[]) {
+  pendingMutations.clear();
   window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
   emit({ pending: items.length, blocked: items.filter((item) => item.blocked).length });
 }
@@ -66,6 +133,12 @@ function writeOutbox(items: PendingMutation[]) {
 /** Entfernt Outbox, Entwürfe und Besitzer (Logout, Kontowechsel). */
 export function clearOfflineStore() {
   if (typeof window === "undefined") return;
+  pendingDrafts.clear();
+  pendingMutations.clear();
+  if (persistTimer !== null) {
+    window.clearTimeout(persistTimer);
+    persistTimer = null;
+  }
   for (const key of Object.keys(window.localStorage)) {
     if (key === OUTBOX_KEY || key === OWNER_KEY || key.startsWith(DRAFT_PREFIX)) window.localStorage.removeItem(key);
   }
@@ -75,6 +148,7 @@ export function clearOfflineStore() {
 /** Vor dem ersten Senden aufrufen: gehört die Ablage einem anderen Konto, wird sie verworfen. */
 export function bindOfflineStoreToUser(userId: string | null | undefined) {
   if (typeof window === "undefined" || !userId) return;
+  flushPendingOfflineWrites();
   const owner = window.localStorage.getItem(OWNER_KEY);
   const hasData = Object.keys(window.localStorage).some((key) => key === OUTBOX_KEY || key.startsWith(DRAFT_PREFIX));
   if (owner !== userId && (owner !== null || hasData)) clearOfflineStore();
@@ -109,8 +183,10 @@ export function getOfflineServerSnapshot(): OfflineSnapshot {
 }
 
 export function queueMutation(input: Omit<PendingMutation, "id" | "createdAt" | "attempts">) {
-  const items = readOutbox();
-  const previous = items.find((item) => item.key === input.key);
+  // Schon im Puffer (weiteres Tippen im selben Feld): ohne localStorage-Zugriff ersetzen
+  const buffered = pendingMutations.get(input.key);
+  const items = buffered ? null : readOutbox();
+  const previous = buffered ?? items?.find((item) => item.key === input.key);
   // Jeder neue Body bekommt eine eigene id: flushOutbox entfernt nach Erfolg nur den Eintrag
   // mit genau der gesendeten id. Mit der alten id loeschte ein waehrend des Sendens
   // eingereihter, neuerer Body sich selbst mit (Audit MAIN-FE-011).
@@ -120,7 +196,14 @@ export function queueMutation(input: Omit<PendingMutation, "id" | "createdAt" | 
     createdAt: previous?.createdAt ?? Date.now(),
     attempts: previous?.attempts ?? 0,
   };
-  writeOutbox([...items.filter((item) => item.key !== input.key), next]);
+  // Neuer Body ersetzt einen gesperrten (blocked) Eintrag desselben key - wie bisher ohne Flag
+  pendingMutations.delete(input.key);
+  pendingMutations.set(input.key, next);
+  schedulePersist();
+  if (items) {
+    const all = [...items.filter((item) => item.key !== input.key), next];
+    emit({ pending: all.length, blocked: all.filter((item) => item.blocked).length });
+  }
   emit({ lastError: input.lastError ?? null });
   if (navigator.onLine) {
     if (flushTimer !== null) window.clearTimeout(flushTimer);
@@ -251,13 +334,17 @@ export async function flushOutbox(): Promise<void> {
 }
 
 export function saveDraft(key: string, value: string) {
-  window.localStorage.setItem(`${DRAFT_PREFIX}${key}`, value);
+  pendingDrafts.set(key, value);
+  schedulePersist();
 }
 
 export function readDraft(key: string): string | null {
-  return typeof window === "undefined" ? null : window.localStorage.getItem(`${DRAFT_PREFIX}${key}`);
+  if (typeof window === "undefined") return null;
+  const buffered = pendingDrafts.get(key);
+  return buffered !== undefined ? buffered : window.localStorage.getItem(`${DRAFT_PREFIX}${key}`);
 }
 
 export function clearDraft(key: string) {
+  pendingDrafts.delete(key);
   window.localStorage.removeItem(`${DRAFT_PREFIX}${key}`);
 }

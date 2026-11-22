@@ -4243,3 +4243,41 @@
 .form-block-row-source { border-left: 2px solid var(--accent-soft); }
 
 .form-block-source-value { min-height: 36px; display: flex; align-items: center; padding: var(--space-2) var(--space-3); font-size: var(--text-base); overflow-wrap: anywhere; }
+
+/* Akkordeon-Leistung (1.5.1, Audit perf-protocol-editor 2026-11-22): accordion-scroll.ts setzt
+   pro Scroll-Frame --accordion-above/--accordion-below auf .protocol-document und --open je Punkt.
+   Als gewöhnliche (vererbte) Custom Properties zwangen sie den Browser, in jedem Frame den Stil
+   des ganzen Dokuments bzw. ganzer Punkte neu zu berechnen. Registriert und nicht vererbt gelten
+   sie nur am Element selbst; wer sie braucht, übernimmt sie ausdrücklich mit `inherit`:
+   die Abstandshalter (::before/::after) vom Dokument, der Titel (h2) über seinen Kopf vom Punkt.
+   Optik unverändert - nur die Neuberechnung beschränkt sich auf diese wenigen Elemente. Bewusst
+   als eigener Block am Dateiende (die Regeln oben bleiben, wie sie sind). */
+@property --accordion-above {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --accordion-below {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --open {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+.protocol-document-accordion.protocol-document-spaced::before,
+.protocol-document-accordion.protocol-document-spaced::after {
+  --accordion-above: inherit;
+  --accordion-below: inherit;
+}
+
+.protocol-document-accordion .protocol-doc-section > .editor-panel-header,
+.protocol-document-accordion .protocol-doc-section > .editor-panel-header > div,
+.protocol-document-accordion .protocol-doc-section > .editor-panel-header > div > h2 {
+  --open: inherit;
+}
