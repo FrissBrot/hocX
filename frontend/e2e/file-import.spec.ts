@@ -109,7 +109,7 @@ test("ZIP importieren mit Regel, Vorschau und Bericht", async ({ page, request }
   const start = page.getByRole("button", { name: "Import starten" });
   await expect(start).toBeEnabled({ timeout: 30_000 });
   await start.click();
-  await page.getByRole("dialog").getByRole("button", { name: "Import starten" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Import starten" }).click();
 
   await expect(page.getByText(/Import abgeschlossen/)).toBeVisible({ timeout: 180_000 });
   await expect(page.getByRole("link", { name: `Lager ${stamp}/foto.png` })).toBeVisible();
