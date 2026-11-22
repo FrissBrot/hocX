@@ -35,6 +35,7 @@ from app.models.import_entities import ImportJob
 from app.services.audit_service import AuditService
 from app.services.cloud_import import jobs, paths
 from app.services.cloud_import.jobs import ImportFailure
+from app.services.file_service import FileService
 from app.services.upload_pipeline import GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
 
 # Wie files.py: die Route-Klasse streamt nur die Upload-Pfade (/cloud-import/uploads/), alle anderen
@@ -80,6 +81,8 @@ class ImportJobCreate(BaseModel):
     type_filter: TypeFilter = "all"
     include_gps: bool = True
     folder_tags: bool = False
+    # Album-Regeln wirken nur, wenn eingeschaltet (Standard aus, User-Entscheid 2026-11-22)
+    albums_enabled: bool = False
 
 
 class ManifestEntry(BaseModel):
@@ -133,6 +136,7 @@ class ImportSettingsIn(BaseModel):
     type_filter: TypeFilter = "all"
     include_gps: bool = True
     folder_tags: bool = False
+    albums_enabled: bool = False
 
 
 class PreviewRequest(ImportSettingsIn):
@@ -157,6 +161,7 @@ class PreviewItemRead(BaseModel):
     reason: str | None
     tags: list[str]
     date: date | None
+    date_source: str | None = None
     albums: list[str]
     rules: list[str]
     conflict: bool
@@ -188,6 +193,14 @@ class PreviewRead(BaseModel):
     filtered_total: int
     folders: list[str]
     saved: bool
+    # Albumnamen, die es im Verein schon gibt und die deshalb ergänzt statt neu angelegt werden
+    existing_albums: list[str] = Field(default_factory=list)
+
+
+class AlbumReportRead(BaseModel):
+    name: str
+    reused: bool
+    candidates: int
 
 
 class ImportJobRead(BaseModel):
@@ -197,6 +210,7 @@ class ImportJobRead(BaseModel):
     type_filter: str
     include_gps: bool
     folder_tags: bool
+    albums_enabled: bool
     takeout: bool
     rules: list[dict]
     total_items: int
@@ -212,6 +226,7 @@ class ImportJobRead(BaseModel):
     counts: dict[str, int] = Field(default_factory=dict)
     codes: dict[str, int] = Field(default_factory=dict)
     processed_bytes: int = 0
+    albums: list[AlbumReportRead] = Field(default_factory=list)
 
 
 class PendingUploadRead(BaseModel):
@@ -237,6 +252,7 @@ class ReportItemRead(BaseModel):
     result_code: str | None
     tags: list[str]
     estimated_date: date | None
+    date_source: str | None = None
     albums: list[str]
     conflict: bool
     file_id: uuid.UUID | None
@@ -256,12 +272,17 @@ def _job_read(db: Session, job: ImportJob, user: CurrentUser, *, with_counts: bo
     creator = db.get(AppUser, job.requested_by) if job.requested_by else None
     read = ImportJobRead(
         id=job.id, source=job.source, status=job.status, type_filter=job.type_filter, include_gps=job.include_gps,
-        folder_tags=job.folder_tags, takeout=job.takeout, rules=list(job.rules or []), total_items=job.total_items,
+        folder_tags=job.folder_tags, albums_enabled=job.albums_enabled, takeout=job.takeout, rules=list(job.rules or []),
+        total_items=job.total_items,
         total_bytes=job.total_bytes, archives=len(job.archives or []), error=job.error,
         is_owner=job.requested_by == user.user_id,
         requested_by_name=(creator.display_name if creator is not None and creator.tenant_id == job.tenant_id else None),
         created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at,
         last_progress_at=job.last_progress_at,
+        albums=[
+            AlbumReportRead(name=name, reused=bool(entry.get("reused")), candidates=int(entry.get("candidates") or 0))
+            for name, entry in sorted((job.album_report or {}).items())
+        ],
     )
     if with_counts:
         read.counts, read.codes, read.processed_bytes = jobs.status_counts(db, job)
@@ -284,7 +305,7 @@ def create_import_job(payload: ImportJobCreate, db: Session = Depends(get_db), u
     try:
         job = jobs.create_job(
             db, tenant_id=tenant_id, user_id=user.user_id, source=payload.source, type_filter=payload.type_filter,
-            include_gps=payload.include_gps, folder_tags=payload.folder_tags,
+            include_gps=payload.include_gps, folder_tags=payload.folder_tags, albums_enabled=payload.albums_enabled,
         )
     except ImportFailure as exc:
         raise _http(exc) from None
@@ -334,7 +355,9 @@ def _evaluate(db: Session, job: ImportJob, payload: ImportSettingsIn) -> tuple[j
     raw_rules = [rule.model_dump(mode="json") for rule in payload.rules]
     compiled = jobs.compile_job_rules(db, job.tenant_id, raw_rules)
     # Vorschau mit den übergebenen Optionen (der Auftrag selbst bleibt unverändert)
-    return compiled, jobs.evaluate_job(db, job, compiled.rules, type_filter=payload.type_filter, folder_tags=payload.folder_tags)
+    return compiled, jobs.evaluate_job(
+        db, job, compiled.rules, type_filter=payload.type_filter, folder_tags=payload.folder_tags, albums_enabled=payload.albums_enabled,
+    )
 
 
 @router.post("/cloud-import/jobs/{job_id}/preview", response_model=PreviewRead, response_model_by_alias=True)
@@ -349,7 +372,8 @@ def preview_import_job(
     if not editable:
         payload = PreviewRequest(
             rules=_stored_rules(job), type_filter=job.type_filter,
-            include_gps=job.include_gps, folder_tags=job.folder_tags, view=payload.view, rule_id=payload.rule_id,
+            include_gps=job.include_gps, folder_tags=job.folder_tags, albums_enabled=job.albums_enabled,
+            view=payload.view, rule_id=payload.rule_id,
             q=payload.q, offset=payload.offset, limit=payload.limit,
         )
     compiled, outcomes = _evaluate(db, job, payload)
@@ -360,7 +384,7 @@ def preview_import_job(
         if job.status == "ready" and job.requested_by == user.user_id:
             jobs.save_settings(
                 job, raw_rules=[rule.model_dump(mode="json") for rule in payload.rules], type_filter=payload.type_filter,
-                include_gps=payload.include_gps, folder_tags=payload.folder_tags,
+                include_gps=payload.include_gps, folder_tags=payload.folder_tags, albums_enabled=payload.albums_enabled,
             )
             saved = True
         db.commit()  # gibt die Zeilensperre frei
@@ -376,7 +400,8 @@ def preview_import_job(
         items=[
             PreviewItemRead(
                 path=o.path, kind=o.kind, size=o.size, import_=o.import_, reason=o.reason, tags=o.result.tags,
-                date=o.result.date, albums=[_album_label(key, album_names) for key in o.result.albums],
+                date=o.result.date, date_source=o.result.date_source if o.result.date else None,
+                albums=[_album_label(key, album_names) for key in o.result.albums],
                 rules=o.result.matched, conflict=bool(o.result.conflicts),
             )
             for o in page
@@ -384,6 +409,8 @@ def preview_import_job(
         filtered_total=len(selected),
         folders=jobs.folder_list(outcomes),
         saved=saved,
+        # Nur wer Alben verwalten darf, erfährt, welche Namen es schon gibt (Review N1)
+        existing_albums=jobs.existing_album_names(db, job.tenant_id, outcomes) if user.can(P.PHOTOS_MANAGE) else [],
     )
 
 
@@ -395,7 +422,7 @@ def start_import_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
         raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
     settings_in = ImportSettingsIn(
         rules=_stored_rules(job), type_filter=job.type_filter,
-        include_gps=job.include_gps, folder_tags=job.folder_tags,
+        include_gps=job.include_gps, folder_tags=job.folder_tags, albums_enabled=job.albums_enabled,
     )
     compiled, outcomes = _evaluate(db, job, settings_in)
     if compiled.errors:
@@ -475,7 +502,8 @@ def list_import_items(
     """Bericht: Dateien mit Ergebnis. Dateinamen/Pfade nur hier und nie in Mails oder Logs."""
     job = _load(db, user, job_id)
     items, total = jobs.report_items(db, job, status=item_status, offset=offset, limit=limit)
-    file_ids = {item.stored_file_id for item in items if item.stored_file_id}
+    # Vorhandene Dateien (Duplikate) nur verlinken, wenn die lesende Person sie sieht (Review N2)
+    file_ids = {item.stored_file_id or item.existing_file_id for item in items if item.stored_file_id or item.existing_file_id}
     public = dict(
         db.execute(select(StoredFile.id, StoredFile.public_id).where(StoredFile.tenant_id == job.tenant_id, StoredFile.id.in_(file_ids))).all()
     ) if file_ids else {}
@@ -489,13 +517,24 @@ def list_import_items(
                 except ValueError:
                     continue
     names = {str(k): v for k, v in jobs.own_album_ids(db, job.tenant_id, album_ids).items()}
+    existing_ids = [public[item.existing_file_id] for item in items if not item.stored_file_id and item.existing_file_id in public]
+    visible_existing = set(FileService().visible_overview_items(db, user, existing_ids)) if existing_ids else set()
+
+    def link(item) -> uuid.UUID | None:
+        if item.stored_file_id:
+            return public.get(item.stored_file_id)
+        if item.existing_file_id and public.get(item.existing_file_id) in visible_existing:
+            return public[item.existing_file_id]
+        return None
+
     return ReportRead(
         items=[
             ReportItemRead(
                 path=item.path, kind=item.kind, size=item.size_bytes, status=item.status,
                 result_code=item.result_code or item.listing_code, tags=list(item.tags or []),
-                estimated_date=item.estimated_date, albums=[_album_label(key, names) for key in item.albums or []],
-                conflict=item.conflict, file_id=public.get(item.stored_file_id) if item.stored_file_id else None,
+                estimated_date=item.estimated_date, date_source=item.date_source,
+                albums=[_album_label(key, names) for key in item.albums or []], conflict=item.conflict,
+                file_id=link(item),
             )
             for item in items
         ],

@@ -19,9 +19,9 @@ import type { ImportJob, ImportPreview } from "@/lib/files/file-import";
 import { ImportRulesStep } from "./import-rules-step";
 
 const job: ImportJob = {
-  id: "job-1", source: "zip", status: "ready", type_filter: "all", include_gps: true, folder_tags: false, takeout: false,
+  id: "job-1", source: "zip", status: "ready", type_filter: "all", include_gps: true, folder_tags: false, albums_enabled: false, takeout: false,
   rules: [], total_items: 3, total_bytes: 3000, archives: 1, error: null, is_owner: true, requested_by_name: "Anna",
-  created_at: "2026-11-22T10:00:00Z", started_at: null, finished_at: null, last_progress_at: null, counts: {}, codes: {}, processed_bytes: 0,
+  created_at: "2026-11-22T10:00:00Z", started_at: null, finished_at: null, last_progress_at: null, counts: {}, codes: {}, processed_bytes: 0, albums: [],
 };
 
 function preview(overrides: Partial<ImportPreview> = {}): ImportPreview {
@@ -36,6 +36,7 @@ function preview(overrides: Partial<ImportPreview> = {}): ImportPreview {
     filtered_total: 2,
     folders: ["Lager", "tmp"],
     saved: true,
+    existing_albums: [],
     ...overrides,
   };
 }
@@ -87,5 +88,29 @@ describe("ImportRulesStep", () => {
     await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/preview") && JSON.parse(String(init?.body)).rules.length === 1)).toBe(true), { timeout: 3000 });
     const lastCall = browserApiFetchMock.mock.calls.filter(([url]) => String(url).endsWith("/preview")).at(-1);
     expect(JSON.parse(String(lastCall?.[1]?.body)).rules).toHaveLength(1);
+  });
+});
+
+describe("ImportRulesStep album option", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+  });
+
+  it("is off by default, hides album actions and sends the switch with the preview", async () => {
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.endsWith("/preview")) return Promise.resolve(preview());
+      return Promise.resolve([]);
+    });
+    render(<ImportRulesStep job={job} readOnly={false} onJob={() => {}} onCancelled={() => {}} />);
+    const toggle = screen.getByRole("checkbox", { name: "Bilder per Regel in Alben einordnen" }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Regel hinzufügen" }));
+    expect(screen.queryByRole("option", { name: "In Album einordnen" })).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("option", { name: "In Album einordnen" })).toBeTruthy();
+    await waitFor(
+      () => expect(browserApiFetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/preview") && JSON.parse(String(init?.body)).albums_enabled === true)).toBe(true),
+      { timeout: 3000 },
+    );
   });
 });

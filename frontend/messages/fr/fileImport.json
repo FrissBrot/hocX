@@ -65,7 +65,9 @@
       "documents": "Documents uniquement"
     },
     "includeGps": "Conserver les données GPS des images",
-    "folderTags": "Utiliser les noms de dossiers comme tags"
+    "folderTags": "Utiliser les noms de dossiers comme tags",
+    "albumsEnabled": "Classer les images dans des albums selon les règles",
+    "albumsHint": "Désactivé par défaut : les images arrivent dans la galerie et peuvent être ajoutées plus tard à un album via la sélection multiple."
   },
   "cancel": {
     "label": "Abandonner l'import",
@@ -153,7 +155,8 @@
       "required": "Merci de compléter.",
       "out_of_range": "La date doit se situer entre 1826 et aujourd'hui.",
       "album_not_found": "Album introuvable."
-    }
+    },
+    "albumsOff": "Les règles d'album ne s'appliquent que si « Classer les images dans des albums selon les règles » est activé."
   },
   "preview": {
     "title": "Aperçu",
@@ -184,7 +187,9 @@
     "loading": "Calcul de l'aperçu …",
     "empty": "Aucun fichier dans cette vue.",
     "notImported": "Non importé",
-    "conflict": "Conflit"
+    "conflict": "Conflit",
+    "existingAlbums": "Ces albums existent déjà et seront complétés : {names}",
+    "fromTakeout": "depuis Takeout"
   },
   "codes": {
     "too_large": "Trop volumineux",
@@ -204,7 +209,8 @@
     "rejected": "Refusé",
     "source_gone": "Source plus disponible",
     "rule_violation": "Règle non respectée",
-    "invalid_name": "Nom non valable"
+    "invalid_name": "Nom non valable",
+    "duplicate_enriched": "Doublon, complété"
   },
   "kinds": {
     "image": "Image",
@@ -250,7 +256,10 @@
       "reason": "Motif",
       "size": "Taille"
     },
-    "empty": "Aucun fichier dans cette vue."
+    "empty": "Aucun fichier dans cette vue.",
+    "albumReused": "Album « {name} » : album existant complété.",
+    "albumReusedOldest": "Album « {name} » : {count} albums portent ce nom, le plus ancien a été complété.",
+    "albumCreated": "Album « {name} » : nouvellement créé."
   },
   "itemStatus": {
     "listed": "Listé",

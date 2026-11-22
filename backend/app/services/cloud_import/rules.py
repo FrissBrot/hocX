@@ -100,6 +100,8 @@ class ItemResult:
     albums: list[str] = field(default_factory=list)
     matched: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    # "rule" oder "takeout" (vom Aufrufer gesetzt, siehe jobs.evaluate_job)
+    date_source: str | None = None
 
 
 def _options(case_sensitive: bool):
@@ -359,11 +361,18 @@ def auto_folder_tags(path: str) -> list[str]:
     return [segment for segment in folder_segments(path) if segment.casefold() not in FOLDER_TAG_BLOCKLIST]
 
 
-def evaluate_item(item: ItemInput, rules: list[CompiledRule], *, folder_tags: bool = False) -> ItemResult:
+_ALBUM_ACTIONS = frozenset({"add_to_album", "folder_to_album"})
+
+
+def evaluate_item(item: ItemInput, rules: list[CompiledRule], *, folder_tags: bool = False, albums: bool = True) -> ItemResult:
+    """albums=False (Standard eines Imports, User-Entscheid): Album-Aktionen wirken nicht und
+    zählen auch nicht als Treffer - die Bilder landen nur in der Galerie."""
     result = ItemResult()
     name = file_name(item.path)
     tags: list[str] = []
     for rule in rules:
+        if not albums and rule.action in _ALBUM_ACTIONS:
+            continue
         if not _applies(rule, item, name):
             continue
         result.matched.append(rule.id)
@@ -372,6 +381,7 @@ def evaluate_item(item: ItemInput, rules: list[CompiledRule], *, folder_tags: bo
         elif rule.action == "set_date":
             if result.date is None:
                 result.date = rule.date
+                result.date_source = "rule"
             elif rule.date != result.date:
                 result.conflicts.append(rule.id)
         elif rule.action == "skip":
@@ -389,10 +399,11 @@ def evaluate_item(item: ItemInput, rules: list[CompiledRule], *, folder_tags: bo
     result.albums = result.albums[:MAX_ALBUMS_PER_FILE]
     if item.kind != KIND_IMAGE:
         result.date = None
+        result.date_source = None
         result.albums = []
     return result
 
 
-def evaluate(items: Iterable[ItemInput], rules: list[CompiledRule], *, folder_tags: bool = False) -> Iterator[ItemResult]:
+def evaluate(items: Iterable[ItemInput], rules: list[CompiledRule], *, folder_tags: bool = False, albums: bool = True) -> Iterator[ItemResult]:
     for item in items:
-        yield evaluate_item(item, rules, folder_tags=folder_tags)
+        yield evaluate_item(item, rules, folder_tags=folder_tags, albums=albums)

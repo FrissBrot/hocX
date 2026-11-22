@@ -65,7 +65,9 @@
       "documents": "Documents only"
     },
     "includeGps": "Keep GPS data of images",
-    "folderTags": "Use folder names as tags"
+    "folderTags": "Use folder names as tags",
+    "albumsEnabled": "Put images into albums by rule",
+    "albumsHint": "Off by default: images go to the gallery and can be added to an album later via multi-select."
   },
   "cancel": {
     "label": "Discard import",
@@ -153,7 +155,8 @@
       "required": "Please fill in.",
       "out_of_range": "The date must be between 1826 and today.",
       "album_not_found": "Album not found."
-    }
+    },
+    "albumsOff": "Album rules only apply when «Put images into albums by rule» is switched on."
   },
   "preview": {
     "title": "Preview",
@@ -184,7 +187,9 @@
     "loading": "Calculating preview …",
     "empty": "No files in this view.",
     "notImported": "Not imported",
-    "conflict": "Conflict"
+    "conflict": "Conflict",
+    "existingAlbums": "These albums already exist and will be extended: {names}",
+    "fromTakeout": "from Takeout"
   },
   "codes": {
     "too_large": "Too large",
@@ -204,7 +209,8 @@
     "rejected": "Rejected",
     "source_gone": "Source no longer available",
     "rule_violation": "Rule violated",
-    "invalid_name": "Invalid name"
+    "invalid_name": "Invalid name",
+    "duplicate_enriched": "Duplicate, supplemented"
   },
   "kinds": {
     "image": "Image",
@@ -250,7 +256,10 @@
       "reason": "Reason",
       "size": "Size"
     },
-    "empty": "No files in this view."
+    "empty": "No files in this view.",
+    "albumReused": "Album «{name}»: existing album extended.",
+    "albumReusedOldest": "Album «{name}»: {count} albums with this name exist, the oldest was extended.",
+    "albumCreated": "Album «{name}»: newly created."
   },
   "itemStatus": {
     "listed": "Listed",

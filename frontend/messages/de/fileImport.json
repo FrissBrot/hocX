@@ -65,7 +65,9 @@
       "documents": "Nur Dokumente"
     },
     "includeGps": "GPS-Daten der Bilder übernehmen",
-    "folderTags": "Ordnernamen als Tags übernehmen"
+    "folderTags": "Ordnernamen als Tags übernehmen",
+    "albumsEnabled": "Bilder per Regel in Alben einordnen",
+    "albumsHint": "Standardmässig aus: Bilder kommen in die Galerie und lassen sich später über die Mehrfachauswahl einem Album zuordnen."
   },
   "cancel": {
     "label": "Import verwerfen",
@@ -153,7 +155,8 @@
       "required": "Bitte ausfüllen.",
       "out_of_range": "Das Datum muss zwischen 1826 und heute liegen.",
       "album_not_found": "Album nicht gefunden."
-    }
+    },
+    "albumsOff": "Album-Regeln wirken nur, wenn «Bilder per Regel in Alben einordnen» eingeschaltet ist."
   },
   "preview": {
     "title": "Vorschau",
@@ -184,7 +187,9 @@
     "loading": "Vorschau wird berechnet …",
     "empty": "Keine Dateien in dieser Ansicht.",
     "notImported": "Nicht importiert",
-    "conflict": "Konflikt"
+    "conflict": "Konflikt",
+    "existingAlbums": "Diese Alben gibt es schon und werden ergänzt: {names}",
+    "fromTakeout": "aus Takeout"
   },
   "codes": {
     "too_large": "Zu gross",
@@ -204,7 +209,8 @@
     "rejected": "Abgelehnt",
     "source_gone": "Quelle nicht mehr vorhanden",
     "rule_violation": "Regel verletzt",
-    "invalid_name": "Ungültiger Name"
+    "invalid_name": "Ungültiger Name",
+    "duplicate_enriched": "Duplikat, ergänzt"
   },
   "kinds": {
     "image": "Bild",
@@ -250,7 +256,10 @@
       "reason": "Grund",
       "size": "Grösse"
     },
-    "empty": "Keine Dateien in dieser Ansicht."
+    "empty": "Keine Dateien in dieser Ansicht.",
+    "albumReused": "Album «{name}»: bestehendes Album ergänzt.",
+    "albumReusedOldest": "Album «{name}»: {count} gleichnamige Alben vorhanden, das älteste wurde ergänzt.",
+    "albumCreated": "Album «{name}»: neu angelegt."
   },
   "itemStatus": {
     "listed": "Gelistet",

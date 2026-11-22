@@ -13,7 +13,7 @@ zum Beispiel den Vereinsordner aus OneDrive, Google Drive oder Dropbox. Zu finde
 
 | Quelle | Wann | Hinweise |
 |---|---|---|
-| **ZIP-Archiv** | Download aus OneDrive/Dropbox, Google Takeout, Archiv vom PC | Mehrere ZIPs pro Import möglich (z. B. Takeout-Teilarchive), je bis 10 GB. Bei Google Takeout wird der Ordner «Takeout» automatisch erkannt; die Metadaten-Dateien (`.json`) werden nicht importiert. |
+| **ZIP-Archiv** | Download aus OneDrive/Dropbox, Google Takeout, Archiv vom PC | Mehrere ZIPs pro Import möglich (z. B. Takeout-Teilarchive), je bis 10 GB. Bei Google Takeout wird der Ordner «Takeout» automatisch erkannt. Die Metadaten-Dateien (`.json`) werden nicht importiert, ihr Aufnahmedatum aber übernommen, wenn das Foto selbst keines hat (siehe unten). |
 | **Ordner hochladen** | Synchronisierter Ordner auf dem PC (OneDrive, Google Drive, …) | Zuerst wird nur die Dateiliste übertragen. Nach dem Start lädt der Browser genau die Dateien hoch, die importiert werden - das Fenster muss dafür offen bleiben. Wird es geschlossen, denselben Ordner später erneut wählen; der Upload geht weiter. |
 
 Direkte Verbindungen zu OneDrive und Google Drive folgen in einer späteren Version.
@@ -43,8 +43,17 @@ passen) und eine Aktion.
 | Tags hinzufügen | Tags aller passenden Regeln werden zusammengeführt. |
 | Aufnahmedatum setzen, wenn es fehlt | Nur Bilder. Gilt nur, wenn die Datei selbst kein Aufnahmedatum hat, und erscheint als «geschätzt». Passen mehrere Regeln, gilt die erste (andere werden als Konflikt angezeigt). |
 | Nicht importieren | Gewinnt immer. Die Datei wird weder übertragen noch importiert. |
-| In Album einordnen | Nur Bilder: in ein bestehendes oder ein neues Album. |
-| Album nach Ordnernamen | Nur Bilder: ein Album je Ordner (direkter oder oberster Ordner). |
+| In Album einordnen | Nur Bilder, nur mit eingeschalteter Option «Bilder per Regel in Alben einordnen»: in ein bestehendes oder ein neues Album. |
+| Album nach Ordnernamen | Nur Bilder, nur mit eingeschalteter Option: ein Album je Ordner (direkter oder oberster Ordner). |
+
+**Alben sind standardmässig aus.** Ohne die Option kommen Bilder einfach in die Galerie; sie lassen
+sich später über die Mehrfachauswahl einem Album zuordnen. Gibt es im Verein schon ein Album mit
+genau diesem Namen, wird es ergänzt statt ein zweites anzulegen (bei mehreren gleichnamigen das
+älteste; der Bericht nennt das). Alben anderer Vereine (geteilte Alben) werden nie verändert.
+
+**Aufnahmedatum:** Es gilt immer das Datum aus der Datei (EXIF). Fehlt es, übernimmt hocX bei Google
+Takeout das Datum aus der Metadaten-Datei (`photoTakenTime`), sonst das Datum einer Datumsregel. Beide
+erscheinen als «geschätzt».
 
 Zusätzlich lassen sich die **Ordnernamen als Tags** übernehmen (nichtssagende Namen wie «Neuer
 Ordner» oder «Desktop» werden ausgelassen). hocX kennt keine Ordner in der Ablage: die
@@ -58,7 +67,8 @@ der Import nicht starten.
 
 Nach dem Start lassen sich die Regeln nicht mehr ändern. Jede Datei durchläuft die gleichen
 Prüfungen wie ein normaler Upload (Virenprüfung, Inhaltstyp, Duplikate, Kontingent). Bereits
-vorhandene Dateien werden nicht doppelt gespeichert. Ein Import lässt sich jederzeit abbrechen;
+vorhandene Dateien werden nicht doppelt gespeichert; sie bekommen aber die Tags und Alben aus den
+Regeln dazu (nur ergänzt, nie entfernt) und erscheinen im Bericht als «Duplikat, ergänzt». Ein Import lässt sich jederzeit abbrechen;
 bereits importierte Dateien bleiben. Ein unterbrochener Import (z. B. Kontingent voll) lässt sich
 fortsetzen.
 

@@ -39,6 +39,7 @@ export type ImportJob = {
   type_filter: ImportTypeFilter;
   include_gps: boolean;
   folder_tags: boolean;
+  albums_enabled: boolean;
   takeout: boolean;
   rules: ImportRule[];
   total_items: number;
@@ -54,6 +55,7 @@ export type ImportJob = {
   counts: Partial<Record<ImportItemStatus, number>>;
   codes: Record<string, number>;
   processed_bytes: number;
+  albums: { name: string; reused: boolean; candidates: number }[];
 };
 
 export type ImportRuleError = { rule_id: string; field: string; code: string };
@@ -66,6 +68,7 @@ export type ImportPreviewItem = {
   reason: string | null;
   tags: string[];
   date: string | null;
+  date_source?: "rule" | "takeout" | null;
   albums: string[];
   rules: string[];
   conflict: boolean;
@@ -88,6 +91,7 @@ export type ImportPreview = {
   filtered_total: number;
   folders: string[];
   saved: boolean;
+  existing_albums: string[];
 };
 
 export type ImportReportItem = {
@@ -98,6 +102,7 @@ export type ImportReportItem = {
   result_code: string | null;
   tags: string[];
   estimated_date: string | null;
+  date_source?: "rule" | "takeout" | null;
   albums: string[];
   conflict: boolean;
   file_id: string | null;
@@ -203,6 +208,8 @@ export function uploadBatches(files: PathedFile[], maxFiles: number, maxBytes: n
   if (current.length) batches.push(current);
   return batches;
 }
+
+export const ALBUM_ACTIONS: ImportRuleAction[] = ["add_to_album", "folder_to_album"];
 
 let ruleCounter = 0;
 

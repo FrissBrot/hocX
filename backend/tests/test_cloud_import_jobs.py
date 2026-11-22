@@ -276,7 +276,7 @@ def test_full_zip_import_with_tags_date_albums_and_duplicates(db):
         {"id": "album", "match": {}, "action": {"type": "folder_to_album"}},
         {"id": "skip", "match": {"folder": "tmp"}, "action": {"type": "skip"}},
     ]
-    assert _preview(db, owner, job.id, rules).saved
+    assert _preview(db, owner, job.id, rules, albums_enabled=True).saved
     started = routes.start_import_job(job.id, db=db, user=owner)
     assert started.status == "queued"
 
@@ -518,3 +518,143 @@ def test_analyze_function_runs_as_app_role(db):
 
     with as_app(db, None):
         db.execute(text("SELECT public.hocx_analyze_upload_tables()"))
+
+
+
+# --- Entscheide 2026-11-22: Alben optional, Wiederverwendung, Duplikate ergänzen, Takeout-Datum ----
+
+
+def test_album_rules_are_off_by_default(db):
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    job = _zip_job(db, owner, {"Lager/a.png": _png((31, 2, 3))})
+    rules = [{"id": "album", "match": {}, "action": {"type": "folder_to_album"}}]
+    preview = _preview(db, owner, job.id, rules)
+    assert preview.items[0].albums == [] and preview.summary.per_rule == {}
+    routes.start_import_job(job.id, db=db, user=owner)
+    _run_worker(db)
+    assert db.scalar(select(func.count()).select_from(PhotoAlbum).where(PhotoAlbum.tenant_id == tenant.id)) == 0
+    assert _items(db, job.id)["Lager/a.png"].status == "imported"
+
+
+def test_existing_album_with_the_same_name_is_reused_oldest_first(db):
+    from datetime import UTC, datetime, timedelta
+
+    tenant, other = make_tenant(db, "A"), make_tenant(db, "B")
+    owner = _admin(db, tenant)
+    old = PhotoAlbum(tenant_id=tenant.id, name="Lager", kind="manual", created_at=datetime.now(UTC) - timedelta(days=9))
+    newer = PhotoAlbum(tenant_id=tenant.id, name="Lager", kind="manual")
+    foreign = PhotoAlbum(tenant_id=other.id, name="Lager", kind="manual")
+    db.add_all([old, newer, foreign])
+    db.commit()
+    job = _zip_job(db, owner, {"Lager/a.png": _png((41, 2, 3))})
+    rules = [{"id": "album", "match": {}, "action": {"type": "folder_to_album"}}]
+    preview = _preview(db, owner, job.id, rules, albums_enabled=True)
+    assert preview.existing_albums == ["Lager"]
+    routes.start_import_job(job.id, db=db, user=owner)
+    _run_worker(db)
+    stored = db.get(StoredFile, _items(db, job.id)["Lager/a.png"].stored_file_id)
+    in_albums = set(db.scalars(select(PhotoAlbumItem.album_id).where(PhotoAlbumItem.file_id == stored.public_id)))
+    assert in_albums == {old.id}
+    assert db.scalar(select(func.count()).select_from(PhotoAlbum).where(PhotoAlbum.tenant_id == tenant.id)) == 2
+    report = routes.get_import_job(job.id, db=db, user=owner)
+    assert [(a.name, a.reused, a.candidates) for a in report.albums] == [("Lager", True, 2)]
+
+
+def test_duplicates_get_tags_and_albums_added_never_removed(db):
+    from app.services.file_service import FileService
+
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    content = _png((51, 2, 3))
+    items, _errors = asyncio.run(FileService().save_gallery_uploads(db, tenant_id=tenant.id, files=[("alt.png", content)], tags=["Alt"], created_by=owner.user_id))
+    existing = db.scalar(select(StoredFile).where(StoredFile.public_id == items[0].id))
+    job = _zip_job(db, owner, {"Lager/neu.png": content})
+    rules = [
+        {"id": "tag", "match": {}, "action": {"type": "add_tags", "tags": ["Lager"]}},
+        {"id": "album", "match": {}, "action": {"type": "folder_to_album"}},
+    ]
+    _preview(db, owner, job.id, rules, albums_enabled=True)
+    routes.start_import_job(job.id, db=db, user=owner)
+    _run_worker(db)
+    item = _items(db, job.id)["Lager/neu.png"]
+    assert item.status == "duplicate" and item.result_code == "duplicate_enriched"
+    assert item.existing_file_id == existing.id and item.stored_file_id is None
+    db.refresh(existing)
+    assert existing.tags == ["Alt", "Lager"]
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.tenant_id == tenant.id, PhotoAlbum.name == "Lager"))
+    assert db.scalar(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id == existing.public_id))
+    report = routes.list_import_items(job.id, item_status="duplicate", offset=0, limit=10, db=db, user=owner)
+    assert report.items[0].result_code == "duplicate_enriched" and report.items[0].file_id == existing.public_id
+
+
+def test_takeout_metadata_date_fills_only_missing_capture_dates(db):
+    import json as jsonlib
+    from datetime import date, datetime
+
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    stamp = int(datetime(2018, 6, 3, 12).timestamp())
+    meta = jsonlib.dumps({"photoTakenTime": {"timestamp": str(stamp)}}).encode()
+    buffer = io.BytesIO()
+    exif_image = Image.new("RGB", (30, 20), color=(9, 9, 9))
+    exif = Image.Exif()
+    exif[306] = "2015:01:02 10:00:00"
+    exif_image.save(buffer, format="JPEG", exif=exif)
+    job = _create(db, owner)
+    _add_zip(
+        db, owner, job.id,
+        {
+            "Takeout/Google Fotos/Lager/ohne.png": _png((61, 2, 3)),
+            "Takeout/Google Fotos/Lager/ohne.png.supplemental-metadata.json": meta,
+            "Takeout/Google Fotos/Lager/mit-exif.jpg": buffer.getvalue(),
+            "Takeout/Google Fotos/Lager/mit-exif.jpg.json": meta,
+            "Takeout/Google Fotos/Lager/kaputt.png": _png((62, 2, 3)),
+            "Takeout/Google Fotos/Lager/kaputt.png.json": b"{nicht json",
+        },
+        name="takeout.zip",
+    )
+    items = _items(db, job.id)
+    assert items["Google Fotos/Lager/ohne.png"].hint_date == date(2018, 6, 3)
+    assert items["Google Fotos/Lager/kaputt.png"].hint_date is None
+    routes.finish_import_listing(job.id, db=db, user=owner)
+    rules = [{"id": "d", "match": {}, "action": {"type": "set_date", "date": "2020-01-01"}}]
+    preview = _preview(db, owner, job.id, rules)
+    by_path = {item.path: item for item in preview.items}
+    assert (by_path["Google Fotos/Lager/ohne.png"].date, by_path["Google Fotos/Lager/ohne.png"].date_source) == (date(2018, 6, 3), "takeout")
+    assert (by_path["Google Fotos/Lager/kaputt.png"].date, by_path["Google Fotos/Lager/kaputt.png"].date_source) == (date(2020, 1, 1), "rule")
+    routes.start_import_job(job.id, db=db, user=owner)
+    _run_worker(db)
+    items = _items(db, job.id)
+    without = db.get(StoredFile, items["Google Fotos/Lager/ohne.png"].stored_file_id)
+    assert without.estimated_taken_on == date(2018, 6, 3)
+    with_exif = db.get(StoredFile, items["Google Fotos/Lager/mit-exif.jpg"].stored_file_id)
+    assert with_exif.exif_taken_at.date() == date(2015, 1, 2)  # EXIF hat Vorrang (Schätzdatum greift nicht)
+    assert with_exif.estimated_taken_on is None
+
+
+def test_duplicates_are_not_enriched_without_write_access(db, monkeypatch):
+    """Security-Review M1: dieselbe Schreibprüfung wie bulk-tags (z. B. Bilder aus nicht lesbaren
+    Protokollen) - sonst weder Tags noch Alben."""
+    from app.services.access_service import AccessService
+    from app.services.file_service import FileService
+
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    content = _png((71, 2, 3))
+    items, _errors = asyncio.run(FileService().save_gallery_uploads(db, tenant_id=tenant.id, files=[("alt.png", content)], tags=["Alt"], created_by=owner.user_id))
+    existing = db.scalar(select(StoredFile).where(StoredFile.public_id == items[0].id))
+
+    def deny(self, db_, user, stored_file_id, *, allow_context_grant=True):
+        assert allow_context_grant is False
+        raise HTTPException(status_code=404, detail="nicht lesbar")
+
+    monkeypatch.setattr(AccessService, "ensure_can_read_stored_file", deny)
+    job = _zip_job(db, owner, {"Lager/neu.png": content})
+    _preview(db, owner, job.id, [{"id": "tag", "match": {}, "action": {"type": "add_tags", "tags": ["Lager"]}}])
+    routes.start_import_job(job.id, db=db, user=owner)
+    _run_worker(db)
+    item = _items(db, job.id)["Lager/neu.png"]
+    assert item.status == "duplicate" and item.result_code == "duplicate" and item.existing_file_id is None
+    db.refresh(existing)
+    assert existing.tags == ["Alt"]

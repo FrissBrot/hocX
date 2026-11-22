@@ -7,7 +7,7 @@ import { ReorderButtons } from "@/components/ui/reorder-buttons";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select } from "@/components/ui/select";
 import { TagInput } from "@/components/ui/tag-input";
-import type { ImportRule, ImportRuleAction, ImportRuleError } from "@/lib/files/file-import";
+import { ALBUM_ACTIONS, type ImportRule, type ImportRuleAction, type ImportRuleError } from "@/lib/files/file-import";
 
 export type AlbumOption = { id: string; name: string };
 
@@ -20,6 +20,7 @@ type Props = {
   folders: string[];
   albums: AlbumOption[];
   tagSuggestions: string[];
+  albumsEnabled: boolean;
   readOnly: boolean;
   onChange: (rule: ImportRule) => void;
   onMove: (from: number, to: number) => void;
@@ -29,7 +30,7 @@ type Props = {
 const ACTIONS: ImportRuleAction[] = ["add_tags", "set_date", "skip", "add_to_album", "folder_to_album"];
 
 export function ImportRuleCard({
-  rule, index, count, matches, errors, folders, albums, tagSuggestions, readOnly, onChange, onMove, onRemove,
+  rule, index, count, matches, errors, folders, albums, tagSuggestions, albumsEnabled, readOnly, onChange, onMove, onRemove,
 }: Props) {
   const t = useTranslations("fileImport");
   const title = t("rules.ruleTitle", { number: index + 1 });
@@ -127,11 +128,14 @@ export function ImportRuleCard({
         <label className="field-stack">
           <span className="field-label">{t("rules.action")}</span>
           <Select value={rule.action.type} onChange={(event) => setAction({ type: event.target.value as ImportRuleAction })}>
-            {ACTIONS.map((action) => (
+            {ACTIONS.filter((action) => albumsEnabled || !ALBUM_ACTIONS.includes(action) || action === rule.action.type).map((action) => (
               <option key={action} value={action}>{t(`rules.actions.${action}`)}</option>
             ))}
           </Select>
           {errorLine("action")}
+          {!albumsEnabled && ALBUM_ACTIONS.includes(rule.action.type) ? (
+            <span className="field-help">{t("rules.albumsOff")}</span>
+          ) : null}
         </label>
         {rule.action.type === "add_tags" ? (
           <label className="field-stack">

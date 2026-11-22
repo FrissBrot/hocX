@@ -41,6 +41,20 @@ Ordner-Upload, Regel-Engine, Hintergrundverarbeitung, Bericht. Microsoft- und Go
    `before_commit`-Hook in derselben Transaktion geschrieben wie die neuen Dateien - eine
    Wiederaufnahme nach Absturz importiert nichts doppelt.
 
+## Entscheide 2026-11-22
+
+- Album-Aktionen nur mit `import_job.albums_enabled` (Standard aus); ohne bleibt `albums` leer.
+- Albumnamen (`name:<Name>`): gleichnamiges manuelles Album des eigenen Mandanten wird wiederverwendet,
+  bei mehreren das älteste (`created_at`, `id`); `album_report` hält `reused`/`candidates` für den Bericht.
+- Duplikate: sichtbare und verwaltbare vorhandene Dateien bekommen Tags (Vereinigung, nie entfernt) und
+  Album-Einträge (`add_items` ohne Überschreiben); `import_item.existing_file_id`, Code `duplicate_enriched`.
+  `existing_file_id` zählt nicht für die Aufbewahrung des Berichts.
+- Takeout: beim Hochladen eines Archivs werden die Metadaten-JSON im selben Ordner zugeordnet
+  (`.json`, `.supplemental-metadata.json` und gekürzte Formen, Zähler `(n)`), je höchstens 64 KiB
+  gelesen und `photoTakenTime.timestamp` als `hint_date` gespeichert. Rangfolge EXIF > Takeout > Regel;
+  `date_source` (`takeout`/`rule`) erscheint in Vorschau und Bericht. JSON in einem anderen
+  Teilarchiv als das Foto wird nicht zugeordnet.
+
 ## Planner-Statistik
 
 Nach je 5000 neu importierten Dateien und am Ende eines Auftrags ruft der Worker

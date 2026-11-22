@@ -19,6 +19,7 @@ import json
 import shutil
 import uuid
 import zipfile
+import zlib
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -99,7 +100,8 @@ def list_jobs(db: Session, tenant_id: int, limit: int = 20) -> list[ImportJob]:
 
 
 def create_job(
-    db: Session, *, tenant_id: int, user_id: int, source: str, type_filter: str, include_gps: bool, folder_tags: bool
+    db: Session, *, tenant_id: int, user_id: int, source: str, type_filter: str, include_gps: bool, folder_tags: bool,
+    albums_enabled: bool = False,
 ) -> ImportJob:
     active = db.scalar(
         select(ImportJob.id).where(ImportJob.tenant_id == tenant_id, ImportJob.status.in_(IMPORT_JOB_ACTIVE_STATUSES))
@@ -108,7 +110,7 @@ def create_job(
         raise ImportFailure(409, "import_active")
     job = ImportJob(
         tenant_id=tenant_id, requested_by=user_id, source=source, type_filter=type_filter,
-        include_gps=include_gps, folder_tags=folder_tags, status="draft",
+        include_gps=include_gps, folder_tags=folder_tags, albums_enabled=albums_enabled, status="draft",
     )
     db.add(job)
     try:
@@ -134,6 +136,7 @@ class _Entry:
     archive_index: int | None = None
     entry_index: int | None = None
     encrypted: bool = False
+    hint_date: date | None = None
 
 
 def _insert_entries(db: Session, job: ImportJob, entries: list[_Entry]) -> int:
@@ -163,6 +166,7 @@ def _insert_entries(db: Session, job: ImportJob, entries: list[_Entry]) -> int:
                     "tenant_id": job.tenant_id, "job_id": job.id, "path": entry.path, "size_bytes": entry.size,
                     "modified_at": entry.modified_at, "archive_index": entry.archive_index,
                     "entry_index": entry.entry_index, "kind": kind, "listing_code": code, "status": "listed",
+                    "hint_date": entry.hint_date if kind == paths.KIND_IMAGE else None,
                 }
             )
         result = db.execute(
@@ -228,6 +232,43 @@ def read_zip_listing(path: Path, archive_index: int) -> list[_Entry]:
     return entries
 
 
+def read_takeout_dates(archive_path: Path, entries: list[_Entry]) -> int:
+    """Aufnahmedatum aus den Takeout-Metadaten-JSON desselben Archivs (gleicher Ordner). Gelesen
+    wird je JSON höchstens TAKEOUT_JSON_MAX_BYTES; kaputte oder fremde JSON zählen nicht. Pfade kommen
+    nur aus dem ZIP-Verzeichnis und dienen allein der Zuordnung."""
+    by_path = {entry.path: entry for entry in entries}
+    matches = paths.match_takeout_sidecars(list(by_path))
+    if not matches:
+        return 0
+    found = 0
+    files_read = 0
+    bytes_read = 0
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            infos = archive.infolist()
+            for image_path, json_path in matches.items():
+                sidecar = by_path[json_path]
+                if sidecar.encrypted or sidecar.entry_index is None or sidecar.size > paths.TAKEOUT_JSON_MAX_BYTES:
+                    continue
+                # Gesamtbudget je Archiv (Rechenzeit im Upload-Request begrenzen, Security-Review M2)
+                if files_read >= paths.TAKEOUT_JSON_MAX_FILES or bytes_read + sidecar.size > paths.TAKEOUT_JSON_MAX_TOTAL_BYTES:
+                    break
+                files_read += 1
+                bytes_read += sidecar.size
+                try:
+                    with archive.open(infos[sidecar.entry_index]) as source:
+                        data = source.read(paths.TAKEOUT_JSON_MAX_BYTES + 1)
+                except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, NotImplementedError, EOFError, ValueError):
+                    continue
+                taken = paths.parse_takeout_date(data)
+                if taken is not None:
+                    by_path[image_path].hint_date = taken
+                    found += 1
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ImportFailure(400, "zip_invalid") from exc
+    return found
+
+
 def add_archive(db: Session, job: ImportJob, staged: Path) -> int:
     """Registriert ein gestagtes ZIP (Takeout-Teilarchive: mehrere je Auftrag)."""
     require_status(job, "draft")
@@ -242,6 +283,8 @@ def add_archive(db: Session, job: ImportJob, staged: Path) -> int:
     entries = read_zip_listing(staged, archive_index)
     if archive_index == 0 and paths.is_takeout([entry.path for entry in entries]):
         job.takeout = True
+    if job.takeout:
+        read_takeout_dates(staged, entries)
     inserted = _insert_entries(db, job, entries)
     job.archives = [*job.archives, {"path": str(staged.relative_to(settings.storage_root)), "size": staged.stat().st_size}]
     return inserted
@@ -331,12 +374,14 @@ def _type_filtered(type_filter: str, kind: str) -> bool:
 
 
 def evaluate_job(
-    db: Session, job: ImportJob, compiled: list[rules.CompiledRule], *, type_filter: str | None = None, folder_tags: bool | None = None
+    db: Session, job: ImportJob, compiled: list[rules.CompiledRule], *, type_filter: str | None = None,
+    folder_tags: bool | None = None, albums_enabled: bool | None = None,
 ) -> list[Outcome]:
     type_filter = job.type_filter if type_filter is None else type_filter
     folder_tags = job.folder_tags if folder_tags is None else folder_tags
+    albums_enabled = job.albums_enabled if albums_enabled is None else albums_enabled
     rows = db.execute(
-        select(ImportItem.id, ImportItem.path, ImportItem.kind, ImportItem.size_bytes, ImportItem.listing_code)
+        select(ImportItem.id, ImportItem.path, ImportItem.kind, ImportItem.size_bytes, ImportItem.listing_code, ImportItem.hint_date)
         .where(ImportItem.job_id == job.id, ImportItem.tenant_id == job.tenant_id)
         .order_by(ImportItem.path)
     ).all()
@@ -348,7 +393,11 @@ def evaluate_job(
         if _type_filtered(type_filter, row.kind):
             outcomes.append(Outcome(row.id, row.path, row.kind, row.size_bytes, False, "type_filtered", rules.ItemResult()))
             continue
-        result = rules.evaluate_item(rules.ItemInput(row.path, row.kind), compiled, folder_tags=folder_tags)
+        result = rules.evaluate_item(rules.ItemInput(row.path, row.kind), compiled, folder_tags=folder_tags, albums=albums_enabled)
+        if row.kind == paths.KIND_IMAGE and row.hint_date is not None:
+            # Rangfolge (User-Entscheid): EXIF > Takeout-JSON > Regel-Datum. EXIF setzt sich beim Ingest
+            # ohnehin durch, weil estimated_taken_on nur ohne echtes Aufnahmedatum gilt.
+            result.date, result.date_source = row.hint_date, "takeout"
         if result.skip:
             outcomes.append(Outcome(row.id, row.path, row.kind, row.size_bytes, False, "excluded_by_rule", result))
         else:
@@ -436,9 +485,12 @@ def folder_list(outcomes: list[Outcome]) -> list[str]:
     return sorted(folders)
 
 
-def save_settings(job: ImportJob, *, raw_rules: list[dict], type_filter: str, include_gps: bool, folder_tags: bool) -> None:
+def save_settings(
+    job: ImportJob, *, raw_rules: list[dict], type_filter: str, include_gps: bool, folder_tags: bool, albums_enabled: bool = False
+) -> None:
     require_status(job, "ready")
     job.rules = raw_rules
+    job.albums_enabled = albums_enabled
     job.type_filter = type_filter
     job.include_gps = include_gps
     job.folder_tags = folder_tags
@@ -457,9 +509,10 @@ _APPLY_SQL = text(
     """
     UPDATE import_item AS i SET
         status = d.status, result_code = d.result_code, tags = d.tags, estimated_date = d.estimated_date,
+        date_source = d.date_source,
         albums = d.albums, matched_rules = d.matched_rules, conflict = d.conflict, group_key = d.group_key
     FROM jsonb_to_recordset(CAST(:data AS jsonb)) AS d(
-        id bigint, status text, result_code text, tags jsonb, estimated_date date, albums jsonb,
+        id bigint, status text, result_code text, tags jsonb, estimated_date date, date_source text, albums jsonb,
         matched_rules jsonb, conflict boolean, group_key text
     )
     WHERE i.id = d.id AND i.job_id = :job_id AND i.tenant_id = :tenant_id
@@ -479,6 +532,7 @@ def apply_outcomes(db: Session, job: ImportJob, outcomes: list[Outcome]) -> None
                 "result_code": None if outcome.import_ else outcome.reason,
                 "tags": result.tags,
                 "estimated_date": result.date.isoformat() if result.date else None,
+                "date_source": result.date_source if result.date else None,
                 "albums": result.albums,
                 "matched_rules": result.matched,
                 "conflict": bool(result.conflicts),
@@ -681,3 +735,24 @@ def check_upload_allowed(db: Session, job: ImportJob, *, kind: str, content_leng
 # Toleranz für Multipart-Overhead und noch nicht erkannte Duplikate beim Vergleich mit dem Kontingent
 STAGING_QUOTA_TOLERANCE = 64 * 1024**2
 STAGING_MIN_FREE_RATIO = 0.10
+
+
+def manual_albums_by_name(db: Session, tenant_id: int, names: set[str]) -> dict[str, list[PhotoAlbum]]:
+    """Eigene manuelle Alben mit exakt diesen Namen, je Name das älteste zuerst (deterministisch).
+    Nur der eigene Mandant: Alben von Partnern (geteilte Alben) werden nie beschrieben."""
+    if not names:
+        return {}
+    found: dict[str, list[PhotoAlbum]] = {}
+    for album in db.scalars(
+        select(PhotoAlbum)
+        .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbum.kind == "manual", PhotoAlbum.name.in_(names))
+        .order_by(PhotoAlbum.created_at, PhotoAlbum.id)
+    ):
+        found.setdefault(album.name, []).append(album)
+    return found
+
+
+def existing_album_names(db: Session, tenant_id: int, outcomes: list[Outcome]) -> list[str]:
+    """Für die Vorschau: Albumnamen aus Regeln, die es im Verein schon gibt (werden ergänzt)."""
+    names = {key[5:] for o in outcomes if o.import_ for key in o.result.albums if key.startswith("name:")}
+    return sorted(manual_albums_by_name(db, tenant_id, names))

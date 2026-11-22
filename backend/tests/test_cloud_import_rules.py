@@ -251,3 +251,65 @@ def test_kind_filter_and_disabled_rules():
 def test_folder_names_as_tags_skip_meaningless_names():
     result = _eval("Neuer Ordner/Lager 2019/Desktop/a.jpg", paths.KIND_IMAGE, [], folder_tags=True)
     assert result.tags == ["Lager 2019"]
+
+
+
+# --- Takeout-Metadaten ------------------------------------------------------------------------
+
+
+def test_takeout_sidecars_are_matched_including_variants():
+    long_name = "a-very-long-photo-name-from-google-photos-1234.jpg"
+    listing = [
+        "Fotos/IMG_1.jpg", "Fotos/IMG_1.jpg.json",
+        "Fotos/IMG_2.jpg", "Fotos/IMG_2.jpg.supplemental-metadata.json",
+        "Fotos/IMG_3.jpg", "Fotos/IMG_3.jpg.supplemen.json",
+        "Fotos/IMG_4(1).jpg", "Fotos/IMG_4.jpg(1).json", "Fotos/IMG_4.jpg", "Fotos/IMG_4.jpg.json",
+        f"Fotos/{long_name}", "Fotos/a-very-long-photo-name-from-google-photos-12.json",
+        "Anderer/IMG_5.jpg", "Fotos/IMG_5.jpg.json",
+    ]
+    matches = paths.match_takeout_sidecars(listing)
+    assert matches["Fotos/IMG_1.jpg"] == "Fotos/IMG_1.jpg.json"
+    assert matches["Fotos/IMG_2.jpg"] == "Fotos/IMG_2.jpg.supplemental-metadata.json"
+    assert matches["Fotos/IMG_3.jpg"] == "Fotos/IMG_3.jpg.supplemen.json"
+    assert matches["Fotos/IMG_4(1).jpg"] == "Fotos/IMG_4.jpg(1).json"
+    assert matches["Fotos/IMG_4.jpg"] == "Fotos/IMG_4.jpg.json"
+    assert matches[f"Fotos/{long_name}"] == "Fotos/a-very-long-photo-name-from-google-photos-12.json"
+    assert "Anderer/IMG_5.jpg" not in matches  # nur im selben Ordner
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (b'{"photoTakenTime": {"timestamp": "1528020000"}}', date(2018, 6, 3)),
+        (b'{"photoTakenTime": {"timestamp": 1528020000}}', date(2018, 6, 3)),
+        (b'{"photoTakenTime": {"timestamp": "0"}}', None),
+        (b'{"photoTakenTime": {"timestamp": "99999999999999"}}', None),
+        (b'{"creationTime": {"timestamp": "1528020000"}}', None),
+        (b"{kaputt", None),
+        (b"[" * 100000, None),
+        (b'{"photoTakenTime": "x"}', None),
+        (b"\xff\xfe", None),
+    ],
+)
+def test_takeout_date_parsing_is_robust(data, expected):
+    assert paths.parse_takeout_date(data) == expected
+
+
+def test_takeout_json_size_is_limited():
+    big = b'{"photoTakenTime": {"timestamp": "1528020000"}, "x": "' + b"a" * (paths.TAKEOUT_JSON_MAX_BYTES) + b'"}'
+    assert paths.parse_takeout_date(big) is None
+
+
+def test_album_actions_are_ignored_when_albums_are_off():
+    compiled, _errors = compile_rules([_rule(action={"type": "folder_to_album"}), _rule("t", action={"type": "add_tags", "tags": ["x"]})])
+    result = evaluate_item(ItemInput("Lager/a.jpg", paths.KIND_IMAGE), compiled, albums=False)
+    assert result.albums == [] and result.matched == ["t"]
+
+
+def test_takeout_matching_stays_fast_with_many_unmatched_files():
+    """Security-Review M2: kein quadratischer Aufwand bei vielen Dateien ohne exakten Treffer."""
+    listing = [f"Ordner/bild-mit-einem-recht-langen-namen-{i:06d}.jpg" for i in range(20_000)]
+    listing += [f"Ordner/ganz-andere-metadaten-datei-mit-langem-namen-{i:06d}.json" for i in range(20_000)]
+    started = time.monotonic()
+    assert paths.match_takeout_sidecars(listing) == {}
+    assert time.monotonic() - started < 3.0

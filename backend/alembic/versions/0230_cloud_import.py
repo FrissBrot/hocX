@@ -42,10 +42,12 @@ def upgrade() -> None:
             type_filter text NOT NULL DEFAULT 'all',
             include_gps boolean NOT NULL DEFAULT true,
             folder_tags boolean NOT NULL DEFAULT false,
+            albums_enabled boolean NOT NULL DEFAULT false,
             takeout boolean NOT NULL DEFAULT false,
             rules jsonb NOT NULL DEFAULT '[]'::jsonb,
             archives jsonb NOT NULL DEFAULT '[]'::jsonb,
             album_map jsonb NOT NULL DEFAULT '{}'::jsonb,
+            album_report jsonb NOT NULL DEFAULT '{}'::jsonb,
             total_items integer NOT NULL DEFAULT 0,
             total_bytes bigint NOT NULL DEFAULT 0,
             error text,
@@ -89,12 +91,15 @@ def upgrade() -> None:
             result_code text,
             tags jsonb NOT NULL DEFAULT '[]'::jsonb,
             estimated_date date,
+            date_source text,
+            hint_date date,
             albums jsonb NOT NULL DEFAULT '[]'::jsonb,
             matched_rules jsonb NOT NULL DEFAULT '[]'::jsonb,
             conflict boolean NOT NULL DEFAULT false,
             group_key text,
             staged_path text,
             stored_file_id bigint REFERENCES stored_file(id) ON DELETE SET NULL,
+            existing_file_id bigint REFERENCES stored_file(id) ON DELETE SET NULL,
             attempts smallint NOT NULL DEFAULT 0,
             CONSTRAINT uq_import_item_job_path UNIQUE (job_id, path),
             CONSTRAINT ck_import_item_status CHECK (
@@ -107,6 +112,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX idx_import_item_job_status ON import_item (job_id, status, id)")
     op.execute("CREATE INDEX idx_import_item_tenant ON import_item (tenant_id)")
     op.execute("CREATE INDEX idx_import_item_stored_file ON import_item (stored_file_id) WHERE stored_file_id IS NOT NULL")
+    op.execute("CREATE INDEX idx_import_item_existing_file ON import_item (existing_file_id) WHERE existing_file_id IS NOT NULL")
 
     for table in ("import_job", "import_item"):
         op.execute(f"CREATE POLICY tenant_isolation ON public.{table} FOR ALL USING {BASE} WITH CHECK {BASE}")  # sql-ok: feste Policy und Tabellennamen

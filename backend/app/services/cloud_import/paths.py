@@ -116,3 +116,100 @@ def strip_takeout(path: str) -> str:
 def is_takeout_sidecar(path: str) -> bool:
     name = file_name(path).lower()
     return name.endswith(".json") or name in _TAKEOUT_SIDECAR_NAMES
+
+
+# --- Takeout-Metadaten (User-Entscheid 2026-11-22) -------------------------------------------
+# Google Fotos legt je Foto eine JSON-Datei daneben: «IMG_1.jpg.json», seit 2024
+# «IMG_1.jpg.supplemental-metadata.json», bei langen Namen gekürzt («….jpg.supplemen.json», ganzer
+# Name höchstens ~51 Zeichen) und bei gleichen Namen mit Zähler «IMG_1.jpg(1).json» für «IMG_1(1).jpg».
+# Ausgewertet wird nur photoTakenTime.timestamp; das Datum gilt nur, wenn die Datei selbst keins hat.
+TAKEOUT_JSON_MAX_BYTES = 64 * 1024
+_SUPPLEMENTAL = "supplemental-metadata"
+_COUNTER = re.compile(r"^(.*)\((\d{1,4})\)$")
+# Google kürzt den JSON-Dateinamen auf rund 51 Zeichen - kürzere Namen gelten nie als gekürzt.
+_TRUNCATED_MIN_LENGTH = 40
+# Index der gekürzten Namen: so viele Anfangszeichen; mehr Kandidaten je Schlüssel = keine Zuordnung
+_TRUNCATED_KEY = 20
+_TRUNCATED_BUCKET_MAX = 50
+# Je Archiv höchstens so viele Metadaten-JSON bzw. Bytes lesen (danach ohne Takeout-Datum)
+TAKEOUT_JSON_MAX_FILES = 50_000
+TAKEOUT_JSON_MAX_TOTAL_BYTES = 256 * 1024**2
+
+
+def _sidecar_base(json_name: str) -> tuple[str, int | None] | None:
+    """(Name des zugehörigen Bildes ohne Zähler, Zähler) aus dem Namen einer Takeout-JSON."""
+    if not json_name.lower().endswith(".json"):
+        return None
+    stem = json_name[:-5]
+    counter: int | None = None
+    match = _COUNTER.match(stem)
+    if match:
+        stem, counter = match.group(1), int(match.group(2))
+    head, dot, tail = stem.rpartition(".")
+    # «.supplemental-metadata» und jede gekürzte Form davon («.supplemen», «.su») entfernen
+    if dot and tail and _SUPPLEMENTAL.startswith(tail.lower()) and head:
+        stem = head
+    return (stem, counter) if stem else None
+
+
+def _with_counter(name: str, counter: int | None) -> str:
+    if counter is None:
+        return name
+    path = PurePosixPath(name)
+    return f"{path.stem}({counter}){path.suffix}"
+
+
+def match_takeout_sidecars(all_paths: list[str]) -> dict[str, str]:
+    """Bildpfad → Pfad der zugehörigen Metadaten-JSON im selben Ordner (nur eindeutige Treffer)."""
+    by_folder: dict[str, list[tuple[str, str, int | None]]] = {}
+    images_by_folder: dict[str, list[str]] = {}
+    for path in all_paths:
+        name = file_name(path)
+        folder = folder_of(path)
+        if name.lower().endswith(".json"):
+            base = _sidecar_base(name)
+            if base is not None:
+                by_folder.setdefault(folder, []).append((path, base[0], base[1]))
+        elif kind_for_name(name) == KIND_IMAGE:
+            images_by_folder.setdefault(folder, []).append(path)
+    matches: dict[str, str] = {}
+    for folder, images in images_by_folder.items():
+        sidecars = by_folder.get(folder, [])
+        if not sidecars:
+            continue
+        exact = {_with_counter(base, counter): json_path for json_path, base, counter in sidecars}
+        # Gekürzte Namen einmal je Ordner nach den ersten Zeichen indexieren (kein quadratischer
+        # Aufwand bei vielen Dateien ohne exakten Treffer, Security-Review M2)
+        truncated: dict[str, list[tuple[str, str]]] = {}
+        for json_path, base, counter in sidecars:
+            if counter is None and len(file_name(json_path)) >= _TRUNCATED_MIN_LENGTH and len(base) >= _TRUNCATED_KEY:
+                truncated.setdefault(base[:_TRUNCATED_KEY], []).append((json_path, base))
+        for image in images:
+            name = file_name(image)
+            if name in exact:
+                matches[image] = exact[name]
+                continue
+            bucket = truncated.get(name[:_TRUNCATED_KEY], [])
+            candidates = [json_path for json_path, base in bucket[:_TRUNCATED_BUCKET_MAX] if name.startswith(base)]
+            if len(candidates) == 1 and len(bucket) <= _TRUNCATED_BUCKET_MAX:
+                matches[image] = candidates[0]
+    return matches
+
+
+def parse_takeout_date(data: bytes) -> "date | None":
+    """photoTakenTime.timestamp (Sekunden, UTC) als Kalenderdatum; None bei allem Unerwarteten."""
+    import json
+    from datetime import UTC, date, datetime
+
+    if len(data) > TAKEOUT_JSON_MAX_BYTES:
+        return None
+    try:
+        document = json.loads(data.decode("utf-8"))
+        raw = document["photoTakenTime"]["timestamp"]
+        seconds = int(str(raw).strip())
+        taken = datetime.fromtimestamp(seconds, UTC).date()
+    except (ValueError, KeyError, TypeError, OverflowError, OSError, UnicodeDecodeError, AttributeError, RecursionError):
+        return None
+    if seconds <= 0 or taken < date(1826, 1, 1) or taken > datetime.now(UTC).date():
+        return None
+    return taken

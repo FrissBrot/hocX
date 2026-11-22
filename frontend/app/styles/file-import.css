@@ -200,3 +200,9 @@
     max-width: 200px;
   }
 }
+
+.file-import-album-report {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--muted);
+}

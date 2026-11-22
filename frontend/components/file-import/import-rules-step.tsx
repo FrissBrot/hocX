@@ -48,6 +48,7 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
   const [typeFilter, setTypeFilter] = useState<ImportTypeFilter>(job.type_filter);
   const [includeGps, setIncludeGps] = useState(job.include_gps);
   const [folderTags, setFolderTags] = useState(job.folder_tags);
+  const [albumsEnabled, setAlbumsEnabled] = useState(job.albums_enabled);
   const [view, setView] = useState<View>("all");
   const [ruleFilter, setRuleFilter] = useState("");
   const [query, setQuery] = useState("");
@@ -74,13 +75,14 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
       type_filter: typeFilter,
       include_gps: includeGps,
       folder_tags: folderTags,
+      albums_enabled: albumsEnabled,
       view,
       rule_id: ruleFilter || null,
       q: query.trim() || null,
       offset,
       limit: PAGE_SIZE,
     }),
-    [rules, typeFilter, includeGps, folderTags, view, ruleFilter, query, offset],
+    [rules, typeFilter, includeGps, folderTags, albumsEnabled, view, ruleFilter, query, offset],
   );
 
   useEffect(() => {
@@ -179,7 +181,12 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
             <input type="checkbox" checked={folderTags} disabled={readOnly} onChange={(event) => { setFolderTags(event.target.checked); setOffset(0); }} />
             {t("options.folderTags")}
           </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={albumsEnabled} disabled={readOnly} onChange={(event) => { setAlbumsEnabled(event.target.checked); setOffset(0); }} />
+            {t("options.albumsEnabled")}
+          </label>
         </div>
+        <p className="field-help">{t("options.albumsHint")}</p>
         {rules.length === 0 ? <p className="muted">{t("rules.empty")}</p> : null}
         <div className="file-import-rule-list">
           {rules.map((rule, index) => (
@@ -193,6 +200,7 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
               folders={preview?.folders ?? []}
               albums={albums}
               tagSuggestions={tagSuggestions}
+              albumsEnabled={albumsEnabled}
               readOnly={readOnly}
               onChange={(next) => updateRules(rules.map((entry) => (entry.id === rule.id ? next : entry)))}
               onMove={(from, to) => updateRules(moveItem(rules, from, to))}
@@ -230,6 +238,9 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
           />
         ) : null}
         {hasErrors ? <StatusBanner tone="warning" message={t("preview.ruleErrors")} /> : null}
+        {albumsEnabled && preview?.existing_albums.length ? (
+          <StatusBanner tone="neutral" message={t("preview.existingAlbums", { names: preview.existing_albums.join(", ") })} />
+        ) : null}
         {summary?.conflicts ? <StatusBanner tone="neutral" message={t("preview.conflictHint")} /> : null}
 
         <div className="list-filter-row">
@@ -267,7 +278,10 @@ export function ImportRulesStep({ job, readOnly, onJob, onCancelled }: Props) {
                 {item.conflict ? <Badge variant="warning">{t("preview.conflict")}</Badge> : null}
               </td>
               <td>{item.tags.join(", ")}</td>
-              <td>{item.date ? formatDate(item.date) : ""}</td>
+              <td>
+                {item.date ? formatDate(item.date) : ""}
+                {item.date && item.date_source === "takeout" ? <span className="muted"> ({t("preview.fromTakeout")})</span> : null}
+              </td>
               <td>{item.albums.join(", ")}</td>
               <td>{item.rules.map(ruleLabel).join(", ")}</td>
             </tr>

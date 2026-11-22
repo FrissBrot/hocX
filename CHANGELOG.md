@@ -16,7 +16,9 @@ Installationen aktualisieren können.
   benötigten Dateien werden übertragen). Regeln nach Ordner, Pfad-Muster und Dateiname (regulärer
   Ausdruck, ReDoS-sicher über RE2) setzen Tags, ein geschätztes Aufnahmedatum (nur wenn es fehlt),
   schliessen Dateien aus oder ordnen Bilder in Alben ein (bestehendes Album oder ein Album je
-  Ordner). Vorschau mit Treffern je Regel, Konflikten und Kontingent-Prüfung vor dem Start; der
+  Ordner; abschaltbar und standardmässig aus, gleichnamige Alben werden ergänzt). Bei Google Takeout
+  übernimmt der Import das Aufnahmedatum aus den Metadaten-Dateien, wenn das Foto selbst keines hat.
+  Bereits vorhandene Dateien bekommen Tags und Alben dazu («Duplikat, ergänzt»). Vorschau mit Treffern je Regel, Konflikten und Kontingent-Prüfung vor dem Start; der
   Import läuft im Hintergrund (job-worker, Job `cloud_import`) mit Fortschritt, Abbruch und
   Fortsetzen, danach ein Bericht je Datei. Jede Datei durchläuft die normale Upload-Pipeline
   (Virenprüfung, Inhaltstyp, Grössen, Duplikate, Kontingent). Grenzen: 50 000 Dateien und 100 GB je

@@ -91,6 +91,17 @@ export function ImportReport({ job, onJob }: { job: ImportJob; onJob: (job: Impo
             .join(" · ")}
         </p>
       ) : null}
+      {job.albums.length ? (
+        <ul className="file-import-album-report">
+          {job.albums.map((album) => (
+            <li key={album.name}>
+              {album.reused
+                ? t(album.candidates > 1 ? "report.albumReusedOldest" : "report.albumReused", { name: album.name, count: album.candidates })
+                : t("report.albumCreated", { name: album.name })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="field-help">{t("report.retention")}</p>
       {job.status === "failed" && job.is_owner ? (
         <div className="modal-actions">
@@ -127,7 +138,10 @@ export function ImportReport({ job, onJob }: { job: ImportJob; onJob: (job: Impo
             <td><Badge variant={STATUS_VARIANT[item.status] ?? "neutral"}>{t(`itemStatus.${item.status}`)}</Badge></td>
             <td>{item.result_code && t.has(`codes.${item.result_code}`) ? t(`codes.${item.result_code}`) : item.result_code ?? ""}</td>
             <td>{item.tags.join(", ")}</td>
-            <td>{item.estimated_date ? formatDate(item.estimated_date) : ""}</td>
+            <td>
+              {item.estimated_date ? formatDate(item.estimated_date) : ""}
+              {item.estimated_date && item.date_source === "takeout" ? <span className="muted"> ({t("preview.fromTakeout")})</span> : null}
+            </td>
             <td>{formatFileSize(item.size, locale)}</td>
           </tr>
         ))}

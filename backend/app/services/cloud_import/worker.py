@@ -324,7 +324,7 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
     first = batch[0]
 
     def apply_results(*_args) -> None:
-        _apply_results(db, job, by_name, results, work)
+        _apply_results(db, job, by_name, results, work, viewer)
 
     try:
         if first.kind == paths.KIND_IMAGE:
@@ -379,10 +379,13 @@ def _requester_allowed(viewer, kind: str) -> bool:
 _STATUS_BY_RESULT = {"uploaded": "imported", "skipped": "duplicate", "metadata_updated": "duplicate", "failed": "failed"}
 
 
-def _apply_results(db: Session, job: ImportJob, by_name: dict[str, ImportItem], results: list[dict], work: _Slice) -> None:
+def _apply_results(
+    db: Session, job: ImportJob, by_name: dict[str, ImportItem], results: list[dict], work: _Slice, viewer=None
+) -> None:
     """Pipeline-Ergebnis je Datei → Import-Eintrag, Alben; läuft vor dem Commit der Pipeline."""
     seen: set[str] = set()
     imported_public: dict[str, ImportItem] = {}
+    duplicate_public: dict[str, ImportItem] = {}
     for result in results:
         item = by_name.get(result.get("name") or "")
         if item is None or result["name"] in seen:
@@ -395,6 +398,8 @@ def _apply_results(db: Session, job: ImportJob, by_name: dict[str, ImportItem], 
             item.result_code = result.get("code") or "rejected"
         elif status == "duplicate":
             item.result_code = "duplicate"
+            if result.get("file_id"):
+                duplicate_public[result["file_id"]] = item
         elif result.get("file_id"):
             imported_public[result["file_id"]] = item
     for name, item in by_name.items():
@@ -411,10 +416,59 @@ def _apply_results(db: Session, job: ImportJob, by_name: dict[str, ImportItem], 
         for stored_id, public_id in rows:
             imported_public[str(public_id)].stored_file_id = stored_id
         _assign_albums(db, job, [(uuid.UUID(key), item) for key, item in imported_public.items()], work)
+    if duplicate_public and viewer is not None:
+        _enrich_duplicates(db, job, duplicate_public, work, viewer)
     job.last_progress_at = jobs.now()
     job.lease_until = jobs.now() + LEASE
     jobs.touch(job)
     db.flush()
+
+
+def _enrich_duplicates(db: Session, job: ImportJob, duplicates: dict[str, ImportItem], work: _Slice, viewer) -> None:
+    """Bereits vorhandene Dateien (User-Entscheid 2026-11-22): Tags und Alben des Regel-Ergebnisses
+    nur ergänzen, nie entfernen oder überschreiben. Nur Dateien, die die auftraggebende Person sieht
+    (die Pipeline meldet nur sichtbare) und verwalten darf, nur im eigenen Mandanten."""
+    from fastapi import HTTPException
+
+    from app.services.access_service import AccessService
+    from app.services.cloud_import.rules import normalize_tags
+    from app.services.file_service import BLOCKED_SCAN_STATUSES
+    from app.services.file_trash_service import may_manage
+
+    access = AccessService()
+    files = {
+        str(stored.public_id): stored
+        for stored in db.scalars(
+            select(StoredFile)
+            .where(StoredFile.tenant_id == job.tenant_id, StoredFile.public_id.in_([uuid.UUID(key) for key in duplicates]))
+            .with_for_update()  # Tags lesen-ergänzen-schreiben ohne verlorene parallele Änderung (Review N3)
+        )
+    }
+    album_targets: list[tuple[uuid.UUID, ImportItem]] = []
+    for key, item in duplicates.items():
+        stored = files.get(key)
+        if stored is None or not may_manage(viewer, stored.mime_type):
+            continue
+        # Gleiche Schreibprüfung wie bulk-tags/Album-Einträge (nur Rollenrechte, z. B. keine Bilder
+        # aus nicht lesbaren Protokollen) - Review M1
+        try:
+            access.ensure_can_read_stored_file(db, viewer, stored.id, allow_context_grant=False)
+        except HTTPException:
+            continue
+        item.existing_file_id = stored.id
+        changed = False
+        current = list(stored.tags or [])
+        merged = normalize_tags([*current, *(item.tags or [])])
+        if merged != current and set(current) <= set(merged):
+            stored.tags = merged
+            changed = True
+        if item.kind == paths.KIND_IMAGE and item.albums and stored.scan_status not in BLOCKED_SCAN_STATUSES:
+            album_targets.append((stored.public_id, item))
+            changed = True
+        if changed:
+            item.result_code = "duplicate_enriched"
+    if album_targets:
+        _assign_albums(db, job, album_targets, work, existing=True)
 
 
 def _album_for_key(db: Session, job: ImportJob, key: str) -> PhotoAlbum | None:
@@ -424,7 +478,9 @@ def _album_for_key(db: Session, job: ImportJob, key: str) -> PhotoAlbum | None:
             album_id = uuid.UUID(value)
         except ValueError:
             return None
-        return db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == job.tenant_id))
+        return db.scalar(
+            select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == job.tenant_id, PhotoAlbum.kind == "manual")
+        )
     if kind != "name" or not value:
         return None
     known = (job.album_map or {}).get(value)
@@ -432,14 +488,24 @@ def _album_for_key(db: Session, job: ImportJob, key: str) -> PhotoAlbum | None:
         album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == uuid.UUID(known), PhotoAlbum.tenant_id == job.tenant_id))
         if album is not None:
             return album
-    album = PhotoAlbum(tenant_id=job.tenant_id, name=value, kind="manual")
-    db.add(album)
-    db.flush()
+    # Gleichnamiges eigenes Album wiederverwenden (User-Entscheid 2026-11-22): exakter Name, bei
+    # mehreren das älteste; nur manuelle Alben des eigenen Mandanten, nie Partner-Alben.
+    existing = jobs.manual_albums_by_name(db, job.tenant_id, {value}).get(value, [])
+    if existing:
+        album = existing[0]
+    else:
+        album = PhotoAlbum(tenant_id=job.tenant_id, name=value, kind="manual")
+        db.add(album)
+        db.flush()
     job.album_map = {**(job.album_map or {}), value: str(album.id)}
+    job.album_report = {**(job.album_report or {}), value: {"reused": bool(existing), "candidates": len(existing)}}
     return album
 
 
-def _assign_albums(db: Session, job: ImportJob, imported: list[tuple[uuid.UUID, ImportItem]], work: _Slice) -> None:
+def _assign_albums(
+    db: Session, job: ImportJob, imported: list[tuple[uuid.UUID, ImportItem]], work: _Slice, *, existing: bool = False
+) -> None:
+    """existing=True (Duplikate): nur hinzufügen - ein schon vorhandener Album-Eintrag bleibt unverändert."""
     from app.services import photo_album_service  # Importzyklus wie in file_service
 
     by_key: dict[str, list[uuid.UUID]] = {}
@@ -450,7 +516,7 @@ def _assign_albums(db: Session, job: ImportJob, imported: list[tuple[uuid.UUID, 
         album = _album_for_key(db, job, key)
         if album is None:
             continue
-        photo_album_service.add_items(db, album, file_ids, manual=True)
+        photo_album_service.add_items(db, album, file_ids, manual=not existing)
         work.touched_albums.add(album.id)
 
 

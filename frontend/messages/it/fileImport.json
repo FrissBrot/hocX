@@ -65,7 +65,9 @@
       "documents": "Solo documenti"
     },
     "includeGps": "Mantenere i dati GPS delle immagini",
-    "folderTags": "Usare i nomi delle cartelle come tag"
+    "folderTags": "Usare i nomi delle cartelle come tag",
+    "albumsEnabled": "Inserire le immagini negli album secondo le regole",
+    "albumsHint": "Disattivato per impostazione predefinita: le immagini finiscono nella galleria e possono essere aggiunte a un album più tardi tramite la selezione multipla."
   },
   "cancel": {
     "label": "Scartare l'importazione",
@@ -153,7 +155,8 @@
       "required": "Compila questo campo.",
       "out_of_range": "La data deve essere tra il 1826 e oggi.",
       "album_not_found": "Album non trovato."
-    }
+    },
+    "albumsOff": "Le regole degli album valgono solo se «Inserire le immagini negli album secondo le regole» è attivato."
   },
   "preview": {
     "title": "Anteprima",
@@ -184,7 +187,9 @@
     "loading": "Calcolo dell'anteprima …",
     "empty": "Nessun file in questa vista.",
     "notImported": "Non importato",
-    "conflict": "Conflitto"
+    "conflict": "Conflitto",
+    "existingAlbums": "Questi album esistono già e verranno completati: {names}",
+    "fromTakeout": "da Takeout"
   },
   "codes": {
     "too_large": "Troppo grande",
@@ -204,7 +209,8 @@
     "rejected": "Rifiutato",
     "source_gone": "Origine non più disponibile",
     "rule_violation": "Regola violata",
-    "invalid_name": "Nome non valido"
+    "invalid_name": "Nome non valido",
+    "duplicate_enriched": "Duplicato, completato"
   },
   "kinds": {
     "image": "Immagine",
@@ -250,7 +256,10 @@
       "reason": "Motivo",
       "size": "Dimensione"
     },
-    "empty": "Nessun file in questa vista."
+    "empty": "Nessun file in questa vista.",
+    "albumReused": "Album «{name}»: album esistente completato.",
+    "albumReusedOldest": "Album «{name}»: esistono {count} album con questo nome, è stato completato il più vecchio.",
+    "albumCreated": "Album «{name}»: creato nuovo."
   },
   "itemStatus": {
     "listed": "Elencato",

@@ -44,12 +44,16 @@ class ImportJob(Base):
     type_filter: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'all'"))
     include_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     folder_tags: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Album-Aktionen der Regeln wirken nur, wenn eingeschaltet (User-Entscheid: Standard aus)
+    albums_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     takeout: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     rules: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     # Gestagte ZIP-Archive: [{"path": <relativ zu storage_root>, "size": int}] (Name nie als Pfad)
     archives: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     # Beim Import angelegte Alben: {"<Name>": "<album uuid>"}
     album_map: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Für den Bericht: {"<Name>": {"reused": bool, "candidates": int}} (bestehendes Album wiederverwendet?)
+    album_report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     total_items: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
     # Kuratierter Fehlercode (nie Ausnahme-Text)
@@ -73,6 +77,7 @@ class ImportItem(Base):
         Index("idx_import_item_job_status", "job_id", "status", "id"),
         Index("idx_import_item_tenant", "tenant_id"),
         Index("idx_import_item_stored_file", "stored_file_id", postgresql_where=text("stored_file_id IS NOT NULL")),
+        Index("idx_import_item_existing_file", "existing_file_id", postgresql_where=text("existing_file_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -90,10 +95,16 @@ class ImportItem(Base):
     result_code: Mapped[str | None] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     estimated_date: Mapped[date | None] = mapped_column(Date)
+    # Herkunft von estimated_date: "takeout" (Metadaten-JSON) oder "rule"
+    date_source: Mapped[str | None] = mapped_column(Text)
+    # Aufnahmedatum aus der Takeout-Metadaten-JSON (beim Auflisten gelesen)
+    hint_date: Mapped[date | None] = mapped_column(Date)
     albums: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     matched_rules: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     conflict: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     group_key: Mapped[str | None] = mapped_column(Text)
     staged_path: Mapped[str | None] = mapped_column(Text)
     stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
+    # Duplikat: vorhandene Datei, die ergänzt wurde (zählt nicht für die Aufbewahrung des Berichts)
+    existing_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
     attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"), default=0)

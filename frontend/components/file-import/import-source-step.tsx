@@ -42,6 +42,7 @@ export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: 
   const [typeFilter, setTypeFilter] = useState<ImportTypeFilter>("all");
   const [includeGps, setIncludeGps] = useState(true);
   const [folderTags, setFolderTags] = useState(false);
+  const [albumsEnabled, setAlbumsEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -58,7 +59,7 @@ export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: 
     try {
       const created = await browserApiFetch<ImportJob>("/api/cloud-import/jobs", {
         method: "POST",
-        body: JSON.stringify({ source, type_filter: typeFilter, include_gps: includeGps, folder_tags: folderTags }),
+        body: JSON.stringify({ source, type_filter: typeFilter, include_gps: includeGps, folder_tags: folderTags, albums_enabled: albumsEnabled }),
       });
       onJob(created);
     } catch (error) {
@@ -197,7 +198,12 @@ export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: 
             <input type="checkbox" checked={folderTags} onChange={(event) => setFolderTags(event.target.checked)} />
             {t("options.folderTags")}
           </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={albumsEnabled} onChange={(event) => setAlbumsEnabled(event.target.checked)} />
+            {t("options.albumsEnabled")}
+          </label>
         </div>
+        <p className="field-help">{t("options.albumsHint")}</p>
         <p className="field-help">{t("source.limits")}</p>
         <div className="modal-actions">
           <button type="button" className="button-primary" disabled={busy || blocked} onClick={() => void createJob()}>
