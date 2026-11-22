@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -116,7 +117,7 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
     <div className="grid upload-job-detail">
       <div className="page-header">
         <div>
-          <Link className="upload-history-back" href={`/${area}/uploads`}>{t("backToHistory")}</Link>
+          <Link className="upload-history-back" href={`/${area}/uploads` as Route}>{t("backToHistory")}</Link>
           <h1 className="page-title">{t("detailTitle", { date: formatDateTime(job.created_at, locale) })}</h1>
           <p className="muted">{resultSummary(job, t)}</p>
         </div>
@@ -131,7 +132,7 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
             <div>
               <dt>{t("column.ref")}</dt>
               <dd>
-                {href ? <Link href={href}>{job.ref.label ?? t(`ref.${job.ref.kind}`)}</Link> : job.ref.label ?? t(`ref.${job.ref.kind}`)}
+                {href ? <Link href={href as Route}>{job.ref.label ?? t(`ref.${job.ref.kind}`)}</Link> : job.ref.label ?? t(`ref.${job.ref.kind}`)}
                 {job.ref.on_date ? ` · ${formatDate(job.ref.on_date)}` : null}
               </dd>
             </div>

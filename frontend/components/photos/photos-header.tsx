@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { ReactNode, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -51,7 +52,7 @@ export function PhotosPageHeader({ total, pills, onOpenTrash, onUpload, uploadsH
       <div className="table-toolbar-actions photos-header-actions">
         {pills}
         {uploadsHref ? (
-          <Link className="button-secondary photos-header-button" href={uploadsHref}>
+          <Link className="button-secondary photos-header-button" href={uploadsHref as Route}>
             <ActionIcon name="upload" />
             {t("uploadsLink")}
           </Link>

@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -44,7 +45,7 @@ export function RecentUploadHint({ channels, basePath, noun }: { channels: Uploa
   return (
     <div className="upload-hint" role="status">
       <span className="upload-hint-text">{t(noun === "photos" ? "photos" : "files", { count: job.counts.uploaded })}</span>
-      <Link className="upload-hint-link" href={`${basePath}/${job.id}`}>{t("edit")}</Link>
+      <Link className="upload-hint-link" href={`${basePath}/${job.id}` as Route}>{t("edit")}</Link>
       <button
         type="button"
         className="button-icon-soft button-icon-soft-sm"

@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -71,7 +72,7 @@ export function UploadHistoryView({ area, canSeeAll }: { area: "photos" | "files
     <div className="grid upload-history">
       <div className="page-header">
         <div>
-          <Link className="upload-history-back" href={`/${area}`}>{t(area === "photos" ? "backToPhotos" : "backToFiles")}</Link>
+          <Link className="upload-history-back" href={`/${area}` as Route}>{t(area === "photos" ? "backToPhotos" : "backToFiles")}</Link>
           <h1 className="page-title">{t("title")}</h1>
           <p className="muted">{t(area === "photos" ? "descriptionPhotos" : "descriptionFiles")}</p>
         </div>
@@ -118,7 +119,7 @@ export function UploadHistoryView({ area, canSeeAll }: { area: "photos" | "files
         {jobs.map((job) => (
           <tr key={job.id}>
             <td>
-              <Link className="table-row-link" href={`${basePath}/${job.id}`}>{formatDateTime(job.created_at, locale)}</Link>
+              <Link className="table-row-link" href={`${basePath}/${job.id}` as Route}>{formatDateTime(job.created_at, locale)}</Link>
               {job.reconstructed ? <span className="muted upload-history-note">{t("reconstructed")}</span> : null}
             </td>
             <td>{actorLabel(job, t)}</td>
