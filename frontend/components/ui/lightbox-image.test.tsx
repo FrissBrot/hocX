@@ -43,6 +43,21 @@ describe("LightboxImage", () => {
     expect(lightboxImg.src).not.toContain("/thumbnail");
   });
 
+  it("falls back to the full src in the grid when the preview cannot be loaded", () => {
+    render(
+      <LightboxImage
+        src="/api/stored-files/full.jpg"
+        previewSrc="/api/stored-files/full.jpg/thumbnail"
+        alt="Vereinsausflug"
+      />
+    );
+
+    const trigger = screen.getByAltText("Vereinsausflug") as HTMLImageElement;
+    fireEvent.error(trigger);
+    expect(trigger.src).toContain("/api/stored-files/full.jpg");
+    expect(trigger.src).not.toContain("/thumbnail");
+  });
+
   it("closes the lightbox on Escape", () => {
     render(<LightboxImage src="/api/stored-files/full.jpg" alt="Vereinsausflug" />);
 

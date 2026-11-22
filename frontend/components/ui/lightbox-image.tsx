@@ -14,13 +14,15 @@ type LightboxImageProps = {
   className?: string;
   /** Smaller preview shown in the trigger thumbnail, e.g. a generated thumbnail - the
    * lightbox popup always opens with the full-resolution `src`. Falls back to `src` when
-   * omitted. */
+   * omitted or when the preview fails to load (no thumbnail for this format: 404). */
   previewSrc?: string;
 };
 
 export function LightboxImage({ src, alt, className, previewSrc }: LightboxImageProps) {
   const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
+  // Vorschau nicht ladbar (z. B. keine Vorschau für dieses Format): Original im Raster zeigen
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   usePopupEscape(open, () => setOpen(false), rootRef);
@@ -32,7 +34,8 @@ export function LightboxImage({ src, alt, className, previewSrc }: LightboxImage
     <>
       <img
         alt={alt}
-        src={previewSrc ?? src}
+        src={previewSrc && !previewFailed ? previewSrc : src}
+        onError={previewSrc && !previewFailed ? () => setPreviewFailed(true) : undefined}
         loading="lazy"
         decoding="async"
         className={className ? `${className} image-lightbox-trigger` : "image-lightbox-trigger"}
