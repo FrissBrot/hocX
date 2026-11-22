@@ -306,6 +306,27 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     );
   }
 
+  // Kontingent schon beim Öffnen ausgeschöpft (max. Dateien erreicht, Dokument ohne auto_close
+  // weiter offen): kein Formular, das jede Auswahl ablehnt und «max. 0 weitere Dateien» anzeigt.
+  if (remaining === 0) {
+    return (
+      <div className="card" role="status">
+        <h2>{t("limitReachedTitle")}</h2>
+        <p className="muted">{t("limitReached", { count: maxFiles ?? 0 })}</p>
+        <div className="upload-success-actions">
+          {singleElement ? null : (
+            <Link href={`/${linkToken}/${assignmentSlug}`} className="button">
+              {t("otherElement")}
+            </Link>
+          )}
+          <Link href={`/${linkToken}`} className="button button-outline">
+            {t("toOverview")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const captchaReady = Boolean(captchaSessionToken);
   const submitDisabled = submitting || files.length === 0;
 

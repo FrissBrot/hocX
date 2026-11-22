@@ -115,7 +115,9 @@
     "progressUploading": "Uploading …",
     "progressPercent": "{percent}%",
     "progressProcessing": "Checking …",
-    "progressProcessingHint": "Your files have been transferred and are now being checked for viruses and format. Please keep this page open."
+    "progressProcessingHint": "Your files have been transferred and are now being checked for viruses and format. Please keep this page open.",
+    "limitReachedTitle": "Submission complete",
+    "limitReached": "{count, plural, one {The permitted file for this document has already been submitted. No further files are accepted.} other {All # permitted files for this document have already been submitted. No further files are accepted.}}"
   },
   "language": {
     "label": "Language"
