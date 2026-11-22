@@ -1,10 +1,10 @@
-fastapi==0.162.0
+fastapi==0.162.2
 starlette>=1.10.0  # CVE-2026-48710 (BadHost) fix, siehe security-audit/FINDINGS.md DEP-02
 uvicorn[standard]==0.54.0
 sqlalchemy==2.1.8
 alembic==1.20.1
 psycopg[binary]==3.3.8
-pydantic==2.14.2
+pydantic==2.14.3
 pydantic-settings==2.16.2
 python-multipart==0.0.33
 pyclamd==0.4.0
@@ -19,11 +19,11 @@ Pillow==13.0.0
 # Dokument-Engine (app/documents): Typst-Compiler (QR-Codes über das vendorte Typst-Paket
 # tiaoma), Markdown-Parser, XMP-Ergänzung (pypdf, inkrementell) und XLSX-Export. Versionen
 # fest, damit Dev, CI und Produktion identisch rendern.
-typst==0.15.0
+typst==0.15.2
 markdown-it-py==4.2.0
 pypdf==6.21.4
 # Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (TYPST-005, STUDIO-015)
-pypdfium2==5.14.0
+pypdfium2==5.15.0
 openpyxl==3.1.5
 # Zeichenabdeckung der Schriften (PDF/A verbietet fehlende Glyphen, siehe renderer.py)
 fonttools==4.68.0
@@ -31,7 +31,7 @@ pillow-heif==1.8.1
 ImageHash==4.3.2
 
 # S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
-boto3==1.43.124
+boto3==1.43.126
 
 # Passwortgeschützte ZIP-Dateien (AES-256, WinZip-AE-2) für Datenauskunft und Vereinsexport
 # (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,
@@ -41,7 +41,7 @@ pyzipper==0.4.0
 # Passwortgeschützte Excel-Dateien (Office-Verschlüsselung «Agile», AES) für die Tabellenexporte des
 # Document Studio (app/documents/exports.py::encrypt_xlsx) - öffnen ohne Zusatzsoftware in Excel,
 # Numbers und LibreOffice. olefile ist die Abhängigkeit von msoffcrypto-tool.
-msoffcrypto-tool==6.0.0
+msoffcrypto-tool==6.1.0
 olefile==0.47
 
 # Länder-Geolocation als Risikosignal (app/core/geoip.py): Leser für die lokale MMDB-Datei von
