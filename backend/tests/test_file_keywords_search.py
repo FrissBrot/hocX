@@ -312,31 +312,46 @@ def test_synonym_routes_need_settings_manage(db):
 # --- Leistung -------------------------------------------------------------------------------------
 
 
-def test_search_with_keywords_and_synonyms_stays_fast_on_10k_photos(db, capsys):
-    """10 000 Fotos mit Keywords: Suche (Plan + Bewertung, inkl. Synonymen und Tippfehler) bleibt
-    weit unter einer Sekunde und nutzt den GIN-Index des Suchdokuments, keinen Volltabellen-Scan
-    über stored_file."""
-    tenant = make_tenant(db)
-    words = ["Velo", "Zeltlager", "Gipfel", "Seeufer", "Grillfest", "Turnier", "Hock", "Brunnen", "Kirche", "Fahne"]
+_PERF_WORDS = ["Velo", "Zeltlager", "Gipfel", "Seeufer", "Grillfest", "Turnier", "Hock", "Brunnen", "Kirche", "Fahne"]
+
+
+def _bulk_photos(db, tenant_id, count):
+    """count Fotos mit je einem der _PERF_WORDS und einem «MotivN» als Keywords (ohne ORM, schnell)."""
     db.execute(
         text(
             """
             WITH ins AS (
                 INSERT INTO stored_file (tenant_id, original_name, mime_type, storage_path, keywords)
-                SELECT :t, 'bild_' || g || '.jpg', 'image/jpeg', 'uploads/perf/' || g || '.jpg',
+                SELECT :t, 'bild_' || g || '.jpg', 'image/jpeg', 'uploads/perf/' || :t || '/' || g || '.jpg',
                        ARRAY[(CAST(:words AS text[]))[1 + g % 10], 'Motiv' || (g % 500)]
-                  FROM generate_series(1, 10000) AS g
+                  FROM generate_series(1, :n) AS g
                 RETURNING id
             )
             INSERT INTO gallery_image (tenant_id, stored_file_id) SELECT :t, id FROM ins
             """
         ),
-        {"t": tenant.id, "words": words},
+        {"t": tenant_id, "words": _PERF_WORDS, "n": count},
     )
     db.flush()
+
+
+def _analyze_photo_tables(db):
+    """Statistik wie in Produktion nach dem Autoanalyze. Ohne ANALYZE von stored_file/gallery_image
+    schätzt Postgres in der vollen Suite mit der Statistik, die Autovacuum über die zurückgerollten
+    Zeilen früherer Tests gelegt hat (viele Seiten, ~0 Zeilen): 10 000 Fotos gelten als 1 Zeile,
+    und der Plan wird zum Nested Loop ohne Indexbedingung (stored_file x gallery_image, 10^8 Zeilen)."""
+    for table in ("stored_file", "gallery_image", "photo_search_doc", "photo_search_term", "tenant"):
+        db.execute(text(f"ANALYZE {table}"))  # sql-ok: feste Tabellennamen aus dem Test
+
+
+def test_search_with_keywords_and_synonyms_stays_fast_on_10k_photos(db, capsys):
+    """10 000 Fotos mit Keywords: Suche (Plan + Bewertung, inkl. Synonymen und Tippfehler) bleibt
+    weit unter einer Sekunde und nutzt den GIN-Index des Suchdokuments, keinen Volltabellen-Scan
+    über stored_file."""
+    tenant = make_tenant(db)
+    _bulk_photos(db, tenant.id, 10000)
     assert db.scalar(text("SELECT count(*) FROM photo_search_doc WHERE tenant_id = :t"), {"t": tenant.id}) == 10000
-    db.execute(text("ANALYZE photo_search_doc"))
-    db.execute(text("ANALYZE photo_search_term"))
+    _analyze_photo_tables(db)
 
     timings = {}
     for query in ("velo", "fahrad", "zeltlagr", "motiv42 gipfel", "sitzung"):
@@ -349,6 +364,43 @@ def test_search_with_keywords_and_synonyms_stays_fast_on_10k_photos(db, capsys):
     with capsys.disabled():
         print("\n[perf 10k] " + ", ".join(f"{q}: {ms:.0f} ms" for q, ms in timings.items()))
     assert max(timings.values()) < 1500
+
+
+def test_big_tenant_search_stays_fast_after_many_searches_in_small_tenants(db, capsys):
+    """Regression (Integrationsrunde 1.5.1, 250-290 s statt 0.2 s): psycopg bereitet dieselbe
+    Abfrage nach 5 Ausführungen auf einer Verbindung serverseitig vor, und Postgres nahm danach einen
+    generischen Plan ohne Mandantenwert - geschätzt für einen kleinen Mandanten (1 Treffer), wodurch
+    die ganze Dateiübersicht je Suchtreffer neu gelesen wurde (Nested Loop, Join Filter). Die
+    Verbindungen planen deshalb immer mit den echten Werten (app/core/db.py, plan_cache_mode)."""
+    big = make_tenant(db, "Gross")
+    _bulk_photos(db, big.id, 10000)
+    # Viele kleine Mandanten neben einem grossen: der generische Plan schätzt «ein Mandant» mit dem
+    # Durchschnitt, also klein.
+    small = [make_tenant(db, f"Klein {i}") for i in range(40)]
+    for tenant in small:
+        _bulk_photos(db, tenant.id, 25)
+    _analyze_photo_tables(db)
+
+    # Dieselbe Abfrage oft genug in kleinen Mandanten: psycopg bereitet sie vor (prepare_threshold 5),
+    # Postgres hätte nach weiteren 5 eigenen Plänen auf den generischen gewechselt.
+    for tenant in small[:12]:
+        assert _photos(db, tenant.id, "velo")
+    plans = db.execute(
+        text(
+            "SELECT generic_plans, custom_plans FROM pg_prepared_statements "
+            "WHERE statement LIKE '%files_overview%' AND statement LIKE '%photo_search_doc%'"
+        )
+    ).all()
+    assert plans, "Suchabfrage wurde nicht serverseitig vorbereitet - der Test prüft so den Planwechsel nicht"
+    assert all(generic == 0 for generic, _custom in plans), plans
+
+    start = time.perf_counter()
+    items = service.list_tenant_files(db, big.id, only_images=True, search="velo", sort_by="relevance", limit=60)
+    elapsed = (time.perf_counter() - start) * 1000
+    with capsys.disabled():
+        print(f"\n[perf 10k nach kleinen Mandanten] velo: {elapsed:.0f} ms")
+    assert len(items) == 60
+    assert elapsed < 1500
 
 
 def test_bulk_routes_check_protocol_read_access_like_the_single_route(db):

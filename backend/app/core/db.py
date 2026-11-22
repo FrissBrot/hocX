@@ -9,6 +9,14 @@ from app.core.config import settings
 
 # application_name: in pg_stat_activity lassen sich Backend, job-worker, document-worker usw.
 # auseinanderhalten (alle nutzen dieselbe Rolle hocx_app).
+#
+# plan_cache_mode=force_custom_plan: psycopg bereitet eine Abfrage nach 5 Ausführungen auf derselben
+# Verbindung serverseitig vor (prepare_threshold), und Postgres wechselt danach auf einen generischen
+# Plan, sobald dieser nicht teurer geschätzt wird als die bisherigen. Der generische Plan kennt den
+# Mandanten nicht und schätzt mit dem Durchschnitt über alle Mandanten - nach Suchen in kleinen
+# Mandanten plante er die Fotosuche eines Mandanten mit 10 000 Fotos als Nested Loop, der die ganze
+# Dateiübersicht je Treffer neu las (über 200 s statt 0.2 s). Mit eigenem Plan je Ausführung bleibt
+# das Vorbereiten (Parsen) gespart, geplant wird immer mit den echten Werten.
 engine = create_engine(
     settings.app_database_url or settings.database_url,
     future=True,
@@ -17,7 +25,10 @@ engine = create_engine(
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_timeout=settings.db_pool_timeout_seconds,
-    connect_args={"application_name": f"hocx-{settings.process_kind}"},
+    connect_args={
+        "application_name": f"hocx-{settings.process_kind}",
+        "options": "-c plan_cache_mode=force_custom_plan",
+    },
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
