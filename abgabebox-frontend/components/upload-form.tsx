@@ -12,6 +12,7 @@ import { canUploadMoreAfterSuccess, isImageFile, validateUploadFiles, SUPPORTED_
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 import { sendUpload, type UploadPhase } from "@/lib/upload-request";
 import { UploadProgress } from "@/components/upload-progress";
+import { UploadErrorMessage, UploadFileList } from "@/components/upload-file-list";
 
 type Props = {
   linkToken: string;
@@ -111,12 +112,6 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setError(null);
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   // Laeuft einmal pro Seitenaufruf, sobald FriendlyCaptcha eine Loesung liefert - tauscht sie
@@ -361,27 +356,11 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
         </div>
       </div>
 
-      {files.length > 0 && (
-        <ul className="file-list">
-          {files.map((file, i) => {
-            const ext = fileExtension(file.name);
-            return (
-              <li key={i} className="file-item">
-                <span className={`file-ext file-ext-${extensionTone(ext)}`} aria-hidden="true">{ext || "·"}</span>
-                <span className="file-text">
-                  <span className="file-name">{file.name}</span>
-                  <span className="file-size">{formatSize(file.size)}</span>
-                </span>
-                <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label={t("removeFile")}>✕</button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <UploadFileList files={files} onRemove={removeFile} />
 
       {submitting && progress ? <UploadProgress progress={progress} /> : null}
 
-      {error && <p className="error">{error}</p>}
+      <UploadErrorMessage message={error} />
       {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
 
       {/* Nur relevant, wenn ein Bild ausgewählt ist: andere Dateien tragen keinen Standort */}
@@ -446,17 +425,4 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       </div>
     </form>
   );
-}
-
-function fileExtension(name: string): string {
-  const parts = name.split(".");
-  return parts.length > 1 ? (parts.pop() ?? "").toUpperCase().slice(0, 4) : "";
-}
-
-// Farbton des Dateityp-Kaestchens: PDF rot, Word blau, Bilder/Tabellen gruen, sonst neutral.
-function extensionTone(ext: string): "danger" | "info" | "success" | "neutral" {
-  if (ext === "PDF") return "danger";
-  if (ext === "DOC" || ext === "DOCX" || ext === "ODT") return "info";
-  if (["JPG", "JPEG", "PNG", "HEIC", "HEIF", "WEBP", "GIF", "XLS", "XLSX", "CSV", "ODS"].includes(ext)) return "success";
-  return "neutral";
 }

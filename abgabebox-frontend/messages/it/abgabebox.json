@@ -68,7 +68,7 @@
     "hintMaxFilesRemaining": "{count, plural, one {max. # file aggiuntivo} other {max. # file aggiuntivi}}",
     "hintPerFile": "{size} MB ciascuno",
     "hintTotal": "massimo 150 MB in totale",
-    "removeFile": "Rimuovi",
+    "removeFile": "Rimuovi {filename}",
     "offlineNotice": "Offline – i caricamenti sono possibili solo dopo il ripristino della connessione. La selezione rimane in questa scheda.",
     "alreadyUploaded": "{count, plural, one {Già # file caricato per questa consegna.} other {Già # file caricati per questa consegna.}}",
     "captchaDone": "✓ Verifica di sicurezza completata",

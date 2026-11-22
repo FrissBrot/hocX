@@ -68,7 +68,7 @@
     "hintMaxFilesRemaining": "{count, plural, one {max. # fichier supplémentaire} other {max. # fichiers supplémentaires}}",
     "hintPerFile": "{size} MB chacun",
     "hintTotal": "150 MB au total maximum",
-    "removeFile": "Retirer",
+    "removeFile": "Retirer {filename}",
     "offlineNotice": "Hors ligne – les envois ne sont possibles qu'une fois la connexion rétablie. Votre sélection reste dans cet onglet.",
     "alreadyUploaded": "{count, plural, one {# fichier déjà téléversé pour ce dépôt.} other {# fichiers déjà téléversés pour ce dépôt.}}",
     "captchaDone": "✓ Vérification de sécurité terminée",
