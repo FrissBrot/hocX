@@ -59,6 +59,8 @@ def _wait_until_blocked(timeout: float = 10.0) -> bool:
     with engine.connect() as probe:
         while time.monotonic() < deadline:
             waiting = probe.scalar(text("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()"))
+            # pg_stat_activity ist je Transaktion ein fester Schnappschuss: jede Abfrage neu
+            probe.rollback()
             if waiting:
                 return True
             time.sleep(0.05)
@@ -95,8 +97,9 @@ def test_delete_waits_for_running_export_and_keeps_its_template(tenant_id):
         export_id = export.id
         with ThreadPoolExecutor(1) as pool:
             deletion = pool.submit(delete_in_other_request)
-            assert _wait_until_blocked(), "Löschen wartet nicht auf den laufenden Export"
-            exporter.commit()
+            blocked = _wait_until_blocked()
+            exporter.commit()  # auch ohne Warten, sonst hinge der Thread an der Sperre des Exports
+            assert blocked, "Löschen wartet nicht auf den laufenden Export"
             with pytest.raises(template_service.TemplateStateError):
                 deletion.result(timeout=15)
     finally:
