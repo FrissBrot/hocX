@@ -53,10 +53,13 @@ def save_policy(db: Session, tenant_id: int, values: dict[str, Any]) -> TenantRe
 # ── Vorschläge ───────────────────────────────────────────────────────────
 
 
-def _candidates(db: Session, policy: TenantRetentionPolicy) -> list[dict[str, Any]]:
-    params = {"t": policy.tenant_id, "limit": _MAX_PER_RULE}
+def _candidates(db: Session, policy: TenantRetentionPolicy, *, only: tuple[str, int] | None = None) -> list[dict[str, Any]]:
+    """Fällige Daten nach der aktuellen Regel. ``only=(kind, subject_id)``: nur diesen einen Eintrag
+    prüfen (vor dem Umsetzen eines Vorschlags) - dann zählt auch eine Datei im Papierkorb."""
+    kind, subject = only if only is not None else (None, None)
+    params = {"t": policy.tenant_id, "limit": _MAX_PER_RULE, "subject": subject}
     found: list[dict[str, Any]] = []
-    if policy.submissions_months:
+    if policy.submissions_months and kind in (None, "submission_upload"):
         rows = db.execute(sql("""
             SELECT * FROM (
                 -- Abgabeschluss: Stichtag der Abgabe, bei Terminen Termindatum plus Tage danach
@@ -68,18 +71,20 @@ def _candidates(db: Session, policy: TenantRetentionPolicy) -> list[dict[str, An
                 WHERE a.tenant_id = :t
             ) c
             WHERE c.ref IS NOT NULL AND c.ref < CAST(now() - make_interval(months => :months) AS date)
+              AND (CAST(:subject AS bigint) IS NULL OR c.id = :subject)
             ORDER BY c.ref, c.id LIMIT :limit
         """), {**params, "months": policy.submissions_months}).mappings().all()
         for r in rows:
             element = " ".join(part for part in (r["event_date"].strftime("%d.%m.%Y") if r["event_date"] else None, r["event_title"]) if part)
             found.append({"kind": "submission_upload", "subject_id": r["id"], "label": " – ".join(p for p in (r["title"], element) if p), "reference_date": r["ref"]})
-    if policy.unlinked_gallery_years:
+    if policy.unlinked_gallery_years and kind in (None, "gallery_image"):
         rows = db.execute(sql("""
             SELECT s.id, s.original_name, CAST(COALESCE(s.capture_corrected_at, s.exif_taken_at, s.created_at) AS date) AS ref
             FROM gallery_image g JOIN stored_file s ON s.id = g.stored_file_id
             WHERE g.tenant_id = :t AND g.event_id IS NULL AND g.submission_assignment_id IS NULL
               AND NOT EXISTS (SELECT 1 FROM photo_album_item i WHERE i.file_id = s.public_id)
-              AND s.deleted_at IS NULL
+              AND (s.deleted_at IS NULL OR CAST(:subject AS bigint) IS NOT NULL)
+              AND (CAST(:subject AS bigint) IS NULL OR s.id = :subject)
               AND s.created_at < now() - make_interval(years => :years)
             ORDER BY s.created_at, s.id LIMIT :limit
         """), {**params, "years": policy.unlinked_gallery_years}).mappings().all()
@@ -147,13 +152,21 @@ def decide(db: Session, tenant_id: int, proposal_ids: list[uuid.UUID], *, action
 
     result = {"applied": 0, "dismissed": 0, "failed": 0, "missing": 0}
     for proposal_id in proposal_ids:
+        # Gesperrt: Job (Automatik) und Person entscheiden nie gleichzeitig über denselben Vorschlag.
         proposal = db.scalar(select(RetentionProposal).where(
             RetentionProposal.id == proposal_id, RetentionProposal.tenant_id == tenant_id, RetentionProposal.status == "open"
-        ))
+        ).with_for_update())
         if proposal is None:
             result["missing"] += 1
             continue
         kind, subject_id = proposal.kind, proposal.subject_id
+        if action == "apply" and not _still_due(db, tenant_id, kind, subject_id):
+            # Veraltet (Regel gelockert, Bild inzwischen verknüpft, Frist verschoben): nicht löschen.
+            # Der Vorschlag verschwindet; ist der Eintrag später wieder fällig, entsteht ein neuer.
+            db.delete(proposal)
+            db.commit()
+            result["missing"] += 1
+            continue
         try:
             if action == "apply":
                 # Aufbewahrung löscht endgültig - auch eine inzwischen in den Papierkorb gelegte Datei.
@@ -175,6 +188,13 @@ def decide(db: Session, tenant_id: int, proposal_ids: list[uuid.UUID], *, action
             record_system_error(db, exc=exc, tenant_id=tenant_id)
             result["failed"] += 1
     return result
+
+
+def _still_due(db: Session, tenant_id: int, kind: str, subject_id: int) -> bool:
+    """Gilt der Vorschlag nach der AKTUELLEN Regel und dem aktuellen Stand noch? Vorschläge sind
+    Tage alt; bis zum Umsetzen kann die Regel gelockert oder das Bild verknüpft worden sein."""
+    policy = db.get(TenantRetentionPolicy, tenant_id)
+    return policy is not None and bool(_candidates(db, policy, only=(kind, subject_id)))
 
 
 def _apply(db: Session, tenant_id: int, kind: str, subject_id: int) -> None:
