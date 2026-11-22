@@ -990,6 +990,9 @@ export function ProtocolEditor({
           // Akkordeon: Ziel im Scrollraum des ganz offenen Dokuments (dort liegt jeder Punkt
           // immer, accordion-scroll.ts) - unterwegs klappen die Punkte stetig mit.
           const engine = accordionEngineRef.current;
+          // Ziel rendern, auch solange es noch zugeklappt ist: der Autofokus unten trifft sonst
+          // einen übersprungenen Inhalt (content-visibility, accordion-scroll.ts)
+          engine?.reveal(selectedElementId);
           const place = engine?.target(selectedElementId) ?? null;
           const target = sectionScrollTarget({
             top: place?.top ?? offsetTopWithin(section, container),

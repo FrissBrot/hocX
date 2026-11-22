@@ -19,6 +19,8 @@ type CoverageResponse = {
 // Nach der letzten relevanten Änderung kurz warten: die Abfrage setzt die Protokoll-Vorlage
 // (ohne PDF) zusammen und soll beim Tippen nicht laufend kommen.
 const REFRESH_DELAY_MS = 4000;
+// Spätestens so lange nach dem Laden kommt die erste Abfrage, auch ohne Leerlauf.
+const FIRST_LOAD_TIMEOUT_MS = 3000;
 
 export function toPdfCoverage(response: CoverageResponse): PdfCoverage {
   return {
@@ -71,7 +73,7 @@ export function usePdfCoverage(protocolId: string, signature: string): PdfCovera
   const firstRef = useRef(true);
   useEffect(() => {
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+    const load = () => {
       browserApiFetch<CoverageResponse>(`/api/protocols/${protocolId}/pdf-coverage`)
         .then((response) => {
           if (cancelled) return;
@@ -80,8 +82,23 @@ export function usePdfCoverage(protocolId: string, signature: string): PdfCovera
           setCoverage((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
         })
         .catch(() => undefined);
-    }, firstRef.current ? 0 : REFRESH_DELAY_MS);
+    };
+    const first = firstRef.current;
     firstRef.current = false;
+    // Erste Abfrage im Leerlauf nach dem Laden (B1): sie setzt die Protokoll-Vorlage zusammen
+    // und konkurrierte sonst mit den Anfragen und dem Aufbau des Editors.
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (first && idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(load, { timeout: FIRST_LOAD_TIMEOUT_MS });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+    const timer = window.setTimeout(load, first ? 0 : REFRESH_DELAY_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);

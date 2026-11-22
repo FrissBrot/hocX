@@ -77,7 +77,24 @@ type Item = {
   metrics: AccordionMetrics | null;
   open: number;
   above: boolean;
+  /** Ganz zu: Inhalt wird nicht gerendert (SKIPPED_CLASS), Höhe bleibt die gemessene. */
+  skipped: boolean;
 };
+
+/** Klasse am Inhalt eines ganz zugeklappten Punkts (protocol.css: content-visibility). Der
+ * Browser überspringt dann Stil, Layout und Zeichnen des Inhalts - bei 30 Punkten mit Editoren,
+ * Tabellen und Bildern der grösste Teil der Arbeit je Scroll-Frame (Performance-Audit
+ * 2026-11-22, S3). Die gemessene Höhe steht als contain-intrinsic-height daneben, damit
+ * offsetHeight und damit die Rechnung hier unverändert bleiben. */
+export const SKIPPED_CLASS = "protocol-doc-section-skipped";
+
+function setSkipped(item: Item, skipped: boolean, height: number) {
+  if (item.skipped === skipped) return;
+  item.skipped = skipped;
+  item.inner.classList.toggle(SKIPPED_CLASS, skipped);
+  if (skipped) item.inner.style.setProperty("contain-intrinsic-height", `auto ${height}px`);
+  else item.inner.style.removeProperty("contain-intrinsic-height");
+}
 
 export type AccordionEngine = {
   /** Neu berechnen und anwenden (rAF-gedrosselt). */
@@ -86,6 +103,9 @@ export type AccordionEngine = {
   target: (id: string) => { top: number; height: number } | null;
   /** Sofort neu berechnen (nach einem Sprung). */
   settle: () => void;
+  /** Inhalt eines Punkts sofort wieder rendern, auch wenn er (noch) zu ist: vor einem Sprung
+   * mit Autofokus - übersprungene Inhalte (content-visibility) nehmen keinen Fokus an. */
+  reveal: (id: string) => void;
   destroy: () => void;
 };
 
@@ -97,6 +117,7 @@ export function createAccordionEngine(
   let gap = 0;
   let anchorIndex = 0;
   let activeId: string | null = null;
+  let revealedId: string | null = null;
   let frame: number | null = null;
 
   function collect() {
@@ -109,7 +130,7 @@ export function createAccordionEngine(
       if (!section || !body || !inner) return [];
       const id = section.id.replace("protocol-element-", "");
       const known = previous.get(id);
-      return [{ id, section, body, inner, metrics: null, open: known?.open ?? -1, above: known?.above ?? false }];
+      return [{ id, section, body, inner, metrics: null, open: known?.open ?? -1, above: known?.above ?? false, skipped: known?.skipped ?? false }];
     });
     anchorIndex = Math.max(0, items.findIndex((item) => item.id === previousAnchor));
     gap = parseFloat(getComputedStyle(container).rowGap) || 0;
@@ -167,6 +188,12 @@ export function createAccordionEngine(
     const metrics = items.map(metricsOf);
     const open = accordionOpenness(metrics, anchor, tops[anchor] - scrollTop, { center, gap });
     items.forEach((item, index) => apply(item, open[index], index < anchor));
+    // Erst nach dem Anwenden (und Messen): ganz zugeklappte Punkte nicht rendern. Die direkten
+    // Nachbarn des Bezugs bleiben gerendert, damit Tab/Umschalt+Tab wie bisher in den nächsten
+    // bzw. vorherigen Punkt springen; ebenso ein Sprungziel (reveal).
+    items.forEach((item, index) =>
+      setSkipped(item, item.open === 0 && Math.abs(index - anchor) > 1 && item.id !== revealedId, metrics[index].body)
+    );
     // Fehlende Höhe darüber/darunter in den Abstandshaltern: der Bezug bleibt, wo er ist
     let missingAbove = 0;
     let missingBelow = 0;
@@ -190,7 +217,11 @@ export function createAccordionEngine(
   }
 
   function relayout() {
-    for (const item of items) item.metrics = null;
+    // Neue Breite: übersprungene Inhalte vor dem Messen wieder rendern (sonst gälte die alte Höhe)
+    for (const item of items) {
+      setSkipped(item, false, 0);
+      item.metrics = null;
+    }
     schedule();
   }
 
@@ -236,12 +267,18 @@ export function createAccordionEngine(
       if (frame !== null) window.cancelAnimationFrame(frame);
       run();
     },
+    reveal(id) {
+      revealedId = id;
+      const item = items.find((entry) => entry.id === id);
+      if (item) setSkipped(item, false, 0);
+    },
     destroy() {
       if (frame !== null) window.cancelAnimationFrame(frame);
       container.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", relayout);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
+      for (const item of items) setSkipped(item, false, 0);
       container.style.removeProperty("--accordion-above");
       container.style.removeProperty("--accordion-below");
     },

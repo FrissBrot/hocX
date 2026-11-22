@@ -21,6 +21,10 @@ Installationen aktualisieren können.
     Das Personenverzeichnis zur Namensauflösung enthält nur noch verwiesene Personen und keine
     E-Mail-Adressen mehr.
   - Schnellnavigation rechts als eigene, memoisierte Komponente: rendert beim Tippen nicht mehr mit.
+  - Akkordeon: der Inhalt ganz zugeklappter Punkte wird nicht mehr gerendert (`content-visibility`),
+    ausser bei den direkten Nachbarn des aktiven Punkts (Tab springt wie bisher hinein) und bei
+    einem Sprungziel (Autofokus). Scrollraum und Sprungziele bleiben gleich (gemessene Höhe).
+  - «Nicht im PDF»: die erste Abfrage läuft im Leerlauf nach dem Laden statt sofort.
   - «Nicht im PDF»: die Abdeckung lädt Protokollinhalte und Termine nur noch einmal statt je einmal
     für den Protokollinhalt und für die Protokoll-Vorlage.
 - **Weniger Datenbankabfragen je Anfrage:** Konto, Mandant, Session, zweiter Faktor und gebuchte
