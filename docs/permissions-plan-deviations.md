@@ -81,7 +81,7 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   Datei, beim Auflisten und Widerrufen je Link (sonst öffnete die Token-URL Inhalte, die man im
   Verein nicht lesen darf). Album-Links brauchen `photos.read`.
 - **Einzelabruf von Dateien** symmetrisch: `files.read` nur Dokumente, `photos.read` nur Bilder
-  (Entwürfe-Leser wie bisher alles).
+  samt Live-Photo-Clips (`video/*`, wie im Papierkorb) (Entwürfe-Leser wie bisher alles).
 - **Personensuche** sucht ohne `participants.contacts` nicht in E-Mail-Adressen; ohne
   Verwaltungsrecht sind `login_enabled`/`notify_without_login` ausgeblendet.
 - **MFA:** Ein Zurücksetzen des Faktors durch die Administration startet keine neue Frist.
