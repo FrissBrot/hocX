@@ -35,7 +35,7 @@ import { useStableCallbacks } from "@/lib/hooks/use-stable-callbacks";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
+import { isAlreadyUploadedLazy } from "@/lib/image-analysis/precheck-lazy";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
@@ -1607,7 +1607,7 @@ export function ProtocolEditor({
     try {
       // Vorab-Abgleich per SHA-256: ein im Mandanten schon vorhandenes Bild würde der Server
       // ohnehin als Duplikat ablehnen - dann gar nicht erst übertragen.
-      if (await isAlreadyUploaded(file, "protocol_image")) {
+      if (await isAlreadyUploadedLazy(file, "protocol_image")) {
         setStatus(protocolElementBlockId, "error");
         showToast(t("imageAlreadyExists"), "error");
         return;

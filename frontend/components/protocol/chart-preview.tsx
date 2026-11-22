@@ -1,0 +1,196 @@
+"use client";
+
+// Diagramm-Darstellung des Statistik-Blocks (Recharts). Eigene Datei, damit chart-block.tsx sie per
+// next/dynamic erst lädt, wenn ein Diagramm gezeichnet wird (Performance-Audit Protokoll-Editor).
+import type { useTranslations } from "next-intl";
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
+import { StatisticsOverview } from "@/types/api";
+import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
+import { fineCountsByType, fineTotalsByCurrency } from "@/lib/utils/fine-stats";
+
+const C = CHART_COLORS;
+const PIE = CHART_PIE_PALETTE;
+
+function fmtMonth(m: string, locale: string) {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString(`${locale}-CH`, { month: "short", year: "2-digit" });
+}
+
+export function ChartPreview({ chartType, cycleKey, data, t, locale }: { chartType: string; cycleKey: string; data: StatisticsOverview; t: ReturnType<typeof useTranslations>; locale: string }) {
+  const h = 220;
+
+  if (chartType === "attendance_over_time") {
+    const d = data.attendance_over_time.map((r) => ({ ...r, month: fmtMonth(r.month, locale) }));
+    if (!d.length) return <NoData t={t} />;
+    return (
+      <ResponsiveContainer width="100%" height={h}>
+        <BarChart data={d} barSize={14}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" width={24} />
+          <Tooltip />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+          <Bar dataKey="present" name={t("series.present")} stackId="a" fill={C.present} />
+          <Bar dataKey="excused" name={t("series.excused")} stackId="a" fill={C.excused} />
+          <Bar dataKey="absent" name={t("series.absent")} stackId="a" fill={C.absent} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "attendance_by_participant") {
+    const d = data.attendance_by_participant.slice(0, 15).map((r) => ({ name: r.name, present: r.present, excused: r.excused, absent: r.absent }));
+    if (!d.length) return <NoData t={t} />;
+    return (
+      <ResponsiveContainer width="100%" height={Math.max(h, d.length * 28)}>
+        <BarChart layout="vertical" data={d} barSize={10}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <Tooltip />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+          <Bar dataKey="present" name={t("series.present")} stackId="a" fill={C.present} />
+          <Bar dataKey="excused" name={t("series.excused")} stackId="a" fill={C.excused} />
+          <Bar dataKey="absent" name={t("series.absent")} stackId="a" fill={C.absent} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "finance_by_month") {
+    const d = data.finance_by_month.reduce<Record<string, { month: string; income: number; expenses: number }>>((acc, r) => {
+      if (!acc[r.month]) acc[r.month] = { month: r.month, income: 0, expenses: 0 };
+      acc[r.month].income += r.income;
+      acc[r.month].expenses += r.expenses;
+      return acc;
+    }, {});
+    const arr = Object.values(d).sort((a, b) => a.month.localeCompare(b.month)).map((r) => ({ ...r, month: fmtMonth(r.month, locale) }));
+    if (!arr.length) return <NoData t={t} />;
+    return (
+      <ResponsiveContainer width="100%" height={h}>
+        <BarChart data={arr} barSize={14}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={40} />
+          <Tooltip />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+          <Bar dataKey="income" name={t("series.income")} fill={C.income} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="expenses" name={t("series.expenses")} fill={C.expenses} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "fines_by_participant") {
+    // Beträge nur in der Hauptwährung (wie der PDF-Export, MAIN-BE-019).
+    const mainCurrency = fineTotalsByCurrency(data.fines_by_participant)[0]?.currency ?? "";
+    const d = data.fines_by_participant
+      .filter((f) => (f.currency ?? "") === mainCurrency)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+      .map((f) => ({ name: f.name, amount: f.amount }));
+    if (!d.length) return <NoData t={t} />;
+    return (
+      <ResponsiveContainer width="100%" height={Math.max(h, d.length * 28)}>
+        <BarChart layout="vertical" data={d} barSize={12}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <Tooltip />
+          <Bar dataKey="amount" name={t("series.amount")} fill={C.fines} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "fines_by_type") {
+    const d = fineCountsByType(data.fines_by_type).map((f, i) => ({ name: f.label, value: f.count, color: PIE[i % PIE.length] }));
+    if (!d.length) return <NoData t={t} />;
+    return (
+      <ResponsiveContainer width="100%" height={h}>
+        <PieChart>
+          <Pie data={d} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+            {d.map((e) => <Cell key={e.name} fill={e.color} />)}
+          </Pie>
+          <Tooltip />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "todos") {
+    const d = [
+      { name: t("series.done"), value: data.todos.done, color: C.done },
+      { name: t("series.open"), value: data.todos.open, color: C.open },
+    ];
+    return (
+      <ResponsiveContainer width="100%" height={h}>
+        <PieChart>
+          <Pie data={d} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+            {d.map((e) => <Cell key={e.name} fill={e.color} />)}
+          </Pie>
+          <Tooltip />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "groups_sessions" || chartType === "groups_avg") {
+    let groups = data.groups_stats;
+    if (cycleKey !== "all") {
+      const [cid, yr] = cycleKey.split(":");
+      groups = groups.filter((g) => g.cycle_config_id === cid && g.cycle_year === Number(yr));
+    }
+    const merged: Record<string, { name: string; sessions: number; sessions_with_p: number; weighted: number; sp: number }> = {};
+    for (const g of groups) {
+      if (!merged[g.group_name]) merged[g.group_name] = { name: g.group_name, sessions: 0, sessions_with_p: 0, weighted: 0, sp: 0 };
+      merged[g.group_name].sessions += g.session_count;
+      merged[g.group_name].sessions_with_p += g.session_count_with_participants;
+      merged[g.group_name].weighted += g.avg_participants * g.session_count_with_participants;
+      merged[g.group_name].sp += g.session_count_with_participants;
+    }
+    const d = Object.values(merged).sort((a, b) => b.sessions - a.sessions);
+    if (!d.length) return <NoData t={t} />;
+
+    if (chartType === "groups_sessions") {
+      const arr = d.map((g) => ({ name: g.name, allSessions: g.sessions, withParticipants: g.sessions_with_p }));
+      return (
+        <ResponsiveContainer width="100%" height={Math.max(h, d.length * 42)}>
+          <BarChart layout="vertical" data={arr} barSize={10} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+            <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+            <Tooltip />
+            <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
+            <Bar dataKey="allSessions" name={t("series.allSessions")} fill={C.sessions} opacity={0.5} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="withParticipants" name={t("series.withParticipants")} fill={C.sessions} radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    const arr = d.map((g) => ({ name: g.name, avgParticipants: g.sp > 0 ? Math.round(g.weighted / g.sp * 10) / 10 : 0 }));
+    return (
+      <ResponsiveContainer width="100%" height={Math.max(h, d.length * 32)}>
+        <BarChart layout="vertical" data={arr} barSize={14}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="var(--muted)" />
+          <Tooltip />
+          <Bar dataKey="avgParticipants" name={t("series.avgParticipants")} fill={C.participants} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  return <NoData t={t} />;
+}
+
+function NoData({ t }: { t: ReturnType<typeof useTranslations> }) {
+  return <p className="muted" style={{ padding: "var(--space-2) 0" }}>{t("noDataGeneric")}</p>;
+}
