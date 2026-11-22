@@ -19,6 +19,7 @@ from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
 from app import runtime_metrics
 from app.db import SessionLocal, engine
+from app.public_errors import PublicError
 from app.repository import insert_error_log, redact_path, upload_path_referenced
 from app.routes import public, verify
 from app.objstore_client import StorageWriteFenced
@@ -261,6 +262,9 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
         return _db_busy_response()
     if exc.status_code >= 400 and exc.__cause__ is not None:
         await _record_error_off_loop(request, exc.__cause__, exc.status_code)
+    if isinstance(exc, PublicError):
+        # Stabiler Code + Platzhalterwerte, damit die Oberfläche die Meldung übersetzen kann.
+        return JSONResponse(status_code=exc.status_code, content=exc.body(), headers=exc.headers)
     return await http_exception_handler(request, exc)
 
 

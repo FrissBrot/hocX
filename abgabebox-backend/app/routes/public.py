@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 import imagehash
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from PIL import Image
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.captcha import mint_captcha_session_token, verify_captcha, verify_captc
 from app.config import settings
 from app.db import UploadLockBusy, get_db, serialized_upload, tenant_upload_lock
 from app.offload import run_coroutine_in_thread
+from app.public_errors import PublicError
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.objstore_client import StorageWriteFenced
 from app.storage import delete_object, move_from_quarantine, save_to_quarantine, tenant_storage_bytes
@@ -34,8 +35,8 @@ def _client_ip(request: Request) -> str | None:
 
 router = APIRouter()
 
-NOT_FOUND = HTTPException(status_code=404, detail="Nicht gefunden")
-FEATURE_DISABLED = HTTPException(status_code=403, detail="Die Abgabebox ist für diese Organisation aktuell nicht verfügbar.")
+NOT_FOUND = PublicError(404, "not_found", "Nicht gefunden")
+FEATURE_DISABLED = PublicError(403, "feature_disabled", "Die Abgabebox ist für diese Organisation aktuell nicht verfügbar.")
 
 # SECURITY: the client-sent Content-Type header (upload_file.content_type) is fully attacker
 # controlled and must never be trusted or stored - a file named "x.pdf" with real HTML/JS
@@ -340,9 +341,9 @@ async def _verify_captcha_impl(request: Request, link_token: str, assignment_slu
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
     element = element_resolver.resolve_single_element(db, assignment, element_ref)
     if element is None:
-        raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+        raise PublicError(400, "element_closed", "Element ist nicht (mehr) offen")
     if not await verify_captcha(captcha_solution):
-        raise HTTPException(status_code=400, detail="Captcha ungültig")
+        raise PublicError(400, "captcha_invalid", "Captcha ungültig")
     token = mint_captcha_session_token(link_token, assignment_slug, element_ref, client_ip=_client_ip(request))
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
@@ -378,17 +379,17 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     element = element_resolver.resolve_single_element(db, assignment, element_ref)
     if element is None:
         _log("element_closed", "Element ist nicht (mehr) offen")
-        raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+        raise PublicError(400, "element_closed", "Element ist nicht (mehr) offen")
 
     # 401 statt 400: das Frontend unterscheidet daran "Sicherheitscheck abgelaufen, bitte neu
     # verifizieren" (Widget erneut ausloesen) von den echten Validierungsfehlern unten (400).
     if not verify_captcha_session_token(captcha_session_token, link_token, assignment_slug, element_ref, client_ip=_client_ip(request)):
         _log("captcha_failed", "Bot-Verifikation fehlgeschlagen oder Sicherheitscheck abgelaufen")
-        raise HTTPException(status_code=401, detail="Sicherheitscheck abgelaufen - bitte kurz warten")
+        raise PublicError(401, "captcha_expired", "Sicherheitscheck abgelaufen - bitte kurz warten")
 
     if not files:
         _log("validation_failed", "Keine Datei ausgewählt")
-        raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
+        raise PublicError(400, "no_file", "Keine Datei ausgewählt")
 
     # Checked before anything about any of `files` is read or scanned - see
     # _exceeds_max_files_per_request's docstring above.
@@ -397,9 +398,11 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             "validation_failed",
             f"Zu viele Dateien in einer Anfrage ({len(files)}, max. {settings.max_files_per_upload_request})",
         )
-        raise HTTPException(
-            status_code=400,
-            detail=f"Maximal {settings.max_files_per_upload_request} Dateien pro Anfrage erlaubt",
+        raise PublicError(
+            400,
+            "too_many_files_request",
+            f"Maximal {settings.max_files_per_upload_request} Dateien pro Anfrage erlaubt",
+            params={"max": settings.max_files_per_upload_request},
         )
 
     max_files = assignment["max_files_per_element"]
@@ -413,20 +416,20 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         suffix = Path(upload_file.filename or "").suffix.lower().lstrip(".")
         if allowed_types and suffix not in allowed_types:
             _log("validation_failed", f"Dateityp nicht erlaubt: .{suffix}")
-            raise HTTPException(status_code=400, detail=f"Dateityp '.{suffix}' nicht erlaubt")
+            raise PublicError(400, "file_type_not_allowed", f"Dateityp '.{suffix}' nicht erlaubt", params={"extension": suffix})
         # H11: bounded read (see _read_upload_within_limit above) instead of an unconditional
         # `await upload_file.read()` on the whole body.
         content = await _read_upload_within_limit(upload_file, max_bytes)
         if content is None:
             _log("validation_failed", f"Datei zu gross: {upload_file.filename} (max. {assignment['max_file_size_mb']} MB)")
-            raise HTTPException(status_code=400, detail=f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)")
+            raise PublicError(400, "file_too_large", f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)", params={"maxMb": assignment["max_file_size_mb"]})
         total_bytes_read += len(content)
         if total_bytes_read > MAX_UPLOAD_REQUEST_BYTES:
             _log("validation_failed", f"Upload insgesamt zu gross ({total_bytes_read // 1024 // 1024} MB)")
-            raise HTTPException(status_code=400, detail="Upload insgesamt zu gross")
+            raise PublicError(400, "upload_too_large", "Upload insgesamt zu gross")
         if not _content_matches_extension(content, suffix):
             _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
-            raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
+            raise PublicError(400, "content_mismatch", f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'", params={"extension": suffix})
         # Server-derived mime type, never the client-sent Content-Type header - see comment above.
         mime_type = _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")
         if not include_gps:
@@ -476,20 +479,20 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 existing_checksums.add(checksum)
         contents = unique_contents
         if not contents:
-            return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
+            return UploadResult(ok=True, files_received=files_received)
 
         # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
         # _compute_perceptual_hash. Nur innerhalb dieser Abgabe (Security-Audit SEC-011): ein
         # mandantenweiter Vergleich verriet anonymen Link-Inhabern, ob ein Foto im Verein existiert.
         perceptual_hashes = [_compute_perceptual_hash(content, mime) for content, _, mime in contents]
         tenant_image_hashes = [phash for _id, phash in repository.list_assignment_image_hashes(db, assignment_id=assignment["id"])]
-        image_duplicate_warnings: list[str] = []
+        image_duplicate_files: list[str] = []
         for i, ((_content, original_name, _mime), phash) in enumerate(zip(contents, perceptual_hashes)):
             if phash is None:
                 continue
             other_hashes_in_request = [h for j, h in enumerate(perceptual_hashes) if h is not None and j != i]
             if _has_close_perceptual_match(phash, tenant_image_hashes + other_hashes_in_request):
-                image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits in dieser Abgabe hochgeladenen Bild.")
+                image_duplicate_files.append(original_name)
 
         incoming_bytes = sum(len(content) for content, _, _ in contents)
         tenant_quota_bytes = repository.get_tenant_storage_quota_bytes(db, tenant_id=tenant["id"])
@@ -524,7 +527,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 if checksum not in existing_checksums_locked
             ]
             if not remaining_files:
-                return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
+                return UploadResult(ok=True, files_received=files_received)
             contents = [item for item, _, _ in remaining_files]
             checksums = [checksum for _, checksum, _ in remaining_files]
             perceptual_hashes = [phash for _, _, phash in remaining_files]
@@ -544,10 +547,10 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # the safe, contained fix for this pass.
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
-                raise HTTPException(400, "Speicherkontingent der Organisation erreicht")
+                raise PublicError(400, "storage_limit", "Speicherkontingent der Organisation erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
-                raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte die Organisation kontaktieren")
+                raise PublicError(400, "storage_limit", "Speicherlimit erreicht - bitte die Organisation kontaktieren")
 
             # Authoritative re-check of max_files_per_element, now inside the same per-tenant
             # lock the quota check above uses (audit finding, 2026-08-25) - this is what
@@ -564,7 +567,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             )
             if latest_status == "closed":
                 _log("element_closed", "Element ist nicht (mehr) offen")
-                raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+                raise PublicError(400, "element_closed", "Element ist nicht (mehr) offen")
 
             already_uploaded = 0
             if max_files is not None:
@@ -574,9 +577,11 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 if already_uploaded + len(contents) > max_files:
                     remaining = max(0, max_files - already_uploaded)
                     _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch möglich)")
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
+                    raise PublicError(
+                        400,
+                        "too_many_files_total",
+                        f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
+                        params={"maxFiles": max_files, "remaining": remaining},
                     )
 
             # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
@@ -594,7 +599,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                     raise
                 except Exception as exc:
                     _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
-                    raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
+                    raise PublicError(500, "save_failed", "Datei konnte nicht gespeichert werden") from exc
                 counter = f"_{i+1}" if len(contents) > 1 else ""
                 display_name = f"{assignment_slug}_{element_slug}_{date_str}{counter}{suffix}"
                 quarantine_files.append({
@@ -639,9 +644,9 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                     db.rollback()
             if "error" in scan_results and "infected" not in scan_results:
                 _log("scan_error", "Virenprüfung konnte nicht abgeschlossen werden")
-                raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
+                raise PublicError(422, "scan_failed", "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
             _log("scan_infected", "Schadware gefunden – Upload abgelehnt")
-            raise HTTPException(status_code=400, detail="Eine oder mehrere Dateien wurden als Schadware eingestuft")
+            raise PublicError(400, "malware", "Eine oder mehrere Dateien wurden als Schadware eingestuft")
 
         # Per-file, not a single overall_scan applied to the whole batch (audit finding,
         # 2026-08-25) - ClamAV being unreachable for just one file out of several used to hold
@@ -663,7 +668,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                     raise
                 except Exception as exc:
                     _log("upload_error", f"Dateiverschiebung fehlgeschlagen: {exc}")
-                    raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
+                    raise PublicError(500, "save_failed", "Datei konnte nicht verschoben werden") from exc
             saved_files.append(file_info)
 
         if not any_pending:
@@ -700,7 +705,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             if closed_meanwhile:
                 _log("element_closed", "Element wurde während des Uploads geschlossen")
                 # erwarteter Fall (kein Programmfehler), daher nicht ins Fehlerprotokoll
-                raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen") from None
+                raise PublicError(400, "element_closed", "Element ist nicht (mehr) offen") from None
             _log("upload_error", f"Datenbankfehler: {exc}")
             raise
 
@@ -711,7 +716,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             _log("scan_clean")
         _log("submitted", "Freigegeben")
         return UploadResult(
-            ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings, element_closed=close_after
+            ok=True, files_received=files_received, image_duplicate_files=image_duplicate_files, element_closed=close_after
         )
 
 
@@ -741,4 +746,4 @@ async def upload(
         busy = True
     if busy:
         # Erwartet (andere Uploads desselben Vereins laufen) - kein Eintrag im Fehlerprotokoll.
-        raise HTTPException(status_code=503, detail="Gerade werden andere Dateien verarbeitet - bitte gleich erneut versuchen", headers={"Retry-After": "10"})
+        raise PublicError(503, "upload_busy", "Gerade werden andere Dateien verarbeitet - bitte gleich erneut versuchen", headers={"Retry-After": "10"})

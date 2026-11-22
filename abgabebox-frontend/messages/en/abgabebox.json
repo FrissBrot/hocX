@@ -91,10 +91,32 @@
       "connectionLost": "Connection interrupted during upload. Check whether the submission already arrived before sending again.",
       "tooManyFiles": "A maximum of 50 files is allowed per upload.",
       "selectionTooLarge": "The selection is larger than 150 MB. Please split it across multiple uploads.",
-      "maxFilesTotal": "A maximum of {maxFiles} file(s) is allowed in total ({remaining} still possible)",
+      "maxFilesTotal": "{maxFiles, plural, one {A maximum of # file is allowed in total} other {A maximum of # files is allowed in total}} ({remaining, number} still possible)",
       "unsupportedType": "\"{filename}\" can't be accepted: {kind, select, missing {files without an extension aren't allowed} other {the extension .{extension} isn't allowed}}. Allowed: {allowed}.",
       "disallowedType": "\"{filename}\" has a disallowed file format (allowed: {allowed})",
-      "fileTooLarge": "\"{filename}\" is too large (max. {maxFileSizeMb} MB)"
+      "fileTooLarge": "\"{filename}\" is too large (max. {maxFileSizeMb} MB)",
+      "server": {
+        "not_found": "This submission could not be found. Please check the link.",
+        "feature_disabled": "The submission box is currently not available for this organisation.",
+        "element_closed": "Submissions for this document are no longer accepted.",
+        "captcha_invalid": "The security check failed. Please reload the page.",
+        "captcha_expired": "Security check has expired – it is being renewed, please wait a moment",
+        "no_file": "Please select at least one file",
+        "too_many_files_request": "A maximum of {max, number} files per upload is allowed.",
+        "file_type_not_allowed": "Files with the extension .{extension} are not accepted.",
+        "file_too_large": "A file is too large (max. {maxMb, number} MB).",
+        "upload_too_large": "The upload is too large in total. Please split it into several uploads.",
+        "content_mismatch": "The content of a file does not match the extension .{extension}.",
+        "storage_limit": "The organisation's storage is full. Please contact the organisation.",
+        "too_many_files_total": "{maxFiles, plural, one {A maximum of # file is allowed in total} other {A maximum of # files is allowed in total}} ({remaining, number} still possible)",
+        "save_failed": "The file could not be saved. Please try again.",
+        "malware": "One or more files were classified as malware and not accepted.",
+        "scan_failed": "A file could not be checked for malware (max. 100 MB). Please send a smaller file.",
+        "upload_busy": "Other files are being processed right now – please try again shortly.",
+        "db_busy": "The submission box is busy right now. Please try again shortly.",
+        "storage_write_fenced": "Uploading is briefly locked right now. Please try again shortly.",
+        "maintenance": "The submission box is under maintenance. Please try again later."
+      }
     },
     "dropLabelRelease": "Release to add",
     "captchaTitle": "Security check",
@@ -115,7 +137,8 @@
     "progressUploading": "Uploading …",
     "progressPercent": "{percent}%",
     "progressProcessing": "Checking …",
-    "progressProcessingHint": "Your files have been transferred and are now being checked for viruses and format. Please keep this page open."
+    "progressProcessingHint": "Your files have been transferred and are now being checked for viruses and format. Please keep this page open.",
+    "duplicateWarning": "“{filename}” looks similar to an image already uploaded to this submission."
   },
   "language": {
     "label": "Language"

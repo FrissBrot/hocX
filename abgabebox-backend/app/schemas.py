@@ -36,7 +36,9 @@ class ElementPublic(BaseModel):
 class UploadResult(BaseModel):
     ok: bool
     files_received: int
-    image_duplicate_warnings: list[str] = []
+    # Dateinamen, die einem bereits in dieser Abgabe hochgeladenen Bild ähneln. Nur die Namen,
+    # der Hinweistext entsteht im Frontend in der gewählten Sprache.
+    image_duplicate_files: list[str] = []
     # Element nach dieser Abgabe automatisch geschlossen (auto_close): die Erfolgsseite bietet
     # dann keinen weiteren Upload an, der nur an «Element ist nicht (mehr) offen» scheitern würde.
     element_closed: bool = False

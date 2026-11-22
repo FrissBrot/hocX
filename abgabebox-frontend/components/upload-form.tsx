@@ -11,6 +11,7 @@ import { publicApiUrl } from "@/lib/api";
 import { canUploadMoreAfterSuccess, isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 import { sendUpload, type UploadPhase } from "@/lib/upload-request";
+import { duplicateWarnings, serverErrorMessage } from "@/lib/upload-error";
 import { UploadProgress } from "@/components/upload-progress";
 
 type Props = {
@@ -222,14 +223,13 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
           requestFreshCaptcha();
           throw new UploadMessageError(t("errors.captchaExpired"));
         }
+        // Kuratierte Fehler tragen einen stabilen Code (abgabebox-backend/app/public_errors.py),
+        // das deutsche `detail` wird nie angezeigt.
         const body = await response.json().catch(() => null);
-        // body?.detail kommt direkt vom Backend (abgabebox-backend liefert aktuell kuratierten
-        // Freitext, keine stabilen Fehlercodes) - kann hier noch nicht lokalisiert werden, siehe
-        // CLAUDE.md Abschnitt i18n Punkt 10 (kein unnoetiger Umbau des Error-Handlings).
-        throw new UploadMessageError(typeof body?.detail === "string" ? body.detail : t("errors.uploadFailedGeneric"));
+        throw new UploadMessageError(serverErrorMessage(t, body));
       }
       const result = await response.json().catch(() => null);
-      setWarnings(result?.image_duplicate_warnings ?? []);
+      setWarnings(duplicateWarnings(t, result));
       setElementClosed(result?.element_closed === true);
       setUploadedSoFar((prev) => prev + files.length);
       setReceipt({ files: files.length, at: new Date() });
