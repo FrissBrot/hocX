@@ -91,10 +91,32 @@
       "connectionLost": "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.",
       "tooManyFiles": "Maximal 50 Dateien pro Upload erlaubt.",
       "selectionTooLarge": "Die Auswahl ist grösser als 150 MB. Bitte auf mehrere Uploads aufteilen.",
-      "maxFilesTotal": "Maximal {maxFiles} Datei(en) insgesamt erlaubt ({remaining} noch möglich)",
+      "maxFilesTotal": "{maxFiles, plural, one {Maximal # Datei insgesamt erlaubt} other {Maximal # Dateien insgesamt erlaubt}} ({remaining, number} noch möglich)",
       "unsupportedType": "„{filename}“ wird nicht angenommen: {kind, select, missing {Dateien ohne Endung sind nicht erlaubt} other {die Endung .{extension} ist nicht erlaubt}}. Erlaubt: {allowed}.",
       "disallowedType": "„{filename}“ hat ein nicht erlaubtes Dateiformat (erlaubt: {allowed})",
-      "fileTooLarge": "„{filename}“ ist zu gross (max. {maxFileSizeMb} MB)"
+      "fileTooLarge": "„{filename}“ ist zu gross (max. {maxFileSizeMb} MB)",
+      "server": {
+        "not_found": "Diese Abgabe wurde nicht gefunden. Bitte den Link prüfen.",
+        "feature_disabled": "Die Abgabebox ist für diese Organisation aktuell nicht verfügbar.",
+        "element_closed": "Für dieses Dokument werden keine Abgaben mehr angenommen.",
+        "captcha_invalid": "Der Sicherheitscheck ist fehlgeschlagen. Bitte die Seite neu laden.",
+        "captcha_expired": "Sicherheitscheck ist abgelaufen – wird gerade erneuert, bitte kurz warten",
+        "no_file": "Bitte mindestens eine Datei auswählen",
+        "too_many_files_request": "Maximal {max, number} Dateien pro Upload erlaubt.",
+        "file_type_not_allowed": "Dateien mit der Endung .{extension} werden nicht angenommen.",
+        "file_too_large": "Eine Datei ist zu gross (max. {maxMb, number} MB).",
+        "upload_too_large": "Der Upload ist insgesamt zu gross. Bitte auf mehrere Uploads aufteilen.",
+        "content_mismatch": "Der Inhalt einer Datei passt nicht zur Endung .{extension}.",
+        "storage_limit": "Der Speicherplatz der Organisation ist voll. Bitte die Organisation kontaktieren.",
+        "too_many_files_total": "{maxFiles, plural, one {Maximal # Datei insgesamt erlaubt} other {Maximal # Dateien insgesamt erlaubt}} ({remaining, number} noch möglich)",
+        "save_failed": "Die Datei konnte nicht gespeichert werden. Bitte erneut versuchen.",
+        "malware": "Eine oder mehrere Dateien wurden als Schadsoftware eingestuft und nicht angenommen.",
+        "scan_failed": "Eine Datei konnte nicht auf Schadsoftware geprüft werden (max. 100 MB). Bitte eine kleinere Datei senden.",
+        "upload_busy": "Gerade werden andere Dateien verarbeitet – bitte gleich erneut versuchen.",
+        "db_busy": "Die Abgabebox ist gerade ausgelastet. Bitte gleich erneut versuchen.",
+        "storage_write_fenced": "Hochladen ist gerade kurz gesperrt. Bitte in Kürze erneut versuchen.",
+        "maintenance": "Die Abgabebox wird gerade gewartet. Bitte später erneut versuchen."
+      }
     },
     "dropLabelRelease": "Loslassen zum Hinzufügen",
     "captchaTitle": "Sicherheitsprüfung",
@@ -117,7 +139,8 @@
     "progressProcessing": "Wird geprüft …",
     "progressProcessingHint": "Die Dateien sind übertragen und werden jetzt auf Viren und Format geprüft. Bitte die Seite offen lassen.",
     "limitReachedTitle": "Abgabe vollständig",
-    "limitReached": "{count, plural, one {Für dieses Dokument wurde die erlaubte Datei bereits abgegeben. Weitere Dateien werden nicht angenommen.} other {Für dieses Dokument wurden bereits alle # erlaubten Dateien abgegeben. Weitere Dateien werden nicht angenommen.}}"
+    "limitReached": "{count, plural, one {Für dieses Dokument wurde die erlaubte Datei bereits abgegeben. Weitere Dateien werden nicht angenommen.} other {Für dieses Dokument wurden bereits alle # erlaubten Dateien abgegeben. Weitere Dateien werden nicht angenommen.}}",
+    "duplicateWarning": "„{filename}“ ähnelt einem bereits in dieser Abgabe hochgeladenen Bild."
   },
   "language": {
     "label": "Sprache"

@@ -49,7 +49,7 @@ def test_all_duplicates_succeed_without_scan_or_quota(monkeypatch):
     monkeypatch.setattr(public.scanner, 'scan_many', scan)
     result = upload([PDF, PDF])
     assert result.ok and result.files_received == 2
-    assert result.image_duplicate_warnings == []
+    assert result.image_duplicate_files == []
     scan.assert_not_called()
 
 
@@ -64,7 +64,7 @@ def test_mixed_batch_only_scans_and_stores_new_file(monkeypatch):
     monkeypatch.setattr(public.scanner, 'scan_many', scan)
     result = upload([PDF, NEW, NEW])
     assert result.ok and result.files_received == 3
-    assert not result.image_duplicate_warnings
+    assert not result.image_duplicate_files
     assert scan.call_args.args[0] == [NEW]
     assert len(saved) == 1
 
@@ -96,7 +96,7 @@ def test_concurrent_duplicates_are_silently_accepted_but_scanned_once(monkeypatc
     # Scan läuft bewusst vor dem Upload-Lock (CONC-008): gleichzeitige identische Einreichungen
     # werden ggf. beide gescannt, gespeichert wird genau eine.
     assert 1 <= len(scans) <= 2 and len(committed) == 1
-    assert all(result.ok and result.files_received == 1 and not result.image_duplicate_warnings for result in results)
+    assert all(result.ok and result.files_received == 1 and not result.image_duplicate_files for result in results)
 
 
 def test_cancelled_upload_releases_lock():

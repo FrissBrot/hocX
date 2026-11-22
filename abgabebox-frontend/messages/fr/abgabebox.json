@@ -91,10 +91,32 @@
       "connectionLost": "Connexion interrompue pendant l'envoi. Vérifiez si le dépôt est déjà arrivé avant de renvoyer.",
       "tooManyFiles": "Un maximum de 50 fichiers est autorisé par envoi.",
       "selectionTooLarge": "La sélection dépasse 150 MB. Veuillez la répartir sur plusieurs envois.",
-      "maxFilesTotal": "Un maximum de {maxFiles} fichier(s) est autorisé au total ({remaining} encore possible(s))",
+      "maxFilesTotal": "{maxFiles, plural, one {Un maximum de # fichier est autorisé au total} other {Un maximum de # fichiers est autorisé au total}} ({remaining, plural, one {# encore possible} other {# encore possibles}})",
       "unsupportedType": "« {filename} » ne peut pas être accepté : {kind, select, missing {les fichiers sans extension ne sont pas autorisés} other {l'extension .{extension} n'est pas autorisée}}. Autorisés : {allowed}.",
       "disallowedType": "« {filename} » a un format de fichier non autorisé (autorisés : {allowed})",
-      "fileTooLarge": "« {filename} » est trop volumineux (max. {maxFileSizeMb} Mo)"
+      "fileTooLarge": "« {filename} » est trop volumineux (max. {maxFileSizeMb} Mo)",
+      "server": {
+        "not_found": "Ce dépôt est introuvable. Veuillez vérifier le lien.",
+        "feature_disabled": "La boîte de dépôt n'est actuellement pas disponible pour cette organisation.",
+        "element_closed": "Ce document n'accepte plus de dépôts.",
+        "captcha_invalid": "Le contrôle de sécurité a échoué. Veuillez recharger la page.",
+        "captcha_expired": "Le contrôle de sécurité a expiré – il est en cours de renouvellement, veuillez patienter",
+        "no_file": "Veuillez sélectionner au moins un fichier",
+        "too_many_files_request": "Un maximum de {max, number} fichiers par envoi est autorisé.",
+        "file_type_not_allowed": "Les fichiers avec l'extension .{extension} ne sont pas acceptés.",
+        "file_too_large": "Un fichier est trop volumineux (max. {maxMb, number} Mo).",
+        "upload_too_large": "L'envoi est trop volumineux au total. Veuillez le répartir sur plusieurs envois.",
+        "content_mismatch": "Le contenu d'un fichier ne correspond pas à l'extension .{extension}.",
+        "storage_limit": "L'espace de stockage de l'organisation est plein. Veuillez contacter l'organisation.",
+        "too_many_files_total": "{maxFiles, plural, one {Un maximum de # fichier est autorisé au total} other {Un maximum de # fichiers est autorisé au total}} ({remaining, plural, one {# encore possible} other {# encore possibles}})",
+        "save_failed": "Le fichier n'a pas pu être enregistré. Veuillez réessayer.",
+        "malware": "Un ou plusieurs fichiers ont été classés comme logiciels malveillants et refusés.",
+        "scan_failed": "Un fichier n'a pas pu être analysé (max. 100 Mo). Veuillez envoyer un fichier plus petit.",
+        "upload_busy": "D'autres fichiers sont en cours de traitement – veuillez réessayer dans un instant.",
+        "db_busy": "La boîte de dépôt est actuellement surchargée. Veuillez réessayer dans un instant.",
+        "storage_write_fenced": "L'envoi est brièvement bloqué. Veuillez réessayer sous peu.",
+        "maintenance": "La boîte de dépôt est en maintenance. Veuillez réessayer plus tard."
+      }
     },
     "dropLabelRelease": "Relâcher pour ajouter",
     "captchaTitle": "Contrôle de sécurité",
@@ -117,7 +139,8 @@
     "progressProcessing": "Vérification en cours …",
     "progressProcessingHint": "Les fichiers ont été transférés et sont maintenant vérifiés (virus et format). Veuillez laisser cette page ouverte.",
     "limitReachedTitle": "Dépôt complet",
-    "limitReached": "{count, plural, one {Le fichier autorisé pour ce document a déjà été déposé. Aucun autre fichier n'est accepté.} other {Les # fichiers autorisés pour ce document ont déjà été déposés. Aucun autre fichier n'est accepté.}}"
+    "limitReached": "{count, plural, one {Le fichier autorisé pour ce document a déjà été déposé. Aucun autre fichier n'est accepté.} other {Les # fichiers autorisés pour ce document ont déjà été déposés. Aucun autre fichier n'est accepté.}}",
+    "duplicateWarning": "« {filename} » ressemble à une image déjà déposée pour ce dépôt."
   },
   "language": {
     "label": "Langue"
