@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import false, func, or_, select, update
+from sqlalchemy import false, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.documents import brand_service
@@ -45,6 +45,11 @@ from app.models import (
 )
 
 _NODE_ADAPTER = TypeAdapter(Node)
+
+# Namensraum für pg_advisory_xact_lock(ns, tenant_id) in set_assignment. Andere Namensräume:
+# upload_lock (909100001), submission_service (909100002), protocol_service (909100011),
+# task_package_service (909100012), event_cycle_service (909100013).
+ASSIGNMENT_LOCK_NAMESPACE = 909100014
 
 
 class TemplateConflictError(Exception):
@@ -482,6 +487,10 @@ def set_assignment(
             raise TemplateStateError("apiError.notFound")
         if not doc_type.needs_protocol:
             raise TemplateStateError("apiError.assignmentScope")
+    # Zuweisungen eines Mandanten nacheinander: zwei gleichzeitige erste Zuweisungen sahen sonst
+    # beide keine Zeile, die zweite scheiterte am Unique-Index (IntegrityError, HTTP 500). Mit dem
+    # Lock wartet sie und findet danach (READ COMMITTED) die Zeile der ersten.
+    db.execute(text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": ASSIGNMENT_LOCK_NAMESPACE, "tenant_id": tenant_id})
     statement = select(DocumentTemplateAssignment).where(
         DocumentTemplateAssignment.tenant_id == tenant_id,
         DocumentTemplateAssignment.document_type == document_type,
