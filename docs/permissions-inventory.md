@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 638 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 393
+- Routen gesamt: 651 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 406
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -203,6 +203,19 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PUT /api/calendar-feeds/{kind}` | meetings.read |
 | `POST /api/calendar-feeds/{kind}/regenerate` | meetings.read |
 | `GET /api/clamav/status` | submissions.read |
+| `GET /api/cloud-import/jobs` | files.import |
+| `POST /api/cloud-import/jobs` | files.import |
+| `GET /api/cloud-import/jobs/{job_id}` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/cancel` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/finish-listing` | files.import |
+| `GET /api/cloud-import/jobs/{job_id}/items` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/manifest` | files.import |
+| `GET /api/cloud-import/jobs/{job_id}/pending-uploads` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/preview` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/resume` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/start` | files.import · je nach Fall: files.manage, photos.manage |
+| `POST /api/cloud-import/uploads/{job_id}/archive` | files.import |
+| `POST /api/cloud-import/uploads/{job_id}/files` | files.import |
 | `GET /api/context-files/submission-photos` | meetings.read |
 | `GET /api/context-visibility` | settings.manage |
 | `PUT /api/context-visibility/{module}` | settings.manage |

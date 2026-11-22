@@ -137,6 +137,10 @@
       "read": {
         "label": "Vedere l’archivio",
         "description": "Vedere e scaricare i file dell’archivio."
+      },
+      "import": {
+        "label": "Importare file",
+        "description": "Riprendere intere raccolte di file: caricare archivi ZIP (anche Google Takeout) o cartelle, con regole per tag, data di scatto e album."
       }
     },
     "submissions": {

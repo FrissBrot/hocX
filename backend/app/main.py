@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, cloud_import, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -286,6 +286,16 @@ app.add_middleware(
     max_active=settings.gallery_upload_concurrency,
     wait_seconds=settings.gallery_upload_slot_wait_seconds,
 )
+# Datei-Import: ZIP-Archive (bis 10 GiB) und Ordner-Dateien streamen wie die Galerie direkt auf
+# den Upload-Datenträger (ImportUploadRoute) - eigene Annahme, gleiche Grenzen.
+app.add_middleware(
+    UploadAdmissionMiddleware,
+    path="/api/cloud-import/uploads/",
+    max_bytes=GALLERY_REQUEST_MAX_BYTES,
+    storage_dir=settings.upload_root,
+    max_active=settings.gallery_upload_concurrency,
+    wait_seconds=settings.gallery_upload_slot_wait_seconds,
+)
 
 # Audit MAIN-SEC-004: Multipart nur mit signierter Session und mit Grössenlimit, bevor
 # Starlette den Body auf die Platte spoolt (Galerie hat oben ihre eigene Admission).
@@ -301,7 +311,7 @@ app.add_middleware(
         ("/api/admin/tenants/import", admin.MAX_TENANT_IMPORT_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES),
         (public_submission_access.UPLOAD_PATH, public_submission_access.MAX_UPLOAD_REQUEST_BYTES),
     ),
-    skip_prefixes=("/api/files/gallery-uploads",),
+    skip_prefixes=("/api/files/gallery-uploads", "/api/cloud-import/uploads/"),
     token_paths=((public_submission_access.UPLOAD_PATH, public_submission_access.TOKEN_HEADER, public_submission_access.upload_token_valid),),
 )
 
@@ -310,7 +320,7 @@ from app.request_body_limit import RequestBodyLimitMiddleware
 app.add_middleware(
     RequestBodyLimitMiddleware,
     max_bytes=settings.max_request_body_bytes,
-    skip_prefixes=("/api/files/gallery-uploads",),
+    skip_prefixes=("/api/files/gallery-uploads", "/api/cloud-import/uploads/"),
     # SEC-AUTH-002: Anmeldung (Mandant und Plattform) mit kleinem Body-Limit
     # Passkey-Registrierung: Attestation mit Zertifikatskette (x5c) braucht mehr Platz
     path_limits=(
@@ -334,6 +344,7 @@ app.add_middleware(
     # Lange Upload-Bodies belegen sonst einen Platz ohne DB-Arbeit; die Galerie hat eine eigene Annahme.
     skip_prefixes=(
         "/api/files/gallery-uploads",
+        "/api/cloud-import/uploads/",
         "/api/files/document-uploads",
         "/api/tools/word-import/",
         "/api/admin/tenants/import",
@@ -497,6 +508,7 @@ app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elem
 app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(agenda_items.router, prefix="/api", tags=["agenda-items"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+app.include_router(cloud_import.router, prefix="/api", tags=["cloud-import"])
 app.include_router(public_links.router, prefix="/api", tags=["public-links"])
 app.include_router(search.router, prefix="/api", tags=["search"])
 # Logische Dokumente (Dateien-Tab, feature/document-management): GET /api/documents/{uuid}… -

@@ -47,3 +47,4 @@ olefile==0.47
 # Länder-Geolocation als Risikosignal (app/core/geoip.py): Leser für die lokale MMDB-Datei von
 # DB-IP «IP to Country Lite» (CC BY 4.0). Nur Ländercode, keine Abfrage nach aussen.
 maxminddb==3.2.0
+google-re2==1.1.20251105  # Regel-Engine Datei-Import: lineare Regex (ReDoS-Schutz), BSD-3

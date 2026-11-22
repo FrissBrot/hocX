@@ -62,13 +62,24 @@ def authorize_gallery_upload(request: Request) -> None:
 
 
 class GalleryUploadRoute(APIRoute):
+    """Streamt Multipart-Dateien direkt auf den Upload-Datenträger (ein Temp-File je Datei, später
+    per Rename übernommen). Unterklassen setzen Pfad-Erkennung, Berechtigung und Dateianzahl."""
+
+    max_files = 50
+
+    def is_streaming_upload(self, path: str) -> bool:
+        return path.rstrip('/').endswith('/files/gallery-uploads')
+
+    def authorize(self, request: Request) -> None:
+        authorize_gallery_upload(request)
+
     def get_route_handler(self):
         original = super().get_route_handler()
         async def handler(request: Request):
-            if request.method != "POST" or not request.url.path.rstrip('/').endswith('/files/gallery-uploads'):
+            if request.method != "POST" or not self.is_streaming_upload(request.url.path):
                 return await original(request)
-            await run_in_threadpool(authorize_gallery_upload, request)
-            parser = GalleryMultipartParser(request.headers, request.stream(), max_files=50, max_fields=20)
+            await run_in_threadpool(self.authorize, request)
+            parser = GalleryMultipartParser(request.headers, request.stream(), max_files=self.max_files, max_fields=20)
             form = None
             try:
                 form = await parser.parse()
@@ -89,3 +100,18 @@ class GalleryUploadRoute(APIRoute):
                     for handle in parser._files_to_close_on_error:
                         handle.close()
         return handler
+
+
+class ImportUploadRoute(GalleryUploadRoute):
+    """Datei-Import: ZIP-Archive und Ordner-Dateien (POST /api/cloud-import/uploads/...)."""
+
+    max_files = 100
+
+    def is_streaming_upload(self, path: str) -> bool:
+        return "/cloud-import/uploads/" in path
+
+    def authorize(self, request: Request) -> None:
+        # Vor dem ersten Byte: Recht, eigener Auftrag, Status, Grenzen, Kontingent, Plattenreserve.
+        from app.api.routes.cloud_import import authorize_import_upload
+
+        authorize_import_upload(request)

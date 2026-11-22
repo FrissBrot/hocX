@@ -69,6 +69,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("gallery_upload_ingest", "uploads", 5 / 60, max_silence_seconds=60 * 60, service="job-worker"),
     # Vereinsexport (Datenschutz-Audit Paket 6): ein grosser Export mit allen Fotos kann Stunden dauern.
     _loop("tenant_data_export", "documents", 1, max_silence_seconds=6 * 60 * 60, service="job-worker"),
+    # Datei-Import (services/cloud_import): Zeitscheiben je Auftrag, ein Tick kann mehrere Minuten dauern.
+    _loop("cloud_import", "uploads", 5 / 60, max_silence_seconds=60 * 60, service="job-worker"),
     _loop("retention_proposals", "cleanup", 24 * 60),
     _loop("notification_dispatch", "maintenance", 1, max_silence_seconds=30 * 60, service="job-worker"),
     _loop("todo_reminders", "maintenance", 30, service="job-worker"),

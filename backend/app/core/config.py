@@ -325,6 +325,12 @@ class Settings(BaseSettings):
     # Gleichzeitige Galerie-Uploads je uvicorn-Worker (CONC-007) und Wartezeit auf einen Platz.
     gallery_upload_concurrency: int = Field(default=2, ge=1, le=8, validation_alias="GALLERY_UPLOAD_CONCURRENCY")
     gallery_upload_slot_wait_seconds: float = Field(default=60.0, ge=0, le=600, validation_alias="GALLERY_UPLOAD_SLOT_WAIT_SECONDS")
+    # Datei-Import (services/cloud_import, Plan 2026-11-21 E-5): Obergrenzen je Import-Auftrag.
+    # Einzeldateien behalten die normalen Upload-Grenzen (20 MB Dokument, 100 MB Bild).
+    cloud_import_max_job_files: int = Field(default=50_000, ge=1, le=50_000, validation_alias="CLOUD_IMPORT_MAX_JOB_FILES")
+    cloud_import_max_job_bytes: int = Field(
+        default=100 * 1024**3, ge=1024**2, le=100 * 1024**3, validation_alias="CLOUD_IMPORT_MAX_JOB_BYTES"
+    )
     # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
     # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
     # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).

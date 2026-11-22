@@ -629,6 +629,10 @@
       "geoip_update": {
         "title": "Mettre à jour la géolocalisation par pays",
         "description": "Télécharge chaque mois la base « IP to Country Lite » de DB-IP (CC BY 4.0) pour le signal de connexion « nouveau pays », la vérifie et remplace l’ancienne. Passage quotidien, téléchargement uniquement si une nouvelle édition mensuelle existe."
+      },
+      "cloud_import": {
+        "title": "Import de fichiers",
+        "description": "Traite les imports de fichiers lancés (ZIP, Google Takeout, dossiers) via la chaîne de téléversement et nettoie les imports et rapports expirés."
       }
     }
   },

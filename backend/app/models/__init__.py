@@ -284,3 +284,10 @@ __all__ += [
 
 # Papierkorb-Hook (do_orm_execute) für jede Session registrieren, auch ohne app.core.db.
 from app.core import trash_scope as _trash_scope  # noqa: E402,F401
+
+from app.models.import_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0230
+    ImportItem,
+    ImportJob,
+)
+
+__all__ += ["ImportItem", "ImportJob"]

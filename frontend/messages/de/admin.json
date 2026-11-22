@@ -629,6 +629,10 @@
       "geoip_update": {
         "title": "Länder-Geolocation aktualisieren",
         "description": "Lädt monatlich die Datenbank «IP to Country Lite» von DB-IP (CC BY 4.0) für das Anmeldesignal «neues Land», prüft sie und ersetzt die alte. Täglicher Tick, Download nur bei neuer Monatsausgabe."
+      },
+      "cloud_import": {
+        "title": "Datei-Import",
+        "description": "Verarbeitet gestartete Datei-Importe (ZIP, Google Takeout, Ordner) durch die Upload-Pipeline und räumt abgelaufene Importe und Berichte auf."
       }
     }
   },

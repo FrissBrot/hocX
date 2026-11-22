@@ -137,6 +137,10 @@
       "read": {
         "label": "Ablage ansehen",
         "description": "Dateien der freien Ablage ansehen und herunterladen."
+      },
+      "import": {
+        "label": "Dateien importieren",
+        "description": "Ganze Ablagen übernehmen: ZIP-Archive (auch Google Takeout) oder Ordner hochladen, mit Regeln für Tags, Aufnahmedatum und Alben."
       }
     },
     "submissions": {
