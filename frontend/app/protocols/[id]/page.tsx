@@ -6,11 +6,14 @@ import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
+  AttendanceFine,
+  AttendanceFineListItem,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
   ParticipantSummary,
   ProtocolElement,
+  ProtocolAgendaItem,
   ProtocolImage,
   ProtocolSummary,
   ProtocolTodo,
@@ -39,6 +42,18 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
   const imagesPromise = backendFetchWithSession<Record<string, ProtocolImage[]>>(`/api/protocols/${id}/block-images`).then((v) => v ?? {});
   const pendingTodosPromise = backendFetchWithSession<TodoListItem[]>(`/api/protocols/${id}/pending-todos`).then((v) => v ?? []);
   const financeAccountsPromise = backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts").then((v) => v ?? []);
+  // Früher erst nach der Hydration im Editor geladen (Performance-Audit Protokoll-Editor). null =
+  // nicht verfügbar: der Editor lädt dann selbst nach (wie bisher, Fehler bleiben still).
+  const agendaItemsPromise = backendFetchWithSession<ProtocolAgendaItem[]>(`/api/protocols/${id}/agenda-items`);
+  const scrollPositionPromise = backendFetchWithSession<{ element_id: string | null }>(`/api/protocols/${id}/scroll-position`);
+  // Bussen nur mit reports.personal (wie im Editor); die Sitzung kommt ohnehin zuerst
+  const finesAllowedPromise = sessionPromise.then((loaded) => can(loaded, "reports.personal")).catch(() => false);
+  const protocolFinesPromise = finesAllowedPromise.then((allowed) =>
+    allowed ? backendFetchWithSession<AttendanceFine[]>(`/api/protocols/${id}/fines`) : null
+  );
+  const pendingFinesPromise = finesAllowedPromise.then((allowed) =>
+    allowed ? backendFetchWithSession<AttendanceFineListItem[]>(`/api/protocols/${id}/pending-fines`) : null
+  );
   const participantsPromise = protocolPromise.then((loaded) =>
     loaded
       ? backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${loaded.template_id}/participants`).then((v) => v ?? [])
@@ -101,6 +116,10 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     financeAccounts,
     initialListEntries,
     initialFinanceTransactions,
+    agendaItems,
+    scrollPosition,
+    protocolFines,
+    pendingFines,
   ] = await Promise.all([
     templatesPromise,
     eventsPromise,
@@ -114,6 +133,10 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     financeAccountsPromise,
     listEntriesPromise,
     financeTransactionsPromise,
+    agendaItemsPromise,
+    scrollPositionPromise,
+    protocolFinesPromise,
+    pendingFinesPromise,
   ]);
 
   return (
@@ -160,6 +183,10 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               canCollectSubmissions={can(session, "submissions.manage") && can(session, "meetings.edit")}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
               wheelEnabled={session.user?.protocol_wheel_enabled ?? false}
+              initialAgendaItems={agendaItems}
+              initialScrollPosition={scrollPosition}
+              initialProtocolFines={protocolFines}
+              initialPendingFines={pendingFines}
             />
           </section>
         }

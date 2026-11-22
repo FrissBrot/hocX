@@ -36,6 +36,14 @@ export function bumpStatsCharts(options?: unknown) {
   window.dispatchEvent(new Event(STATS_BUMP_EVENT));
 }
 
+/** Neuer Statistik-Stand ohne Ereignis: für einen Editor, der gerade öffnet - seine Diagramme
+ * lesen die Version erst beim eigenen ersten Rendern und laden dann genau einmal frisch (ein
+ * bumpStatsCharts() nach dem Mount liess jedes Diagramm doppelt laden). */
+export function startFreshStatsVersion() {
+  _statsVersion++;
+  _lastStatsBump = Date.now();
+}
+
 // Diagramme mit derselben Zyklus-Auswahl teilen Cache, Anfrage und Polling.
 type StatsResult = { data: StatisticsOverview | null; stale: boolean };
 const statsCaches = new Map<string, { version: number; result: StatsResult }>();

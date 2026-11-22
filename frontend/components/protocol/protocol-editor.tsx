@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
 import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
-import { bumpStatsCharts } from "@/components/protocol/chart-block";
+import { bumpStatsCharts, startFreshStatsVersion } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
@@ -122,6 +122,12 @@ type ProtocolEditorProps = {
   accordionEnabled?: boolean;
   /** Rad-Effekt beim Scrollen (Profileinstellung); wirkt nur zusammen mit dem Akkordeon */
   wheelEnabled?: boolean;
+  // Vom Server mitgeladen (page.tsx), damit sie nicht erst nach der Hydration starten.
+  // null/undefined: nicht mitgeladen (Fehler, fehlendes Recht) - der Editor lädt dann selbst.
+  initialProtocolFines?: AttendanceFine[] | null;
+  initialPendingFines?: AttendanceFineListItem[] | null;
+  initialAgendaItems?: ProtocolAgendaItem[] | null;
+  initialScrollPosition?: { element_id: string | null } | null;
 };
 
 const EMPTY_AGENDA_ITEMS: ProtocolAgendaItem[] = [];
@@ -153,6 +159,10 @@ export function ProtocolEditor({
   canCollectSubmissions = false,
   accordionEnabled: accordionPreference = true,
   wheelEnabled = false,
+  initialProtocolFines,
+  initialPendingFines,
+  initialAgendaItems,
+  initialScrollPosition,
 }: ProtocolEditorProps) {
   const accordionEnabled = accordionPreference;
   // Rad-Effekt nur im Akkordeon: gekippt werden die eingeklappten Punkte (kleine Kacheln), nie
@@ -205,10 +215,20 @@ export function ProtocolEditor({
   // Kontostände ändern sich mit Transaktionen, die im Protokoll erfasst werden
   const [accounts, setAccounts] = useState<FinanceAccount[]>(availableAccounts);
   const [financeVersion, setFinanceVersion] = useState(0);
-  const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
-  const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
-  // Refresh chart blocks whenever fines change (add/delete)
-  useEffect(() => { bumpStatsCharts(); }, [protocolFines.length]);
+  const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>(initialProtocolFines ?? []);
+  const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>(initialPendingFines ?? []);
+  // Beim Öffnen frisch gerechnete Statistik für die Diagramme - vor deren erstem Abruf. Früher
+  // erledigte das bumpStatsCharts() im Mount-Effekt unten, nachdem die Diagramme schon geladen
+  // hatten: jedes Diagramm lud dadurch doppelt (_t=0, _t=1).
+  useState(() => { startFreshStatsVersion(); return null; });
+  // Diagramme neu laden, wenn Bussen dazukommen oder wegfallen - nicht beim Öffnen und nicht beim
+  // ersten Laden der Bussen (der Stand ist dann schon in der Statistik enthalten).
+  const protocolFinesCountRef = useRef(protocolFines.length);
+  useEffect(() => {
+    if (protocolFinesCountRef.current === protocolFines.length) return;
+    protocolFinesCountRef.current = protocolFines.length;
+    bumpStatsCharts();
+  }, [protocolFines.length]);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
@@ -224,7 +244,13 @@ export function ProtocolEditor({
   const [newEventDrafts, setNewEventDrafts] = useState<Record<string, ProtocolEventDraft>>({});
   const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({});
   const [blockStatus, setBlockStatus] = useState<Record<string, SaveState>>({});
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(initialElements[0]?.id ?? null);
+  // Vom Server mitgeladene Leseposition gleich als Start: der erste Scroll geht dann direkt dorthin
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(() => {
+    const remembered = initialScrollPosition?.element_id;
+    return remembered && initialElements.some((element) => element.id === remembered) ? remembered : initialElements[0]?.id ?? null;
+  });
+  // Zuletzt gespeicherte bzw. vom Server gelesene Leseposition: dieselbe nicht erneut speichern
+  const savedScrollElementIdRef = useRef<string | null>(initialScrollPosition?.element_id ?? null);
   const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
   const [trackChangesEnabled, setTrackChangesEnabledState] = useState(protocol.track_changes_enabled ?? false);
@@ -251,7 +277,7 @@ export function ProtocolEditor({
   const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
   // Anliegen (agenda_item): ohne eigenen Block unter ihrem Traktandum, siehe
   // backend app/services/agenda_item_service.py. Geladen im Client, neu bei Collab-Meldung.
-  const [agendaItems, setAgendaItems] = useState<ProtocolAgendaItem[]>([]);
+  const [agendaItems, setAgendaItems] = useState<ProtocolAgendaItem[]>(initialAgendaItems ?? []);
   const [agendaCreateOpen, setAgendaCreateOpen] = useState(false);
   const [agendaPostponeItem, setAgendaPostponeItem] = useState<ProtocolAgendaItem | null>(null);
   const reloadAgendaItems = useCallback(async () => {
@@ -261,7 +287,13 @@ export function ProtocolEditor({
       // Best effort: ohne Anliegen bleibt der Editor voll nutzbar.
     }
   }, [protocol.id]);
+  // Vom Server mitgeladen: erst bei einem Statuswechsel neu laden
+  const agendaItemsPrefetchedRef = useRef(initialAgendaItems != null);
   useEffect(() => {
+    if (agendaItemsPrefetchedRef.current) {
+      agendaItemsPrefetchedRef.current = false;
+      return;
+    }
     void reloadAgendaItems();
   }, [reloadAgendaItems, protocolStatus]);
 
@@ -377,21 +409,34 @@ export function ProtocolEditor({
     [collab.onListChanged]
   );
 
+  // Nur laden, was page.tsx nicht schon mitgebracht hat (beim ersten Durchlauf)
+  const finesPrefetchedRef = useRef({ fines: initialProtocolFines != null, pending: initialPendingFines != null });
   useEffect(() => {
+    const prefetched = finesPrefetchedRef.current;
+    finesPrefetchedRef.current = { fines: false, pending: false };
     if (!canViewFines) return;
-    browserApiFetch<AttendanceFine[]>(`/api/protocols/${protocol.id}/fines`)
-      .then((data) => { if (data) setProtocolFines(data); })
-      .catch(() => { /* silently ignore 403 for restricted roles */ });
-    browserApiFetch<AttendanceFineListItem[]>(`/api/protocols/${protocol.id}/pending-fines`)
-      .then((data) => { if (data) setPendingFines(data); })
-      .catch(() => {});
+    if (!prefetched.fines) {
+      browserApiFetch<AttendanceFine[]>(`/api/protocols/${protocol.id}/fines`)
+        .then((data) => {
+          if (!data) return;
+          // Erstes Laden: kein Neuladen der Diagramme (siehe protocolFinesCountRef)
+          protocolFinesCountRef.current = data.length;
+          setProtocolFines(data);
+        })
+        .catch(() => { /* silently ignore 403 for restricted roles */ });
+    }
+    if (!prefetched.pending) {
+      browserApiFetch<AttendanceFineListItem[]>(`/api/protocols/${protocol.id}/pending-fines`)
+        .then((data) => { if (data) setPendingFines(data); })
+        .catch(() => {});
+    }
   }, [protocol.id, canViewFines]);
 
-  // Restore last active element from backend
+  // Restore last active element from backend (von page.tsx mitgeladen, sonst hier abgefragt)
   useEffect(() => {
-    browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
-      .then((data) => {
+    const restore = (data: { element_id: string | null } | null) => {
         isRestoringRef.current = false;
+        savedScrollElementIdRef.current = data?.element_id ?? null;
         // Always land on a section when opening the protocol: the remembered one if it
         // still exists, otherwise the first visible one (selected by the effect below).
         // Without this the document pane stays at scrollTop 0, i.e. on the empty
@@ -403,7 +448,13 @@ export function ProtocolEditor({
           setSelectedElementId(id);
         }
         setScrollRequestId((current) => current + 1);
-      })
+    };
+    if (initialScrollPosition != null) {
+      restore(initialScrollPosition);
+      return;
+    }
+    browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
+      .then(restore)
       .catch(() => {
         isRestoringRef.current = false;
         isInitialScrollRef.current = true;
@@ -417,7 +468,9 @@ export function ProtocolEditor({
   useEffect(() => {
     if (!selectedElementId || isRestoringRef.current) return;
     if (elementSaveTimerRef.current) window.clearTimeout(elementSaveTimerRef.current);
+    if (selectedElementId === savedScrollElementIdRef.current) return;
     elementSaveTimerRef.current = window.setTimeout(() => {
+      savedScrollElementIdRef.current = selectedElementId;
       void browserApiFetch(`/api/protocols/${protocol.id}/scroll-position`, {
         method: "PUT",
         body: JSON.stringify({ element_id: selectedElementId }),
