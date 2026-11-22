@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -65,7 +65,7 @@ from app.schemas.word_import import (
     WordImportTableRoleCommit,
     WordImportTextCommit,
 )
-from app.services import public_id_service
+from app.services import public_id_service, upload_job_service
 from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, extract_word_import_files_from_zip
 from app.services.word_import_queue_service import WordImportQueueService
 from app.services.word_import_service import WordImportService
@@ -997,6 +997,17 @@ async def _ingest_word_import_documents_impl(  # loop-ok: nur über run_coroutin
         file_payloads.append((name, content))
         batch_bytes += len(content)
 
+    # Upload-Verlauf (0250): ein Vorgang je Upload-Request, vorab abgelehnte Dateien als Items
+    history = upload_job_service.open_job(
+        db, tenant_id=user.current_tenant_id, channel="word_import", created_by=user.user_id, status="processing",
+        options={"template_id": str(template_id)},
+    )
+    history.client_closed_at = datetime.now(UTC)
+    upload_job_service.record_items(
+        db, history,
+        [upload_job_service.ItemIn(status="rejected", name=error.split(":", 1)[0], reason_code="unsupported_format") for error in errors],
+    )
+    db.commit()
     try:
         # Siehe Kommentar bei analyze_word_import oben - queue_service.ingest() ruft
         # dieselbe synchrone analyze()-Kette für jede Datei des Batches nacheinander auf,
@@ -1009,9 +1020,12 @@ async def _ingest_word_import_documents_impl(  # loop-ok: nur über run_coroutin
             created_by=user.user_id,
             files=file_payloads,
             viewer=user,
+            upload_job_id=history.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    upload_job_service.finish(db, history)
+    db.commit()
 
     template = db.get(Template, internal_template_id)
     template_name = template.name if template else ""

@@ -292,6 +292,9 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         job.status = "failed"
         job.error = "requester_unauthorized"
         job.finished_at = jobs.now()
+        from app.services import upload_job_service
+
+        upload_job_service.finish_import_job(db, job)
         AuditService().log(
             db, action="file_import.stopped_unauthorized", actor_user_id=job.requested_by, tenant_id=job.tenant_id,
             entity_type="import_job", details={"job_id": str(job.id)}, commit=False,
@@ -300,6 +303,7 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         return False
     files: list[tuple[str, bytes]] = []
     by_name: dict[str, ImportItem] = {}
+    read_failures: list[ImportItem] = []
     staged_items = [item for item in batch if item.staged_path]
     for item in batch:
         content = _read_zip_entry(job, item, work) if job.source == "zip" else _read_staged(item)
@@ -310,10 +314,18 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         if isinstance(content, str):
             item.status = "failed"
             item.result_code = content
+            read_failures.append(item)
             continue
         name = paths.file_name(item.path)
         files.append((name, content))
         by_name[name] = item
+    if read_failures:
+        from app.services import upload_job_service
+
+        upload_job_service.record_items(
+            db, upload_job_service.import_job_for(db, job),
+            [upload_job_service.ItemIn(status="failed", name=paths.file_name(item.path), reason_code=item.result_code) for item in read_failures],
+        )
     if not files:
         _unlink_staged(staged_items)
         job.last_progress_at = jobs.now()
@@ -364,6 +376,9 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         job.status = "failed"
         job.error = "quota_exceeded"
         job.finished_at = jobs.now()
+        from app.services import upload_job_service
+
+        upload_job_service.finish_import_job(db, job)
         db.commit()
         return False
     return True
@@ -382,7 +397,12 @@ _STATUS_BY_RESULT = {"uploaded": "imported", "skipped": "duplicate", "metadata_u
 def _apply_results(
     db: Session, job: ImportJob, by_name: dict[str, ImportItem], results: list[dict], work: _Slice, viewer=None
 ) -> None:
-    """Pipeline-Ergebnis je Datei → Import-Eintrag, Alben; läuft vor dem Commit der Pipeline."""
+    """Pipeline-Ergebnis je Datei → Import-Eintrag, Alben; läuft vor dem Commit der Pipeline.
+    Upload-Verlauf (0250): der Import ist ein Vorgang ``cloud_import``; die Items entstehen in
+    derselben Transaktion wie die Dateien."""
+    from app.services import upload_job_service
+
+    upload_job_service.record_results(db, upload_job_service.import_job_for(db, job), results)
     seen: set[str] = set()
     imported_public: dict[str, ImportItem] = {}
     duplicate_public: dict[str, ImportItem] = {}
@@ -561,6 +581,9 @@ def _maybe_finish(db: Session, job: ImportJob) -> None:
 
 
 def _finish(db: Session, job: ImportJob, status: str) -> None:
+    from app.services import upload_job_service
+
+    upload_job_service.finish_import_job(db, job)
     job.status = status
     job.finished_at = jobs.now()
     job.archives = []
@@ -584,6 +607,9 @@ def _after_job_end(db: Session, job: ImportJob) -> None:
 
 
 def _finish_cancel(db: Session, job: ImportJob) -> None:
+    from app.services import upload_job_service
+
+    upload_job_service.finish_import_job(db, job, cancelled=True)
     jobs.finalize_cancel(db, job)
     AuditService().log(
         db, action="file_import.cancelled", actor_user_id=job.requested_by, tenant_id=job.tenant_id,

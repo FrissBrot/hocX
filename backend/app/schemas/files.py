@@ -761,6 +761,28 @@ class FileBulkTagsUpdate(BaseModel):
     remove_tags: list[str] = []
 
 
+class FileBulkEventLink(BaseModel):
+    """POST /files/bulk-event-link (Upload-Verlauf, Bulk «Termin zuordnen»): mode "set" verknüpft
+    fest mit event_id (manuell, bleibt bei Datumsänderungen), "auto" gibt die Zuordnung an die
+    automatische Zuordnung nach Aufnahmedatum zurück."""
+
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    mode: Literal["set", "auto"]
+    event_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "FileBulkEventLink":
+        if (self.mode == "set") != (self.event_id is not None):
+            raise ValueError("event_id nur und immer mit mode 'set'")
+        return self
+
+
+class FileBulkEventLinkResult(BaseModel):
+    updated_ids: list[uuid.UUID]
+    # Unbekannt, fremd, nicht beschreibbar oder keine Galerie-Datei - nicht unterschieden
+    not_found_ids: list[uuid.UUID]
+
+
 _DATE_ONLY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _SHARE_EXPIRY_TZ = ZoneInfo("Europe/Zurich")
 

@@ -559,3 +559,60 @@ def camera_clause(db: Session, job: UploadJob, key: str):
                 StoredFile.mime_type.like("image/%"),
             )
     return false()
+
+
+# --- Weitere Kanäle (Phase 4) -----------------------------------------------------------------
+
+
+def protocol_day_job(db: Session, *, tenant_id: int, protocol_id: int, created_by: int | None) -> UploadJob:
+    """E-6: ein Vorgang je Protokoll und Tag (Schweizer Kalendertag). Gleichzeitige Uploads
+    landen über den eindeutigen Index im selben Vorgang."""
+    from app.services.capture_date import upload_day
+
+    day = upload_day(_now())
+    db.execute(
+        pg_insert(UploadJob)
+        .values(tenant_id=tenant_id, channel="protocol_image", created_by=created_by, protocol_id=protocol_id, group_day=day, status="done")
+        .on_conflict_do_nothing()
+    )
+    job = db.scalar(
+        select(UploadJob).where(
+            UploadJob.tenant_id == tenant_id, UploadJob.channel == "protocol_image",
+            UploadJob.protocol_id == protocol_id, UploadJob.group_day == day,
+        )
+    )
+    job.finished_at = _now()
+    job.client_closed_at = job.client_closed_at or job.finished_at
+    return job
+
+
+def record_new_file(db: Session, job: UploadJob, stored_file: StoredFile, *, name: str | None = None) -> None:
+    record_items(
+        db, job,
+        [ItemIn(status="uploaded", name=name or stored_file.original_name, stored_file_id=stored_file.id,
+                size_bytes=stored_file.file_size_bytes, mime_type=stored_file.mime_type)],
+    )
+
+
+def import_job_for(db: Session, import_job) -> UploadJob:
+    """Datei-Import (cloud_import): ein Vorgang je Import-Auftrag, verweist auf dessen Bericht."""
+    job = db.scalar(select(UploadJob).where(UploadJob.import_job_id == import_job.id, UploadJob.tenant_id == import_job.tenant_id))
+    if job is not None:
+        return job
+    db.execute(
+        pg_insert(UploadJob)
+        .values(
+            tenant_id=import_job.tenant_id, channel="cloud_import", created_by=import_job.requested_by, import_job_id=import_job.id,
+            status="processing", client_closed_at=_now(), actor_ref={"source": import_job.source},
+            options={"include_gps": bool(import_job.include_gps)},
+        )
+        .on_conflict_do_nothing()
+    )
+    return db.scalar(select(UploadJob).where(UploadJob.import_job_id == import_job.id, UploadJob.tenant_id == import_job.tenant_id))
+
+
+def finish_import_job(db: Session, import_job, *, cancelled: bool = False) -> None:
+    job = db.scalar(select(UploadJob).where(UploadJob.import_job_id == import_job.id, UploadJob.tenant_id == import_job.tenant_id))
+    if job is None or job.status not in UPLOAD_JOB_ACTIVE_STATUSES:
+        return
+    finish(db, job, status="cancelled" if cancelled and job.total == 0 else None)

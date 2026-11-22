@@ -27,7 +27,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -480,6 +480,7 @@ class TenantImportService:
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)
         self._import_submission_upload_files(submission_upload_map, stored_file_map)
+        self._record_upload_history(new_tenant.id, list(stored_file_map.values()))
         self._import_gallery_images(
             new_tenant.id, stored_file_map, event_map,
             cycle_config_map=cycle_config_map, submission_assignment_map=submission_assignment_map,
@@ -1609,6 +1610,40 @@ class TenantImportService:
             id_map[row["id"]] = new_row.id
         self.db.commit()
         return id_map
+
+    def _record_upload_history(self, new_tenant_id: int, stored_file_ids: list[int]) -> None:
+        """Upload-Verlauf (0250): ein Vorgang «Plattform-Import» für alle importierten Dateien, die
+        nicht schon als Abgabebox-Einreichung einen Vorgang haben (Trigger 0252). Set-basiert."""
+        if not stored_file_ids:
+            return
+        job_id = self.db.execute(
+            text(
+                "INSERT INTO upload_job (tenant_id, channel, actor_kind, status, client_closed_at, finished_at) "
+                "VALUES (:tenant, 'tenant_import', 'platform_admin', 'done', now(), now()) RETURNING id"
+            ),
+            {"tenant": new_tenant_id},
+        ).scalar_one()
+        params = {"job": job_id, "tenant": new_tenant_id, "ids": stored_file_ids}
+        count = self.db.execute(
+            text(
+                "INSERT INTO upload_job_item (upload_job_id, tenant_id, position, original_name, size_bytes, mime_type, status, stored_file_id) "
+                "SELECT :job, :tenant, (row_number() OVER (ORDER BY s.id))::int - 1, left(s.original_name, 255), s.file_size_bytes, "
+                "s.mime_type, 'uploaded', s.id FROM stored_file s "
+                "WHERE s.tenant_id = :tenant AND s.id = ANY(:ids) AND s.upload_job_id IS NULL"
+            ),
+            params,
+        ).rowcount or 0
+        if not count:
+            self.db.execute(text("DELETE FROM upload_job WHERE id = :job AND tenant_id = :tenant"), params)
+        else:
+            self.db.execute(
+                text("UPDATE stored_file SET upload_job_id = :job WHERE tenant_id = :tenant AND id = ANY(:ids) AND upload_job_id IS NULL"),
+                params,
+            )
+            self.db.execute(
+                text("UPDATE upload_job SET total = :n, uploaded = :n WHERE id = :job AND tenant_id = :tenant"), {**params, "n": count}
+            )
+        self.db.commit()
 
     def _import_submission_upload_files(self, submission_upload_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
         for row in self._t("submission_upload_file"):

@@ -1901,6 +1901,12 @@
         "photos.manage"
       ]
     },
+    "POST /api/files/bulk-event-link": {
+      "handler": "files.bulk_link_event",
+      "requires": [
+        "photos.manage"
+      ]
+    },
     "POST /api/files/bulk-keywords": {
       "handler": "files.bulk_update_file_keywords",
       "requires_any": [

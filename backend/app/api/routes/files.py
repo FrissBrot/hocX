@@ -72,6 +72,8 @@ from app.schemas.files import (
     SimilarityGroupList,
     StoredFileMetadata,
     FileBulkCaptureDatePreview,
+    FileBulkEventLink,
+    FileBulkEventLinkResult,
     CaptureChangeBatchRead,
     CaptureChangeUndoResult,
     MAX_STORED_FILE_NAME_LENGTH,
@@ -87,7 +89,7 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import upload_precheck_service
 from app.services import upload_job_service
-from app.services import capture_change_service
+from app.services import capture_change_service, photo_event_link_service
 from app.models.upload_history_entities import CaptureChangeBatch
 from app.schemas.upload_jobs import UploadJobOfFile
 from app.services import file_keywords
@@ -1092,6 +1094,17 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     _ensure_readable_block_or_404(db, user, protocol_element_block.id, "Protocol element block not found")
     _ensure_block_protocol_not_frozen(db, protocol_element_block.id)
+    protocol_id = db.scalar(
+        select(ProtocolElement.protocol_id).where(ProtocolElement.id == protocol_element_block.protocol_element_id)
+    )
+
+    def record_in_history(stored_file: StoredFile) -> None:
+        # Upload-Verlauf (E-6): ein Vorgang je Protokoll und Tag, in derselben Transaktion
+        if protocol_id is None:
+            return
+        job = upload_job_service.protocol_day_job(db, tenant_id=stored_file.tenant_id, protocol_id=protocol_id, created_by=user.user_id)
+        upload_job_service.record_new_file(db, job, stored_file)
+
     try:
         return await service.save_protocol_image(
             db,
@@ -1102,6 +1115,7 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
             created_by=user.user_id,
             include_gps=include_gps,
             viewer=user,
+            before_commit=record_in_history,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -2568,3 +2582,47 @@ def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get
     if any(not (mime or "").startswith("image/") for mime in mimes):
         require_permission(user, P.FILES_MANAGE)
     service.bulk_update_tags(db, user.current_tenant_id, ids, payload.add_tags, payload.remove_tags)
+
+
+@router.post("/files/bulk-event-link", response_model=FileBulkEventLinkResult)
+def bulk_link_event(payload: FileBulkEventLink, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Mehrfachauswahl «Termin zuordnen» (Upload-Verlauf): Fotos fest mit einem Termin verknüpfen
+    oder an die automatische Zuordnung zurückgeben. Termin nur aus dem eigenen Mandanten (sonst
+    404), je Datei dieselbe Schreibprüfung wie bulk-tags; nicht beschreibbare wie unbekannte."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    event = None
+    if payload.event_id is not None:
+        event = public_id_service.get_by_public_id(db, Event, payload.event_id, tenant_id=user.current_tenant_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
+    ids = list(dict.fromkeys(payload.file_ids))
+    hidden = _files_outside_scope(db, user, ids)
+    readable = _readable_own_ids(db, user, [file_id for file_id in ids if file_id not in hidden], write=True)
+    rows = db.execute(
+        select(GalleryImage, StoredFile)
+        .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
+        .where(
+            GalleryImage.tenant_id == user.current_tenant_id, StoredFile.tenant_id == user.current_tenant_id,
+            StoredFile.public_id.in_(list(readable)), StoredFile.mime_type.like("image/%"),
+        )
+    ).all()
+    updated: list[uuid.UUID] = []
+    relink: list[StoredFile] = []
+    for gallery_image, stored in rows:
+        if payload.mode == "set":
+            gallery_image.event_id, gallery_image.event_auto_linked = event.id, False
+        else:
+            gallery_image.event_id, gallery_image.event_auto_linked = None, False
+            relink.append(stored)
+        updated.append(stored.public_id)
+    photo_event_link_service.resync_photos_after_date_change(db, user.current_tenant_id, relink)
+    audit.log(
+        db, action="photo.event_linked", actor=user, entity_type="stored_file", entity_id=None,
+        details={"mode": payload.mode, "event_id": event.id if event else None, "file_ids": [str(i) for i in updated]},
+        commit=False,
+    )
+    db.commit()
+    done = set(updated)
+    return FileBulkEventLinkResult(updated_ids=updated, not_found_ids=[file_id for file_id in ids if file_id not in done])

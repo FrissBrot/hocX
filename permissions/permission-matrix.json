@@ -1034,6 +1034,13 @@
         "writer"
       ]
     },
+    "POST /api/files/bulk-event-link": {
+      "handler": "files.bulk_link_event",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "POST /api/files/bulk-keywords": {
       "handler": "files.bulk_update_file_keywords",
       "allowed": [

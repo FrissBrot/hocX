@@ -1545,7 +1545,9 @@ class FileService:
         created_by: int | None = None,
         include_gps: bool = True,
         viewer=None,
+        before_commit: Callable[[StoredFile], None] | None = None,
     ) -> ProtocolImageRead:
+        """before_commit (Upload-Verlauf): erhält die neue Datei, noch in derselben Transaktion."""
         self.ensure_storage()
 
         mime = (file.content_type or "").split(";")[0].strip().lower()
@@ -1642,6 +1644,8 @@ class FileService:
                 caption=caption,
             )
             protocol_image = self.protocol_image_repository.create(db, protocol_image)
+            if before_commit is not None:
+                before_commit(stored_file)
             db.commit()
 
         return ProtocolImageRead(
