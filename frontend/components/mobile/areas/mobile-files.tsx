@@ -48,7 +48,8 @@ export function FileTypeTile({ name }: { name: string }) {
   return <span className={`mobile-filetype${tone ? ` mobile-filetype-${tone}` : ""}`} aria-hidden="true">{ext || "?"}</span>;
 }
 
-export function MobileFiles({ initialItems, canManage = false }: { initialItems: FileOverviewItem[]; canManage?: boolean }) {
+/** canManage: files.manage (hochladen, umbenennen, Tags); canShare: sharing.public + Abo «Fotos teilen». */
+export function MobileFiles({ initialItems, canManage = false, canShare = false }: { initialItems: FileOverviewItem[]; canManage?: boolean; canShare?: boolean }) {
   const t = useTranslations("files");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
@@ -181,7 +182,7 @@ export function MobileFiles({ initialItems, canManage = false }: { initialItems:
         <MobileEmpty title={t("view.emptyTitle")} hint={t("view.emptyDescription")} />
       )}
 
-      <MobileFab label={tMobile("files.fab")} onClick={() => setUploading(true)} />
+      {canManage ? <MobileFab label={tMobile("files.fab")} onClick={() => setUploading(true)} /> : null}
 
       {sortOpen ? (
         <MobileActionSheet
@@ -207,10 +208,14 @@ export function MobileFiles({ initialItems, canManage = false }: { initialItems:
             setDetail((current) => (current ? { ...current, original_name: name } : current));
           }}
           onTrashed={(trashed) => setItems((current) => current.filter((item) => item.id !== trashed.id))}
-          onShare={() => {
-            setShare(detail);
-            setDetail(null);
-          }}
+          onShare={
+            canShare
+              ? () => {
+                  setShare(detail);
+                  setDetail(null);
+                }
+              : undefined
+          }
         />
       ) : null}
       <ShareLinkModal open={share !== null} onClose={() => setShare(null)} fileIds={share ? [share.id] : []} defaultName={share?.original_name ?? ""} includesImages={share?.is_image ?? false} />
