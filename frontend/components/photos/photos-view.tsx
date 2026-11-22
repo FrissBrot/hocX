@@ -89,9 +89,11 @@ type Props = {
   canShare?: boolean;
   /** settings.manage: Link «Verwalten» führt zu Einstellungen › Zugangslinks. */
   canManageSettings?: boolean;
+  /** photos.manage + Abo «Fotos teilen»: Alben mit anderen Vereinen teilen, Einladungen annehmen. */
+  canShareWithTenants?: boolean;
 };
 
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false, canShare = false, canManageSettings = false }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false, canShare = false, canManageSettings = false, canShareWithTenants = false }: Props) {
   const t = useTranslations("photos.view");
   const tFiles = useTranslations("files");
   // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
@@ -696,6 +698,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           onOpenedAlbum={() => setOpenAlbumId(null)}
           onReleaseChanged={loadPendingReleases}
           viewerPermissions={{ canManage, canShare, canManageSettings }}
+          canShareWithTenants={canShareWithTenants}
         />
       ) : tab === "duplicates" && !embedded ? (
         <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} viewerPermissions={{ canManage, canShare, canManageSettings }} />

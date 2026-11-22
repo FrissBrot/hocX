@@ -29,7 +29,9 @@ function albumKindLabel(t: TFunc): Record<PhotoAlbumKind, string> {
   };
 }
 
-function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareRequest[]; onDone: () => void }) {
+/** canManage: photos.manage (Ablehnen); canAccept: zusätzlich Abo «Fotos teilen» (Annehmen). Ohne
+ * Recht nur der Hinweis - das Backend lehnte die Antwort mit 403 ab (Nachtlauf 2026-11-22). */
+function PendingAlbumShareRequests({ requests, onDone, canManage, canAccept }: { requests: AlbumShareRequest[]; onDone: () => void; canManage: boolean; canAccept: boolean }) {
   const t = useTranslations("photos.albums");
   const toast = useToast();
   const [busyAlbumId, setBusyAlbumId] = useState<string | null>(null);
@@ -58,12 +60,16 @@ function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareR
           <span className="album-share-row-name">
             <strong>{request.owner_tenant_name}</strong> {t("pendingRequests.requestText", { name: request.album_name })}
           </span>
-          <button type="button" className="button-primary" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, true)}>
-            {t("pendingRequests.accept")}
-          </button>
-          <button type="button" className="button-ghost" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, false)}>
-            {t("pendingRequests.reject")}
-          </button>
+          {canAccept ? (
+            <button type="button" className="button-primary" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, true)}>
+              {t("pendingRequests.accept")}
+            </button>
+          ) : null}
+          {canManage ? (
+            <button type="button" className="button-ghost" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, false)}>
+              {t("pendingRequests.reject")}
+            </button>
+          ) : null}
         </div>
       ))}
     </div>
@@ -75,15 +81,21 @@ export function PhotoAlbums({
   onOpenedAlbum,
   onReleaseChanged,
   viewerPermissions,
+  canShareWithTenants = false,
 }: {
   // Von aussen (Hinweis auf der Fotos-Seite) direkt zu öffnendes Album.
   openAlbumId?: string | null;
   onOpenedAlbum?: () => void;
   // Freigaben haben sich geändert - der Hinweis auf der Fotos-Seite lädt neu.
   onReleaseChanged?: () => void;
-  // Rechte der Foto-Ansicht im geöffneten Album (Löschen, Teilen, Best-of).
+  // Rechte der Foto-Ansicht im geöffneten Album (Löschen, Teilen, Best-of); canManage (photos.manage)
+  // und canShare (sharing.public + Abo) gelten auch für die Album-Aktionen selbst.
   viewerPermissions?: ViewerPermissions;
+  // photos.manage + Abo «Fotos teilen»: mit anderen Vereinen teilen, Einladungen annehmen.
+  canShareWithTenants?: boolean;
 } = {}) {
+  const canManage = viewerPermissions?.canManage ?? false;
+  const canShare = viewerPermissions?.canShare ?? false;
   const t = useTranslations("photos.albums");
   const toast = useToast();
   const confirm = useConfirm();
@@ -234,7 +246,7 @@ export function PhotoAlbums({
   if (active) {
     const publicLinksBlocked = Boolean(active.my_share && !active.my_share.public_links_allowed);
     const isOwner = !active.owner_tenant_name;
-    const manageItems: ActionMenuItem[] = isOwner
+    const manageItems: ActionMenuItem[] = isOwner && canManage
       ? [
           { label: t("renameAction"), onClick: () => { setRenameValue(active.name); setRenaming(true); } },
           ...(active.kind === "manual" ? [{ label: t("deleteAction"), onClick: () => void deleteAlbum(active), danger: true }] : []),
@@ -255,7 +267,7 @@ export function PhotoAlbums({
                 {t("sharedWithPrefix")}{active.shared_with.map((share) => `${share.tenant_name ?? t("unknownTenant", { id: `${share.tenant_public_id.slice(0, 8)}…` })} (${share.status === "accepted" ? t("statusActive") : share.status === "pending" ? t("statusPending") : t("statusDeclined")})`).join(", ")}
               </p>
             )}
-            {active.my_share && (
+            {active.my_share && canManage && (
               <label className="album-picker-switch album-share-location-switch">
                 <input
                   type="checkbox"
@@ -271,11 +283,13 @@ export function PhotoAlbums({
             {publicLinksBlocked && <p className="muted">{t("publicLinksNotAllowed")}</p>}
           </div>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={() => setPicking(true)}>{t("addExistingPhotos")}</button>
-            {!publicLinksBlocked && (
+            {canManage && (
+              <button type="button" className="button-secondary" onClick={() => setPicking(true)}>{t("addExistingPhotos")}</button>
+            )}
+            {canShare && !publicLinksBlocked && (
               <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>{t("shareLink")}</button>
             )}
-            {!active.owner_tenant_name && (
+            {canShareWithTenants && !active.owner_tenant_name && (
               <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>{t("shareWithTenant")}</button>
             )}
             <HelpPopover topic={t("helpTopic")} docs={{ page: "fotos", anchor: "alben" }}>
@@ -294,9 +308,11 @@ export function PhotoAlbums({
             <button type="button" className="button-ghost" onClick={() => setPendingOnly((current) => !current)}>
               {pendingOnly ? t("showAll") : t("showPendingOnly")}
             </button>
-            <button type="button" className="button-secondary" disabled={releasing} onClick={() => void releaseAll(active)}>
-              {releasing ? t("releasing") : t("releaseAll")}
-            </button>
+            {canManage && (
+              <button type="button" className="button-secondary" disabled={releasing} onClick={() => void releaseAll(active)}>
+                {releasing ? t("releasing") : t("releaseAll")}
+              </button>
+            )}
           </AlbumReleaseNotice>
         )}
         <PhotosView
@@ -336,8 +352,15 @@ export function PhotoAlbums({
   return (
     <div className="grid">
       {error && <p role="alert" className="form-error-banner">{error}</p>}
-      <PendingAlbumShareRequests requests={pendingRequests} onDone={() => setRevision((value) => value + 1)} />
-      <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>{t("createButton")}</button></div>
+      <PendingAlbumShareRequests
+        requests={pendingRequests}
+        onDone={() => setRevision((value) => value + 1)}
+        canManage={canManage}
+        canAccept={canShareWithTenants}
+      />
+      {canManage && (
+        <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>{t("createButton")}</button></div>
+      )}
       {loading ? (
         <p className="muted">{t("loadingAlbums")}</p>
       ) : albums.length === 0 ? (

@@ -27,6 +27,7 @@ export default async function PhotosPage() {
               canOpenTrash={can(session, "photos.manage") || can(session, "files.manage")}
               canShare={can(session, "sharing.public") && featureAccess(session, "photo_sharing") === "full"}
               canManageSettings={can(session, "settings.manage")}
+              canShareWithTenants={can(session, "photos.manage") && featureAccess(session, "photo_sharing") === "full"}
             />
           </section>
           </>
