@@ -6,6 +6,10 @@ import deNav from "@/messages/de/nav.json";
 import enNav from "@/messages/en/nav.json";
 import frNav from "@/messages/fr/nav.json";
 import itNav from "@/messages/it/nav.json";
+import deSettings from "@/messages/de/settings.json";
+import enSettings from "@/messages/en/settings.json";
+import frSettings from "@/messages/fr/settings.json";
+import itSettings from "@/messages/it/settings.json";
 import { SYSTEM_ROLE_PERMISSIONS, type SystemRoleKey } from "@/lib/permissions.generated";
 import type { SessionInfo } from "@/types/api";
 
@@ -207,5 +211,28 @@ describe("buildNav", () => {
     expect(hrefs("writer")).toContain("/participants");
     expect(hrefs("writer")).not.toContain("/tenant-settings");
     expect(hrefs("admin")).toEqual(expect.arrayContaining(["/users", "/tenant-settings", "/tools/import"]));
+  });
+});
+
+describe("settings hub cards", () => {
+  // Die Übersicht (settings-overview.tsx) zeigt je Link «hub.cards.<labelKey>.description» - fehlt der
+  // Text, erscheint der rohe Schlüssel (Abnahme r93: «Suche & Synonyme»).
+  const SETTINGS_CATALOGS: Record<string, Record<string, unknown>> = { de: deSettings, en: enSettings, fr: frSettings, it: itSettings };
+  it("has a card description for every settings link in every locale", () => {
+    const labelKeys = new Set<string>();
+    for (const role of Object.keys(SYSTEM_ROLE_PERMISSIONS) as SystemRoleKey[]) {
+      for (const group of buildSettingsNav(sessionFor(role))) {
+        for (const link of group.links) labelKeys.add(link.labelKey);
+      }
+    }
+    expect(labelKeys.size).toBeGreaterThan(0);
+    const missing: string[] = [];
+    for (const locale of locales) {
+      const flat = flatten(SETTINGS_CATALOGS[locale]);
+      for (const key of labelKeys) {
+        if (!flat[`hub.cards.${key}.description`]) missing.push(`${locale}:${key}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });
