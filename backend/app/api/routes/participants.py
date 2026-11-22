@@ -285,7 +285,9 @@ async def _import_participants_csv_impl(  # loop-ok: nur über run_coroutine_in_
     except CsvTooManyRows as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=exc.detail()) from exc
-    except (SQLAlchemyError, UnicodeDecodeError) as exc:
+    except (SQLAlchemyError, ValueError) as exc:
+        # ValueError: Kodierung (UnicodeDecodeError) oder unlesbares CSV (csv.Error, z. B. Feld
+        # über 128 KiB) - Eingabefehler, deshalb 400 ohne Eintrag im Fehlerprotokoll.
         db.rollback()
         raise HTTPException(status_code=400, detail="CSV import failed") from exc
 
