@@ -201,6 +201,19 @@ def _read_object(namespace: str, key: str) -> bytes | None:
 
 
 @dataclass
+class CaptureChange:
+    """Ein geändertes Foto einer Datumskorrektur: Korrekturwert davor und danach (Rückgängig)."""
+
+    stored_file: StoredFile
+    prev_corrected_at: datetime | None
+    prev_has_time: bool
+    new_corrected_at: datetime | None
+    new_has_time: bool
+    # Zuordnungstag (Termin) vor der Änderung - für die Vorschau der Auswirkungen
+    old_link_day: date | None = None
+
+
+@dataclass
 class CaptureCorrectionOutcome:
     """Ergebnis von FileService.correct_capture_dates (je Liste die öffentlichen IDs)."""
 
@@ -216,6 +229,8 @@ class CaptureCorrectionOutcome:
     date_only_ids: list[uuid.UUID] = field(default_factory=list)
     # Von follow_capture_date_change geänderte Alben (Bestenauswahl nach dem Commit neu berechnen).
     touched_album_ids: set[uuid.UUID] = field(default_factory=set)
+    # Je geändertem Foto Wert davor/danach (Rückgängig, Vorschau)
+    changes: list[CaptureChange] = field(default_factory=list)
 
 
 @dataclass
@@ -1305,6 +1320,7 @@ class FileService:
         corrected: tuple[datetime, bool] | None = None,
         shift: timedelta | None = None,
         user_id: int | None,
+        dry_run: bool = False,
     ) -> CaptureCorrectionOutcome:
         """Korrigiertes Aufnahmedatum für mehrere Bilder setzen ("set"), verschieben ("shift")
         oder entfernen ("reset") - Einzelbearbeitung im Foto-Viewer und Mehrfachauswahl der
@@ -1312,29 +1328,31 @@ class FileService:
         anderer Mandanten (auch Partner-Fotos geteilter Alben) und Nicht-Bilder landen
         gleichermassen in not_found. Das EXIF-Datum bleibt als Original gespeichert; die Datei
         selbst zieht der Job capture_date_file_sync nach (capture_file_state, Migration 0203). Danach
-        werden automatische Termin-Verknüpfungen neu bewertet und datumsabhängige Auto-Alben
-        nachgezogen (photo_album_service.follow_capture_date_change). Verschieben bei Fotos ohne
-        Uhrzeit: nur der Tagesanteil wirkt (no_time_unchanged_ids/date_only_ids). Committet NICHT -
-        der Aufrufer schreibt den Audit-Eintrag in dieselbe Transaktion und ruft danach
-        recompute_capture_albums(outcome) auf."""
+        werden automatische Termin-Verknüpfungen neu bewertet - nur für Fotos, deren Zuordnungstag
+        sich ändert, mit einmal geladenen Terminen (Plan «Upload-Verlauf» 7.6) - und datumsabhängige
+        Auto-Alben nachgezogen (photo_album_service.follow_capture_date_change). Verschieben bei
+        Fotos ohne Uhrzeit: nur der Tagesanteil wirkt (no_time_unchanged_ids/date_only_ids).
+
+        outcome.changes hält je geändertem Foto den Wert davor und danach (Rückgängig, 0251).
+        dry_run (Vorschau): nichts sperren, nichts schreiben - gleiche Klassifizierung.
+        Committet NICHT - der Aufrufer schreibt den Audit-Eintrag in dieselbe Transaktion und
+        ruft danach recompute_capture_albums(outcome) auf."""
         from app.services import photo_album_service  # Importzyklus, siehe save_gallery_uploads
+        from app.services.capture_date import auto_link_date
 
         outcome = CaptureCorrectionOutcome()
         changed_files: list[StoredFile] = []
+        relink_files: list[StoredFile] = []
         shift_whole_days = shift is None or image_metadata_service.shift_is_whole_days(shift)
         requested = list(dict.fromkeys(file_ids))
-        found = {
-            stored_file.public_id: stored_file
-            for stored_file in db.scalars(
-                select(StoredFile)
-                .where(
-                    StoredFile.tenant_id == tenant_id,
-                    StoredFile.public_id.in_(requested),
-                    StoredFile.mime_type.like("image/%"),
-                )
-                .with_for_update()
-            )
-        }
+        query = select(StoredFile).where(
+            StoredFile.tenant_id == tenant_id,
+            StoredFile.public_id.in_(requested),
+            StoredFile.mime_type.like("image/%"),
+        )
+        if not dry_run:
+            query = query.with_for_update()
+        found = {stored_file.public_id: stored_file for stored_file in db.scalars(query)}
         for public_id in requested:
             stored_file = found.get(public_id)
             if stored_file is None:
@@ -1354,6 +1372,24 @@ class FileService:
                     # Korrektur gleich der Schätzung anlegen, kein Datei-Sync).
                     outcome.no_time_unchanged_ids.append(public_id)
                     continue
+            prev = (stored_file.capture_corrected_at, bool(stored_file.capture_corrected_has_time))
+            old_link_day = auto_link_date(stored_file)
+            if dry_run:
+                status = image_metadata_service.correction_status(stored_file, target)
+                if status == "invalid":
+                    outcome.invalid_ids.append(public_id)
+                    continue
+                if status == "unchanged":
+                    outcome.unchanged_ids.append(public_id)
+                    continue
+                new_at = target[0].replace(tzinfo=UTC) if target is not None else None
+                outcome.changes.append(
+                    CaptureChange(stored_file, prev[0], prev[1], new_at, bool(target[1]) if target is not None else False, old_link_day)
+                )
+                outcome.updated_ids.append(public_id)
+                if mode == "shift" and target is not None and not target[1] and not shift_whole_days:
+                    outcome.date_only_ids.append(public_id)
+                continue
             try:
                 changed = image_metadata_service.set_capture_correction(
                     stored_file,
@@ -1365,13 +1401,23 @@ class FileService:
                 outcome.invalid_ids.append(public_id)
                 continue
             if changed:
-                photo_event_link_service.resync_photo_after_date_change(db, stored_file)
+                outcome.changes.append(
+                    CaptureChange(
+                        stored_file, prev[0], prev[1], stored_file.capture_corrected_at, bool(stored_file.capture_corrected_has_time),
+                        old_link_day,
+                    )
+                )
+                if auto_link_date(stored_file) != old_link_day:
+                    relink_files.append(stored_file)
                 outcome.updated_ids.append(public_id)
                 changed_files.append(stored_file)
                 if mode == "shift" and target is not None and not target[1] and not shift_whole_days:
                     outcome.date_only_ids.append(public_id)
             else:
                 outcome.unchanged_ids.append(public_id)
+        if dry_run:
+            return outcome
+        photo_event_link_service.resync_photos_after_date_change(db, tenant_id, relink_files)
         db.flush()
         outcome.touched_album_ids = photo_album_service.follow_capture_date_change(db, tenant_id=tenant_id, stored_files=changed_files)
         return outcome

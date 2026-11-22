@@ -71,6 +71,9 @@ from app.schemas.files import (
     PhotoAnalysisProgress,
     SimilarityGroupList,
     StoredFileMetadata,
+    FileBulkCaptureDatePreview,
+    CaptureChangeBatchRead,
+    CaptureChangeUndoResult,
     MAX_STORED_FILE_NAME_LENGTH,
     StoredFileRename,
     StoredFileRenameResult,
@@ -84,6 +87,8 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import upload_precheck_service
 from app.services import upload_job_service
+from app.services import capture_change_service
+from app.models.upload_history_entities import CaptureChangeBatch
 from app.schemas.upload_jobs import UploadJobOfFile
 from app.services import file_keywords
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
@@ -1546,15 +1551,9 @@ def update_stored_file_capture_correction(
     return _with_upload_job(db, user, stored_file, metadata)
 
 
-@router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
-def bulk_update_capture_date(
-    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
-):
-    """Mehrfachauswahl der Galerie «Aufnahmedatum ändern»: alle auf ein Datum setzen, um einen
-    Versatz verschieben (Bilder ohne Aufnahmedatum werden übersprungen und gemeldet) oder die
-    Korrektur entfernen. Höchstens MAX_CAPTURE_DATE_BULK Bilder; nur Bilder des eigenen
-    Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
-    not_found zurück. Ein Audit-Eintrag pro Aufruf."""
+def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptureDate):
+    """Gemeinsame Prüfung für Anwenden und Vorschau: (angefragte IDs, beschreibbare IDs, nicht
+    lesbare IDs, Zielwert bei «set», Versatz bei «shift»)."""
     require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -1584,17 +1583,53 @@ def bulk_update_capture_date(
     )
     if corrected is not None and image_metadata_service.valid_capture_datetime(corrected[0]) is None:
         raise HTTPException(status_code=422, detail="Ungültiges Aufnahmedatum")
-    shift = timedelta(days=payload.shift_days, hours=payload.shift_hours) if payload.mode == "shift" else None
-    outcome = service.correct_capture_dates(
-        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+    shift = (
+        timedelta(days=payload.shift_days, hours=payload.shift_hours, minutes=payload.shift_minutes, seconds=payload.shift_seconds)
+        if payload.mode == "shift"
+        else None
     )
-    outcome.not_found_ids.extend(unreadable)
+    return ids, writable_ids, unreadable, corrected, shift
+
+
+@router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
+def bulk_update_capture_date(
+    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Mehrfachauswahl der Galerie «Aufnahmedatum ändern»: alle auf ein Datum setzen, um einen
+    Versatz verschieben (Tage, Stunden, Minuten; Bilder ohne Aufnahmedatum werden übersprungen und
+    gemeldet) oder die Korrektur entfernen. Höchstens MAX_CAPTURE_DATE_BULK Bilder je Aufruf - der
+    Browser stückelt grössere Auswahlen und sendet ab dem zweiten Stück die batch_id des ersten
+    mit, damit «Rückgängig» alles zusammen zurücknimmt (Migration 0251). Nur Bilder des eigenen
+    Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
+    not_found zurück. Ein Audit-Eintrag pro Aufruf."""
+    ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    upload_job = upload_job_service.get_visible_job(db, user, payload.upload_job_id) if payload.upload_job_id is not None else None
     details: dict = {}
     if corrected is not None:
         details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]}
     elif shift is not None:
-        details = {"shift_days": payload.shift_days, "shift_hours": payload.shift_hours}
-    _capture_correction_audit(db, user, mode=payload.mode, outcome=outcome, requested=len(ids), details=details)
+        details = {
+            "shift_days": payload.shift_days, "shift_hours": payload.shift_hours,
+            "shift_minutes": payload.shift_minutes, "shift_seconds": payload.shift_seconds,
+        }
+    # Korrektur vor dem Ändern öffnen bzw. aufnehmen (fremde/alte batch_id = 404, nichts geändert)
+    batch = capture_change_service.open_batch(
+        db, user, batch_id=payload.batch_id, mode=payload.mode, params=details, upload_job_id=upload_job.id if upload_job else None
+    )
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+    )
+    outcome.not_found_ids.extend(unreadable)
+    capture_change_service.record(db, batch, outcome.changes)
+    batch_id = batch.id
+    if not outcome.changes and payload.batch_id is None:
+        # Nichts geändert: keine leere Korrektur zum Rückgängigmachen anbieten
+        db.delete(batch)
+        batch_id = None
+    _capture_correction_audit(
+        db, user, mode=payload.mode, outcome=outcome, requested=len(ids),
+        details={**details, "batch_id": str(batch_id) if batch_id else None},
+    )
     db.commit()
     service.recompute_capture_albums(db, outcome)
     return FileBulkCaptureDateResult(
@@ -1605,7 +1640,104 @@ def bulk_update_capture_date(
         not_found_ids=outcome.not_found_ids,
         no_time_unchanged_ids=outcome.no_time_unchanged_ids,
         date_only_ids=outcome.date_only_ids,
+        batch_id=batch_id,
     )
+
+
+@router.post("/files/bulk-capture-date/preview", response_model=FileBulkCaptureDatePreview)
+def preview_bulk_capture_date(
+    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Vorschau zu POST /files/bulk-capture-date: gleiche Eingabe und Prüfungen, schreibt nichts.
+    Zähler, Stichprobe vorher/nachher und Auswirkungen (Tageswechsel, Terminwechsel automatisch
+    verknüpfter Fotos). POST, weil die Auswahl im Body steht; ändert nichts."""
+    _ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift,
+        user_id=user.user_id, dry_run=True,
+    )
+    effect = capture_change_service.impacts(db, user.current_tenant_id, outcome.changes)
+    return FileBulkCaptureDatePreview(
+        will_change=len(outcome.updated_ids),
+        unchanged=len(outcome.unchanged_ids),
+        no_date=len(outcome.skipped_no_date_ids),
+        date_only_unchanged=len(outcome.no_time_unchanged_ids),
+        date_only_changed=len(outcome.date_only_ids),
+        invalid=len(outcome.invalid_ids),
+        not_found=len(outcome.not_found_ids) + len(unreadable),
+        no_date_ids=outcome.skipped_no_date_ids[:MAX_CAPTURE_DATE_BULK],
+        samples=capture_change_service.samples(service, outcome.changes),
+        **effect,
+    )
+
+
+def _capture_batch_or_404(db: Session, user: CurrentUser, batch_id: uuid.UUID) -> CaptureChangeBatch:
+    batch = db.scalar(
+        select(CaptureChangeBatch).where(CaptureChangeBatch.id == batch_id, CaptureChangeBatch.tenant_id == user.current_tenant_id)
+    )
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Korrektur nicht gefunden")
+    return batch
+
+
+@router.post("/capture-changes/{batch_id}/undo", response_model=CaptureChangeUndoResult)
+def undo_capture_change(batch_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Datumskorrektur rückgängig machen (7.5): je Foto der Wert davor, aber nur, wo seither nichts
+    anderes geändert wurde. Gleiche Schreibprüfung je Foto wie die Mehrfachauswahl."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=404, detail="Korrektur nicht gefunden")
+    batch = _capture_batch_or_404(db, user, batch_id)
+    db.execute(select(CaptureChangeBatch.id).where(CaptureChangeBatch.id == batch.id).with_for_update())
+    if batch.undone_at is not None:
+        raise HTTPException(status_code=409, detail="Diese Korrektur wurde bereits rückgängig gemacht")
+    readable = context_visibility_service.readable_assignment_ids(db, user)
+
+    def writable(stored: StoredFile) -> bool:
+        if readable is not None and not context_visibility_service.abgabe_scope_allows(db, user, stored.id):
+            return False
+        try:
+            access_service.ensure_can_read_stored_file(db, user, stored.id, allow_context_grant=False)
+        except HTTPException:
+            return False
+        return True
+
+    outcome = capture_change_service.undo(db, batch, user_id=user.user_id, writable=writable)
+    audit.log(
+        db, action="photo.capture_date_shift_undone", actor=user, entity_type="capture_change_batch", entity_id=None,
+        details={
+            "batch_id": str(batch.id), "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
+            "file_ids": [str(public_id) for public_id in outcome.restored_ids],
+        },
+        commit=False,
+    )
+    db.commit()
+    if outcome.touched_album_ids:
+        photo_album_service.recompute_best_of_for_albums(db, service, outcome.touched_album_ids)
+    return CaptureChangeUndoResult(restored_ids=outcome.restored_ids, conflict_ids=outcome.conflict_ids, not_found_ids=outcome.not_found_ids)
+
+
+@router.get("/capture-changes", response_model=list[CaptureChangeBatchRead])
+def list_capture_changes(
+    upload_job_id: uuid.UUID = Query(...), db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Datumskorrekturen eines Upload-Vorgangs (Reiter «Datumskorrekturen») mit Rückgängig-Status."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    job = upload_job_service.get_visible_job(db, user, upload_job_id)
+    batches = capture_change_service.list_for_job(db, user.current_tenant_id, job.id)
+    remaining = capture_change_service.remaining_items(db, [batch.id for batch in batches])
+    users = {
+        row.id: row.display_name
+        for row in db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_({b.created_by for b in batches if b.created_by})))
+    } if batches else {}
+    return [
+        CaptureChangeBatchRead(
+            id=batch.id, mode=batch.mode, params=batch.params or {}, created_at=batch.created_at,
+            created_by_name=users.get(batch.created_by), updated_count=batch.updated_count, remaining=remaining.get(batch.id, 0),
+            undone_at=batch.undone_at, can_undo=batch.undone_at is None and remaining.get(batch.id, 0) > 0,
+        )
+        for batch in batches
+    ]
 
 
 @router.get("/stored-files/{stored_file_id}/thumbnail")

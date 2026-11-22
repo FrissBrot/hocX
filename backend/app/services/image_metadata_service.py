@@ -663,6 +663,19 @@ def shifted_correction(stored_file: Any, delta: timedelta) -> tuple[datetime, bo
     return datetime.combine(day, CORRECTED_DATE_ONLY_TIME), False
 
 
+def correction_status(stored_file: Any, target: tuple[datetime, bool] | None) -> str:
+    """Vorschau zu set_capture_correction ohne zu schreiben: "invalid", "unchanged" oder "change"."""
+    if target is None:
+        return "unchanged" if stored_file.capture_corrected_at is None else "change"
+    naive = valid_capture_datetime(target[0])
+    if naive is None:
+        return "invalid"
+    current = stored_file.capture_corrected_at
+    if current is not None and _stored_naive(current) == naive and bool(stored_file.capture_corrected_has_time) == target[1]:
+        return "unchanged"
+    return "change"
+
+
 def set_capture_correction(
     stored_file: Any, corrected: datetime | None, *, has_time: bool, user_id: int | None
 ) -> bool:

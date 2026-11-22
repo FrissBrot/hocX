@@ -1038,6 +1038,18 @@
         "meetings.read"
       ]
     },
+    "GET /api/capture-changes": {
+      "handler": "files.list_capture_changes",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "POST /api/capture-changes/{batch_id}/undo": {
+      "handler": "files.undo_capture_change",
+      "requires": [
+        "photos.manage"
+      ]
+    },
     "GET /api/clamav/status": {
       "handler": "submission_assignments.get_clamav_status",
       "requires": [
@@ -1873,6 +1885,12 @@
     },
     "POST /api/files/bulk-capture-date": {
       "handler": "files.bulk_update_capture_date",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "POST /api/files/bulk-capture-date/preview": {
+      "handler": "files.preview_bulk_capture_date",
       "requires": [
         "photos.manage"
       ]

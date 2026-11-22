@@ -117,3 +117,57 @@ def resync_photo_after_date_change(db: Session, stored_file: StoredFile) -> None
         elif gallery_image.event_id != match.id:
             gallery_image.event_id = match.id
             gallery_image.event_auto_linked = True
+
+
+def _events_for_days(db: Session, tenant_id: int, days: list[date]) -> list[Event]:
+    """Nicht abgesagte Termine des Mandanten, die den Bereich [min, max] der Tage berühren - einmal
+    geladen statt einer Abfrage je Foto (Plan «Upload-Verlauf» 7.6)."""
+    if not days:
+        return []
+    low, high = min(days), max(days)
+    return list(
+        db.scalars(
+            select(Event)
+            .where(
+                Event.tenant_id == tenant_id,
+                Event.is_cancelled.is_(False),
+                Event.event_date <= high,
+                func.coalesce(Event.event_end_date, Event.event_date) >= low,
+            )
+            .order_by(Event.event_date.desc(), Event.id.asc())
+        )
+    )
+
+
+def match_in_memory(events: list[Event], on_date: date | None) -> Event | None:
+    """Gleiche Regel wie find_matching_event (jüngster Beginn, dann kleinere ID) auf vorgeladenen Terminen."""
+    if on_date is None:
+        return None
+    for event in events:  # bereits nach event_date absteigend, id aufsteigend sortiert
+        if event.event_date <= on_date <= (event.event_end_date or event.event_date):
+            return event
+    return None
+
+
+def resync_photos_after_date_change(db: Session, tenant_id: int, stored_files: list[StoredFile]) -> int:
+    """Wie resync_photo_after_date_change für viele Fotos: Termine einmal laden, im Speicher
+    zuordnen. Der Aufrufer übergibt nur Fotos, deren Zuordnungstag sich geändert hat. Manuelle
+    Verknüpfungen bleiben unberührt. Committet nicht. Rückgabe: Anzahl geänderter Verknüpfungen."""
+    files = [stored_file for stored_file in stored_files if stored_file.tenant_id == tenant_id]
+    if not files:
+        return 0
+    days_by_file = {stored_file.id: auto_link_date(stored_file) for stored_file in files}
+    events = _events_for_days(db, tenant_id, [day for day in days_by_file.values() if day is not None])
+    changed = 0
+    for gallery_image in db.scalars(
+        select(GalleryImage).where(GalleryImage.tenant_id == tenant_id, GalleryImage.stored_file_id.in_(list(days_by_file)))
+    ):
+        if gallery_image.event_id is not None and not gallery_image.event_auto_linked:
+            continue
+        match = match_in_memory(events, days_by_file.get(gallery_image.stored_file_id))
+        target = match.id if match is not None else None
+        if gallery_image.event_id != target:
+            gallery_image.event_id = target
+            gallery_image.event_auto_linked = target is not None
+            changed += 1
+    return changed
