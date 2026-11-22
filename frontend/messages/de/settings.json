@@ -132,6 +132,9 @@
       },
       "import": {
         "description": "Protokolle und Daten aus Word und anderen Quellen übernehmen."
+      },
+      "searchSynonyms": {
+        "description": "Synonyme für die Suche in Fotos und Ablage pflegen."
       }
     }
   },

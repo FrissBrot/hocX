@@ -463,8 +463,12 @@ if (!main) {
           new PerformanceObserver((list) => list.getEntries().forEach((entry) => entry.name === "keydown" && window.__keys.push(entry.duration))).observe({ type: "event", durationThreshold: 16 });
         });
         await page.goto(`${BASE}/protocols/${created.id}`, { waitUntil: "load", timeout: 120000 });
-        const input = page.locator("textarea.todo-input").first();
-        await input.waitFor({ timeout: 60000 });
+        // Die eigene Pendenz über ihren Text wählen: Vorlagen können offene Pendenzen aus früheren
+        // Protokollen mitbringen, dann wäre das erste Feld eine fremde Pendenz (Abnahme r93).
+        await page.locator("textarea.todo-input").first().waitFor({ timeout: 60000 });
+        const ownIndex = await page.locator("textarea.todo-input").evaluateAll((fields) => fields.findIndex((field) => field.value === "Abnahme"));
+        if (ownIndex < 0) throw new Error("eigene Pendenz «Abnahme» nicht im Editor gefunden");
+        const input = page.locator("textarea.todo-input").nth(ownIndex);
         await input.scrollIntoViewIfNeeded();
         await input.click();
         await page.keyboard.press("End");

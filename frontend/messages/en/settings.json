@@ -132,6 +132,9 @@
       },
       "import": {
         "description": "Bring in minutes and data from Word and other sources."
+      },
+      "searchSynonyms": {
+        "description": "Manage synonyms for searching photos and files."
       }
     }
   },

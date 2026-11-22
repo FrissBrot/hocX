@@ -132,6 +132,9 @@
       },
       "import": {
         "description": "Importare verbali e dati da Word e altre fonti."
+      },
+      "searchSynonyms": {
+        "description": "Gestire i sinonimi per la ricerca di foto e file."
       }
     }
   },

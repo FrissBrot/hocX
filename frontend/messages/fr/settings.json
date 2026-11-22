@@ -132,6 +132,9 @@
       },
       "import": {
         "description": "Reprendre des procès-verbaux et données depuis Word et d'autres sources."
+      },
+      "searchSynonyms": {
+        "description": "Gérer les synonymes pour la recherche de photos et de fichiers."
       }
     }
   },
