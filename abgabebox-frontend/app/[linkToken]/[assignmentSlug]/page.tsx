@@ -2,7 +2,8 @@ import { notFound, redirect, RedirectType } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { getAssignmentDetail, listElements } from "@/lib/api";
+import { FeatureDisabledNotice } from "@/components/feature-disabled-notice";
+import { AbgabeboxFeatureDisabledError, getAssignmentDetail, listElements, type AssignmentDetailPublic, type ElementPublic } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 const COLORS = 4;
@@ -13,10 +14,21 @@ export default async function AssignmentElementsPage({
   params: Promise<{ linkToken: string; assignmentSlug: string }>;
 }) {
   const { linkToken, assignmentSlug } = await params;
-  const [assignment, elements] = await Promise.all([
-    getAssignmentDetail(linkToken, assignmentSlug),
-    listElements(linkToken, assignmentSlug),
-  ]);
+  let assignment: AssignmentDetailPublic | null;
+  let elements: ElementPublic[] | null;
+  try {
+    [assignment, elements] = await Promise.all([
+      getAssignmentDetail(linkToken, assignmentSlug),
+      listElements(linkToken, assignmentSlug),
+    ]);
+  } catch (error) {
+    // Direkt geteilter Link, Abgabebox des Vereins abgeschaltet: wie die Abgabenliste.
+    if (error instanceof AbgabeboxFeatureDisabledError) {
+      const tAssignments = await getTranslations("abgabebox.assignments");
+      return <FeatureDisabledNotice title={tAssignments("disabledTitle")} hint={tAssignments("disabledHint")} />;
+    }
+    throw error;
+  }
   if (assignment === null || elements === null) {
     notFound();
   }

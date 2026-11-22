@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
   listElements: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => api);
+vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), ...api }));
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -42,6 +42,7 @@ vi.mock("@/components/upload-form", () => ({
 
 import AssignmentElementsPage from "@/app/[linkToken]/[assignmentSlug]/page";
 import ElementUploadPage from "@/app/[linkToken]/[assignmentSlug]/[elementRef]/page";
+import { AbgabeboxFeatureDisabledError } from "@/lib/api";
 
 const assignment = {
   public_slug: "jahresbericht",
@@ -105,7 +106,7 @@ describe("Upload-Seite", () => {
 
   it("zeigt die Beschreibung der Abgabe über dem Upload-Feld", async () => {
     api.listElements.mockResolvedValue([element("el-1", "Bericht"), element("el-2", "Beilage")]);
-    const html = renderToStaticMarkup(await ElementUploadPage(params("el-1")));
+    const html = renderToStaticMarkup(await ElementUploadPage({ params: Promise.resolve({ linkToken: "tok", assignmentSlug: "jahresbericht", elementRef: "el-1" }) }));
     const descriptionAt = html.indexOf(assignment.description);
     expect(descriptionAt).toBeGreaterThan(-1);
     expect(descriptionAt).toBeLessThan(html.indexOf('data-testid="upload-form"'));
@@ -120,7 +121,7 @@ describe("Upload-Seite", () => {
 
   it("verlinkt bei nur einem Dokument zur Abgabenliste, damit Zurück nicht in die Weiterleitung führt", async () => {
     api.listElements.mockResolvedValue([element("el-1", "Bericht")]);
-    const html = renderToStaticMarkup(await ElementUploadPage(params("el-1")));
+    const html = renderToStaticMarkup(await ElementUploadPage({ params: Promise.resolve({ linkToken: "tok", assignmentSlug: "jahresbericht", elementRef: "el-1" }) }));
     expect(html).toContain('href="/tok"');
     expect(html).not.toContain('href="/tok/jahresbericht"');
     expect(html).toContain(de.elements.backToAssignments);
@@ -130,12 +131,31 @@ describe("Upload-Seite", () => {
   it("lässt die Beschreibung weg, wenn die Abgabe keine hat", async () => {
     api.getAssignmentDetail.mockResolvedValue({ ...assignment, description: null });
     api.listElements.mockResolvedValue([element("el-1", "Bericht")]);
-    const html = renderToStaticMarkup(await ElementUploadPage(params("el-1")));
+    const html = renderToStaticMarkup(await ElementUploadPage({ params: Promise.resolve({ linkToken: "tok", assignmentSlug: "jahresbericht", elementRef: "el-1" }) }));
     expect(html).not.toContain("box-step-desc");
   });
 
   it("liefert 404 für ein unbekanntes Dokument", async () => {
     api.listElements.mockResolvedValue([element("el-1", "Bericht")]);
     await expect(ElementUploadPage(params("gibt-es-nicht"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("Abgabebox des Vereins abgeschaltet (direkt geteilter Link)", () => {
+  beforeEach(() => {
+    api.getAssignmentDetail.mockRejectedValue(new AbgabeboxFeatureDisabledError());
+    api.listElements.mockRejectedValue(new AbgabeboxFeatureDisabledError());
+  });
+
+  it("zeigt in der Dokumentauswahl den Hinweis statt «nicht gefunden»", async () => {
+    const html = renderToStaticMarkup(await AssignmentElementsPage(listParams));
+    expect(html).toContain(de.assignments.disabledTitle);
+    expect(html).toContain(de.assignments.disabledHint);
+  });
+
+  it("zeigt auf der Upload-Seite den Hinweis statt «nicht gefunden»", async () => {
+    const html = renderToStaticMarkup(await ElementUploadPage({ params: Promise.resolve({ linkToken: "tok", assignmentSlug: "jahresbericht", elementRef: "el-1" }) }));
+    expect(html).toContain(de.assignments.disabledTitle);
+    expect(html).not.toContain("upload-form");
   });
 });

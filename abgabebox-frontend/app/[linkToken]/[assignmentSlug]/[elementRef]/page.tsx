@@ -3,7 +3,8 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { UploadForm } from "@/components/upload-form";
-import { getAssignmentDetail, listElements } from "@/lib/api";
+import { FeatureDisabledNotice } from "@/components/feature-disabled-notice";
+import { AbgabeboxFeatureDisabledError, getAssignmentDetail, listElements, type AssignmentDetailPublic, type ElementPublic } from "@/lib/api";
 import { resolvePuzzleEndpoint } from "@/lib/friendly-captcha";
 import { formatDate } from "@/lib/format";
 
@@ -13,10 +14,21 @@ export default async function ElementUploadPage({
   params: Promise<{ linkToken: string; assignmentSlug: string; elementRef: string }>;
 }) {
   const { linkToken, assignmentSlug, elementRef } = await params;
-  const [assignment, elements] = await Promise.all([
-    getAssignmentDetail(linkToken, assignmentSlug),
-    listElements(linkToken, assignmentSlug),
-  ]);
+  let assignment: AssignmentDetailPublic | null;
+  let elements: ElementPublic[] | null;
+  try {
+    [assignment, elements] = await Promise.all([
+      getAssignmentDetail(linkToken, assignmentSlug),
+      listElements(linkToken, assignmentSlug),
+    ]);
+  } catch (error) {
+    // Direkt geteilter Link, Abgabebox des Vereins abgeschaltet: wie die Abgabenliste.
+    if (error instanceof AbgabeboxFeatureDisabledError) {
+      const tAssignments = await getTranslations("abgabebox.assignments");
+      return <FeatureDisabledNotice title={tAssignments("disabledTitle")} hint={tAssignments("disabledHint")} />;
+    }
+    throw error;
+  }
   const element = elements?.find((candidate) => candidate.element_ref === elementRef) ?? null;
 
   if (assignment === null || elements === null || element === null) {

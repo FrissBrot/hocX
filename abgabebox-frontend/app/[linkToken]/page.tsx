@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { FeatureDisabledNotice } from "@/components/feature-disabled-notice";
 import { listAssignments } from "@/lib/api";
 
 const COLORS = 4;
@@ -14,12 +15,7 @@ export default async function LinkAssignmentsPage({ params }: { params: Promise<
   }
   const t = await getTranslations("abgabebox.assignments");
   if (resolution.status === "feature_disabled") {
-    return (
-      <div className="card">
-        <h1>{t("disabledTitle")}</h1>
-        <p className="muted muted-flush">{t("disabledHint")}</p>
-      </div>
-    );
+    return <FeatureDisabledNotice title={t("disabledTitle")} hint={t("disabledHint")} />;
   }
   const assignments = resolution.data;
 
