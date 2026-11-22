@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Cookie, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -80,6 +80,10 @@ class CurrentUser:
     # Register zu übernehmen, ohne sie zu verlängern oder frischer zu machen (Security-Review M1/N5).
     token_issued_at: datetime | None = None
     token_expires_at: datetime | None = None
+    # Verlangt eine Rolle des Kontos MFA (tenant_role.require_mfa)? Von build_current_user aus
+    # denselben Rollenzeilen ermittelt (spart je Request eine Abfrage); None = nicht geladen,
+    # dann fragt mfa_policy.account_requires_mfa selbst nach.
+    role_requires_mfa: bool | None = None
 
     def can(self, permission: P) -> bool:
         """Funktionsberechtigung: Permission vorhanden und - falls an ein Modul gebunden - das
@@ -325,6 +329,11 @@ class ValidatedSession:
     data: dict
     # Zeile im Session-Register; None bei Tokens von vor dem Update (ohne sid)
     record: object | None
+    # Hat das Konto einen zweiten Faktor? Mit derselben Abfrage wie das Konto geladen.
+    has_mfa_factor: bool = False
+    # Gebuchte bzw. nur noch lesbare Features des Mandanten (tenant_feature), ebenfalls aus
+    # dieser Abfrage; build_current_user übernimmt sie statt erneut zu laden.
+    tenant_features: tuple[frozenset[str], frozenset[str]] | None = None
 
     @property
     def mfa_verified(self) -> bool:
@@ -337,6 +346,39 @@ class ValidatedSession:
         return datetime.fromtimestamp(int(self.data.get("iat", 0)), UTC)
 
 
+def _features_subquery(access: str):
+    return (
+        select(func.array_agg(TenantFeature.feature_code))
+        .where(TenantFeature.tenant_id == AppUser.tenant_id, TenantFeature.access == access)
+        .correlate(AppUser)
+        .scalar_subquery()
+    )
+
+
+def _load_session_rows(db: Session, user_id: int, session_id: uuid.UUID | None):
+    """Konto, Mandant, MFA-Faktor, Features und (falls im Token) die Session in einer Abfrage
+    (Performance-Audit 2026-11-22, B2: vorher je eine). Nichts davon wird zwischengespeichert:
+    jede Anfrage liest den aktuellen Stand, ein Widerruf wirkt sofort. Konto, Mandant und Session
+    landen in der Identity-Map der Session; ``db.get`` in sessions.validate und
+    build_current_user fragt deshalb nicht erneut."""
+    from app.models import AuthSession
+
+    statement = (
+        select(
+            AppUser,
+            Tenant,
+            exists().where(UserMfaFactor.user_id == AppUser.id).label("has_mfa_factor"),
+            _features_subquery("full").label("features_full"),
+            _features_subquery("read_only").label("features_read_only"),
+        )
+        .join(Tenant, Tenant.id == AppUser.tenant_id)
+        .where(AppUser.id == user_id)
+    )
+    if session_id is not None:
+        statement = statement.add_columns(AuthSession).outerjoin(AuthSession, AuthSession.id == session_id)
+    return db.execute(statement).first()
+
+
 def validate_session_token(db: Session, token: str | None) -> ValidatedSession | None:
     """Gemeinsame Kontoprüfung für REST und WebSocket (SEC-AUTH-014): Signatur und Ablauf, Konto
     aktiv, Login erlaubt, nicht ausgetreten, kein Widerruf seit Ausstellung, Session im Register
@@ -345,27 +387,40 @@ def validate_session_token(db: Session, token: str | None) -> ValidatedSession |
     if session_data is None:
         return None
     try:
-        user = db.get(AppUser, int(session_data["user_id"]))
+        user_id = int(session_data["user_id"])
     except (KeyError, TypeError, ValueError):
         return None
+    session_id = None
+    if session_data.get("sid"):
+        try:
+            session_id = uuid.UUID(str(session_data["sid"]))
+        except (TypeError, ValueError):
+            return None
+    row = _load_session_rows(db, user_id, session_id)
+    user = row[0] if row is not None else None
     if user is None or not user.is_active or not user.login_enabled or user.has_left:
         return None
     if _token_predates_revoke(user, session_data):
         return None
     record = None
-    if session_data.get("sid"):
+    if session_id is not None:
         from app.auth_security import sessions
 
+        # Prüft Konto, Widerruf, Ablauf und Inaktivität der Session; die Zeile kommt aus der
+        # Identity-Map (oben mitgeladen), nur die Eltern-Session einer Kind-Session wird gelesen.
         record = sessions.validate(db, session_data["sid"], user.id)
         if record is None:
             return None
-    return ValidatedSession(user=user, data=session_data, record=record)
+    # Faktor und Features stammen aus derselben Abfrage wie das Konto (gleicher Stand wie die
+    # übrigen Prüfungen dieser Anfrage, nichts darüber hinaus gespeichert).
+    features = (frozenset(row.features_full or ()), frozenset(row.features_read_only or ()))
+    return ValidatedSession(user=user, data=session_data, record=record, has_mfa_factor=bool(row.has_mfa_factor), tenant_features=features)
 
 
 def _load_role_rows(db: Session, user_id: int):
     return db.execute(
         select(
-            TenantRole.id, TenantRole.public_id, TenantRole.name, TenantRole.system_key,
+            TenantRole.id, TenantRole.public_id, TenantRole.name, TenantRole.system_key, TenantRole.require_mfa,
             TenantRolePermission.permission_key, TenantRolePermission.scope,
         )
         .select_from(UserRole)
@@ -403,13 +458,24 @@ def load_role_permissions(db: Session, user_id: int) -> tuple[frozenset[str], tu
     return _effective(rows), tuple(sorted({row.id for row in rows}))
 
 
-def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False) -> CurrentUser:
-    tenant = db.execute(select(Tenant).where(Tenant.id == user.tenant_id)).scalar_one()
+def build_current_user(
+    db: Session, user: AppUser, *, mfa_verified: bool = False, tenant_features: tuple[frozenset[str], frozenset[str]] | None = None,
+) -> CurrentUser:
+    """``tenant_features``: in derselben Anfrage bereits geladene Features (validate_session_token),
+    sonst hier gelesen."""
+    # db.get: in validate_session_token schon mitgeladen (Identity-Map, keine Abfrage)
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is None:
+        tenant = db.execute(select(Tenant).where(Tenant.id == user.tenant_id)).scalar_one()
     rows = _load_role_rows(db, user.id)
     summaries = {row.id: RoleSummary(public_id=row.public_id, name=row.name, system_key=row.system_key) for row in rows}
-    feature_rows = db.execute(select(TenantFeature.feature_code, TenantFeature.access).where(TenantFeature.tenant_id == tenant.id)).all()
-    tenant_features = frozenset(row.feature_code for row in feature_rows if row.access == "full")
-    read_only_features = frozenset(row.feature_code for row in feature_rows if row.access == "read_only")
+    if tenant_features is None:
+        feature_rows = db.execute(select(TenantFeature.feature_code, TenantFeature.access).where(TenantFeature.tenant_id == tenant.id)).all()
+        tenant_features = (
+            frozenset(row.feature_code for row in feature_rows if row.access == "full"),
+            frozenset(row.feature_code for row in feature_rows if row.access == "read_only"),
+        )
+    full_features, read_only_features = tenant_features
     return CurrentUser(
         user_id=user.id,
         user_public_id=user.public_id,
@@ -427,27 +493,20 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_currency=tenant.finance_currency or "CHF",
         mfa_verified=mfa_verified,
         tenant_require_mfa=tenant_requires_mfa(db, tenant.id),
-        current_tenant_features=tenant_features,
+        current_tenant_features=full_features,
         current_tenant_read_only_features=read_only_features,
         permissions=_effective(rows),
         assigned_only=_assigned_only(rows),
         role_ids=tuple(sorted(summaries)),
         roles=tuple(summaries[role_id] for role_id in sorted(summaries)),
-    )
-
-
-def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
-    return (
-        db.query(UserMfaFactor.id)
-        .filter(UserMfaFactor.user_id == user_id)
-        .limit(1)
-        .one_or_none()
-        is not None
+        role_requires_mfa=any(row.require_mfa for row in rows),
     )
 
 
 def _requires_mfa(db: Session, user: CurrentUser) -> bool:
-    return account_requires_mfa(db, user.user_id, permissions=user.permissions, tenant_id=user.current_tenant_id)
+    return account_requires_mfa(
+        db, user.user_id, permissions=user.permissions, tenant_id=user.current_tenant_id, role_requires_mfa=user.role_requires_mfa,
+    )
 
 
 # Fehlercode, wenn eine sonst gültige Session nur deshalb nicht auflöst, weil MFA Pflicht ist und
@@ -468,12 +527,12 @@ def get_optional_current_user(
     if validated is None:
         return None
     user = validated.user
-    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified)
+    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified, tenant_features=validated.tenant_features)
     current_user.session_id = validated.record.id if validated.record is not None else None
     current_user.auth_time = validated.auth_time
     current_user.token_issued_at = datetime.fromtimestamp(int(validated.data.get("iat", 0)), UTC)
     current_user.token_expires_at = datetime.fromtimestamp(int(validated.data.get("exp", 0)), UTC)
-    has_mfa_factor = _has_active_mfa_factor(db, user.id)
+    has_mfa_factor = validated.has_mfa_factor
     if has_mfa_factor and not current_user.mfa_verified:
         return None
     if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
