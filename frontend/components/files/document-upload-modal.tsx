@@ -7,6 +7,7 @@ import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "./u
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch, browserApiUpload } from "@/lib/api/client";
+import { completeUploadJob, openUploadJob, reportClientRejections, targetFromForm } from "@/lib/uploads/upload-jobs";
 import { hashForPrecheck, needsUpload, precheckToFileResult, precheckUploads } from "@/lib/image-analysis/precheck";
 import { formatFileSize } from "@/lib/utils/format";
 import { DocumentUploadResult, UploadFileResult } from "@/types/api";
@@ -81,6 +82,8 @@ export function DocumentUploadModal({
   const t = useTranslations("files");
   const locale = useLocale();
   const [initial] = useState(() => partitionDocuments(initialFiles ?? [], t));
+  // Vom Browser abgelehnte Dateien (Typ) - im Upload-Verlauf gemeldet und gekennzeichnet (E-14)
+  const rejectedFiles = useRef<File[]>((initialFiles ?? []).filter((file) => !initial.accepted.includes(file)));
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initial.accepted);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -94,7 +97,9 @@ export function DocumentUploadModal({
   function addFiles(fileList: FileList | File[]) {
     // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
     // onChange, which runs before React invokes the state updater below.
-    const { accepted, error: rejectedError } = partitionDocuments(Array.from(fileList), t);
+    const all = Array.from(fileList);
+    const { accepted, error: rejectedError } = partitionDocuments(all, t);
+    rejectedFiles.current = [...rejectedFiles.current, ...all.filter((file) => !accepted.includes(file))];
     setSelectedFiles((current) => [...current, ...accepted]);
     setError(rejectedError);
   }
@@ -115,13 +120,21 @@ export function DocumentUploadModal({
     if (selectedFiles.length === 0 || uploading || target.incomplete || ruleProblems.length > 0) return;
     setUploading(true);
     setError(null);
+    let uploadJobId: string | null = null;
     try {
+      // Ein Vorgang im Upload-Verlauf für Vorab-Abgleich, Upload und vom Browser abgelehnte Dateien
+      uploadJobId = await openUploadJob("document", {
+        ...targetFromForm((form) => target.appendTo(form)),
+        tags: tagsValue.split(",").map((tag) => tag.trim()).filter(Boolean),
+      });
+      await reportClientRejections(uploadJobId, rejectedFiles.current.map((file) => ({ name: file.name, size: file.size, code: "unsupported_format" })));
+      rejectedFiles.current = [];
       // Vorab-Abgleich per SHA-256: im Mandanten schon vorhandene Dokumente nicht übertragen.
       // Ohne Antwort des Servers (Fehler) wird einfach alles normal hochgeladen.
       const hashes = await Promise.all(selectedFiles.map((file) => hashForPrecheck(file)));
       const precheck = await precheckUploads(
         selectedFiles.map((file, index) => ({ index, file, analysis: hashes[index] })),
-        { context: "document" },
+        { context: "document", uploadJobId },
       );
       const skipped: UploadFileResult[] = [];
       const toUpload = selectedFiles.filter((file, index) => {
@@ -133,7 +146,7 @@ export function DocumentUploadModal({
         return true;
       });
       if (toUpload.length === 0) {
-        onUploaded({ items: [], errors: [], file_results: skipped });
+        onUploaded({ items: [], errors: [], file_results: skipped, upload_job_id: uploadJobId });
         onClose();
         return;
       }
@@ -141,6 +154,7 @@ export function DocumentUploadModal({
       toUpload.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
       target.appendTo(body);
+      if (uploadJobId) body.append("upload_job_id", uploadJobId);
       // XHR statt fetch, damit grosse PDFs einen Byte-Fortschritt zeigen (Audit Dateien/Fotos).
       // 5 Minuten wie bisher: ein Stapel grosser Dokumente plus Virenprüfung.
       setProgress(null);
@@ -159,6 +173,7 @@ export function DocumentUploadModal({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("errors.uploadFailed"));
     } finally {
+      void completeUploadJob(uploadJobId);
       setUploading(false);
       setProgress(null);
     }

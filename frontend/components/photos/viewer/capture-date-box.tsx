@@ -116,6 +116,7 @@ function CaptureDateEditor({
   const [time, setTimeState] = useState(current && currentHasTime ? current.slice(11, 16) : "");
   const [days, setDaysState] = useState("0");
   const [hours, setHoursState] = useState("0");
+  const [minutes, setMinutesState] = useState("0");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -129,15 +130,17 @@ function CaptureDateEditor({
   const setTime = edit(setTimeState);
   const setDays = edit(setDaysState);
   const setHours = edit(setHoursState);
+  const setMinutes = edit(setMinutesState);
 
   const shiftDays = parseWholeNumber(days);
   const shiftHours = parseWholeNumber(hours);
-  const preview = shiftDays !== null && shiftHours !== null ? shiftPreview(metadata, shiftDays, shiftHours) : null;
+  const shiftMinutes = parseWholeNumber(minutes);
+  const preview = shiftDays !== null && shiftHours !== null && shiftMinutes !== null ? shiftPreview(metadata, shiftDays, shiftHours, shiftMinutes) : null;
   // «Neu: …» bzw. bei Fotos ohne Uhrzeit, deren Versatz keinen ganzen Tag ergibt, «unverändert – keine Uhrzeit».
   const previewLabel = preview?.noTimeUnchanged ? t("shiftPreviewNoTimeUnchanged") : t("shiftPreview", { value: formatMoment(preview) });
   const valid =
     mode === "set" ? Boolean(date)
-    : mode === "shift" ? base !== null && shiftDays !== null && shiftHours !== null && (shiftDays !== 0 || shiftHours !== 0)
+    : mode === "shift" ? base !== null && shiftDays !== null && shiftHours !== null && shiftMinutes !== null && (shiftDays !== 0 || shiftHours !== 0 || shiftMinutes !== 0)
     : true;
 
   let question = "";
@@ -163,7 +166,7 @@ function CaptureDateEditor({
       if (mode === "shift") {
         const result = await browserApiFetch<FileBulkCaptureDateResult>("/api/files/bulk-capture-date", {
           method: "POST",
-          body: JSON.stringify({ file_ids: [fileId], mode: "shift", shift_days: shiftDays ?? 0, shift_hours: shiftHours ?? 0 }),
+          body: JSON.stringify({ file_ids: [fileId], mode: "shift", shift_days: shiftDays ?? 0, shift_hours: shiftHours ?? 0, ...(shiftMinutes ? { shift_minutes: shiftMinutes } : {}) }),
         });
         if (result?.invalid_ids.length) throw new Error(tc("resultInvalid", { count: 1 }));
         if (result?.skipped_no_date_ids.length) throw new Error(tc("resultSkipped", { count: 1 }));
@@ -218,6 +221,10 @@ function CaptureDateEditor({
             <label className="field-stack">
               <span className="field-label">{tc("shiftHoursLabel")}</span>
               <input type="number" step={1} inputMode="numeric" value={hours} onChange={(event) => setHours(event.target.value)} />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{tc("shiftMinutesLabel")}</span>
+              <input type="number" step={1} inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} />
             </label>
           </div>
           <p className="field-help" aria-live="polite">

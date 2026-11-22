@@ -1,0 +1,169 @@
+{
+  "title": "Upload history",
+  "descriptionPhotos": "All photo uploads with the result per file. Edit an upload as a whole: tags, albums, event, capture date.",
+  "descriptionFiles": "All uploads to the file storage with the result per file: uploaded, duplicate, rejected.",
+  "backToPhotos": "‹ Photos",
+  "backToFiles": "‹ Files",
+  "backToHistory": "‹ Upload history",
+  "loading": "Loading …",
+  "loadError": "The upload history could not be loaded.",
+  "empty": "No uploads for this selection.",
+  "loadMore": "Load more",
+  "reconstructed": "reconstructed",
+  "reconstructedHint": "This upload was reconstructed afterwards from existing files. The grouping is approximate; duplicates and rejected files are not known.",
+  "detailTitle": "Upload of {date}",
+  "factsLabel": "Upload details",
+  "files": "Files",
+  "filesValue": "{count, plural, one {1 file available} other {# files available}}",
+  "filter": {
+    "all": "All",
+    "mine": "Mine",
+    "channel": "Channel",
+    "areaPhotos": "Photos (all channels)",
+    "areaFiles": "Files (all channels)",
+    "from": "From",
+    "to": "To",
+    "problemsOnly": "Only with problems"
+  },
+  "column": {
+    "time": "Time",
+    "person": "Person",
+    "channel": "Channel",
+    "ref": "Reference",
+    "result": "Result",
+    "status": "Status"
+  },
+  "channel": {
+    "gallery": "Photo upload",
+    "document": "File upload",
+    "protocol_image": "Minutes image",
+    "todo": "Task",
+    "submission_link": "Personal link",
+    "abgabebox": "Submission box",
+    "word_import": "Word import",
+    "tenant_import": "Platform import",
+    "cloud_import": "File import"
+  },
+  "status": {
+    "open": "Open",
+    "processing": "In progress",
+    "done": "Done",
+    "partial": "With problems",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "itemStatus": {
+    "uploaded": "Uploaded",
+    "duplicate": "Duplicate",
+    "metadata_updated": "Metadata added",
+    "rejected": "Rejected",
+    "infected": "Virus found",
+    "failed": "Failed",
+    "discarded": "Discarded"
+  },
+  "reason": {
+    "duplicate_exact": "Already present (same content)",
+    "too_large": "Too large",
+    "unsupported_format": "Format not supported",
+    "scan_failed": "Virus scan failed",
+    "infected": "Virus scan: infected",
+    "quota_exceeded": "Storage full",
+    "heic_unreadable": "HEIC file not readable",
+    "rule_violation": "Submission rule violated",
+    "client_rejected": "Rejected by the browser",
+    "cancelled": "Discarded on cancel",
+    "other": "Other reason"
+  },
+  "ref": {
+    "event": "Event",
+    "submission": "Submission",
+    "cycle": "Cycle",
+    "protocol": "Minutes",
+    "todo": "Task",
+    "import": "Import report"
+  },
+  "actor": {
+    "abgabebox": "Submission box",
+    "submissionPerson": "Personal link",
+    "platform": "Platform import",
+    "deleted": "Deleted account",
+    "unknown": "Unknown"
+  },
+  "summary": {
+    "uploaded": "{count, plural, one {1 uploaded} other {# uploaded}}",
+    "duplicates": "{count, plural, one {1 duplicate} other {# duplicates}}",
+    "metadataUpdated": "{count, plural, one {1 completed} other {# completed}}",
+    "problems": "{count, plural, one {1 rejected} other {# rejected}}",
+    "discarded": "{count, plural, one {1 discarded} other {# discarded}}"
+  },
+  "options": {
+    "tags": "Tags",
+    "estimated": "Estimated date",
+    "gps": "GPS included",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "tabs": {
+    "photos": "Photos",
+    "results": "Results",
+    "corrections": "Date corrections"
+  },
+  "items": {
+    "name": "File",
+    "status": "Result",
+    "reason": "Reason",
+    "size": "Size",
+    "file": "File in hocX",
+    "empty": "No files recorded.",
+    "nameRemoved": "Name removed (file deleted)",
+    "browserReported": "reported by the browser"
+  },
+  "fileState": {
+    "open": "Open",
+    "ok": "Available",
+    "trashed": "In the trash",
+    "deleted": "File deleted",
+    "infected_later": "Virus found later",
+    "scan_pending": "Virus scan pending",
+    "hidden": "Not visible"
+  },
+  "cameras": {
+    "title": "Cameras",
+    "camera": "Camera",
+    "count": "Photos",
+    "period": "Period",
+    "withTime": "With time",
+    "actions": "Actions",
+    "unknown": "No camera information",
+    "device": "{name} (device {index})",
+    "withTimeValue": "{count, number} · {gps, plural, =0 {no GPS time} one {1 with GPS time} other {# with GPS time}}",
+    "select": "Select only these",
+    "shift": "Shift time …",
+    "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {earlier} other {later}}",
+    "gpsHint": "According to GPS time ({samples, plural, one {1 photo} other {# photos}}) probably: {offset}"
+  },
+  "corrections": {
+    "when": "Time",
+    "what": "Correction",
+    "who": "Person",
+    "count": "Photos",
+    "action": "Undo",
+    "empty": "No date corrections for this upload yet.",
+    "modeSet": "Set to a date",
+    "modeReset": "Original restored",
+    "modeShift": "Shifted: {hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {earlier} other {later}}",
+    "countValue": "{count, plural, one {1 changed} other {# changed}} · {remaining, plural, one {1 available} other {# available}}",
+    "undo": "Undo",
+    "undone": "{count, plural, one {1 photo reset.} other {# photos reset.}}",
+    "conflicts": "{count, plural, one {1 photo was changed differently in the meantime and stays as it is.} other {# photos were changed differently in the meantime and stay as they are.}}",
+    "undoError": "The correction could not be undone.",
+    "undoneAt": "Undone on {date}",
+    "noFiles": "No photos left"
+  },
+  "hint": {
+    "photos": "{count, plural, one {1 photo uploaded.} other {# photos uploaded.}}",
+    "files": "{count, plural, one {1 file uploaded.} other {# files uploaded.}}",
+    "edit": "Edit",
+    "dismiss": "Hide notice"
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "title": "Historique des téléversements",
+  "descriptionPhotos": "Tous les téléversements de photos avec le résultat par fichier. Modifier un téléversement en entier : tags, albums, événement, date de prise de vue.",
+  "descriptionFiles": "Tous les téléversements du classement avec le résultat par fichier : téléversé, doublon, refusé.",
+  "backToPhotos": "‹ Photos",
+  "backToFiles": "‹ Classement",
+  "backToHistory": "‹ Historique des téléversements",
+  "loading": "Chargement …",
+  "loadError": "L'historique des téléversements n'a pas pu être chargé.",
+  "empty": "Aucun téléversement pour cette sélection.",
+  "loadMore": "Charger plus",
+  "reconstructed": "reconstitué",
+  "reconstructedHint": "Ce téléversement a été reconstitué après coup à partir de fichiers existants. Le regroupement est approximatif ; les doublons et fichiers refusés ne sont pas connus.",
+  "detailTitle": "Téléversement du {date}",
+  "factsLabel": "Informations sur le téléversement",
+  "files": "Fichiers",
+  "filesValue": "{count, plural, one {1 fichier disponible} other {# fichiers disponibles}}",
+  "filter": {
+    "all": "Tous",
+    "mine": "Les miens",
+    "channel": "Canal",
+    "areaPhotos": "Photos (tous les canaux)",
+    "areaFiles": "Classement (tous les canaux)",
+    "from": "Du",
+    "to": "Au",
+    "problemsOnly": "Seulement avec problèmes"
+  },
+  "column": {
+    "time": "Moment",
+    "person": "Personne",
+    "channel": "Canal",
+    "ref": "Référence",
+    "result": "Résultat",
+    "status": "Statut"
+  },
+  "channel": {
+    "gallery": "Téléversement de photos",
+    "document": "Téléversement au classement",
+    "protocol_image": "Image de procès-verbal",
+    "todo": "Tâche",
+    "submission_link": "Lien personnel",
+    "abgabebox": "Boîte de dépôt",
+    "word_import": "Import Word",
+    "tenant_import": "Import plateforme",
+    "cloud_import": "Import de fichiers"
+  },
+  "status": {
+    "open": "Ouvert",
+    "processing": "En cours",
+    "done": "Terminé",
+    "partial": "Avec problèmes",
+    "failed": "Échoué",
+    "cancelled": "Annulé"
+  },
+  "itemStatus": {
+    "uploaded": "Téléversé",
+    "duplicate": "Doublon",
+    "metadata_updated": "Métadonnées complétées",
+    "rejected": "Refusé",
+    "infected": "Virus détecté",
+    "failed": "Échoué",
+    "discarded": "Rejeté"
+  },
+  "reason": {
+    "duplicate_exact": "Déjà présent (même contenu)",
+    "too_large": "Trop volumineux",
+    "unsupported_format": "Format non pris en charge",
+    "scan_failed": "Contrôle antivirus échoué",
+    "infected": "Contrôle antivirus : infecté",
+    "quota_exceeded": "Stockage plein",
+    "heic_unreadable": "Fichier HEIC illisible",
+    "rule_violation": "Règle du dépôt non respectée",
+    "client_rejected": "Refusé par le navigateur",
+    "cancelled": "Rejeté lors de l'annulation",
+    "other": "Autre raison"
+  },
+  "ref": {
+    "event": "Événement",
+    "submission": "Dépôt",
+    "cycle": "Cycle",
+    "protocol": "Procès-verbal",
+    "todo": "Tâche",
+    "import": "Rapport d'import"
+  },
+  "actor": {
+    "abgabebox": "Boîte de dépôt",
+    "submissionPerson": "Lien personnel",
+    "platform": "Import plateforme",
+    "deleted": "Compte supprimé",
+    "unknown": "Inconnu"
+  },
+  "summary": {
+    "uploaded": "{count, plural, one {1 téléversé} other {# téléversés}}",
+    "duplicates": "{count, plural, one {1 doublon} other {# doublons}}",
+    "metadataUpdated": "{count, plural, one {1 complété} other {# complétés}}",
+    "problems": "{count, plural, one {1 refusé} other {# refusés}}",
+    "discarded": "{count, plural, one {1 rejeté} other {# rejetés}}"
+  },
+  "options": {
+    "tags": "Tags",
+    "estimated": "Date estimée",
+    "gps": "GPS transmis",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "tabs": {
+    "photos": "Photos",
+    "results": "Résultats",
+    "corrections": "Corrections de date"
+  },
+  "items": {
+    "name": "Fichier",
+    "status": "Résultat",
+    "reason": "Raison",
+    "size": "Taille",
+    "file": "Fichier dans hocX",
+    "empty": "Aucun fichier enregistré.",
+    "nameRemoved": "Nom supprimé (fichier supprimé)",
+    "browserReported": "signalé par le navigateur"
+  },
+  "fileState": {
+    "open": "Ouvrir",
+    "ok": "Disponible",
+    "trashed": "Dans la corbeille",
+    "deleted": "Fichier supprimé",
+    "infected_later": "Virus détecté ultérieurement",
+    "scan_pending": "Contrôle antivirus en attente",
+    "hidden": "Non visible"
+  },
+  "cameras": {
+    "title": "Appareils",
+    "camera": "Appareil",
+    "count": "Photos",
+    "period": "Période",
+    "withTime": "Avec heure",
+    "actions": "Actions",
+    "unknown": "Sans indication d'appareil",
+    "device": "{name} (appareil {index})",
+    "withTimeValue": "{count, number} · {gps, plural, =0 {sans heure GPS} one {1 avec heure GPS} other {# avec heure GPS}}",
+    "select": "Sélectionner seulement celles-ci",
+    "shift": "Décaler l'heure …",
+    "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {plus tôt} other {plus tard}}",
+    "gpsHint": "Selon l'heure GPS ({samples, plural, one {1 photo} other {# photos}}) probablement : {offset}"
+  },
+  "corrections": {
+    "when": "Moment",
+    "what": "Correction",
+    "who": "Personne",
+    "count": "Photos",
+    "action": "Annuler",
+    "empty": "Aucune correction de date pour ce téléversement.",
+    "modeSet": "Fixé à une date",
+    "modeReset": "Original rétabli",
+    "modeShift": "Décalé : {hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {plus tôt} other {plus tard}}",
+    "countValue": "{count, plural, one {1 modifiée} other {# modifiées}} · {remaining, plural, one {1 disponible} other {# disponibles}}",
+    "undo": "Annuler",
+    "undone": "{count, plural, one {1 photo rétablie.} other {# photos rétablies.}}",
+    "conflicts": "{count, plural, one {1 photo a été modifiée autrement entre-temps et reste ainsi.} other {# photos ont été modifiées autrement entre-temps et restent ainsi.}}",
+    "undoError": "La correction n'a pas pu être annulée.",
+    "undoneAt": "Annulé le {date}",
+    "noFiles": "Plus aucune photo disponible"
+  },
+  "hint": {
+    "photos": "{count, plural, one {1 photo téléversée.} other {# photos téléversées.}}",
+    "files": "{count, plural, one {1 fichier téléversé.} other {# fichiers téléversés.}}",
+    "edit": "Modifier",
+    "dismiss": "Masquer la remarque"
+  }
+}

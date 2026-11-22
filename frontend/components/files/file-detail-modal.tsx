@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 // Datei-Detail (Design «hocX Datei-Detail Popup v2»): Kopf mit Name (umbenennen), Quelle, Status,
 // Hochgeladen von und Version; links Vorschau (PDF-Ansicht/Text/Bild), rechts Reiter «Details &
 // Tags» und «Verlauf»; Fuss mit Papierkorb (Bestätigung inline) und Öffnen/Teilen/Herunterladen.
@@ -281,6 +283,11 @@ export function FileDetailModal({
               <PersonAvatar name={uploader} />
               <strong>{uploader}</strong>
             </span>
+          ) : null}
+          {metadata?.upload_job ? (
+            <Link className="file-detail-upload-job" href={`/${item.is_image ? "photos" : "files"}/uploads/${metadata.upload_job.id}`}>
+              {t(metadata.upload_job.reconstructed ? "detail.uploadJobLinkReconstructed" : "detail.uploadJobLink", { count: metadata.upload_job.uploaded_count })}
+            </Link>
           ) : null}
           {version ? (
             <span className="muted">

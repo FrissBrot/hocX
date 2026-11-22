@@ -2356,3 +2356,227 @@ div.photo-viewer-card-image {
     padding: var(--space-4);
   }
 }
+
+/* Verschieben um Tage, Stunden und Minuten (Upload-Verlauf 1.6): drei gleich breite Felder */
+.photo-viewer-correction-fields:has(> :nth-child(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* ── Upload-Verlauf (1.6): Hinweisstreifen, Verlauf, Vorgangsdetail ───────────────────────── */
+.upload-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.upload-hint-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-hint-link {
+  font-weight: 600;
+}
+
+.upload-history-shell {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.upload-history-back {
+  display: inline-block;
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.upload-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.upload-history-channel {
+  min-width: 220px;
+}
+
+.upload-history-dates {
+  min-width: 300px;
+}
+
+.upload-history-problems {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.upload-history-note {
+  display: block;
+  font-size: var(--text-xs);
+}
+
+.upload-job-facts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.upload-job-facts-list dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.upload-job-facts-list dd {
+  margin: 0;
+}
+
+.upload-job-cameras {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.upload-camera-hint {
+  display: block;
+  color: var(--warning-fg);
+  font-size: var(--text-xs);
+}
+
+.upload-camera-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.upload-item-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.upload-item-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+}
+
+.photo-viewer-upload-job {
+  font-size: var(--text-sm);
+}
+
+/* Fortschritt gestückelter Bulk-Aktionen */
+.photo-bulk-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Datumsdialog: Reiterwechsel ändert die Höhe nicht (DESIGN.md Abschnitt 8) */
+.capture-date-dialog-body {
+  height: min(560px, calc(100dvh - 260px));
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.capture-date-offset-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.capture-date-offset-fields input {
+  min-width: 0;
+}
+
+.capture-date-reference-result {
+  margin: 0;
+  font-weight: 600;
+}
+
+.capture-preview {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.capture-preview-title {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.capture-preview-counts {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.capture-preview-samples {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.capture-preview-sample {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.capture-preview-sample img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+}
+
+.capture-preview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capture-preview-change {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .capture-date-dialog-body {
+    height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .capture-date-offset-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .capture-preview-sample {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .capture-preview-change {
+    grid-column: 2;
+  }
+}

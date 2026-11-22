@@ -31,6 +31,8 @@ import { HelpPopover } from "@/components/ui/help-popover";
 import { useToast } from "@/contexts/toast-context";
 import { MobileFab } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
+import { PHOTO_CHANNELS } from "@/lib/uploads/upload-jobs";
+import { RecentUploadHint } from "@/components/uploads/recent-upload-hint";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
@@ -42,6 +44,7 @@ import {
   GalleryUploadJobDetail,
   StoredFileMetadata,
   UploadFileResult,
+  UploadJobFileIds,
   PhotoAnalysisProgress as ProgressData,
 } from "@/types/api";
 
@@ -89,18 +92,22 @@ type Props = {
   canShare?: boolean;
   /** settings.manage: Link «Verwalten» führt zu Einstellungen › Zugangslinks. */
   canManageSettings?: boolean;
+  /** Upload-Verlauf: nur die Fotos dieses Vorgangs (eingebettet im Vorgangsdetail). */
+  uploadJobId?: string;
+  /** Vorgabe der Auswahl von aussen (z. B. «Nur diese Kamera»); `key` erzwingt das erneute Setzen. */
+  selectionRequest?: { key: number; ids: string[] } | null;
 };
 
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false, canShare = false, canManageSettings = false }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false, canShare = false, canManageSettings = false, uploadJobId, selectionRequest = null }: Props) {
   const t = useTranslations("photos.view");
   const tFiles = useTranslations("files");
   // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
   // Vorab-Abgleich schon erledigt hat. Die Zusammenfassung erscheint erst, wenn alle Aufträge
   // des Vorgangs fertig sind - jede Datei zählt dabei genau einmal.
-  const uploadSessionRef = useRef<{ pending: Set<string>; results: UploadFileResult[]; closed: boolean } | null>(null);
+  const uploadSessionRef = useRef<{ pending: Set<string>; results: UploadFileResult[]; closed: boolean; uploadJobId?: string | null } | null>(null);
   const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
   const tMobile = useTranslations("mobile");
-  const embedded = Boolean(albumId);
+  const embedded = Boolean(albumId || uploadJobId);
   const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
@@ -134,7 +141,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   // Nach Datum sortierte Hauptgalerie: Zeitleiste mit festen Höhen und Zeitstrahl (photo-timeline.tsx)
   // statt seitenweisem Nachladen. Alben (eigene Reihenfolge, Beste zuerst) und die anderen
   // Sortierungen behalten die bisherige Liste.
-  const timelineMode = tab === "all" && sortKey === "group_date" && !albumId;
+  const timelineMode = tab === "all" && sortKey === "group_date" && !albumId && !uploadJobId;
   const [timelineKey, setTimelineKey] = useState(0);
   const [timelineRefresh, setTimelineRefresh] = useState(0);
   const [timelineTotal, setTimelineTotal] = useState<number | null>(null);
@@ -190,6 +197,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     tagFilter.forEach((tag) => params.append("tags", tag));
     if (albumId) params.set("album_id", albumId);
     if (albumId && sharePendingOnly) params.set("share_pending", "true");
+    if (uploadJobId) params.set("upload_job_id", uploadJobId);
     params.set("skip", String(skip));
     params.set("limit", String(PAGE_SIZE));
     params.set("sort_by", sortKey);
@@ -228,7 +236,28 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }, firstLoad ? 0 : 50);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly]);
+  }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly, uploadJobId]);
+
+  // Auswahl von aussen (Vorgangsdetail: «Nur diese Kamera auswählen»)
+  useEffect(() => {
+    if (selectionRequest) setSelectedIds(new Set(selectionRequest.ids));
+  }, [selectionRequest]);
+
+  // «Alle N dieses Uploads auswählen»: alle beschreibbaren Fotos des Vorgangs, nicht nur die geladenen.
+  const [jobSelectable, setJobSelectable] = useState<number | null>(null);
+  async function selectAllInJob() {
+    if (!uploadJobId) return;
+    try {
+      const result = await browserApiFetch<UploadJobFileIds>(`/api/upload-jobs/${uploadJobId}/file-ids?only_images=true`);
+      if (!result) return;
+      setSelectedIds(new Set(result.file_ids));
+      setJobSelectable(result.file_ids.length);
+      if (result.truncated) showToast(t("jobSelectTruncated", { count: result.file_ids.length }), "info");
+      else if (result.file_ids.length < result.total) showToast(t("jobSelectPartial", { count: result.total - result.file_ids.length }), "info");
+    } catch {
+      showToast(t("loadError"), "error");
+    }
+  }
 
   // Anzahl Treffer bei aktiver Suche/Filter ausserhalb der Zeitleiste (dieselben Filter wie die Liste).
   useEffect(() => {
@@ -523,7 +552,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }
   }
 
-  function showUploadSummary(results: UploadFileResult[]) {
+  function showUploadSummary(results: UploadFileResult[], uploadJobId?: string | null) {
     const normalized = results.map(normalizeResult);
     if (normalized.length === 0) return;
     const counts = countUploadResults(normalized);
@@ -531,7 +560,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     if (counts.metadataUpdated > 0) reload();
     const tone = counts.failed > 0 ? (counts.failed === counts.total ? "error" : "info") : "success";
     showToast(uploadResultsSummary(normalized, tFiles, "images"), tone, {
-      action: { label: tFiles("uploadResults.detailsAction"), onClick: () => setUploadResults(normalized) },
+      actions: [
+        { label: tFiles("uploadResults.detailsAction"), onClick: () => setUploadResults(normalized) },
+        // Upload-Verlauf: «Bearbeiten» führt zum Vorgang (Bulk-Aktionen, Datumskorrektur)
+        ...(uploadJobId ? [{ label: t("editUploadAction"), onClick: () => router.push(`/photos/uploads/${uploadJobId}`) }] : []),
+      ],
     });
   }
 
@@ -543,9 +576,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }
     session.results.push(...sessionInfo.precheckResults);
     session.closed = true;
+    session.uploadJobId = sessionInfo.uploadJobId ?? null;
     if (session.pending.size === 0) {
       uploadSessionRef.current = null;
-      showUploadSummary(session.results);
+      showUploadSummary(session.results, session.uploadJobId);
     }
   }
 
@@ -559,12 +593,12 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
       session.results.push(...results);
       if (session.closed && session.pending.size === 0) {
         uploadSessionRef.current = null;
-        showUploadSummary(session.results);
+        showUploadSummary(session.results, session.uploadJobId);
       }
       return;
     }
     // Auftrag aus einem anderen Tab/vor einem Neuladen: eigene Zusammenfassung.
-    showUploadSummary(results);
+    showUploadSummary(results, job.upload_job_id);
   }
 
   function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
@@ -601,6 +635,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
             <PhotosPageHeader
               total={analysisProgress?.total_images ?? null}
               onOpenTrash={canOpenTrash ? () => setTrashOpen(true) : undefined}
+              uploadsHref={canManage ? "/photos/uploads" : undefined}
               onUpload={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
@@ -640,6 +675,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
               />
             </>
           )}
+          {!mobile && canManage ? <RecentUploadHint channels={PHOTO_CHANNELS} basePath="/photos/uploads" noun="photos" /> : null}
           {pendingReleaseTotal > 0 && (
             <AlbumReleaseNotice
               message={
@@ -732,6 +768,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
               selectedIds={Array.from(selectedIds)}
               selectedItems={items.filter((item) => selectedIds.has(item.id))}
               onSelectAll={() => setSelectedIds(new Set(items.map((item) => item.id)))}
+              onSelectAllInJob={uploadJobId ? () => void selectAllInJob() : undefined}
+              jobSelectableCount={jobSelectable}
+              uploadJobId={uploadJobId}
+              referenceItems={items}
               tagSuggestions={tagSuggestions}
               onClearSelection={() => setSelectedIds(new Set())}
               onDone={() => reload()}

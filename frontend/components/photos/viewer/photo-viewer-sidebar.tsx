@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -251,7 +252,17 @@ function DetailsSection({ item, metadata, albums }: { item: FileOverviewItem; me
         ) : null}
         <div className="photo-viewer-details-wide">
           <dt>{t("uploadedLabel")}</dt>
-          <dd>{uploaded}</dd>
+          <dd>
+            {uploaded}
+            {metadata?.upload_job ? (
+              <>
+                {" · "}
+                <Link className="photo-viewer-upload-job" href={`/photos/uploads/${metadata.upload_job.id}`}>
+                  {t(metadata.upload_job.reconstructed ? "uploadJobLinkReconstructed" : "uploadJobLink", { count: metadata.upload_job.uploaded_count })}
+                </Link>
+              </>
+            ) : null}
+          </dd>
         </div>
         <div className="photo-viewer-details-wide">
           <dt>{t("locationLabel")}</dt>

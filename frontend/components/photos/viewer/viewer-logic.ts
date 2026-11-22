@@ -148,19 +148,20 @@ export function shiftBase(
 export function shiftPreview(
   metadata: Pick<StoredFileMetadata, "capture_corrected_at" | "capture_corrected_has_time" | "exif_taken_at" | "estimated_taken_on">,
   days: number,
-  hours: number
+  hours: number,
+  minutes = 0,
 ): ShiftPreview | null {
   const base = shiftBase(metadata);
   const parts = base ? wallClock(base.value) : null;
   if (!base || !parts) return null;
   if (!base.hasTime) {
-    const wholeDays = wholeShiftDays(days, hours);
+    const wholeDays = wholeShiftDays(days, hours, minutes);
     const day = new Date(Date.UTC(parts.y, parts.m - 1, parts.d) + wholeDays * 86_400_000);
     const date = `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}`;
     return wholeDays === 0 ? { date, time: null, noTimeUnchanged: true } : { date, time: null };
   }
   // UTC-Arithmetik: keine Sommerzeit-Sprünge, die Ziffern bleiben Kamerazeit.
-  const moment = new Date(Date.UTC(parts.y, parts.m - 1, parts.d, parts.hh, parts.mm) + (days * 24 + hours) * 3_600_000);
+  const moment = new Date(Date.UTC(parts.y, parts.m - 1, parts.d, parts.hh, parts.mm) + ((days * 24 + hours) * 60 + minutes) * 60_000);
   const date = `${moment.getUTCFullYear()}-${pad(moment.getUTCMonth() + 1)}-${pad(moment.getUTCDate())}`;
   return { date, time: `${pad(moment.getUTCHours())}:${pad(moment.getUTCMinutes())}` };
 }

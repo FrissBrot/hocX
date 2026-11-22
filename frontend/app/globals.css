@@ -15792,3 +15792,8 @@ a.export-step-meta {
     animation: none;
   }
 }
+
+/* Upload-Verlauf: Link zum Herkunftsvorgang im Datei-Detail (überall, wo das Datei-Detail erscheint) */
+.file-detail-upload-job {
+  font-size: var(--text-sm);
+}

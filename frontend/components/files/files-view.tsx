@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+import { RecentUploadHint } from "@/components/uploads/recent-upload-hint";
+import { FILE_CHANNELS } from "@/lib/uploads/upload-jobs";
 import { useTranslations } from "next-intl";
 
 import { DocumentUploadModal } from "./document-upload-modal";
@@ -206,8 +209,13 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
     if (results.length > 0) {
       // Je Datei: hochgeladen / übersprungen (schon vorhanden) / fehlgeschlagen.
       const failed = countUploadResults(results).failed;
+      const jobId = result.upload_job_id;
       showToast(uploadResultsSummary(results, t), failed > 0 ? "info" : "success", {
-        action: { label: t("uploadResults.detailsAction"), onClick: () => setUploadResults(results) },
+        actions: [
+          { label: t("uploadResults.detailsAction"), onClick: () => setUploadResults(results) },
+          // Upload-Verlauf: Ergebnisliste und Bulk-Aktionen des Vorgangs
+          ...(jobId ? [{ label: t("view.editUploadAction"), onClick: () => router.push(`/files/uploads/${jobId}`) }] : []),
+        ],
       });
       return;
     }
@@ -317,6 +325,11 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
                 {t("view.importButton")}
               </Link>
             ) : null}
+            {canDelete ? (
+              <Link href="/files/uploads" className="button-secondary">
+                {t("view.uploadsButton")}
+              </Link>
+            ) : null}
             {canOpenTrash ? (
               <button type="button" className="button-secondary" onClick={() => setTrashOpen(true)}>
                 {t("trash.open")}
@@ -330,6 +343,8 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
           </div>
         )}
       </div>
+
+      {canDelete && !hasNoFiles ? <RecentUploadHint channels={FILE_CHANNELS} basePath="/files/uploads" noun="files" /> : null}
 
       {hasNoFiles ? (
         <EmptyState

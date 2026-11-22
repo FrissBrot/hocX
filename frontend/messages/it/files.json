@@ -98,7 +98,9 @@
     "renamedToast": "File rinominato.",
     "renameError": "Impossibile rinominare il file.",
     "mimeHide": "Nascondi MIME",
-    "trashConfirmHint": "{count, plural, =0 {} one {} other {Vengono spostate tutte le # versioni. }}Il ripristino è possibile per {days} giorni, poi l’eliminazione è definitiva."
+    "trashConfirmHint": "{count, plural, =0 {} one {} other {Vengono spostate tutte le # versioni. }}Il ripristino è possibile per {days} giorni, poi l’eliminazione è definitiva.",
+    "uploadJobLink": "tramite caricamento di {count, plural, one {1 file} other {# file}} ›",
+    "uploadJobLinkReconstructed": "tramite caricamento di {count, plural, one {1 file} other {# file}} (ricostruito) ›"
   },
   "table": {
     "columnName": "Nome",
@@ -141,7 +143,9 @@
     "viewToggle": "Vista",
     "viewList": "Elenco",
     "viewGrid": "Riquadri con anteprima",
-    "importButton": "Importa"
+    "importButton": "Importa",
+    "uploadsButton": "Caricamenti",
+    "editUploadAction": "Modifica"
   },
   "sourceOptions": {
     "all": "Tutte le origini",
