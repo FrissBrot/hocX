@@ -69,6 +69,15 @@ def _owned_thumbnail(stored_file: StoredFile) -> Path | None:
     return path if path.is_relative_to(root) else None
 
 
+def _lock_current(db: Session, stored_file: StoredFile) -> None:
+    """Zeile sperren und neu lesen, bevor ihr Objektschlüssel verwendet wird. Der Job
+    capture_date_file_sync legt die Datei unter Zeilensperre als neues Objekt ab; ohne Sperre
+    löschte bzw. verschob ein gleichzeitiger Aufruf den alten, schon gelesenen Schlüssel, und das
+    neu geschriebene Objekt blieb aktiv im Speicher zurück."""
+    db.flush()
+    db.refresh(stored_file, with_for_update=True)
+
+
 class FileEraser:
     def __init__(self, file_service=None) -> None:
         self._thumbnails: list[Path] = []
@@ -79,6 +88,7 @@ class FileEraser:
         """Löscht die Datei samt allem, was ohne Fremdschlüssel an ihr hängt. ``extra_public_ids``:
         weitere IDs, unter denen sie in Alben/Links steht (Abgabebox: die public_id der
         Einreichungsdatei). ``namespace`` muss vor dem Löschen der Einreichungszeilen bestimmt werden."""
+        _lock_current(db, stored_file)
         if namespace is None:
             from app.services.stored_file_location import namespace_for_stored_file
 
@@ -122,6 +132,7 @@ class FileEraser:
     ) -> None:
         """Übernimmt die Datei in die Galerie (Herkunfts-Tag), bevor ihr Zusammenhang gelöscht wird."""
         if namespace == ABGABEBOX:
+            _lock_current(db, stored_file)
             store = get_object_store()
             upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
             new_key = new_object_key(*[part for part in (upload_prefix, "kept") if part and part != "."], filename=stored_file.original_name)
