@@ -104,6 +104,12 @@ def test_validate_rejects_tiny_or_empty_databases(tmp_path):
         geoip.validate_file(garbage)
 
 
+def _checksums(source: Path, *months: str):
+    """Wie die Download-Seite: SHA1 der entpackten Datei je MMDB-URL."""
+    sha1 = geoip.file_sha1(source)
+    return lambda: {geoip.DOWNLOAD_URL.format(month=month): sha1 for month in months}
+
+
 def _fake_download(source: Path, calls: list[str], missing: set[str] = frozenset()):
     def download(url: str, target: Path) -> None:
         calls.append(url)
@@ -121,13 +127,15 @@ def test_update_downloads_validates_and_replaces_atomically(tmp_path, monkeypatc
     now = datetime.now(UTC)
     source = write_mmdb(tmp_path / "quelle.mmdb", NETWORKS, pad_nodes=PAD, build=now)
     calls: list[str] = []
-    result = geoip.update_database(now=now, download=_fake_download(source, calls))
+    checksums = _checksums(source, now.strftime("%Y-%m"))
+    result = geoip.update_database(now=now, download=_fake_download(source, calls), checksums=checksums)
     assert result["updated"] == now.strftime("%Y-%m")
+    assert result["sha1"] == geoip.file_sha1(source)
     assert calls == [geoip.DOWNLOAD_URL.format(month=now.strftime("%Y-%m"))]
     assert target.exists() and not list(target.parent.glob(".geoip-*"))
     assert geoip.country_for("81.62.1.2") == "CH"
     # Zweiter Lauf im selben Monat: nichts zu tun, kein Download
-    assert geoip.update_database(now=now, download=_fake_download(source, calls))["skipped"] == "current"
+    assert geoip.update_database(now=now, download=_fake_download(source, calls), checksums=checksums)["skipped"] == "current"
     assert len(calls) == 1
     geoip.reset()
 
@@ -141,7 +149,7 @@ def test_update_keeps_the_old_file_when_the_new_one_is_invalid(tmp_path, monkeyp
     monkeypatch.setattr(settings, "geoip_auto_update", True)
     bad = write_mmdb(tmp_path / "bad.mmdb", NETWORKS, database_type="DBIP-City-Lite", pad_nodes=PAD, build=now)
     with pytest.raises(geoip.GeoIPUpdateError):
-        geoip.update_database(now=now, download=_fake_download(bad, []))
+        geoip.update_database(now=now, download=_fake_download(bad, []), checksums=_checksums(bad, now.strftime("%Y-%m")))
     assert target.read_bytes() == before
     assert not list(tmp_path.glob(".geoip-*"))
 
@@ -154,12 +162,70 @@ def test_new_month_not_yet_published_keeps_old_file_or_loads_previous_month(tmp_
     source = write_mmdb(tmp_path / "quelle.mmdb", NETWORKS, pad_nodes=PAD, build=datetime(2026, 11, 1, tzinfo=UTC))
     calls: list[str] = []
     # Ohne Datei: Dezember fehlt noch -> November wird geladen
-    result = geoip.update_database(now=now, download=_fake_download(source, calls, missing={"2026-12"}))
+    checksums = _checksums(source, "2026-12", "2026-11")
+    result = geoip.update_database(now=now, download=_fake_download(source, calls, missing={"2026-12"}), checksums=checksums)
     assert result["updated"] == "2026-11" and calls[-1].endswith("2026-11.mmdb.gz")
     # Mit November-Datei: Dezember fehlt -> alte Datei bleibt, kein Fehler
-    result = geoip.update_database(now=now, download=_fake_download(source, calls, missing={"2026-12"}))
+    result = geoip.update_database(now=now, download=_fake_download(source, calls, missing={"2026-12"}), checksums=checksums)
     assert result == {"skipped": "not_published", "build_month": "2026-11"}
     geoip.reset()
+
+
+# Ausschnitt der offiziellen Download-Seite (Aufbau wie db-ip.com/db/download/ip-to-country-lite):
+# CSV- und MMDB-Block mit MD5/SHA1 der entpackten Datei, danach der Download-Link.
+_PAGE = """
+<dl><dt>Format</dt><dd>CSV</dd><dt>MD5SUM</dt><dd class="small">93c945395f0bc2ceefea7dd55750417a</dd>
+<dt>SHA1SUM</dt><dd class="small">e2061015c43ec91c94a12191a6a613279eb94c0c</dd></dl>
+<div><a href='https://download.db-ip.com/free/dbip-country-lite-2026-11.csv.gz' class='btn'>CSV</a></div>
+<dl><dt>Format</dt><dd>MMDB</dd><dt>MD5SUM</dt><dd class="small">5974b336a7409ec854f67eacd52c2061</dd>
+<dt>SHA1SUM</dt>
+	<dd class="small">09EEA8433FE3EED71984FD6AAC9D8AB3D9CA51F0</dd></dl>
+<div class="px-1 mb-1"><a href='https://download.db-ip.com/free/dbip-country-lite-2026-11.mmdb.gz' class='btn'>MMDB</a></div>
+"""
+
+
+def test_checksums_are_read_from_the_download_page():
+    assert geoip.parse_checksums(_PAGE) == {
+        "https://download.db-ip.com/free/dbip-country-lite-2026-11.mmdb.gz": "09eea8433fe3eed71984fd6aac9d8ab3d9ca51f0",
+    }
+    assert geoip.parse_checksums("<html>Wartung</html>") == {}
+
+
+def test_update_rejects_a_file_whose_checksum_does_not_match(tmp_path, monkeypatch):
+    """N-1: eine veränderte oder beschädigte Datei wird nie übernommen, auch wenn sie als MMDB gültig ist."""
+    target = tmp_path / "dbip-country-lite.mmdb"
+    now = datetime.now(UTC)
+    write_mmdb(target, NETWORKS, pad_nodes=PAD, build=now - timedelta(days=40))
+    before = target.read_bytes()
+    monkeypatch.setattr(settings, "geoip_db_path", str(target))
+    monkeypatch.setattr(settings, "geoip_auto_update", True)
+    tampered = write_mmdb(tmp_path / "manipuliert.mmdb", {**NETWORKS, "81.0.0.0/8": "RU"}, pad_nodes=PAD, build=now)
+    expected = lambda: {geoip.DOWNLOAD_URL.format(month=now.strftime("%Y-%m")): "0" * 40}  # noqa: E731
+    with pytest.raises(geoip.GeoIPUpdateError, match="Prüfsumme passt nicht"):
+        geoip.update_database(now=now, download=_fake_download(tampered, []), checksums=expected)
+    assert target.read_bytes() == before
+    assert not list(tmp_path.glob(".geoip-*"))
+
+
+def test_update_without_published_checksum_downloads_nothing(tmp_path, monkeypatch):
+    target = tmp_path / "dbip-country-lite.mmdb"
+    monkeypatch.setattr(settings, "geoip_db_path", str(target))
+    monkeypatch.setattr(settings, "geoip_auto_update", True)
+    with pytest.raises(geoip.GeoIPUpdateError, match="keine Prüfsumme"):
+        geoip.update_database(now=datetime.now(UTC), download=lambda *_: pytest.fail("kein Download"), checksums=dict)
+    assert not target.exists()
+
+
+def test_checksum_page_errors_stop_the_update(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "geoip_db_path", str(tmp_path / "x.mmdb"))
+    monkeypatch.setattr(settings, "geoip_auto_update", True)
+
+    def offline(request, timeout=None):
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr(geoip._opener, "open", offline)
+    with pytest.raises(geoip.GeoIPUpdateError, match="Prüfsummen nicht abrufbar"):
+        geoip.update_database(download=lambda *_: pytest.fail("kein Download"))
 
 
 def test_auto_update_off_never_downloads(tmp_path, monkeypatch):

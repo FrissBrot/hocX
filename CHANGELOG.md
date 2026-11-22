@@ -8,6 +8,41 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+Geplant als 1.5.2 (Folgekorrekturen zu 1.5.1). Keine Migration, keine neuen Einstellungen.
+
+### Update
+
+**Kurz für Betreiber:** `./scripts/deploy.sh <test|prod>` wie gewohnt.
+
+- **Ausgehende Verbindungen:** der job-worker braucht für den Job `geoip_update` zusätzlich HTTPS zu
+  `db-ip.com` (Download-Seite mit den Prüfsummen), nicht nur zu `download.db-ip.com`. Ohne Zugang zur
+  Seite übernimmt der Job keine neue Länder-Datenbank mehr (die vorhandene bleibt, der Job meldet einen Fehler).
+- Traefik 3.7.19 (Patch), Python-Pakete mit Patch-/Minor-Updates (u. a. FastAPI 0.162.2, Pydantic 2.14.3,
+  pypdfium2 5.15 mit PDFium-Sicherheitskorrekturen); E2E-Image Playwright 1.65.0.
+
+### Sicherheit
+
+- **GeoIP-Datenbank nur mit passender Prüfsumme (N-1):** `geoip_update` vergleicht die entpackte MMDB-Datei
+  mit dem SHA1, den DB-IP auf der offiziellen Download-Seite veröffentlicht (eine Signatur bietet DB-IP nicht
+  an). Weicht er ab oder fehlt er, wird die Datei nicht übernommen.
+
+### Behoben
+
+- **Abgabebox:** Upload-Fehler und Hinweise auf ähnliche Bilder erscheinen in der gewählten Sprache statt
+  auf Deutsch (stabile Fehlercodes); Fehlermeldungen werden von Screenreadern angesagt und Entfernen-Knöpfe
+  nennen ihre Datei; ist das Dateikontingent eines Dokuments ausgeschöpft, erscheint «Abgabe vollständig»
+  statt eines Formulars, das jede Auswahl ablehnt; eine abgeschaltete Abgabebox wird auch auf direkt geteilten
+  Abgabe-Links erklärt (statt «nicht gefunden»); die Prüfseite zeigt das Erstelldatum nach Schweizer Zeit.
+- **Dateien und Fotos:** Hochladen, Teilen, Tags/Stichwörter und Album-Aktionen erscheinen nur noch mit
+  passendem Recht bzw. Abo (vorher endeten sie mit 403).
+- **Papierkorb:** Wiederherstellen und endgültiges Löschen (auch durch den Job) sperren die Datei; eine
+  gleichzeitig wiederhergestellte Datei wird nicht mehr gelöscht.
+- **Aufbewahrung:** Vorschläge werden vor dem Umsetzen nach der aktuellen Regel neu geprüft; nach gelockerter
+  Regel oder inzwischen verknüpftem Bild wird nichts mehr gelöscht.
+- **Gesamtexport:** gleichzeitige Anfragen legen nur noch einen Auftrag an.
+- **Mitglieder:** leerer Name oder `null` beim Bearbeiten wird abgelehnt (422) statt die Mitgliederliste zu
+  brechen; kaputte CSV-Dateien ergeben 400 statt 500; überlange ID-Listen der Massenaktionen 422 statt 500.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
