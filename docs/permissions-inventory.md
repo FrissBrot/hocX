@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 651 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 406
+- Routen gesamt: 658 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 413
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -617,6 +617,13 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/tools/word-import/documents/{document_id}/reanalyze` | meetings.edit |
 | `GET /api/tools/word-import/last-template` | meetings.edit |
 | `PUT /api/tools/word-import/last-template` | meetings.edit |
+| `GET /api/upload-jobs` | <*_READ_ANY> |
+| `POST /api/upload-jobs` | <*upload_job_service.OPENABLE_CHANNELS[payload.channel]> |
+| `GET /api/upload-jobs/{job_id}` | <*_READ_ANY> |
+| `POST /api/upload-jobs/{job_id}/client-results` | files.manage oder photos.manage |
+| `POST /api/upload-jobs/{job_id}/complete` | files.manage oder photos.manage |
+| `GET /api/upload-jobs/{job_id}/file-ids` | <*_READ_ANY> |
+| `GET /api/upload-jobs/{job_id}/items` | <*_READ_ANY> |
 | `GET /api/users` | UserService (access.manage) |
 | `POST /api/users` | UserService (access.manage) |
 | `GET /api/users/me` | eigenes Konto |

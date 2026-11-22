@@ -1532,6 +1532,12 @@ class StoredFile(Base, TimestampMixin):
     # file_trash_service (von Hand oder nach TRASH_RETENTION).
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Herkunftsvorgang im Upload-Verlauf (Migration 0250, User-Entscheid E-3). FK (tenant_id,
+    # upload_job_id) -> upload_job, ON DELETE SET NULL nur für diese Spalte.
+    upload_job_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    # Kürzel der Kamera-Seriennummer (0250, E-13): HMAC je Mandant, nie Klartext - nur für die
+    # Kameragruppen im Upload-Verlauf (services/camera_serial.py), nie in API-Antworten.
+    camera_serial_key: Mapped[str | None] = mapped_column(Text)
 
 
 class ProtocolText(Base, TimestampMixin, UpdatedAtMixin):
@@ -3057,6 +3063,8 @@ class GalleryUploadJob(Base, TimestampMixin):
     # Im Upload-Popup angegebenes Schaetzdatum - gilt fuer jedes Bild dieses Auftrags, fuer
     # das der Server kein echtes Aufnahmedatum findet (auch ZIP-Eintraege).
     estimated_taken_on: Mapped[date | None] = mapped_column(Date)
+    # Vorgang im Upload-Verlauf (Migration 0250): alle Pakete eines Dialog-Durchgangs zeigen hierhin.
+    upload_job_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
     # Clientseitig extrahierte Metadaten je SHA-256 (Browser-Analyse vor dem Upload, nur fuer
     # HEIC/HEIF). Nur Hinweise: angewendet wird ein Eintrag ausschliesslich, wenn der
     # serverseitig neu berechnete Hash der Datei passt (siehe FileService._apply_upload_metadata

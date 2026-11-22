@@ -577,6 +577,7 @@ class FileService:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        upload_job_id: uuid.UUID | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -608,6 +609,7 @@ class FileService:
             date_to=date_to,
             viewer_tenant_id=viewer_tenant_id,
             readable_assignment_ids=readable_assignment_ids,
+            upload_job_id=upload_job_id,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
@@ -2307,6 +2309,7 @@ class FileService:
                 job.error = GALLERY_JOB_FAILED_CODE
                 job.finished_at = datetime.now(UTC)
                 db.commit()
+                self._finish_upload_job(db, job)
             else:
                 job.status = "done"
                 job.reserved_bytes = 0
@@ -2315,6 +2318,23 @@ class FileService:
                 db.commit()
                 for relative_path in job.staged_paths:
                     (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+                self._finish_upload_job(db, job)
+
+    def _finish_upload_job(self, db: Session, job: GalleryUploadJob) -> None:
+        """Upload-Verlauf: Vorgang abschliessen, wenn der Browser fertig ist und kein weiteres
+        Paket mehr läuft. Fehler hier dürfen den Ingest nie aufhalten."""
+        if job.upload_job_id is None:
+            return
+        from app.services import upload_job_service
+
+        try:
+            upload_job_service.maybe_finish(db, job.upload_job_id, job.tenant_id)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 - Verlauf ist nachrangig, der Upload ist gespeichert
+            from app.core.error_log import record_system_error
+
+            db.rollback()
+            record_system_error(db, exc=exc, tenant_id=job.tenant_id)
 
     def _next_fair_gallery_job(self, db: Session) -> GalleryUploadJob | None:
         """Nächster wartender Job: zuerst Mandanten, die am längsten nicht bedient wurden (statt
@@ -2493,6 +2513,12 @@ class FileService:
         ]
 
         def checkpoint(items: list[FileOverviewItem], errors: list[str]) -> None:
+            # Upload-Verlauf (0250): Items dieses Pakets in derselben Transaktion wie die Dateien
+            if job.upload_job_id is not None:
+                from app.models.upload_history_entities import UploadJob
+                from app.services import upload_job_service
+
+                upload_job_service.record_results(db, db.get(UploadJob, job.upload_job_id), batch_results)
             job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
             job.errors = [*job.errors, *rule_errors, *errors]
             job.file_results = [*job.file_results, *batch_results]

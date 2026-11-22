@@ -967,7 +967,12 @@ class TenantCloneService:
             new_storage_path = self._clone_stored_file_content(db, row.storage_path, namespace=namespace, new_tenant_id=new_tenant_id)
             # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
             # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})
+            new_row = _copy_row(row, {
+                "tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None,
+                # Upload-Verlauf und Kamera-Kürzel gehören zum Quellmandanten (Verlauf wird nicht
+                # kopiert; das Kürzel ist ein Hash mit dem Schlüssel des Quellmandanten, E-13)
+                "upload_job_id": None, "camera_serial_key": None,
+            })
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id

@@ -291,3 +291,12 @@ from app.models.import_entities import (  # noqa: E402 - eigene Datei, siehe Mig
 )
 
 __all__ += ["ImportItem", "ImportJob"]
+
+from app.models.upload_history_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0250
+    CaptureChangeBatch,
+    CaptureChangeItem,
+    UploadJob,
+    UploadJobItem,
+)
+
+__all__ += ["CaptureChangeBatch", "CaptureChangeItem", "UploadJob", "UploadJobItem"]

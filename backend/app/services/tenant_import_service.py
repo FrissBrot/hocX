@@ -1597,6 +1597,9 @@ class TenantImportService:
                 {
                     "tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status,
                     "thumbnail_path": None, **capture_overrides,
+                    # Upload-Verlauf: der Import bildet einen eigenen Vorgang (tenant_import); das
+                    # Kamera-Kürzel des Quellmandanten gilt hier nicht (anderer Schlüssel, E-13)
+                    "upload_job_id": None, "camera_serial_key": None,
                 },
             )
             self.db.add(new_row)

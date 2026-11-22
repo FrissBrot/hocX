@@ -196,6 +196,8 @@ class GalleryUploadJobRead(BaseModel):
     imported_count: int
     error_count: int
     created_at: datetime
+    # Vorgang im Upload-Verlauf (0250), für «Bearbeiten» nach dem Upload
+    upload_job_id: uuid.UUID | None = None
     started_at: datetime | None
     finished_at: datetime | None
     error: str | None
@@ -240,6 +242,7 @@ class DocumentUploadResult(BaseModel):
     items: list[FileOverviewItem]
     errors: list[str]
     file_results: list[UploadFileResult] = []
+    upload_job_id: uuid.UUID | None = None
 
 
 class ClientGpsMetadata(BaseModel):
@@ -286,6 +289,8 @@ class UploadPrecheckRequest(BaseModel):
     # Schätzdatum aus dem Upload-Popup - gilt nur für Bilder ohne echtes Aufnahmedatum.
     estimated_taken_on: date | None = None
     files: list[UploadPrecheckFile] = Field(max_length=500)
+    # Upload-Verlauf (0250): übersprungene Duplikate und ergänzte Metadaten werden im Vorgang erfasst
+    upload_job_id: uuid.UUID | None = None
 
 
 class UploadPrecheckResult(BaseModel):
@@ -438,6 +443,8 @@ class StoredFileMetadata(BaseModel):
     gps: GpsMetadataRead | None = None
     # Darf der aktuelle Benutzer das geschätzte Datum bearbeiten (nur Bilder, Schreibrecht)?
     can_edit_capture_date: bool = False
+    # Herkunftsvorgang im Upload-Verlauf (0250) - nur, wenn die Person ihn sehen darf
+    upload_job: "UploadJobOfFile | None" = None
 
 
 class PhotoAlbumCreate(BaseModel):
@@ -762,3 +769,8 @@ class PublicShareRead(BaseModel):
     files: list[PublicShareFile]
     # Immer ein ZIP; mit ?ids=<uuid>,<uuid> nur die Auswahl.
     download_all_url: str | None = None
+
+
+from app.schemas.upload_jobs import UploadJobOfFile  # noqa: E402 - Vorwärtsreferenz in StoredFileMetadata
+
+StoredFileMetadata.model_rebuild()

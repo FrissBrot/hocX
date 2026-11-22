@@ -429,6 +429,7 @@ class StoredFileRepository:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        upload_job_id: uuid.UUID | None = None,
     ):
         """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
         Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen.
@@ -457,6 +458,9 @@ class StoredFileRepository:
             )
         if file_ids is not None:
             query = query.where(union_query.c.public_id.in_(file_ids))
+        if upload_job_id is not None:
+            # Upload-Verlauf (0250): Dateien eines Vorgangs (Index idx_stored_file_upload_job)
+            query = query.where(union_query.c.id.in_(select(StoredFile.id).where(StoredFile.upload_job_id == upload_job_id)))
         if only_images:
             query = query.where(union_query.c.mime_type.like("image/%"))
         if exclude_images:
@@ -582,6 +586,7 @@ class StoredFileRepository:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        upload_job_id: uuid.UUID | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -616,7 +621,7 @@ class StoredFileRepository:
             tenant_id, search_plan=plan, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
             date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
-            readable_assignment_ids=readable_assignment_ids,
+            readable_assignment_ids=readable_assignment_ids, upload_job_id=upload_job_id,
         )
 
         sort_column = {

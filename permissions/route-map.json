@@ -3961,6 +3961,64 @@
         "meetings.edit"
       ]
     },
+    "GET /api/upload-jobs": {
+      "handler": "upload_jobs.list_upload_jobs",
+      "requires_any": [
+        [
+          "<*_READ_ANY>"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs": {
+      "handler": "upload_jobs.create_upload_job",
+      "requires_any": [
+        [
+          "<*upload_job_service.OPENABLE_CHANNELS[payload.channel]>"
+        ]
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}": {
+      "handler": "upload_jobs.get_upload_job",
+      "requires_any": [
+        [
+          "<*_READ_ANY>"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/client-results": {
+      "handler": "upload_jobs.report_client_results",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/complete": {
+      "handler": "upload_jobs.complete_upload_job",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/file-ids": {
+      "handler": "upload_jobs.list_upload_job_file_ids",
+      "requires_any": [
+        [
+          "<*_READ_ANY>"
+        ]
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/items": {
+      "handler": "upload_jobs.list_upload_job_items",
+      "requires_any": [
+        [
+          "<*_READ_ANY>"
+        ]
+      ]
+    },
     "GET /api/users": {
       "handler": "users.list_users",
       "note": "UserService (access.manage)"

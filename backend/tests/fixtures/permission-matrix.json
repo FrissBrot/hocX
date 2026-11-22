@@ -2919,6 +2919,40 @@
         "writer"
       ]
     },
+    "GET /api/upload-jobs": {
+      "handler": "upload_jobs.list_upload_jobs",
+      "allowed": []
+    },
+    "POST /api/upload-jobs": {
+      "handler": "upload_jobs.create_upload_job",
+      "allowed": []
+    },
+    "GET /api/upload-jobs/{job_id}": {
+      "handler": "upload_jobs.get_upload_job",
+      "allowed": []
+    },
+    "POST /api/upload-jobs/{job_id}/client-results": {
+      "handler": "upload_jobs.report_client_results",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/complete": {
+      "handler": "upload_jobs.complete_upload_job",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/file-ids": {
+      "handler": "upload_jobs.list_upload_job_file_ids",
+      "allowed": []
+    },
+    "GET /api/upload-jobs/{job_id}/items": {
+      "handler": "upload_jobs.list_upload_job_items",
+      "allowed": []
+    },
     "GET /api/users/mfa-policy": {
       "handler": "users.get_mfa_policy",
       "allowed": [

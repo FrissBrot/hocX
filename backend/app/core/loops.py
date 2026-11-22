@@ -20,7 +20,7 @@ from typing import Any
 
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.config import settings
-from app.services import document_sync_service, domain_health_check_service, erasure_journal, retention_service
+from app.services import document_sync_service, domain_health_check_service, erasure_journal, retention_service, upload_job_service
 from app.services import maintenance_service, metrics_rollup_service, photo_album_service, storage_migration_service, system_alert_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
@@ -98,6 +98,8 @@ async def log_cleanup_loop() -> None:
         error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
         job_status_service.cleanup_old_runs(db, retention_days=settings.job_run_retention_days)
         system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
+        # Upload-Verlauf: vom Browser verlassene Vorgänge (> 24 h offen) abschliessen
+        upload_job_service.close_stale(db)
         retention_service.cleanup(db)
         erasure_journal.purge(db, retention_days=settings.erasure_journal_retention_days)
         metrics_rollup_service.cleanup_samples(db)
