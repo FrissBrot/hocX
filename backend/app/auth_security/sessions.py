@@ -58,9 +58,11 @@ def create(
     return row
 
 
-def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
+def validate(db: Session, sid: str | None, user_id: int, *, touch: bool = True) -> AuthSession | None:
     """Aktive Session dieses Kontos oder None (unbekannt, widerrufen, abgelaufen, inaktiv).
-    Eine wegen Inaktivität abgelaufene Session wird dabei als widerrufen markiert."""
+    Eine wegen Inaktivität abgelaufene Session wird dabei als widerrufen markiert.
+    touch=False prüft nur und frischt last_seen_at nicht auf: für Prüfungen, die keine
+    Benutzeraktivität sind (WebSocket-Revalidierung), sonst greift die Inaktivitätsgrenze nie."""
     try:
         session_id = uuid.UUID(str(sid))
     except (TypeError, ValueError):
@@ -80,7 +82,7 @@ def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
         row.revoked_at, row.revoked_reason = now, "idle"
         db.commit()
         return None
-    if row.last_seen_at < now - timedelta(seconds=settings.auth_session_touch_seconds):
+    if touch and row.last_seen_at < now - timedelta(seconds=settings.auth_session_touch_seconds):
         row.last_seen_at = now
         db.commit()
     return row
