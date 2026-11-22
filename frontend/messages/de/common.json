@@ -249,9 +249,11 @@
   "richTextEditor": {
     "bold": "Fett ({shortcut})",
     "bulletList": "Aufzählung",
+    "bulletListShortcut": "Aufzählung ({shortcut})",
     "italic": "Kursiv ({shortcut})",
     "openLink": "{modifier} + Klick öffnet den Link",
     "orderedList": "Nummerierte Liste",
+    "orderedListShortcut": "Nummerierte Liste ({shortcut})",
     "toolbar": "Textformat"
   },
   "keys": {
