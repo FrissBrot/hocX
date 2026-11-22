@@ -87,15 +87,18 @@ def _missing_images(block: Any) -> int:
     return sum(1 for image in images if getattr(image, "missing", False))
 
 
-def _layout_origins(db: Session, user: CurrentUser | None, tenant_id: int, protocol: Protocol, content: dict | None) -> set[str] | None:
+def _layout_origins(
+    db: Session, user: CurrentUser | None, tenant_id: int, protocol: Protocol, content: dict | None, shared: BuildContext | None = None,
+) -> set[str] | None:
     """Herkunft aller Blöcke, die die Protokoll-Vorlage setzt (ohne PDF-Compile). ``content``:
-    ungespeichertes Layout statt der Vorlage des Mandanten (Tests)."""
+    ungespeichertes Layout statt der Vorlage des Mandanten (Tests). ``shared``: Aufbau, dessen
+    geladene Protokollinhalte und Termine wiederverwendet werden (statt alles erneut zu lesen)."""
     from app.documents.service import DocumentRequest, prepare
 
     try:
         prepared = prepare(
             db, user, tenant_id, DocumentRequest(protocol_id=protocol.public_id, document_type="protocol", content=content),
-            preview=True, assets=_MetadataAssets(), skip_version=True,
+            preview=True, assets=_MetadataAssets(), skip_version=True, shared_data_from=shared,
         )
     except (ValueError, DocumentNotFoundError, DocumentPermissionError):
         # Keine (lesbare) Protokoll-Vorlage, oder sie verweist auf Inhalte ohne Leserecht: die
@@ -111,11 +114,11 @@ def protocol_pdf_coverage(db: Session, user: CurrentUser | None, tenant_id: int,
 
     savepoint = db.begin_nested()
     try:
-        ctx = BuildContext(db=db, tenant_id=tenant_id, language="de", user=user, protocol=protocol, assets=_MetadataAssets())
+        ctx = BuildContext(db=db, tenant_id=tenant_id, language="de", user=user, protocol=protocol, assets=_MetadataAssets(), reuse_protocol_elements=True)
         canonical = run_component(ctx, BlockSpec(type="protocol_element"))
         canonical_origins = collect_origins(canonical)
         canonical_blocks = {child.origin: child for element in canonical if isinstance(element, ElementModel) for child in element.children if child.origin}
-        layout_origins = _layout_origins(db, user, tenant_id, protocol, layout_content)
+        layout_origins = _layout_origins(db, user, tenant_id, protocol, layout_content, ctx)
 
         coverage = Coverage(layout_checked=layout_origins is not None)
         content = ctx.protocol_content(protocol)

@@ -201,6 +201,10 @@ class BuildContext:
     # Alle Platzhalter-Texte des Dokuments (block_notes wird je Block geleert): für den Hinweis in
     # Tabellen- und Markdown-Exporten, wo es keine Platzhalter an Blöcken gibt.
     restriction_messages: list[str] = field(default_factory=list)
+    # Nur PDF-Abdeckung (export_coverage.py): zwei Aufbauten desselben Protokolls teilen Daten;
+    # die Traktanden (``protocol_element``) werden dann einmal gemappt und als Kopie
+    # wiederverwendet. Für die Abdeckung zählen nur Herkunft und Inhalt, nicht die Sprache.
+    reuse_protocol_elements: bool = False
 
     def protocol_content(self, protocol: Any):
         """Alle Inhalte eines Protokolls (repository.ProtocolContent), einmal je Aufbau."""
@@ -214,6 +218,14 @@ class BuildContext:
     def forget_protocol_content(self, protocol_id: int) -> None:
         """Nach Änderungen an Blöcken (Mitgliedschaftsblöcke nachführen) neu laden."""
         self._protocol_contents.pop(protocol_id, None)
+
+    def first_time(self, key: Any) -> bool:
+        """True beim ersten Aufruf mit ``key`` in diesem Aufbau (z. B. einmal nachführen)."""
+        marker = ("first_time", key)
+        if marker in self._memo:
+            return False
+        self._memo[marker] = True
+        return True
 
     def memo(self, key: Any, loader: Any) -> Any:
         """Wert einmal je Aufbau berechnen (z. B. alle Termine des Mandanten)."""

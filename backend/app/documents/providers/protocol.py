@@ -824,7 +824,7 @@ def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: Protoco
         protocol = resolve_protocol(ctx, params.protocol_id)
         if params.protocol_id is None or (ctx.protocol is not None and protocol.id == ctx.protocol.id):
             _refresh_membership(ctx, protocol)
-    blocks = element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos, invitation_only=params.invitation_only)
+    blocks = _element_blocks_for(ctx, protocol, params)
     if params.titles_only:
         return [BulletListBlock(**spec_fields(spec), items=[block.title or "" for block in blocks if block.title])]
     allowed = CONTENT_FILTERS.get(params.content)
@@ -844,11 +844,33 @@ def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: Protoco
     return blocks
 
 
+def _element_blocks_for(ctx: BuildContext, protocol: Protocol | None, params: ProtocolElementParams) -> list[ElementModel]:
+    """``element_blocks`` - in der PDF-Abdeckung (``ctx.reuse_protocol_elements``) einmal je
+    Protokoll und Parametern gemappt und danach als Kopie wiederverwendet (der Aufrufer
+    verändert die Blöcke). Sonst wie bisher bei jedem Aufruf neu."""
+    def build() -> list[ElementModel]:
+        return element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos, invitation_only=params.invitation_only)
+
+    if not ctx.reuse_protocol_elements or protocol is None or ctx.session_template is not None:
+        return build()
+    key = ("protocol_element_blocks", protocol.id, str(params.element_id), params.include_session_todos, params.invitation_only)
+    # Flache Kopien genügen: der Aufrufer filtert die Kinderliste und setzt Titel/Ebenen an
+    # Traktandum und Kind, nichts tiefer. Eine tiefe Kopie kostete so viel wie neu zu mappen.
+    return [
+        block.model_copy(update={"children": [child.model_copy() for child in block.children]})
+        for block in ctx.memo(key, build)
+    ]
+
+
 def _refresh_membership(ctx: BuildContext, protocol: Protocol) -> None:
     """Mitgliedschaftsblöcke offener Protokolle nachführen (wie vor jedem früheren Export).
-    Ohne Commit: der Render-Service committet, die Vorschau rollt zurück."""
+    Ohne Commit: der Render-Service committet, die Vorschau rollt zurück. Einmal je Aufbau:
+    ein zweiter Traktanden-Baustein derselben Vorlage fände nichts Neues, verwürfe aber die
+    schon geladenen Inhalte."""
     from app.services.protocol_service import ProtocolService
 
+    if not ctx.first_time(("refresh_membership", protocol.id)):
+        return
     ProtocolService().refresh_membership_blocks(ctx.db, protocol.id, commit=False)
     ctx.forget_protocol_content(protocol.id)
 

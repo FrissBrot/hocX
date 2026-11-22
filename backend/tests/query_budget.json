@@ -31,8 +31,8 @@
       "per_item": 0.0
     },
     "pdf_coverage": {
-      "1": 44,
-      "20": 44,
+      "1": 33,
+      "20": 33,
       "per_item": 0.0
     },
     "protocol_block_images": {
@@ -53,6 +53,11 @@
     "protocol_elements": {
       "1": 7,
       "20": 7,
+      "per_item": 0.0
+    },
+    "template_participants": {
+      "1": 5,
+      "20": 5,
       "per_item": 0.0
     }
   }
