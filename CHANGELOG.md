@@ -8,6 +8,26 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **Protokoll-Editor schneller (Performance-Audit 2026-11-22, Teil 1.6):**
+  - Mitschreiben zu zweit: Sperren anderer Personen liegen nicht mehr im Zustand des ganzen Editors.
+    Jeder Punkt abonniert nur die Sperren seiner eigenen Felder; ein Fokuswechsel einer anderen
+    Person rendert nur noch den betroffenen Punkt neu statt aller Punkte. Sperren, Anzeige «wer
+    tippt wo» und Textabgleich bleiben gleich.
+  - Kleinere Seite beim Öffnen: die Seite enthält nur noch die Termine, die das Protokoll anzeigen
+    kann (verwiesene Termine, Treffer der Terminfilter seiner Blöcke, kommende Termine). Ältere
+    Termine für Terminauswahl, Kalender und Tag-Vorschläge lädt der Editor danach im Leerlauf nach.
+    Das Personenverzeichnis zur Namensauflösung enthält nur noch verwiesene Personen und keine
+    E-Mail-Adressen mehr.
+  - Schnellnavigation rechts als eigene, memoisierte Komponente: rendert beim Tippen nicht mehr mit.
+  - «Nicht im PDF»: die Abdeckung lädt Protokollinhalte und Termine nur noch einmal statt je einmal
+    für den Protokollinhalt und für die Protokoll-Vorlage.
+- **Weniger Datenbankabfragen je Anfrage:** Konto, Mandant, Session, zweiter Faktor und gebuchte
+  Features kommen in einer Abfrage, Rollen und deren MFA-Pflicht in einer zweiten. Alle Prüfungen
+  (aktiv, Login erlaubt, ausgetreten, Widerruf, Session-Register, MFA, RLS-Kontext) laufen weiter bei
+  jeder Anfrage, ohne Zwischenspeicher.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,

@@ -2,8 +2,6 @@
 
 import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
-import { announce } from "@/lib/a11y/announce";
-import { reorderKeyDown } from "@/lib/a11y/reorder";
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
@@ -23,7 +21,7 @@ import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submi
 import { Modal } from "@/components/ui/modal";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Badge } from "@/components/ui/badge";
-import { NavIcon } from "@/components/ui/nav-icons";
+import { ProtocolQuickNav, type QuickNavItem } from "@/components/protocol/protocol-quicknav";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
 import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
 import { bumpStatsCharts, startFreshStatsVersion } from "@/components/protocol/chart-block";
@@ -96,6 +94,7 @@ import {
 } from "@/components/protocol/document-scroll";
 import { createAccordionEngine, type AccordionEngine } from "@/components/protocol/accordion-scroll";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
+import { useCompleteEvents } from "@/lib/protocol/use-complete-events";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
@@ -105,6 +104,9 @@ type ProtocolEditorProps = {
   availableParticipants: ParticipantSummary[];
   participantDirectory?: ParticipantSummary[];
   availableEvents: EventSummary[];
+  /** false: availableEvents enthält nur die für die Anzeige nötigen Termine, der Editor lädt den
+   * Rest nach dem ersten Darstellen nach (lib/protocol/initial-editor-data.ts) */
+  eventsComplete?: boolean;
   availableLists: StructuredListDefinition[];
   initialListEntries: Record<string, StructuredListEntry[]>;
   availableTemplates: TemplateSummary[];
@@ -146,6 +148,7 @@ export function ProtocolEditor({
   availableParticipants,
   participantDirectory = [],
   availableEvents,
+  eventsComplete = true,
   availableLists,
   initialListEntries,
   availableTemplates,
@@ -175,11 +178,11 @@ export function ProtocolEditor({
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
   const tCommon = useTranslations("common");
-  const tKeyboard = useTranslations("common.keyboard");
   const locale = useLocale();
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
+  useCompleteEvents(eventsComplete, setEvents);
   const [lists, setLists] = useState(availableLists);
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: string } | null>(null);
   const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -251,7 +254,6 @@ export function ProtocolEditor({
   });
   // Zuletzt gespeicherte bzw. vom Server gelesene Leseposition: dieselbe nicht erneut speichern
   const savedScrollElementIdRef = useRef<string | null>(initialScrollPosition?.element_id ?? null);
-  const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
   const [trackChangesEnabled, setTrackChangesEnabledState] = useState(protocol.track_changes_enabled ?? false);
   // Tracking applies during "geplant" - confusingly, that's the status the app's own
@@ -573,13 +575,13 @@ export function ProtocolEditor({
       const consequences = next === "abgeschlossen" ? t("finishProtocolConfirmMessage") : t("finishSessionConfirmMessage");
       const ok = await confirm({
         title: next === "abgeschlossen" ? t("finishProtocolConfirmTitle") : t("finishSessionConfirmTitle"),
-        message: collab.hasOtherActiveEditors ? t("confirmWithOtherEditors", { consequences }) : consequences,
+        message: collab.hasOtherActiveEditors() ? t("confirmWithOtherEditors", { consequences }) : consequences,
         confirmLabel: workflowMeta[protocolStatus]?.ctaLabel,
       });
       if (ok) void performStatusTransition();
       return;
     }
-    if (collab.hasOtherActiveEditors) {
+    if (collab.hasOtherActiveEditors()) {
       setShowStatusChangeWarning(true);
       return;
     }
@@ -2199,6 +2201,18 @@ export function ProtocolEditor({
   );
   const pdfCoverage = usePdfCoverage(protocol.id, pdfCoverageKey);
 
+  // Schnellnavigation (S5): eigene memoisierte Komponente mit stabilen Einträgen, rendert nur bei
+  // geänderten Namen, Symbolen, Reihenfolge oder aktivem Punkt neu.
+  const quickNavKey = visibleElements.map((element) => `${element.id}\u0001${sectionIconKey(element)}\u0001${element.section_name_snapshot}`).join("\u0002");
+  const quickNavItems = useMemo<QuickNavItem[]>(
+    () => (quickNavKey ? quickNavKey.split("\u0002").map((entry) => {
+      const [id, icon, name] = entry.split("\u0001");
+      return { id, icon: icon as QuickNavItem["icon"], name };
+    }) : []),
+    [quickNavKey]
+  );
+  const quickNavHandlers = useStableCallbacks({ focusElement, reorderElements });
+
   const elementHandlers = useStableCallbacks({
     saveBlockConfiguration,
     saveAttendanceStatus,
@@ -2376,7 +2390,7 @@ export function ProtocolEditor({
               tagConfig={tagConfig}
               updateTagColor={updateTagColor}
               renameTag={renameTag}
-              collab={collab}
+              collab={collab.fieldLocks}
               trackChangesActive={trackChangesActive}
               element={element}
               elementIndex={index}
@@ -2462,53 +2476,13 @@ export function ProtocolEditor({
         </article>
 
         <aside className="protocol-quicknav">
-          <div className="card protocol-quicknav-section">
-            <div className="eyebrow">{t("quickAccessEyebrow")}</div>
-            <nav className="protocol-quicknav-list">
-              {visibleElements.map((element, elementIndex) => (
-                <div
-                  className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
-                  key={element.id}
-                  draggable={!isReadOnly}
-                  onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
-                  onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
-                  onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
-                  onDrop={isReadOnly ? undefined : (event) => {
-                    event.preventDefault();
-                    const sourceId = draggedElementId;
-                    setDraggedElementId(null);
-                    if (sourceId) {
-                      void reorderElements(sourceId, element.id);
-                    }
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={`protocol-quicknav-item${selectedElementId === element.id ? " protocol-quicknav-item-active" : ""}`}
-                    onClick={() => focusElement(element.id)}
-                    title={element.section_name_snapshot}
-                    data-reorder-key={`reorder:quicknav:${element.id}`}
-                    aria-keyshortcuts={isReadOnly ? undefined : "Alt+ArrowUp Alt+ArrowDown"}
-                    // Tastatur-Alternative zum Ziehen: Alt+Pfeil verschiebt den Abschnitt
-                    onKeyDown={isReadOnly ? undefined : (event) =>
-                      reorderKeyDown(event, {
-                        index: elementIndex,
-                        count: visibleElements.length,
-                        focusKey: `reorder:quicknav:${element.id}`,
-                        move: async (_from, to) => {
-                          await reorderElements(element.id, visibleElements[to].id);
-                          announce(tKeyboard("moved", { name: element.section_name_snapshot, position: to + 1, total: visibleElements.length }));
-                        },
-                      })
-                    }
-                  >
-                    <span className="protocol-quicknav-icon-badge"><NavIcon name={sectionIconKey(element)} /></span>
-                    <span className="protocol-quicknav-item-label">{element.section_name_snapshot}</span>
-                  </button>
-                </div>
-              ))}
-            </nav>
-          </div>
+          <ProtocolQuickNav
+            items={quickNavItems}
+            selectedId={selectedElementId}
+            readOnly={isReadOnly}
+            onSelect={quickNavHandlers.focusElement}
+            onReorder={quickNavHandlers.reorderElements}
+          />
 
           {attendanceTally && (
             <div className="card protocol-quicknav-attendance">

@@ -14,7 +14,7 @@ vi.mock("@/components/mobile/mobile-shell", () => ({ useMobileSession: () => ({ 
 vi.mock("@/lib/hooks/use-pdf-export", () => ({ usePdfExport: () => ({ busyByProtocol: {}, openOrGeneratePdf: vi.fn() }) }));
 vi.mock("@/lib/hooks/use-protocol-collaboration", () => ({
   useProtocolCollaboration: () => ({
-    hasOtherActiveEditors: false,
+    hasOtherActiveEditors: () => false,
     otherPresence: [],
     isLockedByOther: () => false,
     lockField: vi.fn(),
@@ -24,6 +24,7 @@ vi.mock("@/lib/hooks/use-protocol-collaboration", () => ({
     sendFieldUpdate: vi.fn(),
     sendStatusChanged: vi.fn(),
   }),
+  useFieldLocks: () => ({}),
 }));
 
 import { MobileProtocolEditor } from "./mobile-protocol-editor";

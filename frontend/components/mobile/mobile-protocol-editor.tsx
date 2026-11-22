@@ -31,7 +31,7 @@ import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { isAlreadyUploadedLazy } from "@/lib/image-analysis/precheck-lazy";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
-import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
+import { useFieldLocks, useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import type {
   AttendanceFine,
   FinanceAccount,
@@ -110,6 +110,9 @@ export function MobileProtocolEditor({
   const pendingNotesSaveRef = useRef<Promise<boolean> | null>(null);
   const session = useMobileSession();
   const collab = useProtocolCollaboration(protocol.id);
+  // Sperren liegen ausserhalb des React-Zustands (K1): hier abonnieren, damit die Ansicht bei
+  // fremden Sperren neu rendert.
+  const fieldLocks = useFieldLocks(collab);
   const { busyByProtocol, openOrGeneratePdf } = usePdfExport();
 
   const [elements, setElements] = useState(initialElements);
@@ -145,7 +148,8 @@ export function MobileProtocolEditor({
 
   const blockEditable = useCallback(
     (block: ProtocolElementBlock) => !isReadOnly && !collab.isLockedByOther(`block-${block.id}`) && (forceEditable || block.is_editable_snapshot),
-    [isReadOnly, forceEditable, collab]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fieldLocks: neu auswerten, wenn sich Sperren ändern
+    [isReadOnly, forceEditable, collab, fieldLocks]
   );
 
   const updateBlock = useCallback((blockId: string, update: (block: ProtocolElementBlock) => ProtocolElementBlock) => {
@@ -282,11 +286,11 @@ export function MobileProtocolEditor({
           nextStatus === "abgeschlossen"
             ? tProtocols("editor.finishProtocolConfirmTitle")
             : tProtocols("editor.finishSessionConfirmTitle"),
-        message: collab.hasOtherActiveEditors ? tProtocols("editor.confirmWithOtherEditors", { consequences }) : consequences,
+        message: collab.hasOtherActiveEditors() ? tProtocols("editor.confirmWithOtherEditors", { consequences }) : consequences,
         confirmLabel: ctaLabel ?? "",
       });
       if (!ok) return;
-    } else if (collab.hasOtherActiveEditors && !(await confirm({ message: t("editor.othersEditingConfirm"), confirmLabel: ctaLabel ?? "" }))) {
+    } else if (collab.hasOtherActiveEditors() && !(await confirm({ message: t("editor.othersEditingConfirm"), confirmLabel: ctaLabel ?? "" }))) {
       return;
     }
     // Eine beim Schliessen des Notiz-Blatts ausgelöste Speicherung muss vor dem

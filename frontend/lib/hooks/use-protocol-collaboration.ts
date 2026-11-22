@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 export type CollaboratorInfo = {
   user_id: string;
@@ -25,6 +25,50 @@ export type ListChangedEvent = {
   content_version: number;
 };
 
+export type FieldLocks = Readonly<Record<string, CollaboratorInfo>>;
+
+const EMPTY_LOCKS: FieldLocks = Object.freeze({});
+
+/**
+ * Sperren fremder Personen ausserhalb des React-Zustands: ein Fokuswechsel einer anderen Person
+ * ändert nur diesen Store. Neu rendern nur Komponenten, die die betroffenen Felder abonniert haben
+ * (useFieldLocksSignature, useFieldLocks) - nicht mehr der ganze Editor mit allen Punkten
+ * (Performance-Audit 2026-11-22, K1).
+ */
+function createLockStore() {
+  let locks: FieldLocks = EMPTY_LOCKS;
+  const listeners = new Set<() => void>();
+  return {
+    get: (): FieldLocks => locks,
+    update(updater: (current: FieldLocks) => FieldLocks) {
+      const next = updater(locks);
+      if (next === locks) return;
+      locks = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+/**
+ * Stabile Sperr-Schnittstelle für die Punkte des Editors: alle Funktionen behalten ihre Identität
+ * über die ganze Lebensdauer der Verbindung, damit memoisierte Punkte nicht bei jeder Sperr- oder
+ * Anwesenheitsänderung neu rendern. Den aktuellen Stand liest ``isLockedByOther``; neu gerendert
+ * wird über ein Abonnement (``useFieldLocksSignature``).
+ */
+export type CollabFieldLocks = {
+  lockField: (fieldKey: string) => void;
+  unlockField: (fieldKey: string) => void;
+  isLockedByOther: (fieldKey: string) => CollaboratorInfo | null;
+  subscribeLocks: (listener: () => void) => () => void;
+  getLocks: () => FieldLocks;
+};
+
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
@@ -47,7 +91,10 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
   const [canEdit, setCanEdit] = useState(true);
   const [selfUserId, setSelfUserId] = useState<string | null>(null);
   const [presence, setPresence] = useState<CollaboratorInfo[]>([]);
-  const [locks, setLocks] = useState<Record<string, CollaboratorInfo>>({});
+  const lockStoreRef = useRef<ReturnType<typeof createLockStore> | null>(null);
+  if (lockStoreRef.current === null) lockStoreRef.current = createLockStore();
+  const lockStore = lockStoreRef.current;
+  const setLocks = lockStore.update;
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -123,9 +170,9 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
             const presenceList = Array.isArray(message.presence) ? (message.presence as CollaboratorInfo[]) : [];
             setPresence(presenceList);
             const serverLocks = (message.locks as Record<string, CollaboratorInfo>) ?? {};
-            // Nur fremde Sperren im State: eigene ändern nichts an der Anzeige, würden aber bei
-            // jedem Fokuswechsel das ganze Dokument neu rendern (eigene stehen in ownLocksRef).
-            setLocks(Object.fromEntries(Object.entries(serverLocks).filter(([, holder]) => holder.user_id !== selfId)));
+            // Nur fremde Sperren im Store: eigene ändern nichts an der Anzeige, würden aber bei
+            // jedem Fokuswechsel neu rendern lassen (eigene stehen in ownLocksRef).
+            setLocks(() => Object.fromEntries(Object.entries(serverLocks).filter(([, holder]) => holder.user_id !== selfId)));
             // Reconciled against the server's authoritative snapshot on every (re)connect,
             // not left as whatever this client last knew locally (audit finding,
             // 2026-08-25) - ownLocksRef otherwise still listed a field this client held
@@ -222,7 +269,7 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       ownLocksRef.current.clear();
       setConnected(false);
       setPresence([]);
-      setLocks({});
+      setLocks(() => EMPTY_LOCKS);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     };
     // selfUserId intentionally excluded: message handlers read it via closure per-effect-run,
@@ -240,12 +287,12 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     send({ type: "unlock", field_key: fieldKey });
     setLocks((current) => {
       if (!(fieldKey in current)) return current;
-      if (current[fieldKey].user_id !== selfUserId) return current;
+      if (current[fieldKey].user_id !== selfUserIdRef.current) return current;
       const next = { ...current };
       delete next[fieldKey];
       return next;
     });
-  }, [send, selfUserId]);
+  }, [send, setLocks]);
 
   const sendFieldUpdate = useCallback((fieldKey: string, patch: unknown) => {
     send({ type: "field_update", field_key: fieldKey, patch });
@@ -276,15 +323,19 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     };
   }, []);
 
+  // Liest den aktuellen Stand (keine Abhängigkeit vom Render): wer neu rendern muss, abonniert
+  // die Sperren (useFieldLocksSignature/useFieldLocks).
   const isLockedByOther = useCallback((fieldKey: string): CollaboratorInfo | null => {
-    const holder = locks[fieldKey];
-    if (!holder || holder.user_id === selfUserId) return null;
+    const holder = lockStore.get()[fieldKey];
+    if (!holder || holder.user_id === selfUserIdRef.current) return null;
     return holder;
-  }, [locks, selfUserId]);
+  }, [lockStore]);
 
-  const hasOtherActiveEditors = useMemo(
-    () => Object.values(locks).some((holder) => holder.user_id !== selfUserId),
-    [locks, selfUserId]
+  // Funktion statt Wert: nur in Rückfragen gebraucht, ein Wert liesse den Editor bei jeder
+  // fremden Sperre neu rendern.
+  const hasOtherActiveEditors = useCallback(
+    () => Object.values(lockStore.get()).some((holder) => holder.user_id !== selfUserIdRef.current),
+    [lockStore]
   );
 
   const otherPresence = useMemo(
@@ -292,8 +343,13 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     [presence, selfUserId]
   );
 
-  // Stabile Identität: der Protokoll-Editor reicht das Objekt an memoisierte Punkte weiter,
-  // ein neues Objekt pro Render liesse dort jedes Element bei jedem Tastendruck neu rendern.
+  const fieldLocks = useMemo<CollabFieldLocks>(
+    () => ({ lockField, unlockField, isLockedByOther, subscribeLocks: lockStore.subscribe, getLocks: lockStore.get }),
+    [lockField, unlockField, isLockedByOther, lockStore]
+  );
+
+  // Ändert sich nur bei Verbindung, Bearbeitungsrecht und Anwesenheit (selten), nie bei Sperren.
+  // Die Punkte des Editors bekommen ``fieldLocks`` (stabil) statt dieses Objekts.
   return useMemo(
     () => ({
       connected,
@@ -301,8 +357,8 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       selfUserId,
       presence,
       otherPresence,
-      locks,
       hasOtherActiveEditors,
+      fieldLocks,
       lockField,
       unlockField,
       sendFieldUpdate,
@@ -311,6 +367,8 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       onStatusChanged,
       onListChanged,
       isLockedByOther,
+      subscribeLocks: lockStore.subscribe,
+      getLocks: lockStore.get,
     }),
     [
       connected,
@@ -318,8 +376,8 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       selfUserId,
       presence,
       otherPresence,
-      locks,
       hasOtherActiveEditors,
+      fieldLocks,
       lockField,
       unlockField,
       sendFieldUpdate,
@@ -328,6 +386,47 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       onStatusChanged,
       onListChanged,
       isLockedByOther,
+      lockStore,
     ]
   );
+}
+
+const emptyLocks = () => EMPTY_LOCKS;
+const emptySignature = () => "";
+
+/** Alle fremden Sperren, mit Neu-Rendern bei jeder Änderung (z. B. mobiler Editor). */
+export function useFieldLocks(source: Pick<CollabFieldLocks, "subscribeLocks" | "getLocks">): FieldLocks {
+  return useSyncExternalStore(source.subscribeLocks, source.getLocks, emptyLocks);
+}
+
+/** Block-ID eines Feldschlüssels (`block-<id>` oder `block-<id>-…`, z. B. Matrixzellen). */
+function blockIdOfFieldKey(fieldKey: string, blockIds: ReadonlySet<string>): string | null {
+  if (!fieldKey.startsWith("block-")) return null;
+  const rest = fieldKey.slice(6);
+  for (const id of blockIds) {
+    if (rest === id || rest.startsWith(`${id}-`)) return id;
+  }
+  return null;
+}
+
+/** Kurzform der fremden Sperren auf den Feldern dieser Blöcke (inkl. Matrixzellen). */
+export function fieldLocksSignature(locks: FieldLocks, blockIds: ReadonlySet<string>): string {
+  const parts: string[] = [];
+  for (const [fieldKey, holder] of Object.entries(locks)) {
+    if (blockIdOfFieldKey(fieldKey, blockIds) !== null) parts.push(`${fieldKey}=${holder.user_id}:${holder.display_name}`);
+  }
+  return parts.sort().join("|");
+}
+
+/**
+ * Abonniert die Sperren der Felder einiger Blöcke: die Komponente rendert nur neu, wenn sich bei
+ * genau diesen Feldern etwas ändert (useSyncExternalStore mit einer Zeichenkette als Snapshot).
+ * Den Halter liest sie danach über ``isLockedByOther``.
+ */
+export function useFieldLocksSignature(source: Pick<CollabFieldLocks, "subscribeLocks" | "getLocks">, blockIds: readonly string[]): string {
+  const key = blockIds.join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ids = useMemo(() => new Set(blockIds), [key]);
+  const getSnapshot = useCallback(() => fieldLocksSignature(source.getLocks(), ids), [source, ids]);
+  return useSyncExternalStore(source.subscribeLocks, getSnapshot, emptySignature);
 }

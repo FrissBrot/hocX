@@ -23,6 +23,7 @@ import {
   TodoListItem,
 } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
+import { collectReferencedIds, selectInitialEvents, slimParticipantDirectory } from "@/lib/protocol/initial-editor-data";
 
 export default async function ProtocolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -139,6 +140,15 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     pendingFinesPromise,
   ]);
 
+  // Nur, was der Editor zum ersten Darstellen braucht, in die Seite (L5): Termine, die das
+  // Protokoll anzeigen kann, und Namen verwiesener Personen. Ältere Termine lädt der Editor
+  // danach nach (eventsComplete=false), siehe lib/protocol/initial-editor-data.ts.
+  const referencedIds = collectReferencedIds(elements, initialTodos, pendingTodos, initialListEntries, initialFinanceTransactions);
+  // Gestern (UTC): auch auf einem Server in einer anderen Zeitzone nie nach dem Schweizer «heute»
+  const today = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const initialEvents = selectInitialEvents(events, { elements, protocolDate: protocol.protocol_date, today, referencedIds });
+  const directory = slimParticipantDirectory(participantDirectory, collectReferencedIds([...referencedIds], initialEvents.events));
+
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
@@ -164,8 +174,9 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               initialTodos={initialTodos}
               initialImages={initialImages}
               availableParticipants={participants}
-              participantDirectory={participantDirectory}
-              availableEvents={events}
+              participantDirectory={directory}
+              availableEvents={initialEvents.events}
+              eventsComplete={initialEvents.complete}
               availableLists={lists}
               initialListEntries={initialListEntries}
               availableTemplates={templates}
