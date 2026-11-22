@@ -115,7 +115,9 @@
     "progressUploading": "Wird hochgeladen …",
     "progressPercent": "{percent} %",
     "progressProcessing": "Wird geprüft …",
-    "progressProcessingHint": "Die Dateien sind übertragen und werden jetzt auf Viren und Format geprüft. Bitte die Seite offen lassen."
+    "progressProcessingHint": "Die Dateien sind übertragen und werden jetzt auf Viren und Format geprüft. Bitte die Seite offen lassen.",
+    "limitReachedTitle": "Abgabe vollständig",
+    "limitReached": "{count, plural, one {Für dieses Dokument wurde die erlaubte Datei bereits abgegeben. Weitere Dateien werden nicht angenommen.} other {Für dieses Dokument wurden bereits alle # erlaubten Dateien abgegeben. Weitere Dateien werden nicht angenommen.}}"
   },
   "language": {
     "label": "Sprache"

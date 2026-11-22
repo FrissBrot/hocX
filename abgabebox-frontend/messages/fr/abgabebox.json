@@ -115,7 +115,9 @@
     "progressUploading": "Envoi en cours …",
     "progressPercent": "{percent} %",
     "progressProcessing": "Vérification en cours …",
-    "progressProcessingHint": "Les fichiers ont été transférés et sont maintenant vérifiés (virus et format). Veuillez laisser cette page ouverte."
+    "progressProcessingHint": "Les fichiers ont été transférés et sont maintenant vérifiés (virus et format). Veuillez laisser cette page ouverte.",
+    "limitReachedTitle": "Dépôt complet",
+    "limitReached": "{count, plural, one {Le fichier autorisé pour ce document a déjà été déposé. Aucun autre fichier n'est accepté.} other {Les # fichiers autorisés pour ce document ont déjà été déposés. Aucun autre fichier n'est accepté.}}"
   },
   "language": {
     "label": "Langue"
