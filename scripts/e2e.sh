@@ -108,7 +108,7 @@ run_tests() {
       -e E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 \
       -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' -e E2E_ARGS="${E2E_ARGS:-}" \
       -e E2E_WORKERS="${E2E_WORKERS:-2}" \
-      mcr.microsoft.com/playwright:v1.65.0-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
+      mcr.microsoft.com/playwright:v1.64.1-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
   fi
 }
 
