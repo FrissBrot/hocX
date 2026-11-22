@@ -321,6 +321,11 @@
       "css_gzip_kb": 57,
       "css_raw_kb": 358
     },
+    "/files/import": {
+      "js_gzip_kb": 266,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 395
+    },
     "/finances": {
       "js_gzip_kb": 267,
       "css_gzip_kb": 49,
