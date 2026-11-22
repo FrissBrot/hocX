@@ -128,7 +128,7 @@
       "filterAll": "All",
       "filterOpen": "Open",
       "filterChanged": "Changed",
-      "filterEmpty": "No rows in this view.",
+      "filterEmpty": "No entries found.",
       "nobodyAssigned": "Nobody assigned yet",
       "addPerson": "+ Person",
       "addPersonTo": "Assign a person to “{row}”",
@@ -145,7 +145,9 @@
       "statusOpen": "Open",
       "statusAdded": "New",
       "statusChanged": "Changed",
-      "statusRemoved": "Removed"
+      "statusRemoved": "Removed",
+      "searchPlaceholderShort": "Search list",
+      "summary": "{count, plural, one {# entry} other {# entries}} · {attention, plural, one {# needs attention} other {# need attention}}"
     }
   },
   "inactive": "inactive",

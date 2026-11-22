@@ -239,7 +239,7 @@
     "/admin/login": {
       "js_gzip_kb": 221,
       "css_gzip_kb": 58,
-      "css_raw_kb": 354
+      "css_raw_kb": 356
     },
     "/agenda": {
       "js_gzip_kb": 242,
@@ -274,41 +274,41 @@
     "/documents": {
       "js_gzip_kb": 299,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/assets": {
       "js_gzip_kb": 293,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/brand": {
       "js_gzip_kb": 300,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/components": {
       "js_gzip_kb": 206,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/exports": {
       "js_gzip_kb": 292,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/protocols": {
       "js_gzip_kb": 206,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/documents/templates/[id]": {
       "js_gzip_kb": 347,
       "css_gzip_kb": 64,
-      "css_raw_kb": 392
+      "css_raw_kb": 396
     },
     "/elements": {
       "js_gzip_kb": 522,
-      "css_gzip_kb": 62,
+      "css_gzip_kb": 64,
       "css_raw_kb": 392
     },
     "/events": {
@@ -318,8 +318,8 @@
     },
     "/files": {
       "js_gzip_kb": 267,
-      "css_gzip_kb": 57,
-      "css_raw_kb": 358
+      "css_gzip_kb": 59,
+      "css_raw_kb": 360
     },
     "/finances": {
       "js_gzip_kb": 267,
@@ -389,12 +389,12 @@
     "/protocols": {
       "js_gzip_kb": 258,
       "css_gzip_kb": 66,
-      "css_raw_kb": 400
+      "css_raw_kb": 406
     },
     "/protocols/[id]": {
       "js_gzip_kb": 689,
       "css_gzip_kb": 66,
-      "css_raw_kb": 400
+      "css_raw_kb": 406
     },
     "/settings": {
       "js_gzip_kb": 230,
@@ -429,7 +429,7 @@
     "/task-packages": {
       "js_gzip_kb": 296,
       "css_gzip_kb": 59,
-      "css_raw_kb": 356
+      "css_raw_kb": 358
     },
     "/templates": {
       "js_gzip_kb": 550,

@@ -128,7 +128,7 @@
       "filterAll": "Alle",
       "filterOpen": "Offen",
       "filterChanged": "Geändert",
-      "filterEmpty": "Keine Zeilen in dieser Ansicht.",
+      "filterEmpty": "Keine Einträge gefunden.",
       "nobodyAssigned": "Noch niemand zugeteilt",
       "addPerson": "+ Person",
       "addPersonTo": "Person zu «{row}» zuteilen",
@@ -145,7 +145,9 @@
       "statusOpen": "Offen",
       "statusAdded": "Neu",
       "statusChanged": "Geändert",
-      "statusRemoved": "Entfernt"
+      "statusRemoved": "Entfernt",
+      "searchPlaceholderShort": "In Liste suchen",
+      "summary": "{count, plural, one {# Eintrag} other {# Einträge}} · {attention, plural, one {# braucht Aufmerksamkeit} other {# brauchen Aufmerksamkeit}}"
     }
   },
   "inactive": "inaktiv",

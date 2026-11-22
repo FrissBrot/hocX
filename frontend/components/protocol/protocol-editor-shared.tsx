@@ -538,6 +538,7 @@ export function TodoMiniMenu({
   align = "start",
   triggerClassName,
   leading,
+  title,
   children,
 }: {
   label: string;
@@ -547,6 +548,8 @@ export function TodoMiniMenu({
   triggerClassName?: string;
   /** Vor dem Text im Auslöser, z. B. Screenreader-Hinweis «überfällig» */
   leading?: ReactNode;
+  /** Tooltip am Auslöser, z. B. der volle Fälligkeitstext, wenn das Badge «Heute» zeigt */
+  title?: string;
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -571,6 +574,7 @@ export function TodoMiniMenu({
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={title}
       >
         {leading}
         <span className="mini-menu-trigger-label">{label}</span>

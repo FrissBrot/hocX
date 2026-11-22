@@ -73,13 +73,12 @@ export function EventDateTile({
       <span className="protocol-event-tile" style={style} aria-hidden="true">
         <span className="protocol-event-tile-month">{parts.month}</span>
         <span className="protocol-event-tile-day">{parts.day ? String(Number(parts.day)) : ""}</span>
-        <span className="protocol-event-tile-weekday">{parts.weekday}</span>
       </span>
-      {hasEnd ? (
-        <span className="protocol-event-until" aria-hidden="true">
-          {t("eventUntil", { date: formatDate(endDate) })}
-        </span>
-      ) : null}
+      {/* Wochentag rechts neben der Kachel (Entwurf), darunter ggf. das Enddatum */}
+      <span className="protocol-event-date-side" aria-hidden="true">
+        <span className="protocol-event-tile-weekday">{parts.weekday}</span>
+        {hasEnd ? <span className="protocol-event-until">{t("eventUntil", { date: formatDate(endDate) })}</span> : null}
+      </span>
       <span className="visually-hidden">{formatDateRange(date, endDate)}</span>
     </div>
   );
@@ -94,12 +93,12 @@ export function EventTagLine({ tag, tagConfig }: { tag: string | null | undefine
       {tags.map((item) => {
         const color = tagConfig[item]?.color;
         return (
-          <span key={item} className="protocol-event-tag">
-            <span
-              className="protocol-event-tag-dot"
-              style={color ? ({ "--protocol-event-tile-color": color } as CSSProperties) : undefined}
-              aria-hidden="true"
-            />
+          <span
+            key={item}
+            className={`protocol-event-tag${color ? " protocol-event-tag-colored" : ""}`}
+            style={color ? ({ "--protocol-event-tile-color": color } as CSSProperties) : undefined}
+          >
+            <span className="protocol-event-tag-dot" aria-hidden="true" />
             {item}
           </span>
         );
@@ -138,6 +137,20 @@ export function EventListToolbar({
   );
 }
 
+/** Ort mit Stecknadel (Anzeige der Terminliste). */
+export function EventLocation({ location }: { location: string | null | undefined }) {
+  if (!location) return <>—</>;
+  return (
+    <span className="protocol-event-location">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 14.5s4.5-4.2 4.5-7.8A4.5 4.5 0 0 0 3.5 6.7c0 3.6 4.5 7.8 4.5 7.8Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+        <circle cx="8" cy="6.6" r="1.6" stroke="currentColor" strokeWidth="1.4" />
+      </svg>
+      {location}
+    </span>
+  );
+}
+
 /** Trennzeile an der Sitzungsgrenze. */
 export function EventSessionSeparator({
   colSpan,
@@ -156,6 +169,7 @@ export function EventSessionSeparator({
   return (
     <tr className="protocol-event-separator">
       <td colSpan={colSpan}>
+        <span className="protocol-event-separator-dot" aria-hidden="true" />
         <span className="protocol-event-separator-label">{label}</span>
       </td>
     </tr>

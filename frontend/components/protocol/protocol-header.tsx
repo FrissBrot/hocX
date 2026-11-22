@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState, useSyncExternalStore } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { DocumentExportDialog } from "@/components/documents/export-dialog";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -11,8 +11,8 @@ import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import { docsUrl } from "@/lib/docs";
-import { useShortcutLabel } from "@/lib/search/shortcuts";
-import { formatDateTime } from "@/lib/utils/format";
+import { useModifierLabel, useShortcutLabel } from "@/lib/search/shortcuts";
+import { formatDate } from "@/lib/utils/format";
 
 // Kopf des Protokoll-Editors (Design «Protokoll-Header», Variante «Mit Workflow-Leiste»):
 // oben Zurück, Titel, Meta-Zeile und Aktionen (Suche, Export, «⋯»), darunter die Workflow-Leiste
@@ -70,8 +70,8 @@ export function ProtocolHeader({
 }: Props) {
   const t = useTranslations("protocols.editor");
   const tHelp = useTranslations("common.help");
-  const locale = useLocale();
   const shortcut = useShortcutLabel();
+  const modifier = useModifierLabel();
   const [exportOpen, setExportOpen] = useState(false);
   const [workflowHelpOpen, setWorkflowHelpOpen] = useState(false);
   // Doku-Adresse erst nach der Hydration (wie HelpPopover)
@@ -94,8 +94,10 @@ export function ProtocolHeader({
   return (
     <header className="protocol-header">
       <div className="protocol-header-top">
-        <a href="/protocols" className="button-ghost button-icon protocol-header-back" aria-label={t("header.back")} title={t("header.back")}>
-          <span aria-hidden="true">←</span>
+        <a href="/protocols" className="button-secondary button-icon protocol-header-back" aria-label={t("header.back")} title={t("header.back")}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </a>
         <div className="protocol-header-heading">
           <h1 className="protocol-header-title">{title}</h1>
@@ -104,7 +106,7 @@ export function ProtocolHeader({
             {createdAt ? (
               <>
                 <span className="protocol-header-meta-sep" aria-hidden="true">·</span>
-                <span>{t("header.created", { date: formatDateTime(createdAt, locale) })}</span>
+                <span>{t("header.created", { date: formatDate(createdAt) })}</span>
               </>
             ) : null}
             {templateVersion != null ? (
@@ -128,18 +130,21 @@ export function ProtocolHeader({
               <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             <span className="protocol-header-search-label" aria-hidden="true">{t("header.searchLabel")}</span>
-            <kbd className="protocol-header-kbd" aria-hidden="true">{t("ctrlFHint", { shortcut: shortcut("F") })}</kbd>
+            <span className="protocol-header-kbds" aria-hidden="true">
+              <kbd className="protocol-header-kbd">{modifier}</kbd>
+              <kbd className="protocol-header-kbd">F</kbd>{/* i18n-ok: Tastenname */}
+            </span>
           </button>
           <ActionMenu
             ariaLabel={t("header.exportMenu")}
             icon={<ActionIcon name="download" />}
-            triggerClassName="button-ghost button-icon protocol-header-icon"
+            triggerClassName="button-secondary button-icon protocol-header-icon"
             items={exportItems}
           />
           <ActionMenu
             ariaLabel={t("header.moreMenu")}
             icon="⋯"
-            triggerClassName="button-ghost button-icon protocol-header-icon"
+            triggerClassName="button-secondary button-icon protocol-header-icon"
             items={moreItems}
           />
         </div>

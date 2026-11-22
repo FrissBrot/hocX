@@ -131,6 +131,13 @@
 
 .linked-list-table-wrap { overflow-x: auto; }
 
+/* Tabellenoptik wie die Terminliste im Protokoll (Entwurf «Termine, Listen & Pendenzen») */
+.linked-list-table th { padding: var(--space-3) var(--space-4); background: color-mix(in srgb, var(--bg) 60%, var(--panel-solid)); border-bottom: 1px solid var(--border); color: var(--muted); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.linked-list-table td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+
+.linked-list-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+
 .linked-list-table tbody tr:last-child td { border-bottom: 0; }
 
 .linked-list-label { width: 34%; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
@@ -155,7 +162,19 @@
 
 .linked-list-person-name { overflow-wrap: anywhere; }
 
-.linked-list-avatar { display: inline-grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0; }
+.linked-list-avatar { display: inline-grid; flex: none; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0; }
+
+/* Fünf Avatar-Töne aus den Diagrammfarben, Zuordnung je Name (structured-list-table.tsx) */
+.linked-list-avatar-tone-0 { background: color-mix(in srgb, var(--chart-1) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--chart-1) 72%, var(--text)); }
+
+.linked-list-avatar-tone-1 { background: color-mix(in srgb, var(--chart-2) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--chart-2) 72%, var(--text)); }
+
+.linked-list-avatar-tone-2 { background: color-mix(in srgb, var(--chart-3) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--chart-3) 72%, var(--text)); }
+
+.linked-list-avatar-tone-3 { background: color-mix(in srgb, var(--chart-4) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--chart-4) 72%, var(--text)); }
+
+.linked-list-avatar-tone-4 { background: color-mix(in srgb, var(--chart-5) 22%, var(--panel-solid)); color: color-mix(in srgb, var(--chart-5) 72%, var(--text)); }
+
 
 .linked-list-person-remove { --button-bg: transparent; --button-hover-bg: var(--panel-solid); display: inline-grid; flex: none; place-items: center; width: 20px; min-height: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); font-size: var(--text-base); font-weight: 400; line-height: 1; }
 
@@ -190,15 +209,27 @@
 .linked-list-legend { display: inline-flex; gap: var(--space-3); }
 
 /* Suche und Ansichts-Sortierung (nur Anzeige, Design «Termine, Listen & Pendenzen») */
-.linked-list-search { flex: 0 1 240px; margin-left: auto; }
+.linked-list-summary-text { color: var(--muted); font-size: var(--text-sm); }
 
-.linked-list-sort { --button-bg: transparent; --button-hover-bg: transparent; display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs); background: var(--button-bg); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.linked-list-search { flex: 0 1 260px; min-width: 220px; margin-left: auto; }
+
+.linked-list-search input { min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); font-size: var(--text-sm); }
+
+.linked-list-sort { --button-bg: transparent; --button-hover-bg: transparent; display: flex; align-items: center; justify-content: space-between; gap: var(--space-1); width: 100%; min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-xs); background: var(--button-bg); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 
 .linked-list-sort:hover { color: var(--text); }
 
-.linked-list-sort-mark { color: var(--border-strong); font-size: var(--text-xs); }
+.linked-list-sort-mark { color: var(--text); font-size: var(--text-xs); }
 
-.linked-list-sort-active, .linked-list-sort-active .linked-list-sort-mark { color: var(--accent); }
+.linked-list-sort-active { color: var(--text); }
+
+.linked-list-num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.linked-list-num .linked-list-sort { flex-direction: row-reverse; }
+
+.linked-list-status .badge { min-height: 24px; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 600; }
+
+.linked-list-status .badge-dot { width: 6px; height: 6px; background: currentColor; }
 
 .linked-list-status { display: inline-flex; margin-left: var(--space-2); vertical-align: middle; font-weight: 400; }
 

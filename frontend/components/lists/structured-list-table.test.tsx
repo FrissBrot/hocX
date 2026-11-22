@@ -179,7 +179,7 @@ it("sucht im Protokoll nur in der Anzeige über alle Spalten", () => {
   fireEvent.change(search, { target: { value: "anna" } });
   expect(labelOrder()).toEqual(["Zelt"]);
   fireEvent.change(search, { target: { value: "nichts" } });
-  expect(screen.getByText("Keine Zeilen in dieser Ansicht.")).toBeInTheDocument();
+  expect(screen.getByText("Keine Einträge gefunden.")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Suche leeren" }));
   expect(labelOrder()).toEqual(["Material", "Coach", "Zelt"]);
   expect(onUpdateEntry).not.toHaveBeenCalled();
@@ -211,6 +211,7 @@ it("zeigt den bestehenden Status als Pille", () => {
     editable={false} protocolView={{ highlightEmpty: true }}
     entryTrackedStatusById={{ a: { status: "added" }, c: { status: "removed" } }}
     onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  expect(screen.getByText("3 Einträge · 3 brauchen Aufmerksamkeit")).toBeInTheDocument();
   const rowOf = (label: string) => screen.getByText(label).closest("tr") as HTMLElement;
   expect(rowOf("Material").querySelector(".badge-success")?.textContent).toBe("Neu");
   expect(rowOf("Coach").querySelector(".badge-warning")?.textContent).toBe("Offen");

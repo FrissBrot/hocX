@@ -20,7 +20,10 @@ Installationen aktualisieren können.
   Suchfeld und lassen sich per Spaltenkopf sortieren (auf, ab, zurück zur Vorlagen-Reihenfolge –
   nicht gespeichert). Pendenzen: erledigte durchgestrichen an ihrer Stelle, Fälligkeit farbig
   (rot überfällig, gelb innerhalb von 14 Tagen wie in der Pendenzen-Übersicht), Fortschritt in %,
-  Zähler an den Tag-Filtern und Initialen bei den Zuständigen.
+  Zähler an den Tag-Filtern und Initialen bei den Zuständigen. Pendenzen erscheinen als Tabelle
+  (Erledigt | Aufgabe | Verantwortlich | Fällig) mit «X offen · Y erledigt», Fälligkeit als
+  «Überfällig · TT.MM.», «Heute» bzw. «In N Tagen»; Stammlisten zeigen «N Einträge · M brauchen
+  Aufmerksamkeit», Avatare in fünf Tönen und Zahlen rechtsbündig.
 - **Protokoll-Editor: neuer Kopf mit Workflow-Leiste.** Oben Zurück-Symbol, Titel und Meta-Zeile
   (Protokollnummer · Erstellt · Vorlage vN), Suchfeld-Knopf mit Tastenkürzel, Export-Menü («PDF
   öffnen», «Exportieren …») und «⋯» («Original-Dokument öffnen», «Hilfe zum Ablauf»). Darunter die

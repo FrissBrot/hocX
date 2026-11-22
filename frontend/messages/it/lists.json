@@ -128,7 +128,7 @@
       "filterAll": "Tutti",
       "filterOpen": "Aperti",
       "filterChanged": "Modificati",
-      "filterEmpty": "Nessuna riga in questa vista.",
+      "filterEmpty": "Nessuna voce trovata.",
       "nobodyAssigned": "Ancora nessuno assegnato",
       "addPerson": "+ Persona",
       "addPersonTo": "Assegna una persona a «{row}»",
@@ -145,7 +145,9 @@
       "statusOpen": "Aperto",
       "statusAdded": "Nuovo",
       "statusChanged": "Modificato",
-      "statusRemoved": "Rimosso"
+      "statusRemoved": "Rimosso",
+      "searchPlaceholderShort": "Cerca nell’elenco",
+      "summary": "{count, plural, one {# voce} other {# voci}} · {attention, plural, one {# richiede attenzione} other {# richiedono attenzione}}"
     }
   },
   "inactive": "inattiva",

@@ -6,7 +6,7 @@ vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
 import type { ParticipantSummary, ProtocolSummary, ProtocolTodo } from "@/types/api";
 import { TodoMiniMenu } from "./protocol-editor-shared";
 import { SessionTodosSection } from "./session-todos-section";
-import { TodoProgress, personInitials, protocolTodoDueTone, todoDueTriggerClass } from "./protocol-todo-display";
+import { TodoProgress, personInitials, protocolTodoDue, protocolTodoDueTone, todoDueBadgeLabel, todoDueTriggerClass } from "./protocol-todo-display";
 
 // Pendenzen im Protokoll: Fälligkeit farbig nach derselben Regel wie die Übersicht (dueInfo,
 // 14 Tage), erledigte durchgestrichen an ihrer Position, Fortschritt und Initialen.
@@ -30,6 +30,19 @@ describe("protocolTodoDueTone", () => {
   });
 });
 
+describe("todoDueBadgeLabel", () => {
+  const t = (key: string, values?: Record<string, string | number>) =>
+    key === "todoDueOverdueBadge" ? `Überfällig · ${values?.date}` : key === "todoDueToday" ? "Heute" : `In ${values?.count} Tagen`;
+  it("zeigt «Überfällig · TT.MM.», «Heute», «In N Tagen», sonst den bisherigen Text", () => {
+    expect(todoDueBadgeLabel(protocolTodoDue({ ...base, due_date: "2026-11-20" }, today), "20.11.2026", t)).toBe("Überfällig · 20.11.");
+    expect(todoDueBadgeLabel(protocolTodoDue({ ...base, due_date: "2026-11-22" }, today), "22.11.2026", t)).toBe("Heute");
+    expect(todoDueBadgeLabel(protocolTodoDue({ ...base, due_date: "2026-11-27" }, today), "27.11.2026", t)).toBe("In 5 Tagen");
+    expect(todoDueBadgeLabel(protocolTodoDue({ ...base, due_date: "2027-01-10" }, today), "10.01.2027", t)).toBe("10.01.2027");
+    expect(todoDueBadgeLabel(protocolTodoDue(base, today), "Kein Enddatum", t)).toBe("Kein Enddatum");
+    expect(todoDueBadgeLabel(protocolTodoDue({ ...base, due_date: "2026-11-01", todo_status_code: "done" }, today), "01.11.2026", t)).toBe("01.11.2026");
+  });
+});
+
 describe("TodoMiniMenu als Fälligkeits-Badge", () => {
   it("trägt die Farbklasse und öffnet weiter das Fälligkeitsmenü", () => {
     render(
@@ -49,7 +62,8 @@ describe("Fortschritt und Initialen", () => {
   it("zeigt «X von Y erledigt» mit Prozent", () => {
     render(<TodoProgress done={1} total={3} />);
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-label", "1 von 3 erledigt");
-    expect(screen.getByText("1 von 3 erledigt · 33 %")).toBeInTheDocument();
+    expect(screen.getByText("2 offen · 1 erledigt")).toBeInTheDocument();
+    expect(screen.getByText("33 %")).toBeInTheDocument();
   });
 
   it("bildet Initialen aus höchstens zwei Namensteilen", () => {

@@ -96,6 +96,14 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
   await expect(events.locator(".protocol-event-separator")).toContainText("Ab Sitzung vom");
   await expect(events.locator(".protocol-event-tag").first()).toContainText(tag);
   await shot(page, "header-events");
+  await page.locator(".protocol-header").screenshot({ path: "test-results/protocol-tables-header-only-light-1440.png" });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await page.locator(".protocol-header").screenshot({ path: "test-results/protocol-tables-header-only-dark-1440.png" });
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+    await events.screenshot({ path: `test-results/protocol-tables-events-only-${theme}-1440.png` });
+  }
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   const allTab = events.getByRole("tab", { name: /Alle/ });
   await allTab.focus();
   await page.keyboard.press("ArrowRight");
@@ -115,6 +123,11 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
   await page.keyboard.press("Enter");
   await expect(labels).toHaveText(["Abwart", "Getränke", "Material"]);
   await shot(page, "list");
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+    await listBlock.screenshot({ path: `test-results/protocol-tables-list-only-${theme}-1440.png` });
+  }
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
   await expect(labels).toHaveText(["Material", "Getränke", "Abwart"]);
@@ -125,14 +138,23 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
   // Pendenzen: Fortschritt, Zähler an Tags, Fälligkeitsfarben, erledigte durchgestrichen an Ort
   const todoProgress = page.getByRole("progressbar", { name: "1 von 4 erledigt" });
   await todoProgress.scrollIntoViewIfNeeded();
-  await expect(page.getByText("1 von 4 erledigt · 25 %")).toBeVisible();
+  await expect(page.getByText("3 offen · 1 erledigt")).toBeVisible();
+  await expect(page.locator(".todo-progress-count")).toHaveText("25 %");
   await expect(page.locator(".tag-filter-chip", { hasText: "Halle" }).locator(".tag-filter-chip-count")).toHaveText("2");
   const cards = todoProgress.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' grid ')][1]").locator("article.todo-card");
   await expect(cards.nth(2)).toHaveClass(/todo-card-strike/);
   await expect(cards.nth(0).locator(".todo-due-trigger-overdue")).toBeVisible();
   await expect(cards.nth(1).locator(".todo-due-trigger-soon")).toBeVisible();
+  await expect(cards.nth(0).locator(".todo-due-trigger")).toContainText("Überfällig ·");
+  await expect(cards.nth(1).locator(".todo-due-trigger")).toContainText(/In \d+ Tagen/);
   await expect(cards.nth(3).locator(".todo-due-trigger-overdue, .todo-due-trigger-soon")).toHaveCount(0);
   await shot(page, "todos");
+  const todoBlockLocator = todoProgress.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' grid ')][1]");
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+    await todoBlockLocator.screenshot({ path: `test-results/protocol-tables-todos-only-${theme}-1440.png` });
+  }
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   // Fälligkeits-Badge bleibt Auslöser des Fälligkeitsmenüs
   await cards.nth(1).locator(".todo-due-trigger").click();
   await expect(page.locator("#due-date-portal")).toBeVisible();

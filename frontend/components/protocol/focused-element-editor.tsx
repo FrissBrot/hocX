@@ -115,9 +115,9 @@ import {
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 import { PdfOmittedHint } from "@/components/protocol/pdf-omitted-hint";
-import { TodoAssigneeAvatar, TodoDueToneHint, TodoProgress, protocolTodoDueTone, todoDueTriggerClass } from "@/components/protocol/protocol-todo-display";
+import { TodoAssigneeAvatar, TodoDueToneHint, TodoProgress, protocolTodoDue, todoDueBadgeLabel, todoDueTriggerClass } from "@/components/protocol/protocol-todo-display";
 import { localDateToday } from "@/lib/utils/participant-membership";
-import { EventDateTile, EventListToolbar, EventSessionSeparator, EventTagLine, eventTagColor, eventTimeline } from "@/components/protocol/protocol-event-list-display";
+import { EventDateTile, EventListToolbar, EventLocation, EventSessionSeparator, EventTagLine, eventTagColor, eventTimeline } from "@/components/protocol/protocol-event-list-display";
 import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
@@ -301,6 +301,7 @@ function FocusedElementEditorImpl({
   const t = useTranslations("protocols");
   const tBoard = useTranslations("protocols.attendanceBoard");
   const tTodos = useTranslations("todos");
+  const tTables = useTranslations("protocols.tables");
   const tTemplates = useTranslations("templates.elementEditor");
   const eventFieldConfig = useEventFieldConfig();
   const confirm = useConfirm();
@@ -1921,7 +1922,18 @@ function FocusedElementEditorImpl({
                       ))}
                     </div>
                   )}
-                  <div className="todo-list">
+                  <div className="todo-list todo-list-table">
+                    {visibleTodos.length ? (
+                      // Spaltenköpfe nur optisch: die Zeilen bleiben Karten mit eigenen Bedienelementen
+                      <div className="todo-table-head" aria-hidden="true">
+                        <span />
+                        <span>{tTables("todoColumnTask")}</span>
+                        <span className="todo-table-head-meta">
+                          <span>{tTables("todoColumnAssignee")}</span>
+                          <span>{tTables("todoColumnDue")}</span>
+                        </span>
+                      </div>
+                    ) : null}
                     {visibleTodos.map((todo) => {
                       const isDone = todo.todo_status_code === "done";
                       const isPendingDelete = trackChangesActive && !!todo.pending_delete;
@@ -1929,7 +1941,8 @@ function FocusedElementEditorImpl({
                       const isTrackedAdded = trackChangesActive && todo.tracked_change === "added";
                       const trackedBeforeTask =
                         trackChangesActive && todo.tracked_change === "changed" ? todo.tracked_change_before_json?.task : undefined;
-                      const dueTone = protocolTodoDueTone(todo, todoToday);
+                      const due = protocolTodoDue(todo, todoToday);
+                      const dueTone = due.tone;
                       return (
                         <article className={`todo-card todo-card-compact${isDone ? " todo-card-done todo-card-strike" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
                           <button
@@ -1993,7 +2006,8 @@ function FocusedElementEditorImpl({
                               }}
                             />
                             <TodoMiniMenu
-                              label={dueMenuLabel(todo)}
+                              label={todoDueBadgeLabel(due, dueMenuLabel(todo), tTables)}
+                              title={dueMenuLabel(todo)}
                               compact
                               align="end"
                               triggerClassName={todoDueTriggerClass(dueTone)}
@@ -2121,7 +2135,8 @@ function FocusedElementEditorImpl({
                         value={newTodoTask[block.id] ?? ""}
                         onChange={(event) => setNewTodoTask((current) => ({ ...current, [block.id]: event.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") void addTodo(block.id); }}
-                        placeholder={t("newTaskPlaceholder")}
+                        placeholder={tTables("todoNewPlaceholder")}
+                        aria-label={tTables("todoNewPlaceholder")}
                       />
                       <TagInput
                         value={newTodoTags[block.id] ?? ""}
@@ -2129,8 +2144,8 @@ function FocusedElementEditorImpl({
                         suggestions={allBlockTags}
                         placeholder={t("tagsPlaceholder")}
                       />
-                      <button type="button" onClick={() => addTodo(block.id)}>
-                        {t("newTodoPlus")}
+                      <button type="button" className="button-primary" onClick={() => addTodo(block.id)}>
+                        {tTables("todoAdd")}
                       </button>
                     </div>
                   )}
@@ -3375,7 +3390,7 @@ function FocusedElementEditorImpl({
                                         }
                                       />
                                     ) : (
-                                      eventRow.location || "—"
+                                      <EventLocation location={eventRow.location} />
                                     )}
                                   </td>
                                 ) : null}
