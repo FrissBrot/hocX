@@ -27,7 +27,9 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t("description"),
     // Installierbar als App (app/manifest.ts); iOS liest Icon und Vollbild aus diesen Angaben
     manifest: "/manifest.webmanifest",
-    icons: { apple: "/icons/apple-touch-icon.png" },
+    // Favicon als public/favicon.ico statt app/favicon.ico: die Datei-Konvention hängt ihren Link an
+    // jede Seite, auch an /admin - dort ersetzt app/admin/layout.tsx die Icons (Konsolen-Favicon, 1.5.2).
+    icons: { icon: [{ url: "/favicon.ico", sizes: "256x256", type: "image/x-icon" }], apple: "/icons/apple-touch-icon.png" },
     appleWebApp: { capable: true, title: "hocX", statusBarStyle: "default" },
   };
 }

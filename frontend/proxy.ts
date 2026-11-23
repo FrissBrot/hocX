@@ -53,6 +53,9 @@ const processKind = frontendRole();
 const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
 const WEBSITE_PATH = "/website";
 
+// Favicon der hocX Konsole (public/icons/console, app/admin/layout.tsx)
+export const CONSOLE_FAVICON_PATH = "/icons/console/favicon.ico";
+
 // Ohne Timeout hielt ein haengendes (nicht ablehnendes) Backend jeden Seiten-Request bis zum
 // undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
 export const SESSION_CHECK_TIMEOUT_MS = 5_000;
@@ -117,6 +120,17 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   if (processKind === "admin" && !adminAllowedOnHost(requestHost, adminDomain)) {
     // Das Admin-Frontend bedient nur die Admin-Domain.
     return new NextResponse(null, { status: 404 });
+  }
+  // Favicon der hocX Konsole (1.5.2): Browser fragen /favicon.ico teils direkt an, ohne die
+  // <link rel="icon"> aus app/admin/layout.tsx zu lesen. Auf der Admin-Domain dann das Konsolen-Icon,
+  // sonst das App-Favicon (app/favicon.ico). Ohne Sitzungsprüfung, wie bisher (stand im Matcher aus).
+  if (pathname === "/favicon.ico") {
+    if (processKind === "admin" || (!!adminDomain && requestHost === adminDomain)) {
+      const iconUrl = request.nextUrl.clone();
+      iconUrl.pathname = CONSOLE_FAVICON_PATH;
+      return NextResponse.rewrite(iconUrl);
+    }
+    return NextResponse.next();
   }
   const isWebsiteHost = processKind !== "admin" && !!websiteDomain && requestHost === websiteDomain;
   const rewrittenPathname = isWebsiteHost
@@ -193,6 +207,7 @@ async function route(request: NextRequest, requestHeaders: Headers) {
 }
 
 export const config = {
-  // manifest.webmanifest und icons/: die App-Installation lädt sie vor dem Login (app/manifest.ts)
-  matcher: ["/((?!api/|api$|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|icons/).*)"]
+  // manifest.webmanifest und icons/: die App-Installation lädt sie vor dem Login (app/manifest.ts).
+  // favicon.ico läuft mit, damit die Admin-Domain das Konsolen-Icon bekommt (route() oben).
+  matcher: ["/((?!api/|api$|_next/static|_next/image|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|icons/).*)"]
 };

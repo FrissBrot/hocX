@@ -13,7 +13,8 @@ Installationen aktualisieren können.
 Korrekturversion zu 1.5.1 mit allen Funden der Nachtläufe vom 22. und 23.11.2026: mehrere
 Sicherheitskorrekturen bei Konto- und Rechteverwaltung, Anmeldung, Freigabelinks und Dateilöschung,
 dazu Korrekturen bei gleichzeitigen Änderungen im Document Studio, bei Pendenzen und Bussen, beim
-Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox. Keine
+Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox sowie die
+überarbeitete Seitenleiste der Plattform-Konsole («hocX Konsole»). Keine
 Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
@@ -52,6 +53,22 @@ Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes
   als bestätigt gelten.
 - Bussen zu Protokollen folgen denselben Leserechten wie das Protokoll selbst (Entwürfe nur mit
   dem Recht, Entwürfe zu lesen); nicht lesbare Protokolle verhalten sich wie unbekannte.
+
+### Geändert
+
+- **Plattform-Admin heisst jetzt «hocX Konsole»** (en «hocX Console», fr/it «Console hocX»): Titel in der
+  Seitenleiste, Browser-Tab aller /admin-Seiten und Login der Konsole. Kontobezeichnungen wie
+  «Plattform-Admins» (Rollen, Audit-Akteur) bleiben.
+- **Seitenleiste der Konsole mit den Massen der App:** gleicher Innenabstand, Logo, Gruppen- und
+  Eintragsabstände, Eintragshöhe 40 px und Bereichsköpfe 32 px wie die Hauptnavigation der Vereins-App
+  (die dichteren Sonderwerte aus 1.5.1 entfallen). Grosse Bereiche scrollen jetzt innerhalb der
+  Navigation, der aktive Eintrag wird dabei sichtbar gehalten; Zähler im aktiven Eintrag mit
+  ausreichendem Kontrast. Kompaktmodus und Mobilmenü unverändert bedienbar.
+- **Eigenes Favicon für die Konsole:** dasselbe hX-Zeichen, hell auf dunklem Grund
+  (`public/icons/console`: `favicon.ico`, `icon.svg`, `apple-touch-icon.png`), damit App und Konsole
+  im Tab unterscheidbar sind. `/favicon.ico` auf der Admin-Domain liefert ebenfalls das Konsolen-Icon
+  (`proxy.ts`). Das App-Favicon liegt dafür neu unter `public/favicon.ico` (statt `app/favicon.ico`,
+  gleiche Datei, Link über die Metadaten), Manifest und App-Icons bleiben unverändert.
 
 ### Behoben
 
