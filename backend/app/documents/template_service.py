@@ -48,8 +48,8 @@ _NODE_ADAPTER = TypeAdapter(Node)
 
 # Namensraum für pg_advisory_xact_lock(ns, tenant_id) in set_assignment. Andere Namensräume:
 # upload_lock (909100001), submission_service (909100002), protocol_service (909100011),
-# task_package_service (909100012), event_cycle_service (909100013).
-ASSIGNMENT_LOCK_NAMESPACE = 909100014
+# task_package_service (909100012), event_cycle_service (909100013), data_export/tenant (909100014).
+ASSIGNMENT_LOCK_NAMESPACE = 909100015
 
 
 class TemplateConflictError(Exception):
