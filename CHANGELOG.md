@@ -8,6 +8,16 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- **Archivierte Dokumentvorlage bleibt nicht mehr Standard (PR #102):** Wurde eine Vorlage archiviert
+  (z. B. «Unbenutzte archivieren»), während jemand sie gleichzeitig als Standard wählte, blieb die
+  archivierte Vorlage zugewiesen; Dokumente fielen still auf die Vorgabe zurück. Archivieren und
+  Zuweisen laufen jetzt je Vorlage nacheinander (Advisory-Lock `909100015`), die Zuweisung prüft den
+  Status frisch aus der Datenbank. Gegenüber dem Nachtlauf-Fix ohne `SELECT … FOR SHARE`: Systemvorlagen
+  darf ein Mandant unter RLS lesen, aber nicht sperren - das Zuweisen einer Systemvorlage hätte sonst mit
+  500 abgebrochen.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
