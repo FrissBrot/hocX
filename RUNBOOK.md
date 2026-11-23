@@ -1295,15 +1295,32 @@ Im Backend-Container (`docker compose exec backend …`):
 
 ```bash
 python -m app.auth_security.cli list                    # aktive IP-Sperren (nur Pseudonyme)
-python -m app.auth_security.cli unblock-ip 203.0.113.7  # Sperre einer Adresse (und ihres /24) aufheben
+python -m app.auth_security.cli unblock-ip 203.0.113.7  # Sperre einer Adresse, ihres /24 und ihres Netz-Fingerprints aufheben
 python -m app.auth_security.cli unblock <subject>       # Sperre per Pseudonym aus "list"
 python -m app.auth_security.cli reset-account person@example.org   # Fehlversuchszähler eines Kontos löschen
 python -m app.auth_security.cli attack-mode-off         # Angriffsmodus 1 h aussetzen
 ```
 
-Dieselben Sperren sind über `/api/admin/auth-security/blocks` (Plattform-Admin, Schreibrecht) lesbar,
-setzbar (Stufe 5, Begründung + Ablauf, max. 30 Tage) und aufhebbar; jedes Setzen/Aufheben erzeugt ein
-Ereignis `block.set`/`block.clear` und einen Audit-Eintrag. Der Plattform-Login ist von den App-IP-Sperren
+Dieselben Sperren sind über `/api/admin/auth-security/blocks` (Plattform-Admin, nur Owner) lesbar,
+setzbar (Stufe 5, Begründung + Ablauf, max. 30 Tage), verlängerbar (`…/blocks/{subject}/extend`, macht
+auch eine automatische Sperre zur manuellen Stufe 5) und aufhebbar - jeweils mit Passkey-Bestätigung
+(`security-block`); jedes Setzen/Verlängern/Aufheben erzeugt ein Ereignis `block.set`/`block.clear`
+(gekürztes Subjekt, Admin, ab 1.7 Vorfall) und einen Audit-Eintrag.
+
+**Konsole › Sicherheit (1.6):** *Sperren* zeigt die Abwehrleiter (Stufen 1-3 zählen bewusst **Ereignisse** der letzten 24 h -
+Fehlversuche, wegen Grenzen abgewiesene Versuche, Zusatzprüfungen -, nicht Quellen, weil es dafür nur
+gleitende Redis-Zähler je Quelle ohne Übersicht gibt; 4-5 aktive Sperren), Karten mit Countdown und Zähler «Abgewiesen» (Redis `authblock:hits:*`) und den
+Verlauf 7 Tage aus `block.set`/`block.clear` (Ereignisse vor 1.6 haben kein Subjekt und fehlen dort).
+*Anmeldeereignisse* filtert mit Pflicht-Zeitraum (max. 14 Tage) nach Pseudonym-Präfixen, Land, Typ,
+Ergebnis und Mandant; «Quelle sperren» sperrt den **Netz-Fingerprint** des Ereignisses (Bereich
+`net_fp`, dasselbe Pseudonym wie `auth_event.src_net_hash`/`audit_log.ip_hash`, /24 bzw. /48) -
+`is_blocked` prüft ihn zusätzlich zu den Zähler-Pseudonymen. *Alarmregeln* zeigt je Regel den Messwert
+auch unter der Schwelle, eine Kurve 24 h (Näherung: feste Abschnitte = Fenster der Regel, mind. 15 min,
+statt gleitendem Fenster; in der Oberfläche vermerkt) und die Auslösungen 30 Tage (aus `system_health_event`);
+Schwellen bleiben `.env`-Einstellungen. Migration `0280_auth_event_subject_index` baut den Index
+`(subject_hash, ts)` mit `CREATE INDEX CONCURRENTLY` (ohne Schreibsperre; bei 90 Tagen Aufbewahrung
+Sekunden bis wenige Minuten). Bricht sie ab, bleibt ein ungültiger Index zurück, den der nächste Lauf
+selbst entfernt und neu baut. Der Plattform-Login ist von den App-IP-Sperren
 ausgenommen (Ziti ist der stärkere Nachweis). Wer nicht mehr hineinkommt, obwohl das Konto in Ordnung
 ist: vom gewohnten Gerät anmelden (bekannte Geräte sind ausgenommen) oder `reset-account`.
 

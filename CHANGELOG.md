@@ -42,6 +42,11 @@ Installationen aktualisieren können.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
+- **Konsole › Audit-Log: gespeicherte Ansichten und Token-Suche (1.6):** Ansichten «Alle Ereignisse»,
+  «Fehlgeschlagen», «Anmeldungen», «Löschungen», «Plattform-Admin» und «Datenschutz» mit Zählern für
+  den gewählten Zeitraum. Das Suchfeld versteht `quelle:`, `aktion:` und `vorgang:` (z. B.
+  `vorgang:gelöscht`); `person:` und `mandant:` öffnen die Auswahl (Personen über die Admin-Suche,
+  Mandanten über die Mandantensuche) – in der Adresse stehen nur IDs, nie Namen.
 - **Konsole › Sicherheit › Alarmregeln (1.6, vorher «Warnungen»):** alle zehn Regeln mit aktuellem
   Messwert gegen die Schwelle – auch unterhalb («ruhig», «nahe Schwelle», «ausgelöst») –, Bedingung in
   Worten, Kurve der letzten 24 h je Regel (mit Tabellenalternative), Auslösungen der letzten 30 Tage

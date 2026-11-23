@@ -11,7 +11,7 @@ import { adminIsOwner } from "@/lib/admin/tenant-detail-server";
 export default async function AdminSecurityAlertsPage() {
   const [t, isOwner] = await Promise.all([getTranslations("adminSecurity.alerts"), adminIsOwner()]);
   return (
-    <section className="panel section-stack">
+    <section className="panel section-stack admin-security-panel">
       <SecurityPageHeader title={t("title")} description={t("description")} />
       {/* useSearchParams (Regel und Zustand in der URL) braucht eine Suspense-Grenze */}
       <Suspense fallback={null}>

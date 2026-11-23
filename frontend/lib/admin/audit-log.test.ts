@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { AUDIT_URL_CONFIG, auditApiQuery, auditDiff, groupByDay, relativeDay, selectedAreas, stepSelection, toggleArea, type AuditFilters } from "./audit-log";
+import {
+  AUDIT_URL_CONFIG,
+  activeAuditView,
+  applyAuditView,
+  auditApiQuery,
+  auditDiff,
+  groupByDay,
+  parseAuditTokens,
+  relativeDay,
+  selectedAreas,
+  stepSelection,
+  toggleArea,
+  type AuditFilters,
+} from "./audit-log";
 import { serverTableStateFromParams, serverTableUrlQuery } from "./use-server-table";
 
 const base: AuditFilters = { ...AUDIT_URL_CONFIG.defaults };
@@ -52,5 +65,38 @@ describe("Audit-Log (Design 1.5.1)", () => {
     expect(state.filters.source).toBe("");
     expect(state.filters.area).toBe("auth");
     expect(serverTableUrlQuery(state, AUDIT_URL_CONFIG).toString()).toBe("outcome=failure&area=auth");
+  });
+});
+
+describe("Audit-Log Ansichten und Token-Suche (1.6)", () => {
+  const aliases = { person: ["person"], tenant: ["mandant"], source: ["quelle"], action: ["aktion"], verb: ["vorgang"] };
+  const verbs = { "gelöscht": "deleted", angesehen: "viewed" } as const;
+
+  it("erkennt die aktive Ansicht und wendet sie an (Zeitraum/Mandant bleiben)", () => {
+    const filters = { ...base, range: "30d", tenant_id: "0193a6f0-0000-7000-8000-000000000001", source: "abcd" };
+    expect(activeAuditView(filters, AUDIT_URL_CONFIG.defaults)).toBeNull();
+    const applied = applyAuditView(filters, "deletions", AUDIT_URL_CONFIG.defaults);
+    expect(applied).toEqual({ ...base, range: "30d", tenant_id: filters.tenant_id, verb: "deleted" });
+    expect(activeAuditView(applied, AUDIT_URL_CONFIG.defaults)).toBe("deletions");
+    expect(activeAuditView(base, AUDIT_URL_CONFIG.defaults)).toBe("all");
+  });
+
+  it("liest Tokens, Personen und Mandanten nur als Auswahl, nie als Namen", () => {
+    expect(parseAuditTokens("quelle:26CA aktion:protocol vorgang:gelöscht rest", aliases, verbs)).toEqual({
+      patch: { source: "26ca", action: "protocol", verb: "deleted" }, rest: "rest", pick: null, invalid: [],
+    });
+    const person = parseAuditTokens("person:timo", aliases, verbs);
+    expect(person.pick).toBe("person");
+    expect(person.patch).toEqual({});
+    expect(parseAuditTokens("mandant:Jungwacht", aliases, verbs).pick).toBe("tenant");
+    const named = parseAuditTokens("person:Vorname Nachname", aliases, verbs);
+    expect(named).toEqual({ patch: {}, rest: "", pick: "person", invalid: [] });
+    expect(parseAuditTokens("quelle:xy vorgang:gemalt farbe:rot", aliases, verbs).invalid).toEqual(["quelle:xy", "vorgang:gemalt", "farbe:rot"]);
+    expect(parseAuditTokens("vorgang:viewed", aliases, verbs).patch).toEqual({ verb: "viewed" });
+  });
+
+  it("ein offener Token geht nicht als Aktions-Präfix ans Backend", () => {
+    expect(auditApiQuery({ ...base, action: "quelle:26" }).has("action")).toBe(false);
+    expect(auditApiQuery({ ...base, verb: "deleted" }).get("verb")).toBe("deleted");
   });
 });

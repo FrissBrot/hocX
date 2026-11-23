@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI, HTTPException, Response
@@ -152,6 +153,7 @@ def test_extend_turns_automatic_block_into_manual_stage5(db, monkeypatch):
     assert extended.until >= automatic.until + 120 * 60 - 2
     assert client.post(f"/api/admin/auth-security/blocks/{automatic.subject}/extend", json={"minutes": 5, "reason": ""}).status_code == 422
     assert client.post(f"/api/admin/auth-security/blocks/{'0' * 24}/extend", json={"minutes": 5, "reason": "gibt es nicht"}).status_code == 404
+    assert client.post("/api/admin/auth-security/blocks/authblock*/extend", json={"minutes": 5, "reason": "Muster"}).status_code == 422
     assert db.execute(text("SELECT count(*) FROM audit_log WHERE action = 'admin.auth_block_extended' AND actor_email = :email"), {"email": owner.email}).scalar() == 1
     reasons = [event.details["reason"] for event in _block_events(db, automatic.subject)]
     assert reasons == ["source_hard", "extend"]
@@ -160,7 +162,10 @@ def test_extend_turns_automatic_block_into_manual_stage5(db, monkeypatch):
 def test_history_shows_bars_and_early_clear(db):
     owner = _admin(db)
     client = _client(db, owner)
-    subject = client.post("/api/admin/auth-security/blocks", json={"ip": "203.0.113.90", "minutes": 60, "reason": "Test Verlauf"}).json()["subject"]
+    short = client.post("/api/admin/auth-security/blocks", json={"ip": "203.0.113.90", "minutes": 60, "reason": "Test Verlauf"}).json()["subject"]
+    assert len(short) == 12   # Antwort nur gekürzt
+    subject = next(item["subject"] for item in client.get("/api/admin/auth-security/blocks").json() if item["short"] == short)
+    assert client.delete(f"/api/admin/auth-security/blocks/{short}").status_code == 422   # nur volle Pseudonyme
     assert client.delete(f"/api/admin/auth-security/blocks/{subject}").status_code == 204
     history = client.get("/api/admin/auth-security/blocks/history").json()
     source = next(item for item in history["sources"] if item["subject"] == subject[:12])
@@ -235,7 +240,12 @@ def test_event_filters_by_prefixes_country_type_outcome_and_tenant(db, owner_cli
     row = items(subject=subject[:12], tenant_id=str(tenant.public_id))
     assert len(row) == 1 and row[0]["tenant_name"] == "Ereignis Verein" and row[0]["tenant_id"] == str(tenant.public_id)
     assert owner_client.get("/api/admin/auth-security/events", params={"tenant_id": str(uuid.uuid4())}).status_code == 404
-    for bad in ({"range": "30d"}, {"subject": "XYZ1"}, {"net": "ab"}, {"country": "nl"}, {"event_type": "erfunden"}, {"cursor": "kaputt"}):
+    from app.auth_security import event_query
+
+    overflow = event_query.encode_cursor(datetime.now(UTC), 2**70)
+    naive = event_query.encode_cursor(datetime(2026, 1, 1), 5)
+    for bad in ({"range": "30d"}, {"subject": "XYZ1"}, {"net": "ab"}, {"country": "nl"}, {"event_type": "erfunden"}, {"cursor": "kaputt"},
+                {"cursor": overflow}, {"cursor": naive}):
         assert owner_client.get("/api/admin/auth-security/events", params=bad).status_code == 422, bad
 
 
@@ -372,3 +382,27 @@ def test_alert_rules_are_owner_only(db):
     client = _client(db, _admin(db, "support"))
     assert client.get("/api/admin/auth-security/alert-rules").status_code == 403
     assert client.get("/api/admin/auth-security/alert-rules/spraying/series").status_code == 403
+
+
+# ── Audit-Log: gespeicherte Ansichten, Vorgang ─────────────────────────────────────────────
+
+
+def test_audit_views_count_and_verb_filter(db):
+    from app.api.routes import admin as admin_module
+    from tests.factories import make_tenant
+
+    admin_module._audit_view_cache.clear()
+    tenant = make_tenant(db, "Audit Ansichten")
+    for action, outcome in (("protocol.deleted", "success"), ("user.login_failed", "failure"), ("personal_data.viewed", "success"), ("todo.created", "success")):
+        db.execute(text("INSERT INTO audit_log (action, outcome, tenant_id) VALUES (:a, :o, :t)"), {"a": action, "o": outcome, "t": tenant.id})
+    owner = _admin(db)
+    client = _client(db, owner)
+    counts = client.get("/api/admin/audit-log/views", params={"range": "24h", "tenant_id": str(tenant.public_id)}).json()["counts"]
+    assert counts == {"all": 4, "failures": 1, "auth": 1, "deletions": 1, "admin": 0, "privacy": 1}
+    page = client.get("/api/admin/audit-log", params={"range": "24h", "tenant_id": str(tenant.public_id), "verb": "deleted"}).json()
+    assert [item["action"] for item in page["items"]] == ["protocol.deleted"]
+    assert client.get("/api/admin/audit-log", params={"verb": "'; drop"}).status_code == 422
+    support = _client(db, _admin(db, "support"))
+    assert support.get("/api/admin/audit-log/views").status_code == 403
+    assert support.get("/api/admin/audit-log/views", params={"tenant_id": str(uuid.uuid4())}).status_code == 403
+    assert client.get("/api/admin/audit-log/views", params={"tenant_id": str(uuid.uuid4())}).status_code == 404

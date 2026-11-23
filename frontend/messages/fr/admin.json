@@ -1522,7 +1522,8 @@
       "actorSelected": "Même personne",
       "source": "Source {source}",
       "entity": "Objet {entity}",
-      "remove": "Retirer le filtre « {filter} »"
+      "remove": "Retirer le filtre « {filter} »",
+      "verb": "Opération : {verb}"
     },
     "stats": {
       "events": "Événements",
@@ -1555,6 +1556,35 @@
       "person": "Tout de cette personne",
       "source": "Même source",
       "action": "Même action"
+    },
+    "views": {
+      "label": "Vues enregistrées",
+      "all": "Tous les événements",
+      "failures": "Échoués",
+      "auth": "Connexions",
+      "deletions": "Suppressions",
+      "admin": "Admin plateforme",
+      "privacy": "Protection des données"
+    },
+    "tokens": {
+      "placeholder": "Rechercher ou filtrer, p. ex. source:26ca action:protocol opération:supprimé",
+      "label": "Rechercher ou filtrer",
+      "keysLabel": "Clés de filtre :",
+      "invalid": "Non compris : {tokens}. Clés de filtre :",
+      "keys": {
+        "person": "personne",
+        "tenant": "mandant",
+        "source": "source",
+        "action": "action",
+        "verb": "opération"
+      }
+    },
+    "person": {
+      "all": "Toutes les personnes",
+      "placeholder": "Choisir une personne",
+      "searchPlaceholder": "Nom ou e-mail (au moins 3 caractères)",
+      "adminLabel": "{name} (admin plateforme)",
+      "selected": "Personne choisie"
     }
   },
   "emailLog": {

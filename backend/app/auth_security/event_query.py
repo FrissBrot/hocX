@@ -134,9 +134,13 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
     try:
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         ts, row_id = raw.rsplit("|", 1)
-        return datetime.fromisoformat(ts), int(row_id)
+        parsed, number = datetime.fromisoformat(ts), int(row_id)
     except (ValueError, UnicodeDecodeError) as exc:
         raise ValueError("Cursor ungültig") from exc
+    # Zeitzone Pflicht, ID im bigint-Bereich (sonst 500 statt 422, Security-Review 1.6)
+    if parsed.tzinfo is None or not 0 < number < 2**63:
+        raise ValueError("Cursor ungültig")
+    return parsed, number
 
 
 _LIST_SELECT = (

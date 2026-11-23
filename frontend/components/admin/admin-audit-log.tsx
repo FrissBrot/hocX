@@ -3,9 +3,10 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { AuditPersonPicker } from "@/components/admin/audit-person-picker";
 import { SecurityExportButton } from "@/components/admin/security/security-export";
 import { TenantPicker } from "@/components/admin/tenant-picker";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,13 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";
 import {
   AUDIT_RANGES,
+  AUDIT_TOKEN_KEYS,
   AUDIT_URL_CONFIG,
+  AUDIT_VERBS,
+  AUDIT_VIEWS,
+  activeAuditView,
+  applyAuditView,
+  parseAuditTokens,
   auditApiQuery,
   auditDiff,
   groupByDay,
@@ -27,6 +34,9 @@ import {
   toggleArea,
   type AuditFilters,
   type AuditRange,
+  type AuditTokenKey,
+  type AuditVerbFilter,
+  type AuditView,
 } from "@/lib/admin/audit-log";
 import { serverTableStateFromParams, serverTableUrlQuery } from "@/lib/admin/use-server-table";
 import { browserApiFetch } from "@/lib/api/client";
@@ -66,7 +76,10 @@ function useAuditUrlState() {
     return { filters: serverTableStateFromParams(params, AUDIT_URL_CONFIG).filters, entry: Number.isFinite(entry) && entry > 0 ? entry : null };
   });
   useEffect(() => {
-    const query = serverTableUrlQuery({ filters: state.filters, offset: 0, sort: null, dir: "asc" }, AUDIT_URL_CONFIG);
+    // Nur ein gültiges Aktions-Präfix kommt in die URL - nie halb getippte Tokens oder Freitext mit
+    // Namen («person:Vorname Nachname», Security-Review 1.6)
+    const urlFilters = AUDIT_URL_CONFIG.validate?.action?.(state.filters.action) === false ? { ...state.filters, action: "" } : state.filters;
+    const query = serverTableUrlQuery({ filters: urlFilters, offset: 0, sort: null, dir: "asc" }, AUDIT_URL_CONFIG);
     if (state.entry) query.set("entry", String(state.entry));
     const next = query.toString();
     if (window.location.pathname === pathname && window.location.search.replace(/^\?/, "") !== next) {
@@ -95,6 +108,25 @@ export function AdminAuditLog({ initialPage }: { initialPage: AuditLogPage }) {
   const [detail, setDetail] = useState<EntryDetail | null>(null);
   const queryKey = auditApiQuery(filters).toString();
   const debounceText = useRef(filters.action);
+  const [viewCounts, setViewCounts] = useState<Record<AuditView, number> | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const personTriggerId = useId();
+  const tenantTriggerId = useId();
+  const tToken = useTranslations("admin.auditLog.tokens");
+  const tVerbs = useTranslations("common.auditActions.verbs");
+
+  // Zähler der gespeicherten Ansichten (Zeitraum und Mandant, 60 s Cache im Backend)
+  const viewRange = filters.range || "7d";
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({ range: viewRange });
+    if (filters.tenant_id) query.set("tenant_id", filters.tenant_id);
+    browserApiFetch<{ counts: Record<AuditView, number> }>(`/api/admin/audit-log/views?${query}`, { signal: controller.signal })
+      .then((result) => setViewCounts(result?.counts ?? null))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [viewRange, filters.tenant_id]);
 
   const load = useCallback(
     async (offset: number, signal?: AbortSignal) => {
@@ -189,6 +221,32 @@ export function AdminAuditLog({ initialPage }: { initialPage: AuditLogPage }) {
   useShortcut("admin.auditNext", () => setEntry(stepSelection(ids, selectedId, 1)));
   useShortcut("admin.auditPrevious", () => setEntry(stepSelection(ids, selectedId, -1)));
 
+  const currentView = activeAuditView(filters, AUDIT_URL_CONFIG.defaults);
+
+  // Token-Suche (1.6): «quelle:26ca aktion:protocol vorgang:gelöscht»; «person:» und «mandant:»
+  // öffnen die Auswahl - Namen kommen nie in Filter oder URL.
+  function submitTokens(event: FormEvent) {
+    event.preventDefault();
+    const aliases = Object.fromEntries(AUDIT_TOKEN_KEYS.map((key) => [key, [tToken(`keys.${key}`)]])) as Record<AuditTokenKey, string[]>;
+    const verbAliases = Object.fromEntries(
+      AUDIT_VERBS.filter((verb) => tVerbs.has(verb)).map((verb) => [tVerbs(verb).toLowerCase(), verb]),
+    ) as Record<string, AuditVerbFilter>;
+    const parsed = parseAuditTokens(filters.action, aliases, verbAliases);
+    setTokenError(parsed.invalid.length ? parsed.invalid.join(" ") : null);
+    setFilters({ ...parsed.patch, action: parsed.patch.action ?? parsed.rest });
+    if (parsed.pick) document.getElementById(parsed.pick === "person" ? personTriggerId : tenantTriggerId)?.focus();
+  }
+
+  function insertToken(key: AuditTokenKey) {
+    if (key === "person" || key === "tenant") {
+      document.getElementById(key === "person" ? personTriggerId : tenantTriggerId)?.focus();
+      return;
+    }
+    const prefix = `${tToken(`keys.${key}`)}:`;
+    setFilters({ action: filters.action.trim() ? `${filters.action.trim()} ${prefix}` : prefix });
+    searchRef.current?.focus();
+  }
+
   const areas = selectedAreas(filters);
   const areaCounts = timeline ? countByArea(timeline.by_category) : null;
   const groups = groupByDay(items);
@@ -235,9 +293,44 @@ export function AdminAuditLog({ initialPage }: { initialPage: AuditLogPage }) {
         </div>
       </div>
 
+      <div className="audit-views" role="group" aria-label={t("views.label")}>
+        {AUDIT_VIEWS.map((view) => (
+          <button
+            key={view}
+            type="button"
+            className={`audit-view${currentView === view ? " audit-view-active" : ""}`}
+            aria-pressed={currentView === view}
+            onClick={() => setFilters(applyAuditView(filters, view, AUDIT_URL_CONFIG.defaults))}
+          >
+            {t(`views.${view}`)}
+            {viewCounts ? <span className="audit-view-count">{viewCounts[view].toLocaleString(locale)}</span> : null}
+          </button>
+        ))}
+      </div>
+
       <section className="card audit-filters" aria-label={t("filtersLabel")}>
         <div className="audit-filter-row">
-          <SearchInput value={filters.action} onChange={(value) => setFilters({ action: value })} placeholder={t("actionPlaceholder")} />
+          <form className="audit-token-form" role="search" onSubmit={submitTokens}>
+            <SearchInput
+              ref={searchRef}
+              value={filters.action}
+              onChange={(value) => {
+                setTokenError(null);
+                setFilters({ action: value });
+              }}
+              placeholder={t("tokens.placeholder")}
+              aria-label={t("tokens.label")}
+              aria-describedby={`${personTriggerId}-tokens`}
+            />
+            <div id={`${personTriggerId}-tokens`} className="audit-token-keys">
+              <span className="muted">{tokenError ? t("tokens.invalid", { tokens: tokenError }) : t("tokens.keysLabel")}</span>
+              {AUDIT_TOKEN_KEYS.map((key) => (
+                <button key={key} type="button" className="button-pill" onClick={() => insertToken(key)}>
+                  {tToken(`keys.${key}`)}:
+                </button>
+              ))}
+            </div>
+          </form>
           <FilterTabs<string>
             options={[
               { value: "", label: t("filterAll") },
@@ -253,7 +346,20 @@ export function AdminAuditLog({ initialPage }: { initialPage: AuditLogPage }) {
             onChange={(value) => setFilters({ range: value })}
           />
           <div className="audit-tenant-filter">
-            <TenantPicker value={filters.tenant_id || null} onChange={(tenant) => setFilters({ tenant_id: tenant?.id ?? "" })} nullLabel={t("allTenants")} />
+            <TenantPicker
+              value={filters.tenant_id || null}
+              onChange={(tenant) => setFilters({ tenant_id: tenant?.id ?? "" })}
+              nullLabel={t("allTenants")}
+              triggerId={tenantTriggerId}
+            />
+          </div>
+          <div className="audit-tenant-filter">
+            <AuditPersonPicker
+              kind={filters.actor_kind}
+              id={filters.actor_id}
+              triggerId={personTriggerId}
+              onChange={(person) => setFilters(person ? { actor_kind: person.kind, actor_id: person.id } : { actor_kind: "", actor_id: "" })}
+            />
           </div>
         </div>
 
@@ -408,9 +514,11 @@ function DayRows({ title, meta, columns, children }: { title: string; meta: stri
 
 function ActiveFilters({ filters, onClear }: { filters: AuditFilters; onClear: (patch: Partial<AuditFilters>) => void }) {
   const t = useTranslations("admin.auditLog");
+  const tVerbs = useTranslations("common.auditActions.verbs");
   const chips: { key: string; label: string; clear: Partial<AuditFilters> }[] = [];
   if (filters.actor_kind) chips.push({ key: "actor", label: t(filters.actor_id ? "active.actorSelected" : `actorKinds.${filters.actor_kind}`), clear: { actor_kind: "", actor_id: "" } });
   if (filters.source) chips.push({ key: "source", label: t("active.source", { source: filters.source }), clear: { source: "" } });
+  if (filters.verb) chips.push({ key: "verb", label: t("active.verb", { verb: tVerbs.has(filters.verb) ? tVerbs(filters.verb) : filters.verb }), clear: { verb: "" } });
   if (filters.entity_type) chips.push({ key: "entity", label: t("active.entity", { entity: `${filters.entity_type}${filters.entity_id ? ` #${filters.entity_id}` : ""}` }), clear: { entity_type: "", entity_id: "" } });
   if (chips.length === 0) return null;
   return (

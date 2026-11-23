@@ -18,11 +18,14 @@ export function TenantPicker({
   onChange,
   nullLabel,
   placeholder,
+  triggerId,
 }: {
   value: string | null;
   onChange: (tenant: TenantOption | null) => void;
   nullLabel?: string;
   placeholder?: string;
+  /** ID des Auslösers (z. B. um ihn aus einer Token-Suche zu fokussieren) */
+  triggerId?: string;
 }) {
   const [selected, setSelected] = useState<TenantOption | null>(null);
 
@@ -61,6 +64,7 @@ export function TenantPicker({
       }}
       nullLabel={nullLabel}
       placeholder={placeholder}
+      triggerProps={triggerId ? { id: triggerId } : undefined}
     />
   );
 }

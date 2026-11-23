@@ -183,7 +183,8 @@
     "blockSource": "Bloquer la source",
     "blocked": "Réseau bloqué.",
     "blockTitle": "Bloquer le réseau {net}",
-    "blockDescription": "Blocage manuel (niveau 5) du réseau de cet événement (IPv4 /24, IPv6 /48). Confirmé par passkey et consigné dans le journal d'audit. Les admins plateforme restent exemptés."
+    "blockDescription": "Blocage manuel (niveau 5) du réseau de cet événement (IPv4 /24, IPv6 /48). Confirmé par passkey et consigné dans le journal d'audit. Les admins plateforme restent exemptés.",
+    "blockShared": "Ce réseau a produit {count, plural, one {# événement} other {# événements}} en ±{hours} h. Un réseau partagé (NAT d'entreprise, proxy, école) bloque toutes les personnes sans appareil connu."
   },
   "blocks": {
     "title": "Blocages",

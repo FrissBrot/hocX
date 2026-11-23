@@ -59,6 +59,11 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/audit-log/views": {
+      "handler": "admin.audit_log_views",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/auth-security/alert-rules": {
       "handler": "admin_auth_security.auth_security_alert_rules",
       "platform": true,

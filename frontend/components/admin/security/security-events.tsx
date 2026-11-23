@@ -738,6 +738,8 @@ function BlockSourceModal({ open, event, onClose, onDone }: { open: boolean; eve
   return (
     <Modal open={open} title={t("events.blockTitle", { net: event.src_net_hash ?? "" })} description={t("events.blockDescription")} onClose={onClose}>
       <ModalSaveForm className="section-stack" onSubmit={(formEvent) => { formEvent.preventDefault(); return submit(); }}>
+        {/* Geteilte Netze (NAT, Proxy) treffen alle ohne bekanntes Gerät (Security-Review 1.6) */}
+        <StatusBanner tone="warning" message={t("events.blockShared", { count: event.related.net ?? 0, hours: event.related_hours })} />
         <div className="field-stack">
           <span className="field-label">{tBlocks("durationLabel")}</span>
           <FilterTabs

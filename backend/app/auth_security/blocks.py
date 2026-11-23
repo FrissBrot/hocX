@@ -126,8 +126,8 @@ def count_rejection(block: Block) -> None:
         key = f"{_HITS}{block.subject}"
         client.incr(key)
         client.expire(key, max(60, block.until - int(time.time()) + 3600))
-    except redis_sync.RedisError:
-        pass
+    except redis_sync.RedisError as exc:
+        note_backend_error(exc)
 
 
 def rejections(subjects: list[str]) -> dict[str, int]:
@@ -135,7 +135,8 @@ def rejections(subjects: list[str]) -> dict[str, int]:
         return {}
     try:
         values = get_redis_sync().mget([f"{_HITS}{subject}" for subject in subjects])
-    except redis_sync.RedisError:
+    except redis_sync.RedisError as exc:
+        note_backend_error(exc)
         return {}
     return {subject: int(value or 0) for subject, value in zip(subjects, values, strict=True)}
 

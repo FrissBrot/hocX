@@ -17,10 +17,11 @@ import tempfile
 import uuid
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -343,7 +344,7 @@ def block_event_source(event_id: uuid.UUID, payload: BlockExtend, db: Session = 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     event_query.clear_cache()
     _block_audit(db, admin, "admin.auth_block_set", block, source="event", event_id=str(event_id))
-    return {"subject": block.subject, "until": block.until}
+    return {"subject": block.short, "until": block.until}
 
 
 @router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])
@@ -365,6 +366,10 @@ def auth_security_block_history(db: Session = Depends(get_db)):
     return read_service.block_history(db)
 
 
+# Schlüssel einer Sperre: Netz-Fingerprint (16) oder Zähler-Pseudonym (24 Hex-Zeichen)
+_BLOCK_SUBJECT = r"^[0-9a-f]{16}([0-9a-f]{8})?$"
+
+
 def _block_audit(db: Session, admin: CurrentAdmin, action: str, block: blocks.Block, **details) -> None:
     audit.log(
         db, action=action, actor_email=admin.email,
@@ -381,11 +386,11 @@ def create_block(payload: BlockCreate, db: Session = Depends(get_db), admin: Cur
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _block_audit(db, admin, "admin.auth_block_set", block, source="manual")
-    return {"subject": block.subject, "until": block.until}
+    return {"subject": block.short, "until": block.until}
 
 
 @router.post("/auth-security/blocks/{subject}/extend", dependencies=[Depends(require_step_up("security-block"))])
-def extend_block(subject: str, payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+def extend_block(subject: Annotated[str, PathParam(pattern=_BLOCK_SUBJECT)], payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     """Verlängern = manuelle Sperre Stufe 5 derselben Quelle (Begründung Pflicht, auditiert)."""
     if len(subject) > 64:
         raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
@@ -396,11 +401,11 @@ def extend_block(subject: str, payload: BlockExtend, db: Session = Depends(get_d
     if block is None:
         raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
     _block_audit(db, admin, "admin.auth_block_extended", block, added_minutes=payload.minutes)
-    return {"subject": block.subject, "until": block.until}
+    return {"subject": block.short, "until": block.until}
 
 
 @router.delete("/auth-security/blocks/{subject}", status_code=204, dependencies=[Depends(require_step_up("security-block"))])
-def delete_block(subject: str, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+def delete_block(subject: Annotated[str, PathParam(pattern=_BLOCK_SUBJECT)], db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     if len(subject) > 64 or not blocks.clear(subject, admin_id=admin.admin_id):
         raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
     audit.log(db, action="admin.auth_block_cleared", actor_email=admin.email, details={"subject": subject[:12]})

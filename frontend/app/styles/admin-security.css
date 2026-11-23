@@ -843,3 +843,21 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* Kein Kind darf die Seite breiter machen als den Viewport (390 px), wie .audit-panel: sonst
+   bestimmt die breiteste Tabelle die Mindestbreite der ganzen Seite */
+.admin-security-panel {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.admin-security-panel > * {
+  min-width: 0;
+}
+
+/* .visually-hidden-Texte in Tabellenzellen (Risikoklasse, Verteilung) sind absolut positioniert:
+   ohne eigenen Bezugsrahmen entkommen sie dem overflow der Tabelle und machen die Seite so breit
+   wie die Tabelle (390 px: 1112 px) */
+.admin-security-panel .table-shell {
+  position: relative;
+}

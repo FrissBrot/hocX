@@ -183,7 +183,8 @@
     "blockSource": "Quelle sperren",
     "blocked": "Netz gesperrt.",
     "blockTitle": "Netz {net} sperren",
-    "blockDescription": "Manuelle Sperre (Stufe 5) des Netzes dieses Ereignisses (IPv4 /24, IPv6 /48). Wird mit Passkey bestätigt und im Audit-Log vermerkt. Plattform-Admins bleiben ausgenommen."
+    "blockDescription": "Manuelle Sperre (Stufe 5) des Netzes dieses Ereignisses (IPv4 /24, IPv6 /48). Wird mit Passkey bestätigt und im Audit-Log vermerkt. Plattform-Admins bleiben ausgenommen.",
+    "blockShared": "Aus diesem Netz kamen {count, plural, one {# Ereignis} other {# Ereignisse}} in ±{hours} h. Ein geteiltes Netz (Firmen-NAT, Proxy, Schule) sperrt alle Personen ohne bekanntes Gerät."
   },
   "blocks": {
     "title": "Sperren",

@@ -6,7 +6,7 @@ import { adminIsOwner } from "@/lib/admin/tenant-detail-server";
 export default async function AdminSecurityEventsPage() {
   const isOwner = await adminIsOwner();
   return (
-    <section className="panel section-stack">
+    <section className="panel section-stack admin-security-panel">
       {/* useSearchParams (Filter in der URL) braucht eine Suspense-Grenze */}
       <Suspense fallback={null}>
         <SecurityEvents canWrite={isOwner} />

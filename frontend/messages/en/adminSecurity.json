@@ -183,7 +183,8 @@
     "blockSource": "Block source",
     "blocked": "Network blocked.",
     "blockTitle": "Block network {net}",
-    "blockDescription": "Manual block (stage 5) of this event's network (IPv4 /24, IPv6 /48). Confirmed with a passkey and recorded in the audit log. Platform admins remain exempt."
+    "blockDescription": "Manual block (stage 5) of this event's network (IPv4 /24, IPv6 /48). Confirmed with a passkey and recorded in the audit log. Platform admins remain exempt.",
+    "blockShared": "This network produced {count, plural, one {# event} other {# events}} within ±{hours} h. A shared network (company NAT, proxy, school) blocks everyone without a known device."
   },
   "blocks": {
     "title": "Blocks",

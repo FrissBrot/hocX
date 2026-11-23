@@ -125,7 +125,7 @@ test.describe("Admin-Konsole", () => {
   test("Audit-Log: Filter stehen nur mit IDs/Codes in der URL", async ({ page }) => {
     await expectHealthyPage(page, "/admin/security/audit?outcome=failure&actor_kind=system&from=2026-01-01");
     await expect(page.getByRole("tab", { name: "Fehlgeschlagen" })).toHaveAttribute("aria-selected", "true");
-    await page.getByPlaceholder("Aktion, z. B. user.login").fill("admin.login");
+    await page.getByRole("textbox", { name: "Suchen oder filtern" }).fill("admin.login");
     await expect(page).toHaveURL(/action=admin\.login/);
     expect(page.url()).not.toMatch(/%40|@/);
   });
@@ -150,7 +150,7 @@ test.describe("Admin-Konsole", () => {
     await expectHealthyPage(page, `/admin/security/audit?entry=${entryId}`);
     await expect(page.locator("aside.audit-detail")).toBeVisible();
     // Bereichs-Chip als Code in der URL
-    await page.getByRole("button", { name: /^Anmeldung/ }).click();
+    await page.getByRole("button", { name: /^Anmeldung(\s+\d+)?$/ }).click();
     await expect(page).toHaveURL(/area=auth/);
     expect(page.url()).not.toMatch(/%40|@/);
     // 390 px: die Seite wird nicht breiter als der Viewport (Tabelle und Reiter scrollen in sich)
