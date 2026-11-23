@@ -21,6 +21,15 @@ Installationen aktualisieren können.
   (`mcr.microsoft.com/playwright:v1.65.1-noble`) ist jetzt per Digest gepinnt. Der Spec `security-devices`
   wartete nach «Gerät abmelden» nur auf den Toast und zählte die Abmelde-Knöpfe, bevor die Liste neu geladen
   war; mit 1.65 traf er dieses Fenster reproduzierbar. Er wartet jetzt, bis die abgemeldete Zeile weg ist.
+- **Redis 8.10** (vorher 7.4, `redis:8-alpine` per Digest) in allen Compose-Dateien (Dev, Release, Tests)
+  und den CI-Diensten. Konfiguration (`requirepass` aus dem Secret, `maxmemory` + `noeviction`), ACL des
+  Standardbenutzers und RDB-Snapshots unverändert; redis-py 8.1 (Lua-Skripte der Rate-Limits und
+  Kollaborations-Sperren, Pub/Sub) läuft unverändert. Das Image lädt zusätzlich die mitgelieferten Module
+  (Search, JSON, TimeSeries, Bloom, Vector Sets), hocX nutzt sie nicht. Lizenz ab Redis 8: AGPLv3/RSALv2/SSPLv1
+  (wahlweise); hocX betreibt das unveränderte Image nur intern.
+  **Rollback auf einen Deploy-Code mit Redis 7 nur mit geleertem Redis-Volume** (Redis 7 liest das RDB-Format 15
+  nicht): Login-Tickets, MFA-Flows, Rate-Limit-/Sperrzähler, temporäre Anmeldesperren und Kollaborations-Sperren
+  gehen dabei verloren; Sessions und Job-Warteschlange liegen in PostgreSQL und bleiben (RUNBOOK Abschnitt 5). Der automatische App-Rollback von `deploy.sh` ist nicht betroffen.
 
 ## [1.5.1] - 2026-11-22
 
