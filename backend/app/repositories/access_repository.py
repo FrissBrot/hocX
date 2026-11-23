@@ -179,9 +179,11 @@ class AccessRepository:
         combined = union_all(export_q, image_q, import_q).subquery()
         return db.scalar(select(combined.c.protocol_id).limit(1))
 
-    def stored_file_is_image(self, db: Session, *, stored_file_id: int) -> bool:
-        mime = db.scalar(select(StoredFile.mime_type).where(StoredFile.id == stored_file_id))
-        return bool(mime and mime.startswith("image/"))
+    def stored_file_is_media(self, db: Session, *, stored_file_id: int) -> bool:
+        """Foto oder Video: Videos gibt es nur als Clip eines Live Photos, sie gehören zum Foto
+        (photos.read, wie file_trash_service.is_media) - nicht zur Ablage (files.read)."""
+        mime = db.scalar(select(StoredFile.mime_type).where(StoredFile.id == stored_file_id)) or ""
+        return mime.startswith("image/") or mime.startswith("video/")
 
     def is_own_document_export_file(self, db: Session, *, stored_file_id: int, user_id: int, tenant_id: int) -> bool:
         """PDF der Dokument-Engine ohne Protokollbezug, das diese Person in diesem Mandanten

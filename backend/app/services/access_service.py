@@ -192,7 +192,8 @@ class AccessService:
         # Ablage mit files.read, Fotos (Galerie, Abgabe-Fotos) mit photos.read - bisher deckte
         # files.manage beides (Plan «Berechtigungen», Phase 3; Mapping gibt beide Rechte weiter).
         # Symmetrisch: files.read nur für Dokumente, photos.read nur für Bilder.
-        is_image = self.repository.stored_file_is_image(db, stored_file_id=stored_file_id)
+        # Live-Photo-Clips (video/*) zählen zum Foto (Nachtlauf 2026-11-22).
+        is_image = self.repository.stored_file_is_media(db, stored_file_id=stored_file_id)
         if not (
             user.can(P.MEETINGS_READ_DRAFTS)
             or (user.can(P.FILES_READ) and not is_image)
