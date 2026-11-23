@@ -19,6 +19,13 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- **Fett/Kursiv mit Satzzeichen am Rand bleibt erhalten:** Endete eine Auszeichnung mit einem Satzzeichen
+  und folgte direkt ein Buchstabe (z. B. «**B!**» vor «C») oder begann sie mit einem Satzzeichen nach einem
+  Buchstaben, verschob der Markdown-Export die Begrenzer nach innen («**B**!C», das Satzzeichen verlor die
+  Formatierung) oder entfernte sie ganz - CommonMark erkennt `**` dort nicht (Flanking-Regeln). Das
+  angrenzende Zeichen ausserhalb wird jetzt als Zahl-Entität gespeichert («**B!**&#67;»); Editor, PDF und
+  Klartext-Vorschau lesen es wieder als normales Zeichen. Roundtrip-Tests für fett, kursiv und
+  durchgestrichen.
 - **Archivierte Dokumentvorlage bleibt nicht mehr Standard (PR #102):** Wurde eine Vorlage archiviert
   (z. B. «Unbenutzte archivieren»), während jemand sie gleichzeitig als Standard wählte, blieb die
   archivierte Vorlage zugewiesen; Dokumente fielen still auf die Vorgabe zurück. Archivieren und
