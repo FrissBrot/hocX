@@ -92,7 +92,11 @@ class ParticipantService:
         db.refresh(created)
         return created
 
-    def update_participant(self, db: Session, participant_id: int, payload: ParticipantUpdate, *, tenant_id: int) -> Participant | None:
+    def update_participant(
+        self, db: Session, participant_id: int, payload: ParticipantUpdate, *, tenant_id: int, actor=None,
+    ) -> Participant | None:
+        """``actor`` (CurrentUser der Route): für die Selbstentzug-Regel (Deaktivieren/Austritt am
+        eigenen Konto); ohne Akteur nur «letzter Administrator»."""
         # Audit D7, 2026-08-16 - see get_participant's identical note above.
         participant = self.repository.get(db, participant_id)
         if participant is None or participant.tenant_id != tenant_id:
@@ -119,16 +123,19 @@ class ParticipantService:
             # Reaktivieren oder Wiedereintritt (Austrittsdatum entfernt/verschoben) eines Kontos mit
             # Login zählt zum Benutzerlimit des Abos
             user_limit_service.ensure_login_capacity(db, tenant_id, for_user_id=participant.id)
-        if _account_relevant_change(participant, values):
+        newly_left = _newly_left(participant, values)
+        if _account_relevant_change(participant, values) or newly_left:
+            # Austritt (Datum vor heute) sperrt den Login wie Deaktivieren: offene Einmal-Links
+            # dürfen nach einem späteren Wiedereintritt nicht wieder gelten.
             account_notifications.revoke_all_links(db, participant.id)
         old_email = participant.email if participant.login_enabled else None
-        if values.get("is_active") is False and participant.is_active:
+        if (values.get("is_active") is False and participant.is_active) or (newly_left and participant.login_enabled):
             # Wie _update_user_core: Deaktivieren beendet alle Sessions, damit nach einer späteren
             # Reaktivierung keine alten Cookies wieder gültig werden (SECURITY-RULES 3.3).
             values["session_revoke_at"] = datetime.now(UTC)
         try:
             # Deaktivieren darf den letzten Administrator nicht treffen (role_service.admin_guard).
-            with role_service.admin_guard(db, tenant_id, None):
+            with role_service.admin_guard(db, tenant_id, actor, affects_actor=actor is not None and participant.id == actor.user_id):
                 updated = self.repository.update(db, participant, values, commit=False)
                 self.access_service.sync_user_access_from_participants(db, user_id=updated.id, tenant_id=tenant_id)
                 if old_email and "email" in values:
@@ -340,6 +347,15 @@ class ParticipantService:
             )
         db.commit()
         return templates
+
+
+def _newly_left(person, values: dict) -> bool:
+    """Wird die Person mit dieser Änderung zur Ausgetretenen (Austrittsdatum vor heute, has_left)?"""
+    if "left_at" not in values or values["left_at"] is None or person.has_left:
+        return False
+    from app.services.todo_fine_service import today
+
+    return values["left_at"] < today()
 
 
 def _account_relevant_change(person, values: dict) -> bool:

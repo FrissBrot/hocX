@@ -211,7 +211,7 @@ def patch_participant(
             UserService().update_user(db, participant.id, UserUpdate(**payload.model_dump(exclude_unset=True)), user)
             updated = participant
         else:
-            updated = participant_service.update_participant(db, participant.id, payload, tenant_id=user.current_tenant_id)
+            updated = participant_service.update_participant(db, participant.id, payload, tenant_id=user.current_tenant_id, actor=user)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -439,9 +439,10 @@ def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db),
     return _invite_read(db, _invite_one(db, user, participant))
 
 
-def _invite_one(db: Session, user: CurrentUser, participant: Participant):
+def _invite_one(db: Session, user: CurrentUser, participant: Participant, *, count_rate_limit: bool = True):
     """Prüfungen und Versand einer Einladung (einzeln und als Mehrfachaktion). Aufrufer prüft
-    participants.manage und access.manage."""
+    participants.manage und access.manage. ``count_rate_limit=False``: der Aufrufer hat das
+    Einladungs-Ratelimit für diese Person schon gezählt (Mehrfachaktion mit Rolle)."""
     _ensure_can_manage_login(db, user, participant)
     # Einladung eines Kontos mit Administrationsrechten = Rechtevergabe (SEC-AUTH-010)
     from app.core.permissions import requires_mfa
@@ -449,11 +450,26 @@ def _invite_one(db: Session, user: CurrentUser, participant: Participant):
 
     if requires_mfa(load_role_permissions(db, participant.id)[0]):
         require_recent_auth(user, kind=ADMIN, action="participant.invite_admin")
-    enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
+    if count_rate_limit:
+        _enforce_invite_rate_limit(user)
     _ensure_invitable(db, user, participant)
     token = account_links.invite(db, participant, actor_user_id=user.user_id)
     AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
     return token
+
+
+def _enforce_invite_rate_limit(user: CurrentUser) -> None:
+    enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
+
+
+# Fehler, die eine Mehrfachaktion als Ganzes abbrechen statt die Person zu überspringen: fehlender
+# Mailversand und eine nötige Identitätsbestätigung (das Frontend fragt den Faktor ab und
+# wiederholt die Anfrage; als «not_allowed» übersprungen scheiterte die Aktion sonst still).
+_BULK_ABORT_CODES = {"email_not_configured", "step_up_required"}
+
+
+def _aborts_bulk(exc: HTTPException) -> bool:
+    return isinstance(exc.detail, dict) and exc.detail.get("code") in _BULK_ABORT_CODES
 
 
 def _ensure_invitable(db: Session, user: CurrentUser, participant: Participant) -> None:
@@ -537,12 +553,16 @@ def bulk_invite_participants(payload: ParticipantBulkInvite, db: Session = Depen
             if payload.role_id is not None:
                 # Erst prüfen, ob die Einladung möglich ist: update_user committet den Rollenwechsel,
                 # ein späteres Scheitern (Limit, E-Mail vergeben …) liesse sonst die neue Rolle stehen.
+                # Auch das Ratelimit vorher: ein 429 nach dem Rollenwechsel liesse die Rolle stehen.
                 _ensure_invitable(db, user, participant)
+                _enforce_invite_rate_limit(user)
                 UserService().update_user(db, participant.id, UserUpdate(role_ids=[payload.role_id]), user)
-            _invite_one(db, user, participant)
+                _invite_one(db, user, participant, count_rate_limit=False)
+            else:
+                _invite_one(db, user, participant)
         except HTTPException as exc:
             db.rollback()
-            if isinstance(exc.detail, dict) and exc.detail.get("code") == "email_not_configured":
+            if _aborts_bulk(exc):
                 raise
             skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason=_skip_reason(exc)))
             continue
@@ -575,6 +595,8 @@ def bulk_participant_roles(payload: ParticipantBulkRoles, db: Session = Depends(
             UserService().update_user(db, participant.id, UserUpdate(role_ids=after), user)
         except (HTTPException, ValueError) as exc:
             db.rollback()
+            if isinstance(exc, HTTPException) and _aborts_bulk(exc):
+                raise
             reason = _skip_reason(exc) if isinstance(exc, HTTPException) else "failed"
             skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason=reason))
             continue

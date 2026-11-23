@@ -269,13 +269,16 @@ class UserService:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
-        if payload.password or payload.is_active is False or payload.login_enabled is False or (
+        from app.services.participant_service import _newly_left
+
+        newly_left = _newly_left(user, values)
+        if payload.password or payload.is_active is False or payload.login_enabled is False or newly_left or (
             "email" in values and (values["email"] or "") != (user.email or "").strip().lower()
         ):
             # Offene Einmal-Links («Passwort vergessen», Einladung) gelten nicht mehr
             account_notifications.revoke_all_links(db, user.id)
-        if payload.is_active is False:
-            # Deactivation invalidates all existing sessions
+        if payload.is_active is False or (newly_left and user.login_enabled):
+            # Deactivation (oder Austritt, has_left) invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
         if payload.login_enabled is False:
             # Disabling login invalidates all existing sessions
