@@ -197,7 +197,9 @@ def patch_participant(
 ):
     require_permission(user, P.PARTICIPANTS_MANAGE)
     participant = _get_participant_or_404(db, participant_id, user)
-    if participant.login_enabled and payload.model_fields_set & {"email", "is_active"}:
+    # Ein Austrittsdatum sperrt den Login (has_left) wie Deaktivieren - gleiche Schutzregel.
+    changes_exit = "left_at" in payload.model_fields_set and payload.left_at != participant.left_at
+    if participant.login_enabled and (payload.model_fields_set & {"email", "is_active"} or changes_exit):
         require_permission(user, P.ACCESS_MANAGE)
         _ensure_can_manage_login(db, user, participant)
     try:
