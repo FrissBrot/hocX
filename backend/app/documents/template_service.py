@@ -383,6 +383,11 @@ def delete_template(db: Session, template: DocumentTemplate) -> None:
     verloren - dafür gibt es «Archivieren»."""
     if template.tenant_id is None:
         raise TemplateStateError("apiError.systemTemplate")
+    # Erst sperren, dann zählen: Ein gerade entstehender Export (noch nicht festgeschrieben) hält
+    # eine Schlüsselsperre auf der Vorlage. FOR UPDATE wartet darauf, die Zählung danach sieht den
+    # Export (READ COMMITTED). Ohne Sperre sah sie ihn nicht, und das DELETE setzte die
+    # template_id des neuen Exports per ON DELETE SET NULL zurück.
+    lock_row(db, template)
     exported = db.scalar(select(func.count(DocumentExport.id)).where(DocumentExport.template_id == template.id))
     if exported:
         raise TemplateStateError("apiError.templateInUse")
