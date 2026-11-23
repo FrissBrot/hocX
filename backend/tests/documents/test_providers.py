@@ -277,3 +277,29 @@ def test_invitation_shows_only_agenda_items_marked_for_it(db, world):
     agenda = build_blocks(ctx, [BlockSpec(type="protocol_element", params={"titles_only": True, "invitation_only": True})])
     assert "Intern" in protocol_titles
     assert agenda[0].items == ["Begrüssung"]
+
+
+def test_active_member_list_and_attendance_sheet_skip_former_members(db, world):
+    """«Nur aktive» bzw. Präsenzliste: Ausgetretene (Austrittsdatum vor dem Stichtag des Dokuments)
+    gehören nicht dazu - wie in allen Auswahllisten (GET /participants). Am Austrittstag noch dabei."""
+    former = make_participant(db, world["tenant"].id, "Bruno Ehemalig")
+    former.left_at = date(2026, 2, 1)
+    last_day = make_participant(db, world["tenant"].id, "Clara Letzter Tag")
+    last_day.left_at = date(2026, 3, 1)  # = ctx.today
+    db.flush()
+    ctx = _ctx(db, world)
+    member_list = _plain(build_blocks(ctx, [BlockSpec(type="member_list", hide_if_empty=False)]))
+    sheet = _plain(build_blocks(ctx, [BlockSpec(type="attendance_sheet", hide_if_empty=False)]))
+    for text in (member_list, sheet):
+        assert "Anna Muster" in text and "Clara Letzter Tag" in text
+        assert "Bruno Ehemalig" not in text
+    # Ohne «nur aktive» bleibt die vollständige Liste (mit Austrittsdatum)
+    everyone = _plain(build_blocks(ctx, [BlockSpec(type="member_list", params={"active_only": False}, hide_if_empty=False)]))
+    assert "Bruno Ehemalig" in everyone
+    # Platzhalter {members.active_count} / {members.active} im Dokument-Layout
+    from app.documents.bindings import BindingEnvironment, BindingResolver
+    from app.documents.strings import strings_for
+
+    resolver = BindingResolver(ctx, BindingEnvironment(), strings=strings_for("de"))
+    assert resolver.resolve("members.active_count") == 2
+    assert sorted(item["name"] for item in resolver.resolve("members.active")) == ["Anna Muster", "Clara Letzter Tag"]

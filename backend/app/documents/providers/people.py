@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.documents.catalog import (
     AttendanceMatrixParams,
@@ -188,7 +188,11 @@ def provide_attendance_matrix(ctx: BuildContext, spec: BlockSpec, params: Attend
 def _members(ctx: BuildContext, *, active_only: bool, template_ref: Any = None) -> list[Participant]:
     statement = select(Participant).where(Participant.tenant_id == ctx.tenant_id)
     if active_only:
-        statement = statement.where(Participant.is_active.is_(True))
+        # Ausgetretene (Austrittsdatum vor dem Stichtag des Dokuments) sind nicht mehr aktiv - wie
+        # Participant.has_left und GET /participants; am Austrittstag selbst noch dabei.
+        statement = statement.where(
+            Participant.is_active.is_(True), or_(Participant.left_at.is_(None), Participant.left_at >= ctx.today),
+        )
     if template_ref is not None:
         template = ctx.require_entity(Template, template_ref)
         statement = statement.join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id).where(TemplateParticipant.template_id == template.id)

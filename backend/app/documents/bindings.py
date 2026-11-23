@@ -476,13 +476,17 @@ def _load_events(resolver: BindingResolver) -> dict[str, Any]:
 
 
 def _load_members(resolver: BindingResolver) -> dict[str, Any]:
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
     from app.models import Participant
 
     ctx = resolver.ctx
     assert ctx is not None
-    rows = list(ctx.db.scalars(select(Participant).where(Participant.tenant_id == ctx.tenant_id, Participant.is_active.is_(True)).order_by(Participant.display_name)))
+    # Aktiv = nicht deaktiviert und nicht ausgetreten (Austrittsdatum vor dem Stichtag, wie has_left)
+    rows = list(ctx.db.scalars(select(Participant).where(
+        Participant.tenant_id == ctx.tenant_id, Participant.is_active.is_(True),
+        or_(Participant.left_at.is_(None), Participant.left_at >= ctx.today),
+    ).order_by(Participant.display_name)))
     values: dict[str, Any] = {"active_count": len(rows)}
     # Personendaten (Namen, E-Mail) nur mit Schreibrecht; die Anzahl ist für alle lesbar
     try:
