@@ -147,6 +147,7 @@
   "seatsOf": "sur {limit} places",
   "seatsUnlimited": "places, illimité",
   "seatsFree": "{count, plural, one {# place libre} other {# places libres}}",
+  "seatsPendingInvites": "{count, plural, one {# invitation en attente occupe une place} other {# invitations en attente occupent des places}}",
   "noFilesYet": "aucun fichier enregistré",
   "privacy": {
     "intro": "Définit qui voit quelles données personnelles. S’applique à tous les membres de cette organisation.",
