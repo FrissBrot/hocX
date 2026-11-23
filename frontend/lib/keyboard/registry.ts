@@ -87,12 +87,17 @@ export const SHORTCUTS = [
 
   // ── Protokoll-Editor ─────────────────────────────────────────────────────
   { id: "protocol.find", keys: ["Mod+F"], overridesBrowser: true, scope: "page", group: "protocol", inInputs: true },
-  { id: "protocol.nextElement", keys: ["Mod+Enter"], scope: "page", group: "protocol", inInputs: true },
-  { id: "protocol.previousElement", keys: ["Mod+Shift+Enter"], scope: "page", group: "protocol", inInputs: true },
-  { id: "protocol.elementDown", keys: ["ArrowDown"], displayKeys: ["ArrowUp", "ArrowDown"], scope: "page", group: "protocol" },
-  { id: "protocol.elementUp", keys: ["ArrowUp"], scope: "page", group: "protocol" },
-  { id: "protocol.openTodo", keys: ["Mod+Alt+T"], scope: "page", group: "protocol", inInputs: true },
+  // Blockweise durch das Protokoll (wie «nächstes Feld» in Formular-Editoren): Strg/⌘+Enter
+  // aktiviert den nächsten Block, mit Umschalt den vorherigen; nach dem letzten bleibt es dort.
+  { id: "protocol.nextBlock", keys: ["Mod+Enter"], scope: "page", group: "protocol", inInputs: true },
+  { id: "protocol.previousBlock", keys: ["Mod+Shift+Enter"], scope: "page", group: "protocol", inInputs: true },
+  // Schubladen am unteren Rand (Dock). Strg/⌘+Alt+Buchstabe wie die Einfüge-Kürzel in Google Docs
+  // (Strg+Alt+M Kommentar): frei in Browsern, auf Windows nie mit AltGr verwechselt (matchesCombo),
+  // auf macOS über event.code statt des ⌥-Zeichens.
   { id: "protocol.openNotes", keys: ["Mod+Alt+N"], scope: "page", group: "protocol", inInputs: true },
+  { id: "protocol.openTodo", keys: ["Mod+Alt+T"], scope: "page", group: "protocol", inInputs: true },
+  { id: "protocol.openAgenda", keys: ["Mod+Alt+A"], scope: "page", group: "protocol", inInputs: true },
+  { id: "protocol.openStatus", keys: ["Mod+Alt+S"], scope: "page", group: "protocol", inInputs: true },
   // Schnelle Pendenz (session-panel.tsx): Abgabe ein-/ausschalten, auch im Titelfeld
   { id: "protocol.quickTodoCollect", keys: ["Alt+A"], scope: "component", group: "protocol", inInputs: true },
   { id: "protocol.attendanceStatus", keys: ["1", "2", "3", "4"], displayKeys: ["1", "2", "3", "4"], scope: "component", group: "protocol" },

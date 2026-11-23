@@ -1,4 +1,4 @@
-import { createRef } from "react";
+import { createRef, forwardRef, useState, type ComponentProps } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ParticipantSummary, ProtocolSummary } from "@/types/api";
@@ -12,7 +12,17 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
-import { SessionPanel, type SessionPanelHandle } from "./session-panel";
+import { SessionPanel, type ActivePanel, type SessionPanelHandle } from "./session-panel";
+
+type HarnessProps = Omit<ComponentProps<typeof SessionPanel>, "active" | "onClose" | "ref"> & { initial?: ActivePanel };
+
+// Die Schublade des Editors steuert, welcher Teil sichtbar ist (protocol-dock.tsx); hier nachgebildet
+const Harness = forwardRef<SessionPanelHandle, HarnessProps>(function Harness({ initial = "todo", ...props }, ref) {
+  const [active, setActive] = useState<ActivePanel>(initial);
+  return <SessionPanel ref={ref} {...props} active={active} onClose={() => setActive(null)} />;
+});
+
+const todoOpen = (container: HTMLElement) => !container.querySelector(".session-panel-todo-wrap")?.hasAttribute("hidden");
 
 // «Schnelle Pendenz» im Sitzungsmodus: Karte «Datei als Abgabe einsammeln», Tastatur (Leertaste,
 // Alt+A, Enter, Escape), Menü bleibt nach dem Erstellen offen und leer, Abgabe nach der Pendenz.
@@ -25,9 +35,8 @@ function setup(props: { canCollectSubmissions?: boolean } = {}) {
   const ref = createRef<SessionPanelHandle>();
   const onQuickTodoCreated = vi.fn();
   const utils = render(
-    <SessionPanel ref={ref} protocol={protocol} participants={[anna, beat]} onQuickTodoCreated={onQuickTodoCreated} canCollectSubmissions={props.canCollectSubmissions ?? true} />
+    <Harness ref={ref} protocol={protocol} participants={[anna, beat]} onQuickTodoCreated={onQuickTodoCreated} canCollectSubmissions={props.canCollectSubmissions ?? true} />
   );
-  act(() => ref.current?.openTodo(false));
   const task = screen.getByRole("textbox", { name: "Aufgabe" });
   const person = screen.getByRole("combobox", { name: "Person" });
   return { ...utils, ref, task, person, onQuickTodoCreated };
@@ -101,7 +110,7 @@ describe("Schnelle Pendenz", () => {
     expect((task as HTMLInputElement).value).toBe("");
     expect((person as HTMLInputElement).value).toBe("");
     expect(document.activeElement).toBe(task);
-    expect(container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open")).toBe(true);
+    expect(todoOpen(container)).toBe(true);
   });
 
   it("creates the submission after the todo when the card is checked (Enter on the card creates)", async () => {
@@ -147,7 +156,7 @@ describe("Schnelle Pendenz", () => {
 
   it("Escape creates the todo (with submission) and closes; without a title it only closes", async () => {
     const { task, person, onQuickTodoCreated, container } = setup();
-    const isOpen = () => container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open");
+    const isOpen = () => todoOpen(container);
     fireEvent.change(task, { target: { value: "Per Escape" } });
     pickPerson(person, "anna");
     fireEvent.keyDown(task, { key: "a", code: "KeyA", altKey: true });
@@ -165,27 +174,22 @@ describe("Schnelle Pendenz", () => {
     await act(async () => {});
     expect(screen.getByText("Zuerst eine Person zuweisen.")).toBeTruthy();
     expect(apiFetch).not.toHaveBeenCalled();
-    expect(container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open")).toBe(true);
+    expect(todoOpen(container)).toBe(true);
   });
 
   it("Escape without a title only closes", async () => {
     const { container } = setup();
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open")).toBe(false));
+    await waitFor(() => expect(todoOpen(container)).toBe(false));
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("the ✕ button clears the fields first and closes when the menu is empty", () => {
-    const { task, container } = setup();
-    fireEvent.change(task, { target: { value: "Etwas" } });
-    fireEvent.keyDown(task, { key: "a", code: "KeyA", altKey: true });
-    fireEvent.click(screen.getByRole("button", { name: "Felder leeren" }));
-    expect((task as HTMLInputElement).value).toBe("");
-    expect(screen.getByRole("checkbox", { name: /Datei als Abgabe einsammeln/ }).getAttribute("aria-checked")).toBe("false");
-    expect(container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open")).toBe(true);
-    fireEvent.click(within(container.querySelector<HTMLElement>(".quick-flyout-todo")!).getByRole("button", { name: "Schliessen" }));
-    expect(container.querySelector(".quick-flyout-todo")?.classList.contains("quick-flyout-open")).toBe(false);
-    expect(apiFetch).not.toHaveBeenCalled();
+  it("sets the tag from «Zu Punkt»", () => {
+    render(<Harness protocol={protocol} participants={[anna]} sections={[{ id: "e-1", name: "Kasse" }, { id: "e-2", name: "Varia" }]} currentSectionName="Kasse" />);
+    const select = screen.getByRole("combobox", { name: "Zu Punkt" }) as HTMLSelectElement;
+    expect(select.value).toBe("Kasse");
+    fireEvent.change(select, { target: { value: "Varia" } });
+    expect((screen.getByRole("textbox", { name: "Kategorie / Tag" }) as HTMLInputElement).value).toBe("Varia");
   });
 
   it("offers smart dates in the due field and saves the picked date", async () => {
@@ -217,13 +221,13 @@ describe("Schnelle Pendenz", () => {
     render(
       <>
         <textarea aria-label="Feld" defaultValue="Bitte Mittag reservieren für Skiweekend" />
-        <SessionPanel ref={ref} protocol={protocol} participants={[anna]} />
+        <Harness ref={ref} protocol={protocol} participants={[anna]} initial={null} />
       </>
     );
     const field = screen.getByRole("textbox", { name: "Feld" }) as HTMLTextAreaElement;
     field.focus();
     field.setSelectionRange(6, 39);
-    act(() => ref.current?.openTodo());
+    act(() => ref.current?.prefillTodoFromSelection());
     expect((screen.getByRole("textbox", { name: "Aufgabe" }) as HTMLInputElement).value).toBe("Mittag reservieren für Skiweekend");
   });
 });

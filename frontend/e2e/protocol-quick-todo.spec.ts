@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
-// «Schnelle Pendenz» im Protokoll-Editor (session-panel.tsx): Pendenz mit Person, Fälligkeit und
+// «Schnelle Pendenz» im Protokoll-Editor (session-panel.tsx in der Schublade, protocol-dock.tsx): Pendenz mit Person, Fälligkeit und
 // «Datei als Abgabe einsammeln» nur per Tastatur anlegen; das Menü bleibt danach offen und leer,
 // die Pendenz erscheint im Protokoll mit Badge «Abgabe». Screenshots (Light/Dark, 1440 px; 390 px
 // zeigt die Mobile-Ansicht, die ein eigenes Pendenzen-Blatt hat) unter test-results/quick-todo/.
@@ -46,13 +46,14 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/protocols/${protocol.id}`);
-    await expect(page.locator(".protocol-quick-actions")).toBeVisible();
-    const flyout = page.locator(".quick-flyout-todo");
+    await expect(page.locator(".protocol-dock")).toBeVisible();
+    const flyout = page.locator("#protocol-drawer");
+    const dockTodo = page.locator('[data-drawer-button="todo"]');
 
     for (const theme of ["light", "dark"] as const) {
       await setTheme(page, theme);
-      await page.locator(".protocol-quick-actions-btn").nth(1).click();
-      await expect(flyout).toHaveClass(/quick-flyout-open/);
+      await dockTodo.click();
+      await expect(flyout).toBeVisible();
       const task = flyout.getByRole("textbox", { name: "Aufgabe" });
       await expect(task).toBeFocused();
       await page.waitForTimeout(300);
@@ -97,7 +98,7 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
 
       await page.keyboard.press("Enter");
       await expect(flyout.getByRole("status")).toContainText(`Erstellt: ${title} · mit Abgabe`, { timeout: 20_000 });
-      await expect(flyout).toHaveClass(/quick-flyout-open/);
+      await expect(flyout).toBeVisible();
       await expect(task).toHaveValue("");
       await expect(task).toBeFocused();
       await expect(card).toHaveAttribute("aria-checked", "false");
@@ -110,20 +111,22 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
         return Boolean(todo?.submission_assignment_id && todo.due_date);
       }, { timeout: 15_000 }).toBe(true);
       // … und zeigt im Protokoll das Badge «Abgabe»
-      await expect(page.locator(".todo-card", { hasText: "Abgabe" }).locator(".badge", { hasText: "Abgabe" }).first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator(".protocol-todo-static-row", { hasText: title }).locator(".badge", { hasText: "Abgabe" }).first()).toBeVisible({ timeout: 15_000 });
 
       // Escape ohne Titel schliesst nur
       await page.keyboard.press("Escape");
-      await expect(flyout).not.toHaveClass(/quick-flyout-open/);
+      await expect(flyout).toBeHidden();
+      await expect(dockTodo).toBeFocused();
     }
 
     // Escape mit Titel legt die Pendenz an und schliesst das Menü (wie bisher)
-    await page.locator(".protocol-quick-actions-btn").nth(1).click();
-    await expect(flyout).toHaveClass(/quick-flyout-open/);
+    // Kürzel aus der Registry öffnet die Schublade (Strg+Alt+T bzw. ⌥⌘T)
+    await page.keyboard.press("Control+Alt+KeyT");
+    await expect(flyout).toBeVisible();
     await expect(flyout.getByRole("textbox", { name: "Aufgabe" })).toBeFocused();
     await page.keyboard.type("Per Escape angelegt");
     await page.keyboard.press("Escape");
-    await expect(flyout).not.toHaveClass(/quick-flyout-open/, { timeout: 15_000 });
+    await expect(flyout).toBeHidden({ timeout: 15_000 });
     await expect.poll(async () => {
       const byBlock = (await (await request.get(`/api/protocols/${protocol.id}/block-todos`)).json()) as Record<string, { task: string }[]>;
       return Object.values(byBlock).flat().some((item) => item.task === "Per Escape angelegt");

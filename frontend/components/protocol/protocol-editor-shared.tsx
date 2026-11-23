@@ -172,18 +172,54 @@ export function visibleAttendanceTally(
   return tallyAttendance(roster, entries);
 }
 
-/** Maps a protocol section's dominant block type to an existing app-shell nav icon for the Schnellzugriff sidebar. */
-export function sectionIconKey(element: ProtocolElement): import("@/components/ui/nav-icons").NavIconKey {
-  const codes = element.blocks.map((block) => block.element_type_code);
-  if (codes.includes("attendance")) return "participants";
-  if (codes.includes("todo")) return "todos";
-  if (codes.includes("fine_list")) return "fines";
-  if (codes.includes("finance_balance") || codes.includes("finance_transactions")) return "finances";
-  if (codes.includes("chart")) return "statistics";
-  if (codes.includes("event_list") || codes.includes("session_date")) return "events";
-  if (codes.includes("bullet_list")) return "lists";
-  if (codes.includes("matrix")) return "elements";
-  return "documents";
+/** Übersetzungsschlüssel (Namespace «protocols») für den Typ eines Bausteins. */
+export const BLOCK_TYPE_LABEL_KEYS: Record<string, string> = {
+  text: "blockTypeText",
+  static_text: "blockTypeText",
+  display: "blockTypeDisplay",
+  form: "blockTypeForm",
+  todo: "blockTypeTodo",
+  image: "blockTypeImage",
+  bullet_list: "blockTypeBulletList",
+  event_list: "eventsLabel",
+  attendance: "blockTypeAttendance",
+  matrix: "blockTypeMatrix",
+  session_date: "blockTypeSessionDate",
+  finance_balance: "blockTypeFinanceBalance",
+  finance_transactions: "blockTypeFinanceTransactions",
+  fine_list: "blockTypeFineList",
+  chart: "blockTypeChart",
+  entry_exit: "blockTypeEntryExit",
+  session_notes: "blockTypeSessionNotes",
+};
+
+/**
+ * Kurzzusammenfassung eines Punkts für die Gliederung (Design «Protokoll-Editor 1a»): bewusst
+ * unabhängig vom getippten Text, damit die Gliederung beim Schreiben nicht neu rendert (S5).
+ * Anwesenheit und Pendenzen mit Zahlen, sonst die Typen der Bausteine.
+ */
+export function outlineSummary(
+  element: ProtocolElement,
+  context: {
+    attendance: AttendanceTally | null;
+    attendanceTotal: number;
+    todoCount: (blockId: string) => number;
+    t: (key: string, values?: Record<string, string | number>) => string;
+  }
+): string {
+  const codes = element.blocks.map((block) => block.element_type_code ?? "");
+  if (codes.includes("attendance") && context.attendance) {
+    const present = context.attendance.present + context.attendance.late;
+    return context.t("outlineSummaryAttendance", { present, total: context.attendanceTotal });
+  }
+  if (codes.includes("todo")) {
+    const count = element.blocks
+      .filter((block) => block.element_type_code === "todo")
+      .reduce((sum, block) => sum + context.todoCount(block.id), 0);
+    return context.t("outlineSummaryTodos", { count });
+  }
+  const labels = [...new Set(codes.map((code) => BLOCK_TYPE_LABEL_KEYS[code]).filter(Boolean))].map((key) => context.t(key));
+  return labels.join(" · ");
 }
 
 export function embeddedBlockOptions(t: TFunc) {

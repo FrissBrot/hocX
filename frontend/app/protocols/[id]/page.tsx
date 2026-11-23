@@ -192,8 +192,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               }}
               canViewFines={canViewFines}
               canCollectSubmissions={can(session, "submissions.manage") && can(session, "meetings.edit")}
-              accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
-              wheelEnabled={session.user?.protocol_wheel_enabled ?? false}
+              canApprove={can(session, "meetings.approve")}
               initialAgendaItems={agendaItems}
               initialScrollPosition={scrollPosition}
               initialProtocolFines={protocolFines}

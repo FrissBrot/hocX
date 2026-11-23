@@ -139,6 +139,12 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
   const todoProgress = page.getByRole("progressbar", { name: "1 von 4 erledigt" });
   await todoProgress.scrollIntoViewIfNeeded();
   await expect(page.getByText("3 offen · 1 erledigt")).toBeVisible();
+  // Editor 1a: statisch, bis der Block aktiviert ist (erledigte durchgestrichen, Fälligkeit farbig)
+  const todoCard = page.locator('.editor-block-card[data-block-type="todo"]').first();
+  await expect(todoCard.locator(".protocol-todo-static-done")).toHaveCount(1);
+  await expect(todoCard.locator(".protocol-todo-static .todo-due-trigger-overdue")).toHaveCount(1);
+  await todoCard.getByRole("button", { name: /bearbeiten$/ }).click();
+  await expect(todoCard).toHaveClass(/editor-block-card-active/);
   await expect(page.locator(".todo-progress-count")).toHaveText("25 %");
   await expect(page.locator(".tag-filter-chip", { hasText: "Halle" }).locator(".tag-filter-chip-count")).toHaveText("2");
   const cards = todoProgress.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' grid ')][1]").locator("article.todo-card");

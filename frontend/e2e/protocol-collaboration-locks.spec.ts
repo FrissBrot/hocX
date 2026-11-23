@@ -6,7 +6,8 @@ import { authFiles } from "./auth";
 // mehr über ein neues Editor-Objekt, sondern über ein Abonnement je Punkt. Verhalten unverändert:
 // wer in einem Textblock tippt, sperrt ihn für die andere Person (Hinweis mit Namen, Feld nur
 // lesbar), der andere Block bleibt frei, nach dem Verlassen ist er wieder frei, und der Text
-// kommt bei der anderen Person an.
+// kommt bei der anderen Person an. Editor 1a: Blöcke sind statisch, bis sie aktiviert werden;
+// erst der aktive Block sperrt.
 
 async function post(request: APIRequestContext, path: string, data: unknown) {
   const response = await request.post(path, { data });
@@ -18,7 +19,7 @@ async function openAs(browser: Browser, storageState: string, protocolId: string
   const context = await browser.newContext({ storageState, viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await page.goto(`/protocols/${protocolId}`);
-  await expect(page.locator(".editor-block-card .rich-text-editor-content[contenteditable='true']")).toHaveCount(2);
+  await expect(page.locator('.editor-block-card[data-block-type="text"] .editor-block-edit')).toHaveCount(2);
   return page;
 }
 
@@ -41,33 +42,37 @@ test("Sperre eines Textblocks erscheint nur bei diesem Block und verschwindet na
   const writerPage = await openAs(browser, authFiles.writer, protocol.id);
 
   const writerCards = writerPage.locator(".editor-block-card");
-  const adminEditor = adminPage.locator(".editor-block-card").nth(0).locator(".rich-text-editor-content");
-  await adminEditor.click();
+  const adminCards = adminPage.locator(".editor-block-card");
+  await adminCards.nth(0).getByRole("button", { name: /bearbeiten$/ }).click();
+  const adminEditor = adminCards.nth(0).locator(".rich-text-editor-content");
+  await expect(adminEditor).toBeFocused();
   // Gespeichert (und an die anderen verteilt) wird entprellt, solange die Sperre gilt
   const saved = adminPage.waitForResponse((response) => response.url().endsWith("/text") && response.request().method() === "PUT");
   await adminPage.keyboard.type("Hallo zusammen");
   await saved;
 
-  // Gesperrt mit Namen, nur dieser Block, Feld nicht editierbar
+  // Gesperrt mit Namen, nur dieser Block: kein «Bearbeiten», der andere Block bleibt frei
   await expect(writerCards.nth(0)).toHaveClass(/editor-block-card-locked/);
   await expect(writerCards.nth(0).locator(".collab-lock-badge")).toBeVisible();
-  await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toHaveAttribute("contenteditable", "false");
+  await expect(writerCards.nth(0).locator(".editor-block-edit")).toHaveCount(0);
   await expect(writerCards.nth(1)).not.toHaveClass(/editor-block-card-locked/);
-  await expect(writerCards.nth(1).locator(".rich-text-editor-content")).toHaveAttribute("contenteditable", "true");
+  await expect(writerCards.nth(1).locator(".editor-block-edit")).toHaveCount(1);
 
-  // Die andere Richtung: Block B beim Schreibenden, Admin sieht die Sperre nur dort
-  await writerCards.nth(1).locator(".rich-text-editor-content").click();
-  const adminCards = adminPage.locator(".editor-block-card");
+  // Die andere Richtung: Block B beim Schreibenden (per Tastatur), Admin sieht die Sperre nur dort
+  await writerCards.nth(1).locator(".editor-block-edit").focus();
+  await writerPage.keyboard.press("Enter");
+  await expect(writerCards.nth(1).locator(".rich-text-editor-content")).toBeFocused();
   await expect(adminCards.nth(1)).toHaveClass(/editor-block-card-locked/);
   await expect(adminCards.nth(0)).not.toHaveClass(/editor-block-card-locked/);
 
-  // Der Text ist bei der anderen Person angekommen
-  await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toContainText("Hallo zusammen", { timeout: 15_000 });
+  // Der Text ist bei der anderen Person angekommen (statische Anzeige)
+  await expect(writerCards.nth(0).locator(".markdown-view")).toContainText("Hallo zusammen", { timeout: 15_000 });
 
-  // Admin verlässt Block A: beim Schreibenden wieder frei
-  await adminPage.locator(".protocol-quicknav").click({ position: { x: 5, y: 5 } });
+  // Admin verlässt Block A mit Escape: beim Schreibenden wieder frei
+  await adminPage.keyboard.press("Escape");
+  await expect(adminCards.nth(0).locator(".rich-text-editor-content")).toHaveCount(0);
   await expect(writerCards.nth(0)).not.toHaveClass(/editor-block-card-locked/);
-  await expect(writerCards.nth(0).locator(".rich-text-editor-content")).toHaveAttribute("contenteditable", "true");
+  await expect(writerCards.nth(0).locator(".editor-block-edit")).toHaveCount(1);
 
   await adminPage.context().close();
   await writerPage.context().close();

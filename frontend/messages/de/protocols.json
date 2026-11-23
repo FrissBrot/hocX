@@ -195,8 +195,6 @@
   "editEventTitle": "Termin bearbeiten",
   "editListTitle": "Liste bearbeiten",
   "editor": {
-    "attendanceEyebrow": "Anwesenheit",
-    "autosaveNotice": "Änderungen werden automatisch gespeichert.",
     "changeSaveFailed": "Änderung konnte nicht gespeichert werden",
     "configConflictReloaded": "Dieser Block wurde inzwischen von jemand anderem geändert – der aktuelle Stand ist geladen. Bitte die Änderung erneut vornehmen.",
     "entryCreateFailed": "Eintrag konnte nicht erstellt werden",
@@ -209,7 +207,6 @@
     "eventRemoveFailed": "Termin konnte nicht entfernt werden",
     "eventSaveFailed": "Termin konnte nicht gespeichert werden",
     "eventShowFailed": "Termin konnte nicht eingeblendet werden",
-    "excusedLabel": "Entschuldigt",
     "imageDeleteConfirm": "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
     "imageDeleteFailed": "Bild konnte nicht gelöscht werden",
     "imageUploadFailed": "Bild konnte nicht hochgeladen werden",
@@ -220,12 +217,6 @@
     "templateVersionPill": "Vorlagenversion {version, number}",
     "templateChangedHint": "Vorlage wurde geändert",
     "orderSaveFailed": "Reihenfolge konnte nicht gespeichert werden",
-    "otherEditorWarningDescription": "Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen.",
-    "otherEditorWarningTitle": "Andere Person bearbeitet gerade",
-    "presentLabel": "Anwesend",
-    "quickAccessEyebrow": "Schnellzugriff",
-    "savedIndicator": "✓ Gespeichert",
-    "switchAnywayButton": "Trotzdem wechseln",
     "textSaveFailed": "Text konnte nicht gespeichert werden",
     "textSavedLocallyOffline": "Text lokal gesichert – wird nach Wiederherstellung der Verbindung automatisch gespeichert.",
     "todoCreateFailed": "Pendenz konnte nicht erstellt werden",
@@ -233,7 +224,6 @@
     "todoDeleteFailed": "Pendenz konnte nicht gelöscht werden",
     "todoSaveFailed": "Pendenz konnte nicht gespeichert werden",
     "uncancelEventOption": "Absage aufheben",
-    "unexcusedLabel": "Unentschuldigt",
     "workflowDone": "Abgeschlossen",
     "workflowFinishPreparation": "Vorbereitung abschliessen",
     "workflowFinishProtocol": "Protokoll abschliessen",
@@ -249,10 +239,9 @@
     "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – deine letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
     "eventHideFailed": "Termin konnte nicht entfernt werden",
     "finishProtocolConfirmTitle": "Protokoll abschliessen?",
-    "finishProtocolConfirmMessage": "Das Protokoll wird eingefroren und lässt sich danach nicht mehr bearbeiten. hocX erzeugt das signierte PDF, hält den Stand der Pendenzen fest und verschickt die E-Mail-Benachrichtigungen an die Verantwortlichen. Rückgängig machen geht nur über das Menü in der Protokollliste («Zurück auf …»).",
+    "finishProtocolConfirmMessage": "Das Protokoll wird eingefroren und lässt sich danach nicht mehr bearbeiten. hocX erzeugt das signierte PDF, hält den Stand der Pendenzen fest und verschickt die E-Mail-Benachrichtigungen an die Verantwortlichen. Rückgängig machen geht nur über «Status zurücksetzen» (unter «Status & Zusammenarbeit» oder im Menü der Protokollliste).",
     "finishSessionConfirmTitle": "Sitzung abschliessen?",
-    "finishSessionConfirmMessage": "Die Sitzung wird beendet und das Protokoll wechselt in die Nachbearbeitung. Wartende Anliegen für diesen Hock werden fest übernommen. Zurück geht es nur über das Menü in der Protokollliste.",
-    "confirmWithOtherEditors": "{consequences} Achtung: Gerade arbeitet noch jemand anderes an diesem Protokoll mit.",
+    "finishSessionConfirmMessage": "Die Sitzung wird beendet und das Protokoll wechselt in die Nachbearbeitung. Wartende Anliegen für diesen Hock werden fest übernommen. Zurücksetzen lässt sich der Status unter «Status & Zusammenarbeit» oder im Menü der Protokollliste.",
     "statusChangeUnsavedChanges": "Status nicht geändert: Nicht alle Änderungen konnten gespeichert werden. Bitte Verbindung prüfen und erneut versuchen.",
     "statusChangeFailed": "Status konnte nicht geändert werden.",
     "draftsConflictToast": "{count, plural, one {Ein lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} nicht übernommen, weil inzwischen jemand anderes diese Stelle geändert hat. Angezeigt wird die aktuelle Fassung.",
@@ -280,8 +269,73 @@
       "stepDone": "Abgeschlossen",
       "stepDoneHint": "erledigt",
       "templateReload": "Neu laden",
-      "trackChanges": "Nachverfolgen"
-    }
+      "trackChanges": "Nachverfolgen",
+      "backShort": "Protokolle",
+      "searchShort": "Suchen",
+      "outlineToggle": "Gliederung"
+    },
+    "frozenBannerTitle": "Abgeschlossen",
+    "frozenBannerText": "Diese Daten sind eingefroren und schreibgeschützt. Das signierte PDF wurde erzeugt.",
+    "outlineSummaryAttendance": "{present}/{total} anwesend",
+    "outlineSummaryTodos": "{count, plural, one {# Pendenz} other {# Pendenzen}}",
+    "outline": {
+      "label": "Gliederung des Protokolls",
+      "title": "Gliederung",
+      "hidden": "Ausgeblendet",
+      "dropAtEnd": "Hierher ziehen: ans Ende"
+    },
+    "saveState": {
+      "saving": "Speichert …",
+      "saved": "✓ Gespeichert",
+      "offline": "Offline · {count, plural, =0 {alles gespeichert} one {# Änderung wartet} other {# Änderungen warten}}",
+      "error": "Nicht gespeichert – zum Block"
+    },
+    "finishPreparationConfirmTitle": "Vorbereitung abschliessen?",
+    "finishPreparationConfirmMessage": "Das Protokoll wechselt in den Sitzungsmodus. Ab jetzt kommen keine neuen Änderungsmarkierungen dazu.",
+    "transition": {
+      "othersTitle": "{count, plural, one {Andere Person bearbeitet gerade} other {Andere Personen bearbeiten gerade}}",
+      "othersText": "{names} {count, plural, one {arbeitet} other {arbeiten}} aktiv an diesem Protokoll mit. Der Statuswechsel gilt für alle sofort."
+    },
+    "confirmWithOtherEditors": "{consequences} Achtung: Gerade arbeitet noch jemand anderes an diesem Protokoll mit.",
+    "lastBlockReached": "Letzter Block erreicht",
+    "firstBlockReached": "Erster Block erreicht",
+    "drawer": {
+      "dockLabel": "Sitzungswerkzeuge",
+      "notes": {
+        "dock": "Notizen",
+        "title": "Sitzungsnotizen",
+        "notInPdf": "Nicht im PDF"
+      },
+      "todo": {
+        "dock": "Pendenz",
+        "title": "Schnelle Pendenz"
+      },
+      "agenda": {
+        "dock": "Anliegen",
+        "title": "Anliegen erfassen"
+      },
+      "status": {
+        "dock": "Status",
+        "title": "Status & Zusammenarbeit",
+        "activeNow": "Gerade aktiv",
+        "you": "Du",
+        "offline": "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem gespeichert.",
+        "alone": "Niemand sonst ist gerade im Protokoll.",
+        "participants": "Teilnehmende",
+        "present": "Anwesend",
+        "excused": "Entschuldigt",
+        "absent": "Unentschuldigt",
+        "statusTitle": "Status",
+        "revertHint": "Setzt das Protokoll einen Schritt zurück, z. B. um ein abgeschlossenes Protokoll zu korrigieren.",
+        "revertTo": "Zurück auf «{status}»",
+        "shortcuts": "Tastenkürzel",
+        "escape": "Block, Schublade oder Dialog schliessen",
+        "secondFind": "Ein zweites {shortcut} öffnet die Suche des Browsers.",
+        "docsLink": "Anleitung: Zusammenarbeit im Protokoll"
+      }
+    },
+    "revertConfirmTitle": "Status zurücksetzen?",
+    "revertConfirmMessage": "Das Protokoll wechselt zurück auf «{status}». Die Änderung gilt für alle sofort."
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",
@@ -480,12 +534,13 @@
     "createdWithSubmission": "Erstellt: {title} · mit Abgabe",
     "keyHint": "{enter} erstellt · {escape} erstellt und schliesst",
     "keyHintCollect": "{enter} erstellt · {collect} Abgabe · {escape} erstellt und schliesst",
-    "clearFields": "Felder leeren",
     "taskLabel": "Aufgabe",
     "assigneeLabel": "Person",
     "dueLabel": "Fällig",
     "tagLabel": "Kategorie / Tag",
-    "dueEmpty": "Keine Treffer"
+    "dueEmpty": "Keine Treffer",
+    "sectionLabel": "Zu Punkt",
+    "sectionCustom": "Eigener Tag"
   },
   "settledLater": "Später beglichen",
   "showAction": "Einblenden",
@@ -683,5 +738,11 @@
     "todoColumnDue": "Fällig",
     "todoAdd": "Pendenz hinzufügen",
     "todoNewPlaceholder": "Neue Pendenz"
-  }
+  },
+  "blockDone": "Fertig",
+  "blockEdit": "Bearbeiten",
+  "blockEditAria": "{block} bearbeiten",
+  "textEmptyStatic": "Noch kein Text",
+  "bulletsEmptyStatic": "Noch keine Punkte",
+  "todosEmptyStatic": "Noch keine Pendenzen"
 }

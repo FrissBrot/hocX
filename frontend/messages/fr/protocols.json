@@ -195,8 +195,6 @@
   "editEventTitle": "Modifier l'événement",
   "editListTitle": "Modifier la liste",
   "editor": {
-    "attendanceEyebrow": "Présence",
-    "autosaveNotice": "Les modifications sont enregistrées automatiquement.",
     "changeSaveFailed": "La modification n'a pas pu être enregistrée",
     "configConflictReloaded": "Quelqu’un d’autre a modifié ce bloc entre-temps – la version actuelle a été chargée. Veuillez refaire votre modification.",
     "entryCreateFailed": "L'entrée n'a pas pu être créée",
@@ -209,7 +207,6 @@
     "eventRemoveFailed": "L'événement n'a pas pu être retiré",
     "eventSaveFailed": "L'événement n'a pas pu être enregistré",
     "eventShowFailed": "L'événement n'a pas pu être affiché",
-    "excusedLabel": "Excusé",
     "imageDeleteConfirm": "Supprimer définitivement cette image ? Cette action est irréversible.",
     "imageDeleteFailed": "L'image n'a pas pu être supprimée",
     "imageUploadFailed": "L'image n'a pas pu être téléchargée",
@@ -220,12 +217,6 @@
     "templateVersionPill": "Version du modèle {version, number}",
     "templateChangedHint": "Le modèle a été modifié",
     "orderSaveFailed": "L'ordre n'a pas pu être enregistré",
-    "otherEditorWarningDescription": "Au moins une autre personne modifie activement ce procès-verbal en ce moment. Le changement de statut s'appliquera immédiatement à tout le monde.",
-    "otherEditorWarningTitle": "Une autre personne est en train de modifier",
-    "presentLabel": "Présent",
-    "quickAccessEyebrow": "Accès rapide",
-    "savedIndicator": "✓ Enregistré",
-    "switchAnywayButton": "Changer malgré tout",
     "textSaveFailed": "Le texte n'a pas pu être enregistré",
     "textSavedLocallyOffline": "Texte enregistré localement – sera enregistré automatiquement dès le rétablissement de la connexion.",
     "todoCreateFailed": "La tâche n'a pas pu être créée",
@@ -233,7 +224,6 @@
     "todoDeleteFailed": "La tâche n'a pas pu être supprimée",
     "todoSaveFailed": "La tâche n'a pas pu être enregistrée",
     "uncancelEventOption": "Annuler l'annulation",
-    "unexcusedLabel": "Non excusé",
     "workflowDone": "Terminé",
     "workflowFinishPreparation": "Terminer la préparation",
     "workflowFinishProtocol": "Finaliser le procès-verbal",
@@ -249,10 +239,9 @@
     "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local.",
     "eventHideFailed": "L'événement n'a pas pu être retiré",
     "finishProtocolConfirmTitle": "Finaliser le procès-verbal ?",
-    "finishProtocolConfirmMessage": "Le procès-verbal sera figé et ne pourra plus être modifié. hocX génère le PDF signé, enregistre l’état des tâches et envoie les notifications par e-mail aux responsables. Pour annuler, passe par le menu de la liste des procès-verbaux (« Revenir à … »).",
+    "finishProtocolConfirmMessage": "Le procès-verbal sera figé et ne pourra plus être modifié. hocX génère le PDF signé, enregistre l’état des tâches et envoie les notifications par e-mail aux responsables. Pour annuler, utilise « Réinitialiser le statut » (sous « Statut et collaboration » ou dans le menu de la liste des procès-verbaux).",
     "finishSessionConfirmTitle": "Terminer la séance ?",
-    "finishSessionConfirmMessage": "La séance se termine et le procès-verbal passe en post-traitement. Les demandes en attente pour cette réunion sont reprises définitivement. Le retour en arrière n’est possible que via le menu de la liste des procès-verbaux.",
-    "confirmWithOtherEditors": "{consequences} Attention : quelqu’un d’autre travaille actuellement sur ce procès-verbal.",
+    "finishSessionConfirmMessage": "La séance se termine et le procès-verbal passe en post-traitement. Les demandes en attente pour cette réunion sont reprises définitivement. Tu peux réinitialiser le statut sous « Statut et collaboration » ou via le menu de la liste des procès-verbaux.",
     "statusChangeUnsavedChanges": "Statut inchangé : toutes les modifications n’ont pas pu être enregistrées. Vérifie la connexion et réessaie.",
     "statusChangeFailed": "Le statut n’a pas pu être modifié.",
     "draftsConflictToast": "{count, plural, one {Un brouillon local n’a pas été repris} other {# brouillons locaux n’ont pas été repris}} car quelqu’un d’autre a modifié ce passage entre-temps. La version actuelle est affichée.",
@@ -280,8 +269,73 @@
       "stepDone": "Clôturé",
       "stepDoneHint": "terminé",
       "templateReload": "Recharger",
-      "trackChanges": "Suivre les modifications"
-    }
+      "trackChanges": "Suivre les modifications",
+      "backShort": "Procès-verbaux",
+      "searchShort": "Rechercher",
+      "outlineToggle": "Plan"
+    },
+    "frozenBannerTitle": "Clôturé",
+    "frozenBannerText": "Ces données sont figées et en lecture seule. Le PDF signé a été généré.",
+    "outlineSummaryAttendance": "{present}/{total} présents",
+    "outlineSummaryTodos": "{count, plural, one {# tâche} other {# tâches}}",
+    "outline": {
+      "label": "Plan du procès-verbal",
+      "title": "Plan",
+      "hidden": "Masqué",
+      "dropAtEnd": "Déposer ici : à la fin"
+    },
+    "saveState": {
+      "saving": "Enregistrement …",
+      "saved": "✓ Enregistré",
+      "offline": "Hors ligne · {count, plural, =0 {tout est enregistré} one {# modification en attente} other {# modifications en attente}}",
+      "error": "Non enregistré – aller au bloc"
+    },
+    "finishPreparationConfirmTitle": "Terminer la préparation ?",
+    "finishPreparationConfirmMessage": "Le procès-verbal passe en mode séance. Désormais, aucune nouvelle marque de modification n’est ajoutée.",
+    "transition": {
+      "othersTitle": "{count, plural, one {Une autre personne modifie en ce moment} other {D’autres personnes modifient en ce moment}}",
+      "othersText": "{names} {count, plural, one {travaille} other {travaillent}} activement sur ce procès-verbal. Le changement de statut s’applique immédiatement à tout le monde."
+    },
+    "confirmWithOtherEditors": "{consequences} Attention : quelqu’un d’autre travaille actuellement sur ce procès-verbal.",
+    "lastBlockReached": "Dernier bloc atteint",
+    "firstBlockReached": "Premier bloc atteint",
+    "drawer": {
+      "dockLabel": "Outils de séance",
+      "notes": {
+        "dock": "Notes",
+        "title": "Notes de séance",
+        "notInPdf": "Pas dans le PDF"
+      },
+      "todo": {
+        "dock": "Tâche",
+        "title": "Tâche rapide"
+      },
+      "agenda": {
+        "dock": "Demande",
+        "title": "Saisir une demande"
+      },
+      "status": {
+        "dock": "Statut",
+        "title": "Statut et collaboration",
+        "activeNow": "Actifs maintenant",
+        "you": "Toi",
+        "offline": "La collaboration en direct n’est pas connectée – tes modifications sont tout de même enregistrées.",
+        "alone": "Personne d’autre n’est dans ce procès-verbal en ce moment.",
+        "participants": "Participants",
+        "present": "Présents",
+        "excused": "Excusés",
+        "absent": "Non excusés",
+        "statusTitle": "Statut",
+        "revertHint": "Ramène le procès-verbal d’une étape en arrière, p. ex. pour corriger un procès-verbal clôturé.",
+        "revertTo": "Revenir à « {status} »",
+        "shortcuts": "Raccourcis clavier",
+        "escape": "Fermer le bloc, le tiroir ou le dialogue",
+        "secondFind": "Un second {shortcut} ouvre la recherche du navigateur.",
+        "docsLink": "Guide : collaborer sur le procès-verbal"
+      }
+    },
+    "revertConfirmTitle": "Réinitialiser le statut ?",
+    "revertConfirmMessage": "Le procès-verbal revient à « {status} ». Le changement s’applique immédiatement à tout le monde."
   },
   "embeddedBlock": {
     "attendance": "Présence",
@@ -480,12 +534,13 @@
     "createdWithSubmission": "Créé : {title} · avec remise",
     "keyHint": "{enter} crée · {escape} crée et ferme",
     "keyHintCollect": "{enter} crée · {collect} remise · {escape} crée et ferme",
-    "clearFields": "Vider les champs",
     "taskLabel": "Tâche",
     "assigneeLabel": "Personne",
     "dueLabel": "Échéance",
     "tagLabel": "Catégorie / tag",
-    "dueEmpty": "Aucun résultat"
+    "dueEmpty": "Aucun résultat",
+    "sectionLabel": "Pour le point",
+    "sectionCustom": "Tag personnalisé"
   },
   "settledLater": "Réglé plus tard",
   "showAction": "Afficher",
@@ -683,5 +738,11 @@
     "todoColumnDue": "Échéance",
     "todoAdd": "Ajouter une tâche",
     "todoNewPlaceholder": "Nouvelle tâche"
-  }
+  },
+  "blockDone": "Terminé",
+  "blockEdit": "Modifier",
+  "blockEditAria": "Modifier {block}",
+  "textEmptyStatic": "Pas encore de texte",
+  "bulletsEmptyStatic": "Pas encore de points",
+  "todosEmptyStatic": "Pas encore de tâches"
 }

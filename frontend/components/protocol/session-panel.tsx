@@ -17,8 +17,7 @@ import { normalizeSearchText } from "@/lib/utils/smart-dates";
 import { useIsApple } from "@/lib/search/shortcuts";
 import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submission-from-todo";
 import { useDefaultSmartDates, useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
-import { NavIcon } from "@/components/ui/nav-icons";
-import { ActionIcon } from "@/components/ui/action-icons";
+import { Select } from "@/components/ui/select";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 import { QuickTodoFine, quickTodoFineInvalid, quickTodoFineSettings, type QuickTodoFineAccess, type QuickTodoFineChoice } from "@/components/protocol/quick-todo-fine";
 
@@ -39,34 +38,36 @@ type SessionPanelProps = {
   todoFines?: QuickTodoFineAccess;
   /** «Datei als Abgabe einsammeln» anbieten (submissions.manage inkl. Modul Abgabebox, meetings.edit) */
   canCollectSubmissions?: boolean;
+  /** Sichtbarer Teil in der Schublade des Editors (protocol-dock.tsx); null = beide verborgen */
+  active: ActivePanel;
+  onClose: () => void;
+  /** Abgeschlossenes Protokoll: Notizen nur lesend, keine Pendenz */
+  readOnly?: boolean;
+  /** Traktanden für «Zu Punkt» (setzt den Tag der Pendenz) */
+  sections?: { id: string; name: string }[];
 };
 
 export type SessionPanelHandle = {
-  openTodo: (focus?: boolean) => void;
-  openNotes: (focus?: boolean) => void;
-  scheduleClose: () => void;
-  close: () => void;
+  /** Vor dem Öffnen der Pendenz: markierten Text als Titel übernehmen, solange das Feld leer ist */
+  prefillTodoFromSelection: () => void;
   /** Speichert wartende Sitzungsnotizen sofort und meldet, ob alles auf dem Server ist. */
   flushPendingSaves: () => Promise<boolean>;
 };
 
-type ActivePanel = "notes" | "todo" | null;
+export type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProps>(
-  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated, todoFines, canCollectSubmissions = false }, ref) {
+  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated, todoFines, canCollectSubmissions = false, active, onClose, readOnly = false, sections = [] }, ref) {
     const isParticipantSelectable = useParticipantSelectable();
     const t = useTranslations("protocols.sessionPanel");
-    const tCommon = useTranslations("common");
     const tKeys = useTranslations("common.keys");
     const apple = useIsApple();
     const showToast = useToast();
-    const [active, setActive] = useState<ActivePanel>(null);
     const [notes, setNotes] = useState(protocol.session_notes ?? "");
     const [notesSaveState, setNotesSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [todoTask, setTodoTask] = useState("");
     const [todoTag, setTodoTag] = useState(currentSectionName ?? t("defaultTag"));
     const [creatingTodo, setCreatingTodo] = useState(false);
-    const [openedByHover, setOpenedByHover] = useState(false);
     const [fineChoice, setFineChoice] = useState<QuickTodoFineChoice>({ mode: "auto" });
     const notesMutationKey = `protocol-notes:${protocol.id}`;
     const notesServerValueRef = useRef(protocol.session_notes ?? "");
@@ -113,77 +114,35 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const { schedule: scheduleNotes, flush: flushNotes } = useDeferredPopupSave();
     const notesPanelRef = useRef<HTMLDivElement>(null);
     const todoPanelRef = useRef<HTMLDivElement>(null);
-    const leaveTimerRef = useRef<number | undefined>(undefined);
     const createdTimerRef = useRef<number | undefined>(undefined);
     const todoInputRef = useRef<HTMLInputElement | null>(null);
     const dueInputRef = useRef<HTMLInputElement | null>(null);
     const assigneeInputRef = useRef<HTMLInputElement | null>(null);
     const notesRef = useRef<HTMLTextAreaElement | null>(null);
-    const openedByHoverRef = useRef(false);
     const todoTaskRef = useRef(todoTask);
     todoTaskRef.current = todoTask;
-
-    const setHoverMode = useCallback((value: boolean) => {
-      openedByHoverRef.current = value;
-      setOpenedByHover(value);
-    }, []);
-
-    const scheduleClose = useCallback(() => {
-      if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-      leaveTimerRef.current = window.setTimeout(() => {
-        if (openedByHoverRef.current) setActive(null);
-      }, 300);
-    }, []);
 
     useImperativeHandle(ref, () => ({
       flushPendingSaves() {
         return flushNotes();
       },
-      openTodo(focus = true) {
-        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+      prefillTodoFromSelection() {
         // Markierter Text (Protokollfeld oder Seite) wird zum Titel, solange das Feld leer ist
-        if (focus && !todoTaskRef.current.trim()) {
-          const selected = selectedTextOutside(todoPanelRef.current);
-          if (selected) setTodoTask(selected);
-        }
-        setHoverMode(!focus);
-        setActive("todo");
-        if (focus) window.setTimeout(() => todoInputRef.current?.focus(), 60);
+        if (todoTaskRef.current.trim()) return;
+        const selected = selectedTextOutside(todoPanelRef.current);
+        if (selected) setTodoTask(selected);
       },
-      openNotes(focus = true) {
-        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-        setHoverMode(!focus);
-        setActive("notes");
-        if (focus) window.setTimeout(() => notesRef.current?.focus(), 60);
-      },
-      scheduleClose() {
-        scheduleClose();
-      },
-      close() {
-        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-        setHoverMode(false);
-        setActive(null);
-      },
-    }), [scheduleClose, setHoverMode, flushNotes]);
+    }), [flushNotes]);
 
-    // A flyout can appear between two pointer events, which means browsers do not always
-    // emit the mouse-leave sequence we would expect. While it was opened by hovering,
-    // observe the actual pointer target and close once neither toolbar nor flyout is under it.
+    // Beim Öffnen in das passende Feld springen
     useEffect(() => {
-      if (!openedByHover || !active) return;
-      const handlePointerMove = (event: PointerEvent) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        const insideQuickMenu = target.closest(".protocol-quick-actions, .quick-flyout-open");
-        if (insideQuickMenu) {
-          if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-        } else {
-          scheduleClose();
-        }
-      };
-      document.addEventListener("pointermove", handlePointerMove);
-      return () => document.removeEventListener("pointermove", handlePointerMove);
-    }, [active, openedByHover, scheduleClose]);
+      if (!active) return;
+      const timer = window.setTimeout(() => {
+        if (active === "todo") todoInputRef.current?.focus();
+        else notesRef.current?.focus();
+      }, 60);
+      return () => window.clearTimeout(timer);
+    }, [active]);
 
     useEffect(() => {
       setNotes(protocol.session_notes ?? "");
@@ -253,7 +212,6 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     // PATCH request.
     useEffect(() => {
       return () => {
-        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
         if (createdTimerRef.current) window.clearTimeout(createdTimerRef.current);
       };
     }, []);
@@ -329,17 +287,6 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       setDueFocused(false);
       setCollect(false);
       setCollectError(false);
-    }
-
-    const todoHasInput = Boolean(todoTask.trim() || assigneeSearch.trim() || dueSearch.trim() || collect || fineChoice.mode !== "auto");
-
-    function clearOrClose() {
-      if (todoHasInput) {
-        clearTodoFields();
-        todoInputRef.current?.focus();
-      } else {
-        setActive(null);
-      }
     }
 
     function toggleCollect() {
@@ -482,36 +429,18 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
       void handleCreateTodo();
     }
 
-    const handleMouseEnter = () => {
-      if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-    };
-
-    const handleMouseLeave = () => {
-      if (openedByHoverRef.current) {
-        scheduleClose();
-        return;
-      }
-      leaveTimerRef.current = window.setTimeout(() => {
-        const activeEl = document.activeElement;
-        const stillEditing =
-          activeEl === notesRef.current ||
-          Boolean(activeEl && todoPanelRef.current?.contains(activeEl));
-        if (!stillEditing) setActive(null);
-      }, 300);
-    };
-
     const showAssigneeDropdown = Boolean(!assigneeConfirmed && assigneeSearch.trim() && filteredParticipants.length > 0);
     const [dueFocused, setDueFocused] = useState(false);
     const showDueDropdown = dueFocused && !dueConfirmed && filteredDueOptions.length > 0;
     const assigneeMissing = canCollect && collect && !assigneeId;
 
     usePopupEscape(active === "notes", async () => {
-      if (await flushNotes()) setActive(null);
+      if (readOnly || await flushNotes()) onClose();
     }, notesPanelRef);
     // Escape legt die Pendenz an (wie Enter, inkl. Abgabe) und schliesst das Menü; ohne Titel
     // schliesst es nur. Scheitert das Anlegen (z. B. Abgabe ohne Person), bleibt das Menü offen.
     usePopupEscape(active === "todo", async () => {
-      if (!todoTask.trim() || await handleCreateTodo()) setActive(null);
+      if (!todoTask.trim() || await handleCreateTodo()) onClose();
     }, todoPanelRef);
     usePopupEscape(active === "todo" && showAssigneeDropdown, () => setAssigneeConfirmed(true), assigneeInputRef);
     usePopupEscape(active === "todo" && showDueDropdown, () => setDueFocused(false), dueInputRef);
@@ -524,37 +453,17 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
 
     return (
       <>
-        <div
-          ref={notesPanelRef}
-          className={`quick-flyout${active === "notes" ? " quick-flyout-open" : ""}`}
-          // Geschlossen nur per CSS unsichtbar: ohne inert bleiben die Felder per Tab erreichbar.
-          inert={active !== "notes"}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <div className="quick-flyout-header">
-            <div className="quick-flyout-title">
-              <span className="quick-flyout-title-icon"><NavIcon name="lists" /></span>
-              <span className="eyebrow">{t("notesTitle")}</span>
-            </div>
-            <button
-              type="button"
-              className="button-ghost quick-flyout-close"
-              aria-label={tCommon("close")}
-              onClick={() => setActive(null)}
-            >
-              <ActionIcon name="close" />
-            </button>
-          </div>
-
+        <div ref={notesPanelRef} className="session-panel-notes-wrap" hidden={active !== "notes"}>
           <div className="session-panel-section">
             <textarea
               ref={notesRef}
               className="session-panel-notes"
               value={notes}
+              readOnly={readOnly}
+              aria-label={t("notesTitle")}
               onChange={(e) => handleNotesChange(e.target.value)}
               placeholder={t("notesPlaceholder")}
-              rows={9}
+              rows={12}
             />
             {notesSaveState === "saving" && <div className="session-panel-status">{t("saving")}</div>}
             {notesSaveState === "saved" && <div className="session-panel-status session-panel-status-ok">✓ {t("saved")}</div>}
@@ -562,35 +471,27 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
           </div>
         </div>
 
-        <div
-          ref={todoPanelRef}
-          className={`quick-flyout quick-flyout-todo${active === "todo" ? " quick-flyout-open" : ""}`}
-          // Geschlossen nur per CSS unsichtbar: ohne inert bleiben die Felder per Tab erreichbar.
-          inert={active !== "todo"}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          onKeyDown={handleTodoPanelKeyDown}
-        >
-          <div className="quick-flyout-header">
-            <div className="quick-flyout-title">
-              <span className="quick-flyout-title-icon"><NavIcon name="todos" /></span>
-              <span className="eyebrow">{t("quickTodoTitle")}</span>
-            </div>
-            <button
-              type="button"
-              className="button-secondary button-icon quick-todo-clear"
-              aria-label={todoHasInput ? t("clearFields") : tCommon("close")}
-              title={todoHasInput ? t("clearFields") : tCommon("close")}
-              onClick={clearOrClose}
-            >
-              <ActionIcon name="close" />
-            </button>
-          </div>
-
+        {readOnly ? null : (
+        <div ref={todoPanelRef} className="session-panel-todo-wrap" hidden={active !== "todo"} onKeyDown={handleTodoPanelKeyDown}>
           <div className="session-panel-section">
             <div className="quick-todo-created" role="status" aria-live="polite">
               {createdMessage ? <span className="quick-todo-created-text">✓ {createdMessage}</span> : null}
             </div>
+
+            {sections.length ? (
+              <label className="field-stack">
+                <span className="field-label">{t("sectionLabel")}</span>
+                <Select
+                  value={sections.some((section) => section.name === todoTag) ? todoTag : ""}
+                  onChange={(event) => { if (event.target.value) setTodoTag(event.target.value); }}
+                >
+                  {sections.some((section) => section.name === todoTag) ? null : <option value="">{t("sectionCustom")}</option>}
+                  {sections.map((section) => (
+                    <option key={section.id} value={section.name}>{section.name}</option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
 
             <input
               ref={todoInputRef}
@@ -618,7 +519,6 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
                   onChange={(e) => handleAssigneeChange(e.target.value)}
                   placeholder={t("assignPlaceholder")}
                   onKeyDown={handleAssigneeKeyDown}
-                  onFocus={() => { if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
                 />
                 {showAssigneeDropdown && (
                   <div className="session-panel-assignee-dropdown" role="listbox" aria-label={t("assigneeLabel")}>
@@ -659,7 +559,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
                 onChange={(e) => handleDueChange(e.target.value)}
                 placeholder={t("duePlaceholder")}
                 onKeyDown={handleDueKeyDown}
-                onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
+                onFocus={() => setDueFocused(true)}
                 onBlur={() => setDueFocused(false)}
               />
               {showDueDropdown && (
@@ -749,6 +649,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
             <div className="quick-todo-keys">{keyHint}</div>
           </div>
         </div>
+        )}
       </>
     );
   }

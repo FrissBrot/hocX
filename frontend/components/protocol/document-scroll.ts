@@ -1,12 +1,9 @@
-// Scrollverhalten des Protokoll-Dokuments (Design «Protokoll-Editor v2»): Rad-Effekt im
-// Akkordeon, Zielberechnung für Sprünge und sanftes Scrollen. Alle Masse im Scrollraum von
-// .protocol-document (offsetTop/scrollTop, also ungezoomt und unabhängig von den Transforms
-// des Rad-Effekts - getBoundingClientRect würde die gekippten Abschnitte verzerrt messen).
+// Scrollverhalten des Protokoll-Dokuments (Design «Protokoll-Editor 1a»): Zielberechnung und
+// zweistufiger Sprung zu einem Punkt, sanftes Scrollen. Alle Masse im Scrollraum von
+// .protocol-doc (offsetTop/scrollTop).
 
 /** Abstand zum Rand des Dokuments beim Verankern eines Abschnitts. */
 export const SCROLL_INSET = 16;
-/** Der aktive Abschnitt bleibt, bis die Mittellinie so weit über seine Kante hinaus ist. */
-export const SPY_HYSTERESIS = 32;
 // Abweichung in px, ab der ein scrollend als «am Ziel» gilt (Rundung, Zoom).
 export const SCROLL_END_TOLERANCE = 2;
 
@@ -25,45 +22,66 @@ export function offsetTopWithin(el: HTMLElement, container: HTMLElement): number
   return top - containerTop - container.clientTop;
 }
 
-/** scrollTop, mit dem ein Abschnitt angesprungen wird: lange Abschnitte und der erste Punkt
- * oben, alle anderen mittig. */
-export function sectionScrollTarget(
-  { top, height, viewport, scrollHeight, first }: { top: number; height: number; viewport: number; scrollHeight: number; first: boolean }
-): number {
-  const tall = height >= viewport - SCROLL_INSET * 2;
-  const want = tall || first ? top - SCROLL_INSET : top - (viewport - height) / 2;
-  return Math.max(0, Math.min(want, scrollHeight - viewport));
+/** scrollTop, mit dem ein Abschnitt angesprungen wird: Kopf des Punkts oben im Dokument (wie ein
+ * Kapitelsprung in Docs/Word), im Scrollbereich begrenzt. */
+export function sectionScrollTarget({ top, viewport, scrollHeight }: { top: number; viewport: number; scrollHeight: number }): number {
+  return Math.max(0, Math.min(top - SCROLL_INSET, scrollHeight - viewport));
 }
 
-/** Weiter als so viele Punkte vom aktiven entfernt bleibt ein Punkt flach (keine eigene Ebene).
- * Eingeklappte Punkte sind rund 90 px hoch: so weit weg liegen sie ausserhalb des Bildes. */
-export const WHEEL_RANGE = 10;
+/** Ab so vielen Bildschirmhöhen Abstand springt jumpToSection zuerst sofort in die Nähe. */
+export const FAR_JUMP_VIEWPORTS = 2;
 
-export type WheelVars = { "--wheel-dir": string; "--wheel-depth": string };
-
-/** Rad-Effekt im Akkordeon: Lage eines (eingeklappten) Punkts auf der Walze, abhängig nur vom
- * Abstand zum aktiven Punkt in Punkten (offset < 0: darüber). Die Werte gehen als CSS-Variablen
- * an den Abschnitt; Neigung, Grösse und Deckkraft rechnet protocol.css daraus, eine
- * CSS-Transition dreht beim Wechsel auf dem Compositor - kein JavaScript pro Scroll-Frame.
- * null: aktiver Punkt oder zu weit weg (flach, ohne Transform). */
-export function wheelVars(offset: number): WheelVars | null {
-  if (!Number.isFinite(offset) || offset === 0 || Math.abs(offset) > WHEEL_RANGE) return null;
-  const d = Math.min(1, Math.abs(offset) / 4);
-  const depth = d * d * (3 - 2 * d);
-  return { "--wheel-dir": offset < 0 ? "-1" : "1", "--wheel-depth": depth.toFixed(3) };
-}
-
-export type SectionLayout = { section: HTMLElement; top: number; height: number };
-
-/** Positionen aller Abschnitte im Scrollraum. Unabhängig von den Transforms des Rad-Effekts,
- * ändert sich also nur bei Grössen- oder Inhaltsänderungen - Aufrufer können das Ergebnis
- * zwischenspeichern, statt es in jedem Scroll-Frame neu zu lesen. */
-export function measureSections(container: HTMLElement): SectionLayout[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(".protocol-doc-section")).map((section) => ({
-    section,
-    top: offsetTopWithin(section, container),
-    height: section.offsetHeight,
-  }));
+/**
+ * Sprung zu einem Punkt in zwei Stufen. Punkte ausserhalb des Bildes werden mit
+ * content-visibility: auto nicht gerendert und haben nur ihre geschätzte bzw. zuletzt gemessene
+ * Höhe (contain-intrinsic-size: auto). Ein weiter Sprung würde deshalb neben dem Ziel landen:
+ * Stufe 1 springt sofort knapp vor das Ziel (der Browser rendert dort die echten Höhen), Stufe 2
+ * misst im nächsten Frame neu und fährt das letzte Stück (sanft, wenn erlaubt). Gibt eine
+ * Abbruchfunktion zurück; onDone läuft genau einmal.
+ */
+export function jumpToSection(
+  container: HTMLElement,
+  section: HTMLElement,
+  { smooth, onDone }: { smooth: boolean; onDone: () => void }
+): () => void {
+  let cancelled = false;
+  let cancelScroll: (() => void) | null = null;
+  let frame: number | null = null;
+  const target = () =>
+    sectionScrollTarget({ top: offsetTopWithin(section, container), viewport: container.clientHeight, scrollHeight: container.scrollHeight });
+  const finish = () => {
+    if (cancelled) return;
+    const exact = target();
+    if (!smooth || Math.abs(exact - container.scrollTop) < 1) {
+      container.scrollTop = exact;
+      onDone();
+      return;
+    }
+    cancelScroll = supportsNativeSmoothScroll()
+      ? nativeSmoothScroll(container, exact, { onDone })
+      : animateScroll(container, exact, { onDone });
+  };
+  const first = target();
+  const far = Math.abs(first - container.scrollTop) > container.clientHeight * FAR_JUMP_VIEWPORTS;
+  if (far) {
+    // Knapp vor dem Ziel landen, damit die letzte Strecke sichtbar bleibt
+    container.scrollTop = Math.max(0, first - (smooth ? container.clientHeight / 2 : 0));
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        finish();
+      });
+    });
+  } else {
+    finish();
+  }
+  return () => {
+    if (cancelled) return;
+    cancelled = true;
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    if (cancelScroll) cancelScroll();
+    else onDone();
+  };
 }
 
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
@@ -117,10 +135,8 @@ export function supportsNativeSmoothScroll(): boolean {
  * Stelle an).
  *
  * Ein scrollend zählt nur, wenn das Ziel erreicht ist: Geht dem sanften Scrollen ein sofortiger
- * Sprung voraus (Verankerung im Akkordeon), kommt dessen scrollend erst danach an. Es beendete
- * sonst sofort die Pause des Scroll-Spys, bevor der neue Punkt in Position war; der Spy sah die
- * Bildmitte noch über dem Punkt und wählte den vorherigen zurück (Rad-Effekt: man kam beim
- * Mausrad nicht mehr zum nächsten Punkt, Bug 2026-11-11). */
+ * Sprung voraus (Stufe 1 von jumpToSection), kommt dessen scrollend erst danach an und beendete
+ * sonst die Pause des Scroll-Spys zu früh. */
 export function nativeSmoothScroll(container: HTMLElement, target: number, { onDone }: { onDone: () => void }): () => void {
   let finished = false;
   let timer: ReturnType<typeof setTimeout> | undefined;

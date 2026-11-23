@@ -6,6 +6,8 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 // Performance-Quick-Wins im Protokoll-Editor (1.5.1, Audit perf-protocol-editor 2026-11-22):
 // Bilderraster lädt Vorschauen statt Originale (Vollbild bleibt Original), Entwürfe überstehen
 // sofortiges Neuladen trotz gebündeltem Speichern, Statistik-Diagramme laden einmal statt doppelt.
+// Editor 1a (1.6): Text ist statisch, bis der Block aktiviert wird (L4); Diagramme erst beim
+// Hinscrollen (L2).
 
 async function json(request: APIRequestContext, urlPath: string, data: unknown) {
   const response = await request.post(urlPath, { data });
@@ -53,9 +55,11 @@ test("Bilderraster zeigt die Vorschau, das Vollbild das Original", async ({ requ
 test("Entwurf übersteht sofortiges Neuladen trotz gebündeltem Speichern", async ({ request, page }) => {
   const { protocol } = await protocolWith(request, "Entwurf", [{ type: 1, title: "Text" }]);
   await page.goto(`/protocols/${protocol.id}`);
-  const editor = page.locator(".protocol-doc-section-active .rich-text-editor-content").first();
-  await expect(editor).toBeVisible();
-  await editor.click();
+  // Statisch, bis der Block aktiviert wird: dann erst lädt Tiptap
+  await expect(page.locator(".rich-text-editor-content")).toHaveCount(0);
+  await page.getByRole("button", { name: /bearbeiten$/ }).first().click();
+  const editor = page.locator(".editor-block-card-active .rich-text-editor-content").first();
+  await expect(editor).toBeFocused();
   const text = `Sofort neu geladen ${Date.now()}`;
   await page.keyboard.type(text, { delay: 0 });
 
@@ -78,7 +82,7 @@ test("Entwurf übersteht sofortiges Neuladen trotz gebündeltem Speichern", asyn
     }, { timeout: 15_000 })
     .toContain(text);
   await page.reload();
-  await expect(page.locator(".protocol-doc-section-active .rich-text-editor-content").first()).toContainText(text);
+  await expect(page.locator('.editor-block-card[data-block-type="text"] .markdown-view').first()).toContainText(text);
 });
 
 test("Statistik-Diagramm lädt beim Öffnen genau einmal", async ({ request, page }) => {
@@ -89,7 +93,7 @@ test("Statistik-Diagramm lädt beim Öffnen genau einmal", async ({ request, pag
   });
   await page.goto(`/protocols/${protocol.id}`);
   // Recharts wird nachgeladen und zeichnet
-  await expect(page.locator(".protocol-doc-section-active .recharts-wrapper").first()).toBeVisible();
+  await expect(page.locator(".protocol-doc-section .recharts-wrapper").first()).toBeVisible();
   await page.waitForTimeout(2000);
   expect(statsRequests, statsRequests.join("\n")).toHaveLength(1);
 });

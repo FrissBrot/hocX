@@ -9,11 +9,6 @@
       "notifications": "Benachrichtigungen"
     },
     "languageLabel": "Sprache",
-    "wheelLabel": "Rad-Effekt beim Scrollen",
-    "wheelHint": "Punkte drehen sich beim Scrollen wie auf einer Walze um den aktiven Punkt.",
-    "accordionLabel": "Protokollpunkte automatisch einklappen",
-    "accordionHint": "Nur den aktiven Punkt geöffnet anzeigen.",
-    "wheelAccordionHint": "Nur mit eingeklappten Punkten möglich.",
     "save": "Profil speichern",
     "logout": "Logout",
     "saveFailed": "Profil konnte nicht gespeichert werden.",

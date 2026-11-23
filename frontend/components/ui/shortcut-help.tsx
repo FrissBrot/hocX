@@ -23,14 +23,12 @@ export function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => 
   const visible = (SHORTCUTS as readonly ShortcutDefinition[]).filter(
     (definition) => definition.kind === "standard" || definition.scope === "global" || active.has(definition.id)
   );
-  // Gleiche Beschreibung (z. B. Element hoch/runter) nur einmal zeigen
-  const shown = visible.filter((definition) => !(definition.id === "protocol.elementUp" && visible.some((other) => other.id === "protocol.elementDown")));
 
   return (
     <Modal open={open} onClose={onClose} title={t("helpTitle")} description={t("helpDescription")} size="wide">
       <div className="shortcut-help">
         {SHORTCUT_GROUPS.map((group) => {
-          const entries = shown.filter((definition) => definition.group === group);
+          const entries = visible.filter((definition) => definition.group === group);
           if (!entries.length) return null;
           return (
             <section key={group} className="shortcut-help-section" aria-labelledby={`shortcut-help-${group}`}>

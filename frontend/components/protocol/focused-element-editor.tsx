@@ -39,6 +39,8 @@ import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "@/compone
 import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planning/event-series-group";
 import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
+import { ProtocolTextBlock } from "@/components/protocol/protocol-text-block";
+import type { TextDraftStore } from "@/components/protocol/text-drafts";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -122,6 +124,9 @@ import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
 /** Terminfelder im Tabellenblock: Uhrzeiten über TimeInput, Texte als Markdown (wie im Terminformular). */
+/** Bausteine mit statischer Darstellung ausserhalb des aktiven Blocks (L4). */
+const STATIC_VIEW_TYPES = new Set(["text", "static_text", "bullet_list", "todo"]);
+
 const EVENT_TIME_FIELDS = new Set(["start_time", "end_time", "spezial_time1", "spezial_time2"]);
 const EVENT_MARKDOWN_FIELDS = new Set(["description", "program", "spezial_text1", "spezial_text2", "spezial_text3"]);
 
@@ -130,7 +135,9 @@ function FocusedElementEditorImpl({
   trackChangesActive,
   element,
   elementIndex,
-  textDrafts,
+  textDraftStore,
+  activeBlockId = null,
+  onActivateBlock,
   todosByBlock,
   sessionTodos,
   imagesByBlock,
@@ -197,7 +204,6 @@ function FocusedElementEditorImpl({
   pendingTodos,
   onPendingUpdate,
   onPendingDone,
-  isActive = true,
   autoFocusToken = 0,
   tagConfig,
   updateTagColor,
@@ -218,7 +224,12 @@ function FocusedElementEditorImpl({
   trackChangesActive: boolean;
   element: ProtocolElement;
   elementIndex: number;
-  textDrafts: Record<string, string>;
+  /** Getippter Text je Textblock (T3, text-drafts.ts): stabil, Tasten rendern nur den Textblock */
+  textDraftStore: TextDraftStore;
+  /** Aktiver Block dieses Punkts (nur dort Editor, L4); null für alle anderen Punkte */
+  activeBlockId?: string | null;
+  /** Block aktivieren (null: verlassen) */
+  onActivateBlock: (blockId: string | null) => void;
   todosByBlock: Record<string, ProtocolTodo[]>;
   /** Pendenzen mit dem Tag dieses Punkts (Sitzungsansicht), vom Editor stabil vorberechnet. */
   sessionTodos: ProtocolTodo[];
@@ -290,8 +301,6 @@ function FocusedElementEditorImpl({
   pendingTodos: TodoListItem[];
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
   onPendingDone: (todoId: string) => void;
-  /** True while this section is the one currently in focus in the scrollable document (see protocol-editor.tsx's scroll-spy); defaults to true for the legacy single-section "abgeschlossen" view, which always renders exactly one instance. */
-  isActive?: boolean;
   /** Bumped by the parent only on an explicit "jump to this section" action (sidebar click, keyboard nav, restored scroll position) so autofocus never fires just because several sections mount at once. */
   autoFocusToken?: number;
   tagConfig: TagConfig;
@@ -332,6 +341,15 @@ function FocusedElementEditorImpl({
       firstEditable?.focus();
     }, 50);
   }, [autoFocusToken]);
+
+  // Block verlassen («Fertig», Escape, Strg+Enter): Sperre sofort freigeben, auch wenn der Fokus
+  // im Block bleibt (auf «Bearbeiten»)
+  const previousActiveBlockRef = useRef<string | null>(activeBlockId);
+  useEffect(() => {
+    const previous = previousActiveBlockRef.current;
+    previousActiveBlockRef.current = activeBlockId;
+    if (previous && previous !== activeBlockId) collab.unlockField(`block-${previous}`);
+  }, [activeBlockId, collab]);
 
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
@@ -1743,19 +1761,18 @@ function FocusedElementEditorImpl({
     <section
       id={`protocol-element-${element.id}`}
       ref={sectionRef}
-      className={`protocol-doc-section${isActive ? " protocol-doc-section-active" : " protocol-doc-section-inactive"}`}
-      inert={!isActive}
+      className="protocol-doc-section"
+      aria-labelledby={`protocol-element-title-${element.id}`}
     >
-      <div className="editor-panel-header">
-        <div>
-          <div className="eyebrow">{t("elementPointNumber", { number: elementIndex + 1 })}<PdfOmittedHint entry={pdfElementCoverage} /></div>
-          <h2>{element.section_name_snapshot}</h2>
-        </div>
-      </div>
-      {/* Inhalt unter dem Kopf: im Akkordeon klappt protocol-editor.tsx (accordion-scroll.ts) ihn
-          über die Höhe dieses Rahmens stetig auf und zu. */}
-      <div className="protocol-doc-section-body">
-      <div className="protocol-doc-section-body-inner">
+      {/* Kopf: Nummer, Titel (Serif) und Hinweise; die Nummer liest der Screenreader mit */}
+      <header className="protocol-doc-section-head">
+        <span className="protocol-doc-section-number" aria-hidden="true">{String(elementIndex + 1).padStart(2, "0")}</span>
+        <h2 className="protocol-doc-section-title" id={`protocol-element-title-${element.id}`}>
+          <span className="visually-hidden">{t("elementPointNumber", { number: elementIndex + 1 })} </span>
+          {element.section_name_snapshot}
+        </h2>
+        <PdfOmittedHint entry={pdfElementCoverage} />
+      </header>
       <div className="element-block-stack">
         {element.blocks.length === 0 && element.show_when_empty && (
           isPlanningMode ? (
@@ -1832,13 +1849,36 @@ function FocusedElementEditorImpl({
             : [];
           const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
           const isHidden = !block.is_visible_snapshot;
+          // L4: Text, Aufzählung und Pendenzen zeigen ausserhalb des aktiven Blocks nur die statische
+          // Darstellung; erst «Bearbeiten» (oder Strg+Enter) hängt den Editor ein.
+          const hasStaticView = STATIC_VIEW_TYPES.has(elementType);
+          const isBlockActive = activeBlockId === block.id;
+          const canActivate = hasStaticView && blockEditable;
           // Textblock mit DB-Speicherziel: schreibt jede Änderung in das Feld des Termins
           const syncsToEvent = isAutoEventBlock && Boolean(String(blockConfig.sync_target_field ?? ""));
           return (
             <section
-              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${isAutoEventBlock ? " editor-block-card-in-series" : ""}${matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
+              className={`card editor-block-card${isBlockActive ? " editor-block-card-active" : ""}${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${isAutoEventBlock ? " editor-block-card-in-series" : ""}${matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
               key={block.id}
-              onFocusCapture={elementType === "matrix" ? undefined : () => collab.lockField(blockFieldKey)}
+              data-block-id={block.id}
+              data-block-type={elementType}
+              // Maus-Abkürzung: Klick in einen statischen Block aktiviert ihn (Tastatur: «Bearbeiten», Strg+Enter)
+              onClick={canActivate && !isBlockActive ? (event) => { // a11y-ok: Tastatur über den Knopf «Bearbeiten» und Strg+Enter
+                if ((event.target as HTMLElement).closest("button, a, input, textarea, select, label, [role='button'], [role='checkbox']")) return;
+                onActivateBlock(block.id);
+              } : undefined}
+              // Escape verlässt den aktiven Block (Fokus zurück auf «Bearbeiten»); Menüs und Dialoge
+              // darin behandeln Escape vorher selbst (defaultPrevented)
+              onKeyDown={isBlockActive ? (event) => {
+                if (event.key !== "Escape" || event.defaultPrevented) return;
+                event.preventDefault();
+                onActivateBlock(null);
+                window.requestAnimationFrame(() => {
+                  document.querySelector<HTMLElement>(`[data-block-activate="${block.id}"]`)?.focus();
+                });
+              } : undefined}
+              // Statische Blöcke sperren erst im aktiven Zustand (Tab durch das Dokument sperrt nichts)
+              onFocusCapture={elementType === "matrix" || (hasStaticView && !isBlockActive) ? undefined : () => collab.lockField(blockFieldKey)}
               onBlurCapture={
                 elementType === "matrix"
                   ? undefined
@@ -1870,24 +1910,36 @@ function FocusedElementEditorImpl({
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
+                {canActivate ? (
+                  isBlockActive ? (
+                    <button type="button" className="button-secondary editor-block-done" onClick={() => onActivateBlock(null)}>
+                      {t("blockDone")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button-secondary button-ghost editor-block-edit"
+                      data-block-activate={block.id}
+                      aria-label={t("blockEditAria", { block: blockTitle || (elementTypeLabel[elementType] ?? elementType) })}
+                      onClick={() => onActivateBlock(block.id)}
+                    >
+                      {t("blockEdit")}
+                    </button>
+                  )
+                ) : null}
               </div>
 
               {(elementType === "text" || elementType === "static_text") && (
-                <div className="tracked-text-block">
-                  <RichTextEditor
-                    value={textDrafts[block.id] ?? ""}
-                    onChange={(md) => handleTextChange(block.id, md)}
-                    readOnly={!blockEditable}
-                    placeholder={t("textPlaceholderMarkdownHint")}
-                    trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
-                  />
-                  {trackChangesActive && block.tracked_dirty && block.tracked_baseline_content !== textDrafts[block.id] && (
-                    <TrackedChangeHideButton
-                      title={t("hideTextChanges")}
-                      onAccept={() => void acceptTextTrackedChanges(block.id)}
-                    />
-                  )}
-                </div>
+                <ProtocolTextBlock
+                  blockId={block.id}
+                  store={textDraftStore}
+                  serverText={block.text_content ?? ""}
+                  editing={isBlockActive && blockEditable}
+                  trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
+                  label={blockTitle || (elementTypeLabel[elementType] ?? elementType)}
+                  onChange={handleTextChange}
+                  onAcceptTrackedChanges={acceptTextTrackedChanges}
+                />
               )}
 
               {elementType === "todo" && (() => {
@@ -1899,6 +1951,64 @@ function FocusedElementEditorImpl({
                 const progressTodos = blockTodos.filter((item) => !(trackChangesActive && item.pending_delete));
                 const doneTodoCount = progressTodos.filter((item) => item.todo_status_code === "done").length;
                 const todoToday = localDateToday();
+                if (!isBlockActive) {
+                  // Statische Liste (L4): Abhaken bleibt direkt möglich, alles andere nach «Bearbeiten»
+                  return (
+                    <div className="grid">
+                      <TodoProgress done={doneTodoCount} total={progressTodos.length} />
+                      {blockTodos.length ? (
+                        <ul className="protocol-todo-static">
+                          {blockTodos.map((todo) => {
+                            const isDone = todo.todo_status_code === "done";
+                            const isPendingDelete = trackChangesActive && !!todo.pending_delete;
+                            const isTracked = trackChangesActive && (todo.tracked_change === "added" || todo.tracked_change === "changed");
+                            const due = protocolTodoDue(todo, todoToday);
+                            const toggleable = blockEditable && !isPendingDelete;
+                            return (
+                              <li key={todo.id} className={`protocol-todo-static-row${isDone ? " protocol-todo-static-done" : ""}`}>
+                                <button
+                                  type="button"
+                                  className={`todo-toggle${isDone ? " todo-toggle-done" : ""}`}
+                                  disabled={!toggleable}
+                                  aria-label={isDone ? t("reopenTodo") : t("markTodoDone")}
+                                  onClick={() =>
+                                    toggleable && void updateTodo(block.id, todo.id, {
+                                      todo_status_id: isDone ? TODO_STATUS.open : TODO_STATUS.done,
+                                      completed_at: isDone ? null : new Date().toISOString(),
+                                    }).then(bumpStatsCharts)
+                                  }
+                                >
+                                  {isDone ? "✓" : "○"}
+                                </button>
+                                <span className="protocol-todo-static-main">
+                                  <span className={`protocol-todo-static-task${isPendingDelete ? " tracked-strike" : isTracked ? " tracked-underline" : ""}`}>{todo.task}</span>
+                                  {(todo.tags ?? []).length || todo.submission_assignment_id ? (
+                                    <span className="protocol-todo-static-tags">
+                                      {(todo.tags ?? []).map((tag) => `#${tag}`).join(" ")}
+                                      {todo.submission_assignment_id ? <Badge variant="info">{t("sessionPanel.collect.badge")}</Badge> : null}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="protocol-todo-static-meta">
+                                  <span className="protocol-todo-static-person">
+                                    <TodoAssigneeAvatar name={todo.assigned_participant_name} />
+                                    {todo.assigned_participant_name ?? t("nobody")}
+                                  </span>
+                                  <span className={todoDueTriggerClass(due.tone)}>
+                                    <TodoDueToneHint tone={due.tone} />
+                                    {todoDueBadgeLabel(due, dueMenuLabel(todo), tTables)}
+                                  </span>
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="muted protocol-static-empty">{t("todosEmptyStatic")}</p>
+                      )}
+                    </div>
+                  );
+                }
                 return (
                 <div className="grid">
                   <TodoProgress done={doneTodoCount} total={progressTodos.length} />
@@ -2150,7 +2260,18 @@ function FocusedElementEditorImpl({
                 );
               })()}
 
-              {elementType === "bullet_list" && (
+              {elementType === "bullet_list" && !isBlockActive && (() => {
+                const bulletItems = ((Array.isArray(blockConfig.bullet_items) ? blockConfig.bullet_items : []) as string[]).filter((item) => item.trim());
+                return bulletItems.length ? (
+                  <ul className="protocol-bullets-static">
+                    {bulletItems.map((item, index) => <li key={`${block.id}-bullet-${index}`}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="muted protocol-static-empty">{t("bulletsEmptyStatic")}</p>
+                );
+              })()}
+
+              {elementType === "bullet_list" && isBlockActive && (
                 <div className="grid">
                   <div className="todo-list">
                     {((Array.isArray(blockConfig.bullet_items) ? blockConfig.bullet_items : []) as string[]).map((item, index) => (
@@ -4062,9 +4183,7 @@ function FocusedElementEditorImpl({
         {/* The "Termine auswählen" trigger lives in the top-right notch of the red border
             itself (see isFirstInAutoGroup above), not as a separate row. */}
       </div>
-      {/* Rendered inside the same <section> (not as a sibling) so it shares this element's
-          blur/inert/active state in the scrollable document layout, and is included in the
-          section's own bounding box for the scroll-spy's centering calculation. */}
+      {/* Anliegen dieses Punkts inline im selben Abschnitt (zählt für den aktiven Punkt mit) */}
       {agendaSlot}
       <SessionTodosSection
         sectionTag={trimSectionName(element.section_name_snapshot)}
@@ -4082,8 +4201,6 @@ function FocusedElementEditorImpl({
         onAcceptTrackedChange={acceptTodoTrackedChange}
         onResizeTask={autoResizeTodoField}
       />
-      </div>
-      </div>
     </section>
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
@@ -4349,10 +4466,9 @@ type FocusedElementEditorProps = Parameters<typeof FocusedElementEditorImpl>[0];
 const FIELD_SIZING_SUPPORTED = typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content") === true;
 
 // Nach Block-ID geschlüsselte Zustände des Editors: ein Punkt vergleicht nur die Einträge seiner
-// eigenen Blöcke. Sonst renderte jeder Tastendruck (textDrafts) alle Punkte des Protokolls neu.
+// eigenen Blöcke. Getippter Text kommt gar nicht mehr über Props (textDraftStore, T3).
 const PER_BLOCK_PROPS = [
   "todosByBlock",
-  "textDrafts",
   "imagesByBlock",
   "newTodoTask",
   "newEventDrafts",

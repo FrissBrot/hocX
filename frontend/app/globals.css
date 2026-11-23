@@ -3116,10 +3116,6 @@ button.table-row-link.table-row-toggle {
   overflow: visible;
 }
 
-.protocol-quicknav-stat-danger strong {
-  color: var(--danger);
-}
-
 /* ── Tag input ── */
 .tag-input-wrap {
   position: relative;
@@ -5399,22 +5395,6 @@ button.table-row-link.table-row-toggle {
   color: var(--muted);
 }
 
-/* ── Collaboration Status Panel (Status & Zusammenarbeit flyout) ────────────── */
-
-.collab-status-tile strong {
-  font-size: var(--text-xl);
-  line-height: 1.1;
-}
-
-.collab-status-tile span {
-  width: 100%;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  overflow-wrap: anywhere;
-}
 @keyframes dropdown-appear {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
