@@ -37,6 +37,14 @@ _PASSWORD_CHANGE_ATTEMPT_LIMIT = 10
 _PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60
 
 
+def login_email_changes(current_email: str | None, values: dict) -> bool:
+    """Ändert ``values`` die (normalisierte) E-Mail-Adresse? Für Konten mit Login heisst das: neue
+    Login-Adresse, an die «Passwort vergessen» künftig den Link schickt."""
+    if "email" not in values:
+        return False
+    return (values["email"] or "").strip().lower() != (current_email or "").strip().lower()
+
+
 class UserService:
     """A user belongs to exactly one tenant (app_user.tenant_id) and has one or more of that
     tenant's roles (user_role, see role_service). The tenant entry points (list_users/get_user/
@@ -228,9 +236,12 @@ class UserService:
                 payload.password
                 or (payload.login_enabled is not None and payload.login_enabled != bool(user.login_enabled))
                 or (roles is not None and {role.id for role in roles} != current_role_ids)
+                or (was_login_enabled and login_email_changes(user.email, values))
             ):
                 # Passwort setzen, Login und Rollen ändern = Konto- bzw. Rechtevergabe: frische
-                # Anmeldung nötig (SEC-AUTH-010). Gilt für /users und /participants.
+                # Anmeldung nötig (SEC-AUTH-010). Gilt für /users und /participants. Ebenso die
+                # Login-E-Mail: über «Passwort vergessen» an die neue Adresse wirkt sie wie
+                # Passwort setzen (Konto-Übernahme), auch beim eigenen Konto.
                 from app.auth_security.step_up import ADMIN, require_recent_auth
 
                 require_recent_auth(actor, kind=ADMIN, action="user.update_access")
