@@ -98,6 +98,13 @@
     ]
   },
   {
+    "name": "satzzeichen_auszeichnung",
+    "markdown": "Achtung **Stopp!**&#87;eiter und *wirklich?*&#74;awohl Satzende",
+    "lines": [
+      "Achtung Stopp!Weiter und wirklich?Jawohl Satzende"
+    ]
+  },
+  {
     "name": "leerabsatz",
     "markdown": "Vor dem leeren Absatz\n\nNach dem leeren Absatz",
     "lines": [

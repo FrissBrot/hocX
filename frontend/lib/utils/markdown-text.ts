@@ -2,6 +2,10 @@
 // Listen, Tabellenzellen und Vorschauen, wo kein Rich-Text-Editor gerendert werden soll. Die
 // vollständige Darstellung übernimmt RichTextEditor (Formular, readOnly) bzw. das PDF.
 
+function decodeCodePoint(codePoint: number, fallback: string): string {
+  return codePoint > 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : fallback;
+}
+
 /** Markdown in kurzen Klartext: Formatierung, Listenzeichen, Überschriften und Links entfernt,
  * Absätze und Zeilen mit « · » verbunden. */
 export function markdownToPlainText(markdown: string | null | undefined): string {
@@ -21,6 +25,9 @@ export function markdownToPlainText(markdown: string | null | undefined): string
         .replace(/`([^`]*)`/g, "$1")
         .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, "$1")
         .replace(/\\$/, "")
+        // Zahl-Entitäten schreibt der Editor neben Auszeichnungen mit Satzzeichen («**B!**&#67;»)
+        .replace(/&#(\d+);/g, (entity, code: string) => decodeCodePoint(Number(code), entity))
+        .replace(/&#x([0-9a-f]+);/gi, (entity, code: string) => decodeCodePoint(Number.parseInt(code, 16), entity))
         .trim()
     )
     .filter(Boolean);
