@@ -6,6 +6,8 @@ export type SessionInfo = {
   authenticated: boolean;
   /** MFA ist Pflicht, das bestehende Konto hat Frist bis hierhin (Migration 0192) */
   mfa_grace_until?: string | null;
+  /** Passwort aus einem Datenleck bekannt (Migration 0219): Hinweis mit Pflicht zur Änderung */
+  password_breached?: boolean;
   user: {
     id: string;
     first_name: string | null;
@@ -871,6 +873,8 @@ export type AdminTenantUser = {
 export type AdminSessionInfo = {
   authenticated: boolean;
   admin: { id: string; email: string; display_name: string; role: "owner" | "support" } | null;
+  /** Passwort aus einem Datenleck bekannt (Migration 0219): Hinweis mit Pflicht zur Änderung */
+  password_breached?: boolean;
 };
 
 export type AdminLoginResponse = AdminSessionInfo & {

@@ -622,6 +622,10 @@
         "title": "Anmeldeschutz aufräumen",
         "description": "Stündlich: löscht Sicherheitsereignisse nach 90 Tagen, beendete Sitzungen und lange unbenutzte Geräte und repariert Zähler ohne Ablauf."
       },
+      "password_breach_recheck": {
+        "title": "Passwort-Leak-Prüfung vormerken",
+        "description": "Täglich: merkt Konten vor, deren Passwort seit 30 Tagen nicht mehr gegen bekannte Datenlecks geprüft wurde. Die nächste Anmeldung prüft dann ohne Zwischenspeicher."
+      },
       "metrics_rollup": {
         "title": "Kennzahlen-Rollup",
         "description": "Rechnet täglich Zählwerte für Dashboard und Analysen (Mandanten, aktive Benutzer, Anmeldungen, Fehler, Speicher, Nutzung je Modul). Erster Lauf ergänzt 90 Tage rückwirkend."

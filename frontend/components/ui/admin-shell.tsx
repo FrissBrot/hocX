@@ -35,6 +35,7 @@ import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
+import { PasswordBreachedBanner } from "@/components/ui/password-breached-banner";
 
 const AdminCommandPalette = dynamic(() => import("@/components/admin/admin-command-palette").then((m) => m.AdminCommandPalette), { ssr: false });
 const ShortcutHelp = dynamic(() => import("@/components/ui/shortcut-help").then((m) => m.ShortcutHelp), { ssr: false });
@@ -359,7 +360,10 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
             </div>
           </header>
           {isReadOnlyAdmin && <div className="admin-readonly-banner">{t("readOnlyBanner")}</div>}
-          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">{children}</main>
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">
+            <PasswordBreachedBanner breached={session.password_breached} />
+            {children}
+          </main>
         </div>
       </div>
       {shortcutHelpOpen ? <ShortcutHelp open onClose={() => setShortcutHelpOpen(false)} /> : null}

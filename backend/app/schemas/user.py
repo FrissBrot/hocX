@@ -242,6 +242,8 @@ class SessionRead(BaseModel):
     bridge_redirect_url: str | None = None
     # MFA ist Pflicht, aber das bestehende Konto hat noch Frist bis hierhin (Migration 0192)
     mfa_grace_until: datetime | None = None
+    # Passwort aus einem Datenleck bekannt (Migration 0219): Pflicht zur Änderung, nur Hinweis
+    password_breached: bool = False
 
 
 class BridgePreviewRead(BaseModel):

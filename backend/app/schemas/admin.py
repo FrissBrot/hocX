@@ -34,6 +34,8 @@ class AdminSessionRead(BaseModel):
     # pending (audit finding, 2026-08-27). Same shape on purpose so the frontend's existing
     # tenant-login MFA-challenge UI can be reused for the admin panel with minimal changes.
     mfa: MfaPendingLoginRead | None = None
+    # Passwort aus einem Datenleck bekannt (Migration 0219): Pflicht zur Änderung
+    password_breached: bool = False
 
 
 class PlatformAdminCreate(BaseModel):

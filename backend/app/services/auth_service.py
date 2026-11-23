@@ -6,7 +6,7 @@ from fastapi import BackgroundTasks, HTTPException, Request, Response, status
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from app.auth_security import devices, email_challenge, events, notify, risk
+from app.auth_security import breach, devices, email_challenge, events, notify, risk
 from app.auth_security import context as request_context
 from app.auth_security import sessions as session_register
 from app.auth_security.guard import (
@@ -184,6 +184,25 @@ class AuthService:
                 details={"reason": "verification_unavailable"},
             )
             raise _login_denied()
+        # Leak-Prüfung erst nach allen Abweisungen, die für falsches und richtiges Passwort gleich
+        # aussehen (Security-Review 1.5.2: sonst Antwort- und Zeit-Orakel ohne Mailversand).
+        breached = self._check_breach(db, user, payload.password, ctx=ctx, subject_hash=check.subject, device_hash=device_hash)
+        if breached and not has_factor:
+            # Geleaktes Passwort (1.5.2): ohne zweiten Faktor immer der E-Mail-Code - auch auf
+            # bekannten Geräten und ohne Risiko-Signal, unabhängig vom Monitor-Modus der Risk
+            # Engine. Mit Faktor verlangt prepare_login ihn ohnehin bei jeder Anmeldung. Erst der
+            # Code (Besitz des Postfachs), dann gegebenenfalls die Faktor-Einrichtung: sonst könnte
+            # jemand mit dem geleakten Passwort einen eigenen Faktor einrichten.
+            needs_verification = True
+            risk_context["breached"] = True
+            if not smtp:
+                events.record(
+                    ctx=ctx,
+                    event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
+                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                    details={"reason": "password_breached"},
+                )
+                raise email_challenge.email_unavailable()
         if needs_verification and not has_factor and smtp:
             # Versand gestört (notifications/delivery_status.py): gar nicht erst versuchen, sondern
             # sofort klar melden - höchstens ein Login je Minute versucht es echt (Erholung).
@@ -235,6 +254,26 @@ class AuthService:
             return LoginResponse(authenticated=False, mfa=pending_mfa)
 
         return self._finish_login(db, response, user=user, request_host=request_host, mfa_verified=False, request=request, amr=["pwd"], risk_context=risk_context)
+
+    def _check_breach(
+        self, db: Session, user: AppUser, password: str, *, ctx, subject_hash: str | None, device_hash: str | None,
+    ) -> bool:
+        """Leak-Prüfung des eben bestätigten Passworts (app/auth_security/breach.py). Neu markiert:
+        Audit-Eintrag, Sicherheitsereignis und genau eine Warn-Mail. Gibt zurück, ob das Konto
+        (jetzt oder schon vorher) als geleakt markiert ist. Ausfall: fail-open."""
+        outcome = breach.check_on_login(db, user, password)
+        if outcome.newly_marked:
+            _audit.log(
+                db, action="user.password_breached", tenant_id=user.tenant_id, actor_user_id=user.id,
+                entity_type="app_user", entity_id=user.id, details={"detected": "login"}, commit=False,
+            )
+            notify.password_breached(db, user, marked_at=user.password_breached_at)
+            events.record(
+                ctx=ctx, event_type="login.password", outcome="info", user_id=user.id, tenant_id=user.tenant_id,
+                subject_hash=subject_hash, device_hash=device_hash, details={"reason": "password_breached"},
+            )
+        db.commit()
+        return outcome.breached
 
     def verify_email_challenge(self, db: Session, response: Response, payload: EmailChallengeVerifyRequest, request: Request | None = None) -> LoginResponse:
         """E-Mail-Code bestanden: weiter wie nach dem Passwort (Ersteinrichtung des Faktors bei
@@ -511,6 +550,7 @@ class AuthService:
             assigned_only=sorted(user.assigned_only),
             roles=[RoleRef(id=role.public_id, name=role.name, system_key=role.system_key) for role in user.roles],
             mfa_grace_until=user.mfa_grace_until,
+            password_breached=user.password_breached,
         )
 
     def _finish_login(

@@ -622,6 +622,10 @@
         "title": "Nettoyage de la protection des connexions",
         "description": "Toutes les heures : supprime les événements de sécurité après 90 jours, les sessions terminées et les appareils longtemps inutilisés, et répare les compteurs sans expiration."
       },
+      "password_breach_recheck": {
+        "title": "Planifier la vérification des fuites de mots de passe",
+        "description": "Chaque jour : marque les comptes dont le mot de passe n'a pas été vérifié contre les fuites de données connues depuis 30 jours. La prochaine connexion vérifie alors sans cache."
+      },
       "metrics_rollup": {
         "title": "Agrégation des indicateurs",
         "description": "Calcule chaque jour des compteurs pour le tableau de bord et les analyses (mandants, utilisateurs actifs, connexions, erreurs, stockage, utilisation par module). La première exécution reprend 90 jours."

@@ -39,6 +39,7 @@ import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 import { MfaGraceBanner } from "@/components/ui/mfa-grace-banner";
+import { PasswordBreachedBanner } from "@/components/ui/password-breached-banner";
 import { findListSearchInput } from "@/lib/search/list-search";
 import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
 import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
@@ -718,6 +719,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             </Popover>
           </header>
           <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">
+            <PasswordBreachedBanner
+              breached={session?.password_breached}
+              onChange={() => { setProfileInitialTab(profileTabFromLink("security")); setProfileModalOpen(true); }}
+            />
             <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} />
             <InstallAppPrompt />
             {inSettings && usesSettingsFrame(pathname) ? (

@@ -753,9 +753,11 @@
       "introNotice": "Ton compte chez {tenant} a été utilisé sur un appareil que nous ne connaissions pas encore :",
       "hint": "Ce n'était pas toi ? Change immédiatement ton mot de passe et déconnecte toutes les sessions sous « Appareils connectés ».",
       "action": "Vérifier la sécurité",
+      "breachedDetail": "Il apparaît dans des fuites de données publiques (pas chez nous). Change-le après ta prochaine connexion. D'ici là, chaque connexion exige en plus ton deuxième facteur ou un code envoyé par e-mail.",
       "device": "Appareil : {device}",
       "label": {
         "newDevice": "Connexion depuis un nouvel appareil",
+        "passwordBreached": "Ton mot de passe figure dans une fuite de données",
         "suspicious": "Connexion à risque élevé",
         "failedAttempts": "Nombreuses tentatives de connexion échouées ({count})",
         "afterLockout": "Connexion peu après un blocage dû à des tentatives échouées"

@@ -753,9 +753,11 @@
       "introNotice": "Your account at {tenant} was used on a device we haven't seen before:",
       "hint": "Wasn't you? Change your password right away and sign out all sessions under «Signed-in devices».",
       "action": "Review security",
+      "breachedDetail": "It appears in publicly known data breaches (not ours). Change it after your next sign-in. Until then, every sign-in also requires your second factor or a code sent by email.",
       "device": "Device: {device}",
       "label": {
         "newDevice": "Sign-in from a new device",
+        "passwordBreached": "Your password is known from a data breach",
         "suspicious": "Sign-in with elevated risk",
         "failedAttempts": "Many failed sign-in attempts ({count})",
         "afterLockout": "Sign-in shortly after a lockout due to failed attempts"

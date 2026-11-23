@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.admin_security import CurrentAdmin, issue_admin_session_cookie
 from app.core.config import settings
 from app.auth_security import context as request_context
-from app.auth_security import devices, events
+from app.auth_security import breach, devices, events
 from app.auth_security.guard import LoginGuard
 from app.core.security import DUMMY_PASSWORD_HASH, verify_password
 from app.models import PlatformAdmin
@@ -97,8 +97,34 @@ class AdminAuthService:
             subject_hash=check.subject, device_hash=device_hash, details={"known_device": known},
         )
 
+        # Leak-Prüfung des Passworts (1.5.2, app/auth_security/breach.py), fail-open bei Ausfall
+        outcome = breach.check_on_login(db, admin, payload.password)
+        if outcome.newly_marked:
+            _audit.log(db, action="admin.password_breached", actor_email=admin.email, details={"detected": "login"}, commit=False)
+            events.record(
+                ctx=ctx, event_type="admin.login.password", outcome="info", platform_admin_id=admin.id,
+                subject_hash=check.subject, device_hash=device_hash, details={"reason": "password_breached"},
+            )
+        db.commit()
+        if outcome.breached and not self.mfa_service.has_passkey(db, admin.id):
+            # Ohne Passkey folgte jetzt die Ersteinrichtung (Trust on first use) - mit einem
+            # geleakten Passwort könnte so jemand Fremdes seinen Passkey hinterlegen. Neues Passwort
+            # nur über eine andere Owner-Person oder admin_cli (Notausgang).
+            events.record(
+                ctx=ctx, event_type="admin.login.password", outcome="blocked", platform_admin_id=admin.id,
+                subject_hash=check.subject, device_hash=device_hash, enforcement="block", details={"reason": "password_breached"},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "password_breached",
+                    "message": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen.",
+                },
+            )
+
         # Ein richtiges Passwort allein gibt nie eine Session: prepare_login liefert immer ein
-        # Ticket - Passkey bestätigen oder (ohne Passkey) zuerst einen einrichten.
+        # Ticket - Passkey bestätigen oder (ohne Passkey) zuerst einen einrichten. Mit geleaktem
+        # Passwort ist der Passkey der zweite Faktor; der Hinweis verlangt die Änderung.
         pending_mfa = self.mfa_service.prepare_login(db, admin)
         return AdminSessionRead(authenticated=False, mfa=pending_mfa)
 
@@ -141,7 +167,7 @@ class AdminAuthService:
         return self.session(
             CurrentAdmin(
                 admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email,
-                display_name=admin.display_name, role=admin.role,
+                display_name=admin.display_name, role=admin.role, password_breached=admin.password_breached_at is not None,
             )
         )
 
@@ -166,4 +192,5 @@ class AdminAuthService:
         return AdminSessionRead(
             authenticated=True,
             admin=AdminSelfRead(id=admin.admin_public_id, email=admin.email, display_name=admin.display_name, role=admin.role),
+            password_breached=admin.password_breached,
         )

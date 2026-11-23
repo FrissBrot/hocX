@@ -13,13 +13,21 @@ Installationen aktualisieren können.
 Korrekturversion zu 1.5.1 mit allen Funden der Nachtläufe vom 22. und 23.11.2026: mehrere
 Sicherheitskorrekturen bei Konto- und Rechteverwaltung, Anmeldung, Freigabelinks und Dateilöschung,
 dazu Korrekturen bei gleichzeitigen Änderungen im Document Studio, bei Pendenzen und Bussen, beim
-Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox. Keine
-Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox. Neu prüft hocX
+bestehende Passwörter bei jeder Anmeldung gegen bekannte Datenlecks. Eine Migration (0219), keine
+neuen Secrets, zwei optionale Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
-- Von **1.5.1**: `./scripts/deploy.sh <test|prod>` wie gewohnt. Keine Migration, keine neue
-  Einstellung.
+- Von **1.5.1**: `./scripts/deploy.sh <test|prod>` wie gewohnt. Migration **0219** (drei leere
+  Zeitstempel-Spalten auf `app_user` und `platform_admin`, schnell). Optional
+  `PASSWORD_BREACH_RECHECK_DAYS` (Standard 30) und `PASSWORD_LEAK_FETCH_PER_MINUTE` (Standard 600).
+- **Leak-Prüfung beim Login:** Nach dem Update wird jedes Passwort bei der nächsten Anmeldung
+  geprüft. Konten mit geleaktem Passwort brauchen ab dann den zweiten Faktor bzw. einen E-Mail-Code
+  und bekommen einmal eine Warn-Mail; ohne Mailversand und ohne zweiten Faktor ist die Anmeldung
+  solcher Konten nicht möglich (Passwort über «Passwort vergessen» bzw. die Verwaltung neu setzen).
+  Plattform-Admins mit geleaktem Passwort und ohne Passkey werden abgewiesen (neues Passwort über
+  eine andere Owner-Person oder `admin_cli`). Neuer Job `password_breach_recheck` (täglich).
 - **Abgabebox-Fehlerprotokoll:** Unerwartete Fehler der Abgabebox erscheinen ab jetzt unter
   `/admin` im Fehlerprotokoll (bisher kam dort nie ein Eintrag an). Nach dem Update können also
   erstmals Einträge mit Quelle «abgabebox-backend» auftauchen.
@@ -31,6 +39,15 @@ Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes
   Protokollentwürfen (die neue Prüfung greift beim Erstellen, bestehende Links bleiben).
 
 ### Sicherheit
+
+- **Leak-Prüfung bestehender Passwörter:** bei jeder erfolgreichen Passwort-Anmeldung (Konten und
+  Plattform-Admins) mit der bestehenden Prüfung (HIBP, k-Anonymität: nur 5 Hex-Zeichen des SHA-1,
+  Antwort je Präfix eine Stunde im Cache, Rückfall lokale Liste, höchstens 600 Abfragen je Minute).
+  Ausfall blockiert die Anmeldung nie. Geleakt: Konto markiert (Audit-Eintrag), Anmeldung nur mit
+  zweitem Faktor oder E-Mail-Code, einmalige Warn-Mail in allen Sprachen, roter Pflichthinweis in
+  der App «Passwort ändern»; ein neues Passwort hebt die Markierung auf. Der Nachtjob merkt Konten
+  vor, deren Prüfung älter als 30 Tage ist (nächste Anmeldung ohne Cache). Gespeichert werden nur
+  Zeitpunkte, nie Hash, SHA-1 oder Präfix.
 
 - Die Login-E-Mail eines Kontos (auch des eigenen) lässt sich nur noch nach einer frischen
   Bestätigung der Identität ändern, wie Passwort, Login und Rollen.

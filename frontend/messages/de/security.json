@@ -151,13 +151,20 @@
     "rate_limiter_unavailable": "Der Anmeldeschutz ist kurz nicht verfügbar. Bitte gleich nochmals versuchen.",
     "mfa_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es erneut.",
     "auth_email_unavailable": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator.",
-    "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes."
+    "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes.",
+    "password_breached": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
     "message": "Deine Organisation verlangt für dein Konto einen zweiten Faktor. Richte ihn bis {until} ein – danach geht die Anmeldung nur noch damit.",
     "later": "Später",
     "setup": "Jetzt einrichten"
+  },
+  "breached": {
+    "title": "Dein Passwort ist aus einem Datenleck bekannt",
+    "message": "Es taucht in öffentlich bekannten Datenlecks auf. Ändere es jetzt – bis dahin verlangt jede Anmeldung zusätzlich deinen zweiten Faktor oder einen Code per E-Mail.",
+    "adminMessage": "Es taucht in öffentlich bekannten Datenlecks auf. Lass es sofort von einer anderen Owner-Person oder über admin_cli neu setzen.",
+    "change": "Passwort ändern"
   },
   "stepUp": {
     "title": "Identität bestätigen",

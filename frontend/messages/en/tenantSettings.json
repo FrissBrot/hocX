@@ -534,7 +534,7 @@
       "critical": "Critical"
     },
     "loadFailed": "The data could not be loaded.",
-    "privacyHint": "To protect accounts, hocX stores the time, rough device, a pseudonym of the network and – if set up – the country of each sign-in (looked up locally with “IP to Country Lite” by DB-IP.com, CC BY 4.0), never the IP address; events are deleted after 90 days. New passwords are checked anonymously against known data breaches: only the first 5 characters of a hash are sent to “Have I Been Pwned”. Please mention both in your organisation's privacy notice (legitimate interest: account security)."
+    "privacyHint": "To protect accounts, hocX stores the time, rough device, a pseudonym of the network and – if set up – the country of each sign-in (looked up locally with “IP to Country Lite” by DB-IP.com, CC BY 4.0), never the IP address; events are deleted after 90 days. New passwords and passwords at every sign-in are checked anonymously against known data breaches (no personal data; only the time of the check is stored): only the first 5 characters of a hash are sent to “Have I Been Pwned”. Please mention both in your organisation's privacy notice (legitimate interest: account security)."
   },
   "searchSynonyms": {
     "eyebrow": "Search",

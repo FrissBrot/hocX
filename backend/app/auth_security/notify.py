@@ -10,6 +10,7 @@ Mail je Fehlversuch:
 | ``security.login_suspicious`` | erfolgreiche Anmeldung mit Risiko «hoch» oder «kritisch» | je Netz und Tag | nein |
 | ``security.failed_attempts`` | Fehlversuche auf das Konto erreichen ``auth_account_failures_challenge`` | je 6-h-Fenster | nein |
 | ``security.login_after_lockout`` | erfolgreiche Anmeldung, nachdem das Konto/der Faktor gesperrt war | je Tag | nein |
+| ``security.password_breached`` | Passwort bei der Anmeldung als geleakt erkannt (``breach.py``) | je Markierung | nein |
 
 Entscheid Abschaltbarkeit (DSGVO Art. 32, Datenminimierung): Warnungen, die auf einen laufenden
 Angriff oder eine mögliche Übernahme hinweisen, sind Teil der Sicherheit des Kontos und gehen wie
@@ -63,3 +64,11 @@ def login_after_lockout(db: Session, user: AppUser, *, device: str | None, count
     if _eligible(user):
         publish(db, kind="security.login_after_lockout", tenant_id=user.tenant_id, recipient_ids=[user.id],
                 payload=_payload(device=device, country=country), dedupe=datetime.now(UTC).strftime("%Y%m%d"))
+
+
+def password_breached(db: Session, user: AppUser, *, marked_at: datetime) -> None:
+    """Nur beim Setzen der Markierung aufrufen (breach.check_on_login: newly_marked) - der
+    Dedupe-Schlüssel je Markierung verhindert zusätzlich eine zweite Mail für dieselbe."""
+    if _eligible(user):
+        publish(db, kind="security.password_breached", tenant_id=user.tenant_id, recipient_ids=[user.id],
+                payload=_payload(), dedupe=f"breach:{marked_at:%Y%m%d%H%M%S%f}")
