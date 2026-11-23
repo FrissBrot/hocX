@@ -85,8 +85,24 @@
       "admin_level": "W",
       "step_up": "security-block"
     },
+    "GET /api/admin/auth-security/blocks/history": {
+      "handler": "admin_auth_security.auth_security_block_history",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/blocks/ladder": {
+      "handler": "admin_auth_security.auth_security_block_ladder",
+      "platform": true,
+      "admin_level": "O"
+    },
     "DELETE /api/admin/auth-security/blocks/{subject}": {
       "handler": "admin_auth_security.delete_block",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "security-block"
+    },
+    "POST /api/admin/auth-security/blocks/{subject}/extend": {
+      "handler": "admin_auth_security.extend_block",
       "platform": true,
       "admin_level": "W",
       "step_up": "security-block"

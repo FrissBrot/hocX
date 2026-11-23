@@ -74,9 +74,111 @@ def top_accounts(db: Session, *, hours: int = 24, limit: int = 10) -> list[dict]
     return [{**dict(row), "subject_hash": _short(row["subject_hash"])} for row in rows]
 
 
-def active_blocks() -> list[dict]:
+def active_blocks(db: Session | None = None) -> list[dict]:
+    """Aktive Sperren mit Restzeit, Abgewiesen-Zähler und (mit ``db``) Namen des setzenden Admins.
+    ``subject`` bleibt vollständig (Schlüssel für Aufheben/Verlängern), ``short`` ist die Anzeige."""
     now = int(datetime.now(UTC).timestamp())
-    return [{**asdict(block), "subject": block.subject, "remaining_seconds": max(0, block.until - now)} for block in blocks.active_blocks()]
+    active = blocks.active_blocks()
+    hits = blocks.rejections([block.subject for block in active])
+    names: dict[int, str] = {}
+    admin_ids = sorted({block.admin_id for block in active if block.admin_id})
+    if db is not None and admin_ids:
+        names = dict(db.execute(text("SELECT id, display_name FROM platform_admin WHERE id = ANY(:ids)"), {"ids": admin_ids}).all())
+    return [
+        {
+            **asdict(block), "short": block.short, "remaining_seconds": max(0, block.until - now), "rejected": hits.get(block.subject, 0),
+            "admin_name": names.get(block.admin_id) if block.admin_id else None,
+        }
+        for block in active
+    ]
+
+
+# Abwehrleiter der Sperren-Seite: Stufen 1-3 gibt es nur als gleitende Redis-Zähler je Quelle (ohne
+# Übersicht), darum Ereignisse der letzten 24 h; Stufen 4/5 sind die aktiven Sperren (jetzt).
+_LIMIT_LAYERS = ("attempt_rate", "account_source", "source", "account")
+_CACHE_SECONDS = 30
+_ladder_cache: tuple[float, dict] | None = None
+
+
+def defense_ladder(db: Session) -> dict:
+    global _ladder_cache
+    import time
+
+    now = time.monotonic()
+    if _ladder_cache is not None and now - _ladder_cache[0] < _CACHE_SECONDS:
+        counts = dict(_ladder_cache[1])
+    else:
+        row = db.execute(
+            text(
+                "SELECT count(*) FILTER (WHERE outcome = 'failure') AS observed, "
+                "count(*) FILTER (WHERE event_type = 'login.locked' AND details->>'layer' = ANY(:layers)) AS limited, "
+                "count(*) FILTER (WHERE outcome = 'challenged') AS challenged "
+                "FROM auth_event WHERE ts > now() - interval '24 hours'"
+            ),
+            {"layers": list(_LIMIT_LAYERS)},
+        ).mappings().one()
+        counts = {key: int(value or 0) for key, value in row.items()}
+        _ladder_cache = (now, counts)
+    active = blocks.active_blocks()
+    from app.core.config import settings
+
+    return {
+        "events_24h": counts,
+        "automatic": sum(1 for block in active if not block.manual),
+        "manual": sum(1 for block in active if block.manual),
+        # Regeln für die Zeile unter der Leiter (wirksame Einstellungen, keine Geheimnisse)
+        "strikes": settings.auth_block_strikes,
+        "durations": blocks.automatic_durations(),
+        "max_automatic_minutes": blocks.MAX_AUTOMATIC_MINUTES,
+        "max_manual_minutes": blocks.MAX_MANUAL_MINUTES,
+    }
+
+
+BLOCK_HISTORY_DAYS = 7
+_HISTORY_ROWS = 5000
+_HISTORY_SUBJECTS = 60
+
+
+def block_history(db: Session, *, days: int = BLOCK_HISTORY_DAYS) -> dict:
+    """Sperren der letzten Tage aus ``block.set``/``block.clear`` (je Quelle Balken von Setzen bis
+    Ablauf bzw. Aufheben). Ältere Ereignisse ohne ``details.subject`` (vor 1.6) fehlen."""
+    start = datetime.now(UTC) - timedelta(days=days)
+    rows = db.execute(
+        text(
+            "SELECT ts, event_type, src_country, details FROM auth_event "
+            "WHERE event_type IN ('block.set', 'block.clear') AND ts > :start AND details ? 'subject' ORDER BY ts, id LIMIT :limit"
+        ),
+        {"start": start, "limit": _HISTORY_ROWS},
+    ).mappings()
+    sources: dict[str, dict] = {}
+    for row in rows:
+        details = row["details"] or {}
+        subject = str(details.get("subject") or "")[:12]
+        if not subject:
+            continue
+        source = sources.setdefault(subject, {"subject": subject, "scope": details.get("scope"), "country": None, "bars": [], "last": row["ts"]})
+        source["last"] = row["ts"]
+        source["country"] = source["country"] or row["src_country"]
+        open_bar = source["bars"][-1] if source["bars"] and source["bars"][-1]["open"] else None
+        if row["event_type"] == "block.set":
+            if open_bar is not None:
+                # Verlängert bzw. ersetzt: der alte Balken endet hier
+                open_bar.update(end=row["ts"], open=False, replaced=True)
+            minutes = int(details.get("minutes") or 0)
+            source["bars"].append({
+                "start": row["ts"], "end": row["ts"] + timedelta(minutes=minutes), "minutes": minutes,
+                "manual": details.get("kind") == "manual" or details.get("stage") == 5, "stage": details.get("stage"),
+                "reason": details.get("reason"), "cleared": False, "replaced": False, "open": True,
+            })
+            source["scope"] = details.get("scope") or source["scope"]
+        elif open_bar is not None:
+            open_bar.update(end=min(open_bar["end"], row["ts"]), open=False, cleared=True)
+    result = sorted(sources.values(), key=lambda item: item["last"], reverse=True)[:_HISTORY_SUBJECTS]
+    for item in result:
+        for bar in item["bars"]:
+            bar.pop("open", None)
+        item.pop("last", None)
+    return {"start": start, "end": datetime.now(UTC), "sources": result}
 
 
 def recent_events(db: Session, *, limit: int = 100, offset: int = 0, event_type: str | None = None, outcome: str | None = None) -> list[dict]:
@@ -101,7 +203,7 @@ def platform_summary(db: Session) -> dict:
         "timeseries": timeseries(db),
         "top_networks": top_networks(db),
         "top_accounts": top_accounts(db),
-        "active_blocks": active_blocks(),
+        "active_blocks": active_blocks(db),
     }
 
 

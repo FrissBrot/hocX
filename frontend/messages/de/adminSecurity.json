@@ -116,24 +116,16 @@
   },
   "blocks": {
     "title": "Sperren",
-    "description": "Aktive IP-Sperren des Anmeldeschutzes. Setzen und Aufheben verlangen eine Passkey-Bestätigung.",
+    "description": "Befristete Sperren von Quellen für die Anmelde-Endpunkte – nie für Konten mit bekannten Geräten, nie dauerhaft. Gesperrt wird ein Pseudonym, nie eine Adresse. Setzen, Verlängern und Aufheben verlangen eine Passkey-Bestätigung.",
     "add": "Manuelle Sperre",
-    "columns": {
-      "subject": "Quelle (Pseudonym)",
-      "scope": "Umfang",
-      "stage": "Stufe",
-      "kind": "Art",
-      "reason": "Grund",
-      "until": "Bis",
-      "actions": "Aktionen"
-    },
     "scopes": {
       "source": "Einzelne Adresse",
-      "net": "Netz"
+      "net": "Netz",
+      "net_fp": "Netz (aus Ereignis)"
     },
     "manual": "Manuell",
     "automatic": "Automatisch",
-    "unblock": "Entsperren",
+    "unblock": "Aufheben",
     "unblockConfirm": "Sperre für {subject} aufheben? Anmeldungen aus dieser Quelle sind danach wieder möglich.",
     "unblocked": "Sperre aufgehoben.",
     "created": "Sperre gesetzt.",
@@ -146,9 +138,105 @@
     "minutesLabel": "Dauer in Minuten",
     "minutesHelp": "Höchstens {max, number} Minuten.",
     "reasonLabel": "Grund",
-    "save": "Sperren",
+    "save": "Mit Passkey sperren",
     "cancel": "Abbrechen",
-    "readOnly": "Nur Owner können Sperren setzen oder aufheben."
+    "readOnly": "Nur Owner können Sperren setzen oder aufheben.",
+    "activeTitle": "Aktive Sperren",
+    "cardLabel": "Sperre {subject}",
+    "remaining": "verbleibend",
+    "remainingDays": "{days} T {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Verbleibender Anteil der Sperrdauer",
+    "stageBadge": "Stufe {stage}",
+    "repeat": "{count}. Sperre in 7 Tagen",
+    "facts": {
+      "reason": "Grund",
+      "rejected": "Abgewiesen",
+      "by": "Gesetzt von"
+    },
+    "unknownAdmin": "Plattform-Admin",
+    "extend": "Verlängern",
+    "extendTitle": "Sperre {subject} verlängern",
+    "extendDescription": "Die Sperre wird danach eine manuelle Sperre (Stufe 5). Mit Passkey bestätigt und im Audit-Log vermerkt.",
+    "extendSave": "Mit Passkey verlängern",
+    "extended": "Sperre verlängert.",
+    "modalDescription": "Stufe 5. Wird mit Passkey bestätigt und im Audit-Log vermerkt.",
+    "reasonHelp": "Pflicht, z. B. Abuse-Meldung oder Vorfall.",
+    "durationLabel": "Dauer",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 Tage",
+      "43200": "30 Tage",
+      "custom": "Eigene"
+    },
+    "scopeOptions": {
+      "source": "Einzeladresse (/32, /64)",
+      "net": "Netz (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Harte Grenze der Quelle wiederholt erreicht",
+      "risk_critical": "Kritisches Risiko wiederholt",
+      "manual": "Manuell",
+      "extend": "Verlängert"
+    },
+    "ladder": {
+      "title": "Abwehrstufen",
+      "hint": "Stufen 1–3: Ereignisse der letzten 24 h · Stufen 4–5: aktive Sperren",
+      "stage": "Stufe {stage}",
+      "events24h": "Ereignisse 24 h",
+      "activeNow": "aktiv",
+      "stages": {
+        "1": {
+          "title": "Beobachten",
+          "text": "Nur Ereignis, keine Einschränkung (Fehlversuche)."
+        },
+        "2": {
+          "title": "Grenzen gesenkt",
+          "text": "Versuchsrate oder Fehlversuchsgrenze überschritten, Versuch abgewiesen."
+        },
+        "3": {
+          "title": "Zusatzprüfung",
+          "text": "Unbekannte Geräte brauchen E-Mail-Code oder zweiten Faktor."
+        },
+        "4": {
+          "title": "Befristet gesperrt",
+          "text": "Nach wiederholten harten Grenzen: Anmelde-Endpunkte für die Quelle zu."
+        },
+        "5": {
+          "title": "Manuell gesperrt",
+          "text": "Von Plattform-Admin mit Begründung und Ablauf."
+        }
+      },
+      "strikes": "Stufe 4 ab {strikes} Strikes in 24 h",
+      "durations": "Dauer je Wiederholung in 7 Tagen: {durations} min",
+      "limits": "Automatisch höchstens {automatic} h, manuell höchstens {manual} Tage",
+      "adminsExempt": "Plattform-Admins sind ausgenommen (Notfallzugang)"
+    },
+    "history": {
+      "title": "Verlauf, 7 Tage",
+      "summary": "{sources, plural, =0 {Keine Sperren} one {# Quelle} other {# Quellen}} mit {bars, plural, one {# Sperre} other {# Sperren}}, davon {manual, number} manuell. Wiederholungen werden länger.",
+      "showTable": "Daten als Tabelle",
+      "showChart": "Als Diagramm",
+      "empty": "In den letzten 7 Tagen gab es keine Sperren.",
+      "barLabel": "{kind}, ab {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "vorzeitig aufgehoben",
+        "extended": "verlängert",
+        "active": "aktiv",
+        "expired": "abgelaufen"
+      },
+      "columns": {
+        "source": "Quelle",
+        "kind": "Art",
+        "start": "Beginn",
+        "end": "Ende",
+        "minutes": "Minuten",
+        "status": "Status"
+      }
+    }
   },
   "alerts": {
     "title": "Warnungen",

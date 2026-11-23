@@ -175,6 +175,7 @@ class LoginGuard:
         if not known_device and not exempt_from_source_blocks:
             block = blocks.is_blocked(ip)
             if block is not None:
+                blocks.count_rejection(block)
                 self._locked_event(result, "source_blocked", tenant_id)
                 raise _too_many("source_blocked", "Von dieser Verbindung sind Anmeldungen vorübergehend gesperrt", max(60, block.until - int(datetime.now(UTC).timestamp())))
             if self.critical_deny_active(ip):
@@ -285,7 +286,7 @@ class LoginGuard:
         events.record(
             ctx=request_context.current(result.ip),
             event_type="login.password", outcome="blocked", tenant_id=tenant_id, subject_hash=result.subject,
-            device_hash=result.device_hash, risk_score=result.pre.score, risk_reasons=result.pre.reasons,
+            device_hash=result.device_hash, risk_score=result.pre.score, risk_reasons=result.pre.reasons, risk_weights=result.pre.weights,
             enforcement="deny", details={"reason": "risk_critical", "minutes": minutes},
         )
         raise _too_many("login_denied", "Anmeldung von dieser Verbindung vorübergehend nicht möglich", minutes * 60)

@@ -1,11 +1,5 @@
 /* Admin-Redesign: Klassen fuer den Bereich security (nur Tokens, Light/Dark). */
 
-.admin-security-tiles {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
 .admin-security-tile {
   display: flex;
   flex-direction: column;
@@ -76,20 +70,11 @@
 }
 
 @media (max-width: 900px) {
-  .admin-security-tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .admin-security-columns {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 640px) {
-  .admin-security-tiles {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* Quittierte Warnung (1.5.1): abgesetzt, bleibt lesbar */
 .admin-alert-acknowledged td {
@@ -97,3 +82,342 @@
 }
 /* Ereignisse: Risikogründe unter dem Wert (Codes aus auth_event.risk_reasons, übersetzt) */
 .admin-security-reasons { display: block; }
+
+/* ── 1.6 Sperren (Design «hocX Sicherheit Sperren») ─────────────────────────────── */
+
+.admin-security-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.admin-security-section-head .section-title {
+  margin: 0;
+}
+
+.admin-security-mono,
+.admin-security-block-subject {
+  font-family: var(--font-mono);
+}
+
+.admin-security-ladder {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-security-stage {
+  --stage-color: var(--success);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--stage-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.admin-security-stage-2 { --stage-color: var(--warning); }
+.admin-security-stage-3 { --stage-color: var(--danger); }
+.admin-security-stage-4 { --stage-color: var(--violet); }
+.admin-security-stage-5 { --stage-color: var(--accent); }
+
+.admin-security-stage-active {
+  border-color: var(--stage-color);
+  background: color-mix(in srgb, var(--stage-color) 10%, var(--panel-solid));
+}
+
+.admin-security-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-security-stage-label {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-security-stage-count {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-security-stage-title {
+  font-weight: 600;
+}
+
+.admin-security-stage-text,
+.admin-security-stage-unit {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.admin-security-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.admin-security-block-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: var(--space-3);
+}
+
+.admin-security-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-security-block-soon {
+  border-color: var(--warning);
+}
+
+.admin-security-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.admin-security-block-id {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.admin-security-block-subject {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.admin-security-block-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.admin-security-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-security-kind-automatic { background: color-mix(in srgb, var(--violet) 22%, transparent); }
+.admin-security-kind-manual { background: var(--accent-soft); }
+
+.admin-security-block-remaining {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.admin-security-block-remaining strong {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-security-block-remaining .muted {
+  font-size: var(--text-xs);
+}
+
+.admin-security-block-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-security-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-security-meter-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.admin-security-meter-automatic,
+.admin-security-swatch-automatic,
+.admin-security-gantt-bar-automatic { background: var(--violet); }
+
+.admin-security-meter-manual,
+.admin-security-swatch-manual,
+.admin-security-gantt-bar-manual { background: var(--accent); }
+
+.admin-security-swatch-cleared,
+.admin-security-gantt-bar-cleared { background: var(--border-strong); }
+
+.admin-security-block-times {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-security-block-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.admin-security-block-facts dt {
+  color: var(--muted);
+}
+
+.admin-security-block-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-security-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.admin-security-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.admin-security-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-security-swatch {
+  width: 12px;
+  height: 8px;
+  border-radius: var(--radius-xs);
+}
+
+.admin-security-gantt-scroll {
+  overflow-x: auto;
+}
+
+.admin-security-gantt {
+  display: flex;
+  min-width: 760px;
+  flex-direction: column;
+}
+
+.admin-security-gantt-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.admin-security-gantt-axis {
+  border-top: none;
+}
+
+.admin-security-gantt-label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--text-sm);
+}
+
+.admin-security-gantt-label .muted {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-security-gantt-track {
+  position: relative;
+  height: 22px;
+}
+
+.admin-security-gantt-axis .admin-security-gantt-track {
+  height: 16px;
+}
+
+.admin-security-gantt-grid {
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / 7 - 1px), var(--border) calc(100% / 7 - 1px), var(--border) calc(100% / 7));
+}
+
+.admin-security-gantt-tick {
+  position: absolute;
+  top: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.admin-security-gantt-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  min-width: 4px;
+  align-items: center;
+  overflow: hidden;
+  padding-left: var(--space-1);
+  border-radius: var(--radius-xs);
+}
+
+.admin-security-gantt-now {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  bottom: -4px;
+  border-left: 2px solid var(--accent);
+}
+
+@media (max-width: 640px) {
+  .admin-security-block-head {
+    flex-direction: column;
+  }
+
+  .admin-security-block-remaining {
+    align-items: flex-start;
+  }
+}

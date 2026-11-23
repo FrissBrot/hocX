@@ -116,24 +116,16 @@
   },
   "blocks": {
     "title": "Blocages",
-    "description": "Blocages IP actifs de la protection des connexions. Les poser et les lever exige une confirmation par passkey.",
+    "description": "Blocages temporaires de sources pour les points de connexion – jamais pour des comptes sur des appareils connus, jamais définitifs. On bloque un pseudonyme, jamais une adresse. Poser, prolonger et lever exigent une confirmation par passkey.",
     "add": "Blocage manuel",
-    "columns": {
-      "subject": "Source (pseudonyme)",
-      "scope": "Portée",
-      "stage": "Niveau",
-      "kind": "Type",
-      "reason": "Motif",
-      "until": "Jusqu’à",
-      "actions": "Actions"
-    },
     "scopes": {
       "source": "Adresse unique",
-      "net": "Réseau"
+      "net": "Réseau",
+      "net_fp": "Réseau (depuis un événement)"
     },
     "manual": "Manuel",
     "automatic": "Automatique",
-    "unblock": "Débloquer",
+    "unblock": "Lever",
     "unblockConfirm": "Lever le blocage de {subject} ? Les connexions depuis cette source seront à nouveau possibles.",
     "unblocked": "Blocage levé.",
     "created": "Blocage posé.",
@@ -146,9 +138,105 @@
     "minutesLabel": "Durée en minutes",
     "minutesHelp": "Au maximum {max, number} minutes.",
     "reasonLabel": "Motif",
-    "save": "Bloquer",
+    "save": "Bloquer avec passkey",
     "cancel": "Annuler",
-    "readOnly": "Seuls les owners peuvent poser ou lever des blocages."
+    "readOnly": "Seuls les owners peuvent poser ou lever des blocages.",
+    "activeTitle": "Blocages actifs",
+    "cardLabel": "Blocage {subject}",
+    "remaining": "restant",
+    "remainingDays": "{days} j {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Part restante de la durée du blocage",
+    "stageBadge": "Niveau {stage}",
+    "repeat": "{count}e blocage en 7 jours",
+    "facts": {
+      "reason": "Motif",
+      "rejected": "Refusés",
+      "by": "Posé par"
+    },
+    "unknownAdmin": "Admin plateforme",
+    "extend": "Prolonger",
+    "extendTitle": "Prolonger le blocage {subject}",
+    "extendDescription": "Le blocage devient ensuite un blocage manuel (niveau 5). Confirmé par passkey et consigné dans le journal d'audit.",
+    "extendSave": "Prolonger avec passkey",
+    "extended": "Blocage prolongé.",
+    "modalDescription": "Niveau 5. Confirmé par passkey et consigné dans le journal d'audit.",
+    "reasonHelp": "Obligatoire, p. ex. signalement d'abus ou incident.",
+    "durationLabel": "Durée",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 jours",
+      "43200": "30 jours",
+      "custom": "Autre"
+    },
+    "scopeOptions": {
+      "source": "Adresse unique (/32, /64)",
+      "net": "Réseau (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Limite stricte de la source atteinte à répétition",
+      "risk_critical": "Risque critique répété",
+      "manual": "Manuel",
+      "extend": "Prolongé"
+    },
+    "ladder": {
+      "title": "Niveaux de défense",
+      "hint": "Niveaux 1–3 : événements des dernières 24 h · niveaux 4–5 : blocages actifs",
+      "stage": "Niveau {stage}",
+      "events24h": "Événements 24 h",
+      "activeNow": "actifs",
+      "stages": {
+        "1": {
+          "title": "Observer",
+          "text": "Événement seulement, aucune restriction (échecs)."
+        },
+        "2": {
+          "title": "Limites abaissées",
+          "text": "Fréquence ou limite d'échecs dépassée, tentative refusée."
+        },
+        "3": {
+          "title": "Contrôle supplémentaire",
+          "text": "Les appareils inconnus doivent fournir un code e-mail ou un second facteur."
+        },
+        "4": {
+          "title": "Bloqué temporairement",
+          "text": "Après des limites strictes répétées : points de connexion fermés pour la source."
+        },
+        "5": {
+          "title": "Bloqué manuellement",
+          "text": "Par un admin plateforme, avec motif et échéance."
+        }
+      },
+      "strikes": "Niveau 4 dès {strikes} avertissements en 24 h",
+      "durations": "Durée par répétition sur 7 jours : {durations} min",
+      "limits": "Automatique au plus {automatic} h, manuel au plus {manual} jours",
+      "adminsExempt": "Les admins plateforme sont exemptés (accès d'urgence)"
+    },
+    "history": {
+      "title": "Historique, 7 jours",
+      "summary": "{sources, plural, =0 {Aucun blocage} one {# source} other {# sources}} avec {bars, plural, one {# blocage} other {# blocages}}, dont {manual, number} manuels. Les répétitions s'allongent.",
+      "showTable": "Données en tableau",
+      "showChart": "En graphique",
+      "empty": "Aucun blocage ces 7 derniers jours.",
+      "barLabel": "{kind}, dès {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "levé avant terme",
+        "extended": "prolongé",
+        "active": "actif",
+        "expired": "expiré"
+      },
+      "columns": {
+        "source": "Source",
+        "kind": "Type",
+        "start": "Début",
+        "end": "Fin",
+        "minutes": "Minutes",
+        "status": "Statut"
+      }
+    }
   },
   "alerts": {
     "title": "Alertes",

@@ -47,7 +47,10 @@ def main(argv: list[str]) -> int:
         print("aufgehoben" if blocks.clear(rest[0]) else "keine Sperre gefunden")
         return 0
     if command == "unblock-ip" and rest:
-        cleared = [blocks.clear(blocks.subject_for(rest[0], scope)) for scope in ("source", "net")]
+        from app.core.auth_pseudonym import net_hash
+
+        subjects = [blocks.subject_for(rest[0], scope) for scope in ("source", "net")] + [net_hash(rest[0]) or ""]
+        cleared = [blocks.clear(subject) for subject in subjects if subject]
         print("aufgehoben" if any(cleared) else "keine Sperre gefunden")
         return 0
     if command == "reset-account" and rest:

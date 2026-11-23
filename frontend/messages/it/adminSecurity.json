@@ -116,24 +116,16 @@
   },
   "blocks": {
     "title": "Blocchi",
-    "description": "Blocchi IP attivi della protezione degli accessi. Impostarli e revocarli richiede una conferma con passkey.",
+    "description": "Blocchi temporanei di fonti per gli endpoint di accesso – mai per account su dispositivi noti, mai permanenti. Si blocca uno pseudonimo, mai un indirizzo. Impostare, prolungare e revocare richiedono una conferma con passkey.",
     "add": "Blocco manuale",
-    "columns": {
-      "subject": "Origine (pseudonimo)",
-      "scope": "Ambito",
-      "stage": "Livello",
-      "kind": "Tipo",
-      "reason": "Motivo",
-      "until": "Fino a",
-      "actions": "Azioni"
-    },
     "scopes": {
       "source": "Indirizzo singolo",
-      "net": "Rete"
+      "net": "Rete",
+      "net_fp": "Rete (da evento)"
     },
     "manual": "Manuale",
     "automatic": "Automatico",
-    "unblock": "Sblocca",
+    "unblock": "Revoca",
     "unblockConfirm": "Revocare il blocco per {subject}? Gli accessi da questa origine saranno di nuovo possibili.",
     "unblocked": "Blocco revocato.",
     "created": "Blocco impostato.",
@@ -146,9 +138,105 @@
     "minutesLabel": "Durata in minuti",
     "minutesHelp": "Al massimo {max, number} minuti.",
     "reasonLabel": "Motivo",
-    "save": "Blocca",
+    "save": "Blocca con passkey",
     "cancel": "Annulla",
-    "readOnly": "Solo gli owner possono impostare o revocare blocchi."
+    "readOnly": "Solo gli owner possono impostare o revocare blocchi.",
+    "activeTitle": "Blocchi attivi",
+    "cardLabel": "Blocco {subject}",
+    "remaining": "rimanente",
+    "remainingDays": "{days} g {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Quota rimanente della durata del blocco",
+    "stageBadge": "Livello {stage}",
+    "repeat": "{count}° blocco in 7 giorni",
+    "facts": {
+      "reason": "Motivo",
+      "rejected": "Respinti",
+      "by": "Impostato da"
+    },
+    "unknownAdmin": "Admin piattaforma",
+    "extend": "Prolunga",
+    "extendTitle": "Prolunga il blocco {subject}",
+    "extendDescription": "Il blocco diventa poi un blocco manuale (livello 5). Confermato con passkey e registrato nel log di audit.",
+    "extendSave": "Prolunga con passkey",
+    "extended": "Blocco prolungato.",
+    "modalDescription": "Livello 5. Confermato con passkey e registrato nel log di audit.",
+    "reasonHelp": "Obbligatorio, p. es. segnalazione di abuso o incidente.",
+    "durationLabel": "Durata",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 giorni",
+      "43200": "30 giorni",
+      "custom": "Altro"
+    },
+    "scopeOptions": {
+      "source": "Indirizzo singolo (/32, /64)",
+      "net": "Rete (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Limite rigido della fonte raggiunto ripetutamente",
+      "risk_critical": "Rischio critico ripetuto",
+      "manual": "Manuale",
+      "extend": "Prolungato"
+    },
+    "ladder": {
+      "title": "Livelli di difesa",
+      "hint": "Livelli 1–3: eventi delle ultime 24 h · livelli 4–5: blocchi attivi",
+      "stage": "Livello {stage}",
+      "events24h": "Eventi 24 h",
+      "activeNow": "attivi",
+      "stages": {
+        "1": {
+          "title": "Osservare",
+          "text": "Solo evento, nessuna limitazione (tentativi falliti)."
+        },
+        "2": {
+          "title": "Limiti ridotti",
+          "text": "Frequenza o limite di errori superato, tentativo respinto."
+        },
+        "3": {
+          "title": "Verifica aggiuntiva",
+          "text": "I dispositivi sconosciuti richiedono un codice e-mail o un secondo fattore."
+        },
+        "4": {
+          "title": "Bloccato temporaneamente",
+          "text": "Dopo limiti rigidi ripetuti: endpoint di accesso chiusi per la fonte."
+        },
+        "5": {
+          "title": "Bloccato manualmente",
+          "text": "Da un admin della piattaforma con motivo e scadenza."
+        }
+      },
+      "strikes": "Livello 4 da {strikes} avvertimenti in 24 h",
+      "durations": "Durata per ripetizione in 7 giorni: {durations} min",
+      "limits": "Automatico al massimo {automatic} h, manuale al massimo {manual} giorni",
+      "adminsExempt": "Gli admin della piattaforma sono esclusi (accesso d'emergenza)"
+    },
+    "history": {
+      "title": "Cronologia, 7 giorni",
+      "summary": "{sources, plural, =0 {Nessun blocco} one {# fonte} other {# fonti}} con {bars, plural, one {# blocco} other {# blocchi}}, di cui {manual, number} manuali. Le ripetizioni durano di più.",
+      "showTable": "Dati come tabella",
+      "showChart": "Come grafico",
+      "empty": "Negli ultimi 7 giorni non ci sono stati blocchi.",
+      "barLabel": "{kind}, da {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "revocato prima",
+        "extended": "prolungato",
+        "active": "attivo",
+        "expired": "scaduto"
+      },
+      "columns": {
+        "source": "Fonte",
+        "kind": "Tipo",
+        "start": "Inizio",
+        "end": "Fine",
+        "minutes": "Minuti",
+        "status": "Stato"
+      }
+    }
   },
   "alerts": {
     "title": "Avvisi",

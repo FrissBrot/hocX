@@ -2,7 +2,6 @@ import { AreaIntlProvider } from "@/components/i18n/area-intl-provider";
 import "@/app/styles/admin.css";
 import "@/app/styles/admin-analytics.css";
 import "@/app/styles/admin-overview.css";
-import "@/app/styles/admin-security.css";
 import "@/app/styles/admin-tenant-detail.css";
 import "@/app/styles/admin-audit.css";
 import "@/app/styles/uploads.css";

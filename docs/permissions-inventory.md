@@ -6,7 +6,7 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 662 (Plattform-Admin: 156)
+- Routen gesamt: 665 (Plattform-Admin: 159)
 - Mandanten-Routen mit Rechteprüfung: 417
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0

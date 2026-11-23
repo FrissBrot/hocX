@@ -43,8 +43,13 @@ audit = AuditService()
 
 class BlockCreate(BaseModel):
     ip: str | None = Field(default=None, max_length=64)
-    subject: str | None = Field(default=None, max_length=64)
+    subject: str | None = Field(default=None, max_length=64, pattern=r"^[0-9a-f]{16,64}$")
     scope: Literal["source", "net"] = "source"
+    minutes: int = Field(ge=1, le=blocks.MAX_MANUAL_MINUTES)
+    reason: str = Field(min_length=3, max_length=200)
+
+
+class BlockExtend(BaseModel):
     minutes: int = Field(ge=1, le=blocks.MAX_MANUAL_MINUTES)
     reason: str = Field(min_length=3, max_length=200)
 
@@ -92,7 +97,7 @@ def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin =
         "open_alerts": len(open_alerts),
         "critical_alerts": sum(1 for alert in open_alerts if alert["severity"] == "critical"),
         "acknowledged_alerts": len(alerts) - len(open_alerts),
-        "active_blocks": len(read_service.active_blocks()),
+        "active_blocks": len(blocks.active_blocks()),
     }
 
 
@@ -242,8 +247,29 @@ def auth_security_events(
 
 
 @router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])
-def auth_security_blocks():
-    return read_service.active_blocks()
+def auth_security_blocks(db: Session = Depends(get_db)):
+    """Aktive Sperren (1.6: mit Beginn, Dauer, Abgewiesen-Zähler und setzendem Admin)."""
+    return read_service.active_blocks(db)
+
+
+@router.get("/auth-security/blocks/ladder", dependencies=[Depends(require_admin_owner)])
+def auth_security_block_ladder(db: Session = Depends(get_db)):
+    """Abwehrleiter: Stufen 1-3 als Ereignisse der letzten 24 h (30 s zwischengespeichert), Stufen 4/5
+    als aktive Sperren."""
+    return read_service.defense_ladder(db)
+
+
+@router.get("/auth-security/blocks/history", dependencies=[Depends(require_admin_owner)])
+def auth_security_block_history(db: Session = Depends(get_db)):
+    """Verlauf der Sperren der letzten 7 Tage (nur gekürzte Pseudonyme)."""
+    return read_service.block_history(db)
+
+
+def _block_audit(db: Session, admin: CurrentAdmin, action: str, block: blocks.Block, **details) -> None:
+    audit.log(
+        db, action=action, actor_email=admin.email,
+        details={"subject": block.short, "scope": block.scope, "minutes": block.minutes, "reason": block.reason, **details},
+    )
 
 
 @router.post("/auth-security/blocks", status_code=201, dependencies=[Depends(require_step_up("security-block"))])
@@ -254,7 +280,22 @@ def create_block(payload: BlockCreate, db: Session = Depends(get_db), admin: Cur
         block = blocks.set_manual(ip=payload.ip, subject=payload.subject, scope=payload.scope, minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    audit.log(db, action="admin.auth_block_set", actor_email=admin.email, details={"scope": block.scope, "minutes": payload.minutes, "reason": block.reason})
+    _block_audit(db, admin, "admin.auth_block_set", block, source="manual")
+    return {"subject": block.subject, "until": block.until}
+
+
+@router.post("/auth-security/blocks/{subject}/extend", dependencies=[Depends(require_step_up("security-block"))])
+def extend_block(subject: str, payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+    """Verlängern = manuelle Sperre Stufe 5 derselben Quelle (Begründung Pflicht, auditiert)."""
+    if len(subject) > 64:
+        raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
+    try:
+        block = blocks.extend(subject, minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if block is None:
+        raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
+    _block_audit(db, admin, "admin.auth_block_extended", block, added_minutes=payload.minutes)
     return {"subject": block.subject, "until": block.until}
 
 

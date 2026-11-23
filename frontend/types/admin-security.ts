@@ -9,7 +9,56 @@ export type AuthTopNetwork = { src_net_hash: string | null; failures: number; ac
 
 export type AuthTopAccount = { subject_hash: string | null; user_id: number | null; tenant_id: number | null; failures: number; networks: number; last_seen: string };
 
-export type AuthBlock = { subject: string; scope: "source" | "net"; until: number; reason: string; manual: boolean; stage: number; remaining_seconds: number };
+export type AuthBlockScope = "source" | "net" | "net_fp";
+
+/** Aktive Sperre (1.6: Beginn, Dauer, Abgewiesen-Zähler, setzender Admin). `subject` ist der
+ * Schlüssel für Aufheben/Verlängern, angezeigt wird nur `short`. */
+export type AuthBlock = {
+  subject: string;
+  short: string;
+  scope: AuthBlockScope;
+  until: number;
+  reason: string;
+  manual: boolean;
+  stage: number;
+  remaining_seconds: number;
+  created: number;
+  minutes: number;
+  admin_id: number | null;
+  admin_name: string | null;
+  incident_id: number | null;
+  repeat: number;
+  rejected: number;
+};
+
+/** GET /api/admin/auth-security/blocks/ladder */
+export type AuthDefenseLadder = {
+  events_24h: { observed: number; limited: number; challenged: number };
+  automatic: number;
+  manual: number;
+  strikes: number;
+  durations: number[];
+  max_automatic_minutes: number;
+  max_manual_minutes: number;
+};
+
+export type AuthBlockHistoryBar = {
+  start: string;
+  end: string;
+  minutes: number;
+  manual: boolean;
+  stage: number | null;
+  reason: string | null;
+  cleared: boolean;
+  replaced: boolean;
+};
+
+/** GET /api/admin/auth-security/blocks/history (7 Tage) */
+export type AuthBlockHistory = {
+  start: string;
+  end: string;
+  sources: { subject: string; scope: AuthBlockScope | null; country: string | null; bars: AuthBlockHistoryBar[] }[];
+};
 
 export type AuthSecuritySummary = {
   timeseries: AuthTimeseriesPoint[];

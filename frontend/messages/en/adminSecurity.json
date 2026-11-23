@@ -116,24 +116,16 @@
   },
   "blocks": {
     "title": "Blocks",
-    "description": "Active IP blocks of the sign-in protection. Setting and lifting require a passkey confirmation.",
+    "description": "Temporary blocks of sources for the sign-in endpoints – never for accounts on known devices, never permanent. A pseudonym is blocked, never an address. Setting, extending and lifting require passkey confirmation.",
     "add": "Manual block",
-    "columns": {
-      "subject": "Source (pseudonym)",
-      "scope": "Scope",
-      "stage": "Stage",
-      "kind": "Type",
-      "reason": "Reason",
-      "until": "Until",
-      "actions": "Actions"
-    },
     "scopes": {
       "source": "Single address",
-      "net": "Network"
+      "net": "Network",
+      "net_fp": "Network (from event)"
     },
     "manual": "Manual",
     "automatic": "Automatic",
-    "unblock": "Unblock",
+    "unblock": "Lift",
     "unblockConfirm": "Lift the block for {subject}? Sign-ins from this source will be possible again.",
     "unblocked": "Block lifted.",
     "created": "Block set.",
@@ -146,9 +138,105 @@
     "minutesLabel": "Duration in minutes",
     "minutesHelp": "At most {max, number} minutes.",
     "reasonLabel": "Reason",
-    "save": "Block",
+    "save": "Block with passkey",
     "cancel": "Cancel",
-    "readOnly": "Only owners can set or lift blocks."
+    "readOnly": "Only owners can set or lift blocks.",
+    "activeTitle": "Active blocks",
+    "cardLabel": "Block {subject}",
+    "remaining": "remaining",
+    "remainingDays": "{days} d {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Remaining share of the block duration",
+    "stageBadge": "Stage {stage}",
+    "repeat": "block no. {count} in 7 days",
+    "facts": {
+      "reason": "Reason",
+      "rejected": "Rejected",
+      "by": "Set by"
+    },
+    "unknownAdmin": "Platform admin",
+    "extend": "Extend",
+    "extendTitle": "Extend block {subject}",
+    "extendDescription": "The block then becomes a manual block (stage 5). Confirmed with a passkey and recorded in the audit log.",
+    "extendSave": "Extend with passkey",
+    "extended": "Block extended.",
+    "modalDescription": "Stage 5. Confirmed with a passkey and recorded in the audit log.",
+    "reasonHelp": "Required, e.g. abuse report or incident.",
+    "durationLabel": "Duration",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 days",
+      "43200": "30 days",
+      "custom": "Custom"
+    },
+    "scopeOptions": {
+      "source": "Single address (/32, /64)",
+      "net": "Network (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Hard source limit reached repeatedly",
+      "risk_critical": "Critical risk repeatedly",
+      "manual": "Manual",
+      "extend": "Extended"
+    },
+    "ladder": {
+      "title": "Defence stages",
+      "hint": "Stages 1–3: events in the last 24 h · stages 4–5: active blocks",
+      "stage": "Stage {stage}",
+      "events24h": "Events 24 h",
+      "activeNow": "active",
+      "stages": {
+        "1": {
+          "title": "Observe",
+          "text": "Event only, no restriction (failed attempts)."
+        },
+        "2": {
+          "title": "Limits lowered",
+          "text": "Attempt rate or failure limit exceeded, attempt rejected."
+        },
+        "3": {
+          "title": "Extra check",
+          "text": "Unknown devices need an email code or second factor."
+        },
+        "4": {
+          "title": "Temporarily blocked",
+          "text": "After repeated hard limits: sign-in endpoints closed for the source."
+        },
+        "5": {
+          "title": "Manually blocked",
+          "text": "By a platform admin with reason and expiry."
+        }
+      },
+      "strikes": "Stage 4 after {strikes} strikes in 24 h",
+      "durations": "Duration per repetition within 7 days: {durations} min",
+      "limits": "Automatic at most {automatic} h, manual at most {manual} days",
+      "adminsExempt": "Platform admins are exempt (emergency access)"
+    },
+    "history": {
+      "title": "History, 7 days",
+      "summary": "{sources, plural, =0 {No blocks} one {# source} other {# sources}} with {bars, plural, one {# block} other {# blocks}}, {manual, number} of them manual. Repetitions get longer.",
+      "showTable": "Data as table",
+      "showChart": "As chart",
+      "empty": "There were no blocks in the last 7 days.",
+      "barLabel": "{kind}, from {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "lifted early",
+        "extended": "extended",
+        "active": "active",
+        "expired": "expired"
+      },
+      "columns": {
+        "source": "Source",
+        "kind": "Type",
+        "start": "Start",
+        "end": "End",
+        "minutes": "Minutes",
+        "status": "Status"
+      }
+    }
   },
   "alerts": {
     "title": "Alerts",

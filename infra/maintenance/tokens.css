@@ -148,6 +148,8 @@
   --accent: #5b8def;
   --accent-strong: #8ab0ff;
   --accent-soft: rgba(91, 141, 239, 0.16);
+  /* 1.6: eigener Dark-Wert (vorher galt der helle), Sperren-Seite «automatisch» */
+  --violet: #9b7bf7;
   --success: #3ecf8e;
   --warning: #f0b84f;
   --danger: #f87171;
@@ -188,6 +190,8 @@
     --accent: #5b8def;
     --accent-strong: #8ab0ff;
     --accent-soft: rgba(91, 141, 239, 0.16);
+    /* 1.6: eigener Dark-Wert (vorher galt der helle), Sperren-Seite «automatisch» */
+    --violet: #9b7bf7;
     --success: #3ecf8e;
     --warning: #f0b84f;
     --danger: #f87171;

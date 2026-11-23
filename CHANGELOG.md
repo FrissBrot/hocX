@@ -42,6 +42,16 @@ Installationen aktualisieren können.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
+- **Konsole › Sicherheit › Sperren neu (1.6):** Abwehrleiter mit allen fünf Stufen (Stufen 1–3 als
+  Ereignisse der letzten 24 h, 4–5 als aktive Sperren), Karten je Sperre mit Countdown, Grund,
+  Zähler «Abgewiesen», gesetzt von, **Verlängern** (macht die Sperre zur manuellen Sperre Stufe 5,
+  Begründung Pflicht) und Aufheben – beides mit Passkey-Bestätigung und Audit-Eintrag. Verlauf der
+  letzten 7 Tage als Zeitleiste je Quelle (mit Tabellenalternative). Die manuelle Sperre bietet
+  Voreinstellungen (1 h bis 30 Tage) und freie Minuten. Neu kann eine Sperre auch einen
+  **Netz-Fingerprint** (Pseudonym der Anmeldeereignisse, /24 bzw. /48) treffen; Plattform-Admins
+  bleiben ausgenommen. `block.set`/`block.clear` tragen jetzt gekürztes Subjekt, Admin und
+  (vorbereitet für 1.7) Vorfall.
+
 ### Geändert
 
 - **Protokoll-Editor schneller (Performance-Audit 2026-11-22, Teil 1.6):**

@@ -58,6 +58,8 @@ class Assessment:
     reasons: list[str] = field(default_factory=list)
     level: str = NORMAL
     policy_version: str = POLICY_VERSION
+    # Gewicht je Grund (1.6): erklärt den Score im Ereignis-Detail (auth_event.details.weights)
+    weights: dict[str, int] = field(default_factory=dict)
 
     @property
     def needs_verification(self) -> bool:
@@ -113,7 +115,10 @@ def assess(signals: Signals) -> Assessment:
     if signals.attack_mode and not signals.known_device:
         add(15, "attack_mode")
     score = min(100, sum(weight for weight, _reason in parts))
-    return Assessment(score=score, reasons=[reason for _weight, reason in parts], level=level_for(score))
+    return Assessment(
+        score=score, reasons=[reason for _weight, reason in parts], level=level_for(score),
+        weights={reason: weight for weight, reason in parts},
+    )
 
 
 def enforcing() -> bool:
