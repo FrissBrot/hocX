@@ -133,6 +133,12 @@ def handle_rename(db: Session, tenant: Tenant, old_name: str, *, actor_email: st
     offenen Antrag zurück. True, wenn eine Bestätigung aufgehoben wurde (Hinweis im UI)."""
     if tenant.name == old_name:
         return False
+    # Neuen Namen schreiben (sperrt die Zeile bis zum Commit) und den Bestätigungsstand neu laden:
+    # Aufrufer laden den Mandanten oft lange vorher (Logo-Upload mit Virenscan). Eine in diesem
+    # Fenster festgeschriebene Bestätigung des alten Namens sähe der veraltete Stand nicht - der
+    # neue, ungeprüfte Name bliebe bestätigt. Eine spätere Bestätigung wartet auf die Sperre.
+    db.flush()
+    db.refresh(tenant, with_for_update=True)
     row = pending_request(db, tenant.id)
     if row is not None:
         row.status = "withdrawn"
