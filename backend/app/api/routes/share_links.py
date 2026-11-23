@@ -53,8 +53,9 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
 
 
 def _is_creator(user: CurrentUser, link: ShareLink) -> bool:
-    """Den eigenen Link sieht und widerruft der Ersteller immer, auch nach Verlust des Rollen- oder
-    Leserechts (er kennt die URL ohnehin; Liste zeigt nur Metadaten, Review 1.5.2)."""
+    """Eigener Link: die Leseprüfung je Datei entfällt (der Ersteller kennt die URL ohnehin). Die
+    Trennung nach Dateiart (photos.read/files.read, share_link_service.may_see) gilt aber auch für
+    ihn - wer files.read verliert, sieht keine Dokument-Links mehr (Security-Review Phase 3)."""
     return link.created_by is not None and link.created_by == user.user_id
 
 
@@ -210,8 +211,7 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
         for row in rows
-        if _is_creator(user, row.link)
-        or (share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link, readable))
+        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link, readable)
     ]
 
 
@@ -224,13 +224,8 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
     if (
         link is None
         or not share_link_service.can_manage(db, link, user.current_tenant_id)
-        or not (
-            _is_creator(user, link)
-            or (
-                share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
-                and _may_read_link_files(db, user, link)
-            )
-        )
+        or not share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
+        or not _may_read_link_files(db, user, link)
     ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)

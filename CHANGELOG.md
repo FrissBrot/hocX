@@ -56,7 +56,8 @@ Secrets, zwei optionale Umgebungsvariablen, keine Breaking Changes.
   Administratoren zählen nicht mehr für die Regel «letzter Administrator», auch nicht über die
   Personenseite oder den Word-Import.
 - Öffentliche Freigabelinks auf Dateien entstehen und erscheinen nur noch für Dateien, die das
-  eigene Konto selbst öffnen darf; der Ersteller kann seinen Link immer widerrufen.
+  eigene Konto selbst öffnen darf; der Ersteller kann seinen Link widerrufen, auch wenn er die
+  Datei inzwischen nicht mehr öffnen darf (die Trennung Fotos/Dokumente gilt weiter).
 - Live-Photo-Clips folgen dem Recht «Fotos lesen» wie das zugehörige Foto.
 - Offene Protokoll-Tabs halten eine Sitzung nicht mehr über die Inaktivitätsgrenze hinaus am Leben.
 - Vorgänge zum zweiten Faktor (Passkey/Authenticator einrichten, Passkey-Anmeldung, Bestätigung)
