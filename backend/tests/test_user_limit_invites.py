@@ -47,3 +47,24 @@ def test_expired_or_revoked_invites_do_not_count(db):
     revoked.revoked_at = datetime.now(UTC)
     db.flush()
     assert user_limit_service.pending_invite_count(db, tenant.id) == 0
+
+
+def test_open_invite_of_a_former_member_does_not_count(db):
+    """Ausgetretene Personen (Austrittsdatum vor heute, Schweizer Zeit) können eine Einladung nie
+    annehmen (account.py) und zählen nicht zum Limit - ihre liegengebliebene Einladung auch nicht."""
+    from datetime import date
+
+    tenant = make_tenant(db, "Limit Ausgetreten")
+    tenant.user_limit_override = 2
+    make_app_user(db, "limit-former-admin@example.com", tenant_id=tenant.id, role_code="admin")  # 1 Login
+    former = make_participant(db, tenant.id, "Ausgetreten")
+    _invite(db, tenant.id, former)
+    former.left_at = date(2000, 1, 1)
+    leaving_today = make_participant(db, tenant.id, "Tritt heute aus")
+    _invite(db, tenant.id, leaving_today)
+    from app.services.todo_fine_service import today
+
+    leaving_today.left_at = today()  # am Austrittstag selbst noch Mitglied: zählt weiter
+    db.flush()
+
+    assert user_limit_service.pending_invite_count(db, tenant.id) == 1
