@@ -52,6 +52,11 @@ _FLOW_TTL_SECONDS = 10 * 60
 # Erstlogin über Einladung: Zeit für Passkey bzw. Authenticator-App (App installieren, scannen).
 # Läuft das Ticket ab, ist das Passwort trotzdem gesetzt - dann führt der normale Login weiter.
 _INVITE_TICKET_TTL_SECONDS = 30 * 60
+# Vorgänge angemeldeter Konten (Step-up per Passkey, eigener Faktor): je Konto begrenzt. Jeder
+# Vorgang liegt 10 min in Redis (noeviction) - unbegrenzt könnte ein Konto den Speicher füllen und
+# damit Anmeldeschutz und Ratelimits plattformweit lahmlegen (fail-closed).
+SELF_FLOW_START_LIMIT = 60
+SELF_FLOW_START_WINDOW_SECONDS = 15 * 60
 _ISSUER = "hocX"
 
 # Account-scoped lockout for TOTP login verification, independent of which login ticket the
@@ -82,6 +87,10 @@ class MfaService:
         payload = json.dumps({"kind": kind, **data})
         self._redis().set(f"{_FLOW_PREFIX}{token}", payload, nx=True, ex=ttl_seconds)
         return token
+
+    def limit_self_flow_start(self, user_id: int) -> None:
+        """429, wenn ein angemeldetes Konto zu viele Vorgänge zum zweiten Faktor anlegt."""
+        enforce_rate_limit(f"mfa-self-flow-start:{user_id}", limit=SELF_FLOW_START_LIMIT, period_seconds=SELF_FLOW_START_WINDOW_SECONDS)
 
     def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
         raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
@@ -374,6 +383,7 @@ class MfaService:
         user = db.get(AppUser, actor.user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        self.limit_self_flow_start(user.id)
         secret = generate_totp_secret()
         flow_token = self._create_flow("self_totp_enrollment", {"user_id": user.id, "secret": secret})
         return TotpEnrollmentStartRead(
@@ -491,6 +501,7 @@ class MfaService:
         user = db.get(AppUser, actor.user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        self.limit_self_flow_start(user.id)
         return self._start_passkey_registration(
             db,
             user=user,

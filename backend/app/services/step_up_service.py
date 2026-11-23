@@ -53,6 +53,7 @@ class StepUpService:
         ]
         if not factors:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_not_registered", "message": "Kein Passkey auf dieser Domain"})
+        self.mfa.limit_self_flow_start(user.user_id)
         challenge = generate_challenge()
         flow_token = self.mfa._create_flow("step_up_passkey", {"user_id": user.user_id, "challenge": challenge, "rp_id": rp_id, "origin": request_origin})
         return PasskeyAssertionStartRead(
