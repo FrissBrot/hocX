@@ -8,6 +8,13 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **pypdf 7.1.1** (vorher 6.21.4) für die XMP-Ergänzung der Dokument-Engine. Keine Code-Änderung nötig
+  (`PdfWriter(..., incremental=True)` unverändert). Neu erzeugt pypdf die zweite Datei-ID im Trailer
+  zufällig statt als MD5 über den Inhalt; jeder Export hat ohnehin eine eigene Dokument-ID, der
+  SHA-256 im Register gilt weiterhin für genau die ausgelieferten Bytes.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
