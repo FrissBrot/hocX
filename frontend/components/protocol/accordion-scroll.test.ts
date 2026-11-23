@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ACCORDION_RAMP, accordionOpenness, createAccordionEngine, type AccordionMetrics } from "./accordion-scroll";
+import { ACCORDION_RAMP, SKIPPED_CLASS, accordionOpenness, createAccordionEngine, type AccordionMetrics } from "./accordion-scroll";
 
 const options = { center: 400, gap: 16, ramp: 200 };
 const points = (count: number, body = 600): AccordionMetrics[] => Array.from({ length: count }, () => ({ collapsed: 80, body }));
@@ -169,5 +169,35 @@ describe("createAccordionEngine", () => {
     engine.destroy();
     expect(container.style.getPropertyValue("--accordion-below")).toBe("");
   });
-});
 
+  it("überspringt den Inhalt ganz zugeklappter Punkte und behält ihre Höhe (S3)", () => {
+    const { container, inners, runFrames } = setup(6);
+    const engine = createAccordionEngine(container, { onActiveChange: () => {} });
+    runFrames();
+    // Punkt 0 offen, weit entfernte Punkte zu
+    expect(inners[0].classList.contains(SKIPPED_CLASS)).toBe(false);
+    expect(inners[5].classList.contains(SKIPPED_CLASS)).toBe(true);
+    expect(inners[5].style.getPropertyValue("contain-intrinsic-height")).toBe("320px");
+    // Direkter Nachbar des Bezugs bleibt gerendert (Tab springt hinein)
+    expect(inners[1].classList.contains(SKIPPED_CLASS)).toBe(false);
+    // Sprungziel mit Autofokus: sofort und auch nach der nächsten Rechnung gerendert
+    engine.reveal("p4");
+    expect(inners[4].classList.contains(SKIPPED_CLASS)).toBe(false);
+    engine.schedule();
+    runFrames();
+    expect(inners[4].classList.contains(SKIPPED_CLASS)).toBe(false);
+
+    // Fenstergrösse: alles wieder rendern, neu messen, danach wieder überspringen
+    window.dispatchEvent(new Event("resize"));
+    expect(inners[5].classList.contains(SKIPPED_CLASS)).toBe(false);
+    runFrames();
+    expect(inners[5].classList.contains(SKIPPED_CLASS)).toBe(true);
+
+    engine.destroy();
+    // Ohne Akkordeon (abgeschaltet) bleibt nichts übersprungen
+    for (const inner of inners) {
+      expect(inner.classList.contains(SKIPPED_CLASS)).toBe(false);
+      expect(inner.style.getPropertyValue("contain-intrinsic-height")).toBe("");
+    }
+  });
+});

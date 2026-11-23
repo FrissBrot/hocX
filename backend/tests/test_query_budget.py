@@ -124,6 +124,19 @@ def _pdf_coverage(db, n):
     return lambda: protocol_pdf_coverage(db, user, tenant.id, protocol)
 
 
+def _template_participants(db, n):
+    """Teilnehmende einer Vorlage (Protokoll-Editor lädt sie beim Öffnen)."""
+    from app.api.routes import participants as participants_route
+    from tests.factories import make_participant, make_template_participant
+
+    tenant = make_tenant(db, f"Budget Vorlage {n}")
+    template = make_template(db, tenant.id)
+    for index in range(n):
+        make_template_participant(db, template.id, make_participant(db, tenant.id, f"Person {index}").id)
+    user = make_current_user(tenant.id, role="admin")
+    return lambda: participants_route.list_template_participants(template.public_id, as_of=None, db=db, user=user)
+
+
 SCENARIOS: dict[str, Callable] = {
     "protocol_detail": _protocol_detail,
     "protocol_elements": _protocol_elements,
@@ -136,6 +149,7 @@ SCENARIOS: dict[str, Callable] = {
     "list_events": _events,
     "list_participants": _participants,
     "list_templates": _templates,
+    "template_participants": _template_participants,
 }
 
 

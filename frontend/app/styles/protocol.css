@@ -4281,3 +4281,12 @@
 .protocol-document-accordion .protocol-doc-section > .editor-panel-header > div > h2 {
   --open: inherit;
 }
+
+/* Akkordeon (1.6, Audit perf-protocol-editor 2026-11-22, S3): Inhalt ganz zugeklappter Punkte
+   nicht rendern - Stil, Layout und Zeichnen ihrer Editoren, Tabellen und Bilder entfallen je
+   Scroll-Frame. accordion-scroll.ts setzt die Klasse (nicht bei den direkten Nachbarn des
+   aktiven Punkts und nicht bei einem Sprungziel) und daneben die gemessene Höhe als
+   contain-intrinsic-height, damit Scrollraum und Rechnung gleich bleiben. */
+.protocol-doc-section-skipped {
+  content-visibility: hidden;
+}

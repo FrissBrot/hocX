@@ -42,6 +42,30 @@ Installationen aktualisieren können.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
+### Geändert
+
+- **Protokoll-Editor schneller (Performance-Audit 2026-11-22, Teil 1.6):**
+  - Mitschreiben zu zweit: Sperren anderer Personen liegen nicht mehr im Zustand des ganzen Editors.
+    Jeder Punkt abonniert nur die Sperren seiner eigenen Felder; ein Fokuswechsel einer anderen
+    Person rendert nur noch den betroffenen Punkt neu statt aller Punkte. Sperren, Anzeige «wer
+    tippt wo» und Textabgleich bleiben gleich.
+  - Kleinere Seite beim Öffnen: die Seite enthält nur noch die Termine, die das Protokoll anzeigen
+    kann (verwiesene Termine, Treffer der Terminfilter seiner Blöcke, kommende Termine). Ältere
+    Termine für Terminauswahl, Kalender und Tag-Vorschläge lädt der Editor danach im Leerlauf nach.
+    Das Personenverzeichnis zur Namensauflösung enthält nur noch verwiesene Personen und keine
+    E-Mail-Adressen mehr.
+  - Schnellnavigation rechts als eigene, memoisierte Komponente: rendert beim Tippen nicht mehr mit.
+  - Akkordeon: der Inhalt ganz zugeklappter Punkte wird nicht mehr gerendert (`content-visibility`),
+    ausser bei den direkten Nachbarn des aktiven Punkts (Tab springt wie bisher hinein) und bei
+    einem Sprungziel (Autofokus). Scrollraum und Sprungziele bleiben gleich (gemessene Höhe).
+  - «Nicht im PDF»: die erste Abfrage läuft im Leerlauf nach dem Laden statt sofort.
+  - «Nicht im PDF»: die Abdeckung lädt Protokollinhalte und Termine nur noch einmal statt je einmal
+    für den Protokollinhalt und für die Protokoll-Vorlage.
+- **Weniger Datenbankabfragen je Anfrage:** Konto, Mandant, Session, zweiter Faktor und gebuchte
+  Features kommen in einer Abfrage, Rollen und deren MFA-Pflicht in einer zweiten. Alle Prüfungen
+  (aktiv, Login erlaubt, ausgetreten, Widerruf, Session-Register, MFA, RLS-Kontext) laufen weiter bei
+  jeder Anfrage, ohne Zwischenspeicher.
+
 ### Update
 
 - Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung

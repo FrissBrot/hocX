@@ -44,7 +44,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { LockBadge } from "@/components/protocol/collaboration-presence";
-import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
+import { type CollabFieldLocks, useFieldLocksSignature } from "@/lib/hooks/use-protocol-collaboration";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
@@ -209,7 +209,9 @@ function FocusedElementEditorImpl({
   /** «Nicht im PDF»: Abdeckung dieses Punkts bzw. aller Bausteine (use-pdf-coverage.ts). */
   pdfElementCoverage?: PdfCoverageEntry;
   pdfBlockCoverage: Record<string, PdfCoverageEntry>;
-  collab: ReturnType<typeof useProtocolCollaboration>;
+  /** Stabile Sperr-Schnittstelle (useProtocolCollaboration().fieldLocks): ändert ihre Identität
+   * nie, Sperren dieses Punkts kommen über das Abonnement unten. */
+  collab: CollabFieldLocks;
   trackChangesActive: boolean;
   element: ProtocolElement;
   elementIndex: number;
@@ -293,6 +295,9 @@ function FocusedElementEditorImpl({
   updateTagColor: (tag: string, color: string) => Promise<void>;
   renameTag: (oldTag: string, newTag: string) => Promise<void | boolean>;
 }) {
+  // Nur fremde Sperren auf Feldern dieses Punkts lassen ihn neu rendern (K1); den Halter liest
+  // der Render danach über collab.isLockedByOther.
+  useFieldLocksSignature(collab, element.blocks.map((block) => block.id));
   const isParticipantSelectable = useParticipantSelectable();
   const participantNames = useParticipantNameSource(availableParticipants);
   const t = useTranslations("protocols");

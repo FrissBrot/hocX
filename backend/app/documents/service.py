@@ -267,9 +267,12 @@ def prepare(
     render_info: RenderInfo | None = None,
     assets: AssetCollector | None = None,
     skip_version: bool = False,
+    shared_data_from: BuildContext | None = None,
 ) -> PreparedDocument:
-    """``assets``/``skip_version`` nur für die PDF-Abdeckung (export_coverage.py): Bilder nicht
-    laden, keine Versionsvergabe und keinen kanonischen Hash berechnen."""
+    """``assets``/``skip_version``/``shared_data_from`` nur für die PDF-Abdeckung
+    (export_coverage.py): Bilder nicht laden, keine Versionsvergabe und keinen kanonischen Hash
+    berechnen; bereits geladene Protokollinhalte und Termine des Aufbaus ``shared_data_from``
+    wiederverwenden (sprachunabhängige Rohdaten, gleicher Mandant und dieselbe DB-Session)."""
     if not preview and request.is_studio_preview():
         raise ValueError("previewOnly")
     tenant = db.get(Tenant, tenant_id)
@@ -337,6 +340,10 @@ def prepare(
         db=db, tenant_id=tenant_id, language=language, user=user, today=today or swiss_today(), protocol=protocol,
         public_base_url=_public_base_url(), session_template=session_template, assets=assets if assets is not None else AssetCollector(),
     )
+    if shared_data_from is not None and shared_data_from.tenant_id == tenant_id and shared_data_from.db is db and shared_data_from.user is user:
+        ctx._protocol_contents = shared_data_from._protocol_contents
+        ctx._memo = shared_data_from._memo
+        ctx.reuse_protocol_elements = shared_data_from.reuse_protocol_elements
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
 
@@ -433,7 +440,8 @@ def prepare(
         is_draft = True
         document_env.update(version=None, is_draft=True)
         compiled = compile_with(True, strings.get("restricted.banner", ""))
-    digest = protocol_hash or content_hash(meta, compiled.blocks, ctx.assets.files)
+    # Ohne Version (PDF-Abdeckung) braucht niemand den Inhalts-Hash
+    digest = protocol_hash or ("" if skip_version else content_hash(meta, compiled.blocks, ctx.assets.files))
     design = design_hash(content_json(content), brand.tokens.model_dump(mode="json"), {**brand.asset_checksums, **compiled.template_asset_checksums})
     return PreparedDocument(
         compiled=compiled,

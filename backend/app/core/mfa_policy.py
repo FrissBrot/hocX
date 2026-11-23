@@ -32,11 +32,14 @@ def account_requires_mfa(
     *,
     permissions: Iterable[str] | None = None,
     tenant_id: int | None = None,
+    role_requires_mfa: bool | None = None,
 ) -> bool:
     """True, wenn das Konto ohne bestätigten zweiten Faktor keine Session bekommen darf.
 
     ``permissions``: schon geladene effektive Permissions (spart die Abfrage auf jedem Request).
-    ``tenant_id``: Mandant des Kontos (ohne Angabe aus dem Konto gelesen)."""
+    ``tenant_id``: Mandant des Kontos (ohne Angabe aus dem Konto gelesen).
+    ``role_requires_mfa``: in derselben Anfrage aus den Rollenzeilen ermittelt
+    (security.build_current_user); ohne Angabe hier abgefragt."""
     from app.core.tenant_mfa import tenant_requires_mfa
     from app.models import AppUser
 
@@ -45,7 +48,7 @@ def account_requires_mfa(
         tenant_id = user.tenant_id if user is not None else None
     if tenant_requires_mfa(db, tenant_id):
         return True
-    if _role_requires_mfa(db, user_id):
+    if role_requires_mfa if role_requires_mfa is not None else _role_requires_mfa(db, user_id):
         return True
     if permissions is None:
         # Spät importiert: app.core.security importiert dieses Modul.

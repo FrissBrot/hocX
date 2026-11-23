@@ -24,7 +24,6 @@ from app.core.redis_client import get_redis, get_redis_pubsub
 from app.core.permissions import P
 from app.core.security import (
     CurrentUser,
-    _has_active_mfa_factor,
     _requires_mfa,
     mfa_grace_until,
     build_current_user,
@@ -87,12 +86,12 @@ def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     if validated is None:
         return None
     user = validated.user
-    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified)
+    current_user = build_current_user(db, user, mfa_verified=validated.mfa_verified, tenant_features=validated.tenant_features)
     # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
     # without this, a user who becomes MFA-required (promoted to admin) or whose only
     # factor is administratively deleted keeps full read/write WebSocket access with
     # their existing cookie even though the REST path now correctly locks them out.
-    has_mfa_factor = _has_active_mfa_factor(db, user.id)
+    has_mfa_factor = validated.has_mfa_factor
     if has_mfa_factor and not current_user.mfa_verified:
         return None
     if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
