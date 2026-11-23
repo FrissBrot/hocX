@@ -6,14 +6,16 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
-from app.models.entities import ShareLink
+from app.models.entities import ShareLink, ShareLinkFile, StoredFile
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
+from app.services.access_service import AccessService
 from app.services import context_visibility_service, photo_album_share_service, share_link_service
 from app.services.audit_service import AuditService
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
@@ -22,6 +24,7 @@ from app.services.photo_metadata_privacy import MetadataPolicy
 router = APIRouter()
 service = FileService()
 audit = AuditService()
+access_service = AccessService()
 
 
 def _audit(db: Session, user: CurrentUser, action: str, link: ShareLink, **details) -> None:
@@ -47,6 +50,25 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
         share_capture_date=link.share_capture_date,
         share_camera=link.share_camera,
     )
+
+
+def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink) -> bool:
+    """Datei-Link: jede Datei darin muss das Konto selbst lesen dürfen wie im Einzelabruf
+    (Protokollbilder/-exporte nur aus lesbaren Protokollen, Nachtlauf 2026-11-22) - die Token-URL
+    öffnet sie ohne Anmeldung. Album-Links folgen dem Album (bewusste Weitergabe, add_album_items)."""
+    if link.album_id is not None:
+        return True
+    internal_ids = db.scalars(
+        select(StoredFile.id)
+        .join(ShareLinkFile, ShareLinkFile.file_id == StoredFile.public_id)
+        .where(ShareLinkFile.share_link_id == link.id, StoredFile.tenant_id == link.tenant_id)
+    ).all()
+    for internal_id in internal_ids:
+        try:
+            access_service.ensure_can_read_stored_file(db, user, internal_id, allow_context_grant=False)
+        except HTTPException:
+            return False
+    return True
 
 
 MAX_LINK_FILES = 200
@@ -99,6 +121,17 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         require_permission(user, P.PHOTOS_READ)
     if any(not (item.mime_type and item.mime_type.startswith("image/")) for item in found):
         require_permission(user, P.FILES_READ)
+    # Leserecht je Datei wie im Einzelabruf (Protokollbilder/-exporte nur aus lesbaren Protokollen,
+    # Nachtlauf 2026-11-22): der Link gibt die Datei ohne Anmeldung weiter, also nur Rollenrechte
+    # wie beim Album (add_album_items). Nicht lesbare wie unbekannte melden (kein Existenz-Orakel).
+    internal_ids = db.scalars(
+        select(StoredFile.id).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids))
+    ).all()
+    for internal_id in internal_ids:
+        try:
+            access_service.ensure_can_read_stored_file(db, user, internal_id, allow_context_grant=False)
+        except HTTPException:
+            raise HTTPException(status_code=404, detail="Mindestens eine Datei wurde nicht gefunden") from None
     if any(item.scan_status in BLOCKED_SCAN_STATUSES for item in found):
         # Gesperrte Dateien zeigt die öffentliche Seite nie - nicht erst aufnehmen und mitzählen.
         raise HTTPException(status_code=422, detail="Gesperrte Dateien (Virenprüfung) können nicht geteilt werden.")
@@ -126,7 +159,7 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
         for row in rows
-        if share_link_service.may_see(user.can, kinds.get(row.link.id, set()))
+        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link)
     ]
 
 
@@ -140,6 +173,7 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
         link is None
         or not share_link_service.can_manage(db, link, user.current_tenant_id)
         or not share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
+        or not _may_read_link_files(db, user, link)
     ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)

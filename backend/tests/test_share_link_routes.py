@@ -704,3 +704,67 @@ def test_expiry_date_from_the_date_field_keeps_the_link_open_through_that_swiss_
     moment = datetime(2030, 11, 30, 18, 0, tzinfo=UTC)
     created = share_links_routes.create_share_link(ShareLinkCreate(name="Y", file_ids=[a.public_id], expires_at=moment), db, user)
     assert created.expires_at == moment
+
+
+def _make_draft_protocol_image(db, tenant_id: int) -> StoredFile:
+    """Bild in einem Protokollentwurf (Status «geplant») - erscheint in der Dateiübersicht als
+    Quelle «protocol_image», lesen darf es nur, wer den Entwurf lesen darf."""
+    from datetime import date
+
+    from app.models.entities import ProtocolImage
+    from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template
+
+    template = make_template(db, tenant_id)
+    protocol = make_protocol(db, tenant_id, template.id, protocol_number="7/2026", protocol_date=date(2026, 3, 1))
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
+    stored_file = _make_file(db, tenant_id, name="entwurf-bild.png")
+    db.execute(GalleryImage.__table__.delete().where(GalleryImage.stored_file_id == stored_file.id))
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored_file.id, sort_index=0))
+    db.flush()
+    return stored_file
+
+
+def test_create_share_link_rejects_images_of_protocols_the_account_cannot_read(db):
+    """Nachtlauf 2026-11-22 (dateien-fotos/rechte): der Link machte Bilder aus Protokollentwürfen
+    öffentlich, die das Konto selbst nicht öffnen darf (Einzelabruf 404) - wie beim Album
+    (add_album_items) zählt je Datei das Leserecht des Einzelabrufs."""
+    import dataclasses
+
+    from app.services.access_service import AccessService
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    # Eigene Rolle «Fotos & Links»: Fotos lesen und öffentlich teilen, Protokolle nur abgeschlossene
+    photographer = dataclasses.replace(writer, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    db.commit()
+
+    with pytest.raises(HTTPException):
+        AccessService().ensure_can_read_stored_file(db, photographer, draft_image.id)
+
+    with pytest.raises(HTTPException) as denied:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, photographer)
+    assert denied.value.status_code == 404
+    # Wer den Entwurf lesen darf, teilt ihn weiterhin
+    share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+
+
+def test_share_link_list_hides_links_to_files_the_account_cannot_read(db):
+    """Nachtlauf 2026-11-22: die Linkliste zeigte die Token-URL eines Links auf ein Entwurfsbild
+    auch Konten, die das Bild selbst nicht öffnen dürfen (nur Dateiart geprüft)."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photographer = dataclasses.replace(writer, user_id=2, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    photo = _make_file(db, tenant.id)
+    draft_link = share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+    share_links_routes.create_share_link(ShareLinkCreate(name="Foto", file_ids=[photo.public_id]), db, writer)
+
+    assert {row.name for row in share_links_routes.list_share_links(db, writer)} == {"Entwurf", "Foto"}
+    assert [row.name for row in share_links_routes.list_share_links(db, photographer)] == ["Foto"]
+    with pytest.raises(HTTPException) as hidden:
+        share_links_routes.revoke_share_link(draft_link.id, db, photographer)
+    assert hidden.value.status_code == 404
