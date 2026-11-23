@@ -39,7 +39,7 @@ from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.template_service import TemplateService
-from app.services.user_service import UserService
+from app.services.user_service import UserService, login_email_changes
 from app.schemas.user import UserUpdate
 from app.schemas.template import TemplateRead
 from app.schemas.data_export import ProtectedExportRequest
@@ -200,6 +200,9 @@ def patch_participant(
     if participant.login_enabled and payload.model_fields_set & {"email", "is_active"}:
         require_permission(user, P.ACCESS_MANAGE)
         _ensure_can_manage_login(db, user, participant)
+        if login_email_changes(participant.email, payload.model_dump(include={"email"}, exclude_unset=True)):
+            # Neue Login-Adresse = Konto-Übernahme über «Passwort vergessen» (wie /users, SEC-AUTH-010)
+            require_recent_auth(user, kind=ADMIN, action="user.update_access")
     try:
         if payload.model_fields_set & {"login_enabled", "password", "role_ids"}:
             require_permission(user, P.ACCESS_MANAGE)
