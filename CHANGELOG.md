@@ -8,6 +8,80 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.5.2] - 2026-11-23
+
+Korrekturversion zu 1.5.1 mit allen Funden der Nachtläufe vom 22. und 23.11.2026: mehrere
+Sicherheitskorrekturen bei Konto- und Rechteverwaltung, Anmeldung, Freigabelinks und Dateilöschung,
+dazu Korrekturen bei gleichzeitigen Änderungen im Document Studio, bei Pendenzen und Bussen, beim
+Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox. Keine
+Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.5.1**: `./scripts/deploy.sh <test|prod>` wie gewohnt. Keine Migration, keine neue
+  Einstellung.
+- **Abgabebox-Fehlerprotokoll:** Unerwartete Fehler der Abgabebox erscheinen ab jetzt unter
+  `/admin` im Fehlerprotokoll (bisher kam dort nie ein Eintrag an). Nach dem Update können also
+  erstmals Einträge mit Quelle «abgabebox-backend» auftauchen.
+- **Ausgetretene Mitglieder:** Wer ein Austrittsdatum in der Vergangenheit bekommt, wird wie bei
+  einer Deaktivierung abgemeldet; offene Einladungs- und Zurücksetzungslinks verfallen.
+- **Einmalige Empfehlung:** öffentliche Datei-Freigabelinks unter Mandant-Einstellungen ›
+  Zugangslinks sichten und Links auf Bilder oder Exporte aus noch nicht abgeschlossenen Protokollen
+  widerrufen, falls solche angelegt wurden.
+
+### Sicherheit
+
+- Die Login-E-Mail eines Kontos (auch des eigenen) lässt sich nur noch nach einer frischen
+  Bestätigung der Identität ändern, wie Passwort, Login und Rollen.
+- Austrittsdatum bei Konten mit Login: setzen oder entfernen braucht dieselben Rechte wie
+  Deaktivieren (Benutzerverwaltung, keine Höherberechtigten); ausgetretene oder austretende
+  Administratoren zählen nicht mehr für die Regel «letzter Administrator», auch nicht über die
+  Personenseite oder den Word-Import.
+- Öffentliche Freigabelinks auf Dateien entstehen und erscheinen nur noch für Dateien, die das
+  eigene Konto selbst öffnen darf; der Ersteller kann seinen Link immer widerrufen.
+- Live-Photo-Clips folgen dem Recht «Fotos lesen» wie das zugehörige Foto.
+- Offene Protokoll-Tabs halten eine Sitzung nicht mehr über die Inaktivitätsgrenze hinaus am Leben.
+- Vorgänge zum zweiten Faktor (Passkey/Authenticator einrichten, Passkey-Anmeldung, Bestätigung)
+  sind je Konto bzw. je Anmeldung begrenzt.
+- Ratelimits nach IP zählen IPv6-Adressen überall je /64 (Anmeldung, Zugangslinks, Logos,
+  Freigabelinks, Kalender-Abo, Abgabe-Zugang).
+- Fehlerhafte Passkey-Antworten führen zu einer normalen Ablehnung statt zu einem Serverfehler.
+- Gelöschte Fotos bleiben auch bei gleichzeitiger Bearbeitung des Aufnahmedatums nicht im
+  Speicher zurück (auch beim Löschen oder Aufräumen eines Vereins).
+- Organisations-Bestätigung: eine gleichzeitige oder zwischenzeitliche Umbenennung kann nicht mehr
+  als bestätigt gelten.
+
+### Behoben
+
+- **Document Studio:** Vorlage löschen während eines laufenden Exports, gleichzeitig gesetzte erste
+  Standardvorlage (Fehler 500), Asset bzw. Brand-Profil löschen während gleichzeitiger Verwendung
+  und Archivieren gleichzeitig mit einer Standardzuweisung verhalten sich jetzt korrekt.
+- **Pendenzen und Aufgabenpakete:** `null` für Aufgabe, Tags, Name oder «aktiv» sowie zu grosse
+  Sortierwerte werden als ungültige Eingabe abgelehnt (vorher u. a. dauerhaft unlesbare Pendenz bei
+  `tags: null`); Paketnamen werden getrimmt. Unbekannte oder zu grosse Status-IDs ergeben eine
+  Validierungsmeldung statt eines Eintrags im Fehlerprotokoll.
+- **Anwesenheitsbussen:** Beträge werden wie in der Datenbank auf Rappen gerundet und begrenzt
+  (zu grosse oder auf 0 gerundete Beträge ergaben einen Fehler).
+- **Benutzerlimit:** offene Einladungen ausgetretener Personen belegen keinen Platz mehr; ein
+  Wiedereintritt (Austrittsdatum entfernt oder verschoben) prüft das Limit; «Abo & Nutzung» zieht
+  offene Einladungen von den freien Plätzen ab.
+- **MFA-Frist:** Wer seinen letzten Faktor ohne Pflicht entfernt und später wieder unter die
+  Pflicht fällt, bekommt erneut die Frist von drei Tagen.
+- **Mehrfacheinladung mit Rolle:** Die Rolle ändert sich nur noch, wenn die Einladung auch
+  verschickt wird; eine nötige Bestätigung der Identität wird abgefragt statt alle Personen zu
+  überspringen.
+- **Ausgetretene Mitglieder** zählen in Mitgliederlisten/Präsenzlisten des Document Studio und in
+  der Statistik nicht mehr als aktiv; die Mitgliederliste und Personenseite rechnen «heute» in
+  Schweizer Zeit (zwischen Mitternacht und 01:00/02:00 erschienen gestern Ausgetretene als aktiv).
+- **Vereins-Domain:** Passwort ändern, Faktor hinzufügen/entfernen und «Andere Geräte abmelden»
+  melden auf einer eigenen Vereins-Domain nicht mehr ab.
+- **Bestätigung der Identität:** Ist keine Methode nutzbar (nur Passkey auf einer Vereins-Domain),
+  zeigt der Dialog einen Hinweis statt endlos zu laden.
+- **Abgabebox:** Das Fehlerprotokoll schreibt wieder (fehlendes Leserecht beim Eintragen),
+  `%00` im Abgabe-Link ergibt «nicht gefunden» statt eines Serverfehlers, NUL-Zeichen verhindern
+  keine Protokolleinträge mehr, und eine Ablehnung wegen vollem Vereinskontingent steht im
+  Upload-Protokoll.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,
