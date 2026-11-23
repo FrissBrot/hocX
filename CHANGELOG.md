@@ -10,6 +10,20 @@ Installationen aktualisieren können.
 
 ### Hinzugefügt
 
+- **Protokoll-Editor neu (Design «Protokoll-Editor 1a», 1.6):** Kopf mit Status, Titel,
+  Speicherstatus (speichert / gespeichert / offline mit wartenden Änderungen / Fehler mit Sprung zum
+  Block), Anwesenden, Suche, Export und dem Knopf für den nächsten Schritt; links eine Gliederung
+  mit Kurzinfo je Punkt, rechts alle Punkte untereinander. Texte, Aufzählungen und Pendenzen werden
+  gelesen, bis man einen Block mit **Bearbeiten** (oder Strg/⌘+Enter) öffnet; nur dort lädt der
+  Editor. Unten ein Dock mit den Schubladen **Notizen**, **Pendenz** (neu mit «Zu Punkt»),
+  **Anliegen** und **Status & Zusammenarbeit** (wer wo mitarbeitet, Anwesenheit, Tastenkürzel,
+  «Status zurücksetzen»). Auf Tablets lässt sich die Gliederung einblenden.
+- **Traktanden im Protokoll bearbeiten:** hinzufügen (unter der Gliederung), umbenennen und im
+  Vorbereitungsmodus aus- und einblenden, sortieren per Ziehen oder Alt+Pfeil (eine Anfrage, live bei
+  allen). Die Vorlage ändert sich dabei nie: beim **Protokoll abschliessen** listet die Rückfrage
+  jede Abweichung einzeln und übernimmt nur die gewählten in die Vorlage (mit dem Recht zur
+  Vorlagenbearbeitung, sonst nur Hinweis).
+- Bildunterschriften im Protokoll lassen sich nachträglich ändern.
 - **Dateien importieren (Datei-Import P0, 1.6):** Unter *Dateien › Importieren* übernimmt ein Verein
   eine bestehende Ablage in einem Durchgang - als ZIP-Archiv (auch mehrere Teilarchive von
   Google Takeout, der Ordner «Takeout» wird erkannt) oder als Ordner-Upload aus dem Browser (nur die
@@ -43,6 +57,18 @@ Installationen aktualisieren können.
   Zuordnung nach Datum zurückgeben.
 
 ### Geändert
+
+- **Protokoll-Editor:** Akkordeon, Rad-Effekt und die beiden Profileinstellungen dazu sind
+  entfernt, ebenso Schnellnavigation, Schnellmenü-Pille und die Hover-Flyouts (ersetzt durch
+  Gliederung, Dock und Schublade). Jeder Statuswechsel fragt nach; arbeiten andere mit, nennt
+  dieselbe Rückfrage ihre Namen. Tastenkürzel: Strg/⌘+Enter bzw. +Umschalt öffnen den nächsten bzw.
+  vorherigen **Block** (nach dem letzten bleibt der Editor dort, früher schloss er das Protokoll),
+  Strg/⌘+Alt+N/T/A/S öffnen die Schubladen, Esc schliesst. Pfeil auf/ab wechseln den Punkt nicht
+  mehr (sie scrollen wie gewohnt).
+- **Protokoll-Editor schneller:** Punkte ausserhalb des Bildes rendert der Browser nicht
+  (content-visibility), der aktive Punkt kommt aus einem IntersectionObserver, Tiptap lädt erst im
+  aktiven Textblock, Tippen rendert nur den eigenen Block neu, Diagramme laden erst beim Hinscrollen,
+  und die Seite zeigt beim Laden sofort ein Gerüst.
 
 - **Protokoll-Editor schneller (Performance-Audit 2026-11-22, Teil 1.6):**
   - Mitschreiben zu zweit: Sperren anderer Personen liegen nicht mehr im Zustand des ganzen Editors.

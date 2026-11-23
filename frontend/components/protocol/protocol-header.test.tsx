@@ -17,17 +17,26 @@ function setup(overrides: Partial<Parameters<typeof ProtocolHeader>[0]> = {}) {
     createdAt: "2026-11-20T18:30:00Z",
     templateVersion: 3,
     status: "geplant",
+    statusLabel: "Geplant",
+    modeLabel: "Vorbereitungsmodus",
     isReadOnly: false,
     ctaLabel: "Vorbereitung abschliessen",
     ctaBusy: false,
     onCta: vi.fn(),
-    trackChanges: { visible: true, enabled: false, onChange: vi.fn() },
-    templateChange: { visible: false, busy: false, onReload: vi.fn() },
-    importSource: null,
+    trackChangesVisible: true,
+    trackChangesEnabled: false,
+    onTrackChangesChange: vi.fn(),
+    templateChangeVisible: false,
+    templateChangeBusy: false,
+    onTemplateReload: vi.fn(),
+    importSourceUrl: null,
     onOpenSearch: vi.fn(),
-    pdf: { busy: false, onOpen: vi.fn() },
+    pdfBusy: false,
+    onOpenPdf: vi.fn(),
     protocolId: "p-1",
     presence: null,
+    saveState: { kind: "idle" as const },
+    onShowSaveError: vi.fn(),
     ...overrides,
   };
   render(<ProtocolHeader {...props} />);
@@ -35,16 +44,18 @@ function setup(overrides: Partial<Parameters<typeof ProtocolHeader>[0]> = {}) {
 }
 
 describe("ProtocolHeader", () => {
-  it("zeigt Titel, Meta-Zeile und Zurück-Link", () => {
+  it("zeigt Titel, Status, Modus, Meta-Zeile und Zurück-Link", () => {
     setup();
     expect(screen.getByRole("heading", { level: 1, name: "Vorstandssitzung" })).toBeInTheDocument();
     expect(screen.getByText("P-2026-014")).toBeInTheDocument();
+    expect(screen.getByText("Geplant")).toBeInTheDocument();
+    expect(screen.getByText("Vorbereitungsmodus")).toBeInTheDocument();
     expect(screen.getByText("Vorlage v3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Zurück zu den Protokollen" })).toHaveAttribute("href", "/protocols");
   });
 
   it("markiert den aktuellen Schritt und erledigte Schritte, ohne sie klickbar zu machen", () => {
-    setup({ status: "durchgeführt", ctaLabel: "Protokoll abschliessen", trackChanges: { visible: false, enabled: false, onChange: vi.fn() } });
+    setup({ status: "durchgeführt", ctaLabel: "Protokoll abschliessen", trackChangesVisible: false });
     const steps = within(screen.getByRole("list", { name: "Ablauf des Protokolls" })).getAllByRole("listitem");
     expect(steps).toHaveLength(4);
     expect(steps[2]).toHaveAttribute("aria-current", "step");
@@ -59,7 +70,7 @@ describe("ProtocolHeader", () => {
     const toggle = screen.getByRole("switch", { name: "Nachverfolgen" });
     expect(toggle).not.toBeChecked();
     fireEvent.click(toggle);
-    expect(props.trackChanges.onChange).toHaveBeenCalledWith(true);
+    expect(props.onTrackChangesChange).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: "Hilfe zu «Änderungen nachverfolgen»" })).toBeInTheDocument();
   });
 
@@ -82,14 +93,14 @@ describe("ProtocolHeader", () => {
     const props = setup();
     fireEvent.click(screen.getByRole("button", { name: "Exportieren" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "PDF öffnen" }));
-    expect(props.pdf.onOpen).toHaveBeenCalled();
+    expect(props.onOpenPdf).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Exportieren" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Exportieren …" }));
     expect(screen.getByRole("dialog", { name: "Dokument exportieren" })).toBeInTheDocument();
   });
 
   it("sperrt «PDF öffnen», solange das PDF erzeugt wird", () => {
-    setup({ pdf: { busy: true, onOpen: vi.fn() } });
+    setup({ pdfBusy: true });
     fireEvent.click(screen.getByRole("button", { name: "Exportieren" }));
     expect(screen.getByRole("menuitem", { name: "PDF wird erstellt …" })).toBeDisabled();
   });
@@ -103,15 +114,26 @@ describe("ProtocolHeader", () => {
   });
 
   it("bietet mit Importquelle das Originaldokument an", () => {
-    setup({ importSource: { url: "/api/files/original", filename: "alt.docx" } });
+    setup({ importSourceUrl: "/api/files/original" });
     fireEvent.click(screen.getByRole("button", { name: "Weitere Aktionen" }));
     expect(screen.getByRole("menuitem", { name: "Original-Dokument öffnen" })).toBeInTheDocument();
   });
 
   it("zeigt «Vorlage geändert» mit «Neu laden» in der Leiste", () => {
-    const props = setup({ templateChange: { visible: true, busy: false, onReload: vi.fn() } });
+    const props = setup({ templateChangeVisible: true });
     expect(screen.getByText("Vorlage wurde geändert")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Neu laden" }));
-    expect(props.templateChange.onReload).toHaveBeenCalled();
+    expect(props.onTemplateReload).toHaveBeenCalled();
+  });
+
+  it("zeigt offline die Zahl wartender Änderungen", () => {
+    setup({ saveState: { kind: "offline", pending: 2 } });
+    expect(screen.getByRole("status")).toHaveTextContent("Offline · 2 Änderungen warten");
+  });
+
+  it("macht den Fehler-Zustand zum Knopf, der zum Block springt", () => {
+    const props = setup({ saveState: { kind: "error" } });
+    fireEvent.click(screen.getByRole("button", { name: "Nicht gespeichert – zum Block" }));
+    expect(props.onShowSaveError).toHaveBeenCalled();
   });
 });
