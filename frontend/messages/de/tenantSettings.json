@@ -534,7 +534,7 @@
       "critical": "Kritisch"
     },
     "loadFailed": "Die Daten konnten nicht geladen werden.",
-    "privacyHint": "Zur Sicherheit der Konten speichert hocX zu jeder Anmeldung Zeitpunkt, grobes Gerät, ein Pseudonym des Netzes und – falls eingerichtet – das Land (lokal ermittelt mit «IP to Country Lite» von DB-IP.com, CC BY 4.0), nie die IP-Adresse; die Ereignisse werden nach 90 Tagen gelöscht. Neue Passwörter werden anonym gegen bekannte Datenlecks geprüft: nur die ersten 5 Zeichen eines Hashes gehen an «Have I Been Pwned». Bitte erwähnt beides in der Datenschutzerklärung eures Vereins (berechtigtes Interesse: Sicherheit der Konten)."
+    "privacyHint": "Zur Sicherheit der Konten speichert hocX zu jeder Anmeldung Zeitpunkt, grobes Gerät, ein Pseudonym des Netzes und – falls eingerichtet – das Land (lokal ermittelt mit «IP to Country Lite» von DB-IP.com, CC BY 4.0), nie die IP-Adresse; die Ereignisse werden nach 90 Tagen gelöscht. Neue Passwörter und Passwörter bei jeder Anmeldung werden anonym gegen bekannte Datenlecks geprüft (ohne Personendaten, gespeichert wird nur der Zeitpunkt der Prüfung): nur die ersten 5 Zeichen eines Hashes gehen an «Have I Been Pwned». Bitte erwähnt beides in der Datenschutzerklärung eures Vereins (berechtigtes Interesse: Sicherheit der Konten)."
   },
   "searchSynonyms": {
     "eyebrow": "Suche",

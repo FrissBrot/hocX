@@ -577,6 +577,7 @@ class FileService:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        protocol_scope=None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -608,6 +609,7 @@ class FileService:
             date_to=date_to,
             viewer_tenant_id=viewer_tenant_id,
             readable_assignment_ids=readable_assignment_ids,
+            protocol_scope=protocol_scope,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
@@ -721,9 +723,11 @@ class FileService:
             active_job_image_count=active_job_image_count,
         )
 
-    def file_stats(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> FileStats:
+    def file_stats(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None, protocol_scope=None) -> FileStats:
         """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
-        counts = self.stored_file_repository.tenant_file_stats(db, tenant_id, readable_assignment_ids=readable_assignment_ids)
+        counts = self.stored_file_repository.tenant_file_stats(
+            db, tenant_id, readable_assignment_ids=readable_assignment_ids, protocol_scope=protocol_scope
+        )
         return FileStats(
             document_count=counts.document_count,
             photo_count=counts.photo_count,
@@ -828,6 +832,7 @@ class FileService:
         tags: list[str] | None = None,
         file_ids: list[uuid.UUID] | None = None,
         readable_assignment_ids: set[int] | None = None,
+        protocol_scope=None,
     ) -> SimilarityGroupList:
         """Tabs "Duplikate"/"Ähnliche": liest die vom job-worker vorberechneten Gruppen
         (refresh_similarity_results) und filtert sie gegen die aktuellen Bilder - dieselben
@@ -855,6 +860,7 @@ class FileService:
                 tags=tags,
                 file_ids=list(wanted),
                 readable_assignment_ids=readable_assignment_ids,
+                protocol_scope=protocol_scope,
             )
         rows_by_public_id = {row.public_id: row for row in rows}
         groups: list[SimilarityGroup] = []
@@ -1160,11 +1166,13 @@ class FileService:
 
     def list_distinct_tags(
         self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS,
-        readable_assignment_ids: set[int] | None = None,
+        readable_assignment_ids: set[int] | None = None, protocol_scope=None,
     ) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
         deduped and sorted, for the tag-filter/editor autocomplete."""
-        rows = self.stored_file_repository.list_tag_sources(db, tenant_id, readable_assignment_ids=readable_assignment_ids)
+        rows = self.stored_file_repository.list_tag_sources(
+            db, tenant_id, readable_assignment_ids=readable_assignment_ids, protocol_scope=protocol_scope
+        )
         seen: set[str] = set()
         needle = query.strip().lower() if query else None
         for row in rows:
@@ -1182,9 +1190,9 @@ class FileService:
         return normalized
 
     def get_stored_file_metadata(
-        self, db: Session, stored_file: StoredFile, storage_root: str, tenant_id: int, *, can_edit: bool = False
+        self, db: Session, stored_file: StoredFile, storage_root: str, tenant_id: int, *, can_edit: bool = False, protocol_scope=None
     ) -> StoredFileMetadata | None:
-        row = self.stored_file_repository.get_file_overview_row(db, tenant_id, stored_file.id)
+        row = self.stored_file_repository.get_file_overview_row(db, tenant_id, stored_file.id, protocol_scope=protocol_scope)
         if row is None:
             return None
         is_image = bool(stored_file.mime_type and stored_file.mime_type.startswith("image/"))
@@ -1380,6 +1388,7 @@ class FileService:
         Fragt immer ab (auch mit leerer Liste), damit Aufrufer kein Zeit-Orakel bilden."""
         from app.core.permissions import P
         from app.services import context_visibility_service
+        from app.services.access_service import AccessService
 
         if user.current_tenant_id is None:
             return {}
@@ -1395,6 +1404,7 @@ class FileService:
             only_images=only_images,
             exclude_images=exclude_images,
             readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+            protocol_scope=AccessService().protocol_read_scope(db, user),
         )
         return {item.id: item for item in items}
 

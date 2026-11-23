@@ -54,6 +54,9 @@ class CurrentUser:
     tenant_require_mfa: bool = False
     # Laufende Frist zum Einrichten von MFA (bestehende Konten, Migration 0192) - für den Hinweis
     mfa_grace_until: datetime | None = None
+    # Passwort bei einer Anmeldung als geleakt erkannt (Migration 0219) - Hinweis mit Pflicht zur
+    # Änderung in der App; die Anmeldung verlangt solange zweiten Faktor bzw. E-Mail-Code.
+    password_breached: bool = False
     # Feature-Gating pro Mandant (orthogonal zu den Rollen): welche Features fuer
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
@@ -427,6 +430,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_profile_image_path=tenant.profile_image_path,
         current_tenant_currency=tenant.finance_currency or "CHF",
         mfa_verified=mfa_verified,
+        password_breached=user.password_breached_at is not None,
         tenant_require_mfa=tenant_requires_mfa(db, tenant.id),
         current_tenant_features=tenant_features,
         current_tenant_read_only_features=read_only_features,

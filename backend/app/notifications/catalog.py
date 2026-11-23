@@ -70,6 +70,9 @@ KINDS: dict[str, Kind] = {
     "security.login_suspicious": Kind("security.login_suspicious", "account", "account.login_alert"),
     "security.failed_attempts": Kind("security.failed_attempts", "account", "account.login_alert"),
     "security.login_after_lockout": Kind("security.login_after_lockout", "account", "account.login_alert"),
+    # Passwort bei einer Anmeldung als geleakt erkannt (1.5.2, app/auth_security/breach.py): genau
+    # eine Mail je Markierung, nicht je Anmeldung
+    "security.password_breached": Kind("security.password_breached", "account", "account.login_alert"),
     # Login-E-Mail geändert: eigene Gruppe, geht an die ALTE Adresse (payload old_email, dispatch)
     "security.email_changed": Kind("security.email_changed", "account", "account.email_changed"),
     # Busse droht: 3 Tage vor der Fälligkeit einer offenen Aufgabe mit Pendenzen-Busse, ersetzt für

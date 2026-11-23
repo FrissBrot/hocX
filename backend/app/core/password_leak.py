@@ -209,10 +209,25 @@ def _fetch_range(prefix: str) -> dict[str, int]:
     return found
 
 
-def _range(prefix: str) -> dict[str, int]:
+# Obergrenze für Abfragen an HIBP je Minute (alle Prozesse, über Redis): schützt den Dienst und
+# unsere Antwortzeiten, wenn viele Anmeldungen gleichzeitig ungecachte Präfixe prüfen (Leak-Prüfung
+# beim Login, 1.5.2). Darüber: wie ein Ausfall → lokale Liste.
+FETCH_LIMIT_KEY = "pwned-fetch:global"
+
+
+def _fetch_allowed(client) -> bool:
+    if client is None:
+        return True  # ohne Redis kein gemeinsamer Zähler; die Logins selbst sind begrenzt
+    from app.core.rate_limit import within_limit
+
+    return within_limit(FETCH_LIMIT_KEY, limit=max(1, int(settings.password_leak_fetch_per_minute)), period_seconds=60)
+
+
+def _range(prefix: str, *, fresh: bool = False) -> dict[str, int]:
+    """``fresh``: Cache nicht lesen (fällige Prüfung aus dem Nachtjob), das Ergebnis aber cachen."""
     client = _redis()
     key = _cache_key(prefix)
-    if client is not None:
+    if client is not None and not fresh:
         try:
             cached = client.get(key)
             if cached is not None:
@@ -222,6 +237,8 @@ def _range(prefix: str) -> dict[str, int]:
                     return found
         except Exception:  # noqa: BLE001 - Cache ist optional
             client = None
+    if not _fetch_allowed(client):
+        raise LeakServiceUnavailable("Abfragegrenze erreicht")
     found = _fetch_range(prefix)
     if client is not None:
         try:
@@ -256,8 +273,9 @@ def _note_unchecked() -> None:
 # ── Einstieg ────────────────────────────────────────────────────────────
 
 
-def check_password(password: str) -> LeakResult:
-    """Ist das Passwort in einem bekannten Leak? Wirft nie."""
+def check_password(password: str, *, fresh: bool = False) -> LeakResult:
+    """Ist das Passwort in einem bekannten Leak? Wirft nie. ``fresh``: Präfix-Cache umgehen
+    (fällige Prüfung, app/auth_security/breach.py)."""
     current = mode()
     if current == "off" or not password:
         return LeakResult(leaked=False, source="none")
@@ -265,7 +283,7 @@ def check_password(password: str) -> LeakResult:
     if current == "on":
         hexdigest = digest.hex().upper()
         try:
-            found = _range(hexdigest[:5])
+            found = _range(hexdigest[:5], fresh=fresh)
         except LeakServiceUnavailable as exc:
             _note("last_failure")
             _logger.warning("HIBP-Range-API nicht verfügbar (%s), Rückfall auf lokale Liste", exc)

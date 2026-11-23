@@ -117,6 +117,9 @@ class AdminMfaService:
 
     # ── Faktoren ───────────────────────────────────────────────────────────────────────────
 
+    def has_passkey(self, db: Session, admin_id: int) -> bool:
+        return bool(self._list_passkeys(db, admin_id))
+
     def _list_passkeys(self, db: Session, admin_id: int, *, for_update: bool = False) -> list[UserMfaFactor]:
         statement = (
             select(UserMfaFactor)

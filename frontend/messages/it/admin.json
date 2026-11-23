@@ -622,6 +622,10 @@
         "title": "Pulizia protezione accessi",
         "description": "Ogni ora: elimina gli eventi di sicurezza dopo 90 giorni, le sessioni terminate e i dispositivi inutilizzati da tempo e ripara i contatori senza scadenza."
       },
+      "password_breach_recheck": {
+        "title": "Pianificare il controllo delle password trapelate",
+        "description": "Ogni giorno: segnala gli account la cui password non è stata verificata da 30 giorni rispetto a violazioni di dati note. Il prossimo accesso verifica senza cache."
+      },
       "metrics_rollup": {
         "title": "Aggregazione indicatori",
         "description": "Calcola ogni giorno i conteggi per dashboard e analisi (mandanti, utenti attivi, accessi, errori, spazio, utilizzo per modulo). La prima esecuzione recupera 90 giorni."

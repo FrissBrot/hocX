@@ -293,6 +293,9 @@ services:
       # Leak-Prüfung neuer Passwörter (SEC-AUTH-015): on | local-only | off
       PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-on}
       PASSWORD_LEAK_MIN_COUNT: ${PASSWORD_LEAK_MIN_COUNT:-1}
+      PASSWORD_LEAK_FETCH_PER_MINUTE: ${PASSWORD_LEAK_FETCH_PER_MINUTE:-600}
+      # Leak-Prüfung bestehender Passwörter beim Login (1.5.2): Nachtjob password_breach_recheck
+      PASSWORD_BREACH_RECHECK_DAYS: ${PASSWORD_BREACH_RECHECK_DAYS:-30}
       # Länder-Geolocation (Signal «neues Land»): Datei aus dem Volume geoip_data, nur lesend
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-true}
       LOCAL_S3_ENDPOINT: http://local-s3:3900

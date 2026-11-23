@@ -410,6 +410,7 @@
     },
     "login": {
       "action": "Verifica la sicurezza",
+      "breachedDetail": "Compare in violazioni di dati pubblicamente note (non da noi). Cambiala dopo il prossimo accesso. Fino ad allora ogni accesso richiede anche il tuo secondo fattore o un codice via e-mail.",
       "country": "Paese: {country}",
       "countrySource": "Paese: «IP to Country Lite» di DB-IP.com (CC BY 4.0), determinato localmente.",
       "device": "Dispositivo: {device}",
@@ -420,6 +421,7 @@
         "afterLockout": "Accesso poco dopo un blocco per tentativi falliti",
         "failedAttempts": "Molti tentativi di accesso falliti ({count})",
         "newDevice": "Accesso da un nuovo dispositivo",
+        "passwordBreached": "La tua password è nota da una violazione di dati",
         "suspicious": "Accesso con rischio elevato"
       },
       "reason": {

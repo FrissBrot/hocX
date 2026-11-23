@@ -77,6 +77,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Länder-Geolocation: DB-IP-Datenbank laden/aktualisieren (app/core/geoip.py, Migration 0215).
     # 202600045 statt der nächsten freien ID: 038-044 bleiben für parallel entwickelte Jobs frei.
     "geoip_update": 202600045,
+    # Leak-Prüfung bestehender Passwörter (1.5.2, Migration 0219, app/auth_security/breach.py).
+    # 202600070: 038-069 sind teils von parallel entwickelten Jobs (1.6) belegt.
+    "password_breach_recheck": 202600070,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

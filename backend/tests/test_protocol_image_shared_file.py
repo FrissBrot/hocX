@@ -128,3 +128,35 @@ def test_image_routes_reject_frozen_protocol(db):
     assert upload_exc.value.status_code == 409
     assert db.get(ProtocolImage, image_row.id) is not None
     assert protocol_closed.status == "abgeschlossen"
+
+
+def test_read_check_of_carried_over_image_considers_every_protocol(db):
+    """Verdacht 3 (1.5.2): protocol_id_for_stored_file nahm limit(1) ohne Sortierung - bei einem
+    übernommenen Bild (abgeschlossenes Protokoll + neuer Entwurf) entschied die zufällige erste
+    Zeile. Jetzt zählen alle verknüpften Protokolle: lesbar, sobald eines lesbar ist (der Inhalt
+    ist über das abgeschlossene Protokoll ohnehin offen), sonst 404."""
+    import dataclasses
+
+    from app.repositories.access_repository import AccessRepository
+    from app.services.access_service import AccessService
+
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    # Entwurf zuerst verknüpft (kleinere ID): die alte Abfrage lieferte ihn als erste Zeile
+    draft, block_draft = _make_block(db, tenant.id, template.id, "P-Entwurf")
+    final, block_final = _make_block(db, tenant.id, template.id, "P-Final", status="abgeschlossen")
+    image = asyncio.run(FileService().save_protocol_image(db, protocol_element_block=block_draft, file=_png_upload()))
+    stored_file_id = db.query(ProtocolImage).filter(ProtocolImage.public_id == image.id).one().stored_file_id
+    db.add(ProtocolImage(protocol_element_block_id=block_final.id, stored_file_id=stored_file_id, sort_index=0))
+    db.commit()
+
+    assert AccessRepository().protocol_ids_for_stored_file(db, stored_file_id=stored_file_id) == sorted([draft.id, final.id])
+    reader = dataclasses.replace(make_current_user(tenant.id, role="reader"), permissions=frozenset({"meetings.read", "photos.read"}))
+    AccessService().ensure_can_read_stored_file(db, reader, stored_file_id)
+
+    # Abgeschlossenes Protokoll weg: nur noch der Entwurf → nicht lesbar
+    db.execute(ProtocolImage.__table__.delete().where(ProtocolImage.protocol_element_block_id == block_final.id))
+    db.commit()
+    with pytest.raises(HTTPException) as denied:
+        AccessService().ensure_can_read_stored_file(db, reader, stored_file_id)
+    assert denied.value.status_code == 404

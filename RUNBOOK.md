@@ -1252,6 +1252,8 @@ Erfolg hebt die Störung auf. Bei Verbindungs-, TLS- und Anmeldefehlern prüft z
 | `SECURITY_ALERT_ADMIN_LOGINS` | `true` (neu) | jede Plattform-Anmeldung meldet sich im Check «security» |
 | `PASSWORD_LEAK_CHECK` | `on` | Leak-Prüfung neuer Passwörter: `on` (HIBP-Range-API, Rückfall lokale Liste), `local-only`, `off` |
 | `PASSWORD_LEAK_MIN_COUNT` | 1 | ab so vielen Vorkommen in HIBP abgelehnt |
+| `PASSWORD_LEAK_FETCH_PER_MINUTE` | 600 | höchstens so viele HIBP-Abfragen je Minute (alle Prozesse), darüber lokale Liste |
+| `PASSWORD_BREACH_RECHECK_DAYS` | 30 | Leak-Prüfung beim Login (1.5.2): Nachtjob `password_breach_recheck` merkt Konten mit älterer Prüfung vor, die nächste Anmeldung prüft ohne Cache |
 | `GEOIP_AUTO_UPDATE` | `true` | Job `geoip_update` lädt DB-IP «IP to Country Lite» monatlich (`false`: kein Download) |
 
 Weitere Werte (Body-Limit 16 KiB für `/api/auth/*`, GCRA-Raten, Alarmschwellen `AUTH_ALERT_*`) stehen in

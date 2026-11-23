@@ -521,6 +521,7 @@ LOGIN_KIND_KEYS = {
     "security.login_suspicious": "email.login.label.suspicious",
     "security.failed_attempts": "email.login.label.failedAttempts",
     "security.login_after_lockout": "email.login.label.afterLockout",
+    "security.password_breached": "email.login.label.passwordBreached",
 }
 
 
@@ -551,6 +552,8 @@ def _render_login(
         reasons = [text(lang, f"email.login.reason.{reason}") for reason in item.get("reasons") or [] if reason in LOGIN_REASONS]
         if reasons:
             details.append(", ".join(reasons))
+        if item["kind"] == "security.password_breached":
+            details.append(text(lang, "email.login.breachedDetail"))
         sub = " · ".join(details)
         rows.append(Row(title=title, sub=sub, right=_local_time(item["at"]), marker="none", color=RED if alert else NAVY))
         plain_rows.append(f"- {title} ({_local_time(item['at'])})" + (f": {sub}" if sub else ""))

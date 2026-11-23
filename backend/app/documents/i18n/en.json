@@ -410,6 +410,7 @@
     },
     "login": {
       "action": "Review security",
+      "breachedDetail": "It appears in publicly known data breaches (not ours). Change it after your next sign-in. Until then, every sign-in also requires your second factor or a code sent by email.",
       "country": "Country: {country}",
       "countrySource": "Country data: “IP to Country Lite” by DB-IP.com (CC BY 4.0), looked up locally.",
       "device": "Device: {device}",
@@ -420,6 +421,7 @@
         "afterLockout": "Sign-in shortly after a lockout due to failed attempts",
         "failedAttempts": "Many failed sign-in attempts ({count})",
         "newDevice": "Sign-in from a new device",
+        "passwordBreached": "Your password is known from a data breach",
         "suspicious": "Sign-in with elevated risk"
       },
       "reason": {

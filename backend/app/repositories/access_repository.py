@@ -158,26 +158,20 @@ class AccessRepository:
         )
         return db.scalar(statement)
 
-    def protocol_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
-        export_q = select(DocumentExport.protocol_id.label("protocol_id")).where(
-            DocumentExport.stored_file_id == stored_file_id,
-            DocumentExport.protocol_id.is_not(None),
+    def protocol_ids_for_stored_file(self, db: Session, *, stored_file_id: int) -> list[int]:
+        """Alle Protokolle, an denen die Datei hängt (Export, Bild, importiertes Word-Dokument),
+        aufsteigend und ohne Doppel. Ein übernommenes Bild («aus letztem Protokoll übernehmen»)
+        hängt an mehreren Protokollen - früher entschied limit(1) ohne Sortierung zufällig, welches
+        für die Leseprüfung zählte (1.5.2, Verdacht 3)."""
+        links = stored_file_protocol_links()
+        return list(
+            db.scalars(
+                select(links.c.protocol_id)
+                .where(links.c.stored_file_id == stored_file_id)
+                .distinct()
+                .order_by(links.c.protocol_id.asc())
+            )
         )
-        image_q = (
-            select(ProtocolElement.protocol_id.label("protocol_id"))
-            .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
-            .join(ProtocolImage, ProtocolImage.protocol_element_block_id == ProtocolElementBlock.id)
-            .where(ProtocolImage.stored_file_id == stored_file_id)
-        )
-        # Only covers already-imported Word-Import documents (protocol_id set) - queued-but-
-        # not-yet-imported ones (no protocol yet) fall through to tenant_id_for_stored_file's
-        # coarser tenant+role check below, same as any other unlinked stored file.
-        import_q = select(WordImportDocument.protocol_id.label("protocol_id")).where(
-            WordImportDocument.stored_file_id == stored_file_id,
-            WordImportDocument.protocol_id.is_not(None),
-        )
-        combined = union_all(export_q, image_q, import_q).subquery()
-        return db.scalar(select(combined.c.protocol_id).limit(1))
 
     def stored_file_is_media(self, db: Session, *, stored_file_id: int) -> bool:
         """Foto oder Video: Videos gibt es nur als Clip eines Live Photos, sie gehören zum Foto
@@ -204,3 +198,23 @@ class AccessRepository:
 
     def tenant_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
         return db.scalar(select(StoredFile.tenant_id).where(StoredFile.id == stored_file_id))
+
+
+def stored_file_protocol_links():
+    """(stored_file_id, protocol_id) je Protokollbezug einer Datei - Exporte, Protokollbilder und
+    bereits importierte Word-Import-Dokumente (noch nicht importierte haben kein Protokoll und
+    fallen unter die gröbere Mandanten-/Rollenprüfung). Einzige Quelle für die Einzelprüfung
+    (AccessService._ensure_role_can_read_stored_file) und die Listenfilter
+    (access_service.protocol_file_clause), damit beide dieselben Bezüge kennen."""
+    export_q = select(
+        DocumentExport.stored_file_id.label("stored_file_id"), DocumentExport.protocol_id.label("protocol_id")
+    ).where(DocumentExport.protocol_id.is_not(None))
+    image_q = (
+        select(ProtocolImage.stored_file_id.label("stored_file_id"), ProtocolElement.protocol_id.label("protocol_id"))
+        .join(ProtocolElementBlock, ProtocolImage.protocol_element_block_id == ProtocolElementBlock.id)
+        .join(ProtocolElement, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
+    )
+    import_q = select(
+        WordImportDocument.stored_file_id.label("stored_file_id"), WordImportDocument.protocol_id.label("protocol_id")
+    ).where(WordImportDocument.protocol_id.is_not(None))
+    return union_all(export_q, image_q, import_q).subquery("stored_file_protocol_links")

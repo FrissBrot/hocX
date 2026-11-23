@@ -59,8 +59,21 @@ eine Passphrase aus mehreren Wörtern oder ein Passwort aus einem Passwort-Manag
 nur dessen **erste 5 Zeichen** an den Dienst «Have I Been Pwned» (Pwned Passwords, k-Anonymität). Der
 Dienst antwortet mit allen bekannten Einträgen, die so beginnen, ergänzt um Fülleinträge; verglichen
 wird nur auf dem Server. Ist der Dienst nicht erreichbar, prüft hocX gegen eine Liste häufiger
-geleakter Passwörter, die auf dem Server liegt. Geprüft wird nur beim Festlegen eines neuen
-Passworts, nicht bei jeder Anmeldung.
+geleakter Passwörter, die auf dem Server liegt.
+
+Geprüft wird beim Festlegen eines neuen Passworts **und bei jeder Anmeldung** (seit 1.5.2) – denn ein
+Passwort, das heute sicher ist, kann morgen in einem fremden Datenleck auftauchen. Gespeichert wird
+dabei nur der Zeitpunkt der Prüfung, nie das Passwort, ein Hash oder ein Teil davon; an «Have I Been
+Pwned» gehen keine Personendaten (keine E-Mail, kein Name, keine IP von dir). Die Antwort je
+5-Zeichen-Anfang wird eine Stunde zwischengespeichert. Ist der Dienst gestört, klappt die Anmeldung
+trotzdem.
+
+Wird dein Passwort bei einer Anmeldung als geleakt erkannt:
+
+- bekommst du **einmal** eine Sicherheitswarnung per E-Mail (nicht bei jeder Anmeldung),
+- zeigt hocX oben einen roten Hinweis mit **Passwort ändern** – die Änderung ist Pflicht,
+- verlangt jede Anmeldung zusätzlich deinen **zweiten Faktor** oder, falls du keinen hast, einen
+  **Code per E-Mail**, bis du ein neues Passwort gesetzt hast. Danach ist der Hinweis weg.
 
 ## Zweiter Faktor (MFA) {#mfa}
 

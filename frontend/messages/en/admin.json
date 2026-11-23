@@ -622,6 +622,10 @@
         "title": "Sign-in protection cleanup",
         "description": "Hourly: deletes security events after 90 days, ended sessions and long-unused devices, and repairs counters without expiry."
       },
+      "password_breach_recheck": {
+        "title": "Schedule password leak checks",
+        "description": "Daily: flags accounts whose password has not been checked against known data breaches for 30 days. The next sign-in then checks without the cache."
+      },
       "metrics_rollup": {
         "title": "Metrics rollup",
         "description": "Computes daily counts for the dashboard and analytics (tenants, active users, sign-ins, errors, storage, usage per module). The first run backfills 90 days."

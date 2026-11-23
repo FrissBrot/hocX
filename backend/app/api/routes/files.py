@@ -203,6 +203,8 @@ def list_files(
         viewer_tenant_id=user.current_tenant_id if album_id is not None else None,
         # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Dateien anderer Aufträge ausblenden
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        # Protokollbilder/-exporte nur aus lesbaren Protokollen (1.5.2, Verdacht 2)
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -253,6 +255,7 @@ def files_timeline(
     return service.tenant_files_timeline(
         db, user.current_tenant_id, sort_dir=sort_dir, only_images=only_images, search=search, tags=tags,
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
 
 
@@ -272,6 +275,7 @@ def list_file_tags(
     return service.list_distinct_tags(
         db, user.current_tenant_id, query=query, limit=limit,
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
 
 
@@ -292,7 +296,8 @@ def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(ge
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.file_stats(
-        db, user.current_tenant_id, readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user)
+        db, user.current_tenant_id, readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
 
 
@@ -329,6 +334,7 @@ def list_similarity_groups(
         tags=tags,
         file_ids=file_ids,
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
 
 
@@ -1329,7 +1335,8 @@ def get_stored_file_metadata(
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     metadata = service.get_stored_file_metadata(
-        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=_can_edit_capture_date(user, stored_file)
+        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=_can_edit_capture_date(user, stored_file),
+        protocol_scope=access_service.protocol_read_scope(db, user),
     )
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
@@ -1363,7 +1370,9 @@ def update_stored_file_capture_date(
         service.update_estimated_capture_date(db, stored_file, payload.estimated_taken_on, user_id=user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
+    metadata = service.get_stored_file_metadata(
+        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True, protocol_scope=access_service.protocol_read_scope(db, user)
+    )
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     return metadata
@@ -1443,7 +1452,9 @@ def update_stored_file_capture_correction(
     db.commit()
     service.recompute_capture_albums(db, outcome)
     db.refresh(stored_file)
-    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
+    metadata = service.get_stored_file_metadata(
+        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True, protocol_scope=access_service.protocol_read_scope(db, user)
+    )
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     return metadata

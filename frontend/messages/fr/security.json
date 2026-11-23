@@ -151,13 +151,20 @@
     "rate_limiter_unavailable": "La protection des connexions est brièvement indisponible. Réessaie tout de suite.",
     "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie.",
     "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur.",
-    "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre."
+    "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre.",
+    "password_breached": "Ce mot de passe figure dans une fuite de données. Fais-le redéfinir par une autre personne owner ou via admin_cli."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",
     "message": "Votre organisation exige un second facteur pour votre compte. Configurez-le d’ici le {until} – ensuite, la connexion ne sera possible qu’avec lui.",
     "later": "Plus tard",
     "setup": "Configurer maintenant"
+  },
+  "breached": {
+    "title": "Ton mot de passe figure dans une fuite de données",
+    "message": "Il apparaît dans des fuites de données publiques. Change-le maintenant – d'ici là, chaque connexion exige en plus ton deuxième facteur ou un code envoyé par e-mail.",
+    "adminMessage": "Il apparaît dans des fuites de données publiques. Fais-le redéfinir immédiatement par une autre personne owner ou via admin_cli.",
+    "change": "Changer le mot de passe"
   },
   "stepUp": {
     "title": "Confirmer ton identité",
