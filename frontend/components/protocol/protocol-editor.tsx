@@ -76,7 +76,7 @@ import { AgendaQuickCreateForm } from "@/components/protocol/agenda-quick-create
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 import { createDebouncedSaveQueue } from "@/components/protocol/debounced-save-queue";
-import { createTextDraftStore, decideDraftRestore, textDraftBaseKey, textDraftKey } from "@/components/protocol/text-drafts";
+import { createTextDraftStore, decideDraftRestore, settleDraftAfterSave, textDraftBaseKey, textDraftKey } from "@/components/protocol/text-drafts";
 import { useTextDraftEmptiness } from "@/components/protocol/use-text-draft";
 import { jumpToSection, prefersReducedMotion } from "@/components/protocol/document-scroll";
 import { createSectionSpy, type SectionSpy } from "@/components/protocol/section-spy";
@@ -679,6 +679,10 @@ export function ProtocolEditor({
       const decision = decideDraftRestore(draft, readDraft(textDraftBaseKey(blockId)), initialDrafts[blockId]);
       if (decision === "restore") restoredDrafts.push([blockId, draft as string]);
       if (decision === "conflict") conflictingDrafts.push([blockId, draft as string]);
+      if (decision === "saved") {
+        clearDraft(textDraftKey(blockId));
+        clearDraft(textDraftBaseKey(blockId));
+      }
     }
     const applyDrafts = (drafts: (readonly [string, string])[]) => textDraftStore.setMany(drafts);
     if (restoredDrafts.length > 0) {
@@ -1510,10 +1514,12 @@ export function ProtocolEditor({
         tracked_dirty: result.tracked_dirty,
         tracked_baseline_content: result.tracked_baseline_content,
       }));
-      if (isLatestEdit()) {
+      // Weiter getippt: der neuere Entwurf baut jetzt auf `content` auf (text-drafts.ts)
+      const settled = settleDraftAfterSave(mutationKey, textDraftBaseKey(protocolElementBlockId), content, (latest) =>
+        queueMutation({ key: mutationKey, path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`, method: "PUT", body: JSON.stringify({ content: latest, expected_content: content }) })
+      );
+      if (settled) {
         setStatus(protocolElementBlockId, "saved");
-        clearDraft(mutationKey);
-        clearDraft(textDraftBaseKey(protocolElementBlockId));
         removeMutation(mutationKey);
       }
       collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {

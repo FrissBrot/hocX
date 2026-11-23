@@ -19,6 +19,7 @@ import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submi
 import { useDefaultSmartDates, useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { Select } from "@/components/ui/select";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
+import { decideDraftRestore, notesDraftBaseKey, settleDraftAfterSave } from "@/components/protocol/text-drafts";
 import { QuickTodoFine, quickTodoFineInvalid, quickTodoFineSettings, type QuickTodoFineAccess, type QuickTodoFineChoice } from "@/components/protocol/quick-todo-fine";
 
 type DueDraft =
@@ -70,20 +71,45 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [fineChoice, setFineChoice] = useState<QuickTodoFineChoice>({ mode: "auto" });
     const notesMutationKey = `protocol-notes:${protocol.id}`;
+    const notesBaseKey = notesDraftBaseKey(protocol.id);
     const notesServerValueRef = useRef(protocol.session_notes ?? "");
     const latestNotesRef = useRef(notes);
     latestNotesRef.current = notes;
 
     useEffect(() => {
+      // Wie die Textblöcke (text-drafts.ts): nur übernehmen, wenn der Server noch auf dem Stand
+      // ist, auf dem der Entwurf beruht. Vorher stellte jeder abweichende Entwurf sich über die
+      // Serverfassung - auch ein alter, längst gespeicherter über neuere Notizen anderer.
+      const server = protocol.session_notes ?? "";
       const draft = readDraft(notesMutationKey);
-      if (draft !== null && draft !== (protocol.session_notes ?? "")) {
-        setNotes(draft);
+      const decision = decideDraftRestore(draft, readDraft(notesBaseKey), server);
+      if (decision === "restore") {
+        setNotes(draft as string);
         setNotesSaveState("error");
         showToast(t("draftRestored"), "info");
+      } else if (decision === "conflict") {
+        showToast(t("draftConflict"), "error", {
+          action: {
+            label: t("draftConflictApply"),
+            onClick: () => {
+              // Ausdrücklich gewählt: Entwurf auf dem aktuellen Serverstand speichern
+              saveDraft(notesBaseKey, notesServerValueRef.current);
+              setNotes(draft as string);
+              saveNotes(draft as string);
+            },
+          },
+        });
+      } else if (decision === "saved") {
+        // Neuladen vor der Antwort: schon gespeichert. Der Outbox-Eintrag hat denselben Inhalt
+        // und schlüge nur als Konflikt fehl (Notizen sind nicht idempotent).
+        clearDraft(notesMutationKey);
+        clearDraft(notesBaseKey);
+        removeMutation(notesMutationKey);
       }
       const flushed = (event: Event) => {
         if ((event as CustomEvent<{ key?: string }>).detail?.key !== notesMutationKey) return;
         clearDraft(notesMutationKey);
+        clearDraft(notesBaseKey);
         notesServerValueRef.current = latestNotesRef.current;
         setNotesSaveState("saved");
       };
@@ -145,7 +171,12 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     }, [active]);
 
     useEffect(() => {
-      setNotes(protocol.session_notes ?? "");
+      const server = protocol.session_notes ?? "";
+      // Ein eben wiederhergestellter Entwurf bleibt stehen (dieser Effekt lief direkt nach der
+      // Wiederherstellung und zeigte wieder den alten Serverstand)
+      if (decideDraftRestore(readDraft(notesMutationKey), readDraft(notesBaseKey), server) === "restore") return;
+      setNotes(server);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [protocol.id, protocol.session_notes]);
 
     useEffect(() => {
@@ -219,6 +250,8 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const saveNotes = useCallback(
       (value: string) => {
         const expectedSessionNotes = notesServerValueRef.current;
+        // Baseline beim ersten Tastendruck eines Entwurfs (siehe text-drafts.ts)
+        if (readDraft(notesMutationKey) === null) saveDraft(notesBaseKey, expectedSessionNotes);
         saveDraft(notesMutationKey, value);
         queueMutation({
           key: notesMutationKey,
@@ -234,12 +267,19 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
               method: "PATCH",
               body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
             });
-            notesServerValueRef.current = updated.session_notes ?? "";
-            setNotesSaveState("saved");
-            clearDraft(notesMutationKey);
-            removeMutation(notesMutationKey);
+            const saved = updated.session_notes ?? "";
+            notesServerValueRef.current = saved;
+            // Inzwischen weiter getippt: neueren Entwurf und Outbox-Eintrag behalten (vorher
+            // gelöscht - ein schnelles Neuladen verlor ihn) und auf den gespeicherten Stand stützen
+            const settled = settleDraftAfterSave(notesMutationKey, notesBaseKey, saved, (latest) =>
+              queueMutation({ key: notesMutationKey, path: `/api/protocols/${protocol.id}`, method: "PATCH", body: JSON.stringify({ session_notes: latest, expected_session_notes: saved }) })
+            );
             onSessionNotesChange?.(value);
-            window.setTimeout(() => setNotesSaveState("idle"), 1800);
+            if (settled) {
+              setNotesSaveState("saved");
+              removeMutation(notesMutationKey);
+              window.setTimeout(() => setNotesSaveState("idle"), 1800);
+            }
           } catch (error) {
             setNotesSaveState("error");
             queueMutation({
@@ -253,7 +293,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
           }
         });
       },
-      [protocol.id, onSessionNotesChange, notesMutationKey]
+      [protocol.id, onSessionNotesChange, notesMutationKey, notesBaseKey]
     );
 
     const handleNotesChange = (value: string) => {
