@@ -286,6 +286,8 @@ class AdminMfaService:
         admin = db.get(PlatformAdmin, actor.admin_id)
         if admin is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+        # Jeder Start legt einen Redis-Vorgang an (noeviction) - je Konto begrenzt wie bei Mitgliedern
+        enforce_rate_limit(f"admin-mfa-self-flow-start:{admin.id}", limit=60, period_seconds=15 * 60)
         rp_id = self.rp_id(request_host)
         challenge = generate_challenge()
         flow_token = self._create_flow(

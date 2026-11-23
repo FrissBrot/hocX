@@ -57,6 +57,8 @@ _INVITE_TICKET_TTL_SECONDS = 30 * 60
 # damit Anmeldeschutz und Ratelimits plattformweit lahmlegen (fail-closed).
 SELF_FLOW_START_LIMIT = 60
 SELF_FLOW_START_WINDOW_SECONDS = 15 * 60
+# Dasselbe für Vorgänge im Login (Faktor einrichten/Passkey-Anmeldung) je Login-Ticket
+LOGIN_FLOW_START_LIMIT = 10
 _ISSUER = "hocX"
 
 # Account-scoped lockout for TOTP login verification, independent of which login ticket the
@@ -87,6 +89,15 @@ class MfaService:
         payload = json.dumps({"kind": kind, **data})
         self._redis().set(f"{_FLOW_PREFIX}{token}", payload, nx=True, ex=ttl_seconds)
         return token
+
+    def limit_login_flow_start(self, ticket: str) -> None:
+        """429, wenn zu einem Login-Ticket (nach dem Passwortschritt) zu viele Vorgänge entstehen.
+        Bewusst je Ticket und nicht je Konto: wer nur das Passwort kennt, soll den Step-up der
+        Kontoinhaberin nicht sperren können. Schlüssel nur als Hash (Ticket ist geheim)."""
+        import hashlib
+
+        digest = hashlib.sha256(ticket.encode("utf-8")).hexdigest()[:32]
+        enforce_rate_limit(f"mfa-login-flow-start:{digest}", limit=LOGIN_FLOW_START_LIMIT, period_seconds=_FLOW_TTL_SECONDS)
 
     def limit_self_flow_start(self, user_id: int) -> None:
         """429, wenn ein angemeldetes Konto zu viele Vorgänge zum zweiten Faktor anlegt."""
@@ -426,6 +437,7 @@ class MfaService:
 
     def start_login_totp_enrollment(self, db: Session, ticket: str) -> TotpEnrollmentStartRead:
         context = self._load_login_ticket(db, ticket)
+        self.limit_login_flow_start(ticket)
         self._ensure_login_setup_allowed(db, context.user.id)
         secret = generate_totp_secret()
         flow_token = self._create_flow(
@@ -526,6 +538,7 @@ class MfaService:
     ) -> PasskeyRegistrationStartRead:
         context = self._load_login_ticket(db, ticket)
         self._ensure_login_setup_allowed(db, context.user.id)
+        self.limit_login_flow_start(ticket)
         return self._start_passkey_registration(
             db,
             user=context.user,
@@ -890,6 +903,7 @@ class MfaService:
         request_origin: str,
     ) -> PasskeyAssertionStartRead:
         context = self._load_login_ticket(db, ticket)
+        self.limit_login_flow_start(ticket)
         rp_id = self.rp_id_for_request_host(request_host)
         factors = [
             factor

@@ -73,3 +73,18 @@ def test_self_passkey_registration_start_is_limited_per_account(db, monkeypatch)
     user = make_app_user(db, email="flow-passkey@example.com", tenant_id=make_tenant(db).id, role_code="reader")
     current = build_current_user(db, user)
     assert _hits_limit(lambda: MfaService().start_self_passkey_registration(db, current, request_host=HOST, request_origin=ORIGIN))
+
+
+def test_login_setup_flow_start_is_limited_per_ticket(db):
+    """Security-Review 1.5.2: auch nach dem Passwortschritt (Login-Ticket) entstehen Vorgänge nur
+    begrenzt - und die Grenze hängt am Ticket, nicht am Konto (kein Sperren der Inhaberin)."""
+    user = make_app_user(db, email="flow-login@example.com", tenant_id=make_tenant(db).id, role_code="admin")
+    service = MfaService()
+    pending = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
+    assert pending is not None and pending.status == "setup_required"
+    assert _hits_limit(lambda: service.start_login_totp_enrollment(db, pending.ticket))
+    flows = sum(1 for _ in get_redis_sync().scan_iter("mfa:flow:*"))
+    assert flows <= 10
+    # Ein neues Ticket (neue Anmeldung) ist nicht betroffen
+    again = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
+    service.start_login_totp_enrollment(db, again.ticket)
