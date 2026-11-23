@@ -46,3 +46,32 @@ def test_nul_in_assignment_slug_on_upload_is_a_plain_404(monkeypatch):
     )
     assert response.status_code == 404, response.text
     assert recorded == []
+
+
+def test_error_log_and_upload_log_strip_nul():
+    """request.url.path ist dekodiert: ein %00 im Pfad (oder ein NUL im Fehlertext/Dateinamen)
+    liess den INSERT mit psycopg.DataError scheitern («PostgreSQL text fields cannot contain NUL»);
+    _record_error bzw. _log verschlucken das, der Eintrag verschwand ganz."""
+    from app.repository import insert_error_log, insert_upload_log
+
+    class _CapturingSession:
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, statement):
+            self.statements.append(statement)
+
+        def commit(self):
+            pass
+
+    db = _CapturingSession()
+    insert_error_log(
+        db, tenant_id=None, request_method="GET",
+        request_path=f"/api/public/{VALID_TOKEN}/assignments/fo\x00tos",
+        status_code=500, error_type="RuntimeError", error_message="kaputt\x00", traceback="Traceback\x00",
+    )
+    insert_upload_log(db, assignment_id=1, element_ref="e\x001", status="validation_failed", error_message="Datei zu gross: a\x00.pdf")
+
+    for statement in db.statements:
+        params = statement.compile().params
+        assert not any(isinstance(value, str) and "\x00" in value for value in params.values()), params
