@@ -152,26 +152,7 @@
   "collaboration": {
     "editingLockedBy": "being edited by {name}",
     "offline": "Offline",
-    "offlineTitle": "Live collaboration is currently disconnected – your changes are still saved automatically.",
-    "statusPanel": {
-      "absent": "Unexcused",
-      "activeNow": "Active now",
-      "ariaLabel": "Status & collaboration",
-      "close": "Close",
-      "editingLiveWith": "editing live with",
-      "excused": "Excused",
-      "noOneElseActive": "No one else is editing live right now.",
-      "participants": "Participants",
-      "present": "Present",
-      "shortcutNextSection": "Next section",
-      "shortcutNotes": "Open session notes",
-      "shortcutPrevSection": "Previous section",
-      "shortcutSearch": "Search – in attendance, person search first",
-      "shortcutTodo": "Open quick todo",
-      "shortcuts": "Keyboard shortcuts",
-      "title": "Status & collaboration",
-      "docsLink": "Guide: working together on minutes"
-    }
+    "offlineTitle": "Live collaboration is currently disconnected – your changes are still saved automatically."
   },
   "collectFine": "Collect fine",
   "collectedCheckmark": "✓ Collected",
@@ -254,7 +235,6 @@
       "back": "Back to minutes",
       "created": "Created {date}",
       "templateVersion": "Template v{version, number}",
-      "searchLabel": "Search in minutes …",
       "searchAria": "Search in minutes ({shortcut})",
       "exportMenu": "Export",
       "openPdf": "Open PDF",
@@ -282,7 +262,11 @@
       "label": "Outline of the minutes",
       "title": "Outline",
       "hidden": "Hidden",
-      "dropAtEnd": "Drop here: move to the end"
+      "dropAtEnd": "Drop here: move to the end",
+      "peopleHere": "Here right now: {people}",
+      "addLabel": "Add agenda item",
+      "addPlaceholder": "Add agenda item…",
+      "addHint": "Enter adds · only in these minutes"
     },
     "saveState": {
       "saving": "Saving …",
@@ -335,7 +319,38 @@
       }
     },
     "revertConfirmTitle": "Reset status?",
-    "revertConfirmMessage": "The minutes go back to “{status}”. The change applies to everyone immediately."
+    "revertConfirmMessage": "The minutes go back to “{status}”. The change applies to everyone immediately.",
+    "orderConflict": "Someone has reordered the agenda items in the meantime. The current order is loaded.",
+    "elementAddFailed": "Agenda item could not be added",
+    "elementRenameFailed": "Agenda item could not be renamed",
+    "elementVisibilityFailed": "Visibility could not be changed",
+    "imageCaptionFailed": "Caption could not be saved",
+    "presenceViewing": "at “{title}”",
+    "presenceEditing": "editing “{title}”",
+    "section": {
+      "menu": "Actions for “{title}”",
+      "rename": "Rename",
+      "renameLabel": "Title of the agenda item",
+      "show": "Show",
+      "hide": "Hide",
+      "renamed": "renamed",
+      "renamedTitle": "In the template: “{title}”",
+      "hiddenBadge": "Hidden"
+    },
+    "templateChanges": {
+      "title": "Apply agenda changes to template “{template}”?",
+      "intro": "These changes only apply to these minutes so far. hocX applies the selected ones to the template when finalizing.",
+      "noPermission": "These changes only apply to these minutes. You are not allowed to edit the template.",
+      "added": "New: “{title}” after “{after}”",
+      "addedFirst": "New: “{title}” at the beginning",
+      "renamed": "Renamed: “{from}” → “{to}”",
+      "shown": "Shown: “{title}”",
+      "hidden": "Hidden: “{title}”",
+      "order": "Order: {order}",
+      "applied": "{count, plural, one {# change} other {# changes}} applied to the template",
+      "outdated": "The list was out of date and has been reloaded. Please check again.",
+      "failed": "Changes could not be applied to the template"
+    }
   },
   "embeddedBlock": {
     "attendance": "Attendance",
@@ -507,7 +522,6 @@
     "assignPlaceholder": "Assign person…",
     "createTodoButton": "Create todo",
     "createTodoFailed": "Todo could not be created",
-    "createdBadge": "Created",
     "defaultTag": "Session notes",
     "draftRestored": "A local draft of the session notes was restored.",
     "duePlaceholder": "Due…",
@@ -515,7 +529,6 @@
     "noDueDate": "No due date",
     "notesPlaceholder": "Notes for the session…",
     "notesTitle": "Session notes",
-    "quickTodoTitle": "Quick todo",
     "saveError": "Error while saving",
     "saved": "Saved",
     "saving": "Saving…",
@@ -744,5 +757,6 @@
   "blockEditAria": "Edit {block}",
   "textEmptyStatic": "No text yet",
   "bulletsEmptyStatic": "No items yet",
-  "todosEmptyStatic": "No tasks yet"
+  "todosEmptyStatic": "No tasks yet",
+  "imageCaptionLabel": "Caption"
 }

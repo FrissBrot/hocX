@@ -2088,6 +2088,12 @@ export type ProtocolElement = {
   export_visible_snapshot: boolean;
   show_when_empty: boolean;
   blocks: ProtocolElementBlock[];
+  /** Herkunft: aus der Vorlage, im Protokoll hinzugefügt, «Sitzungsnotizen» oder Word-Import */
+  origin?: "template" | "protocol" | "session" | "import";
+  /** Titel laut Vorlage, wenn im Protokoll umbenannt (sonst null) */
+  template_title?: string | null;
+  /** Sichtbarkeit im Protokoll geändert */
+  visibility_customized?: boolean;
 };
 
 export type FinanceAccount = {

@@ -14,6 +14,8 @@ export type OutlineItem = {
   summary: string;
   /** Ausgeblendetes Traktandum (nur im Vorbereitungsmodus sichtbar) */
   hidden?: boolean;
+  /** Initialen der Personen, die gerade an diesem Punkt sind */
+  people?: string;
 };
 
 type ProtocolOutlineProps = {
@@ -21,8 +23,8 @@ type ProtocolOutlineProps = {
   selectedId: string | null;
   canReorder: boolean;
   onSelect: (elementId: string) => void;
-  /** Verschiebt `sourceId` an die Stelle von `targetId` (null = ans Ende). */
-  onReorder: (sourceId: string, targetId: string | null) => void | Promise<void>;
+  /** Verschiebt `sourceId` vor bzw. hinter `targetId` (null = ans Ende). */
+  onReorder: (sourceId: string, targetId: string | null, placement?: "before" | "after") => void | Promise<void>;
   /** Zusatz unter der Liste (z. B. «Traktandum hinzufügen») */
   footer?: ReactNode;
   id?: string;
@@ -55,7 +57,7 @@ export const ProtocolOutline = memo(function ProtocolOutline({ items, selectedId
     const source = items[from];
     const target = items[to];
     if (!source || !target) return;
-    await onReorder(source.id, target.id);
+    await onReorder(source.id, target.id, to > from ? "after" : "before");
   }
 
   return (
@@ -106,6 +108,7 @@ export const ProtocolOutline = memo(function ProtocolOutline({ items, selectedId
                   }) : undefined}
               >
                 <span className="protocol-outline-number">{index + 1}</span>
+                {item.people ? <span className="protocol-outline-people" title={t("peopleHere", { people: item.people })}>{item.people}</span> : null}
                 <span className="protocol-outline-text">
                   <span className="protocol-outline-title">{item.title}</span>
                   {(item.hidden || item.summary) ? <span className="protocol-outline-summary">{item.hidden ? t("hidden") : item.summary}</span> : null}
@@ -139,3 +142,42 @@ export const ProtocolOutline = memo(function ProtocolOutline({ items, selectedId
     </nav>
   );
 });
+
+/**
+ * «Traktandum hinzufügen» unter der Gliederung: Enter fügt hinzu (am Ende, vor den
+ * Sitzungsnotizen), Escape leert. Gilt nur für dieses Protokoll, nie für die Vorlage.
+ */
+export function OutlineAddItem({ onAdd }: { onAdd: (title: string) => Promise<boolean> }) {
+  const t = useTranslations("protocols.editor.outline");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="protocol-outline-add">
+      <label className="protocol-outline-add-field">
+        <span aria-hidden="true">+</span>
+        <span className="visually-hidden">{t("addLabel")}</span>
+        <input
+          value={title}
+          disabled={busy}
+          maxLength={200}
+          placeholder={t("addPlaceholder")}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && title.trim()) {
+              event.preventDefault();
+              setBusy(true);
+              void onAdd(title).then((ok) => {
+                setBusy(false);
+                if (ok) setTitle("");
+              });
+            } else if (event.key === "Escape" && title) {
+              event.preventDefault();
+              setTitle("");
+            }
+          }}
+        />
+      </label>
+      <span className="protocol-outline-add-hint">{t("addHint")}</span>
+    </div>
+  );
+}

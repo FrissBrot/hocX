@@ -152,26 +152,7 @@
   "collaboration": {
     "editingLockedBy": "en cours de modification par {name}",
     "offline": "Hors ligne",
-    "offlineTitle": "La collaboration en direct est actuellement déconnectée – vos modifications sont néanmoins enregistrées automatiquement.",
-    "statusPanel": {
-      "absent": "Non excusé",
-      "activeNow": "Actif en ce moment",
-      "ariaLabel": "Statut et collaboration",
-      "close": "Fermer",
-      "editingLiveWith": "modifie en direct avec",
-      "excused": "Excusé",
-      "noOneElseActive": "Personne d'autre ne modifie en direct actuellement.",
-      "participants": "Participants",
-      "present": "Présent",
-      "shortcutNextSection": "Section suivante",
-      "shortcutNotes": "Ouvrir les notes de séance",
-      "shortcutPrevSection": "Section précédente",
-      "shortcutSearch": "Rechercher – dans les présences, d'abord la recherche de personne",
-      "shortcutTodo": "Ouvrir une tâche rapide",
-      "shortcuts": "Raccourcis clavier",
-      "title": "Statut et collaboration",
-      "docsLink": "Guide : collaborer sur un procès-verbal"
-    }
+    "offlineTitle": "La collaboration en direct est actuellement déconnectée – vos modifications sont néanmoins enregistrées automatiquement."
   },
   "collectFine": "Encaisser l'amende",
   "collectedCheckmark": "✓ Encaissé",
@@ -254,7 +235,6 @@
       "back": "Retour aux procès-verbaux",
       "created": "Créé le {date}",
       "templateVersion": "Modèle v{version, number}",
-      "searchLabel": "Rechercher dans le procès-verbal …",
       "searchAria": "Rechercher dans le procès-verbal ({shortcut})",
       "exportMenu": "Exporter",
       "openPdf": "Ouvrir le PDF",
@@ -282,7 +262,11 @@
       "label": "Plan du procès-verbal",
       "title": "Plan",
       "hidden": "Masqué",
-      "dropAtEnd": "Déposer ici : à la fin"
+      "dropAtEnd": "Déposer ici : à la fin",
+      "peopleHere": "Ici en ce moment : {people}",
+      "addLabel": "Ajouter un point",
+      "addPlaceholder": "Ajouter un point…",
+      "addHint": "Entrée ajoute · uniquement dans ce procès-verbal"
     },
     "saveState": {
       "saving": "Enregistrement …",
@@ -335,7 +319,38 @@
       }
     },
     "revertConfirmTitle": "Réinitialiser le statut ?",
-    "revertConfirmMessage": "Le procès-verbal revient à « {status} ». Le changement s’applique immédiatement à tout le monde."
+    "revertConfirmMessage": "Le procès-verbal revient à « {status} ». Le changement s’applique immédiatement à tout le monde.",
+    "orderConflict": "Quelqu’un a réordonné les points entre-temps. L’ordre actuel est chargé.",
+    "elementAddFailed": "Le point n’a pas pu être ajouté",
+    "elementRenameFailed": "Le point n’a pas pu être renommé",
+    "elementVisibilityFailed": "La visibilité n’a pas pu être modifiée",
+    "imageCaptionFailed": "La légende n’a pas pu être enregistrée",
+    "presenceViewing": "sur « {title} »",
+    "presenceEditing": "modifie « {title} »",
+    "section": {
+      "menu": "Actions pour « {title} »",
+      "rename": "Renommer",
+      "renameLabel": "Titre du point",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "renamed": "renommé",
+      "renamedTitle": "Dans le modèle : « {title} »",
+      "hiddenBadge": "Masqué"
+    },
+    "templateChanges": {
+      "title": "Reprendre les modifications des points dans le modèle « {template} » ?",
+      "intro": "Ces modifications ne valent pour l’instant que dans ce procès-verbal. hocX reprend celles sélectionnées dans le modèle lors de la clôture.",
+      "noPermission": "Ces modifications ne valent que dans ce procès-verbal. Tu n’as pas le droit de modifier le modèle.",
+      "added": "Nouveau : « {title} » après « {after} »",
+      "addedFirst": "Nouveau : « {title} » au début",
+      "renamed": "Renommé : « {from} » → « {to} »",
+      "shown": "Affiché : « {title} »",
+      "hidden": "Masqué : « {title} »",
+      "order": "Ordre : {order}",
+      "applied": "{count, plural, one {# modification reprise} other {# modifications reprises}} dans le modèle",
+      "outdated": "La liste n’était plus à jour et a été rechargée. Vérifie à nouveau.",
+      "failed": "Les modifications n’ont pas pu être reprises dans le modèle"
+    }
   },
   "embeddedBlock": {
     "attendance": "Présence",
@@ -507,7 +522,6 @@
     "assignPlaceholder": "Attribuer à une personne…",
     "createTodoButton": "Créer une tâche",
     "createTodoFailed": "La tâche n'a pas pu être créée",
-    "createdBadge": "Créé",
     "defaultTag": "Notes de séance",
     "draftRestored": "Un brouillon local des notes de séance a été restauré.",
     "duePlaceholder": "Échéance…",
@@ -515,7 +529,6 @@
     "noDueDate": "Pas d'échéance",
     "notesPlaceholder": "Notes pour la séance…",
     "notesTitle": "Notes de séance",
-    "quickTodoTitle": "Tâche rapide",
     "saveError": "Erreur lors de l'enregistrement",
     "saved": "Enregistré",
     "saving": "Enregistrement…",
@@ -744,5 +757,6 @@
   "blockEditAria": "Modifier {block}",
   "textEmptyStatic": "Pas encore de texte",
   "bulletsEmptyStatic": "Pas encore de points",
-  "todosEmptyStatic": "Pas encore de tâches"
+  "todosEmptyStatic": "Pas encore de tâches",
+  "imageCaptionLabel": "Légende"
 }

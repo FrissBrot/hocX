@@ -152,26 +152,7 @@
   "collaboration": {
     "editingLockedBy": "wird bearbeitet von {name}",
     "offline": "Offline",
-    "offlineTitle": "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem automatisch gespeichert.",
-    "statusPanel": {
-      "absent": "Unentschuldigt",
-      "activeNow": "Gerade aktiv",
-      "ariaLabel": "Status & Zusammenarbeit",
-      "close": "Schliessen",
-      "editingLiveWith": "bearbeiten live mit",
-      "excused": "Entschuldigt",
-      "noOneElseActive": "Niemand sonst bearbeitet gerade live.",
-      "participants": "Teilnehmer",
-      "present": "Anwesend",
-      "shortcutNextSection": "Nächster Abschnitt",
-      "shortcutNotes": "Sitzungsnotizen öffnen",
-      "shortcutPrevSection": "Vorheriger Abschnitt",
-      "shortcutSearch": "Suchen – in der Anwesenheit zuerst Personensuche",
-      "shortcutTodo": "Schnelle Pendenz öffnen",
-      "shortcuts": "Tastenkürzel",
-      "title": "Status & Zusammenarbeit",
-      "docsLink": "Anleitung: Zusammenarbeit im Protokoll"
-    }
+    "offlineTitle": "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem automatisch gespeichert."
   },
   "collectFine": "Busse kassieren",
   "collectedCheckmark": "✓ Kassiert",
@@ -254,7 +235,6 @@
       "back": "Zurück zu den Protokollen",
       "created": "Erstellt {date}",
       "templateVersion": "Vorlage v{version, number}",
-      "searchLabel": "Im Protokoll suchen …",
       "searchAria": "Im Protokoll suchen ({shortcut})",
       "exportMenu": "Exportieren",
       "openPdf": "PDF öffnen",
@@ -282,7 +262,11 @@
       "label": "Gliederung des Protokolls",
       "title": "Gliederung",
       "hidden": "Ausgeblendet",
-      "dropAtEnd": "Hierher ziehen: ans Ende"
+      "dropAtEnd": "Hierher ziehen: ans Ende",
+      "peopleHere": "Gerade hier: {people}",
+      "addLabel": "Traktandum hinzufügen",
+      "addPlaceholder": "Traktandum hinzufügen…",
+      "addHint": "Enter fügt hinzu · nur in diesem Protokoll"
     },
     "saveState": {
       "saving": "Speichert …",
@@ -335,7 +319,38 @@
       }
     },
     "revertConfirmTitle": "Status zurücksetzen?",
-    "revertConfirmMessage": "Das Protokoll wechselt zurück auf «{status}». Die Änderung gilt für alle sofort."
+    "revertConfirmMessage": "Das Protokoll wechselt zurück auf «{status}». Die Änderung gilt für alle sofort.",
+    "orderConflict": "Jemand hat die Traktanden inzwischen umsortiert. Die aktuelle Reihenfolge ist geladen.",
+    "elementAddFailed": "Traktandum konnte nicht hinzugefügt werden",
+    "elementRenameFailed": "Traktandum konnte nicht umbenannt werden",
+    "elementVisibilityFailed": "Sichtbarkeit konnte nicht geändert werden",
+    "imageCaptionFailed": "Bildunterschrift konnte nicht gespeichert werden",
+    "presenceViewing": "bei «{title}»",
+    "presenceEditing": "bearbeitet «{title}»",
+    "section": {
+      "menu": "Aktionen für «{title}»",
+      "rename": "Umbenennen",
+      "renameLabel": "Titel des Traktandums",
+      "show": "Einblenden",
+      "hide": "Ausblenden",
+      "renamed": "umbenannt",
+      "renamedTitle": "In der Vorlage: «{title}»",
+      "hiddenBadge": "Ausgeblendet"
+    },
+    "templateChanges": {
+      "title": "Traktanden-Änderungen in Vorlage «{template}» übernehmen?",
+      "intro": "Diese Änderungen gelten bisher nur in diesem Protokoll. Gewählte übernimmt hocX beim Abschliessen in die Vorlage.",
+      "noPermission": "Diese Änderungen gelten nur in diesem Protokoll. Für die Vorlage fehlt dir das Recht, sie zu bearbeiten.",
+      "added": "Neu: «{title}» nach «{after}»",
+      "addedFirst": "Neu: «{title}» am Anfang",
+      "renamed": "Umbenannt: «{from}» → «{to}»",
+      "shown": "Eingeblendet: «{title}»",
+      "hidden": "Ausgeblendet: «{title}»",
+      "order": "Reihenfolge: {order}",
+      "applied": "{count, plural, one {# Änderung} other {# Änderungen}} in die Vorlage übernommen",
+      "outdated": "Die Liste war nicht mehr aktuell und ist neu geladen. Bitte nochmals prüfen.",
+      "failed": "Änderungen konnten nicht in die Vorlage übernommen werden"
+    }
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",
@@ -507,7 +522,6 @@
     "assignPlaceholder": "Person zuweisen…",
     "createTodoButton": "Pendenz erstellen",
     "createTodoFailed": "Pendenz konnte nicht erstellt werden",
-    "createdBadge": "Erstellt",
     "defaultTag": "Sitzungsnotizen",
     "draftRestored": "Lokaler Entwurf der Sitzungsnotizen wurde wiederhergestellt.",
     "duePlaceholder": "Fällig…",
@@ -515,7 +529,6 @@
     "noDueDate": "Kein Enddatum",
     "notesPlaceholder": "Notizen zur Sitzung…",
     "notesTitle": "Sitzungsnotizen",
-    "quickTodoTitle": "Schnelle Pendenz",
     "saveError": "Fehler beim Speichern",
     "saved": "Gespeichert",
     "saving": "Speichert…",
@@ -744,5 +757,6 @@
   "blockEditAria": "{block} bearbeiten",
   "textEmptyStatic": "Noch kein Text",
   "bulletsEmptyStatic": "Noch keine Punkte",
-  "todosEmptyStatic": "Noch keine Pendenzen"
+  "todosEmptyStatic": "Noch keine Pendenzen",
+  "imageCaptionLabel": "Bildunterschrift"
 }

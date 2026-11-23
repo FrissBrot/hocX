@@ -40,6 +40,7 @@ import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planni
 import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
 import { ProtocolTextBlock } from "@/components/protocol/protocol-text-block";
+import { ProtocolSectionTitle } from "@/components/protocol/protocol-section-title";
 import type { TextDraftStore } from "@/components/protocol/text-drafts";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
@@ -138,6 +139,11 @@ function FocusedElementEditorImpl({
   textDraftStore,
   activeBlockId = null,
   onActivateBlock,
+  canRenameElement = false,
+  canToggleElementHidden = false,
+  onRenameElement,
+  onToggleElementVisible,
+  updateImageCaption,
   todosByBlock,
   sessionTodos,
   imagesByBlock,
@@ -230,6 +236,13 @@ function FocusedElementEditorImpl({
   activeBlockId?: string | null;
   /** Block aktivieren (null: verlassen) */
   onActivateBlock: (blockId: string | null) => void;
+  /** Traktandum umbenennen bzw. aus-/einblenden (nur in diesem Protokoll, API PATCH protocol-elements) */
+  canRenameElement?: boolean;
+  canToggleElementHidden?: boolean;
+  onRenameElement: (elementId: string, title: string) => Promise<boolean>;
+  onToggleElementVisible: (elementId: string, visible: boolean) => void;
+  /** Bildunterschrift nachträglich ändern (API PATCH protocol-images) */
+  updateImageCaption: (blockId: string, imageId: string, caption: string) => Promise<void>;
   todosByBlock: Record<string, ProtocolTodo[]>;
   /** Pendenzen mit dem Tag dieses Punkts (Sitzungsansicht), vom Editor stabil vorberechnet. */
   sessionTodos: ProtocolTodo[];
@@ -1761,18 +1774,23 @@ function FocusedElementEditorImpl({
     <section
       id={`protocol-element-${element.id}`}
       ref={sectionRef}
-      className="protocol-doc-section"
+      className={`protocol-doc-section${element.is_visible_snapshot ? "" : " protocol-doc-section-hidden"}`}
       aria-labelledby={`protocol-element-title-${element.id}`}
     >
-      {/* Kopf: Nummer, Titel (Serif) und Hinweise; die Nummer liest der Screenreader mit */}
-      <header className="protocol-doc-section-head">
-        <span className="protocol-doc-section-number" aria-hidden="true">{String(elementIndex + 1).padStart(2, "0")}</span>
-        <h2 className="protocol-doc-section-title" id={`protocol-element-title-${element.id}`}>
-          <span className="visually-hidden">{t("elementPointNumber", { number: elementIndex + 1 })} </span>
-          {element.section_name_snapshot}
-        </h2>
+      {/* Kopf: Nummer, Titel (Serif) und Hinweise; mit Recht Umbenennen und Aus-/Einblenden */}
+      <ProtocolSectionTitle
+        elementId={element.id}
+        number={elementIndex + 1}
+        title={element.section_name_snapshot}
+        templateTitle={element.template_title ?? null}
+        hidden={!element.is_visible_snapshot}
+        canRename={canRenameElement && element.origin !== "session"}
+        canToggleHidden={canToggleElementHidden && element.origin !== "session"}
+        onRename={onRenameElement}
+        onToggleHidden={(elementId, hidden) => onToggleElementVisible(elementId, hidden)}
+      >
         <PdfOmittedHint entry={pdfElementCoverage} />
-      </header>
+      </ProtocolSectionTitle>
       <div className="element-block-stack">
         {element.blocks.length === 0 && element.show_when_empty && (
           isPlanningMode ? (
@@ -4169,6 +4187,23 @@ function FocusedElementEditorImpl({
                           previewSrc={`${browserApiBaseUrl}/api/stored-files/${encodeURIComponent(image.stored_file_id)}/thumbnail`}
                         />
                         <p className="muted">{image.original_name}</p>
+                        {blockEditable ? (
+                          <label className="field-stack image-caption-field">
+                            <span className="visually-hidden">{t("imageCaptionLabel")}</span>
+                            <input
+                              defaultValue={image.caption ?? ""}
+                              key={`${image.id}-${image.caption ?? ""}`}
+                              maxLength={500}
+                              placeholder={t("imageCaptionLabel")}
+                              onBlur={(event) => {
+                                const next = event.currentTarget.value.trim();
+                                if (next !== (image.caption ?? "")) void updateImageCaption(block.id, image.id, next);
+                              }}
+                            />
+                          </label>
+                        ) : image.caption ? (
+                          <p className="image-caption">{image.caption}</p>
+                        ) : null}
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
                           {t("deleteImageAction")}
                         </button>

@@ -340,6 +340,26 @@ button.protocol-save-state-error { min-height: 0; width: auto; padding: 2px var(
 /* Sortierknöpfe nur bei Hover/Fokus, damit die Liste ruhig bleibt (DESIGN.md Abschnitt 9) */
 .protocol-outline-reorder { position: absolute; top: var(--space-1); right: var(--space-1); display: none; }
 .protocol-outline-row:hover .protocol-outline-reorder, .protocol-outline-row:focus-within .protocol-outline-reorder { display: block; }
+.protocol-outline-item { position: relative; }
+.protocol-outline-people { position: absolute; top: var(--space-2); right: var(--space-2); padding: 0 var(--space-1); border-radius: var(--radius-pill); background: var(--info-bg); color: var(--info-fg); font-size: var(--text-xs); font-weight: 600; }
+.protocol-outline-add { display: grid; gap: var(--space-1); margin-top: var(--space-2); }
+.protocol-outline-add-field { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: 2px var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); }
+.protocol-outline-add-field input { min-width: 0; min-height: 30px; padding: 0; border: none; background: transparent; color: var(--text); }
+.protocol-outline-add-field:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.protocol-outline-add-field input:focus { outline: none; box-shadow: none; }
+.protocol-outline-add-hint { padding: 0 var(--space-3); color: var(--muted); font-size: var(--text-xs); }
+/* Punkt-Kopf: Menü (Umbenennen, Aus-/Einblenden), ausgeblendete Punkte gedämpft */
+.protocol-doc-section-menu { margin-left: auto; }
+.protocol-doc-section-title-input { flex: 1; min-width: 200px; font: 700 var(--text-2xl)/1.25 var(--protocol-serif); }
+.protocol-doc-section-hidden > :not(.protocol-doc-section-head) { opacity: 0.55; }
+.image-caption-field input { min-height: 32px; font-size: var(--text-sm); }
+.image-caption { margin: 0; font-size: var(--text-sm); }
+.protocol-template-changes { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.protocol-template-changes-list { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.protocol-template-change { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); }
+.protocol-transition { display: grid; gap: var(--space-3); }
+.protocol-transition-message { margin: 0; }
+.protocol-transition-others { display: grid; gap: var(--space-1); padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning-fg); font-size: var(--text-sm); }
 .protocol-outline-end-drop { position: relative; margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-xs); }
 /* Blockkarten im Dokument: ruhig ohne Rahmen, Rahmen bei Hover, der aktive Block (Editor
    eingehängt, L4) mit Fläche. Aktionen «Bearbeiten»/«Fertig» rechts im Kopf. */
@@ -462,22 +482,6 @@ button.protocol-save-state-error { min-height: 0; width: auto; padding: 2px var(
   font-size: var(--text-sm);
   font-weight: 600;
   border: 1px solid transparent;
-}
-
-.save-indicator {
-  position: fixed;
-  top: 18px;
-  right: 22px;
-  z-index: calc(var(--z-sticky) + 100);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-1) var(--space-3);
-  pointer-events: none;
-  animation: save-indicator-in var(--dur-base) ease;
 }
 
 /* Ctrl+F Kapitel-/Volltextsuche im Protokoll-Editor (protocol-search.tsx). Command-Palette-
@@ -3818,3 +3822,17 @@ button.protocol-save-state-error { min-height: 0; width: auto; padding: 2px var(
 
 /* Platzhalter, bis ein Diagramm in die Nähe des Bildes kommt (chart-block-renderer.tsx, L2) */
 .chart-block-placeholder { min-height: 280px; border-radius: var(--radius-md); background: var(--neutral-bg); }
+
+/* Gerüst beim Laden der Seite (app/protocols/[id]/loading.tsx, B4) */
+.protocol-loading { display: flex; flex-direction: column; gap: var(--space-4); min-height: calc(100dvh - 48px); padding: var(--space-4); }
+.protocol-loading-head { display: grid; gap: var(--space-2); max-width: 520px; }
+.protocol-loading-title { height: 24px; max-width: 360px; }
+.protocol-loading-meta { max-width: 240px; }
+.protocol-loading-body { display: grid; flex: 1; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-6); }
+.protocol-loading-outline { display: grid; align-content: start; gap: var(--space-3); }
+.protocol-loading-doc { display: grid; align-content: start; gap: 56px; max-width: 860px; }
+.protocol-loading-section { display: grid; gap: var(--space-3); }
+@media (max-width: 900px) {
+  .protocol-loading-body { grid-template-columns: 1fr; }
+  .protocol-loading-outline { display: none; }
+}

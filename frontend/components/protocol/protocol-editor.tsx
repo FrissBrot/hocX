@@ -18,13 +18,14 @@ import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-
 import type { QuickTodoFineAccess } from "@/components/protocol/quick-todo-fine";
 import { useCreateSubmissionFromTodo } from "@/components/todos/use-create-submission-from-todo";
 import { Modal } from "@/components/ui/modal";
-import { ProtocolOutline, type OutlineItem } from "@/components/protocol/protocol-outline";
+import { OutlineAddItem, ProtocolOutline, type OutlineItem } from "@/components/protocol/protocol-outline";
 import { DRAWER_SHORTCUTS, ProtocolDock, ProtocolDrawer, type DrawerId } from "@/components/protocol/protocol-dock";
 import { ProtocolStatusDrawer } from "@/components/protocol/protocol-status-drawer";
 import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
 import { bumpStatsCharts, startFreshStatsVersion } from "@/components/protocol/chart-block";
-import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
+import { CollaborationPresenceBar, initials } from "@/components/protocol/collaboration-presence";
 import { StatusTransitionDialog } from "@/components/protocol/status-transition-dialog";
+import { TemplateChangesReview, type TemplateChanges } from "@/components/protocol/template-changes-review";
 import { ProtocolHeader, type ProtocolSaveState } from "@/components/protocol/protocol-header";
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
@@ -190,6 +191,8 @@ export function ProtocolEditor({
   const [todosByBlock, setTodosByBlock] = useState<Record<string, ProtocolTodo[]>>(initialTodos);
   // Aktueller Stand für asynchrone Antworten: eine spät eintreffende Speicher-Antwort darf nicht
   // auf dem Stand vom Zeitpunkt des Aufrufs aufbauen (überschriebe neuere Änderungen).
+  const elementsRef = useRef(elements);
+  elementsRef.current = elements;
   const todosByBlockRef = useRef(todosByBlock);
   todosByBlockRef.current = todosByBlock;
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
@@ -561,6 +564,50 @@ export function ProtocolEditor({
     setTransitionDialogOpen(true);
   };
   const transitionNext = workflowMeta[protocolStatus]?.nextStatus ?? "";
+  // Beim «Protokoll abschliessen»: Traktanden-Änderungen gegenüber der Vorlage zur Übernahme
+  // anbieten (API template-changes). Ohne Änderungen kein Zusatz im Dialog.
+  const [templateChanges, setTemplateChanges] = useState<TemplateChanges | null>(null);
+  const [templateChangeKeys, setTemplateChangeKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!transitionDialogOpen || transitionNext !== "abgeschlossen") return;
+    let cancelled = false;
+    browserApiFetch<TemplateChanges>(`/api/protocols/${protocol.id}/template-changes`)
+      .then((data) => {
+        if (cancelled || !data) return;
+        setTemplateChanges(data);
+        setTemplateChangeKeys(new Set(data.can_apply ? data.changes.map((change) => change.key) : []));
+      })
+      .catch(() => {
+        // Ohne Liste lässt sich trotzdem abschliessen; die Vorlage bleibt dann unverändert
+        if (!cancelled) setTemplateChanges(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transitionDialogOpen, transitionNext, protocol.id]);
+
+  /** Gewählte Traktanden-Änderungen in die Vorlage übernehmen; false = Dialog offen lassen. */
+  async function applyTemplateChanges(): Promise<boolean> {
+    if (!templateChanges?.can_apply || templateChangeKeys.size === 0) return true;
+    try {
+      await browserApiFetch(`/api/protocols/${protocol.id}/template-changes/apply`, {
+        method: "POST",
+        body: JSON.stringify({ keys: [...templateChangeKeys], expected_template_version: templateChanges.template_version }),
+      });
+      showToast(t("templateChanges.applied", { count: templateChangeKeys.size }), "success");
+      return true;
+    } catch (err: unknown) {
+      const detail = err instanceof ApiError ? (err.detail as { code?: string; changes?: TemplateChanges["changes"] } | undefined) : undefined;
+      if (detail?.code === "changes_outdated" && Array.isArray(detail.changes)) {
+        setTemplateChanges({ ...templateChanges, changes: detail.changes });
+        setTemplateChangeKeys(new Set(detail.changes.map((change) => change.key)));
+        showToast(t("templateChanges.outdated"), "info");
+        return false;
+      }
+      showToast(err instanceof Error ? err.message : t("templateChanges.failed"), "error");
+      return false;
+    }
+  }
   const transitionCopy =
     transitionNext === "abgeschlossen"
       ? { title: t("finishProtocolConfirmTitle"), message: t("finishProtocolConfirmMessage") }
@@ -699,6 +746,7 @@ export function ProtocolEditor({
 
   // Abgeleitete Punkte je Quell-Objekt zwischenspeichern: ein unveränderter Punkt behält seine
   // Identität, und der memoisierte FocusedElementEditor rendert nur den geänderten neu.
+  const showHiddenElements = protocolStatus === "geplant" && !forceReadOnly;
   const derivedElementsRef = useRef(new WeakMap<ProtocolElement, ProtocolElement>());
   const derivedPlanningModeRef = useRef(isPlanningMode);
   const visibleElements = useMemo(() => {
@@ -708,7 +756,8 @@ export function ProtocolEditor({
     }
     const cache = derivedElementsRef.current;
     return [...elements]
-      .filter((element) => element.is_visible_snapshot)
+      // Ausgeblendete Traktanden nur im Vorbereitungsmodus (zum Wieder-Einblenden), sonst nie
+      .filter((element) => element.is_visible_snapshot || showHiddenElements)
       .map((element) => {
         const cached = cache.get(element);
         if (cached) return cached;
@@ -723,7 +772,7 @@ export function ProtocolEditor({
       })
       .filter((element) => element.blocks.length > 0 || element.show_when_empty)
       .sort((left, right) => left.sort_index - right.sort_index);
-  }, [elements, isPlanningMode]);
+  }, [elements, isPlanningMode, showHiddenElements]);
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
@@ -941,6 +990,26 @@ export function ProtocolEditor({
     spyRef.current?.observe(Array.from(container.querySelectorAll<HTMLElement>(".protocol-doc-section")));
   }, [visibleElementIdsKey]);
 
+  // Eigenen Ort melden (API focus): aktiver Punkt und Block, «bearbeitet» mit aktivem Block
+  useEffect(() => {
+    if (!collab.connected) return;
+    collab.sendFocus(selectedElementId, activeBlock?.blockId ?? null, activeBlock && !isReadOnly ? "editing" : "viewing");
+  }, [collab, selectedElementId, activeBlock, isReadOnly]);
+
+  // Traktanden von anderen geändert (API agenda_changed): Reihenfolge direkt, sonst neu laden
+  useEffect(
+    () =>
+      collab.onAgendaChanged((event) => {
+        if (event.action === "reordered" && event.element_ids.length) {
+          applyElementOrder(event.element_ids);
+          return;
+        }
+        void refreshElementStructure();
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [collab.onAgendaChanged]
+  );
+
   // Tastenkürzel des Editors (Definitionen und Regeln: lib/keyboard/registry.ts, Gruppe «protocol»).
   // Der zentrale Dispatcher sorgt dafür, dass sie nicht in offenen Dialogen/Menüs, nicht in
   // Listen-Widgets und (ohne Modifier) nicht beim Tippen auslösen.
@@ -997,6 +1066,9 @@ export function ProtocolEditor({
     );
   }
 
+  const activateBlockRef = useRef(activateBlock);
+  activateBlockRef.current = activateBlock;
+
   function stepBlock(direction: 1 | -1) {
     const order = navigableBlocks();
     if (!order.length) return false;
@@ -1047,62 +1119,155 @@ export function ProtocolEditor({
     if (isReadOnly) setActiveBlock(null);
   }, [isReadOnly]);
 
-  async function reorderElements(sourceId: string, targetId: string | null) {
+  // Atomares Sortieren (API PUT element-order): eine Anfrage statt einer je Punkt; hat inzwischen
+  // jemand anders sortiert oder hinzugefügt (409 order_conflict), gilt dessen Reihenfolge und die
+  // Verschiebung wird einmal darauf wiederholt.
+  function applyElementOrder(elementIds: string[], sortIndexById?: Map<string, number>) {
+    const position = new Map(elementIds.map((id, index) => [id, index]));
+    setElements((current) =>
+      current
+        .map((element) => {
+          const sortIndex = sortIndexById?.get(element.id) ?? (position.has(element.id) ? (position.get(element.id)! + 1) * 10 : element.sort_index);
+          return sortIndex === element.sort_index ? element : { ...element, sort_index: sortIndex, section_order_snapshot: sortIndex };
+        })
+        .sort((left, right) => left.sort_index - right.sort_index)
+    );
+  }
+
+  async function reorderElements(sourceId: string, targetId: string | null, placement: "before" | "after" = "before", baseOrder?: string[], retried = false): Promise<void> {
     if (sourceId === targetId) return;
-    const ordered = [...elements].sort((left, right) => left.sort_index - right.sort_index);
-    const sourceIndex = ordered.findIndex((item) => item.id === sourceId);
-    const targetIndex = targetId === null ? ordered.length - 1 : ordered.findIndex((item) => item.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) {
-      return;
-    }
-    const [moved] = ordered.splice(sourceIndex, 1);
-    ordered.splice(targetIndex, 0, moved);
-    const resequenced = resequenceProtocolElements(ordered);
-    const nextStatus: Record<string, SaveState> = {};
-    resequenced.forEach((element) => {
-      element.blocks.forEach((block) => {
-        nextStatus[block.id] = "saving";
-      });
-    });
-    setBlockStatus((current) => ({ ...current, ...nextStatus }));
+    const expected = baseOrder ?? [...elementsRef.current].sort((left, right) => left.sort_index - right.sort_index).map((element) => element.id);
+    const next = expected.filter((id) => id !== sourceId);
+    const targetIndex = targetId === null ? next.length : next.indexOf(targetId);
+    if (!expected.includes(sourceId) || targetIndex < 0) return;
+    next.splice(targetId !== null && placement === "after" ? targetIndex + 1 : targetIndex, 0, sourceId);
+    applyElementOrder(next);
     try {
-      const updated = await Promise.all(
-        resequenced.map((element) =>
-          browserApiFetch<ProtocolElement>(`/api/protocol-elements/${element.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ sort_index: element.sort_index, section_order_snapshot: element.sort_index })
-          })
+      const result = await browserApiFetch<{ element_ids: string[]; elements: { id: string; sort_index: number }[] }>(
+        `/api/protocols/${protocol.id}/element-order`,
+        { method: "PUT", body: JSON.stringify({ element_ids: next, expected_element_ids: expected }) }
+      );
+      applyElementOrder(result.element_ids, new Map(result.elements.map((element) => [element.id, element.sort_index])));
+    } catch (err: unknown) {
+      const detail = err instanceof ApiError ? (err.detail as { code?: string; element_ids?: string[] } | undefined) : undefined;
+      if (detail?.code === "order_conflict" && Array.isArray(detail.element_ids)) {
+        applyElementOrder(detail.element_ids);
+        if (!retried && detail.element_ids.includes(sourceId)) {
+          await reorderElements(sourceId, targetId && detail.element_ids.includes(targetId) ? targetId : null, placement, detail.element_ids, true);
+          return;
+        }
+        showToast(t("orderConflict"), "info");
+        return;
+      }
+      applyElementOrder(expected);
+      showToast(err instanceof Error ? err.message : t("orderSaveFailed"), "error");
+    }
+  }
+
+  // Traktandum hinzufügen (API POST /protocols/{id}/elements): nur in diesem Protokoll, nie in der
+  // Vorlage. Danach springt der Editor hin und öffnet den leeren Textblock.
+  async function addElement(title: string): Promise<boolean> {
+    const trimmed = title.trim();
+    if (!trimmed || isReadOnly) return false;
+    try {
+      const created = await browserApiFetch<ProtocolElement>(`/api/protocols/${protocol.id}/elements`, {
+        method: "POST",
+        body: JSON.stringify({ title: trimmed, after_element_id: null }),
+      });
+      for (const block of created.blocks) {
+        if (block.element_type_code === "text") textDraftStore.set(block.id, block.text_content ?? "");
+      }
+      setElements((current) => [...current.filter((element) => element.id !== created.id), created]);
+      await refreshElementStructure();
+      focusElement(created.id);
+      const textBlock = created.blocks.find((block) => block.element_type_code === "text");
+      if (textBlock) window.setTimeout(() => activateBlockRef.current(textBlock.id), 120);
+      return true;
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : t("elementAddFailed"), "error");
+      return false;
+    }
+  }
+
+  async function renameElement(elementId: string, title: string): Promise<boolean> {
+    try {
+      const updated = await browserApiFetch<ProtocolElement>(`/api/protocol-elements/${elementId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ section_name_snapshot: title }),
+      });
+      setElements((current) =>
+        current.map((element) =>
+          element.id === elementId ? { ...element, section_name_snapshot: updated.section_name_snapshot, template_title: updated.template_title ?? null } : element
         )
       );
-      const updatedById = new Map(updated.map((element) => [element.id, element]));
-      setElements((current) =>
-        current
-          .map((element) => {
-            const patch = updatedById.get(element.id);
-            return patch ? { ...element, sort_index: patch.sort_index, section_order_snapshot: patch.section_order_snapshot } : element;
-          })
-          .sort((left, right) => left.sort_index - right.sort_index)
-      );
-      setBlockStatus((current) => {
-        const next = { ...current };
-        resequenced.forEach((element) => {
-          element.blocks.forEach((block) => {
-            next[block.id] = "saved";
-          });
-        });
-        return next;
+      return true;
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : t("elementRenameFailed"), "error");
+      return false;
+    }
+  }
+
+  async function setElementVisible(elementId: string, visible: boolean) {
+    setElements((current) => current.map((element) => (element.id === elementId ? { ...element, is_visible_snapshot: visible } : element)));
+    try {
+      await browserApiFetch<ProtocolElement>(`/api/protocol-elements/${elementId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_visible_snapshot: visible }),
       });
     } catch (err: unknown) {
-      setBlockStatus((current) => {
-        const next = { ...current };
-        resequenced.forEach((element) => {
-          element.blocks.forEach((block) => {
-            next[block.id] = "error";
+      setElements((current) => current.map((element) => (element.id === elementId ? { ...element, is_visible_snapshot: !visible } : element)));
+      showToast(err instanceof Error ? err.message : t("elementVisibilityFailed"), "error");
+    }
+  }
+
+  // Nach Traktanden-Änderungen (eigene oder per WS «agenda_changed»): Reihenfolge, Titel und
+  // Sichtbarkeit vom Server übernehmen, neue Punkte ergänzen - Blöcke bestehender Punkte bleiben.
+  async function refreshElementStructure() {
+    try {
+      const fresh = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      const freshById = new Map(fresh.map((element) => [element.id, element]));
+      for (const element of fresh) {
+        if (elementsRef.current.some((existing) => existing.id === element.id)) continue;
+        for (const block of element.blocks) {
+          if (block.element_type_code === "text" || block.element_type_code === "static_text") textDraftStore.set(block.id, block.text_content ?? "");
+        }
+      }
+      setElements((current) => {
+        const known = new Set(current.map((element) => element.id));
+        const merged = current
+          .filter((element) => freshById.has(element.id))
+          .map((element) => {
+            const update = freshById.get(element.id)!;
+            return {
+              ...element,
+              sort_index: update.sort_index,
+              section_order_snapshot: update.section_order_snapshot,
+              section_name_snapshot: update.section_name_snapshot,
+              is_visible_snapshot: update.is_visible_snapshot,
+              template_title: update.template_title ?? null,
+              origin: update.origin,
+            };
           });
-        });
-        return next;
+        return [...merged, ...fresh.filter((element) => !known.has(element.id))].sort((left, right) => left.sort_index - right.sort_index);
       });
-      showToast(err instanceof Error ? err.message : t("orderSaveFailed"), "error");
+    } catch {
+      // best effort - eine spätere Änderung oder ein Neuladen bringt den Stand
+    }
+  }
+
+  // Bildunterschrift nachträglich (API PATCH protocol-images; die anderen bekommen die Liste vom Server)
+  async function updateImageCaption(blockId: string, imageId: string, caption: string) {
+    try {
+      const updated = await browserApiFetch<ProtocolImage>(`/api/protocol-images/${imageId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ caption: caption || null }),
+      });
+      setImagesByBlock((current) => ({
+        ...current,
+        [blockId]: (current[blockId] ?? []).map((image) => (image.id === imageId ? { ...image, ...updated } : image)),
+      }));
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : t("imageCaptionFailed"), "error");
     }
   }
 
@@ -2054,6 +2219,15 @@ export function ProtocolEditor({
 
   // Gliederung (S5): eigene memoisierte Komponente mit stabilen Einträgen. Der Schlüssel hängt
   // nur an Titeln, Reihenfolge und Zählern (Pendenzen, Anwesenheit) - nie am getippten Text.
+  // Wo die anderen gerade sind (API presence_focus): Initialen je Punkt für die Gliederung
+  const presenceInitialsByElement = useMemo(() => {
+    const byElement: Record<string, string[]> = {};
+    for (const focus of Object.values(collab.otherFocus)) {
+      if (!focus.element_id) continue;
+      (byElement[focus.element_id] ??= []).push(initials(focus.display_name));
+    }
+    return Object.fromEntries(Object.entries(byElement).map(([id, list]) => [id, list.join(" ")]));
+  }, [collab.otherFocus]);
   const attendanceTotal = useMemo(
     () => attendanceParticipants(availableParticipants, protocol.protocol_date ?? undefined).length,
     [availableParticipants, protocol.protocol_date]
@@ -2069,16 +2243,24 @@ export function ProtocolEditor({
         t: (key, values) => (key.startsWith("outline") ? t(key as "outlineSummaryTodos", values) : tRoot(key as "blockTypeText", values)),
       }),
       element.is_visible_snapshot ? "" : "1",
+      presenceInitialsByElement[element.id] ?? "",
     ].join("\u0001"))
     .join("\u0002");
   const outlineItems = useMemo<OutlineItem[]>(
     () => (outlineKey ? outlineKey.split("\u0002").map((entry) => {
-      const [id, title, summary, hidden] = entry.split("\u0001");
-      return { id, title, summary, hidden: hidden === "1" };
+      const [id, title, summary, hidden, people] = entry.split("\u0001");
+      return { id, title, summary, hidden: hidden === "1", people: people || undefined };
     }) : []),
     [outlineKey]
   );
+  const outlineFooter = useMemo(
+    () => (isReadOnly ? null : <OutlineAddItem onAdd={(title) => outlineHandlers.addElement(title)} />),
+    // outlineHandlers ist stabil (useStableCallbacks)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isReadOnly]
+  );
   const outlineHandlers = useStableCallbacks({
+    addElement,
     // Schmales Fenster: nach der Wahl eines Punkts die überlagerte Gliederung schliessen
     selectElement: (elementId: string) => {
       setOutlineOpen(false);
@@ -2089,6 +2271,9 @@ export function ProtocolEditor({
 
   const elementHandlers = useStableCallbacks({
     activateBlock,
+    renameElement,
+    setElementVisible,
+    updateImageCaption,
     saveBlockConfiguration,
     saveAttendanceStatus,
     updateBlockInState,
@@ -2247,10 +2432,28 @@ export function ProtocolEditor({
         busy={transitioningStatus}
         onCancel={() => setTransitionDialogOpen(false)}
         onConfirm={() => {
-          setTransitionDialogOpen(false);
-          void performStatusTransition();
+          void (async () => {
+            if (transitionNext === "abgeschlossen" && !(await applyTemplateChanges())) return;
+            setTransitionDialogOpen(false);
+            void performStatusTransition();
+          })();
         }}
-      />
+      >
+        {transitionNext === "abgeschlossen" && templateChanges && templateChanges.changes.length > 0 ? (
+          <TemplateChangesReview
+            data={templateChanges}
+            selected={templateChangeKeys}
+            onToggle={(key) =>
+              setTemplateChangeKeys((current) => {
+                const next = new Set(current);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                return next;
+              })
+            }
+          />
+        ) : null}
+      </StatusTransitionDialog>
 
       <div className={`protocol-workspace${outlineOpen ? " protocol-workspace-outline-open" : ""}`}>
         <div
@@ -2269,6 +2472,7 @@ export function ProtocolEditor({
             canReorder={!isReadOnly}
             onSelect={outlineHandlers.selectElement}
             onReorder={outlineHandlers.reorderElements}
+            footer={outlineFooter}
           />
         </div>
 
@@ -2304,6 +2508,11 @@ export function ProtocolEditor({
                   textDraftStore={textDraftStore}
                   activeBlockId={activeBlock?.elementId === element.id ? activeBlock.blockId : null}
                   onActivateBlock={elementHandlers.activateBlock}
+                  canRenameElement={!isReadOnly}
+                  canToggleElementHidden={showHiddenElements}
+                  onRenameElement={elementHandlers.renameElement}
+                  onToggleElementVisible={elementHandlers.setElementVisible}
+                  updateImageCaption={elementHandlers.updateImageCaption}
                   todosByBlock={todosByBlock}
                   sessionTodos={sessionTodosByElement[element.id] ?? EMPTY_TODOS}
                   imagesByBlock={imagesByBlock}
@@ -2411,7 +2620,11 @@ export function ProtocolEditor({
             ) : null}
             {drawer === "status" ? (
               <ProtocolStatusDrawer
-                others={collab.otherPresence}
+                others={collab.otherPresence.map((user) => {
+                  const focus = collab.otherFocus[user.user_id];
+                  const element = focus?.element_id ? visibleElements.find((item) => item.id === focus.element_id) : null;
+                  return { ...user, where: element ? t(focus?.mode === "editing" ? "presenceEditing" : "presenceViewing", { title: element.section_name_snapshot }) : null };
+                })}
                 selfWhere={selectedElement ? selectedElement.section_name_snapshot : null}
                 connected={collab.connected}
                 attendance={attendanceTally}

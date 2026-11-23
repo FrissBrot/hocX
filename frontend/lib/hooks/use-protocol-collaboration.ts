@@ -25,6 +25,25 @@ export type ListChangedEvent = {
   content_version: number;
 };
 
+/** Traktanden im Protokoll geändert (API «agenda_changed», Editor 1a) */
+export type AgendaChangedEvent = {
+  action: "added" | "renamed" | "visibility" | "reordered";
+  element_id: string | null;
+  element_ids: string[];
+  user_id: string;
+  display_name: string;
+};
+
+/** Wo eine Person im Protokoll gerade ist (API «presence_focus», je Verbindung). */
+export type PresenceFocus = {
+  user_id: string;
+  display_name: string;
+  connection_id: string;
+  element_id: string | null;
+  block_id: string | null;
+  mode: "viewing" | "editing" | null;
+};
+
 export type FieldLocks = Readonly<Record<string, CollaboratorInfo>>;
 
 const EMPTY_LOCKS: FieldLocks = Object.freeze({});
@@ -91,6 +110,9 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
   const [canEdit, setCanEdit] = useState(true);
   const [selfUserId, setSelfUserId] = useState<string | null>(null);
   const [presence, setPresence] = useState<CollaboratorInfo[]>([]);
+  // Ort je Verbindung (presence_focus); eigene Verbindungen bleiben drin, gefiltert wird beim Lesen
+  const [focusByConnection, setFocusByConnection] = useState<Record<string, PresenceFocus>>({});
+  const lastFocusRef = useRef<string | null>(null);
   const lockStoreRef = useRef<ReturnType<typeof createLockStore> | null>(null);
   if (lockStoreRef.current === null) lockStoreRef.current = createLockStore();
   const lockStore = lockStoreRef.current;
@@ -107,6 +129,7 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
   const fieldUpdateListenersRef = useRef<Set<(event: FieldUpdateEvent) => void>>(new Set());
   const statusChangedListenersRef = useRef<Set<(event: StatusChangedEvent) => void>>(new Set());
   const listChangedListenersRef = useRef<Set<(event: ListChangedEvent) => void>>(new Set());
+  const agendaChangedListenersRef = useRef<Set<(event: AgendaChangedEvent) => void>>(new Set());
 
   const send = useCallback((message: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -169,6 +192,10 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
             setCanEdit(message.self?.can_edit !== false);
             const presenceList = Array.isArray(message.presence) ? (message.presence as CollaboratorInfo[]) : [];
             setPresence(presenceList);
+            const focusList = Array.isArray(message.focus) ? (message.focus as PresenceFocus[]) : [];
+            setFocusByConnection(Object.fromEntries(focusList.filter((entry) => entry.connection_id).map((entry) => [entry.connection_id, entry])));
+            // Nach (Wieder-)Verbindung den eigenen Ort erneut melden
+            lastFocusRef.current = null;
             const serverLocks = (message.locks as Record<string, CollaboratorInfo>) ?? {};
             // Nur fremde Sperren im Store: eigene ändern nichts an der Anzeige, würden aber bei
             // jedem Fokuswechsel neu rendern lassen (eigene stehen in ownLocksRef).
@@ -237,6 +264,25 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
             statusChangedListenersRef.current.forEach((listener) => listener(message as StatusChangedEvent));
             break;
           }
+          case "presence_focus": {
+            const entry = message as PresenceFocus;
+            if (!entry.connection_id) break;
+            setFocusByConnection((current) => {
+              if (!entry.element_id && !entry.block_id) {
+                if (!(entry.connection_id in current)) return current;
+                const next = { ...current };
+                delete next[entry.connection_id];
+                return next;
+              }
+              return { ...current, [entry.connection_id]: entry };
+            });
+            break;
+          }
+          case "agenda_changed": {
+            if (message.user_id === selfUserIdRef.current) break;
+            agendaChangedListenersRef.current.forEach((listener) => listener(message as AgendaChangedEvent));
+            break;
+          }
           case "list_changed": {
             // No user_id/self-filtering here - every open protocol referencing this list
             // (including whichever protocol/tab caused the change) reacts identically.
@@ -269,6 +315,7 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       ownLocksRef.current.clear();
       setConnected(false);
       setPresence([]);
+      setFocusByConnection({});
       setLocks(() => EMPTY_LOCKS);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     };
@@ -316,6 +363,23 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     };
   }, []);
 
+  /** Eigenen Ort melden (nur bei Wechsel; der Server drosselt zusätzlich). */
+  const sendFocus = useCallback((elementId: string | null, blockId: string | null, mode: "viewing" | "editing") => {
+    const key = `${elementId}|${blockId}|${mode}`;
+    if (lastFocusRef.current === key) return;
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    lastFocusRef.current = key;
+    send({ type: "focus", element_id: elementId, block_id: blockId, mode });
+  }, [send]);
+
+  const onAgendaChanged = useCallback((listener: (event: AgendaChangedEvent) => void) => {
+    agendaChangedListenersRef.current.add(listener);
+    return () => {
+      agendaChangedListenersRef.current.delete(listener);
+    };
+  }, []);
+
   const onListChanged = useCallback((listener: (event: ListChangedEvent) => void) => {
     listChangedListenersRef.current.add(listener);
     return () => {
@@ -342,6 +406,15 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     () => presence.filter((entry) => entry.user_id !== selfUserId),
     [presence, selfUserId]
   );
+  // Ort der anderen Personen: je Person der zuletzt gemeldete Ort (mehrere Tabs: einer davon)
+  const otherFocus = useMemo(() => {
+    const byUser: Record<string, PresenceFocus> = {};
+    for (const entry of Object.values(focusByConnection)) {
+      if (entry.user_id === selfUserId) continue;
+      byUser[entry.user_id] = entry;
+    }
+    return byUser;
+  }, [focusByConnection, selfUserId]);
 
   const fieldLocks = useMemo<CollabFieldLocks>(
     () => ({ lockField, unlockField, isLockedByOther, subscribeLocks: lockStore.subscribe, getLocks: lockStore.get }),
@@ -357,15 +430,18 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       selfUserId,
       presence,
       otherPresence,
+      otherFocus,
       hasOtherActiveEditors,
       fieldLocks,
       lockField,
       unlockField,
       sendFieldUpdate,
       sendStatusChanged,
+      sendFocus,
       onFieldUpdate,
       onStatusChanged,
       onListChanged,
+      onAgendaChanged,
       isLockedByOther,
       subscribeLocks: lockStore.subscribe,
       getLocks: lockStore.get,
@@ -376,15 +452,18 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
       selfUserId,
       presence,
       otherPresence,
+      otherFocus,
       hasOtherActiveEditors,
       fieldLocks,
       lockField,
       unlockField,
       sendFieldUpdate,
       sendStatusChanged,
+      sendFocus,
       onFieldUpdate,
       onStatusChanged,
       onListChanged,
+      onAgendaChanged,
       isLockedByOther,
       lockStore,
     ]
