@@ -234,7 +234,10 @@ def ensure_can_manage_account(db: Session, actor: CurrentUser | None, user_id: i
 
 def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | None = None) -> int:
     """Aktive Konten mit Login, die access.manage haben (über die Standardrolle admin oder eine
-    eigene Rolle mit access.manage)."""
+    eigene Rolle mit access.manage). Ausgetretene (AppUser.has_left) können sich nicht anmelden
+    und zählen deshalb nicht."""
+    from app.services.todo_fine_service import today
+
     grants_access = or_(
         TenantRole.system_key == ADMIN_ROLE_KEY,
         exists(
@@ -249,7 +252,10 @@ def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | N
         .select_from(AppUser)
         .join(UserRole, UserRole.user_id == AppUser.id)
         .join(TenantRole, TenantRole.id == UserRole.role_id)
-        .where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True), grants_access)
+        .where(
+            AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True), grants_access,
+            or_(AppUser.left_at.is_(None), AppUser.left_at >= today()),
+        )
     )
     if excluding:
         statement = statement.where(AppUser.id.not_in(excluding))
@@ -266,7 +272,8 @@ def ensure_admin_remains(db: Session, tenant_id: int, actor: CurrentUser | None,
         raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
     if affects_actor and actor is not None and P.ACCESS_MANAGE.value in actor.permissions:
         own, _ = load_role_permissions(db, actor.user_id)
-        still_active = db.scalar(select(AppUser.is_active).where(AppUser.id == actor.user_id))
+        account = db.get(AppUser, actor.user_id)
+        still_active = account is not None and account.is_active and not account.has_left
         if P.ACCESS_MANAGE.value not in own or not still_active:
             raise RoleConflict("Die eigene Benutzerverwaltung kann man sich nicht selbst entziehen", "own_access_management")
 
