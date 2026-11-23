@@ -2772,29 +2772,6 @@ button.table-row-link.table-row-toggle {
   max-width: 72ch;
 }
 
-.config-toggle-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-3);
-}
-
-.config-toggle-grid .checkbox-row {
-  min-height: 58px;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-4);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 88%, transparent 12%);
-  color: var(--text);
-}
-
-.config-toggle-grid .checkbox-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 7%, transparent 93%);
-}
-
 .table-content-cell {
   max-width: 340px;
   color: var(--muted);
@@ -4511,25 +4488,6 @@ button.table-row-link.table-row-toggle {
   color: var(--muted);
   background: color-mix(in srgb, var(--accent) 6%, var(--panel-solid) 94%);
   border-top: 1px solid var(--border);
-}
-
-.event-compact-create {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: end;
-}
-
-.event-compact-create input,
-.event-compact-create textarea {
-  width: auto;
-  min-height: 38px;
-  flex: 0 0 auto;
-}
-.event-compact-create .button-icon {
-  width: auto;
-  min-height: 38px;
-  flex: 0 0 auto;
 }
 
 /* ── Rich text editor (Tiptap) ── */
@@ -14162,19 +14120,8 @@ a.export-step-meta {
   min-width: 220px;
 }
 
-/* Passwort aus einem Datenleck bekannt (1.5.2): Pflichthinweis, nicht ausblendbar */
-.password-breached-banner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-lg);
-  background: var(--danger-bg);
-  color: var(--danger-fg);
-}
+/* Passwort aus einem Datenleck bekannt (1.5.2): Aufbau wie .mfa-grace-banner, nur in Rot */
+.password-breached-banner { border-color: var(--danger); background: var(--danger-bg); color: var(--danger-fg); }
 
 .install-app-prompt {
   display: flex;

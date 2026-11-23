@@ -12,7 +12,7 @@ export function PasswordBreachedBanner({ breached, onChange }: { breached: boole
   const t = useTranslations("security");
   if (!breached) return null;
   return (
-    <div className="password-breached-banner" role="alert">
+    <div className="mfa-grace-banner password-breached-banner" role="alert">
       <div className="mfa-grace-text">
         <strong>{t("breached.title")}</strong>
         <span>{onChange ? t("breached.message") : t("breached.adminMessage")}</span>
