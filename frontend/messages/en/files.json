@@ -140,7 +140,8 @@
     "descriptionLinked": "All non-image files – from protocols, Word imports, submissions and direct uploads. Images are under <photos>Photos</photos>.",
     "viewToggle": "View",
     "viewList": "List",
-    "viewGrid": "Tiles with preview"
+    "viewGrid": "Tiles with preview",
+    "importButton": "Import"
   },
   "sourceOptions": {
     "all": "All sources",

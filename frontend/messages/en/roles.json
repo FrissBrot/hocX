@@ -137,6 +137,10 @@
       "read": {
         "label": "View storage",
         "description": "View and download files in the shared storage."
+      },
+      "import": {
+        "label": "Import files",
+        "description": "Bring over entire file collections: upload ZIP archives (including Google Takeout) or folders, with rules for tags, capture date and albums."
       }
     },
     "submissions": {

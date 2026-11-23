@@ -140,7 +140,8 @@
     "descriptionLinked": "Tutti i file non immagine – da verbali, importazioni Word, consegne e caricamenti diretti. Le immagini si trovano in <photos>Foto</photos>.",
     "viewToggle": "Vista",
     "viewList": "Elenco",
-    "viewGrid": "Riquadri con anteprima"
+    "viewGrid": "Riquadri con anteprima",
+    "importButton": "Importa"
   },
   "sourceOptions": {
     "all": "Tutte le origini",

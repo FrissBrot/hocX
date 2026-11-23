@@ -629,6 +629,10 @@
       "geoip_update": {
         "title": "Update country geolocation",
         "description": "Downloads DB-IP’s “IP to Country Lite” database (CC BY 4.0) monthly for the “new country” login signal, validates it and replaces the old one. Daily tick, download only when a new monthly edition exists."
+      },
+      "cloud_import": {
+        "title": "File import",
+        "description": "Processes started file imports (ZIP, Google Takeout, folders) through the upload pipeline and cleans up expired imports and reports."
       }
     }
   },

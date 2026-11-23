@@ -255,6 +255,14 @@ async def gallery_upload_ingest_loop() -> None:
     )
 
 
+async def cloud_import_loop() -> None:
+    """Datei-Import (ZIP/Takeout, Ordner-Upload): Regel-Ergebnisse durch die Upload-Pipeline,
+    siehe services/cloud_import/worker.py."""
+    from app.services.cloud_import import worker as cloud_import_worker
+
+    await run_advisory_locked_loop(name="cloud_import", interval_seconds=5, task=cloud_import_worker.process_pending)
+
+
 async def tenant_data_export_loop() -> None:
     """Baut bestellte Vereinsexporte und löscht abgelaufene (services/data_export/tenant.py)."""
     from app.services.data_export import tenant as tenant_data_export_service
@@ -426,6 +434,7 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     photo_album_sync_loop,
     photo_similarity_refresh_loop,
     gallery_upload_ingest_loop,
+    cloud_import_loop,
     tenant_data_export_loop,
     notification_dispatch_loop,
     todo_reminders_loop,

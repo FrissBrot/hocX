@@ -8,6 +8,32 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- **Dateien importieren (Datei-Import P0, 1.6):** Unter *Dateien › Importieren* übernimmt ein Verein
+  eine bestehende Ablage in einem Durchgang - als ZIP-Archiv (auch mehrere Teilarchive von
+  Google Takeout, der Ordner «Takeout» wird erkannt) oder als Ordner-Upload aus dem Browser (nur die
+  benötigten Dateien werden übertragen). Regeln nach Ordner, Pfad-Muster und Dateiname (regulärer
+  Ausdruck, ReDoS-sicher über RE2) setzen Tags, ein geschätztes Aufnahmedatum (nur wenn es fehlt),
+  schliessen Dateien aus oder ordnen Bilder in Alben ein (bestehendes Album oder ein Album je
+  Ordner; abschaltbar und standardmässig aus, gleichnamige Alben werden ergänzt). Bei Google Takeout
+  übernimmt der Import das Aufnahmedatum aus den Metadaten-Dateien, wenn das Foto selbst keines hat.
+  Bereits vorhandene Dateien bekommen Tags und Alben dazu («Duplikat, ergänzt»). Vorschau mit Treffern je Regel, Konflikten und Kontingent-Prüfung vor dem Start; der
+  Import läuft im Hintergrund (job-worker, Job `cloud_import`) mit Fortschritt, Abbruch und
+  Fortsetzen, danach ein Bericht je Datei. Jede Datei durchläuft die normale Upload-Pipeline
+  (Virenprüfung, Inhaltstyp, Grössen, Duplikate, Kontingent). Grenzen: 50 000 Dateien und 100 GB je
+  Import, ein Import je Verein gleichzeitig.
+- Neue Berechtigung **Dateien importieren** (`files.import`), standardmässig nur für Administratoren.
+
+### Update
+
+- Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung
+  `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision hängt vorläufig an `0218_album_item_auto_source` und wird bei der
+  Integration hinter die 1.5.x-Migrationen gehängt.
+- Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
+  `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
+- Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,

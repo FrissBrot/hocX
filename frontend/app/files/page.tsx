@@ -31,6 +31,7 @@ export default async function FilesPage() {
               canDelete={can(session, "files.manage")}
               canOpenTrash={can(session, "files.manage") || can(session, "photos.manage")}
               canShare={canShare}
+              canImport={can(session, "files.import")}
             />
           </section>
           </>

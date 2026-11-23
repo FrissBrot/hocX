@@ -140,7 +140,8 @@
     "descriptionLinked": "Tous les fichiers hors images – issus des procès-verbaux, des imports Word, des remises et des téléversements directs. Les images se trouvent sous <photos>Photos</photos>.",
     "viewToggle": "Affichage",
     "viewList": "Liste",
-    "viewGrid": "Vignettes avec aperçu"
+    "viewGrid": "Vignettes avec aperçu",
+    "importButton": "Importer"
   },
   "sourceOptions": {
     "all": "Toutes les sources",

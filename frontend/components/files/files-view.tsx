@@ -77,9 +77,17 @@ type Props = {
   canOpenTrash?: boolean;
   /** sharing.public + Abo «Fotos teilen»: öffentlichen Link erstellen (sonst 403 im Backend). */
   canShare?: boolean;
+  /** «Dateien importieren» (files.import): Link zum Import-Wizard. */
+  canImport?: boolean;
 };
 
-export function FilesView({ initialItems, canDelete = false, canOpenTrash = false, canShare = false }: Props) {
+export function FilesView({
+  initialItems,
+  canDelete = false,
+  canOpenTrash = false,
+  canShare = false,
+  canImport = false,
+}: Props) {
   const t = useTranslations("files");
   const router = useRouter();
   const showToast = useToast();
@@ -311,8 +319,13 @@ export function FilesView({ initialItems, canDelete = false, canOpenTrash = fals
               : t.rich("view.descriptionLinked", { photos: (chunks) => <Link href="/photos">{chunks}</Link> })}
           </p>
         </div>
-        {hasNoFiles && !canOpenTrash ? null : (
+        {hasNoFiles && !canOpenTrash && !canImport ? null : (
           <div className="table-toolbar-actions">
+            {canImport ? (
+              <Link href="/files/import" className="button-secondary">
+                {t("view.importButton")}
+              </Link>
+            ) : null}
             {canOpenTrash ? (
               <button type="button" className="button-secondary" onClick={() => setTrashOpen(true)}>
                 {t("trash.open")}

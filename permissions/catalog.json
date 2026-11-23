@@ -153,6 +153,13 @@
       ]
     },
     {
+      "key": "files.import",
+      "area": "files",
+      "feature": null,
+      "requires_mfa": false,
+      "implies": []
+    },
+    {
       "key": "photos.read",
       "area": "files",
       "feature": null,

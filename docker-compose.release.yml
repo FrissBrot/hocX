@@ -252,6 +252,9 @@ services:
       # Gleichzeitige Galerie-Uploads je Worker (Concurrency-Audit, RUNBOOK Abschnitt 17).
       GALLERY_UPLOAD_CONCURRENCY: ${GALLERY_UPLOAD_CONCURRENCY:-2}
       GALLERY_UPLOAD_SLOT_WAIT_SECONDS: ${GALLERY_UPLOAD_SLOT_WAIT_SECONDS:-60}
+      # Datei-Import: Obergrenzen je Auftrag (Standard 50 000 Dateien / 100 GiB, RUNBOOK Abschnitt 17).
+      CLOUD_IMPORT_MAX_JOB_FILES: ${CLOUD_IMPORT_MAX_JOB_FILES:-50000}
+      CLOUD_IMPORT_MAX_JOB_BYTES: ${CLOUD_IMPORT_MAX_JOB_BYTES:-107374182400}
       # Pool und Request-Annahme je Backend-Worker, Überlast-Schutz nach Abo (RUNBOOK Abschnitt 17).
       # Die Annahme ergibt sich aus Pool + Overflow minus DB_ADMISSION_RESERVE.
       DB_POOL_SIZE: ${DB_POOL_SIZE:-12}
@@ -958,6 +961,8 @@ services:
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       STORAGE_WORK_ROOT: /app/storage-local/work
+      CLOUD_IMPORT_MAX_JOB_FILES: ${CLOUD_IMPORT_MAX_JOB_FILES:-50000}
+      CLOUD_IMPORT_MAX_JOB_BYTES: ${CLOUD_IMPORT_MAX_JOB_BYTES:-107374182400}
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}

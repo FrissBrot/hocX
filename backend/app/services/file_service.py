@@ -2073,6 +2073,7 @@ class FileService:
         allow_duplicates: bool = False,
         viewer=None,
         include_gps: bool = True,
+        before_commit: Callable[[], None] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -2088,7 +2089,12 @@ class FileService:
         With an Abgabe-Element Bezug the Abgabe's own file rules apply. The route has already
         rejected a batch violating them (see upload_documents); the Dateianzahl is checked
         once more here, under the tenant upload lock, because two near-simultaneous uploads
-        into the same element could otherwise both pass the route's check."""
+        into the same element could otherwise both pass the route's check.
+
+        before_commit (Datei-Import, services/cloud_import/worker.py): wird aufgerufen, wenn
+        file_results vollständig ist, noch in derselben Transaktion wie die neuen Dateien - so
+        halten Import-Einträge und gespeicherte Dateien immer denselben Stand. Ohne neue Dateien
+        (nur Duplikate) committet diese Methode nicht; der Aufrufer committet dann selbst."""
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         results: list[dict] = file_results if file_results is not None else []
@@ -2131,6 +2137,8 @@ class FileService:
                 match = existing.get(checksum)
                 results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
         if not files:
+            if before_commit:
+                before_commit()
             return [], duplicate_errors
         if upload_assignment is not None and upload_element_ref is not None:
             self._recheck_element_capacity(db, tenant_id, upload_assignment, upload_element_ref, len(files))
@@ -2189,6 +2197,8 @@ class FileService:
             document_service.register_upload(db, stored_file)
             saved_public_ids.append(stored_file.public_id)
 
+        if before_commit:
+            before_commit()
         db.commit()
         if not saved_public_ids:
             return [], errors

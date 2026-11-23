@@ -1,7 +1,7 @@
 // GENERATED FILE - do not edit by hand. Source of truth: permissions/catalog.json (repo root).
 // Regenerate with: python3 scripts/sync-permission-catalog.py
 
-export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings.edit" | "meetings.approve" | "todos.complete_own" | "templates.edit" | "templates.manage" | "participants.read" | "participants.contacts" | "participants.manage" | "participants.export" | "finances.read" | "finances.manage" | "fines.manage" | "reports.personal" | "files.read" | "files.manage" | "photos.read" | "photos.manage" | "sharing.public" | "submissions.read" | "submissions.review" | "submissions.manage" | "settings.manage" | "activity.read" | "security.read" | "access.manage" | "data.export";
+export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings.edit" | "meetings.approve" | "todos.complete_own" | "templates.edit" | "templates.manage" | "participants.read" | "participants.contacts" | "participants.manage" | "participants.export" | "finances.read" | "finances.manage" | "fines.manage" | "reports.personal" | "files.read" | "files.manage" | "files.import" | "photos.read" | "photos.manage" | "sharing.public" | "submissions.read" | "submissions.review" | "submissions.manage" | "settings.manage" | "activity.read" | "security.read" | "access.manage" | "data.export";
 export type PermissionArea = "meetings" | "templates" | "participants" | "finances" | "reports" | "files" | "submissions" | "administration";
 export type PermissionFeature = "finance" | "abgabebox" | "custom_domain" | "verify_domain" | "task_packages" | "custom_roles" | "photo_sharing" | "document_designer" | "todo_fines";
 export type SystemRoleKey = "admin" | "writer" | "kassier" | "reader";
@@ -37,6 +37,7 @@ export const PERMISSIONS: readonly PermissionInfo[] = [
   { key: "reports.personal", area: "reports", feature: null, requiresMfa: false, implies: [], scopes: [] },
   { key: "files.read", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
   { key: "files.manage", area: "files", feature: null, requiresMfa: false, implies: ["files.read"], scopes: [] },
+  { key: "files.import", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
   { key: "photos.read", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
   { key: "photos.manage", area: "files", feature: null, requiresMfa: false, implies: ["photos.read"], scopes: [] },
   { key: "sharing.public", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },

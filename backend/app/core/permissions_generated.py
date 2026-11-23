@@ -24,6 +24,7 @@ class P(StrEnum):
     REPORTS_PERSONAL = "reports.personal"
     FILES_READ = "files.read"
     FILES_MANAGE = "files.manage"
+    FILES_IMPORT = "files.import"
     PHOTOS_READ = "photos.read"
     PHOTOS_MANAGE = "photos.manage"
     SHARING_PUBLIC = "sharing.public"
@@ -67,6 +68,7 @@ CATALOG: dict[P, PermissionDef] = {
     P.REPORTS_PERSONAL: PermissionDef(area="reports", feature=None, requires_mfa=False, implies=()),
     P.FILES_READ: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),
     P.FILES_MANAGE: PermissionDef(area="files", feature=None, requires_mfa=False, implies=(P.FILES_READ,)),
+    P.FILES_IMPORT: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),
     P.PHOTOS_READ: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),
     P.PHOTOS_MANAGE: PermissionDef(area="files", feature=None, requires_mfa=False, implies=(P.PHOTOS_READ,)),
     P.SHARING_PUBLIC: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),

@@ -72,6 +72,8 @@ export const AREA_NAMESPACES = {
   elements: ["documentStudio", "files", "photos", "protocols", "sharedLinks", "submissionAssignments", "templates"],
   events: ["connections", "documentStudio", "events"],
   files: ["files", "sharedLinks"],
+  // Datei-Import (app/files/import): Wizard, Regeln, Bericht.
+  fileImport: ["fileImport", "files", "sharedLinks"],
   finances: ["documentStudio", "finances"],
   lists: ["documentStudio", "lists", "protocols"],
   participants: ["files", "participants", "roles", "sharedLinks", "users"],

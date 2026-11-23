@@ -112,6 +112,84 @@
         "reader"
       ]
     },
+    "GET /api/cloud-import/jobs": {
+      "handler": "cloud_import.list_import_jobs",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs": {
+      "handler": "cloud_import.create_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/cloud-import/jobs/{job_id}": {
+      "handler": "cloud_import.get_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/cancel": {
+      "handler": "cloud_import.cancel_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/finish-listing": {
+      "handler": "cloud_import.finish_import_listing",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/cloud-import/jobs/{job_id}/items": {
+      "handler": "cloud_import.list_import_items",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/manifest": {
+      "handler": "cloud_import.add_import_manifest",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/cloud-import/jobs/{job_id}/pending-uploads": {
+      "handler": "cloud_import.list_pending_uploads",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/preview": {
+      "handler": "cloud_import.preview_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/resume": {
+      "handler": "cloud_import.resume_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/start": {
+      "handler": "cloud_import.start_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/uploads/{job_id}/archive": {
+      "handler": "cloud_import.upload_import_archive",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/uploads/{job_id}/files": {
+      "handler": "cloud_import.upload_import_files",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/context-files/submission-photos": {
       "handler": "context_visibility.list_shared_submission_photos",
       "allowed": [

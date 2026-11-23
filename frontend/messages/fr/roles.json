@@ -137,6 +137,10 @@
       "read": {
         "label": "Voir les fichiers",
         "description": "Voir et télécharger les fichiers du classement."
+      },
+      "import": {
+        "label": "Importer des fichiers",
+        "description": "Reprendre des classements entiers : téléverser des archives ZIP (y compris Google Takeout) ou des dossiers, avec des règles pour les tags, la date de prise de vue et les albums."
       }
     },
     "submissions": {

@@ -140,7 +140,8 @@
     "descriptionLinked": "Alle Nicht-Bild-Dateien – aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Bilder liegen unter <photos>Fotos</photos>.",
     "viewToggle": "Ansicht",
     "viewList": "Liste",
-    "viewGrid": "Kacheln mit Vorschau"
+    "viewGrid": "Kacheln mit Vorschau",
+    "importButton": "Importieren"
   },
   "sourceOptions": {
     "all": "Alle Quellen",
