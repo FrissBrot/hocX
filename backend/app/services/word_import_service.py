@@ -3380,6 +3380,13 @@ class WordImportService:
                 participant.joined_at = target_date
                 db.add(participant)
             if participant.left_at is not None and target_date > participant.left_at:
+                from app.services.todo_fine_service import today
+
+                if participant.login_enabled and participant.has_left and target_date >= today():
+                    # Ein Protokoll von heute/später hebt den Austritt eines Kontos mit Login nicht
+                    # auf: das wäre ein Wiedereintritt (Login wieder gültig) ohne access.manage und
+                    # ohne Benutzerlimit-Prüfung (Security-Review 1.5.2). Austritt bleibt.
+                    return
                 participant.left_at = target_date
                 db.add(participant)
 

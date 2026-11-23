@@ -540,3 +540,35 @@ def test_matrix_column_resolution_is_remembered_and_reused_when_no_candidate_mat
     assert second_row.column_key == "col1"
     other_row = next(m for m in second_analysis.matrix_mappings if m.column_label_raw == "25.10.2026")
     assert other_row.column_key == "col2"
+
+
+def test_attendance_in_a_current_protocol_does_not_revive_a_former_login(db):
+    """Security-Review 1.5.2: der Word-Import verschiebt das Austrittsdatum auf das Protokolldatum.
+    Bei einem ausgetretenen Konto mit Login wäre das ein Wiedereintritt (Login wieder gültig) ohne
+    access.manage und Benutzerlimit - das Austrittsdatum bleibt deshalb."""
+    from datetime import timedelta
+
+    from app.services.todo_fine_service import today
+    from tests.factories import make_app_user
+
+    ctx = _build_template(db)
+    tenant, template = ctx["tenant"], ctx["template"]
+    former = make_app_user(db, "word-import-former@example.com", tenant_id=tenant.id, role_code="admin")
+    former.left_at = today() - timedelta(days=30)
+    db.flush()
+    WordImportService().commit(
+        db, tenant_id=tenant.id, user_id=1,
+        payload=WordImportCommit(
+            template_id=template.id,
+            protocol_date=today(),
+            attendance=[
+                WordImportAttendanceCommit(
+                    raw_name=former.display_name, participant_id=former.id, participant_name=former.display_name, status="present",
+                    create_new=False, originally_suggested_participant_id=None, originally_suggested_score=None,
+                )
+            ],
+        ),
+    )
+    db.refresh(former)
+    assert former.has_left
+    assert former.left_at == today() - timedelta(days=30)
