@@ -128,7 +128,7 @@
       "filterAll": "All",
       "filterOpen": "Open",
       "filterChanged": "Changed",
-      "filterEmpty": "No rows in this view.",
+      "filterEmpty": "No entries found.",
       "nobodyAssigned": "Nobody assigned yet",
       "addPerson": "+ Person",
       "addPersonTo": "Assign a person to “{row}”",
@@ -136,7 +136,18 @@
       "removedPerson": "Removed",
       "source": "Rows come from Master data › Master lists › {name}",
       "legendNew": "New",
-      "legendRemoved": "Removed"
+      "legendRemoved": "Removed",
+      "sortAsc": "Sort ascending",
+      "sortDesc": "Sort descending",
+      "sortReset": "Restore template order",
+      "searchPlaceholder": "Search in “{name}”",
+      "searchClear": "Clear search",
+      "statusOpen": "Open",
+      "statusAdded": "New",
+      "statusChanged": "Changed",
+      "statusRemoved": "Removed",
+      "searchPlaceholderShort": "Search list",
+      "summary": "{count, plural, one {# entry} other {# entries}} · {attention, plural, one {# needs attention} other {# need attention}}"
     }
   },
   "inactive": "inactive",

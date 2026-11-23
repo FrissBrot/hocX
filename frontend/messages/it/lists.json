@@ -128,7 +128,7 @@
       "filterAll": "Tutti",
       "filterOpen": "Aperti",
       "filterChanged": "Modificati",
-      "filterEmpty": "Nessuna riga in questa vista.",
+      "filterEmpty": "Nessuna voce trovata.",
       "nobodyAssigned": "Ancora nessuno assegnato",
       "addPerson": "+ Persona",
       "addPersonTo": "Assegna una persona a «{row}»",
@@ -136,7 +136,18 @@
       "removedPerson": "Rimosso",
       "source": "Le righe provengono da Dati di base › Liste di base › {name}",
       "legendNew": "Nuovo",
-      "legendRemoved": "Rimosso"
+      "legendRemoved": "Rimosso",
+      "sortAsc": "Ordina in modo crescente",
+      "sortDesc": "Ordina in modo decrescente",
+      "sortReset": "Ripristina l’ordine del modello",
+      "searchPlaceholder": "Cerca in «{name}»",
+      "searchClear": "Cancella ricerca",
+      "statusOpen": "Aperto",
+      "statusAdded": "Nuovo",
+      "statusChanged": "Modificato",
+      "statusRemoved": "Rimosso",
+      "searchPlaceholderShort": "Cerca nell’elenco",
+      "summary": "{count, plural, one {# voce} other {# voci}} · {attention, plural, one {# richiede attenzione} other {# richiedono attenzione}}"
     }
   },
   "inactive": "inattiva",

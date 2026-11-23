@@ -128,7 +128,7 @@
       "filterAll": "Alle",
       "filterOpen": "Offen",
       "filterChanged": "Geändert",
-      "filterEmpty": "Keine Zeilen in dieser Ansicht.",
+      "filterEmpty": "Keine Einträge gefunden.",
       "nobodyAssigned": "Noch niemand zugeteilt",
       "addPerson": "+ Person",
       "addPersonTo": "Person zu «{row}» zuteilen",
@@ -136,7 +136,18 @@
       "removedPerson": "Entfernt",
       "source": "Zeilen kommen aus Stammdaten › Stammlisten › {name}",
       "legendNew": "Neu",
-      "legendRemoved": "Entfernt"
+      "legendRemoved": "Entfernt",
+      "sortAsc": "Aufsteigend sortieren",
+      "sortDesc": "Absteigend sortieren",
+      "sortReset": "Reihenfolge der Vorlage wiederherstellen",
+      "searchPlaceholder": "In «{name}» suchen",
+      "searchClear": "Suche leeren",
+      "statusOpen": "Offen",
+      "statusAdded": "Neu",
+      "statusChanged": "Geändert",
+      "statusRemoved": "Entfernt",
+      "searchPlaceholderShort": "In Liste suchen",
+      "summary": "{count, plural, one {# Eintrag} other {# Einträge}} · {attention, plural, one {# braucht Aufmerksamkeit} other {# brauchen Aufmerksamkeit}}"
     }
   },
   "inactive": "inaktiv",

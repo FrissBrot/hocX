@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
-import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
+import { usePopoverPosition, usePopoverDismiss, usePopoverFocus } from "@/components/ui/popover";
 import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
@@ -536,11 +536,20 @@ export function TodoMiniMenu({
   label,
   compact = false,
   align = "start",
+  triggerClassName,
+  leading,
+  title,
   children,
 }: {
   label: string;
   compact?: boolean;
   align?: "start" | "end";
+  /** Zusatzklasse am Auslöser, z. B. Fälligkeitsfarbe (todo-due-trigger-overdue) */
+  triggerClassName?: string;
+  /** Vor dem Text im Auslöser, z. B. Screenreader-Hinweis «überfällig» */
+  leading?: ReactNode;
+  /** Tooltip am Auslöser, z. B. der volle Fälligkeitstext, wenn das Badge «Heute» zeigt */
+  title?: string;
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -548,9 +557,11 @@ export function TodoMiniMenu({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const popoverStyle = usePopoverPosition(open, triggerRef, align, 6, { minWidth: 220 });
   usePopoverDismiss(open, () => setOpen(false), [triggerRef, panelRef]);
+  // Tastatur: beim Öffnen Fokus auf den ersten Eintrag, Escape zurück auf den Auslöser
+  const focus = usePopoverFocus({ open, panelRef, anchorRef: triggerRef, onClose: () => setOpen(false), mode: "dialog" });
 
   const popover = open && typeof document !== "undefined" ? createPortal(
-    <div ref={panelRef} id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu">
+    <div ref={panelRef} id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu" onKeyDown={focus.onKeyDown} onFocus={focus.onFocus}>
       {children(() => setOpen(false))}
     </div>,
     document.body
@@ -561,11 +572,13 @@ export function TodoMiniMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={`mini-menu-trigger${open ? " mini-menu-trigger-open" : ""}`}
+        className={`mini-menu-trigger${open ? " mini-menu-trigger-open" : ""}${triggerClassName ? ` ${triggerClassName}` : ""}`}
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={title}
       >
+        {leading}
         <span className="mini-menu-trigger-label">{label}</span>
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>

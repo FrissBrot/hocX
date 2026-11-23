@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, ReactNode, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { menuButtonKeyDown, Popover } from "./popover";
 
@@ -10,9 +10,22 @@ export type ActionMenuItem = {
   danger?: boolean;
   /** Trennlinie vor diesem Eintrag (z. B. vor «Löschen»). */
   separatorBefore?: boolean;
+  /** Vorübergehend nicht wählbar (z. B. PDF wird gerade erzeugt). */
+  disabled?: boolean;
 };
 
-export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; ariaLabel?: string }) {
+export function ActionMenu({
+  items,
+  ariaLabel,
+  icon,
+  triggerClassName = "button-ghost button-icon",
+}: {
+  items: ActionMenuItem[];
+  ariaLabel?: string;
+  /** Eigenes Symbol statt «⋮» (z. B. Export im Protokoll-Kopf). */
+  icon?: ReactNode;
+  triggerClassName?: string;
+}) {
   const t = useTranslations("common");
   const resolvedAriaLabel = ariaLabel ?? t("actions");
   const [open, setOpen] = useState(false);
@@ -22,7 +35,7 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
     <div className="action-menu-wrap" ref={wrapRef} onClick={(event) => event.stopPropagation()}>
       <button
         type="button"
-        className="button-ghost button-icon"
+        className={triggerClassName}
         title={resolvedAriaLabel}
         aria-label={resolvedAriaLabel}
         aria-haspopup="menu"
@@ -30,7 +43,7 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
         onClick={() => setOpen((v) => !v)}
         onKeyDown={menuButtonKeyDown(open, setOpen)}
       >
-        <span aria-hidden="true">⋮</span>
+        <span aria-hidden="true">{icon ?? "⋮"}</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={wrapRef} align="end" className="action-menu" label={resolvedAriaLabel}>
         <>
@@ -41,6 +54,7 @@ export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; aria
               type="button"
               role="menuitem"
               className={item.danger ? "action-menu-item action-menu-item-danger" : "action-menu-item"}
+              disabled={item.disabled}
               onClick={() => {
                 setOpen(false);
                 item.onClick();

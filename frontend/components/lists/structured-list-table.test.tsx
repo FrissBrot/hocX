@@ -160,3 +160,70 @@ it("zeigt beliebig viele Spalten, gruppiert nach einem Spalten-Key und blendet S
   rerender(<StructuredListTable {...props} visibleColumns={["k-zeit", "k-amt", "unbekannt"]} groupByColumn="gibt-es-nicht" />);
   expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Zeit", "Ämtli"]);
 });
+
+const sortEntries = [
+  { id: "a", sort_index: 0, values: { c1: { text_value: "Material" }, c2: { participant_ids: ["tim"], participant_names: ["Tim Grisiger"] } } },
+  { id: "b", sort_index: 1, values: { c1: { text_value: "Coach" }, c2: { participant_ids: [] } } },
+  { id: "c", sort_index: 2, values: { c1: { text_value: "Zelt" }, c2: { participant_ids: ["anna"], participant_names: ["Anna Berger"] } } },
+] as unknown as StructuredListEntry[];
+
+function labelOrder() {
+  return Array.from(document.querySelectorAll("tbody .linked-list-label")).map((cell) => cell.textContent?.replace(/(Offen|Neu|Geändert|Entfernt)$/, "").trim());
+}
+
+it("sucht im Protokoll nur in der Anzeige über alle Spalten", () => {
+  const onUpdateEntry = vi.fn();
+  render(<StructuredListTable definition={protocolDefinition} entries={sortEntries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: false }} onCreateEntry={vi.fn()} onUpdateEntry={onUpdateEntry} onDeleteEntry={vi.fn()} />);
+  const search = screen.getByRole("textbox", { name: "In «Ämtli» suchen" });
+  fireEvent.change(search, { target: { value: "anna" } });
+  expect(labelOrder()).toEqual(["Zelt"]);
+  fireEvent.change(search, { target: { value: "nichts" } });
+  expect(screen.getByText("Keine Einträge gefunden.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Suche leeren" }));
+  expect(labelOrder()).toEqual(["Material", "Coach", "Zelt"]);
+  expect(onUpdateEntry).not.toHaveBeenCalled();
+});
+
+it("sortiert per Spaltenkopf auf, ab und zurück zur Vorlagen-Reihenfolge", () => {
+  const onUpdateEntry = vi.fn();
+  render(<StructuredListTable definition={protocolDefinition} entries={sortEntries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: false }} onCreateEntry={vi.fn()} onUpdateEntry={onUpdateEntry} onDeleteEntry={vi.fn()} />);
+  const header = screen.getByRole("button", { name: /^Ämtli/ });
+  header.focus();
+  fireEvent.click(header);
+  expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending");
+  expect(labelOrder()).toEqual(["Coach", "Material", "Zelt"]);
+  fireEvent.click(header);
+  expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
+  expect(labelOrder()).toEqual(["Zelt", "Material", "Coach"]);
+  fireEvent.click(header);
+  expect(header.closest("th")).not.toHaveAttribute("aria-sort");
+  expect(labelOrder()).toEqual(["Material", "Coach", "Zelt"]);
+  // Personen-Spalte: leere Zeilen bleiben zuletzt
+  fireEvent.click(screen.getByRole("button", { name: /^Verantwortlich/ }));
+  expect(labelOrder()).toEqual(["Zelt", "Material", "Coach"]);
+  expect(onUpdateEntry).not.toHaveBeenCalled();
+});
+
+it("zeigt den bestehenden Status als Pille", () => {
+  render(<StructuredListTable definition={protocolDefinition} entries={sortEntries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: true }}
+    entryTrackedStatusById={{ a: { status: "added" }, c: { status: "removed" } }}
+    onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  // Nur offene Zeilen zählen; Neu (a) und Entfernt (c) nicht
+  expect(screen.getByText("3 Einträge · 1 braucht Aufmerksamkeit")).toBeInTheDocument();
+  const rowOf = (label: string) => screen.getByText(label).closest("tr") as HTMLElement;
+  expect(rowOf("Material").querySelector(".badge-success")?.textContent).toBe("Neu");
+  expect(rowOf("Coach").querySelector(".badge-warning")?.textContent).toBe("Offen");
+  expect(rowOf("Zelt").querySelector(".badge-danger")?.textContent).toBe("Entfernt");
+});
+
+it("zählt als Aufmerksamkeit nur unbesetzte Zeilen, auch ohne «Leere hervorheben»", () => {
+  render(<StructuredListTable definition={protocolDefinition} entries={sortEntries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: false }}
+    entryTrackedStatusById={{ a: { status: "changed", before: { c1: { text_value: "Material" }, c2: { participant_ids: [] } } } }}
+    onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  expect(screen.getByText("3 Einträge · 1 braucht Aufmerksamkeit")).toBeInTheDocument();
+  expect(screen.getByText("Material").closest("tr")?.querySelector(".badge-success")?.textContent).toBe("Geändert");
+});

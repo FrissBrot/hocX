@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { Badge } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchInput } from "@/components/ui/search-input";
 import { localDateToday } from "@/lib/utils/participant-membership";
 import { Modal } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -268,6 +269,10 @@ export function StructuredListTable({
   const [participantPicker, setParticipantPicker] = useState<ParticipantPickerState | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
   const [protocolFilter, setProtocolFilter] = useState<"all" | "open" | "changed">("all");
+  // Protokoll-Ansicht: Suche und Sortierung per Spaltenkopf filtern/ordnen nur die Anzeige,
+  // die Vorlage (sort_by/sort_index) bleibt unverändert; dritter Klick = Vorlagen-Reihenfolge.
+  const [protocolSearch, setProtocolSearch] = useState("");
+  const [protocolSort, setProtocolSort] = useState<{ column: StructuredListColumnKey; direction: "asc" | "desc" } | null>(null);
   const rowTimers = useRef<Record<string, number>>({});
   const newRowTimer = useRef<number | null>(null);
 
@@ -283,6 +288,8 @@ export function StructuredListTable({
     setEntryDrafts({});
     setParticipantPicker(null);
     setParticipantSearch("");
+    setProtocolSearch("");
+    setProtocolSort(null);
   }, [definition.id]);
 
   useEffect(() => {
@@ -702,6 +709,13 @@ export function StructuredListTable({
     return name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   }
 
+  // Avatar-Farbe deterministisch aus dem Namen (5 Töne, gleicher Name = gleiche Farbe)
+  function avatarToneClass(name: string) {
+    let hash = 0;
+    for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return `linked-list-avatar-tone-${hash % 5}`;
+  }
+
   function renderProtocolView() {
     const isPersonType = (valueType: StructuredListValueType) => valueType === "participant" || valueType === "participants";
     // Rollen der Liste: die Spalte «Verantwortliche» bestimmt "besetzt", die Spalte «Bezeichnung»
@@ -729,9 +743,57 @@ export function StructuredListTable({
     const openCount = activeRows.length - filledCount;
     const changedCount = rows.filter((row) => !!row.tracked).length;
     const activeFilter = protocolFilter === "changed" && !changedCount ? "all" : protocolFilter;
-    const visibleRows = rows.filter((row) =>
-      activeFilter === "open" ? !row.removed && !row.filled : activeFilter === "changed" ? !!row.tracked : true
+    const searchText = protocolSearch.trim().toLocaleLowerCase();
+    const searchKeys = [labelKey, ...extraColumns.map((column) => column.id), assignmentKey];
+    const filteredRows = rows.filter((row) =>
+      (activeFilter === "open" ? !row.removed && !row.filled : activeFilter === "changed" ? !!row.tracked : true)
+      && (!searchText || searchKeys.some((key) => entrySortText(row.entry, key).toLocaleLowerCase().includes(searchText)))
     );
+    const activeProtocolSort = protocolSort && searchKeys.includes(protocolSort.column) ? protocolSort : null;
+    // Textspalten, in denen alle Werte Zahlen sind, rechtsbündig (Entwurf)
+    const numericColumns = new Set(extraColumns.filter((column) => {
+      if (column.value_type !== "text") return false;
+      const values = rows.map((row) => entrySortText(row.entry, column.id).trim()).filter(Boolean);
+      return values.length > 0 && values.every((value) => /^-?\d+(?:[.,']\d+)*$/.test(value));
+    }).map((column) => column.id));
+    const visibleRows = activeProtocolSort
+      ? [...filteredRows].sort((left, right) => {
+          const leftText = entrySortText(left.entry, activeProtocolSort.column).trim();
+          const rightText = entrySortText(right.entry, activeProtocolSort.column).trim();
+          // Leere Werte immer zuletzt, gleiche Werte in der bisherigen Reihenfolge
+          if (!leftText || !rightText) return leftText ? -1 : rightText ? 1 : 0;
+          const compared = textCollator.compare(leftText, rightText);
+          return activeProtocolSort.direction === "desc" ? -compared : compared;
+        })
+      : filteredRows;
+    // «brauchen Aufmerksamkeit» = nur offene/unbesetzte Zeilen (User-Entscheid); neu, geändert und
+    // entfernt zählen nicht, ihre Pillen bleiben trotzdem
+    const attentionCount = openCount;
+    const cycleSort = (column: StructuredListColumnKey) => setProtocolSort((current) =>
+      current?.column !== column ? { column, direction: "asc" }
+        : current.direction === "asc" ? { column, direction: "desc" }
+        : null
+    );
+    const sortHeader = (column: StructuredListColumnKey, title: string) => {
+      const active = activeProtocolSort?.column === column ? activeProtocolSort.direction : null;
+      return (
+        <th
+          key={column}
+          className={numericColumns.has(column) ? "linked-list-num" : undefined}
+          aria-sort={active === "asc" ? "ascending" : active === "desc" ? "descending" : undefined}
+        >
+          <button
+            type="button"
+            className={`linked-list-sort${active ? " linked-list-sort-active" : ""}`}
+            title={active === "asc" ? t("protocol.sortDesc") : active === "desc" ? t("protocol.sortReset") : t("protocol.sortAsc")}
+            onClick={() => cycleSort(column)}
+          >
+            {title}
+            {active ? <span className="linked-list-sort-mark" aria-hidden="true">{active === "asc" ? "▲" : "▼"}</span> : null}
+          </button>
+        </th>
+      );
+    };
     const showActions = editable || (changedCount > 0 && !!onAcceptTrackedEntry);
     const percent = activeRows.length ? Math.round((filledCount / activeRows.length) * 100) : 0;
 
@@ -768,7 +830,7 @@ export function StructuredListTable({
                 className={`linked-list-person${added ? " linked-list-person-added" : ""}${departed ? " structured-list-departed" : ""}`}
                 title={departed ? departedTitle(departed) : added ? t("protocol.addedPerson") : undefined}
               >
-                <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+                <span className={`linked-list-avatar ${avatarToneClass(person.name)}`} aria-hidden="true">{personInitials(person.name)}</span>
                 <span className="linked-list-person-name">{person.name}</span>
                 {chipsEditable && (
                   <button
@@ -785,7 +847,7 @@ export function StructuredListTable({
           })}
           {removedPeople.map((person) => (
             <span key={`removed-${person.id}`} className="linked-list-person linked-list-person-removed" title={t("protocol.removedPerson")}>
-              <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+              <span className={`linked-list-avatar ${avatarToneClass(person.name)}`} aria-hidden="true">{personInitials(person.name)}</span>
               <span className="linked-list-person-name">{person.name}</span>
             </span>
           ))}
@@ -818,6 +880,7 @@ export function StructuredListTable({
     return (
       <div className="linked-list-block">
         <div className="linked-list-summary">
+          <span className="linked-list-summary-text">{t("protocol.summary", { count: rows.length, attention: attentionCount })}</span>
           {/* Besetzungsgrad nur, solange im Protokoll noch zugeteilt werden kann. */}
           {editable && (
             <>
@@ -845,24 +908,36 @@ export function StructuredListTable({
               ...(changedCount ? [{ value: "changed" as const, label: t("protocol.filterChanged"), count: changedCount }] : []),
             ]}
           />
+          {rows.length ? (
+            <SearchInput
+              className="linked-list-search"
+              value={protocolSearch}
+              onChange={setProtocolSearch}
+              placeholder={t("protocol.searchPlaceholderShort")}
+              aria-label={t("protocol.searchPlaceholder", { name: definition.name })}
+              clearLabel={t("protocol.searchClear")}
+            />
+          ) : null}
         </div>
         <div className="linked-list-table-wrap">
           <table className="data-table linked-list-table">
             <thead>
               <tr>
-                <th>{titleOf(labelKey)}</th>
-                {extraColumns.map((column) => <th key={column.id}>{column.title}</th>)}
-                <th>{titleOf(assignmentKey)}</th>
+                {sortHeader(labelKey, titleOf(labelKey))}
+                {extraColumns.map((column) => sortHeader(column.id, column.title))}
+                {sortHeader(assignmentKey, titleOf(assignmentKey))}
                 {showActions ? <th className="linked-list-actions" aria-label={t("actionsLabel")} /> : null}
               </tr>
             </thead>
             <tbody>
               {visibleRows.length ? visibleRows.map((row) => {
                 const isOpen = !row.removed && !row.filled;
-                const dotClass = row.removed ? " linked-list-dot-removed"
-                  : row.tracked ? " linked-list-dot-changed"
-                  : isOpen && highlightEmpty ? " linked-list-dot-open"
-                  : "";
+                // Bestehender Status (entfernt/neu/geändert/offen) als Pille statt Punkt
+                const statusPill = row.removed ? <Badge variant="danger" dot>{t("protocol.statusRemoved")}</Badge>
+                  : row.tracked?.status === "added" ? <Badge variant="success" dot>{t("protocol.statusAdded")}</Badge>
+                  : row.tracked ? <Badge variant="success" dot>{t("protocol.statusChanged")}</Badge>
+                  : isOpen && highlightEmpty ? <Badge variant="warning" dot>{t("protocol.statusOpen")}</Badge>
+                  : null;
                 const labelValue = rowValue(row.entry, labelKey);
                 const labelChanged = row.tracked?.status === "changed" && !valuesEqual(labelValue, row.tracked.before?.[labelKey]);
                 return (
@@ -871,7 +946,6 @@ export function StructuredListTable({
                     className={`${isOpen && highlightEmpty ? "linked-list-row-open" : ""}${row.removed ? " linked-list-row-removed" : ""}`.trim() || undefined}
                   >
                     <td className="linked-list-label">
-                      <span className={`linked-list-dot${dotClass}`} aria-hidden="true" />
                       <span className={row.removed ? "tracked-strike" : undefined}>
                         {labelChanged && (
                           <span className="tracked-before-caption tracked-strike linked-list-label-before">
@@ -880,9 +954,10 @@ export function StructuredListTable({
                         )}
                         {renderValueSummary(labelType, labelValue)}
                       </span>
+                      {statusPill ? <span className="linked-list-status">{statusPill}</span> : null}
                     </td>
                     {extraColumns.map((column) => (
-                      <td key={column.id}>
+                      <td key={column.id} className={numericColumns.has(column.id) ? "linked-list-num" : undefined}>
                         {editable && !row.removed
                           ? renderEditableCell(row.entry.id, column.id, column.value_type, rowValue(row.entry, column.id), { isNewRow: false })
                           : <span className={row.removed ? "tracked-strike" : undefined}>{renderValueSummary(column.value_type, rowValue(row.entry, column.id))}</span>}

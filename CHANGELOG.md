@@ -65,18 +65,37 @@ Installationen aktualisieren können.
   Features kommen in einer Abfrage, Rollen und deren MFA-Pflicht in einer zweiten. Alle Prüfungen
   (aktiv, Login erlaubt, ausgetreten, Widerruf, Session-Register, MFA, RLS-Kontext) laufen weiter bei
   jeder Anfrage, ohne Zwischenspeicher.
+- **Protokoll-Editor: Termine, Listen und Pendenzen im neuen Design** (nur Darstellung, keine Migration,
+  PDF unverändert). Terminlisten zeigen das Datum als Kalender-Kachel (Monatsband in der Tag-Farbe,
+  Tag, Wochentag), den Tag als farbigen Punkt unter dem Titel, eine Zusammenfassung «X kommend ·
+  Y vergangen», eine Trennzeile «Ab Sitzung vom …» und – nur wenn vergangene Termine vorhanden
+  sind – den Umschalter «Alle/Kommend» (reine Ansicht, Vorlage bleibt). Die Kopfzeile ist immer
+  fixiert; Spaltenwahl, «Vergangene ausgrauen», Zeilen in Tag-Farbe und «Abgesagt» bleiben.
+  Stammlisten-Tabellen zeigen den Status (offen/neu/geändert/entfernt) als Pille, haben ein
+  Suchfeld und lassen sich per Spaltenkopf sortieren (auf, ab, zurück zur Vorlagen-Reihenfolge –
+  nicht gespeichert). Pendenzen: erledigte durchgestrichen an ihrer Stelle, Fälligkeit farbig
+  (rot überfällig, gelb innerhalb von 14 Tagen wie in der Pendenzen-Übersicht), Fortschritt in %,
+  Zähler an den Tag-Filtern und Initialen bei den Zuständigen. Pendenzen erscheinen als Tabelle
+  (Erledigt | Aufgabe | Verantwortlich | Fällig) mit «X offen · Y erledigt», Fälligkeit als
+  «Überfällig · TT.MM.», «Heute» bzw. «In N Tagen»; Stammlisten zeigen «N Einträge · M brauchen
+  Aufmerksamkeit», Avatare in fünf Tönen und Zahlen rechtsbündig.
+- **Protokoll-Editor: neuer Kopf mit Workflow-Leiste.** Oben Zurück-Symbol, Titel und Meta-Zeile
+  (Protokollnummer · Erstellt · Vorlage vN), Suchfeld-Knopf mit Tastenkürzel, Export-Menü («PDF
+  öffnen», «Exportieren …») und «⋯» («Original-Dokument öffnen», «Hilfe zum Ablauf»). Darunter die
+  vier Schritte (Geplant · Vorbereitung, Sitzung, Nachbearbeitung, Abgeschlossen; nur Anzeige),
+  der Hinweis «Vorlage wurde geändert» mit «Neu laden», der Schalter «Nachverfolgen» (statt
+  An/Aus-Menü) und der Hauptknopf. Abläufe, Bedingungen und Rückfragen beim Statuswechsel sind
+  unverändert.
 
 ### Update
 
 - Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung
-  `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision hängt vorläufig an `0218_album_item_auto_source` und wird bei der
-  Integration hinter die 1.5.x-Migrationen gehängt.
+  `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision folgt auf `0218_album_item_auto_source` (letzte 1.5.1-Migration).
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
-  `0252_upload_history_abgabebox` (vorläufig hinter `0230_cloud_import`, bei der Integration neu
-  verketten). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  `0252_upload_history_abgabebox` (Kette `0218` → `0230` → `0250` → `0251` → `0252`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im

@@ -128,7 +128,7 @@
       "filterAll": "Tous",
       "filterOpen": "Ouverts",
       "filterChanged": "Modifiés",
-      "filterEmpty": "Aucune ligne dans cette vue.",
+      "filterEmpty": "Aucune entrée trouvée.",
       "nobodyAssigned": "Personne n’est encore attribué",
       "addPerson": "+ Personne",
       "addPersonTo": "Attribuer une personne à « {row} »",
@@ -136,7 +136,18 @@
       "removedPerson": "Retiré",
       "source": "Les lignes proviennent de Données de base › Listes de base › {name}",
       "legendNew": "Nouveau",
-      "legendRemoved": "Retiré"
+      "legendRemoved": "Retiré",
+      "sortAsc": "Trier par ordre croissant",
+      "sortDesc": "Trier par ordre décroissant",
+      "sortReset": "Rétablir l’ordre du modèle",
+      "searchPlaceholder": "Rechercher dans « {name} »",
+      "searchClear": "Effacer la recherche",
+      "statusOpen": "Ouvert",
+      "statusAdded": "Nouveau",
+      "statusChanged": "Modifié",
+      "statusRemoved": "Supprimé",
+      "searchPlaceholderShort": "Rechercher dans la liste",
+      "summary": "{count, plural, one {# entrée} other {# entrées}} · {attention, plural, one {# demande de l’attention} other {# demandent de l’attention}}"
     }
   },
   "inactive": "inactive",
