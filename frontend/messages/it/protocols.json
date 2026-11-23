@@ -445,6 +445,8 @@
     "createdBadge": "Creato",
     "defaultTag": "Note della seduta",
     "draftRestored": "È stata ripristinata una bozza locale delle note della seduta.",
+    "draftConflict": "La bozza locale delle note della seduta non è stata ripresa perché nel frattempo qualcun altro ha modificato le note. Viene mostrata la versione attuale.",
+    "draftConflictApply": "Usa la mia bozza",
     "duePlaceholder": "Scadenza…",
     "nextSession": "Prossimo incontro",
     "noDueDate": "Nessuna scadenza",

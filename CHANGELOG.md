@@ -50,12 +50,20 @@ Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes
   Speicher zurück (auch beim Löschen oder Aufräumen eines Vereins).
 - Organisations-Bestätigung: eine gleichzeitige oder zwischenzeitliche Umbenennung kann nicht mehr
   als bestätigt gelten.
+- Bussen zu Protokollen folgen denselben Leserechten wie das Protokoll selbst (Entwürfe nur mit
+  dem Recht, Entwürfe zu lesen); nicht lesbare Protokolle verhalten sich wie unbekannte.
 
 ### Behoben
 
 - **Document Studio:** Vorlage löschen während eines laufenden Exports, gleichzeitig gesetzte erste
   Standardvorlage (Fehler 500), Asset bzw. Brand-Profil löschen während gleichzeitiger Verwendung
   und Archivieren gleichzeitig mit einer Standardzuweisung verhalten sich jetzt korrekt.
+- **Protokoll nach schnellem Neuladen nicht mehr veraltet:** Sitzungsnotizen und Textblöcke
+  behalten einen lokalen Entwurf, der neuer ist als der Serverstand (bei Abweichung Hinweis mit
+  «Meinen Entwurf übernehmen»); schon gespeicherte Entwürfe werden beim Öffnen aufgeräumt, und kein
+  Entwurf wird ohne Speicherung verworfen.
+- **Fett/Kursiv mit Satzzeichen am Rand** (z. B. «**B!**» direkt vor einem Buchstaben) übersteht
+  das Speichern als Markdown; vorher wanderten die Begrenzer nach innen oder gingen verloren.
 - **Pendenzen und Aufgabenpakete:** `null` für Aufgabe, Tags, Name oder «aktiv» sowie zu grosse
   Sortierwerte werden als ungültige Eingabe abgelehnt (vorher u. a. dauerhaft unlesbare Pendenz bei
   `tags: null`); Paketnamen werden getrimmt. Unbekannte oder zu grosse Status-IDs ergeben eine

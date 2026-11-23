@@ -445,6 +445,8 @@
     "createdBadge": "Erstellt",
     "defaultTag": "Sitzungsnotizen",
     "draftRestored": "Lokaler Entwurf der Sitzungsnotizen wurde wiederhergestellt.",
+    "draftConflict": "Lokaler Entwurf der Sitzungsnotizen wurde nicht übernommen, weil inzwischen jemand anderes die Notizen geändert hat. Angezeigt wird die aktuelle Fassung.",
+    "draftConflictApply": "Meinen Entwurf übernehmen",
     "duePlaceholder": "Fällig…",
     "nextSession": "Nächster Hock",
     "noDueDate": "Kein Enddatum",

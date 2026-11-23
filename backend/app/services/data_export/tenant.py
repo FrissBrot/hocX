@@ -36,7 +36,7 @@ EXPORT_TTL = timedelta(days=7)
 STALE_RUNNING = timedelta(hours=6)
 ACTIVE_STATUSES = ("queued", "running")
 # Namensraum für pg_advisory_xact_lock(ns, tenant_id) in request_export (documents/template_service:
-# 909100015, weitere siehe dort)
+# 909100015 und 909100016, weitere siehe dort)
 EXPORT_REQUEST_LOCK_NAMESPACE = 909100014
 
 

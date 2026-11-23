@@ -46,10 +46,32 @@ from app.models import (
 
 _NODE_ADAPTER = TypeAdapter(Node)
 
-# Namensraum für pg_advisory_xact_lock(ns, tenant_id) in set_assignment. Andere Namensräume:
-# upload_lock (909100001), submission_service (909100002), protocol_service (909100011),
-# task_package_service (909100012), event_cycle_service (909100013), data_export/tenant (909100014).
-ASSIGNMENT_LOCK_NAMESPACE = 909100015
+# Namensraum für pg_advisory_xact_lock(ns, tenant_id) in set_assignment (erste Zuweisung je
+# Mandant, #99) - eine andere Ressource als TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE unten (je Vorlage).
+ASSIGNMENT_LOCK_NAMESPACE = 909100016
+
+
+# Namensraum für pg_advisory_xact_lock(ns, document_template.id): Archivieren (exklusiv) gegen
+# Standard-Zuweisung (geteilt). Andere Namensräume: upload_lock (909100001), submission_service
+# (909100002), protocol_service (909100011), task_package_service (909100012),
+# event_cycle_service (909100013), data_export/tenant (909100014), Zuweisung je Mandant (909100016).
+TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE = 909100015
+
+
+def _lock_template_assignments(db: Session, template_id: int, *, exclusive: bool) -> None:
+    """Transaktions-Lock je Dokumentvorlage (frei bei Commit/Rollback, Issue #102).
+
+    Archivieren entfernt alle Zuweisungen der Vorlage; eine gleichzeitige Zuweisung prüfte
+    «aktiv» aber am alten Stand, und das Archivieren sah die noch nicht festgeschriebene
+    Zuweisung nicht - die archivierte Vorlage blieb Standard. Ein Advisory-Lock statt
+    ``SELECT … FOR SHARE`` auf die Vorlage: Systemvorlagen (``tenant_id IS NULL``) darf ein
+    Mandant lesen, aber nicht sperren (Zeilensperren prüfen die Schreib-Policy der RLS, die
+    Zeile wäre unsichtbar)."""
+    function = "pg_advisory_xact_lock" if exclusive else "pg_advisory_xact_lock_shared"
+    db.execute(
+        text(f"SELECT {function}(:ns, :template_id)"),  # sql-ok: Funktionsname fest aus dem Code
+        {"ns": TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE, "template_id": template_id},
+    )
 
 
 class TemplateConflictError(Exception):
@@ -368,9 +390,9 @@ def restore_revision(db: Session, template: DocumentTemplate, revision: Document
 
 
 def set_archived(db: Session, template: DocumentTemplate, archived: bool, *, user_id: int | None) -> DocumentTemplate:
-    # Sperre: eine gleichzeitige Zuweisung (set_assignment, FOR SHARE) wird erst festgeschrieben
-    # und danach unten mit entfernt bzw. sieht danach «archiviert» und lehnt ab.
-    lock_row(db, template)
+    # Wartet auf laufende Zuweisungen dieser Vorlage; die Abfrage der Zuweisungen unten sieht
+    # sie danach (READ COMMITTED), spätere Zuweisungen sehen «archiviert» (Issue #102).
+    _lock_template_assignments(db, template.id, exclusive=True)
     template.status = "archived" if archived else "active"
     template.updated_by = user_id
     if archived:
@@ -482,13 +504,15 @@ def set_assignment(
     """Standard setzen oder (ohne Vorlage und Brand) entfernen."""
     doc_type = get_type(document_type)
     if template is not None:
-        # Status unter Sperre neu lesen: sonst archivierte eine gleichzeitige Anfrage die Vorlage
-        # (set_archived), ohne diese noch nicht festgeschriebene Zuweisung zu sehen.
-        db.flush()
-        db.refresh(template, with_for_update={"read": True})
+        # Status nach dem Lock frisch aus der Datenbank: das Objekt kann vor einem gleichzeitigen
+        # Archivieren geladen worden sein (Issue #102).
+        _lock_template_assignments(db, template.id, exclusive=False)
+        current = db.execute(
+            select(DocumentTemplate.status, DocumentTemplate.published_revision_id).where(DocumentTemplate.id == template.id)
+        ).one_or_none()
         if template.document_type != document_type:
             raise TemplateStateError("apiError.templateTypeMismatch")
-        if template.status != "active" or template.published_revision_id is None:
+        if current is None or current.status != "active" or current.published_revision_id is None:
             raise TemplateStateError("apiError.templateNotPublished")
         if template.tenant_id not in (None, tenant_id):
             raise TemplateStateError("apiError.notFound")
