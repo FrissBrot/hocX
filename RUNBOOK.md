@@ -1227,7 +1227,12 @@ letzten Erfolg gilt der Versand als gestört (Ausnahme: einzelne abgelehnte Empf
 in Folge, und dann nur als Warnung). Solange er gestört ist, bekommen Anmeldungen, die einen Mailcode
 bräuchten, sofort 503 `auth_email_unavailable` («Anmeldung aktuell nicht möglich, wende dich an deinen
 Administrator»); höchstens ein Login je Minute versucht den Versand echt. Bekannte Geräte und Konten mit
-zweitem Faktor sind nicht betroffen. `/admin/system` zeigt die Prüfung «E-Mail-Versand» (kritisch, ntfy-
+zweitem Faktor sind nicht betroffen - **ausser** Konten ohne zweiten Faktor, deren Passwort seit 1.5.2 als
+geleakt markiert ist (Leak-Prüfung beim Login): sie brauchen bei jeder Anmeldung den Mailcode, auch auf
+bekannten Geräten, und sind während einer Störung ausgesperrt. Je nach Verbreitung schwacher Passwörter
+kann das viele Konten treffen; Abhilfe ist die Behebung der Störung (nicht das Abschalten der Prüfung).
+Einzelne Personen können ein neues Passwort über die Verwaltung bekommen (Zurücksetzungslink ebenfalls
+per Mail) oder einen zweiten Faktor einrichten, sobald sie wieder angemeldet sind. `/admin/system` zeigt die Prüfung «E-Mail-Versand» (kritisch, ntfy-
 Problem `email:smtp:<grund>`), das Fehlerprotokoll den ersten Fehler je Fehlerklasse (danach stündlich).
 Behebung: Adminportal → Einstellungen → Benachrichtigungen, SMTP prüfen, Test-Mail senden; der erste
 Erfolg hebt die Störung auf. Bei Verbindungs-, TLS- und Anmeldefehlern prüft zusätzlich der Loop
