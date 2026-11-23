@@ -252,10 +252,18 @@ def _require_b64(data: Any, key: str) -> bytes:
         raise WebauthnError(f"WebAuthn field '{key}' is not valid base64url") from exc
 
 
+# clientDataJSON echter Authenticatoren ist wenige hundert Bytes gross
+_CLIENT_DATA_MAX_BYTES = 8192
+
+
 def _parse_client_data(raw: bytes, *, expected_type: str) -> dict[str, Any]:
+    if len(raw) > _CLIENT_DATA_MAX_BYTES:
+        raise WebauthnError("Client data is too large")
     try:
         parsed = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (ValueError, RecursionError) as exc:
+        # ValueError deckt JSONDecodeError, UnicodeDecodeError und zu lange Ganzzahlen ab;
+        # RecursionError tief verschachtelte Listen - beides Eingabefehler, kein 500.
         raise WebauthnError("Client data is not valid JSON") from exc
     if not isinstance(parsed, dict):
         raise WebauthnError("Client data is not a JSON object")
@@ -300,7 +308,10 @@ def _cose_public_key_to_pem(cose_raw: bytes) -> str:
             raise WebauthnError("Elliptic-curve credential key is malformed")
         curve = ec.SECP256R1()
         numbers = ec.EllipticCurvePublicNumbers(int.from_bytes(x, "big"), int.from_bytes(y, "big"), curve)
-        public_key = numbers.public_key()
+        try:
+            public_key = numbers.public_key()
+        except ValueError as exc:  # Punkt nicht auf der Kurve
+            raise WebauthnError("Credential public key is invalid") from exc
     elif kty == 3:
         n = cose.get(-1)
         e = cose.get(-2)
@@ -309,7 +320,10 @@ def _cose_public_key_to_pem(cose_raw: bytes) -> str:
         if not 2048 <= len(n) * 8 <= 4096:
             raise WebauthnError("RSA credential key size not allowed")
         numbers = rsa.RSAPublicNumbers(int.from_bytes(e, "big"), int.from_bytes(n, "big"))
-        public_key = numbers.public_key()
+        try:
+            public_key = numbers.public_key()
+        except ValueError as exc:  # z. B. Exponent < 3
+            raise WebauthnError("Credential public key is invalid") from exc
     else:
         raise WebauthnError(f"Unsupported COSE key type {kty}")
 

@@ -81,3 +81,26 @@ def test_malformed_assertion_raises_webauthn_error(response):
 def test_cbor_decoder_raises_only_cbor_errors(payload):
     with pytest.raises(CborDecodeError):
         decode_cbor(payload)
+
+
+# ── Security-Review 1.5.2: restliche 500-Pfade im Parser ─────────────────────────────────────
+
+
+@pytest.mark.parametrize("raw", [b"[" * 3000 + b"]" * 3000, b'{"a":' + b"1" * 5000 + b"}", b"{" + b" " * 9000 + b"}"])
+def test_client_data_edge_cases_are_webauthn_errors(raw):
+    from app.core.webauthn import _parse_client_data
+
+    with pytest.raises(WebauthnError):
+        _parse_client_data(raw, expected_type="webauthn.create")
+
+
+def test_invalid_public_key_numbers_are_webauthn_errors():
+    from app.core.webauthn import _cose_public_key_to_pem
+    from tests.soft_passkey import cbor
+
+    off_curve = cbor({1: 2, 3: -7, -1: 1, -2: b"\x01" * 32, -3: b"\x02" * 32})
+    with pytest.raises(WebauthnError):
+        _cose_public_key_to_pem(off_curve)
+    weak_rsa = cbor({1: 3, 3: -257, -1: b"\xc3" * 256, -2: b"\x02"})
+    with pytest.raises(WebauthnError):
+        _cose_public_key_to_pem(weak_rsa)
