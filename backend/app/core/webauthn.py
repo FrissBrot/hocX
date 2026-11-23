@@ -146,8 +146,8 @@ def register_credential(
     expected_rp_id: str,
 ) -> RegisteredCredential:
     response = payload.get("response") or {}
-    client_data_raw = b64url_decode(_require_text(response, "clientDataJSON"))
-    attestation_object = b64url_decode(_require_text(response, "attestationObject"))
+    client_data_raw = _require_b64(response, "clientDataJSON")
+    attestation_object = _require_b64(response, "attestationObject")
     client_data = _parse_client_data(client_data_raw, expected_type="webauthn.create")
     _verify_client_data(client_data, expected_challenge=expected_challenge, expected_origin=expected_origin)
 
@@ -175,7 +175,8 @@ def register_credential(
         raise WebauthnError("Credential id does not match authenticator data")
 
     public_key = _cose_public_key_to_pem(parsed.credential_public_key)
-    transports = [str(item) for item in (response.get("transports") or []) if isinstance(item, str)]
+    raw_transports = response.get("transports") or []
+    transports = [str(item) for item in raw_transports if isinstance(item, str)] if isinstance(raw_transports, list) else []
     return RegisteredCredential(
         credential_id=b64url_encode(parsed.credential_id),
         public_key_pem=public_key,
@@ -196,9 +197,9 @@ def verify_assertion(
     expected_credential_id: str,
 ) -> AssertionResult:
     response = payload.get("response") or {}
-    client_data_raw = b64url_decode(_require_text(response, "clientDataJSON"))
-    auth_data = b64url_decode(_require_text(response, "authenticatorData"))
-    signature = b64url_decode(_require_text(response, "signature"))
+    client_data_raw = _require_b64(response, "clientDataJSON")
+    auth_data = _require_b64(response, "authenticatorData")
+    signature = _require_b64(response, "signature")
 
     client_data = _parse_client_data(client_data_raw, expected_type="webauthn.get")
     _verify_client_data(client_data, expected_challenge=expected_challenge, expected_origin=expected_origin)
@@ -232,11 +233,23 @@ def verify_assertion(
     return AssertionResult(credential_id=expected_credential_id, sign_count=parsed.sign_count)
 
 
-def _require_text(data: dict[str, Any], key: str) -> str:
-    value = data.get(key)
+def _require_text(data: Any, key: str) -> str:
+    # data stammt aus dem Request-Body: kein Objekt (z. B. "response": "x") ist ein Eingabefehler
+    value = data.get(key) if isinstance(data, dict) else None
     if not isinstance(value, str) or not value:
         raise WebauthnError(f"Missing WebAuthn field '{key}'")
     return value
+
+
+def _require_b64(data: Any, key: str) -> bytes:
+    """Base64url-Feld der Passkey-Antwort; ungültiges Base64 (binascii.Error, nicht-ASCII) ist
+    ein Eingabefehler wie jeder andere (WebauthnError -> 400/401 statt 500)."""
+    try:
+        return b64url_decode(_require_text(data, key))
+    except WebauthnError:
+        raise
+    except ValueError as exc:
+        raise WebauthnError(f"WebAuthn field '{key}' is not valid base64url") from exc
 
 
 def _parse_client_data(raw: bytes, *, expected_type: str) -> dict[str, Any]:
@@ -244,6 +257,8 @@ def _parse_client_data(raw: bytes, *, expected_type: str) -> dict[str, Any]:
         parsed = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise WebauthnError("Client data is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise WebauthnError("Client data is not a JSON object")
     if parsed.get("type") != expected_type:
         raise WebauthnError(f"Unexpected WebAuthn ceremony type '{parsed.get('type')}'")
     return parsed
