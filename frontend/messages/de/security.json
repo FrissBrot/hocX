@@ -171,6 +171,7 @@
     "passwordLabel": "Dein Passwort",
     "passkeyHint": "Bestätige mit deinem Passkey (Fingerabdruck, Gesicht oder Geräte-PIN).",
     "loading": "Wird geladen …",
+    "noMethod": "Hier ist keine Bestätigung möglich: dein Passkey funktioniert nur auf der hocX-Hauptadresse und in Browsern mit Passkey-Unterstützung. Öffne hocX dort oder richte zusätzlich eine Authenticator-App ein.",
     "loadFailed": "Bestätigung konnte nicht vorbereitet werden.",
     "failed": "Bestätigung fehlgeschlagen.",
     "cancel": "Abbrechen",

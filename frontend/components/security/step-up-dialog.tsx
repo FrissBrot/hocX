@@ -27,6 +27,8 @@ export function StepUpDialog({ open, onDone }: Props) {
   const tSecurity = useTranslations("security");
   const [methods, setMethods] = useState<StepUpMethod[]>([]);
   const [method, setMethod] = useState<StepUpMethod | null>(null);
+  // Optionen geladen (sonst ist eine leere Methodenliste von «lädt noch» nicht zu unterscheiden)
+  const [loaded, setLoaded] = useState(false);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,12 +40,14 @@ export function StepUpDialog({ open, onDone }: Props) {
     setCode("");
     setPassword("");
     setError("");
+    setLoaded(false);
     browserApiFetch<StepUpOptions>("/api/auth/step-up", { skipStepUp: true })
       .then((options) => {
         if (cancelled) return;
         const usable = options.methods.filter((item) => item !== "passkey" || browserSupportsPasskeys());
         setMethods(usable);
         setMethod(usable[0] ?? null);
+        setLoaded(true);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(apiErrorMessage(err, tSecurity, "apiErrors", t("loadFailed")));
@@ -125,7 +129,9 @@ export function StepUpDialog({ open, onDone }: Props) {
           </label>
         ) : null}
         {method === "passkey" ? <p className="field-help">{t("passkeyHint")}</p> : null}
-        {!method && !error ? <p className="field-help">{t("loading")}</p> : null}
+        {!method && !error && !loaded ? <p className="field-help">{t("loading")}</p> : null}
+        {/* Nur Passkey, der hier nicht geht (Vereins-Domain, Browser ohne Passkeys): Ausweg nennen statt endlos zu laden */}
+        {!method && !error && loaded ? <StatusBanner tone="warning" message={t("noMethod")} /> : null}
         {error ? <StatusBanner tone="error" message={error} /> : null}
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={() => onDone(false)} disabled={busy}>

@@ -171,6 +171,7 @@
     "passwordLabel": "La tua password",
     "passkeyHint": "Conferma con la tua passkey (impronta, volto o PIN del dispositivo).",
     "loading": "Caricamento …",
+    "noMethod": "Qui non è possibile alcuna conferma: la tua passkey funziona solo sull'indirizzo principale di hocX e nei browser che supportano le passkey. Apri hocX lì oppure configura anche un'app di autenticazione.",
     "loadFailed": "Non è stato possibile preparare la conferma.",
     "failed": "Conferma non riuscita.",
     "cancel": "Annulla",
