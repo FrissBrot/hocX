@@ -56,15 +56,21 @@ def test_revoke_others_keeps_the_current_bridge_session(db):
     response = Response()
     users_route.revoke_my_other_sessions(response, db=db, user=current)
     db.expire_all()
-    # Das Cookie der Hauptdomain endet trotzdem (session_revoke_at), nur der Registereintrag bleibt
+    # Das Cookie der Hauptdomain endet, und die Eltern-Session ist auch im Register beendet
+    # (Review 1.5.2: kein «Zombie»-Eintrag unter «Angemeldete Geräte»)
     assert validate_session_token(db, parent_cookie) is None
+    assert db.get(AuthSession, parent.id).revoked_at is not None
     assert db.get(AuthSession, other.id).revoked_at is not None
     assert validate_session_token(db, _session_token(response)) is not None
-    assert db.get(AuthSession, child.id).revoked_at is None
+    kept = db.get(AuthSession, child.id)
+    assert kept.revoked_at is None and kept.parent_id is None
+    assert kept.expires_at <= parent.expires_at
+    assert [row.id for row in sessions.list_active(db, user.id)] == [child.id]
 
 
 def test_password_change_keeps_the_current_bridge_session(db):
-    _user, _parent, child, other, current = _on_custom_domain(db, "bridge-password@example.com")
+    user, parent, child, other, current = _on_custom_domain(db, "bridge-password@example.com")
+    parent_cookie = create_session_token(user.id, sid=str(parent.id), expires_at=parent.expires_at)
     response = Response()
     users_route.change_my_password(
         UserPasswordChange(current_password=PASSWORD, new_password="Kx7#qLm2!vRt9wZp"), _req(), response, db=db, user=current,
@@ -72,4 +78,19 @@ def test_password_change_keeps_the_current_bridge_session(db):
     db.expire_all()
     assert db.get(AuthSession, other.id).revoked_at is not None
     assert validate_session_token(db, _session_token(response)) is not None
+    assert db.get(AuthSession, child.id).revoked_at is None
+    assert validate_session_token(db, parent_cookie) is None
+    assert db.get(AuthSession, parent.id).revoked_at is not None
+
+
+def test_sibling_child_session_on_another_domain_is_revoked(db):
+    user, parent, child, other, current = _on_custom_domain(db, "bridge-sibling@example.com")
+    sibling = sessions.create(
+        db, user_id=user.id, tenant_id=user.tenant_id, mfa=False, amr=["bridge"], parent_id=parent.id,
+        host="anderer-verein.example", expires_at=parent.expires_at,
+    )
+    response = Response()
+    users_route.revoke_my_other_sessions(response, db=db, user=current)
+    db.expire_all()
+    assert db.get(AuthSession, sibling.id).revoked_at is not None
     assert db.get(AuthSession, child.id).revoked_at is None

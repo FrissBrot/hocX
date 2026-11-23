@@ -171,7 +171,7 @@
     "passwordLabel": "Your password",
     "passkeyHint": "Confirm with your passkey (fingerprint, face or device PIN).",
     "loading": "Loading …",
-    "noMethod": "No confirmation possible here: your passkey only works on the main hocX address and in browsers that support passkeys. Open hocX there or also set up an authenticator app.",
+    "noMethod": "No confirmation possible here: your passkey only works on the main hocX address and in browsers that support passkeys. Open hocX there; you can also set up an additional authenticator app there if needed.",
     "loadFailed": "The confirmation could not be prepared.",
     "failed": "Confirmation failed.",
     "cancel": "Cancel",

@@ -171,7 +171,7 @@
     "passwordLabel": "Ton mot de passe",
     "passkeyHint": "Confirme avec ton passkey (empreinte, visage ou PIN de l'appareil).",
     "loading": "Chargement …",
-    "noMethod": "Aucune confirmation possible ici : ta clé d'accès ne fonctionne que sur l'adresse principale de hocX et dans les navigateurs compatibles. Ouvre hocX à cette adresse ou configure aussi une application d'authentification.",
+    "noMethod": "Aucune confirmation possible ici : ta clé d'accès ne fonctionne que sur l'adresse principale de hocX et dans les navigateurs compatibles. Ouvre hocX à cette adresse ; tu peux aussi y configurer une application d'authentification si besoin.",
     "loadFailed": "La confirmation n'a pas pu être préparée.",
     "failed": "Échec de la confirmation.",
     "cancel": "Annuler",
