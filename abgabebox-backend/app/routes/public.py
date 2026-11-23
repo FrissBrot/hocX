@@ -551,6 +551,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # the safe, contained fix for this pass.
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
+                _log("validation_failed", "Speicherkontingent der Organisation erreicht")
                 raise PublicError(400, "storage_limit", "Speicherkontingent der Organisation erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
