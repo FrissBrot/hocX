@@ -47,3 +47,25 @@ def test_expired_or_revoked_invites_do_not_count(db):
     revoked.revoked_at = datetime.now(UTC)
     db.flush()
     assert user_limit_service.pending_invite_count(db, tenant.id) == 0
+
+
+def test_subscription_reports_open_invites_as_taken_seats(db):
+    """«Abo & Nutzung» zeigt freie Plätze: offene Einladungen zählen beim Einladen schon mit und
+    müssen deshalb mitgeliefert werden, sonst zeigt die Seite Plätze frei, die ein 409 ergeben."""
+    from tests.factories import system_role_permissions
+    from app.core.security import CurrentUser
+    from app.services.tenant_service import TenantService
+
+    tenant = make_tenant(db, "Limit Anzeige")
+    tenant.user_limit_override = 2
+    make_app_user(db, "anzeige-admin@example.com", tenant_id=tenant.id, role_code="admin")
+    _invite(db, tenant.id, make_participant(db, tenant.id, "Eingeladen"))
+    actor = CurrentUser(
+        user_id=1, user_public_id=tenant.public_id, first_name="Test", last_name="Admin", display_name="Test Admin",
+        email="test@example.com", preferred_language="de", current_tenant_id=tenant.id,
+        current_tenant_public_id=tenant.public_id, current_tenant_name=tenant.name, current_tenant_profile_image_path=None,
+        permissions=system_role_permissions("admin"), current_tenant_features=frozenset(),
+    )
+    subscription = TenantService().get_subscription(db, tenant.id, actor)
+    assert subscription.user_count == 1
+    assert subscription.pending_invite_count == 1

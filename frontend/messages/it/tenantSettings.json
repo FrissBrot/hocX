@@ -147,6 +147,7 @@
   "seatsOf": "di {limit} posti",
   "seatsUnlimited": "posti, illimitati",
   "seatsFree": "{count, plural, one {# posto libero} other {# posti liberi}}",
+  "seatsPendingInvites": "{count, plural, one {# invito aperto occupa un posto} other {# inviti aperti occupano posti}}",
   "noFilesYet": "nessun file salvato",
   "privacy": {
     "intro": "Stabilisce chi vede quali dati personali. Vale per tutti i membri di questa organizzazione.",

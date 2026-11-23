@@ -184,6 +184,8 @@ export type TenantSubscription = {
   user_limit_override: number | null;
   effective_user_limit: number | null;
   user_count: number;
+  /** Offene Einladungen belegen schon einen Platz im Benutzerlimit. */
+  pending_invite_count?: number;
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   package_storage_bytes: number;
