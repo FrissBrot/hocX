@@ -138,9 +138,26 @@ def revoke(db: Session, session_ids: list[uuid.UUID], *, reason: str) -> int:
     ).rowcount or 0
 
 
+def _ancestors(db: Session, session_id: uuid.UUID) -> list[uuid.UUID]:
+    """Eltern-Kette einer Kind-Session (Domain-Bridge), höchstens wenige Ebenen."""
+    found: list[uuid.UUID] = []
+    current = db.get(AuthSession, session_id)
+    for _depth in range(5):
+        if current is None or current.parent_id is None:
+            break
+        found.append(current.parent_id)
+        current = db.get(AuthSession, current.parent_id)
+    return found
+
+
 def revoke_all(db: Session, user_id: int, *, reason: str, except_id: uuid.UUID | None = None) -> int:
-    """Alle Sessions des Kontos ausser ``except_id`` (und dessen Kinder) widerrufen (ohne Commit)."""
-    keep = set(_with_children(db, [except_id])) if except_id else set()
+    """Alle Sessions des Kontos ausser ``except_id`` (und dessen Kinder) widerrufen (ohne Commit).
+
+    Ist ``except_id`` eine Kind-Session (Mandanten-Domain), bleibt auch ihre Eltern-Kette im
+    Register: eine Kind-Session gilt nur, solange die Eltern-Session lebt (``validate``), sonst
+    endete die «behaltene» Session gleich mit. Die Cookies der Eltern-Sessions beenden die Aufrufer
+    bei Bedarf über ``session_revoke_at``."""
+    keep = set(_with_children(db, [except_id])) | set(_ancestors(db, except_id)) if except_id else set()
     statement = update(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
     if keep:
         statement = statement.where(AuthSession.id.not_in(keep))
