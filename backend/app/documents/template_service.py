@@ -368,6 +368,9 @@ def restore_revision(db: Session, template: DocumentTemplate, revision: Document
 
 
 def set_archived(db: Session, template: DocumentTemplate, archived: bool, *, user_id: int | None) -> DocumentTemplate:
+    # Sperre: eine gleichzeitige Zuweisung (set_assignment, FOR SHARE) wird erst festgeschrieben
+    # und danach unten mit entfernt bzw. sieht danach «archiviert» und lehnt ab.
+    lock_row(db, template)
     template.status = "archived" if archived else "active"
     template.updated_by = user_id
     if archived:
@@ -479,6 +482,10 @@ def set_assignment(
     """Standard setzen oder (ohne Vorlage und Brand) entfernen."""
     doc_type = get_type(document_type)
     if template is not None:
+        # Status unter Sperre neu lesen: sonst archivierte eine gleichzeitige Anfrage die Vorlage
+        # (set_archived), ohne diese noch nicht festgeschriebene Zuweisung zu sehen.
+        db.flush()
+        db.refresh(template, with_for_update={"read": True})
         if template.document_type != document_type:
             raise TemplateStateError("apiError.templateTypeMismatch")
         if template.status != "active" or template.published_revision_id is None:
