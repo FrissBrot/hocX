@@ -69,7 +69,13 @@ Secrets, zwei optionale Umgebungsvariablen, keine Breaking Changes.
 - Organisations-Bestätigung: eine gleichzeitige oder zwischenzeitliche Umbenennung kann nicht mehr
   als bestätigt gelten.
 - Bussen zu Protokollen folgen denselben Leserechten wie das Protokoll selbst (Entwürfe nur mit
-  dem Recht, Entwürfe zu lesen); nicht lesbare Protokolle verhalten sich wie unbekannte.
+  dem Recht, Entwürfe zu lesen), auch in der Bussenliste und der Summe offener Bussen; nicht
+  lesbare Protokolle verhalten sich wie unbekannte.
+- Ein als geleakt markiertes Passwort bestätigt in einer Sitzung von vor der Markierung weder eine
+  Identitätsbestätigung noch einen Passwortwechsel; dafür neu anmelden oder «Passwort vergessen».
+- Wiedereintritt nach einem Austritt beendet alte Sitzungen und Einmal-Links; eine Mehrfacheinladung
+  mit Rolle verlangt die Bestätigung der Identität vor der ersten Änderung; die
+  Organisations-Bestätigung verlangt den geprüften Namen.
 - Bilder aus Protokollentwürfen: Dateiübersicht, Fotos, Zeitleiste, Zahlen, Tag-Vorschläge, Suche
   und Ähnlichkeitsgruppen zeigen Protokollbilder und -exporte nur noch, wenn das Konto das Protokoll
   lesen darf (bisher erschienen Name, Protokollnummer und Blocktitel von Entwürfen). Ein in einen
