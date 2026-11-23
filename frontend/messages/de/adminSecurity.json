@@ -67,7 +67,7 @@
   },
   "events": {
     "title": "Anmeldeereignisse",
-    "description": "Letzte Ereignisse des Anmeldeschutzes. Konten, Netze und Geräte erscheinen nur als gekürzte Pseudonyme.",
+    "description": "Alle Ereignisse des Anmeldeschutzes. Ein Klick auf ein Pseudonym filtert danach – so folgst du einer Spur von Netz zu Konto zu Mandant. Konten, Netze und Geräte erscheinen nur gekürzt.",
     "typeLabel": "Ereignistyp",
     "typeAll": "Alle Typen",
     "outcomeLabel": "Ergebnis",
@@ -80,9 +80,12 @@
       "subject": "Konto",
       "network": "Netz",
       "risk": "Risiko",
-      "client": "Gerät",
-      "actions": "Aktionen",
-      "country": "Land"
+      "client": "Client",
+      "country": "Land",
+      "device": "Gerät (Pseudonym)",
+      "enforcement": "Durchsetzung",
+      "policy": "Richtlinie",
+      "details": "Details"
     },
     "actorKinds": {
       "user": "Benutzer",
@@ -93,7 +96,6 @@
     "empty": "Keine Ereignisse für diese Auswahl.",
     "previous": "Neuere",
     "next": "Ältere",
-    "pageInfo": "Einträge {from, number}–{to, number}",
     "resolve": "Konto anzeigen",
     "resolveConfirm": "Das Pseudonym dieses Ereignisses einem Konto zuordnen? Die Zuordnung braucht eine Passkey-Bestätigung und wird im Audit-Log festgehalten.",
     "countrySource": "Länderangaben: <link>«IP to Country Lite» von DB-IP.com</link> (CC BY 4.0), lokal ermittelt, ohne gespeicherte IP-Adresse.",
@@ -112,7 +114,76 @@
       "privileged_account": "Konto mit Verwaltungsrechten",
       "attack_mode": "Angriffsmodus",
       "degraded": "Notbetrieb (ohne Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Einzeln",
+      "net": "Nach Netz",
+      "subject": "Nach Konto"
+    },
+    "listLabel": "Ereignisse",
+    "pageInfoKeyset": "Seite {page, number} · {count, plural, one {# Eintrag} other {# Einträge}} · neueste zuerst",
+    "filtersLabel": "Filter der Ereignisse",
+    "pivots": {
+      "subject": "konto",
+      "net": "netz",
+      "device": "gerät",
+      "country": "land"
+    },
+    "tokenLabel": "Filter eingeben",
+    "removePivot": "Filter {filter} entfernen",
+    "tokenPlaceholder": "z. B. netz:3f9a1c07 oder land:NL",
+    "tokenInvalid": "Unbekannter Filter. Möglich: konto:, netz:, gerät: (mind. 4 Zeichen) oder land: (z. B. CH).",
+    "tokenHelp": "Mit Enter übernehmen. Ein Klick auf ein Pseudonym in der Liste filtert ebenfalls.",
+    "tenantLabel": "Mandant",
+    "tenantAll": "Alle Mandanten",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 Tage",
+      "14d": "14 Tage"
+    },
+    "liveOn": "Live (30 s)",
+    "liveOff": "Live aus",
+    "reset": "Filter zurücksetzen",
+    "histogramTitle": "Verlauf der gefilterten Ereignisse",
+    "histogramOther": "Abgewiesen/geprüft",
+    "histogramSummary": "{failure, number} Fehlversuche, {other, number} abgewiesene oder geprüfte und {success, number} erfolgreiche Ereignisse im gewählten Zeitraum.",
+    "barTitle": "{time}: {failure, number} fehlgeschlagen · {other, number} abgewiesen/geprüft · {success, number} erfolgreich",
+    "now": "jetzt",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "moderat",
+      "high": "hoch",
+      "critical": "kritisch"
+    },
+    "openEvent": "Ereignis {type} von {time} öffnen",
+    "filterBy": "Nach {filter} {value} filtern",
+    "groupColumns": {
+      "net": "Netz",
+      "subject": "Konto",
+      "distribution": "Verteilung",
+      "events": "Ereignisse",
+      "accounts": "Konten",
+      "networks": "Netze",
+      "maxRisk": "Max. Risiko",
+      "last": "Zuletzt"
+    },
+    "distribution": "{failure, number} fehlgeschlagen, {other, number} abgewiesen/geprüft, {success, number} erfolgreich",
+    "closeDetail": "Detail schliessen",
+    "riskHeading": "Risiko {score} · {level}",
+    "riskNone": "Kein Risikowert",
+    "noReasons": "Kein Risikosignal.",
+    "noWeights": "Ältere Ereignisse (vor 1.6) speichern nur die Gründe, keine Gewichte.",
+    "trace": "Spur verfolgen (±{hours} h)",
+    "traceKinds": {
+      "net": "Gleiches Netz",
+      "subject": "Gleiches Konto",
+      "country": "Gleiches Land"
+    },
+    "blockSource": "Quelle sperren",
+    "blocked": "Netz gesperrt.",
+    "blockTitle": "Netz {net} sperren",
+    "blockDescription": "Manuelle Sperre (Stufe 5) des Netzes dieses Ereignisses (IPv4 /24, IPv6 /48). Wird mit Passkey bestätigt und im Audit-Log vermerkt. Plattform-Admins bleiben ausgenommen."
   },
   "blocks": {
     "title": "Sperren",

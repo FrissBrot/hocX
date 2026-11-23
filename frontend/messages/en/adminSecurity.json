@@ -67,7 +67,7 @@
   },
   "events": {
     "title": "Sign-in events",
-    "description": "Latest events of the sign-in protection. Accounts, networks and devices only appear as shortened pseudonyms.",
+    "description": "All events of the sign-in protection. Clicking a pseudonym filters by it – follow a trail from network to account to tenant. Accounts, networks and devices are only shown shortened.",
     "typeLabel": "Event type",
     "typeAll": "All types",
     "outcomeLabel": "Outcome",
@@ -80,9 +80,12 @@
       "subject": "Account",
       "network": "Network",
       "risk": "Risk",
-      "client": "Device",
-      "actions": "Actions",
-      "country": "Country"
+      "client": "Client",
+      "country": "Country",
+      "device": "Device (pseudonym)",
+      "enforcement": "Enforcement",
+      "policy": "Policy",
+      "details": "Details"
     },
     "actorKinds": {
       "user": "User",
@@ -93,7 +96,6 @@
     "empty": "No events for this selection.",
     "previous": "Newer",
     "next": "Older",
-    "pageInfo": "Entries {from, number}–{to, number}",
     "resolve": "Show account",
     "resolveConfirm": "Map this event's pseudonym to an account? This requires a passkey confirmation and is recorded in the audit log.",
     "countrySource": "Country data: <link>“IP to Country Lite” by DB-IP.com</link> (CC BY 4.0), looked up locally, no IP address stored.",
@@ -112,7 +114,76 @@
       "privileged_account": "privileged account",
       "attack_mode": "attack mode",
       "degraded": "degraded mode (no Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Individual",
+      "net": "By network",
+      "subject": "By account"
+    },
+    "listLabel": "Events",
+    "pageInfoKeyset": "Page {page, number} · {count, plural, one {# entry} other {# entries}} · newest first",
+    "filtersLabel": "Event filters",
+    "pivots": {
+      "subject": "account",
+      "net": "network",
+      "device": "device",
+      "country": "country"
+    },
+    "tokenLabel": "Enter filter",
+    "removePivot": "Remove filter {filter}",
+    "tokenPlaceholder": "e.g. network:3f9a1c07 or country:NL",
+    "tokenInvalid": "Unknown filter. Possible: account:, network:, device: (at least 4 characters) or country: (e.g. CH).",
+    "tokenHelp": "Press Enter to apply. Clicking a pseudonym in the list filters too.",
+    "tenantLabel": "Tenant",
+    "tenantAll": "All tenants",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 days",
+      "14d": "14 days"
+    },
+    "liveOn": "Live (30 s)",
+    "liveOff": "Live off",
+    "reset": "Reset filters",
+    "histogramTitle": "Filtered events over time",
+    "histogramOther": "Rejected/checked",
+    "histogramSummary": "{failure, number} failed attempts, {other, number} rejected or checked and {success, number} successful events in the selected period.",
+    "barTitle": "{time}: {failure, number} failed · {other, number} rejected/checked · {success, number} successful",
+    "now": "now",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "moderate",
+      "high": "high",
+      "critical": "critical"
+    },
+    "openEvent": "Open event {type} from {time}",
+    "filterBy": "Filter by {filter} {value}",
+    "groupColumns": {
+      "net": "Network",
+      "subject": "Account",
+      "distribution": "Distribution",
+      "events": "Events",
+      "accounts": "Accounts",
+      "networks": "Networks",
+      "maxRisk": "Max. risk",
+      "last": "Last"
+    },
+    "distribution": "{failure, number} failed, {other, number} rejected/checked, {success, number} successful",
+    "closeDetail": "Close detail",
+    "riskHeading": "Risk {score} · {level}",
+    "riskNone": "No risk score",
+    "noReasons": "No risk signal.",
+    "noWeights": "Older events (before 1.6) only store the reasons, not the weights.",
+    "trace": "Follow the trail (±{hours} h)",
+    "traceKinds": {
+      "net": "Same network",
+      "subject": "Same account",
+      "country": "Same country"
+    },
+    "blockSource": "Block source",
+    "blocked": "Network blocked.",
+    "blockTitle": "Block network {net}",
+    "blockDescription": "Manual block (stage 5) of this event's network (IPv4 /24, IPv6 /48). Confirmed with a passkey and recorded in the audit log. Platform admins remain exempt."
   },
   "blocks": {
     "title": "Blocks",

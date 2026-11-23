@@ -27,13 +27,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app.auth_security import blocks, read_service
+from app.auth_security import blocks, event_query, read_service
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.admin_step_up import require_step_up
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
-from app.schemas.base import MAX_QUERY_OFFSET
 from app.services import export_crypto
 from app.services.audit_service import AuditService
 
@@ -235,15 +234,100 @@ def auth_security_policy(_admin: CurrentAdmin = Depends(require_admin_owner)):
     return {group: {name: getattr(settings, name) for name in names} for group, names in POLICY_SETTINGS.items()}
 
 
-@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
-def auth_security_events(
+# ── Ereignisse (1.6: Filter, Keyset, Gruppen, Histogramm, Detail, Quelle sperren) ─────────────
+
+_HEX_PREFIX = r"^[0-9a-f]{4,32}$"
+
+
+def event_filter(
+    # Rechte zuerst: ein Support-Admin soll über die Mandanten-ID nichts erfahren (wie audit_filter)
+    _owner: CurrentAdmin = Depends(require_admin_owner),
     db: Session = Depends(get_db),
+    range_: Literal["1h", "24h", "7d", "14d"] = Query("24h", alias="range"),
+    subject: str | None = Query(None, pattern=_HEX_PREFIX),
+    net: str | None = Query(None, pattern=_HEX_PREFIX),
+    device: str | None = Query(None, pattern=_HEX_PREFIX),
+    country: str | None = Query(None, pattern=r"^[A-Z]{2}$"),
     event_type: str | None = Query(None, max_length=64),
     outcome: Literal["success", "failure", "blocked", "challenged", "info"] | None = None,
-    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
-    limit: int = Query(100, ge=1, le=500),
+    tenant_id: uuid.UUID | None = None,
+) -> event_query.EventFilter:
+    """Filter der Ereignisseite: Zeitraum Pflicht (höchstens 14 Tage), Pseudonyme nur als Präfix
+    der gekürzten Anzeige, Mandant über die öffentliche ID (TenantPicker)."""
+    internal_tenant = None
+    if tenant_id is not None:
+        internal_tenant = db.scalar(text("SELECT id FROM tenant WHERE public_id = :id"), {"id": tenant_id})
+        if internal_tenant is None:
+            raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    result = event_query.EventFilter(
+        range=range_, subject=subject, net=net, device=device, country=country, event_type=event_type, outcome=outcome,
+        tenant_id=internal_tenant,
+    )
+    try:
+        event_query.validate(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
+
+
+@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
+def auth_security_events(
+    filters: event_query.EventFilter = Depends(event_filter),
+    db: Session = Depends(get_db),
+    cursor: str | None = Query(None, max_length=200),
+    limit: int = Query(50, ge=1, le=200),
 ):
-    return read_service.recent_events(db, limit=limit, offset=offset, event_type=event_type, outcome=outcome)
+    """Anmeldeereignisse, neueste zuerst, mit Keyset-Pagination (``next_cursor``)."""
+    try:
+        return event_query.list_events(db, filters, cursor=cursor, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/auth-security/events/histogram", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_histogram(filters: event_query.EventFilter = Depends(event_filter), db: Session = Depends(get_db)):
+    """Verlauf der gefilterten Ereignisse (48 Abschnitte) und Zähler je Ergebnis; 30 s Cache."""
+    return event_query.histogram(db, filters)
+
+
+@router.get("/auth-security/events/groups", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_groups(
+    by: Literal["net", "subject"],
+    filters: event_query.EventFilter = Depends(event_filter),
+    db: Session = Depends(get_db),
+):
+    """Gefilterte Ereignisse gruppiert nach Netz oder Konto (höchstens 50, 30 s Cache)."""
+    return event_query.groups(db, filters, by)
+
+
+@router.get("/auth-security/events/{event_id}", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_detail(event_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Detail eines Ereignisses: Risiko mit Gewichten (ab 1.6), Felder, Zähler «Spur verfolgen»."""
+    detail = event_query.event_detail(db, event_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Ereignis nicht gefunden")
+    return detail
+
+
+@router.post("/auth-security/events/{event_id}/block", status_code=201, dependencies=[Depends(require_step_up("security-block"))])
+def block_event_source(event_id: uuid.UUID, payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+    """«Quelle sperren»: manuelle Sperre (Stufe 5) des Netz-Fingerprints des Ereignisses (/24 bzw.
+    /48, User-Entscheid 2026-11-23). Ereignisse eines Plattform-Admins werden nicht gesperrt."""
+    try:
+        fingerprint, actor_kind = event_query.block_subject(db, event_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Ereignis nicht gefunden") from exc
+    if actor_kind == "admin":
+        raise HTTPException(status_code=422, detail={"code": "admin_source", "message": "Quellen von Plattform-Admins werden nicht gesperrt."})
+    if not fingerprint:
+        raise HTTPException(status_code=422, detail={"code": "no_network", "message": "Zu diesem Ereignis ist kein Netz bekannt."})
+    try:
+        block = blocks.set_manual(subject=fingerprint, scope="net_fp", minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    event_query.clear_cache()
+    _block_audit(db, admin, "admin.auth_block_set", block, source="event", event_id=str(event_id))
+    return {"subject": block.subject, "until": block.until}
 
 
 @router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])

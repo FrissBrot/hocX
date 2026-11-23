@@ -67,7 +67,7 @@
   },
   "events": {
     "title": "Eventi di accesso",
-    "description": "Ultimi eventi della protezione degli accessi. Account, reti e dispositivi compaiono solo come pseudonimi abbreviati.",
+    "description": "Tutti gli eventi della protezione degli accessi. Un clic su uno pseudonimo filtra per esso – così segui una traccia da rete ad account a mandante. Account, reti e dispositivi appaiono solo abbreviati.",
     "typeLabel": "Tipo di evento",
     "typeAll": "Tutti i tipi",
     "outcomeLabel": "Esito",
@@ -80,9 +80,12 @@
       "subject": "Account",
       "network": "Rete",
       "risk": "Rischio",
-      "client": "Dispositivo",
-      "actions": "Azioni",
-      "country": "Paese"
+      "client": "Client",
+      "country": "Paese",
+      "device": "Dispositivo (pseudonimo)",
+      "enforcement": "Applicazione",
+      "policy": "Regola",
+      "details": "Dettagli"
     },
     "actorKinds": {
       "user": "Utente",
@@ -93,7 +96,6 @@
     "empty": "Nessun evento per questa selezione.",
     "previous": "Più recenti",
     "next": "Meno recenti",
-    "pageInfo": "Voci {from, number}–{to, number}",
     "resolve": "Mostra account",
     "resolveConfirm": "Associare lo pseudonimo di questo evento a un account? Richiede una conferma con passkey e viene registrato nel registro di audit.",
     "countrySource": "Paesi: <link>«IP to Country Lite» di DB-IP.com</link> (CC BY 4.0), determinati localmente, senza indirizzo IP salvato.",
@@ -112,7 +114,76 @@
       "privileged_account": "account con privilegi",
       "attack_mode": "modalità attacco",
       "degraded": "modalità ridotta (senza Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Singoli",
+      "net": "Per rete",
+      "subject": "Per account"
+    },
+    "listLabel": "Eventi",
+    "pageInfoKeyset": "Pagina {page, number} · {count, plural, one {# voce} other {# voci}} · più recenti prima",
+    "filtersLabel": "Filtri degli eventi",
+    "pivots": {
+      "subject": "account",
+      "net": "rete",
+      "device": "dispositivo",
+      "country": "paese"
+    },
+    "tokenLabel": "Inserire filtro",
+    "removePivot": "Rimuovi filtro {filter}",
+    "tokenPlaceholder": "p. es. rete:3f9a1c07 o paese:NL",
+    "tokenInvalid": "Filtro sconosciuto. Possibili: account:, rete:, dispositivo: (almeno 4 caratteri) o paese: (p. es. CH).",
+    "tokenHelp": "Conferma con Invio. Anche un clic su uno pseudonimo nella lista filtra.",
+    "tenantLabel": "Mandante",
+    "tenantAll": "Tutti i mandanti",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 giorni",
+      "14d": "14 giorni"
+    },
+    "liveOn": "Live (30 s)",
+    "liveOff": "Live spento",
+    "reset": "Reimposta filtri",
+    "histogramTitle": "Andamento degli eventi filtrati",
+    "histogramOther": "Respinti/verificati",
+    "histogramSummary": "{failure, number} tentativi falliti, {other, number} eventi respinti o verificati e {success, number} riusciti nel periodo scelto.",
+    "barTitle": "{time}: {failure, number} falliti · {other, number} respinti/verificati · {success, number} riusciti",
+    "now": "ora",
+    "riskLevels": {
+      "normal": "normale",
+      "moderate": "moderato",
+      "high": "alto",
+      "critical": "critico"
+    },
+    "openEvent": "Apri l'evento {type} delle {time}",
+    "filterBy": "Filtra per {filter} {value}",
+    "groupColumns": {
+      "net": "Rete",
+      "subject": "Account",
+      "distribution": "Distribuzione",
+      "events": "Eventi",
+      "accounts": "Account",
+      "networks": "Reti",
+      "maxRisk": "Rischio max.",
+      "last": "Ultimo"
+    },
+    "distribution": "{failure, number} falliti, {other, number} respinti/verificati, {success, number} riusciti",
+    "closeDetail": "Chiudi dettaglio",
+    "riskHeading": "Rischio {score} · {level}",
+    "riskNone": "Nessun valore di rischio",
+    "noReasons": "Nessun segnale di rischio.",
+    "noWeights": "Gli eventi più vecchi (prima della 1.6) salvano solo i motivi, senza pesi.",
+    "trace": "Segui la traccia (±{hours} h)",
+    "traceKinds": {
+      "net": "Stessa rete",
+      "subject": "Stesso account",
+      "country": "Stesso paese"
+    },
+    "blockSource": "Blocca fonte",
+    "blocked": "Rete bloccata.",
+    "blockTitle": "Blocca la rete {net}",
+    "blockDescription": "Blocco manuale (livello 5) della rete di questo evento (IPv4 /24, IPv6 /48). Confermato con passkey e registrato nel log di audit. Gli admin della piattaforma restano esclusi."
   },
   "blocks": {
     "title": "Blocchi",

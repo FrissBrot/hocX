@@ -181,3 +181,139 @@ def test_support_cannot_read_or_change_blocks(db):
     assert client.post(f"/api/admin/auth-security/blocks/{subject}/extend", json={"minutes": 5, "reason": "nicht erlaubt"}).status_code == 403
     assert client.delete(f"/api/admin/auth-security/blocks/{subject}").status_code == 403
     assert blocks.get(subject) is not None
+
+
+# ── Ereignisse ─────────────────────────────────────────────────────────────────────────────
+
+
+def _hex(length: int = 32) -> str:
+    return (uuid.uuid4().hex + uuid.uuid4().hex)[:length]
+
+
+def _insert_event(db, *, minutes_ago: float = 1, **values) -> uuid.UUID:
+    values = {"event_type": "login.password", "outcome": "failure", "actor_kind": "anonymous", **values}
+    columns = ", ".join(values)
+    params = ", ".join(f":{key}" if key != "details" else "CAST(:details AS jsonb)" for key in values)
+    return db.execute(
+        text(f"INSERT INTO auth_event (ts, {columns}) VALUES (now() - make_interval(secs => :ago), {params}) RETURNING event_id"),  # sql-ok: Spaltennamen aus dem Test
+        {**values, "ago": minutes_ago * 60},
+    ).scalar()
+
+
+@pytest.fixture
+def owner_client(db):
+    from app.auth_security import event_query
+
+    event_query.clear_cache()
+    return _client(db, _admin(db))
+
+
+def test_event_filters_by_prefixes_country_type_outcome_and_tenant(db, owner_client):
+    from tests.factories import make_tenant
+
+    tenant = make_tenant(db, "Ereignis Verein")
+    subject, net, device = _hex(), _hex(16), _hex()
+    _insert_event(db, subject_hash=subject, src_net_hash=net, device_hash=device, src_country="NL", tenant_id=tenant.id)
+    _insert_event(db, subject_hash=subject, src_net_hash=_hex(16), outcome="blocked", event_type="login.locked")
+    _insert_event(db, subject_hash=_hex(), src_net_hash=net, outcome="success", event_type="login.success", minutes_ago=60 * 30)
+
+    def items(**query):
+        response = owner_client.get("/api/admin/auth-security/events", params=query)
+        assert response.status_code == 200, response.text
+        return response.json()["items"]
+
+    assert len(items(subject=subject[:12])) == 2
+    assert items(subject=subject[:12])[0]["subject_hash"] == subject[:12]   # nur gekürzt
+    assert len(items(net=net[:12])) == 1                                   # 30 h alt: ausserhalb 24 h
+    assert len(items(net=net[:12], range="7d")) == 2
+    assert len(items(device=device[:8])) == 1
+    assert len(items(subject=subject[:12], country="NL")) == 1
+    assert len(items(subject=subject[:12], outcome="blocked")) == 1
+    assert len(items(subject=subject[:12], event_type="login.locked")) == 1
+    row = items(subject=subject[:12], tenant_id=str(tenant.public_id))
+    assert len(row) == 1 and row[0]["tenant_name"] == "Ereignis Verein" and row[0]["tenant_id"] == str(tenant.public_id)
+    assert owner_client.get("/api/admin/auth-security/events", params={"tenant_id": str(uuid.uuid4())}).status_code == 404
+    for bad in ({"range": "30d"}, {"subject": "XYZ1"}, {"net": "ab"}, {"country": "nl"}, {"event_type": "erfunden"}, {"cursor": "kaputt"}):
+        assert owner_client.get("/api/admin/auth-security/events", params=bad).status_code == 422, bad
+
+
+def test_event_keyset_pagination_is_complete_and_disjoint(db, owner_client):
+    subject = _hex()
+    for index in range(5):
+        _insert_event(db, subject_hash=subject, minutes_ago=index + 1)
+    seen, cursor = [], None
+    for _ in range(5):
+        params = {"subject": subject[:16], "limit": 2, **({"cursor": cursor} if cursor else {})}
+        page = owner_client.get("/api/admin/auth-security/events", params=params).json()
+        seen += [item["event_id"] for item in page["items"]]
+        cursor = page["next_cursor"]
+        if not cursor:
+            break
+    assert len(seen) == 5 and len(set(seen)) == 5
+
+
+def test_event_groups_and_histogram(db, owner_client):
+    net = _hex(16)
+    for outcome in ("failure", "failure", "blocked"):
+        _insert_event(db, subject_hash=_hex(), src_net_hash=net, outcome=outcome, risk_score=40)
+    (group,) = owner_client.get("/api/admin/auth-security/events/groups", params={"by": "net", "net": net[:12]}).json()
+    assert group["key"] == net[:12] and group["events"] == 3 and group["failure"] == 2 and group["distinct_other"] == 3 and group["max_risk"] == 40
+    histogram = owner_client.get("/api/admin/auth-security/events/histogram", params={"net": net[:12], "outcome": "blocked"}).json()
+    assert len(histogram["buckets"]) == 48
+    assert histogram["outcome_counts"]["failure"] == 2 and histogram["outcome_counts"]["blocked"] == 1   # ohne Ergebnis-Filter
+    assert sum(bucket["failure"] for bucket in histogram["buckets"]) == 0                                # Balken mit Filter
+    assert owner_client.get("/api/admin/auth-security/events/groups", params={"by": "device"}).status_code == 422
+
+
+def test_event_detail_with_weights_and_related_counts(db, owner_client):
+    from app.auth_security import events
+
+    subject, net = _hex(), _hex(16)
+    _insert_event(db, subject_hash=subject, src_net_hash=net, src_country="CH")
+    event_id = _insert_event(
+        db, subject_hash=subject, src_net_hash=net, src_country="CH", risk_score=35, risk_reasons=["new_device", "spraying"],
+        details=json.dumps({"weights": {"new_device": 10, "spraying": 25}, "reason": "password"}),
+    )
+    detail = owner_client.get(f"/api/admin/auth-security/events/{event_id}").json()
+    assert detail["reasons"] == [{"code": "new_device", "weight": 10}, {"code": "spraying", "weight": 25}]
+    assert detail["has_weights"] and "weights" not in detail["details"]
+    assert detail["related"]["net"] == 2 and detail["related"]["subject"] == 2 and detail["related"]["country"] >= 2
+    assert detail["can_block"] and len(detail["src_net_hash"]) == 12
+    assert owner_client.get(f"/api/admin/auth-security/events/{uuid.uuid4()}").status_code == 404
+    # Neue Ereignisse speichern die Gewichte selbst (events.record)
+    marker = _hex()
+    events.record(event_type="login.password", outcome="failure", subject_hash=marker, risk_score=20, risk_reasons=["new_device"],
+                  risk_weights={"new_device": 10, "kaputt grund": 5, "x": True})
+    db.expire_all()
+    stored = db.scalars(select(AuthEvent).where(AuthEvent.subject_hash == marker)).one()
+    assert stored.details["weights"] == {"new_device": 10}
+
+
+def test_block_event_source_blocks_the_net_fingerprint(db, owner_client):
+    fingerprint = net_hash("198.51.100.50")
+    event_id = _insert_event(db, subject_hash=_hex(), src_net_hash=fingerprint)
+    response = owner_client.post(f"/api/admin/auth-security/events/{event_id}/block", json={"minutes": 60, "reason": "Spraying aus Netz"})
+    assert response.status_code == 201, response.text
+    block = blocks.is_blocked("198.51.100.61")
+    assert block is not None and block.scope == "net_fp" and block.manual
+    audit = db.execute(text("SELECT details_json FROM audit_log WHERE action = 'admin.auth_block_set' ORDER BY id DESC LIMIT 1")).scalar()
+    assert audit["source"] == "event" and audit["event_id"] == str(event_id) and audit["subject"] == fingerprint[:12]
+    (event,) = _block_events(db, fingerprint)
+    assert event.src_net_hash == fingerprint   # Sperr-Ereignis erscheint beim Netz-Filter
+
+    admin_event = _insert_event(db, actor_kind="admin", src_net_hash=net_hash("198.51.102.1"), event_type="admin.login.password")
+    assert owner_client.post(f"/api/admin/auth-security/events/{admin_event}/block", json={"minutes": 5, "reason": "nicht erlaubt"}).status_code == 422
+    no_net = _insert_event(db, subject_hash=_hex())
+    assert owner_client.post(f"/api/admin/auth-security/events/{no_net}/block", json={"minutes": 5, "reason": "ohne Netz"}).status_code == 422
+    assert owner_client.post(f"/api/admin/auth-security/events/{uuid.uuid4()}/block", json={"minutes": 5, "reason": "gibt es nicht"}).status_code == 404
+    assert owner_client.post(f"/api/admin/auth-security/events/{event_id}/block", json={"minutes": 5, "reason": ""}).status_code == 422
+
+
+def test_support_cannot_read_events_or_block_sources(db):
+    event_id = _insert_event(db, subject_hash=_hex(), src_net_hash=net_hash("198.51.100.70"))
+    client = _client(db, _admin(db, "support"))
+    for path in ("/events", "/events/histogram", "/events/groups?by=net", f"/events/{event_id}"):
+        assert client.get(f"/api/admin/auth-security{path}").status_code == 403, path
+    assert client.get("/api/admin/auth-security/events", params={"tenant_id": str(uuid.uuid4())}).status_code == 403   # kein 404-Orakel
+    assert client.post(f"/api/admin/auth-security/events/{event_id}/block", json={"minutes": 5, "reason": "nicht erlaubt"}).status_code == 403
+    assert blocks.is_blocked("198.51.100.70") is None

@@ -112,6 +112,27 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/auth-security/events/groups": {
+      "handler": "admin_auth_security.auth_security_event_groups",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/events/histogram": {
+      "handler": "admin_auth_security.auth_security_event_histogram",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/events/{event_id}": {
+      "handler": "admin_auth_security.auth_security_event_detail",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/auth-security/events/{event_id}/block": {
+      "handler": "admin_auth_security.block_event_source",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "security-block"
+    },
     "POST /api/admin/auth-security/events/{event_id}/resolve-subject": {
       "handler": "admin_auth_security.resolve_event_subject",
       "platform": true,

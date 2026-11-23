@@ -67,10 +67,15 @@ describe("Sicherheitsbereich (Plattform)", () => {
   });
 
   it("Ereignisliste übernimmt den Filter aus der URL", async () => {
-    respond({ "/api/admin/auth-security/events": [] });
+    respond({
+      "/api/admin/auth-security/events/histogram": { start: "2026-11-22T10:00:00Z", end: "2026-11-23T10:00:00Z", bucket_seconds: 1800, buckets: [], outcome_counts: { success: 0, failure: 0, blocked: 0, challenged: 0, info: 0 }, total: 0 },
+      "/api/admin/auth-security/events": { items: [], next_cursor: null, start: "2026-11-22T10:00:00Z", end: "2026-11-23T10:00:00Z" },
+    });
     render(<SecurityEvents />);
     expect(await screen.findByText("Keine Ereignisse für diese Auswahl.")).toBeInTheDocument();
-    expect(browserApiFetchMock.mock.calls[0][0]).toContain("outcome=failure");
+    const listCall = browserApiFetchMock.mock.calls.find(([path]) => String(path).startsWith("/api/admin/auth-security/events?"));
+    expect(listCall?.[0]).toContain("outcome=failure");
+    expect(listCall?.[0]).toContain("range=24h");
   });
 
   it("Warnungen lassen sich nach Rückfrage quittieren (1.5.1)", async () => {

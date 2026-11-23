@@ -42,6 +42,15 @@ Installationen aktualisieren können.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
+- **Konsole › Sicherheit › Anmeldeereignisse neu (1.6):** Filter nach Konto-, Netz- und
+  Geräte-Pseudonym (Klick auf ein Pseudonym oder Eingabe wie `netz:3f9a1c07`), Land, Typ, Ergebnis
+  und Mandant (Suche statt Mandantenliste); der Zeitraum ist Pflicht (1 h bis 14 Tage). Ein
+  Histogramm zeigt die gefilterten Ereignisse (mit Tabellenalternative), die Ergebnis-Reiter zählen
+  mit. Ansicht «Nach Netz» bzw. «Nach Konto» gruppiert die Treffer. Blättern ohne Offset
+  (Keyset), Live-Aktualisierung alle 30 s. Das Detail erklärt das Risiko mit den Gewichten der
+  Gründe (ab 1.6 gespeichert, ältere Ereignisse nur mit Gründen), zeigt «Spur verfolgen» (gleiches
+  Netz, Konto, Land) und bietet «Quelle sperren» – sperrt das Netz des Ereignisses (/24, /48) mit
+  Passkey-Bestätigung. Filter stehen in der URL, nur als Codes und Pseudonym-Präfixe.
 - **Konsole › Sicherheit › Sperren neu (1.6):** Abwehrleiter mit allen fünf Stufen (Stufen 1–3 als
   Ereignisse der letzten 24 h, 4–5 als aktive Sperren), Karten je Sperre mit Countdown, Grund,
   Zähler «Abgewiesen», gesetzt von, **Verlängern** (macht die Sperre zur manuellen Sperre Stufe 5,

@@ -421,3 +421,232 @@
     align-items: flex-start;
   }
 }
+
+/* ── 1.6 Ereignisse (Design «hocX Sicherheit Ereignisse») ───────────────────────── */
+
+.admin-security-nowrap {
+  white-space: nowrap;
+}
+
+.admin-security-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.admin-security-token-form {
+  display: flex;
+  min-width: min(100%, 320px);
+  flex: 1 1 360px;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-security-token-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--button-height);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+
+.admin-security-token-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.admin-security-token-field input {
+  min-width: 160px;
+  flex: 1;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: var(--space-1);
+}
+
+.admin-security-token-field input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.admin-security-token-error {
+  color: var(--danger-fg);
+}
+
+.admin-security-pivot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 2px 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  font-size: var(--text-sm);
+}
+
+.admin-security-pivot-key {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.admin-security-pivot-button {
+  padding: 2px var(--space-1);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.admin-security-pivot-button:hover {
+  background: var(--accent-soft);
+}
+
+.admin-security-swatch-failure,
+.admin-security-bar-failure { background: var(--danger); }
+.admin-security-swatch-other,
+.admin-security-bar-other { background: var(--warning); }
+.admin-security-swatch-success,
+.admin-security-bar-success { background: var(--success); }
+
+.admin-security-bars {
+  display: flex;
+  height: 96px;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.admin-security-bar {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.admin-security-bar > div:first-child {
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+
+.admin-security-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-security-risk-meter {
+  display: inline-block;
+  width: 36px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-security-risk-meter > span {
+  display: block;
+  height: 100%;
+}
+
+.admin-security-risk-normal > span { background: var(--success); }
+.admin-security-risk-moderate > span { background: var(--warning); }
+.admin-security-risk-high > span { background: var(--danger); }
+.admin-security-risk-critical > span { background: var(--danger); }
+
+.admin-security-distribution {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-security-events-layout {
+  display: grid;
+  /* Als Grid-Element von .section-stack sonst so breit wie die Tabelle (390 px) */
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+/* Grid statt Flex-Spalte: .table-shell hat align-self: start und würde in einer Flex-Spalte so breit
+   wie die Tabelle (390 px: Seite liefe über) */
+.admin-security-events-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+@media (min-width: 901px) {
+  .admin-security-events-layout-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  }
+}
+
+.admin-security-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-security-risk-stack {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-security-weight-high { background: var(--danger); }
+.admin-security-weight-mid { background: var(--warning); }
+.admin-security-weight-low { background: var(--accent); }
+
+.admin-security-reason-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.admin-security-reason-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-security-trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.admin-security-trace-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-security-trace-item:hover {
+  border-color: var(--accent);
+}

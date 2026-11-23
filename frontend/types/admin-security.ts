@@ -111,23 +111,64 @@ export type ResolvedSubject = {
   is_active: boolean | null;
 };
 
+/** Zeile der Ereignisliste (1.6): Pseudonyme gekürzt (12 Zeichen), Mandant als öffentliche ID + Name. */
 export type AuthEventRow = {
   event_id: string;
   ts: string;
   event_type: string;
   outcome: AuthOutcome;
   actor_kind: string;
-  actor_user_id: number | null;
   platform_admin_id: number | null;
-  tenant_id: number | null;
+  tenant_id: string | null;
+  tenant_name: string | null;
   subject_hash: string | null;
   src_net_hash: string | null;
   device_hash: string | null;
+  /** Ländercode der Quelle (lokale GeoIP-Datenbank), nie die IP */
+  src_country: string | null;
   risk_score: number | null;
   risk_reasons: string[];
+  enforcement: string | null;
   user_agent_family: string | null;
-  /** Ländercode der Quelle (lokale GeoIP-Datenbank), nie die IP */
-  src_country?: string | null;
+};
+
+/** GET /api/admin/auth-security/events (Keyset) */
+export type AuthEventPage = { items: AuthEventRow[]; next_cursor: string | null; start: string; end: string };
+
+export type AuthEventHistogram = {
+  start: string;
+  end: string;
+  bucket_seconds: number;
+  buckets: ({ start: string } & Record<AuthOutcome, number>)[];
+  outcome_counts: Record<AuthOutcome, number>;
+  total: number;
+};
+
+export type AuthEventGroup = {
+  key: string;
+  events: number;
+  failure: number;
+  blocked: number;
+  challenged: number;
+  success: number;
+  distinct_other: number;
+  tenants: number;
+  max_risk: number | null;
+  last_at: string;
+  country: string | null;
+  tenant_name: string | null;
+};
+
+export type AuthEventDetail = AuthEventRow & {
+  policy_version: string | null;
+  endpoint: string | null;
+  host_kind: string | null;
+  reasons: { code: string; weight: number | null }[];
+  has_weights: boolean;
+  details: Record<string, unknown>;
+  related: Partial<Record<"net" | "subject" | "country", number>>;
+  related_hours: number;
+  can_block: boolean;
 };
 
 export type AuthPolicy = Record<string, Record<string, number | string | boolean>>;

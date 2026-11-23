@@ -181,23 +181,6 @@ def block_history(db: Session, *, days: int = BLOCK_HISTORY_DAYS) -> dict:
     return {"start": start, "end": datetime.now(UTC), "sources": result}
 
 
-def recent_events(db: Session, *, limit: int = 100, offset: int = 0, event_type: str | None = None, outcome: str | None = None) -> list[dict]:
-    rows = db.execute(
-        text(
-            "SELECT event_id, ts, event_type, outcome, actor_kind, actor_user_id, platform_admin_id, tenant_id, subject_hash, src_net_hash, "
-            "device_hash, session_id, request_id, risk_score, risk_reasons, enforcement, policy_version, endpoint, host_kind, "
-            "user_agent_family, src_country, details FROM auth_event "
-            "WHERE (CAST(:event_type AS text) IS NULL OR event_type = :event_type) AND (CAST(:outcome AS text) IS NULL OR outcome = :outcome) "
-            "ORDER BY ts DESC LIMIT :limit OFFSET :offset"
-        ),
-        {"event_type": event_type, "outcome": outcome, "limit": min(limit, 500), "offset": offset},
-    ).mappings()
-    return [
-        {**dict(row), "subject_hash": _short(row["subject_hash"]), "src_net_hash": _short(row["src_net_hash"]), "device_hash": _short(row["device_hash"])}
-        for row in rows
-    ]
-
-
 def platform_summary(db: Session) -> dict:
     return {
         "timeseries": timeseries(db),

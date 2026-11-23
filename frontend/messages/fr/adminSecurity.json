@@ -67,7 +67,7 @@
   },
   "events": {
     "title": "Événements de connexion",
-    "description": "Derniers événements de la protection des connexions. Comptes, réseaux et appareils n’apparaissent que sous forme de pseudonymes abrégés.",
+    "description": "Tous les événements de la protection de connexion. Un clic sur un pseudonyme filtre dessus – pour suivre une piste du réseau au compte puis au mandant. Comptes, réseaux et appareils n'apparaissent qu'abrégés.",
     "typeLabel": "Type d’événement",
     "typeAll": "Tous les types",
     "outcomeLabel": "Résultat",
@@ -80,9 +80,12 @@
       "subject": "Compte",
       "network": "Réseau",
       "risk": "Risque",
-      "client": "Appareil",
-      "actions": "Actions",
-      "country": "Pays"
+      "client": "Client",
+      "country": "Pays",
+      "device": "Appareil (pseudonyme)",
+      "enforcement": "Application",
+      "policy": "Règle",
+      "details": "Détails"
     },
     "actorKinds": {
       "user": "Utilisateur",
@@ -93,7 +96,6 @@
     "empty": "Aucun événement pour cette sélection.",
     "previous": "Plus récents",
     "next": "Plus anciens",
-    "pageInfo": "Entrées {from, number}–{to, number}",
     "resolve": "Afficher le compte",
     "resolveConfirm": "Associer le pseudonyme de cet événement à un compte ? Cela exige une confirmation par passkey et est consigné dans le journal d'audit.",
     "countrySource": "Pays : <link>« IP to Country Lite » de DB-IP.com</link> (CC BY 4.0), déterminé localement, sans adresse IP enregistrée.",
@@ -112,7 +114,76 @@
       "privileged_account": "compte privilégié",
       "attack_mode": "mode attaque",
       "degraded": "mode dégradé (sans Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Individuel",
+      "net": "Par réseau",
+      "subject": "Par compte"
+    },
+    "listLabel": "Événements",
+    "pageInfoKeyset": "Page {page, number} · {count, plural, one {# entrée} other {# entrées}} · les plus récentes d'abord",
+    "filtersLabel": "Filtres des événements",
+    "pivots": {
+      "subject": "compte",
+      "net": "réseau",
+      "device": "appareil",
+      "country": "pays"
+    },
+    "tokenLabel": "Saisir un filtre",
+    "removePivot": "Retirer le filtre {filter}",
+    "tokenPlaceholder": "p. ex. réseau:3f9a1c07 ou pays:NL",
+    "tokenInvalid": "Filtre inconnu. Possibles : compte:, réseau:, appareil: (au moins 4 caractères) ou pays: (p. ex. CH).",
+    "tokenHelp": "Valider avec Entrée. Un clic sur un pseudonyme dans la liste filtre aussi.",
+    "tenantLabel": "Mandant",
+    "tenantAll": "Tous les mandants",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 jours",
+      "14d": "14 jours"
+    },
+    "liveOn": "En direct (30 s)",
+    "liveOff": "Direct désactivé",
+    "reset": "Réinitialiser les filtres",
+    "histogramTitle": "Évolution des événements filtrés",
+    "histogramOther": "Refusés/contrôlés",
+    "histogramSummary": "{failure, number} échecs, {other, number} événements refusés ou contrôlés et {success, number} réussis sur la période choisie.",
+    "barTitle": "{time} : {failure, number} échecs · {other, number} refusés/contrôlés · {success, number} réussis",
+    "now": "maintenant",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "modéré",
+      "high": "élevé",
+      "critical": "critique"
+    },
+    "openEvent": "Ouvrir l'événement {type} de {time}",
+    "filterBy": "Filtrer par {filter} {value}",
+    "groupColumns": {
+      "net": "Réseau",
+      "subject": "Compte",
+      "distribution": "Répartition",
+      "events": "Événements",
+      "accounts": "Comptes",
+      "networks": "Réseaux",
+      "maxRisk": "Risque max.",
+      "last": "Dernier"
+    },
+    "distribution": "{failure, number} échecs, {other, number} refusés/contrôlés, {success, number} réussis",
+    "closeDetail": "Fermer le détail",
+    "riskHeading": "Risque {score} · {level}",
+    "riskNone": "Aucune valeur de risque",
+    "noReasons": "Aucun signal de risque.",
+    "noWeights": "Les événements plus anciens (avant 1.6) n'enregistrent que les motifs, sans pondération.",
+    "trace": "Suivre la piste (±{hours} h)",
+    "traceKinds": {
+      "net": "Même réseau",
+      "subject": "Même compte",
+      "country": "Même pays"
+    },
+    "blockSource": "Bloquer la source",
+    "blocked": "Réseau bloqué.",
+    "blockTitle": "Bloquer le réseau {net}",
+    "blockDescription": "Blocage manuel (niveau 5) du réseau de cet événement (IPv4 /24, IPv6 /48). Confirmé par passkey et consigné dans le journal d'audit. Les admins plateforme restent exemptés."
   },
   "blocks": {
     "title": "Blocages",
