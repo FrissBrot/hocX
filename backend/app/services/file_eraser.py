@@ -69,13 +69,24 @@ def _owned_thumbnail(stored_file: StoredFile) -> Path | None:
     return path if path.is_relative_to(root) else None
 
 
-def _lock_current(db: Session, stored_file: StoredFile) -> None:
+def _lock_current(db: Session, stored_file: StoredFile) -> bool:
     """Zeile sperren und neu lesen, bevor ihr Objektschlüssel verwendet wird. Der Job
     capture_date_file_sync legt die Datei unter Zeilensperre als neues Objekt ab; ohne Sperre
     löschte bzw. verschob ein gleichzeitiger Aufruf den alten, schon gelesenen Schlüssel, und das
-    neu geschriebene Objekt blieb aktiv im Speicher zurück."""
+    neu geschriebene Objekt blieb aktiv im Speicher zurück. False, wenn die Zeile inzwischen
+    (gleichzeitig) gelöscht wurde - dann gibt es nichts mehr zu tun (kein Fehler)."""
     db.flush()
-    db.refresh(stored_file, with_for_update=True)
+    row = db.execute(
+        select(StoredFile)
+        .where(StoredFile.id == stored_file.id)
+        .with_for_update()
+        .execution_options(populate_existing=True, include_trashed=True)
+    ).scalar_one_or_none()
+    if row is None:
+        if stored_file in db:
+            db.expunge(stored_file)  # sonst versuchte ein späterer Flush das DELETE erneut
+        return False
+    return True
 
 
 class FileEraser:
@@ -84,11 +95,13 @@ class FileEraser:
         self._touched_albums: set = set()
         self._file_service = file_service
 
-    def erase(self, db: Session, stored_file: StoredFile, *, namespace: str | None = None, extra_public_ids: Iterable[uuid.UUID] = ()) -> None:
+    def erase(self, db: Session, stored_file: StoredFile, *, namespace: str | None = None, extra_public_ids: Iterable[uuid.UUID] = ()) -> bool:
         """Löscht die Datei samt allem, was ohne Fremdschlüssel an ihr hängt. ``extra_public_ids``:
         weitere IDs, unter denen sie in Alben/Links steht (Abgabebox: die public_id der
-        Einreichungsdatei). ``namespace`` muss vor dem Löschen der Einreichungszeilen bestimmt werden."""
-        _lock_current(db, stored_file)
+        Einreichungsdatei). ``namespace`` muss vor dem Löschen der Einreichungszeilen bestimmt werden.
+        False, wenn die Datei gleichzeitig schon gelöscht wurde."""
+        if not _lock_current(db, stored_file):
+            return False
         if namespace is None:
             from app.services.stored_file_location import namespace_for_stored_file
 
@@ -109,15 +122,18 @@ class FileEraser:
         get_object_store().delete(db, namespace, storage_key)
         if thumbnail is not None:
             self._thumbnails.append(thumbnail)
+        return True
 
     def erase_if_unreferenced(self, db: Session, stored_file_ids: Iterable[int], *, namespace: str = MAIN) -> int:
         erased = 0
         for stored_file_id in dict.fromkeys(stored_file_ids):
             stored_file = db.get(StoredFile, stored_file_id)
-            if stored_file is None or is_referenced(db, stored_file_id):
+            # Erst sperren, dann Verweise suchen: ein gleichzeitig angelegter Verweis (z. B. Bild aus
+            # dem letzten Protokoll übernommen) hält eine Schlüsselsperre und ist danach sichtbar.
+            if stored_file is None or not _lock_current(db, stored_file) or is_referenced(db, stored_file_id):
                 continue
-            self.erase(db, stored_file, namespace=namespace)
-            erased += 1
+            if self.erase(db, stored_file, namespace=namespace):
+                erased += 1
         return erased
 
     def keep_in_gallery(
@@ -132,7 +148,8 @@ class FileEraser:
     ) -> None:
         """Übernimmt die Datei in die Galerie (Herkunfts-Tag), bevor ihr Zusammenhang gelöscht wird."""
         if namespace == ABGABEBOX:
-            _lock_current(db, stored_file)
+            if not _lock_current(db, stored_file):
+                return
             store = get_object_store()
             upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
             new_key = new_object_key(*[part for part in (upload_prefix, "kept") if part and part != "."], filename=stored_file.original_name)

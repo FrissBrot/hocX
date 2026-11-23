@@ -203,6 +203,10 @@ class TenantCleanupService:
                 ~select(WordImportDocument.id).where(WordImportDocument.stored_file_id == StoredFile.id).exists(),
                 ~select(SubmissionUploadFile.id).where(SubmissionUploadFile.stored_file_id == StoredFile.id).exists(),
             )
+            # Sperre wie FileEraser: ein gleichzeitig neu abgelegtes Objekt (capture_date_file_sync)
+            # darf nicht nach dem Löschen des alten Schlüssels zurückbleiben (Security-Review 1.5.2).
+            .order_by(StoredFile.id)
+            .with_for_update(of=StoredFile)
         ).all()
         for stored_file in orphaned:
             namespace = ABGABEBOX if stored_file.id in abgabebox_stored_file_ids else MAIN

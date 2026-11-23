@@ -848,8 +848,15 @@ class AdminTenantService:
             if upload_ids
             else set()
         )
+        # Unter Sperre lesen: ein gleichzeitig laufender Job (capture_date_file_sync) legt eine Datei
+        # sonst als neues Objekt ab, nachdem hier der alte Schlüssel gelesen wurde - das neue Objekt
+        # bliebe nach der Löschung des Vereins im Speicher (Security-Review 1.5.2).
         stored_files = db.execute(
-            select(StoredFile.storage_path, StoredFile.id, StoredFile.thumbnail_path).where(StoredFile.tenant_id == tenant_id)
+            select(StoredFile.storage_path, StoredFile.id, StoredFile.thumbnail_path)
+            .where(StoredFile.tenant_id == tenant_id)
+            .order_by(StoredFile.id)
+            .with_for_update(of=StoredFile)
+            .execution_options(include_trashed=True)
         ).all()
         stored_file_paths = [
             (row.storage_path, ABGABEBOX if row.id in abgabebox_stored_file_ids else MAIN)

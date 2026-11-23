@@ -118,3 +118,23 @@ def test_deleting_a_photo_while_the_job_rewrites_it_leaves_no_active_object():
             cleanup.execute(delete(AppUser).where(AppUser.id == user_id))
             cleanup.execute(delete(Tenant).where(Tenant.id == tenant_id))
             cleanup.commit()
+
+
+def test_erasing_a_file_that_was_deleted_meanwhile_is_not_an_error(db):
+    """Security-Review 1.5.2: zwei gleichzeitige Löschungen derselben Datei. Die zweite findet die
+    Zeile nach dem Warten auf die Sperre nicht mehr - das ist kein Fehler (früher 500 durch die
+    neue Sperre)."""
+    from app.services.file_eraser import FileEraser
+
+    tenant = make_tenant(db, "Doppelt gelöscht")
+    stored = StoredFile(
+        tenant_id=tenant.id, original_name="weg.jpg", mime_type="image/jpeg", storage_path=f"uploads/tenant-{tenant.id}/weg.jpeg",
+        file_size_bytes=1, checksum_sha256="0" * 64,
+    )
+    db.add(stored)
+    db.flush()
+    db.execute(delete(StoredFile).where(StoredFile.id == stored.id))  # «die andere Löschung»
+    eraser = FileEraser()
+    assert eraser.erase(db, stored, namespace=MAIN) is False
+    db.flush()
+    assert eraser.erase_if_unreferenced(db, [stored.id]) == 0
