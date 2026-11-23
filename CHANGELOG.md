@@ -8,6 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Sicherheit
+
+- **Bussen nur zu lesbaren Protokollen:** Die Bussen-Routen lösten Protokoll- und Bussen-IDs nur im
+  eigenen Mandanten auf. Eigene Rollen mit `reports.personal` bzw. `fines.manage`, aber ohne
+  `meetings.read_drafts` (oder eingeschränkte Leser ohne Zuordnung), konnten so Bussen von Entwürfen
+  lesen, anlegen, einziehen, löschen und wieder öffnen und an der Antwort erkennen, dass es den Entwurf
+  gibt. Jetzt gelten dieselben Regeln wie beim Lesen des Protokolls (`access_service.can_read_protocol`),
+  nicht lesbar = unbekannt (gleiche 404). Standardrollen sind nicht betroffen.
+
 ### Behoben
 
 - **Archivierte Dokumentvorlage bleibt nicht mehr Standard (PR #102):** Wurde eine Vorlage archiviert
