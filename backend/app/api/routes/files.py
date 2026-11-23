@@ -1584,12 +1584,20 @@ def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptu
     # die das Konto nicht lesen darf, werden nicht angefasst und kommen wie unbekannte als not_found
     # zurück (Security-Review 1.4.1).
     unreadable: list[uuid.UUID] = []
+    documents: list[uuid.UUID] = []
     for stored in db.scalars(select(StoredFile).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(own_ids))):
         try:
             access_service.ensure_can_read_stored_file(db, user, stored.id, allow_context_grant=False)
         except HTTPException:
             unreadable.append(stored.public_id)
+            continue
+        if not (stored.mime_type or "").startswith("image/"):
+            documents.append(stored.public_id)
     writable_ids = [file_id for file_id in ids if file_id not in set(unreadable)]
+    # Dokumente haben kein Aufnahmedatum: sie bleiben immer unverändert. Als «Dokument» gemeldet
+    # werden sie nur, wer die Ablage verwalten darf (gleiche Regel wie bulk-tags) - sonst wie
+    # bisher als not_found, damit die Antwort nichts über fremde Bereiche verrät.
+    not_images = documents if user.can(P.FILES_MANAGE) else []
     corrected = (
         image_metadata_service.corrected_datetime(payload.corrected_date, payload.corrected_time)
         if payload.mode == "set" and payload.corrected_date is not None
@@ -1602,7 +1610,16 @@ def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptu
         if payload.mode == "shift"
         else None
     )
-    return ids, writable_ids, unreadable, corrected, shift
+    return ids, writable_ids, unreadable, corrected, shift, not_images
+
+
+def _split_not_images(outcome, not_images: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Dokumente aus not_found_ids herausnehmen (correct_capture_dates kennt nur Bilder)."""
+    if not not_images:
+        return []
+    documents = set(not_images)
+    outcome.not_found_ids = [file_id for file_id in outcome.not_found_ids if file_id not in documents]
+    return list(not_images)
 
 
 @router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
@@ -1616,7 +1633,7 @@ def bulk_update_capture_date(
     mit, damit «Rückgängig» alles zusammen zurücknimmt (Migration 0251). Nur Bilder des eigenen
     Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
     not_found zurück. Ein Audit-Eintrag pro Aufruf."""
-    ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    ids, writable_ids, unreadable, corrected, shift, not_images = _capture_bulk_prepare(db, user, payload)
     upload_job = upload_job_service.get_visible_job(db, user, payload.upload_job_id) if payload.upload_job_id is not None else None
     details: dict = {}
     if corrected is not None:
@@ -1633,6 +1650,7 @@ def bulk_update_capture_date(
     outcome = service.correct_capture_dates(
         db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
     )
+    skipped_not_images = _split_not_images(outcome, not_images)
     outcome.not_found_ids.extend(unreadable)
     capture_change_service.record(db, batch, outcome.changes)
     batch_id = batch.id
@@ -1642,7 +1660,10 @@ def bulk_update_capture_date(
         batch_id = None
     _capture_correction_audit(
         db, user, mode=payload.mode, outcome=outcome, requested=len(ids),
-        details={**details, "batch_id": str(batch_id) if batch_id else None},
+        details={
+            **details, "batch_id": str(batch_id) if batch_id else None,
+            "upload_job_id": str(upload_job.id) if upload_job else None, "skipped_not_image": len(skipped_not_images),
+        },
     )
     db.commit()
     service.recompute_capture_albums(db, outcome)
@@ -1654,6 +1675,7 @@ def bulk_update_capture_date(
         not_found_ids=outcome.not_found_ids,
         no_time_unchanged_ids=outcome.no_time_unchanged_ids,
         date_only_ids=outcome.date_only_ids,
+        skipped_not_image_ids=skipped_not_images,
         batch_id=batch_id,
     )
 
@@ -1665,11 +1687,12 @@ def preview_bulk_capture_date(
     """Vorschau zu POST /files/bulk-capture-date: gleiche Eingabe und Prüfungen, schreibt nichts.
     Zähler, Stichprobe vorher/nachher und Auswirkungen (Tageswechsel, Terminwechsel automatisch
     verknüpfter Fotos). POST, weil die Auswahl im Body steht; ändert nichts."""
-    _ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    _ids, writable_ids, unreadable, corrected, shift, not_images = _capture_bulk_prepare(db, user, payload)
     outcome = service.correct_capture_dates(
         db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift,
         user_id=user.user_id, dry_run=True,
     )
+    skipped_not_images = _split_not_images(outcome, not_images)
     effect = capture_change_service.impacts(db, user.current_tenant_id, outcome.changes)
     return FileBulkCaptureDatePreview(
         will_change=len(outcome.updated_ids),
@@ -1679,6 +1702,7 @@ def preview_bulk_capture_date(
         date_only_changed=len(outcome.date_only_ids),
         invalid=len(outcome.invalid_ids),
         not_found=len(outcome.not_found_ids) + len(unreadable),
+        not_image=len(skipped_not_images),
         no_date_ids=outcome.skipped_no_date_ids[:MAX_CAPTURE_DATE_BULK],
         samples=capture_change_service.samples(service, outcome.changes),
         **effect,
@@ -1720,7 +1744,8 @@ def undo_capture_change(batch_id: uuid.UUID, db: Session = Depends(get_db), user
     audit.log(
         db, action="photo.capture_date_shift_undone", actor=user, entity_type="capture_change_batch", entity_id=None,
         details={
-            "batch_id": str(batch.id), "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
+            "batch_id": str(batch.id), "mode": batch.mode, "upload_job_id": str(batch.upload_job_id) if batch.upload_job_id else None,
+            "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
             "file_ids": [str(public_id) for public_id in outcome.restored_ids],
         },
         commit=False,

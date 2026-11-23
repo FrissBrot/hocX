@@ -711,6 +711,7 @@
     "undoAction": "Undo",
     "undoDone": "{count, plural, one {1 image reset.} other {# images reset.}}",
     "undoConflicts": "{count, plural, one {1 image was changed differently in the meantime and stays as it is.} other {# images were changed differently in the meantime and stay as they are.}}",
-    "undoError": "The correction could not be undone."
+    "undoError": "The correction could not be undone.",
+    "resultNotImage": "{count, plural, one {1 document has no capture date and stays unchanged.} other {# documents have no capture date and stay unchanged.}}"
   }
 }

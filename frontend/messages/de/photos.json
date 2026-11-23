@@ -711,6 +711,7 @@
     "undoAction": "Rückgängig",
     "undoDone": "{count, plural, one {1 Bild zurückgesetzt.} other {# Bilder zurückgesetzt.}}",
     "undoConflicts": "{count, plural, one {1 Bild wurde inzwischen anders geändert und bleibt so.} other {# Bilder wurden inzwischen anders geändert und bleiben so.}}",
-    "undoError": "Die Korrektur konnte nicht rückgängig gemacht werden."
+    "undoError": "Die Korrektur konnte nicht rückgängig gemacht werden.",
+    "resultNotImage": "{count, plural, one {1 Dokument hat kein Aufnahmedatum und bleibt unverändert.} other {# Dokumente haben kein Aufnahmedatum und bleiben unverändert.}}"
   }
 }

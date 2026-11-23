@@ -172,7 +172,7 @@ function mergePreview(previews: FileBulkCaptureDatePreview[]): FileBulkCaptureDa
   return {
     will_change: sum("will_change"), unchanged: sum("unchanged"), no_date: sum("no_date"),
     date_only_unchanged: sum("date_only_unchanged"), date_only_changed: sum("date_only_changed"), invalid: sum("invalid"),
-    not_found: sum("not_found"), no_date_ids: previews.flatMap((preview) => preview.no_date_ids).slice(0, MAX_CAPTURE_DATE_BULK),
+    not_found: sum("not_found"), not_image: previews.reduce((total, preview) => total + (preview.not_image ?? 0), 0), no_date_ids: previews.flatMap((preview) => preview.no_date_ids).slice(0, MAX_CAPTURE_DATE_BULK),
     samples: previews.flatMap((preview) => preview.samples).slice(0, 20), day_changes: sum("day_changes"),
     event_changes: sum("event_changes"), event_transitions: previews.flatMap((preview) => preview.event_transitions).slice(0, 10),
   };
@@ -187,6 +187,7 @@ export function PhotoCaptureDateDialog({
   uploadJobId,
   referenceItems = [],
   initialShiftMinutes,
+  initialMode,
 }: {
   open: boolean;
   fileIds: string[];
@@ -198,12 +199,14 @@ export function PhotoCaptureDateDialog({
   referenceItems?: FileOverviewItem[];
   /** Vorschlag (z. B. aus der GPS-Zeit einer Kamera), in Minuten, vorzeichenbehaftet. */
   initialShiftMinutes?: number | null;
+  /** Upload-Verlauf «Datum setzen …»: Dialog im passenden Modus öffnen. */
+  initialMode?: CaptureCorrectionMode;
 }) {
   const t = useTranslations("photos.captureCorrection");
   const showToast = useToast();
   const confirmCorrection = useCaptureCorrectionConfirm();
   const suggested = initialShiftMinutes ? splitOffset(initialShiftMinutes * 60) : null;
-  const [mode, setMode] = useState<CaptureCorrectionMode>(suggested ? "shift" : "set");
+  const [mode, setMode] = useState<CaptureCorrectionMode>(initialMode ?? (suggested ? "shift" : "set"));
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [shiftKind, setShiftKind] = useState<ShiftKind>("offset");
@@ -346,6 +349,7 @@ export function PhotoCaptureDateDialog({
         total("date_only_ids") ? t("resultDateOnly", { count: total("date_only_ids") }) : null,
         total("invalid_ids") ? t("resultInvalid", { count: total("invalid_ids") }) : null,
         total("not_found_ids") ? t("resultNotFound", { count: total("not_found_ids") }) : null,
+        total("skipped_not_image_ids") ? t("resultNotImage", { count: total("skipped_not_image_ids") }) : null,
         outcome.failedChunks ? t("resultChunksFailed", { count: outcome.failedChunks }) : null,
         outcome.cancelled ? t("resultCancelled") : null,
       ].filter((note): note is string => Boolean(note));
@@ -527,6 +531,7 @@ function CapturePreview({ preview }: { preview: FileBulkCaptureDatePreview }) {
     preview.date_only_changed ? t("resultDateOnly", { count: preview.date_only_changed }) : null,
     preview.invalid ? t("resultInvalid", { count: preview.invalid }) : null,
     preview.not_found ? t("resultNotFound", { count: preview.not_found }) : null,
+    preview.not_image ? t("resultNotImage", { count: preview.not_image }) : null,
     preview.day_changes ? t("previewDayChanges", { count: preview.day_changes }) : null,
     preview.event_changes ? t("previewEventChanges", { count: preview.event_changes }) : null,
   ].filter((line): line is string => Boolean(line));

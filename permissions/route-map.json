@@ -1887,12 +1887,18 @@
       "handler": "files.bulk_update_capture_date",
       "requires": [
         "photos.manage"
+      ],
+      "branches": [
+        "files.manage"
       ]
     },
     "POST /api/files/bulk-capture-date/preview": {
       "handler": "files.preview_bulk_capture_date",
       "requires": [
         "photos.manage"
+      ],
+      "branches": [
+        "files.manage"
       ]
     },
     "POST /api/files/bulk-delete": {

@@ -39,6 +39,11 @@ Installationen aktualisieren können.
   **Vorschau** mit Tages- und Terminwechseln und **Rückgängig** (exakt, solange die Fotos existieren).
   Grosse Auswahlen werden in Teilen zu 500 verarbeitet. Termin-Zuordnungen werden nur für Fotos
   neu berechnet, deren Tag wechselt.
+- **Datum setzen im Upload-Vorgang:** Neben dem Verschieben setzt «Datum setzen …» ein festes Datum
+  (optional mit Uhrzeit) für alle Fotos eines Uploads, für die Fotos einer Kamera oder für die in der
+  Ergebnisliste ausgewählten Dateien - mit Vorschau, Rückgängig im Reiter «Datumskorrekturen» (zeigt
+  den gesetzten Wert) und Audit-Eintrag mit Bezug zum Upload. Dokumente haben kein Aufnahmedatum,
+  bleiben unverändert und werden für Personen mit «Dateien verwalten» als solche gemeldet.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 

@@ -711,6 +711,7 @@
     "undoAction": "Annuler",
     "undoDone": "{count, plural, one {1 image rétablie.} other {# images rétablies.}}",
     "undoConflicts": "{count, plural, one {1 image a été modifiée autrement entre-temps et reste ainsi.} other {# images ont été modifiées autrement entre-temps et restent ainsi.}}",
-    "undoError": "La correction n'a pas pu être annulée."
+    "undoError": "La correction n'a pas pu être annulée.",
+    "resultNotImage": "{count, plural, one {1 document n’a pas de date de prise de vue et reste inchangé.} other {# documents n’ont pas de date de prise de vue et restent inchangés.}}"
   }
 }

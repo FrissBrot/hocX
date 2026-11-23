@@ -172,3 +172,97 @@ def test_undo_is_bound_to_the_files(db):
     db.expire_all()
     assert db.get(CaptureChangeBatch, result.batch_id) is None
     assert db.scalar(select(CaptureChangeItem.id).where(CaptureChangeItem.batch_id == result.batch_id)) is None
+
+
+def _document(db, tenant_id):
+    stored = StoredFile(
+        tenant_id=tenant_id, original_name=f"{uuid.uuid4().hex[:6]}.pdf", mime_type="application/pdf",
+        storage_path=f"uploads/{uuid.uuid4().hex}.pdf",
+    )
+    db.add(stored)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored.id))
+    db.flush()
+    return stored
+
+
+def _set(db, user, ids, **values):
+    payload = FileBulkCaptureDate(file_ids=ids, mode="set", **values)
+    return files_routes.bulk_update_capture_date(payload, db=db, user=user)
+
+
+def test_set_date_for_files_of_an_upload_job_reports_documents_and_can_be_undone(db):
+    """«Datum setzen» (Upload-Verlauf 1.6): festes Datum mit Uhrzeit für Fotos eines Vorgangs,
+    Dokumente bleiben unverändert und werden gemeldet, Rückgängig wie beim Verschieben, Audit mit
+    Vorgang. Fremde Fotos kommen wie unbekannte als not_found zurück und bleiben unverändert."""
+    from app.services import upload_job_service
+
+    tenant, other = make_tenant(db), make_tenant(db)
+    user = _user(db, tenant)
+    job = upload_job_service.open_job(db, tenant_id=tenant.id, channel="gallery", created_by=user.user_id, status="done")
+    with_exif = _photo(db, tenant.id, exif=datetime(2026, 5, 2, 10, 0, tzinfo=UTC))
+    without = _photo(db, tenant.id)
+    document = _document(db, tenant.id)
+    foreign = _photo(db, other.id, exif=datetime(2026, 5, 2, 10, 0, tzinfo=UTC))
+    ids = [with_exif.public_id, without.public_id, document.public_id, foreign.public_id]
+
+    preview = files_routes.preview_bulk_capture_date(
+        FileBulkCaptureDate(file_ids=ids, mode="set", corrected_date=date(2026, 6, 1), corrected_time=None), db=db, user=user
+    )
+    assert (preview.will_change, preview.not_image, preview.not_found) == (2, 1, 1)
+
+    from datetime import time as dtime
+
+    result = _set(db, user, ids, corrected_date=date(2026, 6, 1), corrected_time=dtime(14, 30), upload_job_id=job.id)
+    assert set(result.updated_ids) == {with_exif.public_id, without.public_id}
+    assert result.skipped_not_image_ids == [document.public_id]
+    assert result.not_found_ids == [foreign.public_id]
+    for photo in (with_exif, without, foreign):
+        db.refresh(photo)
+    assert _naive(with_exif.capture_corrected_at) == datetime(2026, 6, 1, 14, 30) and with_exif.capture_corrected_has_time
+    assert foreign.capture_corrected_at is None
+    batch = db.get(CaptureChangeBatch, result.batch_id)
+    assert batch.mode == "set" and batch.upload_job_id == job.id and batch.updated_count == 2
+    audit = db.execute(
+        text("SELECT details_json FROM audit_log WHERE tenant_id = :t AND action = 'photo.capture_date_corrected'"), {"t": tenant.id}
+    ).scalar_one()
+    assert audit["upload_job_id"] == str(job.id) and audit["skipped_not_image"] == 1
+    assert str(foreign.public_id) not in audit["file_ids"]
+
+    undone = files_routes.undo_capture_change(result.batch_id, db=db, user=user)
+    assert set(undone.restored_ids) == {with_exif.public_id, without.public_id}
+    db.refresh(with_exif)
+    db.refresh(without)
+    assert with_exif.capture_corrected_at is None and without.capture_corrected_at is None
+    undo_audit = db.execute(
+        text("SELECT details_json FROM audit_log WHERE tenant_id = :t AND action = 'photo.capture_date_shift_undone'"), {"t": tenant.id}
+    ).scalar_one()
+    assert undo_audit["mode"] == "set" and undo_audit["upload_job_id"] == str(job.id)
+
+
+def test_set_date_without_files_manage_lists_documents_as_not_found(db):
+    """Dokumente meldet nur, wer die Ablage verwalten darf (Regel wie bulk-tags)."""
+    tenant = make_tenant(db)
+    user = _user(db, tenant)
+    document = _document(db, tenant.id)
+    restricted = make_current_user(tenant.id, role="writer", user_id=user.user_id, permissions=frozenset({"photos.manage", "photos.read"}))
+    result = _set(db, restricted, [document.public_id], corrected_date=date(2026, 6, 1))
+    assert result.skipped_not_image_ids == [] and result.not_found_ids == [document.public_id]
+
+
+def test_set_date_needs_photos_manage_and_rejects_a_foreign_upload_job(db):
+    tenant, other = make_tenant(db), make_tenant(db)
+    reader = _user(db, tenant, role="reader")
+    photo = _photo(db, tenant.id, exif=datetime(2026, 5, 2, 10, 0, tzinfo=UTC))
+    with pytest.raises(HTTPException) as caught:
+        _set(db, reader, [photo.public_id], corrected_date=date(2026, 6, 1))
+    assert caught.value.status_code == 403
+    from app.services import upload_job_service
+
+    foreign_job = upload_job_service.open_job(db, tenant_id=other.id, channel="gallery", created_by=None, status="done")
+    writer = _user(db, tenant)
+    with pytest.raises(HTTPException) as caught:
+        _set(db, writer, [photo.public_id], corrected_date=date(2026, 6, 1), upload_job_id=foreign_job.id)
+    assert caught.value.status_code == 404
+    db.refresh(photo)
+    assert photo.capture_corrected_at is None

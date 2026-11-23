@@ -116,7 +116,11 @@
     "file": "Fichier dans hocX",
     "empty": "Aucun fichier enregistré.",
     "nameRemoved": "Nom supprimé (fichier supprimé)",
-    "browserReported": "signalé par le navigateur"
+    "browserReported": "signalé par le navigateur",
+    "select": "Sélectionner « {name} »",
+    "selectAll": "Sélectionner tous les fichiers chargés",
+    "selectedCount": "{count, plural, one {1 fichier sélectionné} other {# fichiers sélectionnés}}",
+    "clearSelection": "Annuler la sélection"
   },
   "fileState": {
     "open": "Ouvrir",
@@ -140,7 +144,8 @@
     "select": "Sélectionner seulement celles-ci",
     "shift": "Décaler l'heure …",
     "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {plus tôt} other {plus tard}}",
-    "gpsHint": "Selon l'heure GPS ({samples, plural, one {1 photo} other {# photos}}) probablement : {offset}"
+    "gpsHint": "Selon l'heure GPS ({samples, plural, one {1 photo} other {# photos}}) probablement : {offset}",
+    "setDate": "Définir la date …"
   },
   "corrections": {
     "when": "Moment",
@@ -158,12 +163,18 @@
     "conflicts": "{count, plural, one {1 photo a été modifiée autrement entre-temps et reste ainsi.} other {# photos ont été modifiées autrement entre-temps et restent ainsi.}}",
     "undoError": "La correction n'a pas pu être annulée.",
     "undoneAt": "Annulé le {date}",
-    "noFiles": "Plus aucune photo disponible"
+    "noFiles": "Plus aucune photo disponible",
+    "modeSetTo": "Défini au {date}"
   },
   "hint": {
     "photos": "{count, plural, one {1 photo téléversée.} other {# photos téléversées.}}",
     "files": "{count, plural, one {1 fichier téléversé.} other {# fichiers téléversés.}}",
     "edit": "Modifier",
     "dismiss": "Masquer la remarque"
+  },
+  "setDate": {
+    "all": "Définir la date …",
+    "selected": "Définir la date …",
+    "none": "Aucune photo sélectionnée dont la date peut être modifiée."
   }
 }

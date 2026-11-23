@@ -116,7 +116,11 @@
     "file": "Datei in hocX",
     "empty": "Keine Dateien erfasst.",
     "nameRemoved": "Name entfernt (Datei gelöscht)",
-    "browserReported": "vom Browser gemeldet"
+    "browserReported": "vom Browser gemeldet",
+    "select": "«{name}» auswählen",
+    "selectAll": "Alle geladenen Dateien auswählen",
+    "selectedCount": "{count, plural, one {1 Datei ausgewählt} other {# Dateien ausgewählt}}",
+    "clearSelection": "Auswahl aufheben"
   },
   "fileState": {
     "open": "Öffnen",
@@ -140,7 +144,8 @@
     "select": "Nur diese auswählen",
     "shift": "Zeit verschieben …",
     "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {früher} other {später}}",
-    "gpsHint": "Laut GPS-Zeit ({samples, plural, one {1 Foto} other {# Fotos}}) vermutlich: {offset}"
+    "gpsHint": "Laut GPS-Zeit ({samples, plural, one {1 Foto} other {# Fotos}}) vermutlich: {offset}",
+    "setDate": "Datum setzen …"
   },
   "corrections": {
     "when": "Zeitpunkt",
@@ -158,12 +163,18 @@
     "conflicts": "{count, plural, one {1 Foto wurde inzwischen anders geändert und bleibt so.} other {# Fotos wurden inzwischen anders geändert und bleiben so.}}",
     "undoError": "Die Korrektur konnte nicht rückgängig gemacht werden.",
     "undoneAt": "Rückgängig gemacht am {date}",
-    "noFiles": "Keine Fotos mehr vorhanden"
+    "noFiles": "Keine Fotos mehr vorhanden",
+    "modeSetTo": "Auf {date} gesetzt"
   },
   "hint": {
     "photos": "{count, plural, one {1 Foto hochgeladen.} other {# Fotos hochgeladen.}}",
     "files": "{count, plural, one {1 Datei hochgeladen.} other {# Dateien hochgeladen.}}",
     "edit": "Bearbeiten",
     "dismiss": "Hinweis ausblenden"
+  },
+  "setDate": {
+    "all": "Datum setzen …",
+    "selected": "Datum setzen …",
+    "none": "Keine Fotos ausgewählt, deren Datum sich ändern lässt."
   }
 }

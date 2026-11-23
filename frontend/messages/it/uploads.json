@@ -116,7 +116,11 @@
     "file": "File in hocX",
     "empty": "Nessun file registrato.",
     "nameRemoved": "Nome rimosso (file eliminato)",
-    "browserReported": "segnalato dal browser"
+    "browserReported": "segnalato dal browser",
+    "select": "Seleziona «{name}»",
+    "selectAll": "Seleziona tutti i file caricati",
+    "selectedCount": "{count, plural, one {1 file selezionato} other {# file selezionati}}",
+    "clearSelection": "Annulla selezione"
   },
   "fileState": {
     "open": "Apri",
@@ -140,7 +144,8 @@
     "select": "Seleziona solo queste",
     "shift": "Sposta l'ora …",
     "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {prima} other {dopo}}",
-    "gpsHint": "Secondo l'ora GPS ({samples, plural, one {1 foto} other {# foto}}) probabilmente: {offset}"
+    "gpsHint": "Secondo l'ora GPS ({samples, plural, one {1 foto} other {# foto}}) probabilmente: {offset}",
+    "setDate": "Imposta data …"
   },
   "corrections": {
     "when": "Momento",
@@ -158,12 +163,18 @@
     "conflicts": "{count, plural, one {1 foto è stata modificata diversamente nel frattempo e resta così.} other {# foto sono state modificate diversamente nel frattempo e restano così.}}",
     "undoError": "Non è stato possibile annullare la correzione.",
     "undoneAt": "Annullata il {date}",
-    "noFiles": "Nessuna foto rimasta"
+    "noFiles": "Nessuna foto rimasta",
+    "modeSetTo": "Impostato su {date}"
   },
   "hint": {
     "photos": "{count, plural, one {1 foto caricata.} other {# foto caricate.}}",
     "files": "{count, plural, one {1 file caricato.} other {# file caricati.}}",
     "edit": "Modifica",
     "dismiss": "Nascondi avviso"
+  },
+  "setDate": {
+    "all": "Imposta data …",
+    "selected": "Imposta data …",
+    "none": "Nessuna foto selezionata di cui si possa modificare la data."
   }
 }

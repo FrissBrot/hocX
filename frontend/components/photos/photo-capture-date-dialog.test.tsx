@@ -70,6 +70,24 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("öffnet aus dem Upload-Vorgang im Modus «Datum», hängt den Vorgang an und meldet Dokumente", async () => {
+    confirmMock.mockResolvedValue(true);
+    browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a"], skipped_not_image_ids: ["d"], batch_id: "batch-1" });
+    const onDone = vi.fn();
+    render(<PhotoCaptureDateDialog open fileIds={["a", "d"]} uploadJobId="job-1" initialMode="shift" onClose={vi.fn()} onDone={onDone} />);
+    // Modus aus dem Aufrufer (hier «Verschieben»), danach auf «Datum» wechseln
+    expect(screen.getByLabelText("Tage")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Auf Datum setzen" }));
+    const date = screen.getByLabelText("Datum");
+    fireEvent.change(date, { target: { value: "02.05.2026" } });
+    fireEvent.blur(date);
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(lastPost()).toEqual({ file_ids: ["a", "d"], mode: "set", corrected_date: "2026-05-02", corrected_time: null, upload_job_id: "job-1" });
+    expect(showToastMock).toHaveBeenCalledWith("Aufnahmedatum von 1 Bild geändert.", "success", expect.objectContaining({ action: expect.any(Object) }));
+    expect(showToastMock).toHaveBeenCalledWith(expect.stringContaining("1 Dokument hat kein Aufnahmedatum und bleibt unverändert."), "info");
+  });
+
   it("schickt ohne Bestätigung nichts ab", async () => {
     confirmMock.mockResolvedValue(false);
     renderDialog();
