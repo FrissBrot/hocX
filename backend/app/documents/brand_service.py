@@ -220,9 +220,16 @@ def delete_brand(db: Session, brand: DocumentBrand) -> None:
     Brand-Revision festhalten (``brand_mode=pinned``), behalten ihre Referenz - dafür gibt es
     «Archivieren». Ohne die Prüfung der festgehaltenen Revisionen setzte der FK (ON DELETE
     SET NULL) das Pinning still zurück."""
+    # Erst sperren, dann zählen: Ein gerade entstehender Verweis (Zuweisung/Vorlage auf das Profil,
+    # Export/Revision auf eine seiner Revisionen, noch nicht festgeschrieben) hält eine
+    # Schlüsselsperre. FOR UPDATE auf Profil und Revisionen wartet darauf, die Zählung danach sieht
+    # ihn (READ COMMITTED). Ohne Sperre löschte die Kaskade eine gleichzeitig gesetzte Zuweisung mit
+    # bzw. setzte die brand_revision_id eines neuen Exports zurück.
+    lock_row(db, brand)
     if brand.is_default:
         raise BrandValidationError("apiError.defaultBrand")
     revision_ids = select(DocumentBrandRevision.id).where(DocumentBrandRevision.brand_id == brand.id)
+    db.execute(select(DocumentBrandRevision.id).where(DocumentBrandRevision.brand_id == brand.id).order_by(DocumentBrandRevision.id).with_for_update())
     used = (
         db.scalar(select(func.count(DocumentExport.id)).where(DocumentExport.brand_revision_id.in_(revision_ids)))
         or db.scalar(select(func.count(DocumentTemplate.id)).where(DocumentTemplate.brand_id == brand.id))
