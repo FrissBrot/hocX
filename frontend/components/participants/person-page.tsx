@@ -22,6 +22,7 @@ import { apiErrorMessage } from "@/lib/api/error-message";
 import { roleName } from "@/lib/permissions";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { swissDateToday } from "@/lib/utils/participant-membership";
 import type { FineTariffGroup, ParticipantInvite, ParticipantSummary, RoleRead, TemplateSummary, UserMfaOverview } from "@/types/api";
 
 export type PersonPermissions = {
@@ -91,7 +92,7 @@ function changedKeys(draft: Draft, saved: Draft): (keyof Draft)[] {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return swissDateToday();
 }
 
 // Wie lange «✓ Gespeichert» in der Leiste stehen bleibt
