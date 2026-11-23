@@ -17,6 +17,10 @@ Installationen aktualisieren können.
 - **jsdom 31.0.1** (vorher 30.1.3) als Testumgebung für Vitest im Frontend. Die neue CSS-Engine
   serialisiert Inline-Prozentwerte wie Browser auf sechs signifikante Stellen; ein Speicherbalken-Test
   vergleicht deshalb numerisch.
+- **Playwright 1.65.1** (vorher 1.64.1) für die E2E-Tests; das Docker-Image der E2E-Läufe
+  (`mcr.microsoft.com/playwright:v1.65.1-noble`) ist jetzt per Digest gepinnt. Der Spec `security-devices`
+  wartete nach «Gerät abmelden» nur auf den Toast und zählte die Abmelde-Knöpfe, bevor die Liste neu geladen
+  war; mit 1.65 traf er dieses Fenster reproduzierbar. Er wartet jetzt, bis die abgemeldete Zeile weg ist.
 
 ## [1.5.1] - 2026-11-22
 

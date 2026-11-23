@@ -29,11 +29,20 @@ test("Geräteliste zeigt die eigene Session und meldet ein anderes Gerät ab", a
 
   // Einzeln abmelden (nicht «Alle anderen»: das beendete über session_revoke_at auch die
   // gespeicherten Sessions der übrigen Specs)
-  for (let round = 0; round < 10 && (await signOut.count()) > 0; round++) {
+  for (let round = 0; round < 10; round++) {
+    const remaining = await signOut.count();
+    if (remaining === 0) break;
     await signOut.first().click();
     // Rückfrage (useConfirm) ist ein alertdialog über dem Profil-Dialog
-    await page.getByRole("alertdialog").getByRole("button", { name: t.revoke, exact: true }).click();
-    await expect(page.getByText(t.revoked)).toBeVisible();
+    const dialog = page.getByRole("alertdialog");
+    await dialog.getByRole("button", { name: t.revoke, exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText(t.revoked).first()).toBeVisible();
+    // Der Toast erscheint vor dem Neuladen der Liste (sessions-panel.tsx: showToast, dann load()):
+    // bis dahin steht die abgemeldete Zeile noch (deaktiviert) im DOM. Erst weiterzählen, wenn sie
+    // weg ist - sonst zählt die nächste Runde sie mit und klickt auf einen Knopf, der verschwindet
+    // (mit Playwright 1.65 reproduzierbar, die Abfrage traf das Fenster nach dem Toast).
+    await expect(signOut).toHaveCount(remaining - 1);
   }
   await expect(signOut).toHaveCount(0);
 
