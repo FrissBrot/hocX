@@ -14,6 +14,9 @@ Installationen aktualisieren können.
   (`PdfWriter(..., incremental=True)` unverändert). Neu erzeugt pypdf die zweite Datei-ID im Trailer
   zufällig statt als MD5 über den Inhalt; jeder Export hat ohnehin eine eigene Dokument-ID, der
   SHA-256 im Register gilt weiterhin für genau die ausgelieferten Bytes.
+- **jsdom 31.0.1** (vorher 30.1.3) als Testumgebung für Vitest im Frontend. Die neue CSS-Engine
+  serialisiert Inline-Prozentwerte wie Browser auf sechs signifikante Stellen; ein Speicherbalken-Test
+  vergleicht deshalb numerisch.
 
 ## [1.5.1] - 2026-11-22
 
