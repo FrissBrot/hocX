@@ -7,7 +7,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.entities import AppUser, Event, Template, Tenant
-from app.schemas.base import PublicIdModel
+from app.schemas.base import PublicIdModel, reject_null
 from app.schemas.event import EventRead, check_event_date_range
 
 # Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
@@ -306,6 +306,10 @@ class ProtocolTodoUpdate(BaseModel):
     closed_in_protocol_id: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
+    # Teil-Update: task und tags dürfen fehlen, aber nicht null sein. task=null scheiterte am
+    # NOT NULL (400 plus Fehlerprotokoll), tags=null wurde als JSON-null gespeichert und jede
+    # Antwort mit dieser Pendenz brach danach ab (ProtocolTodoRead.tags ist eine Liste).
+    _reject_null = field_validator("task", "tags")(reject_null)
 
 
 class ProtocolTodoRead(BaseModel):
