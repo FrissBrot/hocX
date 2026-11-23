@@ -299,6 +299,11 @@ class MfaService:
             )
         factor_type = factor.factor_type
         db.delete(factor)
+        if remaining == 0:
+            # Letzter Faktor geht nur ohne MFA-Pflicht: eine alte Frist ist damit verbraucht. Wird
+            # MFA später erneut Pflicht, gilt das wieder als «neu Pflicht» mit 3 Tagen
+            # (app.core.mfa_policy); das Zurücksetzen durch Admins setzt die Frist bewusst auf jetzt.
+            user.mfa_grace_until = None
         account_notifications.notify_security(db, user, "security.mfa_removed")
         db.commit()
         # Eigene Faktor-Löschung war nicht auditiert (SEC-AUTH-012)
