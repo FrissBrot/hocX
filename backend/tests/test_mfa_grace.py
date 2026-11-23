@@ -75,3 +75,31 @@ def test_role_flag_requires_mfa(db):
     reader_role.require_mfa = True
     db.flush()
     assert account_requires_mfa(db, person.id, permissions=READER, tenant_id=tenant.id)
+
+
+def test_new_requirement_after_removed_factor_gets_a_new_grace(db):
+    """Vorstand (Rolle mit MFA) richtet TOTP fristgerecht ein, tritt aus dem Vorstand aus und
+    entfernt den Faktor; Monate später wieder Pflicht -> wieder 3 Tage Frist (neu Pflicht),
+    nicht sofortige Sperre wegen der alten, längst abgelaufenen Frist."""
+    from app.core.security import build_current_user
+    from app.core.secret_crypto import encrypt_secret
+    from app.core.totp import generate_totp_secret
+    from app.models import UserMfaFactor
+    from app.services.mfa_service import MfaService
+    from tests.factories import make_app_user
+
+    tenant = _club(db)
+    person = make_app_user(db, email="vorstand-frist@example.com", tenant_id=tenant.id, role_code="reader")
+    person.first_login_at = datetime.now(UTC) - timedelta(days=400)
+    db.flush()
+    # Erste Pflicht vor einem Jahr: Frist damals gestartet und längst abgelaufen
+    assert mfa_grace_until(db, person.id, tenant_id=tenant.id, now=datetime.now(UTC) - timedelta(days=365)) is not None
+    factor = UserMfaFactor(user_id=person.id, factor_type="totp", label="App", secret_encrypted=encrypt_secret(generate_totp_secret()))
+    db.add(factor)
+    tenant.require_mfa = False
+    db.flush()
+    MfaService().delete_self_factor(db, build_current_user(db, person, mfa_verified=True), factor.id)
+
+    tenant.require_mfa = True
+    db.flush()
+    assert mfa_grace_until(db, person.id, tenant_id=tenant.id) is not None
