@@ -108,6 +108,7 @@
     "invalid_credentials": "E-Mail oder Passwort ist ungültig.",
     "login_email_taken": "Diese E-Mail-Adresse wird bereits für einen Login verwendet.",
     "wrong_current_password": "Das aktuelle Passwort ist nicht korrekt.",
+    "password_breached_relogin": "Dein bisheriges Passwort ist aus einem Datenleck bekannt. Melde dich bitte neu an (mit zweitem Faktor oder Code per E-Mail) oder nutze «Passwort vergessen», um es zu ändern.",
     "already_has_login": "Diese Person hat bereits einen Login.",
     "inactive_person": "Inaktive Personen können nicht eingeladen werden.",
     "email_required": "Für eine Einladung braucht die Person eine gespeicherte E-Mail-Adresse.",

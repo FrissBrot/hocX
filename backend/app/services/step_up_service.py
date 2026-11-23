@@ -27,23 +27,34 @@ _PASSWORD_LIMIT = 10
 _WINDOW = 15 * 60
 
 
+def password_confirms_identity(account: AppUser | None, auth_time: datetime | None) -> bool:
+    """Taugt das Passwort zur Bestätigung (Step-up, Passwort ändern)? Nicht, wenn es aus einem
+    Datenleck bekannt ist und die laufende Sitzung älter ist als diese Markierung: dann kennt es
+    womöglich auch, wer ein altes Sitzungscookie hat (Security-Review 1.5.2). Nach einer neuen
+    Anmeldung (seit der Markierung nur mit zweitem Faktor bzw. E-Mail-Code möglich) wieder ja."""
+    if account is None:
+        return False
+    breached = account.password_breached_at
+    return breached is None or (auth_time is not None and auth_time > breached)
+
+
 class StepUpService:
     def __init__(self) -> None:
         self.mfa = MfaService()
 
-    def _methods(self, db: Session, user_id: int, request_host: str | None) -> list[str]:
+    def _methods(self, db: Session, user_id: int, request_host: str | None, *, auth_time: datetime | None = None) -> list[str]:
         factors = self.mfa._list_factors(db, user_id)
         methods: list[str] = []
         if any(factor.factor_type == "totp" and factor.secret_encrypted for factor in factors):
             methods.append("totp")
         if self.mfa.can_add_passkey_here(request_host) and any(factor.factor_type == "webauthn" for factor in factors):
             methods.append("passkey")
-        if not factors:
+        if not factors and password_confirms_identity(db.get(AppUser, user_id), auth_time):
             methods.append("password")
         return methods
 
     def options(self, db: Session, user: CurrentUser, request_host: str | None) -> StepUpOptionsRead:
-        return StepUpOptionsRead(methods=self._methods(db, user.user_id, request_host), auth_time=user.auth_time)  # type: ignore[arg-type]
+        return StepUpOptionsRead(methods=self._methods(db, user.user_id, request_host, auth_time=user.auth_time), auth_time=user.auth_time)  # type: ignore[arg-type]
 
     def start_passkey(self, db: Session, user: CurrentUser, *, request_host: str | None, request_origin: str) -> PasskeyAssertionStartRead:
         rp_id = self.mfa.rp_id_for_request_host(request_host)
@@ -116,7 +127,7 @@ class StepUpService:
         release_attempt(key)
 
     def verify(self, db: Session, response: Response, user: CurrentUser, payload: StepUpRequest, *, request_host: str | None) -> StepUpRead:
-        methods = self._methods(db, user.user_id, request_host)
+        methods = self._methods(db, user.user_id, request_host, auth_time=user.auth_time)
         if payload.method not in methods:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "step_up_method_unavailable", "message": "Diese Bestätigung ist für dein Konto nicht möglich"})
         if payload.method == "totp":

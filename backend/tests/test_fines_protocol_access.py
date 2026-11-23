@@ -177,3 +177,16 @@ def test_kassier_can_collect_into_draft_context(db, setup):
     fine = setup["fines"][setup["final"].id]
     result = fine_routes.collect_fine(fine.public_id, payload=CollectFinePayload(collecting_protocol_id=setup["draft"].public_id), db=db, user=user)
     assert result.status == "collected"
+
+
+def test_tenant_fine_list_and_summary_skip_unreadable_drafts(db, setup):
+    """Security-Review 1.5.2: die Bussenliste (reports.personal) und die offene Summe verrieten
+    Entwürfe, deren Einzelrouten 404 liefern (ID, Nummer, Datum, Betrag)."""
+    user = make_current_user(setup["tenant"].id, permissions=FINES_WITHOUT_DRAFTS)
+    listed = fine_routes.list_fines(skip=0, limit=50, fine_status=None, db=db, user=user)
+    assert [item.id for item in listed] == [setup["fines"][setup["final"].id].public_id]
+    summary = fine_routes.open_fines_summary(db=db, user=user)
+    assert summary.count == 1
+    # Mit meetings.read_drafts weiterhin alle
+    full = make_current_user(setup["tenant"].id, permissions=FINES_WITHOUT_DRAFTS | {"meetings.read_drafts"})
+    assert len(fine_routes.list_fines(skip=0, limit=50, fine_status=None, db=db, user=full)) == 3

@@ -108,6 +108,7 @@
     "invalid_credentials": "E-mail o password non validi.",
     "login_email_taken": "Questo indirizzo e-mail è già usato per un accesso.",
     "wrong_current_password": "La password attuale non è corretta.",
+    "password_breached_relogin": "La tua password attuale è nota da una violazione di dati. Accedi di nuovo (con il secondo fattore o un codice via e-mail) oppure usa «Password dimenticata» per cambiarla.",
     "already_has_login": "Questa persona ha già un accesso.",
     "inactive_person": "Le persone inattive non possono essere invitate.",
     "email_required": "Per un invito la persona deve avere un indirizzo e-mail salvato.",

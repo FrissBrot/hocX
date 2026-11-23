@@ -53,7 +53,12 @@ def list_fines(
     require_feature(user, "finance", write=False)
     if not user.can(P.REPORTS_PERSONAL):
         return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit, status=fine_status)
-    return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit, status=fine_status)
+    # Wie die Einzelrouten (_readable_protocol_id): Bussen von Protokollen, die das Konto nicht lesen
+    # darf (Entwürfe ohne meetings.read_drafts, nicht zugeordnete), erscheinen nicht - sonst verriet
+    # die Liste Entwurfs-ID, -Nummer und -Datum (Security-Review 1.5.2).
+    return repo.list_fines_for_tenant(
+        db, user.current_tenant_id, skip=skip, limit=limit, status=fine_status, protocol_scope=access_service.protocol_read_scope(db, user),
+    )
 
 
 @router.get("/fines/open-summary", response_model=OpenFinesSummary)
@@ -65,7 +70,10 @@ def open_fines_summary(
     ohne reports.personal nur die eigenen. Reine Leseroute (auch im Nur-Lesen-Zustand)."""
     require_feature(user, "finance", write=False)
     own_only = not user.can(P.REPORTS_PERSONAL)
-    summary = repo.open_fines_summary(db, user.current_tenant_id, user_id=user.user_id if own_only else None)
+    summary = repo.open_fines_summary(
+        db, user.current_tenant_id, user_id=user.user_id if own_only else None,
+        protocol_scope=None if own_only else access_service.protocol_read_scope(db, user),
+    )
     return OpenFinesSummary(**summary, own_only=own_only)
 
 

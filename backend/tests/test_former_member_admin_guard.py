@@ -166,3 +166,17 @@ def test_exit_revokes_open_links_and_sessions(db):
     assert person.session_revoke_at is not None
     open_links = db.query(AccountToken).filter(AccountToken.user_id == person.id, AccountToken.revoked_at.is_(None), AccountToken.used_at.is_(None)).count()
     assert open_links == 0
+
+
+def test_reentry_ends_old_sessions(db):
+    """Security-Review 1.5.2 (N1): wer nach dem Austritt wieder eintritt, startet ohne alte Sitzungen."""
+    tenant = make_tenant(db)
+    make_app_user(db, "admin-reentry@example.com", tenant_id=tenant.id, role_code="admin")
+    person = make_app_user(db, "zurueck-reentry@example.com", tenant_id=tenant.id, role_code="reader")
+    person.left_at = today() - timedelta(days=3)
+    person.session_revoke_at = None
+    db.flush()
+    ParticipantService().update_participant(db, person.id, ParticipantUpdate(left_at=None), tenant_id=tenant.id)
+    db.refresh(person)
+    assert not person.has_left
+    assert person.session_revoke_at is not None

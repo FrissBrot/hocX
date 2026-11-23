@@ -123,7 +123,7 @@ class ParticipantService:
             # Reaktivieren oder Wiedereintritt (Austrittsdatum entfernt/verschoben) eines Kontos mit
             # Login zählt zum Benutzerlimit des Abos
             user_limit_service.ensure_login_capacity(db, tenant_id, for_user_id=participant.id)
-        newly_left = _newly_left(participant, values)
+        newly_left = _newly_left(participant, values) or _newly_returned(participant, values)
         if _account_relevant_change(participant, values) or newly_left:
             # Austritt (Datum vor heute) sperrt den Login wie Deaktivieren: offene Einmal-Links
             # dürfen nach einem späteren Wiedereintritt nicht wieder gelten.
@@ -356,6 +356,17 @@ def _newly_left(person, values: dict) -> bool:
     from app.services.todo_fine_service import today
 
     return values["left_at"] < today()
+
+
+def _newly_returned(person, values: dict) -> bool:
+    """Wiedereintritt: eine Ausgetretene (has_left) bekommt kein bzw. ein Austrittsdatum ab heute.
+    Alte Sitzungen und Einmal-Links aus der Zeit vor dem Austritt gelten dann nicht wieder
+    (Security-Review 1.5.2, N1)."""
+    if "left_at" not in values or not person.has_left:
+        return False
+    from app.services.todo_fine_service import today
+
+    return values["left_at"] is None or values["left_at"] >= today()
 
 
 def _account_relevant_change(person, values: dict) -> bool:

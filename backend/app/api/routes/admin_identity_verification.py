@@ -140,6 +140,9 @@ def _decide(db: Session, tenant_id: uuid.UUID, action) -> AdminTenantVerificatio
 def approve_identity_verification(
     tenant_id: uuid.UUID, body: AdminVerificationDecision, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)
 ):
+    if body.expected_name is None:
+        # Pflicht beim Bestätigen: bestätigt wird genau der Name, den der Plattform-Admin geprüft hat
+        raise HTTPException(status_code=422, detail="expected_name is required")
     return _decide(db, tenant_id, lambda tenant: verification.approve(db, tenant, admin_id=admin.admin_id, admin_email=admin.email, note=body.note, expected_name=body.expected_name))
 
 

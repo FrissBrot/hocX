@@ -533,6 +533,9 @@ def bulk_invite_participants(payload: ParticipantBulkInvite, db: Session = Depen
     require_permission(user, P.ACCESS_MANAGE)
     if payload.role_id is not None:
         role_service.resolve_roles(db, user.current_tenant_id, [payload.role_id])
+        # Rollenwechsel verlangt eine frische Bestätigung (update_user): vor der Schleife fragen,
+        # sonst stünde die erste Rolle schon fest, bevor der Abbruch kommt (Review 1.5.2, N3).
+        require_recent_auth(user, kind=ADMIN, action="user.update_access")
     participants, skipped = _bulk_participants(db, user, payload.participant_ids)
     done: list[uuid.UUID] = []
     for participant in participants:

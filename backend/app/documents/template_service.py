@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import false, func, or_, select, text, update
+from sqlalchemy import delete, false, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.documents import brand_service
@@ -389,6 +389,25 @@ def restore_revision(db: Session, template: DocumentTemplate, revision: Document
     return _new_revision(db, template, content, status="draft", user_id=user_id, brand_mode=revision.brand_mode, note=f"restore:{revision.revision_no}")
 
 
+def _detach_assignments(db: Session, template_id: int) -> None:
+    """Zuweisungen von der Vorlage lösen (ohne eigenes Brand-Profil: löschen, sonst nur die Vorlage
+    entfernen). Als bedingte Massenänderung: hat eine gleichzeitige Zuweisung die Zeile inzwischen
+    auf eine andere Vorlage umgestellt, bleibt sie unberührt (das ORM hätte nur über die ID
+    gelöscht bzw. mit StaleDataError abgebrochen; Review 1.5.2, N6)."""
+    db.flush()
+    db.execute(
+        delete(DocumentTemplateAssignment)
+        .where(DocumentTemplateAssignment.document_template_id == template_id, DocumentTemplateAssignment.brand_id.is_(None))
+        .execution_options(synchronize_session="fetch")
+    )
+    db.execute(
+        update(DocumentTemplateAssignment)
+        .where(DocumentTemplateAssignment.document_template_id == template_id)
+        .values(document_template_id=None)
+        .execution_options(synchronize_session="fetch")
+    )
+
+
 def set_archived(db: Session, template: DocumentTemplate, archived: bool, *, user_id: int | None) -> DocumentTemplate:
     # Wartet auf laufende Zuweisungen dieser Vorlage; die Abfrage der Zuweisungen unten sieht
     # sie danach (READ COMMITTED), spätere Zuweisungen sehen «archiviert» (Issue #102).
@@ -397,11 +416,7 @@ def set_archived(db: Session, template: DocumentTemplate, archived: bool, *, use
     template.updated_by = user_id
     if archived:
         # Archivierte Vorlagen sind nirgends mehr Standard
-        for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.document_template_id == template.id)):
-            if assignment.brand_id is None:
-                db.delete(assignment)
-            else:
-                assignment.document_template_id = None
+        _detach_assignments(db, template.id)
         if template.tenant_id is None:
             template.is_platform_default = False
     db.flush()
@@ -423,11 +438,7 @@ def delete_template(db: Session, template: DocumentTemplate) -> None:
         raise TemplateStateError("apiError.templateInUse")
     # Zuweisungen mit eigenem Brand-Profil behalten das Profil (wie beim Archivieren); sonst
     # entfernte der FK (ON DELETE CASCADE) die ganze Zuweisung samt Brand
-    for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.document_template_id == template.id)):
-        if assignment.brand_id is None:
-            db.delete(assignment)
-        else:
-            assignment.document_template_id = None
+    _detach_assignments(db, template.id)
     template.published_revision_id = None
     db.flush()
     db.delete(template)

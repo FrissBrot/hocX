@@ -52,13 +52,19 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
     )
 
 
+def _is_creator(user: CurrentUser, link: ShareLink) -> bool:
+    """Den eigenen Link sieht und widerruft der Ersteller immer, auch nach Verlust des Rollen- oder
+    Leserechts (er kennt die URL ohnehin; Liste zeigt nur Metadaten, Review 1.5.2)."""
+    return link.created_by is not None and link.created_by == user.user_id
+
+
 def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink, readable: dict[int, bool] | None = None) -> bool:
     """Datei-Link: jede Datei darin muss das Konto selbst lesen dürfen wie im Einzelabruf
     (Protokollbilder/-exporte nur aus lesbaren Protokollen, Nachtlauf 2026-11-22) - die Token-URL
     öffnet sie ohne Anmeldung. Album-Links folgen dem Album (bewusste Weitergabe, add_album_items).
     Den eigenen Link sieht und widerruft der Ersteller immer (er kennt die URL ohnehin), auch wenn
     er das Leserecht inzwischen verloren hat. ``readable``: Zwischenspeicher je Datei für Listen."""
-    if link.album_id is not None or (link.created_by is not None and link.created_by == user.user_id):
+    if link.album_id is not None or _is_creator(user, link):
         return True
     cache = readable if readable is not None else {}
     internal_ids = db.scalars(
@@ -204,7 +210,8 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
         for row in rows
-        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link, readable)
+        if _is_creator(user, row.link)
+        or (share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link, readable))
     ]
 
 
@@ -217,8 +224,13 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
     if (
         link is None
         or not share_link_service.can_manage(db, link, user.current_tenant_id)
-        or not share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
-        or not _may_read_link_files(db, user, link)
+        or not (
+            _is_creator(user, link)
+            or (
+                share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
+                and _may_read_link_files(db, user, link)
+            )
+        )
     ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)

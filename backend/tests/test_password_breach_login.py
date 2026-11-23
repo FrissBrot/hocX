@@ -277,3 +277,26 @@ def test_local_list_fallback_marks_hits_but_never_counts_as_a_full_check(db, mai
     assert _login(db, user.email).authenticated is True
     db.refresh(user)
     assert user.last_breach_check_at is None and user.breach_check_due_at is not None
+
+
+def test_breached_password_does_not_confirm_identity_in_an_older_session(db):
+    """Security-Review 1.5.2: ein altes Sitzungscookie plus das öffentlich bekannte Passwort darf
+    weder Step-up noch Passwortwechsel bestätigen (sonst Kontoübernahme trotz Login-Sperre). Nach
+    einer neueren Anmeldung (mit zweitem Faktor/E-Mail-Code) wieder erlaubt."""
+    from app.schemas.user import UserPasswordChange
+    from app.services.step_up_service import StepUpService
+    from app.services.user_service import UserService
+
+    user = make_app_user(db, email="alt-sitzung@example.com", password=PASSWORD)
+    current = build_current_user(db, user)
+    current.auth_time = datetime.now(UTC) - timedelta(hours=2)
+    user.password_breached_at = datetime.now(UTC) - timedelta(hours=1)
+    db.flush()
+
+    assert "password" not in StepUpService()._methods(db, user.id, "app.example.com", auth_time=current.auth_time)
+    with pytest.raises(HTTPException) as refused:
+        UserService().change_own_password(db, current, UserPasswordChange(current_password=PASSWORD, new_password="Kx7#qLm2!vRt9wZp-neu"))
+    assert refused.value.detail["code"] == "password_breached_relogin"
+
+    current.auth_time = datetime.now(UTC)  # neue Anmeldung nach der Markierung
+    assert "password" in StepUpService()._methods(db, user.id, "app.example.com", auth_time=current.auth_time)

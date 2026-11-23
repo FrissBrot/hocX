@@ -79,7 +79,7 @@ def test_request_approve_and_reject_flow(db, setup):
     assert routes.get_document_verification(db=db, user=user).request.decision_note == "Kein Nachweis"
 
     routes.request_identity_verification(routes.VerificationRequestWrite(message="Statuten angehängt"), db=db, user=user)
-    approved = admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(note="Statuten geprüft"), db=db, admin=admin)
+    approved = admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(note="Statuten geprüft", expected_name=tenant.name), db=db, admin=admin)
     assert approved.verified_at is not None and approved.verified_by_email == "ops@hocx.example" and approved.note == "Statuten geprüft"
     actions = _audit_actions(db)
     assert {"identity_verification.requested", "admin.identity_verification_rejected", "admin.identity_verification_approved"} <= actions
@@ -91,7 +91,7 @@ def test_withdraw_and_admin_revoke(db, setup):
     assert routes.withdraw_identity_verification(db=db, user=user).request.status == "withdrawn"
     with pytest.raises(HTTPException):
         routes.withdraw_identity_verification(db=db, user=user)
-    admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(note="telefonisch"), db=db, admin=admin)
+    admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(note="telefonisch", expected_name=tenant.name), db=db, admin=admin)
     revoked = admin_routes.revoke_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(note="Missbrauch"), db=db, admin=admin)
     assert revoked.verified_at is None and revoked.revoked_reason == "admin"
     with pytest.raises(HTTPException):
@@ -102,7 +102,7 @@ def test_withdraw_and_admin_revoke(db, setup):
 def test_renaming_a_verified_tenant_revokes_the_verification(db, setup, by_platform_admin):
     tenant, user, admin = setup
     routes.request_identity_verification(routes.VerificationRequestWrite(), db=db, user=user)
-    admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(), db=db, admin=admin)
+    admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(expected_name=tenant.name), db=db, admin=admin)
     if by_platform_admin:
         asyncio.run(AdminTenantService().update_tenant(db, tenant.id, TenantUpdate(name="Ganz anderer Verein"), admin_email=admin.email))
     else:
@@ -122,3 +122,14 @@ def test_rename_withdraws_a_pending_request_and_same_name_changes_nothing(db, se
     asyncio.run(TenantService().update_tenant(db, tenant.id, user, TenantUpdate(name="Neuer Name")))
     assert db.query(IdentityVerificationRequest).filter_by(tenant_id=tenant.id, status="pending").count() == 0
     assert db.get(Tenant, tenant.id).identity_verified_at is None
+
+
+def test_approve_requires_and_checks_the_expected_name(db, setup):
+    """Review 1.5.2 (N7): Bestätigen nur mit dem geprüften Namen; ein anderer Name ergibt 409."""
+    tenant, user, admin = setup
+    with pytest.raises(HTTPException) as missing:
+        admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(), db=db, admin=admin)
+    assert missing.value.status_code == 422
+    with pytest.raises(HTTPException) as changed:
+        admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(expected_name="Anderer Name"), db=db, admin=admin)
+    assert changed.value.status_code == 409

@@ -126,7 +126,9 @@ class FileEraser:
 
     def erase_if_unreferenced(self, db: Session, stored_file_ids: Iterable[int], *, namespace: str = MAIN) -> int:
         erased = 0
-        for stored_file_id in dict.fromkeys(stored_file_ids):
+        # Aufsteigend sperren wie Vereinslöschung/Aufräumen: sonst Deadlock-Gefahr bei gleichzeitigen
+        # Löschungen mit gemeinsamen Dateien (Review 1.5.2, N5)
+        for stored_file_id in sorted(set(stored_file_ids)):
             stored_file = db.get(StoredFile, stored_file_id)
             # Erst sperren, dann Verweise suchen: ein gleichzeitig angelegter Verweis (z. B. Bild aus
             # dem letzten Protokoll übernommen) hält eine Schlüsselsperre und ist danach sichtbar.

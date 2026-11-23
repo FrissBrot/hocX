@@ -85,9 +85,13 @@ class FinesRepository:
         )
 
     def list_fines_for_tenant(
-        self, db: Session, tenant_id: int, skip: int = 0, limit: int = 50, *, status: str | None = None
+        self, db: Session, tenant_id: int, skip: int = 0, limit: int = 50, *, status: str | None = None, protocol_scope=None
     ) -> list[AttendanceFineListItem]:
+        """``protocol_scope`` (AccessService.protocol_read_scope): nur Bussen lesbarer Protokolle;
+        ``None`` = alle Protokolle des Mandanten."""
         statement = self._base_query().where(Protocol.tenant_id == tenant_id)
+        if protocol_scope is not None:
+            statement = statement.where(protocol_scope.readable(AttendanceFine.protocol_id))
         if status is not None:
             statement = statement.where(AttendanceFine.status == status)
         rows = db.execute(
@@ -135,12 +139,14 @@ class FinesRepository:
         ).all()
         return [self._to_list_item(db, row) for row in rows]
 
-    def open_fines_summary(self, db: Session, tenant_id: int, *, user_id: int | None = None) -> dict:
+    def open_fines_summary(self, db: Session, tenant_id: int, *, user_id: int | None = None, protocol_scope=None) -> dict:
         """Summe der offenen Präsenz-Bussen je Währung über alle Bussen (nicht nur eine Seite)
         plus Anzahl betroffener Personen. ``user_id``: nur die eigenen Bussen (ohne reports.personal)."""
         conditions = [Protocol.tenant_id == tenant_id, AttendanceFine.status == "pending"]
         if user_id is not None:
             conditions.append(AttendanceFine.participant_id == user_id)
+        if protocol_scope is not None:
+            conditions.append(protocol_scope.readable(AttendanceFine.protocol_id))
         rows = db.execute(
             select(
                 FinanceAccount.currency_label,

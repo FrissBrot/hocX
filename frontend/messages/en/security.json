@@ -108,6 +108,7 @@
     "invalid_credentials": "Email or password is invalid.",
     "login_email_taken": "This email address is already used for a login.",
     "wrong_current_password": "The current password is not correct.",
+    "password_breached_relogin": "Your current password is known from a data breach. Please sign in again (with your second factor or an e-mail code) or use «Forgot password» to change it.",
     "already_has_login": "This person already has a login.",
     "inactive_person": "Inactive people cannot be invited.",
     "email_required": "An invitation needs a saved email address for this person.",

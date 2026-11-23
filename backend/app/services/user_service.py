@@ -269,9 +269,10 @@ class UserService:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
-        from app.services.participant_service import _newly_left
+        from app.services.participant_service import _newly_left, _newly_returned
 
-        newly_left = _newly_left(user, values)
+        # Austritt bzw. Wiedereintritt: alte Sitzungen und Einmal-Links enden (wie Deaktivieren)
+        newly_left = _newly_left(user, values) or _newly_returned(user, values)
         if payload.password or payload.is_active is False or payload.login_enabled is False or newly_left or (
             "email" in values and (values["email"] or "") != (user.email or "").strip().lower()
         ):
@@ -366,6 +367,13 @@ class UserService:
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "wrong_current_password", "message": "Aktuelles Passwort ist nicht korrekt"})
         release_attempt(lockout_key)
+        from app.services.step_up_service import password_confirms_identity
+
+        if not password_confirms_identity(user, actor.auth_time):
+            # Geleaktes Passwort als «aktuelles Passwort» belegt nichts, solange die Sitzung älter ist
+            # als die Markierung (altes Cookie + öffentlich bekanntes Passwort = Kontoübernahme).
+            # Neu anmelden (zweiter Faktor/E-Mail-Code) oder «Passwort vergessen» (Review 1.5.2).
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "password_breached_relogin", "message": "Bitte melde dich neu an, um das Passwort zu ändern"})
         # Passwortregel überall (SEC-AUTH-015), nicht nur bei Reset/Einladung
         tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == user.tenant_id))
         ensure_password_acceptable(payload.new_password, personal=(user.first_name, user.last_name, user.display_name, user.email, tenant_name))
