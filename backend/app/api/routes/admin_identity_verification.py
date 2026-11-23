@@ -52,6 +52,9 @@ class AdminVerificationDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     note: str | None = Field(None, max_length=2000)
+    # Name, den der Plattform-Admin beim Bestätigen sieht: weicht der aktuelle ab (inzwischen
+    # umbenannt), lehnt «Bestätigen» ab, statt den ungeprüften neuen Namen zu bestätigen.
+    expected_name: str | None = Field(None, max_length=500)
 
 
 def _email(db: Session, model: type, row_id: int | None) -> str | None:
@@ -137,7 +140,7 @@ def _decide(db: Session, tenant_id: uuid.UUID, action) -> AdminTenantVerificatio
 def approve_identity_verification(
     tenant_id: uuid.UUID, body: AdminVerificationDecision, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)
 ):
-    return _decide(db, tenant_id, lambda tenant: verification.approve(db, tenant, admin_id=admin.admin_id, admin_email=admin.email, note=body.note))
+    return _decide(db, tenant_id, lambda tenant: verification.approve(db, tenant, admin_id=admin.admin_id, admin_email=admin.email, note=body.note, expected_name=body.expected_name))
 
 
 @router.post("/tenants/{tenant_id}/identity-verification/reject", response_model=AdminTenantVerificationRead)

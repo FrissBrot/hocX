@@ -75,9 +75,23 @@ def withdraw_request(db: Session, tenant: Tenant, *, actor: CurrentUser) -> None
     audit.log(db, action="identity_verification.withdrawn", actor=actor, tenant_id=tenant.id, entity_type="identity_verification_request", entity_id=row.id)
 
 
-def approve(db: Session, tenant: Tenant, *, admin_id: int, admin_email: str, note: str | None) -> None:
+def _lock_for_decision(db: Session, tenant: Tenant) -> None:
+    """Mandant sperren und neu lesen (gleiche Reihenfolge wie handle_rename: erst Mandant, dann
+    Antrag). Eine gleichzeitige Umbenennung ist danach entweder festgeschrieben und sichtbar
+    (Antrag zurückgezogen, neuer Name) oder wartet auf diese Entscheidung und hebt sie danach auf.
+    FOR NO KEY UPDATE: blockiert keine Einfügungen anderer Tabellen mit Verweis auf den Mandanten."""
+    db.flush()
+    db.refresh(tenant, with_for_update={"key_share": True})
+
+
+def approve(db: Session, tenant: Tenant, *, admin_id: int, admin_email: str, note: str | None, expected_name: str | None = None) -> None:
     """Bestätigt die Organisation. Mit offenem Antrag wird dieser abgeschlossen; ohne Antrag
-    kann ein Plattform-Admin auch direkt bestätigen (z. B. nach telefonischer Prüfung)."""
+    kann ein Plattform-Admin auch direkt bestätigen (z. B. nach telefonischer Prüfung).
+    ``expected_name``: der Name, den der Plattform-Admin geprüft hat (aus seiner Ansicht) - hat
+    der Verein inzwischen umbenannt, wird abgelehnt statt den neuen Namen zu bestätigen."""
+    _lock_for_decision(db, tenant)
+    if expected_name is not None and expected_name != tenant.name:
+        raise VerificationStateError("apiError.verificationNameChanged")
     now = datetime.now(UTC)
     row = pending_request(db, tenant.id)
     if row is not None:
@@ -99,6 +113,7 @@ def approve(db: Session, tenant: Tenant, *, admin_id: int, admin_email: str, not
 
 
 def reject(db: Session, tenant: Tenant, *, admin_id: int, admin_email: str, note: str) -> None:
+    _lock_for_decision(db, tenant)
     row = pending_request(db, tenant.id)
     if row is None:
         raise VerificationStateError("apiError.verificationNoPending")
@@ -138,7 +153,9 @@ def handle_rename(db: Session, tenant: Tenant, old_name: str, *, actor_email: st
     # Fenster festgeschriebene Bestätigung des alten Namens sähe der veraltete Stand nicht - der
     # neue, ungeprüfte Name bliebe bestätigt. Eine spätere Bestätigung wartet auf die Sperre.
     db.flush()
-    db.refresh(tenant, with_for_update=True)
+    # FOR NO KEY UPDATE (die Zeile ist durch den Flush ohnehin gesperrt): FOR UPDATE kollidierte mit
+    # jeder Einfügung, die auf den Mandanten verweist, und konnte verklemmen.
+    db.refresh(tenant, with_for_update={"key_share": True})
     row = pending_request(db, tenant.id)
     if row is not None:
         row.status = "withdrawn"
