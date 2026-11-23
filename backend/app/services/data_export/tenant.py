@@ -184,6 +184,7 @@ def _write_contents(db: Session, archive: EncryptedZip, job: TenantDataExport, l
         "fines": [_fines(db, tenant_id, lang, names), _todo_fines(db, tenant_id, lang, names)],
         "finances": _finances(db, tenant_id, lang),
         "todos": [_todos(db, tenant_id, lang, names)],
+        "uploads": [_uploads(db, tenant_id, lang, names)],
     }
     for key, sheets in books.items():
         archive.add_bytes(f"{_t(lang, f'tenant.file.{key}')}.xlsx", workbook.build(sheets))
@@ -509,3 +510,19 @@ def _documents(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str, s
         ORDER BY d.display_name, d.id
     """, {"t": tenant_id})
     return [(MAIN, r["storage_path"], f"{folder}/{safe_name(r['original_name'] or r['display_name'])}") for r in rows]
+
+
+def _uploads(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
+    """Upload-Verlauf (0250) als Tabelle - nur Zähler, keine Dateinamen (E-9: abgelehnte Namen nicht
+    exportieren; die gespeicherten Dateien stehen ohnehin im Export)."""
+    rows = _rows(db, """
+        SELECT j.channel, j.created_at, j.created_by, j.actor_kind, j.status, j.total, j.uploaded, j.duplicates,
+               j.rejected + j.infected + j.failed AS rejected
+        FROM upload_job j WHERE j.tenant_id = :t ORDER BY j.created_at, j.id
+    """, {"t": tenant_id})
+    columns = ["created_at", "channel", "person", "status", "total", "uploaded", "duplicates", "rejected"]
+    return _sheet(lang, "uploads", columns, [
+        [_fmt_date(r["created_at"]), r["channel"], names.get(r["created_by"], "") if r["actor_kind"] == "user" and r["created_by"] else "",
+         r["status"], r["total"], r["uploaded"], r["duplicates"], r["rejected"]]
+        for r in rows
+    ])

@@ -68,10 +68,12 @@ export const AREA_NAMESPACES = {
   connections: ["connections"],
   // Startseite (app/page.tsx): Dashboard-Kacheln und Mobile-Dashboard.
   dashboard: ["connections", "dashboard", "events", "finances", "protocols", "statistics", "todos"],
-  documents: ["documentPdf", "documentStudio", "files", "photos", "protocols", "sharedLinks", "templates"],
-  elements: ["documentStudio", "files", "photos", "protocols", "sharedLinks", "submissionAssignments", "templates"],
+  documents: ["documentPdf", "documentStudio", "files", "photos", "protocols", "sharedLinks", "templates", "uploads"],
+  elements: ["documentStudio", "files", "photos", "protocols", "sharedLinks", "submissionAssignments", "templates", "uploads"],
   events: ["connections", "documentStudio", "events"],
-  files: ["files", "sharedLinks"],
+  files: ["files", "sharedLinks", "uploads"],
+  // Upload-Verlauf der Ablage (app/files/uploads): Vorgangsdetail bettet das Fotoraster ein.
+  fileUploads: ["files", "photos", "protocols", "sharedLinks", "uploads"],
   // Datei-Import (app/files/import): Wizard, Regeln, Bericht.
   fileImport: ["fileImport", "files", "sharedLinks"],
   finances: ["documentStudio", "finances"],
@@ -79,7 +81,7 @@ export const AREA_NAMESPACES = {
   participants: ["files", "participants", "roles", "sharedLinks", "users"],
   // Benutzer-, Rollen-, Zyklen- und Freigabeverwaltung teilen sich dieselben Bausteine.
   people: ["cycles", "roles", "sharedLinks", "users"],
-  photos: ["files", "photos", "protocols", "sharedLinks"],
+  photos: ["files", "photos", "protocols", "sharedLinks", "uploads"],
   protocols: [
     "agenda",
     "documentStudio",
@@ -95,13 +97,13 @@ export const AREA_NAMESPACES = {
   statistics: ["documentStudio", "statistics"],
   submissionAccess: ["submissionAccess"],
   submissionAssignments: ["files", "sharedLinks", "submissionAssignments"],
-  taskPackages: ["files", "photos", "protocols", "sharedLinks", "taskPackages"],
+  taskPackages: ["files", "photos", "protocols", "sharedLinks", "taskPackages", "uploads"],
   templates: ["documentPdf", "documentStudio", "finances", "protocols", "submissionAssignments", "templates"],
   tenantSettings: ["cycles", "documents", "protocols", "roles", "sharedLinks", "storage", "tenantSettings", "users"],
   todos: ["connections", "documentStudio", "finances", "protocols", "todos"],
   // «Meine Aufgaben» zeigt dieselbe Pendenzen-Ansicht (TodoListView personal)
   myTasks: ["connections", "documentStudio", "finances", "protocols", "todos"],
-  tools: ["files", "photos", "protocols", "sharedLinks", "templates", "todos", "tools"],
+  tools: ["files", "photos", "protocols", "sharedLinks", "templates", "todos", "tools", "uploads"],
   website: ["website"],
 } as const satisfies Record<string, readonly string[]>;
 

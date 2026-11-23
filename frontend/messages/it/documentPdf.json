@@ -475,7 +475,8 @@
       "agenda_items": "Argomenti",
       "todo_fines": "Multe per compiti",
       "notifications": "Notifiche e-mail",
-      "submission_elements": "Elementi di consegna"
+      "submission_elements": "Elementi di consegna",
+      "uploads": "Caricamenti"
     },
     "col": {
       "first_name": "Nome",
@@ -537,7 +538,13 @@
       "completed_on": "Completato il",
       "fine_tariff": "Tariffa multe",
       "sent_at": "Inviato il",
-      "trashed_at": "Nel cestino dal"
+      "trashed_at": "Nel cestino dal",
+      "channel": "Canale",
+      "total": "File",
+      "uploaded": "Caricati",
+      "duplicates": "Duplicati",
+      "rejected": "Rifiutati",
+      "person": "Persona"
     },
     "file": {
       "workbook": "Rapporto dati",
@@ -555,7 +562,8 @@
         "attendance": "Presenze",
         "fines": "Multe",
         "finances": "Finanze",
-        "todos": "Compiti"
+        "todos": "Compiti",
+        "uploads": "Caricamenti"
       },
       "sheet": {
         "members": "Membri",
@@ -564,7 +572,8 @@
         "fines": "Multe",
         "finances": "Finanze",
         "todos": "Compiti",
-        "todoFines": "Multe per compiti"
+        "todoFines": "Multe per compiti",
+        "uploads": "Cronologia caricamenti"
       },
       "folder": {
         "lists": "Liste",

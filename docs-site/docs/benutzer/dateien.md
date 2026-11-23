@@ -41,6 +41,11 @@ Exportierst du ein Protokoll mehrmals, entsteht kein neuer Eintrag, sondern eine
 immer die aktuelle Version; ältere öffnest du in den Details unter **Versionen**. Mit dem
 Filter **Protokollexporte** siehst du nur diese Dokumente.
 
+## Upload-Verlauf {#upload-verlauf}
+
+**Ablage › Uploads** zeigt jeden Upload mit dem Ergebnis je Datei (hochgeladen, Duplikat,
+abgelehnt mit Grund). Details: [Upload-Verlauf](upload-verlauf.md).
+
 ## Papierkorb {#papierkorb}
 
 Wer Dateien bzw. Fotos verwalten darf, kann direkt hochgeladene Dateien über das Menü **···**

@@ -196,6 +196,8 @@ class GalleryUploadJobRead(BaseModel):
     imported_count: int
     error_count: int
     created_at: datetime
+    # Vorgang im Upload-Verlauf (0250), für «Bearbeiten» nach dem Upload
+    upload_job_id: uuid.UUID | None = None
     started_at: datetime | None
     finished_at: datetime | None
     error: str | None
@@ -240,6 +242,7 @@ class DocumentUploadResult(BaseModel):
     items: list[FileOverviewItem]
     errors: list[str]
     file_results: list[UploadFileResult] = []
+    upload_job_id: uuid.UUID | None = None
 
 
 class ClientGpsMetadata(BaseModel):
@@ -286,6 +289,8 @@ class UploadPrecheckRequest(BaseModel):
     # Schätzdatum aus dem Upload-Popup - gilt nur für Bilder ohne echtes Aufnahmedatum.
     estimated_taken_on: date | None = None
     files: list[UploadPrecheckFile] = Field(max_length=500)
+    # Upload-Verlauf (0250): übersprungene Duplikate und ergänzte Metadaten werden im Vorgang erfasst
+    upload_job_id: uuid.UUID | None = None
 
 
 class UploadPrecheckResult(BaseModel):
@@ -357,6 +362,13 @@ class FileBulkCaptureDate(BaseModel):
     corrected_time: time | None = None
     shift_days: int = Field(default=0, ge=-36500, le=36500)
     shift_hours: int = Field(default=0, ge=-8760, le=8760)
+    # Minuten (Upload-Verlauf, E-10); Sekunden nur für den Referenzfoto-Modus (rechnet sekundengenau)
+    shift_minutes: int = Field(default=0, ge=-525600, le=525600)
+    shift_seconds: int = Field(default=0, ge=-59, le=59)
+    # Rückgängig (Migration 0251): gestückelte Aufrufe senden die batch_id des ersten Stücks mit
+    batch_id: uuid.UUID | None = None
+    # Korrektur aus dem Vorgangsdetail des Upload-Verlaufs (Reiter «Datumskorrekturen»)
+    upload_job_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _check_mode(self) -> "FileBulkCaptureDate":
@@ -364,9 +376,10 @@ class FileBulkCaptureDate(BaseModel):
             raise ValueError("corrected_date fehlt")
         if self.mode != "set" and (self.corrected_date is not None or self.corrected_time is not None):
             raise ValueError("corrected_date/corrected_time nur mit mode 'set'")
-        if self.mode == "shift" and self.shift_days == 0 and self.shift_hours == 0:
+        has_shift = any((self.shift_days, self.shift_hours, self.shift_minutes, self.shift_seconds))
+        if self.mode == "shift" and not has_shift:
             raise ValueError("Versatz fehlt")
-        if self.mode != "shift" and (self.shift_days or self.shift_hours):
+        if self.mode != "shift" and has_shift:
             raise ValueError("Versatz nur mit mode 'shift'")
         return self
 
@@ -387,6 +400,69 @@ class FileBulkCaptureDateResult(BaseModel):
     no_time_unchanged_ids: list[uuid.UUID] = Field(default_factory=list)
     # ... bzw. nur um die ganzen Tage verschoben, Stunden ignoriert (Teilmenge von updated_ids).
     date_only_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Korrektur für «Rückgängig» (None, wenn nichts geändert wurde)
+    batch_id: uuid.UUID | None = None
+
+
+class CaptureEventRef(BaseModel):
+    title: str
+    date: str
+
+
+class CaptureEventTransition(BaseModel):
+    from_event: CaptureEventRef | None = None
+    to_event: CaptureEventRef | None = None
+    count: int
+
+
+class CaptureChangeSample(BaseModel):
+    id: uuid.UUID
+    name: str
+    thumbnail_url: str
+    before: datetime | None = None
+    before_has_time: bool = False
+    before_source: Literal["corrected", "exif", "estimated"]
+    after: datetime | None = None
+    after_has_time: bool = False
+
+
+class FileBulkCaptureDatePreview(BaseModel):
+    """POST /files/bulk-capture-date/preview - gleiche Eingabe und Prüfung, schreibt nichts."""
+
+    will_change: int
+    unchanged: int
+    no_date: int
+    # Fotos ohne Uhrzeit: unverändert (Versatz ohne ganzen Tag) bzw. nur um ganze Tage verschoben
+    date_only_unchanged: int
+    date_only_changed: int
+    invalid: int
+    not_found: int
+    # Fotos ohne Aufnahmedatum, für «Datum setzen» (höchstens 500)
+    no_date_ids: list[uuid.UUID] = Field(default_factory=list)
+    samples: list[CaptureChangeSample] = Field(default_factory=list)
+    day_changes: int = 0
+    event_changes: int = 0
+    event_transitions: list[CaptureEventTransition] = Field(default_factory=list)
+
+
+class CaptureChangeBatchRead(BaseModel):
+    id: uuid.UUID
+    mode: Literal["set", "shift", "reset"]
+    params: dict
+    created_at: datetime
+    created_by_name: str | None = None
+    updated_count: int
+    # Fotos, die es noch gibt (Rückgängig hängt an den Dateien, E-9)
+    remaining: int
+    undone_at: datetime | None = None
+    can_undo: bool = False
+
+
+class CaptureChangeUndoResult(BaseModel):
+    restored_ids: list[uuid.UUID]
+    # Inzwischen anders geändert - unverändert gelassen
+    conflict_ids: list[uuid.UUID]
+    not_found_ids: list[uuid.UUID]
 
 
 class GpsMetadataRead(BaseModel):
@@ -438,6 +514,8 @@ class StoredFileMetadata(BaseModel):
     gps: GpsMetadataRead | None = None
     # Darf der aktuelle Benutzer das geschätzte Datum bearbeiten (nur Bilder, Schreibrecht)?
     can_edit_capture_date: bool = False
+    # Herkunftsvorgang im Upload-Verlauf (0250) - nur, wenn die Person ihn sehen darf
+    upload_job: "UploadJobOfFile | None" = None
 
 
 class PhotoAlbumCreate(BaseModel):
@@ -683,6 +761,28 @@ class FileBulkTagsUpdate(BaseModel):
     remove_tags: list[str] = []
 
 
+class FileBulkEventLink(BaseModel):
+    """POST /files/bulk-event-link (Upload-Verlauf, Bulk «Termin zuordnen»): mode "set" verknüpft
+    fest mit event_id (manuell, bleibt bei Datumsänderungen), "auto" gibt die Zuordnung an die
+    automatische Zuordnung nach Aufnahmedatum zurück."""
+
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    mode: Literal["set", "auto"]
+    event_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "FileBulkEventLink":
+        if (self.mode == "set") != (self.event_id is not None):
+            raise ValueError("event_id nur und immer mit mode 'set'")
+        return self
+
+
+class FileBulkEventLinkResult(BaseModel):
+    updated_ids: list[uuid.UUID]
+    # Unbekannt, fremd, nicht beschreibbar oder keine Galerie-Datei - nicht unterschieden
+    not_found_ids: list[uuid.UUID]
+
+
 _DATE_ONLY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _SHARE_EXPIRY_TZ = ZoneInfo("Europe/Zurich")
 
@@ -762,3 +862,8 @@ class PublicShareRead(BaseModel):
     files: list[PublicShareFile]
     # Immer ein ZIP; mit ?ids=<uuid>,<uuid> nur die Auswahl.
     download_all_url: str | None = None
+
+
+from app.schemas.upload_jobs import UploadJobOfFile  # noqa: E402 - Vorwärtsreferenz in StoredFileMetadata
+
+StoredFileMetadata.model_rebuild()

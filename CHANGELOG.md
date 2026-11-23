@@ -24,6 +24,23 @@ Installationen aktualisieren können.
   (Virenprüfung, Inhaltstyp, Grössen, Duplikate, Kontingent). Grenzen: 50 000 Dateien und 100 GB je
   Import, ein Import je Verein gleichzeitig.
 - Neue Berechtigung **Dateien importieren** (`files.import`), standardmässig nur für Administratoren.
+- **Upload-Verlauf (1.6):** Jeder Upload ist ein Vorgang – über alle Pakete eines Dialogs, den
+  Vorab-Abgleich und vom Browser abgelehnte Dateien hinweg. *Fotos › Uploads* und *Ablage › Uploads*
+  zeigen je Upload Person, Weg (Foto, Ablage, Pendenz, Abgabebox, persönlicher Link, Word-, Datei-
+  und Plattform-Import, Protokollbilder je Protokoll und Tag), Bezug und Ergebnis («48 hochgeladen ·
+  3 Duplikate · 1 abgelehnt»). Im Vorgang: Fotoraster nur dieses Uploads mit «Alle dieses Uploads
+  auswählen» (bis 10 000, Bulk-Aktionen in Teilen mit Fortschritt und Abbruch), Ergebnisliste je Datei
+  mit Grund, Kameras (gleiche Modelle über ein verschlüsseltes Kürzel der Seriennummer getrennt,
+  Vorschlag aus der GPS-Zeit) und Datumskorrekturen. Nach dem Upload «Bearbeiten» im Hinweis und ein
+  ausblendbarer Hinweisstreifen; die Foto-Ansicht verlinkt den Upload. Sichtbar mit dem Recht des
+  Bereichs, eigene Uploads immer. Ältere Uploads werden rekonstruiert und so gekennzeichnet.
+- **Aufnahmedatum verschieben** um Tage, Stunden und **Minuten** mit Richtung früher/später oder
+  **nach Referenzfoto** (richtige Uhrzeit eingeben oder gleicher Moment einer anderen Kamera),
+  **Vorschau** mit Tages- und Terminwechseln und **Rückgängig** (exakt, solange die Fotos existieren).
+  Grosse Auswahlen werden in Teilen zu 500 verarbeitet. Termin-Zuordnungen werden nur für Fotos
+  neu berechnet, deren Tag wechselt.
+- Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
+  Zuordnung nach Datum zurückgeben.
 
 ### Update
 
@@ -33,6 +50,13 @@ Installationen aktualisieren können.
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
+- Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
+  `0252_upload_history_abgabebox` (vorläufig hinter `0230_cloud_import`, bei der Integration neu
+  verketten). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
+  für `hocx_abgabebox`). Kein neues Secret.
+- **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im
+  backend-Container (rekonstruiert den Altbestand, idempotent, siehe RUNBOOK Abschnitt 25).
 
 ## [1.5.1] - 2026-11-22
 

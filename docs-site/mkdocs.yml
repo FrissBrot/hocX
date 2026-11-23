@@ -100,6 +100,7 @@ nav:
       - Abgabebox: benutzer/abgabebox.md
       - Dateien & Dokumente: benutzer/dateien.md
       - Fotos & Alben: benutzer/fotos.md
+      - Upload-Verlauf: benutzer/upload-verlauf.md
       - Dateien importieren: benutzer/datei-import.md
       - Word-Import: benutzer/word-import.md
       - Dokumente & Document Studio: benutzer/dokumente.md
@@ -113,6 +114,7 @@ nav:
       - Platform-Admin-Panel: technik/admin-panel.md
       - Mandanten Export/Import: technik/export-import.md
       - Datei-Import: technik/datei-import.md
+      - Upload-Verlauf: technik/upload-verlauf.md
       - Dokument-Engine: technik/dokument-engine.md
       - Document Studio: technik/document-studio.md
       - Import-Testbook: technik/import-testbook.md

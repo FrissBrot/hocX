@@ -475,7 +475,8 @@
       "agenda_items": "Sujets",
       "todo_fines": "Amendes pour tâches",
       "notifications": "Notifications par e-mail",
-      "submission_elements": "Éléments de dépôt"
+      "submission_elements": "Éléments de dépôt",
+      "uploads": "Téléversements"
     },
     "col": {
       "first_name": "Prénom",
@@ -537,7 +538,13 @@
       "completed_on": "Terminée le",
       "fine_tariff": "Tarif d'amendes",
       "sent_at": "Envoyé le",
-      "trashed_at": "Dans la corbeille depuis"
+      "trashed_at": "Dans la corbeille depuis",
+      "channel": "Canal",
+      "total": "Fichiers",
+      "uploaded": "Téléversés",
+      "duplicates": "Doublons",
+      "rejected": "Refusés",
+      "person": "Personne"
     },
     "file": {
       "workbook": "Rapport de données",
@@ -555,7 +562,8 @@
         "attendance": "Présences",
         "fines": "Amendes",
         "finances": "Finances",
-        "todos": "Tâches"
+        "todos": "Tâches",
+        "uploads": "Téléversements"
       },
       "sheet": {
         "members": "Membres",
@@ -564,7 +572,8 @@
         "fines": "Amendes",
         "finances": "Finances",
         "todos": "Tâches",
-        "todoFines": "Amendes pour tâches"
+        "todoFines": "Amendes pour tâches",
+        "uploads": "Historique des téléversements"
       },
       "folder": {
         "lists": "Listes",

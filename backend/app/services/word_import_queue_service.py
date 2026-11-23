@@ -111,7 +111,16 @@ class WordImportQueueService:
         created_by: int | None,
         files: list[tuple[str, bytes]],
         viewer=None,
+        upload_job_id=None,
     ) -> tuple[list[WordImportDocument], list[str]]:
+        """upload_job_id (Upload-Verlauf, 0250): je Datei ein Item, ein gespeichertes Dokument in
+        derselben Transaktion wie die Datei, ein Fehlschlag danach in einer eigenen."""
+        from app.models.upload_history_entities import UploadJob
+        from app.services import upload_job_service
+
+        def history():
+            return db.get(UploadJob, upload_job_id) if upload_job_id is not None else None
+
         template = db.get(Template, template_id)
         if template is None or template.tenant_id != tenant_id:
             raise ValueError("Vorlage nicht gefunden")
@@ -149,6 +158,8 @@ class WordImportQueueService:
                     created_by=created_by,
                 )
                 db.add(document)
+                if (job := history()) is not None:
+                    upload_job_service.record_new_file(db, job, stored_file, name=filename)
                 db.commit()
                 db.refresh(document)
                 documents.append(document)
@@ -163,6 +174,12 @@ class WordImportQueueService:
                 # this per-file failure is otherwise swallowed into `errors` and never raised.
                 if not isinstance(exc, ValueError):
                     record_system_error(db, exc=exc, tenant_id=tenant_id, source="backend")
+                if (job := history()) is not None:
+                    status, reason = upload_job_service.item_status_for(
+                        {"status": "skipped" if getattr(exc, "status_code", None) == 409 else "failed", "code": getattr(exc, "code", None)}
+                    )
+                    upload_job_service.record_items(db, job, [upload_job_service.ItemIn(status=status, name=filename, reason_code=reason)])
+                    db.commit()
 
         # Display-name second pass (audit D13, 2026-08-16): ingest() processes files
         # sequentially, so a document ingested early in the batch only saw whichever

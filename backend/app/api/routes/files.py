@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.schemas.base import MAX_QUERY_OFFSET
-from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
+from app.models.entities import AppUser, CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
 from sqlalchemy.orm import Session
 
@@ -71,6 +71,11 @@ from app.schemas.files import (
     PhotoAnalysisProgress,
     SimilarityGroupList,
     StoredFileMetadata,
+    FileBulkCaptureDatePreview,
+    FileBulkEventLink,
+    FileBulkEventLinkResult,
+    CaptureChangeBatchRead,
+    CaptureChangeUndoResult,
     MAX_STORED_FILE_NAME_LENGTH,
     StoredFileRename,
     StoredFileRenameResult,
@@ -83,6 +88,10 @@ from app.schemas.files import (
 )
 from app.schemas.protocol import ProtocolImageRead
 from app.services import upload_precheck_service
+from app.services import upload_job_service
+from app.services import capture_change_service, photo_event_link_service
+from app.models.upload_history_entities import CaptureChangeBatch
+from app.schemas.upload_jobs import UploadJobOfFile
 from app.services import file_keywords
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
@@ -153,6 +162,8 @@ def list_files(
     # Nur Einträge dieser Tage (group_date, inklusive) - die Zeitleiste der Fotos lädt die sichtbaren Tage.
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
+    # Upload-Verlauf: nur Dateien dieses Vorgangs (404, wenn die Person ihn nicht sehen darf)
+    upload_job_id: Annotated[uuid.UUID | None, Query()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -170,6 +181,8 @@ def list_files(
         exclude_images, only_images = True, False
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
+    if upload_job_id is not None:
+        upload_job_service.get_visible_job(db, user, upload_job_id)
     album = _get_album(db, user, album_id) if album_id is not None else None
     if exclude_album_id is not None:
         _get_album(db, user, exclude_album_id)
@@ -203,6 +216,7 @@ def list_files(
         viewer_tenant_id=user.current_tenant_id if album_id is not None else None,
         # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Dateien anderer Aufträge ausblenden
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        upload_job_id=upload_job_id,
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -241,6 +255,7 @@ def files_timeline(
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
+    upload_job_id: Annotated[uuid.UUID | None, Query()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -250,9 +265,12 @@ def files_timeline(
     require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
+    if upload_job_id is not None:
+        upload_job_service.get_visible_job(db, user, upload_job_id)
     return service.tenant_files_timeline(
         db, user.current_tenant_id, sort_dir=sort_dir, only_images=only_images, search=search, tags=tags,
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+        upload_job_id=upload_job_id,
     )
 
 
@@ -332,8 +350,31 @@ def list_similarity_groups(
     )
 
 
+def _upload_job_for_request(
+    db: Session, user: CurrentUser, upload_job_id: uuid.UUID | None, channel: str, target: "_UploadTarget",
+    element_ref: str | None, *, options: dict,
+):
+    """Vorgang im Upload-Verlauf für einen Upload-Request: der vom Browser geöffnete (gleicher
+    Kanal bzw. Pendenz, eigene Person, offen, sonst 404) oder - ältere Clients, API - ein eigener
+    Vorgang nur für diesen Request. (Vorgang, neu angelegt?)"""
+    channels = (channel, "todo")
+    attached = upload_job_service.attach(db, user, upload_job_id, channels, lock=True)
+    if attached is not None:
+        return attached, False
+    job = upload_job_service.open_job(
+        db, tenant_id=user.current_tenant_id, channel=channel, created_by=user.user_id, options=options,
+        event_id=target.event_id, submission_assignment_id=target.assignment_id,
+        submission_element_ref=element_ref if target.assignment_id is not None else None,
+        submission_element_label=target.element_label, cycle_config_id=target.cycle_config_id,
+    )
+    # Kein Browser meldet diesen Vorgang ab: er schliesst, sobald die Verarbeitung fertig ist.
+    job.client_closed_at = datetime.now(UTC)
+    return job, True
+
+
 def _gallery_upload_job_to_read(job: GalleryUploadJob) -> GalleryUploadJobRead:
     return GalleryUploadJobRead(
+        upload_job_id=job.upload_job_id,
         id=job.id,
         status=job.status,
         total_files=job.total_files,
@@ -465,7 +506,25 @@ def precheck_uploads(
         raise HTTPException(status_code=400, detail="No active tenant")
     if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
+    # Vorgang vor dem Abgleich prüfen: ein fremder/abgeschlossener ergibt 404, bevor etwas geschieht
+    upload_job = upload_job_service.attach(db, user, payload.upload_job_id, ("gallery", "document", "todo"))
     results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id, viewer=user)
+    if upload_job is not None:
+        by_client = {entry.client_id: entry for entry in payload.files}
+        recorded = [
+            {
+                "name": by_client[result.client_id].name,
+                "status": "skipped" if result.status == "already_exists" else "metadata_updated",
+                "file_id": str(result.file_id) if result.file_id else None,
+                "applied": list(result.applied),
+                "size": by_client[result.client_id].size,
+                "mime_type": by_client[result.client_id].mime_type,
+            }
+            for result in results
+            if result.status in ("already_exists", "metadata_updated") and result.client_id in by_client
+        ]
+        upload_job_service.record_results(db, upload_job, recorded)
+        db.commit()
     return UploadPrecheckResponse(results=results)
 
 
@@ -520,6 +579,8 @@ async def upload_gallery_images(
     file_metadata: Annotated[str | None, Form()] = None,
     # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
     include_gps: Annotated[bool, Form()] = True,
+    # Upload-Verlauf (0250): Vorgang aus POST /upload-jobs; ohne legt dieser Request einen eigenen an.
+    upload_job_id: Annotated[uuid.UUID | None, Form()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -534,7 +595,7 @@ async def upload_gallery_images(
     .../gallery-upload-jobs/{id} fuer den Fortschritt."""
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_upload_gallery_images_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, release_to_shared_albums=release_to_shared_albums, estimated_taken_on=estimated_taken_on, file_metadata=file_metadata, include_gps=include_gps, db=db, user=user)
+    return await run_coroutine_in_thread(_upload_gallery_images_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, release_to_shared_albums=release_to_shared_albums, estimated_taken_on=estimated_taken_on, file_metadata=file_metadata, include_gps=include_gps, upload_job_id=upload_job_id, db=db, user=user)
 
 
 async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
@@ -558,6 +619,8 @@ async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_th
     file_metadata: Annotated[str | None, Form()] = None,
     # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
     include_gps: Annotated[bool, Form()] = True,
+    # Upload-Verlauf (0250): Vorgang aus POST /upload-jobs; ohne legt dieser Request einen eigenen an.
+    upload_job_id: Annotated[uuid.UUID | None, Form()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -663,7 +726,21 @@ async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_th
     if not staged_paths:
         raise HTTPException(status_code=400, detail="Keine Dateien hochgeladen")
 
+    try:
+        upload_job, _created = _upload_job_for_request(
+            db, user, upload_job_id, "gallery", target, submission_element_ref,
+            options={"tags": tag_list, "estimated_taken_on": estimated_taken_on, "include_gps": include_gps,
+                     "release_to_shared_albums": release_to_shared_albums},
+        )
+        upload_job_service.mark_processing(db, upload_job)
+    except BaseException:
+        db.rollback()
+        for relative_path in staged_paths:
+            (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+        raise
+
     job = GalleryUploadJob(
+        upload_job_id=upload_job.id,
         tenant_id=user.current_tenant_id,
         reserved_bytes=reserved_bytes,
         staged_paths=staged_paths,
@@ -717,6 +794,8 @@ async def upload_documents(
     allow_images: Annotated[bool, Form()] = False,
     # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
     include_gps: Annotated[bool, Form()] = True,
+    # Upload-Verlauf (0250): Vorgang aus POST /upload-jobs; ohne legt dieser Request einen eigenen an.
+    upload_job_id: Annotated[uuid.UUID | None, Form()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -727,7 +806,7 @@ async def upload_documents(
     kommt direkt zurueck."""
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, include_gps=include_gps, db=db, user=user)
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, allow_duplicates=allow_duplicates, allow_images=allow_images, include_gps=include_gps, upload_job_id=upload_job_id, db=db, user=user)
 
 
 async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
@@ -748,6 +827,8 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
     allow_images: Annotated[bool, Form()] = False,
     # Wie beim Galerie-Upload: false entfernt GPS-Daten aus Bildern (nur mit allow_images wirksam).
     include_gps: Annotated[bool, Form()] = True,
+    # Upload-Verlauf (0250): Vorgang aus POST /upload-jobs; ohne legt dieser Request einen eigenen an.
+    upload_job_id: Annotated[uuid.UUID | None, Form()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -815,6 +896,10 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
             )
         staged.append((name, content))
 
+    upload_job, created_here = _upload_job_for_request(
+        db, user, upload_job_id, "document", target, submission_element_ref,
+        options={"tags": tag_list, "include_gps": include_gps is not False, "allow_duplicates": allow_duplicates is True},
+    )
     file_results: list[dict] = []
     items, errors = await service.save_document_uploads(
         db,
@@ -833,8 +918,15 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
         include_gps=include_gps is not False,
         # Duplikate nur überspringen, wenn die Person sie sehen darf (Security-Review V-2)
         viewer=user,
+        # Verlauf in derselben Transaktion wie die neuen Dateien
+        before_commit=lambda: upload_job_service.record_results(db, upload_job, file_results),
     )
-    return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
+    if created_here:
+        upload_job_service.finish(db, upload_job)
+    db.commit()
+    return DocumentUploadResult(
+        items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results], upload_job_id=upload_job.id
+    )
 
 
 @router.get("/files/gallery-upload-jobs", response_model=list[GalleryUploadJobRead])
@@ -1002,6 +1094,17 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     _ensure_readable_block_or_404(db, user, protocol_element_block.id, "Protocol element block not found")
     _ensure_block_protocol_not_frozen(db, protocol_element_block.id)
+    protocol_id = db.scalar(
+        select(ProtocolElement.protocol_id).where(ProtocolElement.id == protocol_element_block.protocol_element_id)
+    )
+
+    def record_in_history(stored_file: StoredFile) -> None:
+        # Upload-Verlauf (E-6): ein Vorgang je Protokoll und Tag, in derselben Transaktion
+        if protocol_id is None:
+            return
+        job = upload_job_service.protocol_day_job(db, tenant_id=stored_file.tenant_id, protocol_id=protocol_id, created_by=user.user_id)
+        upload_job_service.record_new_file(db, job, stored_file)
+
     try:
         return await service.save_protocol_image(
             db,
@@ -1012,6 +1115,7 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
             created_by=user.user_id,
             include_gps=include_gps,
             viewer=user,
+            before_commit=record_in_history,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -1335,7 +1439,19 @@ def get_stored_file_metadata(
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     if not _sees_location(user):
         metadata = metadata.model_copy(update={"gps": None})
-    return metadata
+    return _with_upload_job(db, user, stored_file, metadata)
+
+
+def _with_upload_job(db: Session, user: CurrentUser, stored_file: StoredFile, metadata: StoredFileMetadata) -> StoredFileMetadata:
+    """Herkunftsvorgang (Upload-Verlauf) nur, wenn die Person den Vorgang sehen darf."""
+    job = upload_job_service.job_for_file(db, user, stored_file)
+    if job is None:
+        return metadata
+    uploader = db.get(AppUser, job.created_by) if job.created_by is not None and job.actor_kind == "user" else None
+    return metadata.model_copy(update={"upload_job": UploadJobOfFile(
+        id=job.id, channel=job.channel, created_at=job.created_at, uploaded_count=job.uploaded,
+        created_by_name=uploader.display_name if uploader is not None else None, reconstructed=job.reconstructed,
+    )})
 
 
 def _can_edit_capture_date(user: CurrentUser, stored_file: StoredFile) -> bool:
@@ -1366,7 +1482,7 @@ def update_stored_file_capture_date(
     metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
-    return metadata
+    return _with_upload_job(db, user, stored_file, metadata)
 
 
 def _capture_correction_audit(
@@ -1446,18 +1562,12 @@ def update_stored_file_capture_correction(
     metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
-    return metadata
+    return _with_upload_job(db, user, stored_file, metadata)
 
 
-@router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
-def bulk_update_capture_date(
-    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
-):
-    """Mehrfachauswahl der Galerie «Aufnahmedatum ändern»: alle auf ein Datum setzen, um einen
-    Versatz verschieben (Bilder ohne Aufnahmedatum werden übersprungen und gemeldet) oder die
-    Korrektur entfernen. Höchstens MAX_CAPTURE_DATE_BULK Bilder; nur Bilder des eigenen
-    Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
-    not_found zurück. Ein Audit-Eintrag pro Aufruf."""
+def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptureDate):
+    """Gemeinsame Prüfung für Anwenden und Vorschau: (angefragte IDs, beschreibbare IDs, nicht
+    lesbare IDs, Zielwert bei «set», Versatz bei «shift»)."""
     require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -1487,17 +1597,53 @@ def bulk_update_capture_date(
     )
     if corrected is not None and image_metadata_service.valid_capture_datetime(corrected[0]) is None:
         raise HTTPException(status_code=422, detail="Ungültiges Aufnahmedatum")
-    shift = timedelta(days=payload.shift_days, hours=payload.shift_hours) if payload.mode == "shift" else None
-    outcome = service.correct_capture_dates(
-        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+    shift = (
+        timedelta(days=payload.shift_days, hours=payload.shift_hours, minutes=payload.shift_minutes, seconds=payload.shift_seconds)
+        if payload.mode == "shift"
+        else None
     )
-    outcome.not_found_ids.extend(unreadable)
+    return ids, writable_ids, unreadable, corrected, shift
+
+
+@router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
+def bulk_update_capture_date(
+    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Mehrfachauswahl der Galerie «Aufnahmedatum ändern»: alle auf ein Datum setzen, um einen
+    Versatz verschieben (Tage, Stunden, Minuten; Bilder ohne Aufnahmedatum werden übersprungen und
+    gemeldet) oder die Korrektur entfernen. Höchstens MAX_CAPTURE_DATE_BULK Bilder je Aufruf - der
+    Browser stückelt grössere Auswahlen und sendet ab dem zweiten Stück die batch_id des ersten
+    mit, damit «Rückgängig» alles zusammen zurücknimmt (Migration 0251). Nur Bilder des eigenen
+    Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
+    not_found zurück. Ein Audit-Eintrag pro Aufruf."""
+    ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    upload_job = upload_job_service.get_visible_job(db, user, payload.upload_job_id) if payload.upload_job_id is not None else None
     details: dict = {}
     if corrected is not None:
         details = {"corrected_at": corrected[0].isoformat(), "has_time": corrected[1]}
     elif shift is not None:
-        details = {"shift_days": payload.shift_days, "shift_hours": payload.shift_hours}
-    _capture_correction_audit(db, user, mode=payload.mode, outcome=outcome, requested=len(ids), details=details)
+        details = {
+            "shift_days": payload.shift_days, "shift_hours": payload.shift_hours,
+            "shift_minutes": payload.shift_minutes, "shift_seconds": payload.shift_seconds,
+        }
+    # Korrektur vor dem Ändern öffnen bzw. aufnehmen (fremde/alte batch_id = 404, nichts geändert)
+    batch = capture_change_service.open_batch(
+        db, user, batch_id=payload.batch_id, mode=payload.mode, params=details, upload_job_id=upload_job.id if upload_job else None
+    )
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
+    )
+    outcome.not_found_ids.extend(unreadable)
+    capture_change_service.record(db, batch, outcome.changes)
+    batch_id = batch.id
+    if not outcome.changes and payload.batch_id is None:
+        # Nichts geändert: keine leere Korrektur zum Rückgängigmachen anbieten
+        db.delete(batch)
+        batch_id = None
+    _capture_correction_audit(
+        db, user, mode=payload.mode, outcome=outcome, requested=len(ids),
+        details={**details, "batch_id": str(batch_id) if batch_id else None},
+    )
     db.commit()
     service.recompute_capture_albums(db, outcome)
     return FileBulkCaptureDateResult(
@@ -1508,7 +1654,104 @@ def bulk_update_capture_date(
         not_found_ids=outcome.not_found_ids,
         no_time_unchanged_ids=outcome.no_time_unchanged_ids,
         date_only_ids=outcome.date_only_ids,
+        batch_id=batch_id,
     )
+
+
+@router.post("/files/bulk-capture-date/preview", response_model=FileBulkCaptureDatePreview)
+def preview_bulk_capture_date(
+    payload: FileBulkCaptureDate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Vorschau zu POST /files/bulk-capture-date: gleiche Eingabe und Prüfungen, schreibt nichts.
+    Zähler, Stichprobe vorher/nachher und Auswirkungen (Tageswechsel, Terminwechsel automatisch
+    verknüpfter Fotos). POST, weil die Auswahl im Body steht; ändert nichts."""
+    _ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    outcome = service.correct_capture_dates(
+        db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift,
+        user_id=user.user_id, dry_run=True,
+    )
+    effect = capture_change_service.impacts(db, user.current_tenant_id, outcome.changes)
+    return FileBulkCaptureDatePreview(
+        will_change=len(outcome.updated_ids),
+        unchanged=len(outcome.unchanged_ids),
+        no_date=len(outcome.skipped_no_date_ids),
+        date_only_unchanged=len(outcome.no_time_unchanged_ids),
+        date_only_changed=len(outcome.date_only_ids),
+        invalid=len(outcome.invalid_ids),
+        not_found=len(outcome.not_found_ids) + len(unreadable),
+        no_date_ids=outcome.skipped_no_date_ids[:MAX_CAPTURE_DATE_BULK],
+        samples=capture_change_service.samples(service, outcome.changes),
+        **effect,
+    )
+
+
+def _capture_batch_or_404(db: Session, user: CurrentUser, batch_id: uuid.UUID) -> CaptureChangeBatch:
+    batch = db.scalar(
+        select(CaptureChangeBatch).where(CaptureChangeBatch.id == batch_id, CaptureChangeBatch.tenant_id == user.current_tenant_id)
+    )
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Korrektur nicht gefunden")
+    return batch
+
+
+@router.post("/capture-changes/{batch_id}/undo", response_model=CaptureChangeUndoResult)
+def undo_capture_change(batch_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Datumskorrektur rückgängig machen (7.5): je Foto der Wert davor, aber nur, wo seither nichts
+    anderes geändert wurde. Gleiche Schreibprüfung je Foto wie die Mehrfachauswahl."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=404, detail="Korrektur nicht gefunden")
+    batch = _capture_batch_or_404(db, user, batch_id)
+    db.execute(select(CaptureChangeBatch.id).where(CaptureChangeBatch.id == batch.id).with_for_update())
+    if batch.undone_at is not None:
+        raise HTTPException(status_code=409, detail="Diese Korrektur wurde bereits rückgängig gemacht")
+    readable = context_visibility_service.readable_assignment_ids(db, user)
+
+    def writable(stored: StoredFile) -> bool:
+        if readable is not None and not context_visibility_service.abgabe_scope_allows(db, user, stored.id):
+            return False
+        try:
+            access_service.ensure_can_read_stored_file(db, user, stored.id, allow_context_grant=False)
+        except HTTPException:
+            return False
+        return True
+
+    outcome = capture_change_service.undo(db, batch, user_id=user.user_id, writable=writable)
+    audit.log(
+        db, action="photo.capture_date_shift_undone", actor=user, entity_type="capture_change_batch", entity_id=None,
+        details={
+            "batch_id": str(batch.id), "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
+            "file_ids": [str(public_id) for public_id in outcome.restored_ids],
+        },
+        commit=False,
+    )
+    db.commit()
+    if outcome.touched_album_ids:
+        photo_album_service.recompute_best_of_for_albums(db, service, outcome.touched_album_ids)
+    return CaptureChangeUndoResult(restored_ids=outcome.restored_ids, conflict_ids=outcome.conflict_ids, not_found_ids=outcome.not_found_ids)
+
+
+@router.get("/capture-changes", response_model=list[CaptureChangeBatchRead])
+def list_capture_changes(
+    upload_job_id: uuid.UUID = Query(...), db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Datumskorrekturen eines Upload-Vorgangs (Reiter «Datumskorrekturen») mit Rückgängig-Status."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    job = upload_job_service.get_visible_job(db, user, upload_job_id)
+    batches = capture_change_service.list_for_job(db, user.current_tenant_id, job.id)
+    remaining = capture_change_service.remaining_items(db, [batch.id for batch in batches])
+    users = {
+        row.id: row.display_name
+        for row in db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_({b.created_by for b in batches if b.created_by})))
+    } if batches else {}
+    return [
+        CaptureChangeBatchRead(
+            id=batch.id, mode=batch.mode, params=batch.params or {}, created_at=batch.created_at,
+            created_by_name=users.get(batch.created_by), updated_count=batch.updated_count, remaining=remaining.get(batch.id, 0),
+            undone_at=batch.undone_at, can_undo=batch.undone_at is None and remaining.get(batch.id, 0) > 0,
+        )
+        for batch in batches
+    ]
 
 
 @router.get("/stored-files/{stored_file_id}/thumbnail")
@@ -2188,6 +2431,17 @@ def discard_unlinked_uploads(payload: FileDiscardUploadsRequest, db: Session = D
     if not ids:
         return FileDiscardUploadsResult(discarded=[])
     trashed, _errors = file_trash_service.trash_files(db, user, ids, hidden_ids=_files_outside_scope(db, user, ids))
+    if trashed:
+        # Upload-Verlauf: die Items dieser Dateien gelten als «verworfen» (Abbrechen in der Pendenz)
+        trashed_ids = list(
+            db.scalars(
+                select(StoredFile.id)
+                .where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(trashed))
+                .execution_options(include_trashed=True)
+            )
+        )
+        upload_job_service.discard_files(db, user.current_tenant_id, trashed_ids)
+        db.commit()
     return FileDiscardUploadsResult(discarded=trashed)
 
 
@@ -2328,3 +2582,47 @@ def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get
     if any(not (mime or "").startswith("image/") for mime in mimes):
         require_permission(user, P.FILES_MANAGE)
     service.bulk_update_tags(db, user.current_tenant_id, ids, payload.add_tags, payload.remove_tags)
+
+
+@router.post("/files/bulk-event-link", response_model=FileBulkEventLinkResult)
+def bulk_link_event(payload: FileBulkEventLink, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Mehrfachauswahl «Termin zuordnen» (Upload-Verlauf): Fotos fest mit einem Termin verknüpfen
+    oder an die automatische Zuordnung zurückgeben. Termin nur aus dem eigenen Mandanten (sonst
+    404), je Datei dieselbe Schreibprüfung wie bulk-tags; nicht beschreibbare wie unbekannte."""
+    require_permission(user, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    event = None
+    if payload.event_id is not None:
+        event = public_id_service.get_by_public_id(db, Event, payload.event_id, tenant_id=user.current_tenant_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
+    ids = list(dict.fromkeys(payload.file_ids))
+    hidden = _files_outside_scope(db, user, ids)
+    readable = _readable_own_ids(db, user, [file_id for file_id in ids if file_id not in hidden], write=True)
+    rows = db.execute(
+        select(GalleryImage, StoredFile)
+        .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
+        .where(
+            GalleryImage.tenant_id == user.current_tenant_id, StoredFile.tenant_id == user.current_tenant_id,
+            StoredFile.public_id.in_(list(readable)), StoredFile.mime_type.like("image/%"),
+        )
+    ).all()
+    updated: list[uuid.UUID] = []
+    relink: list[StoredFile] = []
+    for gallery_image, stored in rows:
+        if payload.mode == "set":
+            gallery_image.event_id, gallery_image.event_auto_linked = event.id, False
+        else:
+            gallery_image.event_id, gallery_image.event_auto_linked = None, False
+            relink.append(stored)
+        updated.append(stored.public_id)
+    photo_event_link_service.resync_photos_after_date_change(db, user.current_tenant_id, relink)
+    audit.log(
+        db, action="photo.event_linked", actor=user, entity_type="stored_file", entity_id=None,
+        details={"mode": payload.mode, "event_id": event.id if event else None, "file_ids": [str(i) for i in updated]},
+        commit=False,
+    )
+    db.commit()
+    done = set(updated)
+    return FileBulkEventLinkResult(updated_ids=updated, not_found_ids=[file_id for file_id in ids if file_id not in done])

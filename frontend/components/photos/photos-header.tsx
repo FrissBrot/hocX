@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+import Link from "next/link";
 import { ReactNode, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -26,9 +28,11 @@ type HeaderProps = {
   pills?: ReactNode;
   onOpenTrash?: () => void;
   onUpload: () => void;
+  /** Upload-Verlauf (/photos/uploads) - nur mit Recht des Bereichs. */
+  uploadsHref?: string;
 };
 
-export function PhotosPageHeader({ total, pills, onOpenTrash, onUpload }: HeaderProps) {
+export function PhotosPageHeader({ total, pills, onOpenTrash, onUpload, uploadsHref }: HeaderProps) {
   const t = useTranslations("photos.view");
   const tFiles = useTranslations("files");
   const locale = useLocale();
@@ -47,6 +51,12 @@ export function PhotosPageHeader({ total, pills, onOpenTrash, onUpload }: Header
       </div>
       <div className="table-toolbar-actions photos-header-actions">
         {pills}
+        {uploadsHref ? (
+          <Link className="button-secondary photos-header-button" href={uploadsHref as Route}>
+            <ActionIcon name="upload" />
+            {t("uploadsLink")}
+          </Link>
+        ) : null}
         {onOpenTrash ? (
           <button type="button" className="button-secondary photos-header-button" onClick={onOpenTrash}>
             <ActionIcon name="delete" />

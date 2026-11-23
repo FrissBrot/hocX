@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 651 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 406
+- Routen gesamt: 662 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 417
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -202,6 +202,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/calendar-feeds/{kind}` | eigene Kalender-Abos |
 | `PUT /api/calendar-feeds/{kind}` | meetings.read |
 | `POST /api/calendar-feeds/{kind}/regenerate` | meetings.read |
+| `GET /api/capture-changes` | photos.manage |
+| `POST /api/capture-changes/{batch_id}/undo` | photos.manage |
 | `GET /api/clamav/status` | submissions.read |
 | `GET /api/cloud-import/jobs` | files.import |
 | `POST /api/cloud-import/jobs` | files.import |
@@ -324,7 +326,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}` | photos.manage · Feature photo_sharing |
 | `GET /api/files/analysis-progress` | photos.read |
 | `POST /api/files/bulk-capture-date` | photos.manage |
+| `POST /api/files/bulk-capture-date/preview` | photos.manage |
 | `POST /api/files/bulk-delete` | photos.manage |
+| `POST /api/files/bulk-event-link` | photos.manage |
 | `POST /api/files/bulk-keywords` | files.manage oder photos.manage · je nach Fall: <P.FILES_MANAGE if write else P.FILES_READ>, <P.PHOTOS_MANAGE if write else P.PHOTOS_READ> |
 | `POST /api/files/bulk-tags` | photos.manage · je nach Fall: files.manage |
 | `POST /api/files/discard-uploads` | files.manage oder photos.manage |
@@ -617,6 +621,13 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/tools/word-import/documents/{document_id}/reanalyze` | meetings.edit |
 | `GET /api/tools/word-import/last-template` | meetings.edit |
 | `PUT /api/tools/word-import/last-template` | meetings.edit |
+| `GET /api/upload-jobs` | files.import oder files.manage oder meetings.read oder photos.manage oder settings.manage oder submissions.read |
+| `POST /api/upload-jobs` | files.manage oder photos.manage · je nach Fall: files.manage, photos.manage |
+| `GET /api/upload-jobs/{job_id}` | files.import oder files.manage oder meetings.read oder photos.manage oder settings.manage oder submissions.read |
+| `POST /api/upload-jobs/{job_id}/client-results` | files.manage oder photos.manage |
+| `POST /api/upload-jobs/{job_id}/complete` | files.manage oder photos.manage |
+| `GET /api/upload-jobs/{job_id}/file-ids` | files.import oder files.manage oder meetings.read oder photos.manage oder settings.manage oder submissions.read |
+| `GET /api/upload-jobs/{job_id}/items` | files.import oder files.manage oder meetings.read oder photos.manage oder settings.manage oder submissions.read |
 | `GET /api/users` | UserService (access.manage) |
 | `POST /api/users` | UserService (access.manage) |
 | `GET /api/users/me` | eigenes Konto |

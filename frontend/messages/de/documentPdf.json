@@ -475,7 +475,8 @@
       "agenda_items": "Anliegen",
       "todo_fines": "Pendenzen-Bussen",
       "notifications": "E-Mail-Benachrichtigungen",
-      "submission_elements": "Abgabe-Elemente"
+      "submission_elements": "Abgabe-Elemente",
+      "uploads": "Uploads"
     },
     "col": {
       "first_name": "Vorname",
@@ -537,7 +538,13 @@
       "completed_on": "Erledigt am",
       "fine_tariff": "Bussentarif",
       "sent_at": "Versendet am",
-      "trashed_at": "Im Papierkorb seit"
+      "trashed_at": "Im Papierkorb seit",
+      "channel": "Weg",
+      "total": "Dateien",
+      "uploaded": "Hochgeladen",
+      "duplicates": "Duplikate",
+      "rejected": "Abgelehnt",
+      "person": "Person"
     },
     "file": {
       "workbook": "Auskunft",
@@ -555,7 +562,8 @@
         "attendance": "Anwesenheit",
         "fines": "Bussen",
         "finances": "Finanzen",
-        "todos": "Aufgaben"
+        "todos": "Aufgaben",
+        "uploads": "Uploads"
       },
       "sheet": {
         "members": "Mitglieder",
@@ -564,7 +572,8 @@
         "fines": "Bussen",
         "finances": "Finanzen",
         "todos": "Aufgaben",
-        "todoFines": "Pendenzen-Bussen"
+        "todoFines": "Pendenzen-Bussen",
+        "uploads": "Upload-Verlauf"
       },
       "folder": {
         "lists": "Listen",

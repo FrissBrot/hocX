@@ -134,3 +134,62 @@ describe("PhotoBulkBar Aus Album nehmen", () => {
     expect(onRemove).toHaveBeenCalledOnce();
   });
 });
+
+describe("PhotoBulkBar Stückelung und Termin (Upload-Verlauf)", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+    showToastMock.mockReset();
+  });
+
+  it("setzt Tags für grosse Auswahlen in Stücken zu 200 und zeigt Teilfehler", async () => {
+    const ids = Array.from({ length: 450 }, (_, index) => `id-${index}`);
+    let call = 0;
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/files/albums") return Promise.resolve([]);
+      if (url === "/api/files/bulk-tags") {
+        call += 1;
+        return call === 2 ? Promise.reject(new Error("kaputt")) : Promise.resolve(null);
+      }
+      return Promise.resolve(null);
+    });
+    const onDone = vi.fn();
+    render(<PhotoBulkBar selectedIds={ids} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tags" }));
+    const input = document.querySelector(".photo-bulk-bar-tagging input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Lager" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Anwenden" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    const sizes = browserApiFetchMock.mock.calls
+      .filter(([url]) => url === "/api/files/bulk-tags")
+      .map(([, init]) => JSON.parse(init.body).file_ids.length);
+    expect(sizes).toEqual([200, 200, 50]);
+    expect(showToastMock).toHaveBeenCalledWith(expect.stringContaining("1 Teil konnte nicht gespeichert werden."), "error");
+  });
+
+  it("ordnet einen Termin zu und gibt Fotos an die automatische Zuordnung zurück", async () => {
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/events")) return Promise.resolve([{ id: "ev-1", title: "Lager", event_date: "2026-05-02" }]);
+      if (url === "/api/files/bulk-event-link") return Promise.resolve({ updated_ids: ["a"], not_found_ids: [] });
+      return Promise.resolve([]);
+    });
+    render(<PhotoBulkBar selectedIds={["a"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Termin" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Automatisch nach Datum" }));
+    await waitFor(() =>
+      expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/bulk-event-link", {
+        method: "POST",
+        body: JSON.stringify({ file_ids: ["a"], mode: "auto", event_id: null }),
+      }),
+    );
+    expect(showToastMock).toHaveBeenCalledWith("1 Foto wird wieder automatisch nach Datum zugeordnet.", "success");
+  });
+
+  it("bietet im Upload-Vorgang «Alle dieses Uploads auswählen» an", () => {
+    browserApiFetchMock.mockResolvedValue([]);
+    const onSelectAllInJob = vi.fn();
+    render(<PhotoBulkBar selectedIds={["a"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={() => {}} onSelectAllInJob={onSelectAllInJob} />);
+    fireEvent.click(screen.getByRole("button", { name: "Alle dieses Uploads auswählen" }));
+    expect(onSelectAllInJob).toHaveBeenCalled();
+  });
+});

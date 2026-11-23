@@ -166,6 +166,7 @@
       "block": "Section",
       "cancelled": "Annulé",
       "category": "Catégorie",
+      "channel": "Canal",
       "collected_at": "Encaissé le",
       "completed_at": "Terminé le",
       "completed_on": "Terminée le",
@@ -178,6 +179,7 @@
       "detail": "Détail",
       "display_name": "Nom affiché",
       "due_date": "Échéance",
+      "duplicates": "Doublons",
       "element": "Point",
       "email": "E-mail",
       "end_date": "Date de fin",
@@ -203,9 +205,11 @@
       "organizers": "Organisation",
       "outcome": "Résultat",
       "participants": "Participants",
+      "person": "Personne",
       "position": "Ligne",
       "preferred_language": "Langue",
       "protocol": "Procès-verbal",
+      "rejected": "Refusés",
       "role": "Rôle",
       "rule": "Règle",
       "sent_at": "Envoyé le",
@@ -218,8 +222,10 @@
       "template": "Modèle",
       "text": "Texte",
       "title": "Titre",
+      "total": "Fichiers",
       "trashed_at": "Dans la corbeille depuis",
-      "type": "Type"
+      "type": "Type",
+      "uploaded": "Téléversés"
     },
     "file": {
       "personalPrefix": "Acces-donnees",
@@ -244,7 +250,8 @@
       "submission_elements": "Éléments de dépôt",
       "templates": "Modèles de PV",
       "todo_fines": "Amendes pour tâches",
-      "todos": "Tâches"
+      "todos": "Tâches",
+      "uploads": "Téléversements"
     },
     "tenant": {
       "attendance": {
@@ -259,7 +266,8 @@
         "finances": "Finances",
         "fines": "Amendes",
         "members": "Membres",
-        "todos": "Tâches"
+        "todos": "Tâches",
+        "uploads": "Téléversements"
       },
       "fineStatus": {
         "collected": "encaissée",
@@ -289,7 +297,8 @@
         "fines": "Amendes",
         "members": "Membres",
         "todoFines": "Amendes pour tâches",
-        "todos": "Tâches"
+        "todos": "Tâches",
+        "uploads": "Historique des téléversements"
       },
       "withFiles": "Les photos, dépôts et documents figurent comme fichiers originaux dans les dossiers Photos, Dépôts et Documents.",
       "withoutFiles": "Cet export ne contient ni photos, ni dépôts, ni documents (uniquement les tableaux et les PDF des procès-verbaux).",

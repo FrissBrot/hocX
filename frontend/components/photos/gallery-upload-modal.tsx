@@ -20,6 +20,7 @@ import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-phot
 import { hasLargeZip, photoUploadProblem, PHOTO_MAX_FILES, PHOTO_UPLOAD_TIMEOUT_MS, PHOTO_ZIP_MAX_BYTES } from "@/lib/utils/upload-limits";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { splitIntoBatches } from "@/lib/utils/upload-results";
+import { completeUploadJob, openUploadJob, reportClientRejections, targetFromForm } from "@/lib/uploads/upload-jobs";
 import { GalleryUploadJob, SharedTargetAlbum, UploadFileResult } from "@/types/api";
 
 // Status einer Datei im Popup: vor dem Upload "ready", danach je nach Vorab-Abgleich bzw. Batch.
@@ -30,6 +31,8 @@ export type GalleryUploadSession = {
   jobIds: string[];
   // Dateien, die der Vorab-Abgleich bereits erledigt hat (nicht übertragen).
   precheckResults: UploadFileResult[];
+  // Vorgang im Upload-Verlauf (null: Backend ohne Verlauf oder Öffnen fehlgeschlagen).
+  uploadJobId?: string | null;
 };
 
 // HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
@@ -121,6 +124,8 @@ export function GalleryUploadModal({
   const locale = useLocale();
   const tFiles = useTranslations("files");
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initialFiles ?? []);
+  // Beim Ordner-Upload vom Browser übergangene Dateien (keine Bilder) - im Upload-Verlauf gemeldet (E-14).
+  const ignoredFiles = useRef<File[]>([]);
   const previews = useFilePreviews(selectedFiles);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -223,7 +228,9 @@ export function GalleryUploadModal({
   function addFiles(fileList: FileList | File[], fromFolder = false) {
     // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
     // onChange, which runs before React invokes the state updater below.
-    const added = Array.from(fileList).filter((file) => !fromFolder || isGalleryCandidate(file));
+    const all = Array.from(fileList);
+    const added = all.filter((file) => !fromFolder || isGalleryCandidate(file));
+    if (fromFolder) ignoredFiles.current = [...ignoredFiles.current, ...all.filter((file) => !isGalleryCandidate(file) && !file.name.startsWith("."))];
     setSelectedFiles((current) => [...current, ...added]);
     setFileStates([]);
     setError(null);
@@ -281,11 +288,20 @@ export function GalleryUploadModal({
     uploadAbort.current = controller;
     const jobIds: string[] = [];
     const precheckResults: UploadFileResult[] = [];
+    let uploadJobId: string | null = null;
     try {
       // 1. Laufende Analyse abwarten (bereits analysierte Dateien liegen im Cache).
       if (analysisRun.current) await analysisRun.current.catch(() => undefined);
       const fileAnalyses = selectedFiles.map((file) => analysisCache.current.get(file));
       const estimate = showEstimate && estimatedDate ? estimatedDate : null;
+      // Ein Vorgang im Upload-Verlauf für den ganzen Dialog-Durchgang (alle Pakete, Vorab-Abgleich).
+      uploadJobId = await openUploadJob("gallery", {
+        ...targetFromForm((form) => target.appendTo(form)),
+        tags: tagsValue.split(",").map((tag) => tag.trim()).filter(Boolean),
+        estimated_taken_on: estimate,
+        include_gps: includeGps,
+      });
+      await reportClientRejections(uploadJobId, ignoredFiles.current.map((file) => ({ name: file.name, size: file.size, code: "unsupported_format" })));
 
       // 2. Vorab-Abgleich: nur Hashes und Metadaten, keine Dateibytes.
       const clipOfImage = pairLiveClips(selectedFiles.map((file) => file.name));
@@ -294,7 +310,7 @@ export function GalleryUploadModal({
         return analysis?.sha256 && analysis.kind === "image" ? [{ index, file, analysis }] : [];
       });
       const precheck = entries.length
-        ? await precheckUploads(entries, { context: "gallery", estimatedTakenOn: estimate, signal: controller.signal, includeGps })
+        ? await precheckUploads(entries, { context: "gallery", estimatedTakenOn: estimate, signal: controller.signal, includeGps, uploadJobId })
         : new Map();
       const skip = new Set<number>();
       for (const [index, result] of precheck ?? []) {
@@ -330,6 +346,7 @@ export function GalleryUploadModal({
           if (releaseShared && sharedTargets.length > 0) body.append("release_to_shared_albums", "true");
           if (estimate) body.append("estimated_taken_on", estimate);
           if (!includeGps) body.append("include_gps", "false");
+          if (uploadJobId) body.append("upload_job_id", uploadJobId);
           const hints = fileMetadataHints(batch.map((index) => fileAnalyses[index]).filter((analysis): analysis is FileAnalysis => Boolean(analysis)), includeGps);
           if (hints) body.append("file_metadata", hints);
           // Returns almost immediately once the upload is staged and a gallery_upload_job is
@@ -348,12 +365,12 @@ export function GalleryUploadModal({
           }
         }
       }
-      onSessionComplete?.({ jobIds, precheckResults });
+      onSessionComplete?.({ jobIds, precheckResults, uploadJobId });
       onClose();
     } catch (err: unknown) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       // Bereits angelegte Aufträge laufen weiter - ihr Ergebnis gehört trotzdem zu diesem Vorgang.
-      if (jobIds.length || precheckResults.length) onSessionComplete?.({ jobIds, precheckResults });
+      if (jobIds.length || precheckResults.length) onSessionComplete?.({ jobIds, precheckResults, uploadJobId });
       if (aborted) {
         onClose();
         return;
@@ -361,6 +378,8 @@ export function GalleryUploadModal({
       setError(err instanceof Error ? err.message : t("uploadFailed"));
       setFileStates((current) => current.map((state) => (state === "uploading" || state === "waiting" ? "failed" : state)));
     } finally {
+      // Browser ist fertig: der Vorgang schliesst, sobald der Ingest aller Pakete durch ist.
+      void completeUploadJob(uploadJobId);
       setChecking(false);
       setUploading(false);
       setProgress(null);

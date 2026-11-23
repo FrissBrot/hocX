@@ -15,7 +15,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToastMock }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
 
-import { MAX_CAPTURE_DATE_BULK, PhotoCaptureDateDialog, describeOffset, noTimeShiftNote, wholeShiftDays } from "./photo-capture-date-dialog";
+import { MAX_CAPTURE_DATE_SELECTION, PhotoCaptureDateDialog, cameraSeconds, describeOffset, noTimeShiftNote, splitOffset, wholeShiftDays } from "./photo-capture-date-dialog";
 
 const emptyResult = { updated_ids: [], unchanged_ids: [], skipped_no_date_ids: [], invalid_ids: [], not_found_ids: [] };
 
@@ -81,20 +81,27 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     expect(browserApiFetchMock).not.toHaveBeenCalled();
   });
 
-  it("verschiebt um Tage und Stunden und meldet übersprungene Bilder ohne Datum", async () => {
+  it("verschiebt früher um Tage, Stunden und Minuten und meldet übersprungene Bilder ohne Datum", async () => {
     confirmMock.mockResolvedValue(true);
-    browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a", "b"], skipped_no_date_ids: ["c"] });
+    browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a", "b"], skipped_no_date_ids: ["c"], batch_id: "batch-1" });
     renderDialog();
     fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
-    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "-1" } });
-    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-2" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Früher" }));
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Minuten"), { target: { value: "15" } });
     fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
 
-    await waitFor(() => expect(lastPost()).toEqual({ file_ids: ["a", "b", "c"], mode: "shift", shift_days: -1, shift_hours: -2 }));
-    expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 3 Bildern wird um 1 Tag und 2 Stunden nach früher verschoben.");
+    await waitFor(() => expect(lastPost()).toEqual({ file_ids: ["a", "b", "c"], mode: "shift", shift_days: -1, shift_hours: -2, shift_minutes: -15 }));
+    expect(confirmMock.mock.calls[0][0].message).toContain("Das Aufnahmedatum von 3 Bildern wird um 1 Tag, 2 Stunden und 15 Minuten nach früher verschoben.");
     expect(confirmMock.mock.calls[0][0].message).toContain("Bilder ohne Aufnahmedatum werden übersprungen.");
-    expect(confirmMock.mock.calls[0][0].message).toContain("auch in die Bilddateien geschrieben");
     expect(showToastMock).toHaveBeenCalledWith("1 Bild ohne Aufnahmedatum übersprungen.", "info");
+    // «Rückgängig» im Erfolgs-Toast nimmt die ganze Korrektur zurück
+    const success = showToastMock.mock.calls.find(([text]) => text === "Aufnahmedatum von 2 Bildern geändert.");
+    expect(success?.[2]?.action?.label).toBe("Rückgängig");
+    browserApiFetchMock.mockResolvedValue({ restored_ids: ["a", "b"], conflict_ids: [], not_found_ids: [] });
+    success?.[2]?.action?.onClick();
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith("/api/capture-changes/batch-1/undo", { method: "POST" }));
   });
 
   it("weist bei Stunden darauf hin, dass bei Bildern ohne Uhrzeit nur ganze Tage wirken, und meldet sie", async () => {
@@ -105,7 +112,8 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "2" } });
     expect(screen.queryByText(/Bilder ohne Uhrzeit/)).not.toBeInTheDocument(); // reine Tage wirken überall
     fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-13" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Früher" }));
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "13" } });
     expect(screen.getByText("Bilder ohne Uhrzeit bleiben unverändert: bei ihnen wirken nur ganze Tage.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
 
@@ -119,19 +127,53 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     browserApiFetchMock.mockResolvedValue({ ...emptyResult, updated_ids: ["a", "b"], date_only_ids: ["b"] });
     renderDialog(["a", "b"]);
     fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
-    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "-1" } });
-    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-5" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Früher" }));
+    fireEvent.change(screen.getByLabelText("Tage"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "5" } });
     expect(screen.getByText("Bilder ohne Uhrzeit werden nur um 1 Tag verschoben: bei ihnen wirken nur ganze Tage.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
     await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("1 Bild ohne Uhrzeit nur um ganze Tage verschoben.", "info"));
   });
 
-  it("verlangt beim Verschieben einen Versatz", () => {
+  it("verlangt beim Verschieben einen Versatz und nur nicht negative Ganzzahlen", () => {
     renderDialog();
     fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
     expect(screen.getByRole("button", { name: "Übernehmen" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "1.5" } });
     expect(screen.getByRole("button", { name: "Übernehmen" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "-1" } });
+    expect(screen.getByRole("button", { name: "Übernehmen" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Stunden"), { target: { value: "1" } });
+    expect(screen.getByRole("button", { name: "Übernehmen" })).toBeEnabled();
+  });
+
+  it("zeigt die Vorschau des Servers und stückelt grosse Auswahlen mit derselben Korrektur", async () => {
+    const ids = Array.from({ length: 501 }, (_, index) => `id-${index}`);
+    browserApiFetchMock.mockImplementation((url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body);
+      if (url === "/api/files/bulk-capture-date/preview") {
+        return Promise.resolve({
+          will_change: body.file_ids.length, unchanged: 0, no_date: 0, date_only_unchanged: 0, date_only_changed: 0, invalid: 0,
+          not_found: 0, no_date_ids: [], samples: [], day_changes: 2, event_changes: 0, event_transitions: [],
+        });
+      }
+      return Promise.resolve({ ...emptyResult, updated_ids: body.file_ids, batch_id: "b-7" });
+    });
+    confirmMock.mockResolvedValue(true);
+    renderDialog(ids);
+    fireEvent.click(screen.getByRole("tab", { name: "Verschieben" }));
+    fireEvent.change(screen.getByLabelText("Minuten"), { target: { value: "75" } });
+    fireEvent.click(screen.getByRole("button", { name: "Vorschau" }));
+    expect(await screen.findByText("501 Bilder werden geändert.")).toBeInTheDocument();
+    expect(screen.getByText("4 Bilder wechseln den Kalendertag.")).toBeInTheDocument(); // je Stück 2
+    fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Aufnahmedatum von 501 Bildern geändert.", "success", expect.anything()));
+    const posts = browserApiFetchMock.mock.calls.filter(([url]) => url === "/api/files/bulk-capture-date").map(([, init]) => JSON.parse(init.body));
+    expect(posts.map((post) => post.file_ids.length)).toEqual([500, 1]);
+    expect(posts[0].batch_id).toBeUndefined();
+    expect(posts[1].batch_id).toBe("b-7");
+    expect(posts[0].shift_minutes).toBe(15);
+    expect(posts[0].shift_hours).toBe(1);
   });
 
   it("stellt das Original wieder her", async () => {
@@ -145,9 +187,9 @@ describe("PhotoCaptureDateDialog (Mehrfachauswahl «Aufnahmedatum ändern»)", (
     expect(confirmMock.mock.calls[0][0].message).toContain("Auch die Bilddateien bekommen ihr ursprüngliches Datum zurück.");
   });
 
-  it("sperrt mehr als 500 Bilder", () => {
-    renderDialog(Array.from({ length: MAX_CAPTURE_DATE_BULK + 1 }, (_, index) => `id-${index}`));
-    expect(screen.getByText("Bitte höchstens 500 Bilder auswählen.")).toBeInTheDocument();
+  it("sperrt mehr als 10 000 Bilder", () => {
+    renderDialog(Array.from({ length: MAX_CAPTURE_DATE_SELECTION + 1 }, (_, index) => `id-${index}`));
+    expect(screen.getByText(/Bitte höchstens 10.000 Bilder auswählen/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Original wiederherstellen" }));
     expect(screen.getByRole("button", { name: "Übernehmen" })).toBeDisabled();
   });
@@ -169,6 +211,17 @@ describe("describeOffset", () => {
     expect(describeOffset(1, -2, t)).toEqual({ offset: "22 Stunden", direction: "later" });
     expect(describeOffset(-2, 0, t)).toEqual({ offset: "2 Tage", direction: "earlier" });
     expect(describeOffset(0, 25, t)).toEqual({ offset: "1 Tag und 1 Stunde", direction: "later" });
+    expect(describeOffset(0, -1, t, -15)).toEqual({ offset: "1 Stunde und 15 Minuten", direction: "earlier" });
+  });
+
+  it("zerlegt Sekunden des Referenzfoto-Modus mit einheitlichem Vorzeichen", () => {
+    expect(splitOffset(-(3600 + 15 * 60 + 7))).toEqual({ days: 0, hours: -1, minutes: -15, seconds: -7 });
+    expect(splitOffset(86_400 + 60)).toEqual({ days: 1, hours: 0, minutes: 1, seconds: 0 });
+  });
+
+  it("liest die Kamerazeit aus der Korrektur bzw. dem EXIF-Datum", () => {
+    expect(cameraSeconds({ capture_corrected_at: null, exif_taken_at: "2026-05-02T10:00:30+00:00" })).toBe(Date.UTC(2026, 4, 2, 10, 0, 30) / 1000);
+    expect(cameraSeconds({ capture_corrected_at: "2026-05-02T12:00:00+00:00", capture_corrected_has_time: false, exif_taken_at: null })).toBeNull();
   });
 });
 

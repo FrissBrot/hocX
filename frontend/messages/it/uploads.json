@@ -1,0 +1,169 @@
+{
+  "title": "Cronologia caricamenti",
+  "descriptionPhotos": "Tutti i caricamenti di foto con il risultato per file. Modificare un caricamento nel suo insieme: tag, album, evento, data di scatto.",
+  "descriptionFiles": "Tutti i caricamenti nell'archivio con il risultato per file: caricato, duplicato, rifiutato.",
+  "backToPhotos": "‹ Foto",
+  "backToFiles": "‹ Archivio",
+  "backToHistory": "‹ Cronologia caricamenti",
+  "loading": "Caricamento …",
+  "loadError": "Non è stato possibile caricare la cronologia dei caricamenti.",
+  "empty": "Nessun caricamento per questa selezione.",
+  "loadMore": "Carica altri",
+  "reconstructed": "ricostruito",
+  "reconstructedHint": "Questo caricamento è stato ricostruito a posteriori da file esistenti. La composizione è approssimativa; duplicati e file rifiutati non sono noti.",
+  "detailTitle": "Caricamento del {date}",
+  "factsLabel": "Dati del caricamento",
+  "files": "File",
+  "filesValue": "{count, plural, one {1 file disponibile} other {# file disponibili}}",
+  "filter": {
+    "all": "Tutti",
+    "mine": "Miei",
+    "channel": "Canale",
+    "areaPhotos": "Foto (tutti i canali)",
+    "areaFiles": "Archivio (tutti i canali)",
+    "from": "Dal",
+    "to": "Al",
+    "problemsOnly": "Solo con problemi"
+  },
+  "column": {
+    "time": "Momento",
+    "person": "Persona",
+    "channel": "Canale",
+    "ref": "Riferimento",
+    "result": "Risultato",
+    "status": "Stato"
+  },
+  "channel": {
+    "gallery": "Caricamento foto",
+    "document": "Caricamento archivio",
+    "protocol_image": "Immagine del verbale",
+    "todo": "Compito",
+    "submission_link": "Link personale",
+    "abgabebox": "Casella di consegna",
+    "word_import": "Importazione Word",
+    "tenant_import": "Importazione piattaforma",
+    "cloud_import": "Importazione file"
+  },
+  "status": {
+    "open": "Aperto",
+    "processing": "In corso",
+    "done": "Completato",
+    "partial": "Con problemi",
+    "failed": "Non riuscito",
+    "cancelled": "Annullato"
+  },
+  "itemStatus": {
+    "uploaded": "Caricato",
+    "duplicate": "Duplicato",
+    "metadata_updated": "Metadati completati",
+    "rejected": "Rifiutato",
+    "infected": "Virus trovato",
+    "failed": "Non riuscito",
+    "discarded": "Scartato"
+  },
+  "reason": {
+    "duplicate_exact": "Già presente (stesso contenuto)",
+    "too_large": "Troppo grande",
+    "unsupported_format": "Formato non supportato",
+    "scan_failed": "Controllo antivirus non riuscito",
+    "infected": "Controllo antivirus: infetto",
+    "quota_exceeded": "Spazio esaurito",
+    "heic_unreadable": "File HEIC non leggibile",
+    "rule_violation": "Regola della consegna violata",
+    "client_rejected": "Rifiutato dal browser",
+    "cancelled": "Scartato all'annullamento",
+    "other": "Altro motivo"
+  },
+  "ref": {
+    "event": "Evento",
+    "submission": "Consegna",
+    "cycle": "Ciclo",
+    "protocol": "Verbale",
+    "todo": "Compito",
+    "import": "Rapporto d'importazione"
+  },
+  "actor": {
+    "abgabebox": "Casella di consegna",
+    "submissionPerson": "Link personale",
+    "platform": "Importazione piattaforma",
+    "deleted": "Account eliminato",
+    "unknown": "Sconosciuto"
+  },
+  "summary": {
+    "uploaded": "{count, plural, one {1 caricato} other {# caricati}}",
+    "duplicates": "{count, plural, one {1 duplicato} other {# duplicati}}",
+    "metadataUpdated": "{count, plural, one {1 completato} other {# completati}}",
+    "problems": "{count, plural, one {1 rifiutato} other {# rifiutati}}",
+    "discarded": "{count, plural, one {1 scartato} other {# scartati}}"
+  },
+  "options": {
+    "tags": "Tag",
+    "estimated": "Data stimata",
+    "gps": "GPS inviato",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "tabs": {
+    "photos": "Foto",
+    "results": "Risultati",
+    "corrections": "Correzioni della data"
+  },
+  "items": {
+    "name": "File",
+    "status": "Risultato",
+    "reason": "Motivo",
+    "size": "Dimensione",
+    "file": "File in hocX",
+    "empty": "Nessun file registrato.",
+    "nameRemoved": "Nome rimosso (file eliminato)",
+    "browserReported": "segnalato dal browser"
+  },
+  "fileState": {
+    "open": "Apri",
+    "ok": "Disponibile",
+    "trashed": "Nel cestino",
+    "deleted": "File eliminato",
+    "infected_later": "Virus trovato in seguito",
+    "scan_pending": "Controllo antivirus in attesa",
+    "hidden": "Non visibile"
+  },
+  "cameras": {
+    "title": "Fotocamere",
+    "camera": "Fotocamera",
+    "count": "Foto",
+    "period": "Periodo",
+    "withTime": "Con ora",
+    "actions": "Azioni",
+    "unknown": "Senza indicazione della fotocamera",
+    "device": "{name} (dispositivo {index})",
+    "withTimeValue": "{count, number} · {gps, plural, =0 {senza ora GPS} one {1 con ora GPS} other {# con ora GPS}}",
+    "select": "Seleziona solo queste",
+    "shift": "Sposta l'ora …",
+    "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {prima} other {dopo}}",
+    "gpsHint": "Secondo l'ora GPS ({samples, plural, one {1 foto} other {# foto}}) probabilmente: {offset}"
+  },
+  "corrections": {
+    "when": "Momento",
+    "what": "Correzione",
+    "who": "Persona",
+    "count": "Foto",
+    "action": "Annulla",
+    "empty": "Ancora nessuna correzione della data per questo caricamento.",
+    "modeSet": "Impostata su una data",
+    "modeReset": "Originale ripristinato",
+    "modeShift": "Spostata: {hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {prima} other {dopo}}",
+    "countValue": "{count, plural, one {1 modificata} other {# modificate}} · {remaining, plural, one {1 disponibile} other {# disponibili}}",
+    "undo": "Annulla",
+    "undone": "{count, plural, one {1 foto ripristinata.} other {# foto ripristinate.}}",
+    "conflicts": "{count, plural, one {1 foto è stata modificata diversamente nel frattempo e resta così.} other {# foto sono state modificate diversamente nel frattempo e restano così.}}",
+    "undoError": "Non è stato possibile annullare la correzione.",
+    "undoneAt": "Annullata il {date}",
+    "noFiles": "Nessuna foto rimasta"
+  },
+  "hint": {
+    "photos": "{count, plural, one {1 foto caricata.} other {# foto caricate.}}",
+    "files": "{count, plural, one {1 file caricato.} other {# file caricati.}}",
+    "edit": "Modifica",
+    "dismiss": "Nascondi avviso"
+  }
+}

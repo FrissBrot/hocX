@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch, browserApiUpload } from "@/lib/api/client";
 import { analyzeFile } from "@/lib/image-analysis/analyze";
 import { hashForPrecheck } from "@/lib/image-analysis/precheck";
+import { completeUploadJob, openUploadJob } from "@/lib/uploads/upload-jobs";
 import { formatDate } from "@/lib/utils/format";
 import type { DocumentUploadResult, FileOverviewItem, TodoDetailFile } from "@/types/api";
 
@@ -61,6 +62,8 @@ export function useTodoFileUpload({ attachedIds, onAttach, canUploadImages }: {
   const uploadedRef = useRef<string[]>([]);
   // Dialog schon zu: später fertig werdende Uploads gleich wieder verwerfen
   const closedRef = useRef(false);
+  // Upload-Verlauf: ein Vorgang «Pendenz» je Dialog, beim ersten Upload geöffnet, beim Schliessen abgeschlossen
+  const uploadJobRef = useRef<Promise<string | null> | null>(null);
 
   const discard = useCallback((ids: string[]) => {
     if (!ids.length) return;
@@ -74,7 +77,13 @@ export function useTodoFileUpload({ attachedIds, onAttach, canUploadImages }: {
 
   /** Hochgeladene, nicht in `keptIds` enthaltene Dateien in den Papierkorb. `close`: Dialog geht zu. */
   const discardUnlinked = useCallback((keptIds: string[] = [], close = true) => {
-    if (close) closedRef.current = true;
+    if (close) {
+      closedRef.current = true;
+      const job = uploadJobRef.current;
+      uploadJobRef.current = null;
+      // nach dem Verwerfen abschliessen, damit verworfene Dateien als solche im Vorgang stehen
+      if (job) void job.then((id) => setTimeout(() => void completeUploadJob(id), 2000));
+    }
     const ids = uploadedRef.current.filter((id) => !keptIds.includes(id));
     uploadedRef.current = uploadedRef.current.filter((id) => keptIds.includes(id));
     discard(ids);
@@ -136,6 +145,9 @@ export function useTodoFileUpload({ attachedIds, onAttach, canUploadImages }: {
       body.append("allow_duplicates", "true");
       if (image) body.append("allow_images", "true");
       if (image && gpsDecision.includeGps === false) body.append("include_gps", "false");
+      uploadJobRef.current ??= openUploadJob("todo");
+      const uploadJobId = await uploadJobRef.current;
+      if (uploadJobId) body.append("upload_job_id", uploadJobId);
       const result = await browserApiUpload<DocumentUploadResult>("/api/files/document-uploads", body, { timeoutMs: 300_000 });
       const saved = result?.items[0];
       if (saved && closedRef.current) {

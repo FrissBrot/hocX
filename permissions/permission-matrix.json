@@ -103,6 +103,20 @@
         "reader"
       ]
     },
+    "GET /api/capture-changes": {
+      "handler": "files.list_capture_changes",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/capture-changes/{batch_id}/undo": {
+      "handler": "files.undo_capture_change",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "GET /api/clamav/status": {
       "handler": "submission_assignments.get_clamav_status",
       "allowed": [
@@ -1006,8 +1020,22 @@
         "writer"
       ]
     },
+    "POST /api/files/bulk-capture-date/preview": {
+      "handler": "files.preview_bulk_capture_date",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "POST /api/files/bulk-delete": {
       "handler": "files.bulk_delete_files",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/bulk-event-link": {
+      "handler": "files.bulk_link_event",
       "allowed": [
         "admin",
         "writer"
@@ -2917,6 +2945,63 @@
       "allowed": [
         "admin",
         "writer"
+      ]
+    },
+    "GET /api/upload-jobs": {
+      "handler": "upload_jobs.list_upload_jobs",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
+    "POST /api/upload-jobs": {
+      "handler": "upload_jobs.create_upload_job",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}": {
+      "handler": "upload_jobs.get_upload_job",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/client-results": {
+      "handler": "upload_jobs.report_client_results",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/complete": {
+      "handler": "upload_jobs.complete_upload_job",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/file-ids": {
+      "handler": "upload_jobs.list_upload_job_file_ids",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/items": {
+      "handler": "upload_jobs.list_upload_job_items",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
       ]
     },
     "GET /api/users/mfa-policy": {

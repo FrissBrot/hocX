@@ -131,6 +131,12 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         ORDER BY a.created_at, a.id
     """, params)]
 
+    # Selbst ausgelöste Upload-Vorgänge (Upload-Verlauf, 0250) - ohne Dateinamen (die stehen bei «files»)
+    data["uploads"] = [dict(row) for row in _rows(db, """
+        SELECT j.channel, j.created_at, j.status, j.total, j.uploaded, j.duplicates, j.rejected + j.infected + j.failed AS rejected
+        FROM upload_job j WHERE j.tenant_id = :tenant_id AND j.created_by = :pid ORDER BY j.created_at, j.id
+    """, params)]
+
     data["responsibilities"] = [dict(row) for row in _rows(db, """
         SELECT p.protocol_number AS protocol, p.protocol_date AS date, e.element_title_snapshot AS element
         FROM protocol_element e JOIN protocol p ON p.id = e.protocol_id
@@ -244,6 +250,7 @@ _SECTIONS: dict[str, list[str]] = {
     "templates": ["template", "exclude_from_attendance"],
     "lists": ["list", "position"],
     "files": ["name", "mime_type", "size_bytes", "created_at", "taken_at", "trashed_at"],
+    "uploads": ["channel", "created_at", "status", "total", "uploaded", "duplicates", "rejected"],
     "security": ["kind", "detail", "label", "created_at", "last_used_at"],
     "activity": ["created_at", "action", "outcome"],
     "mentions": ["protocol", "date", "block", "excerpt"],

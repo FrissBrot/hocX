@@ -1038,6 +1038,18 @@
         "meetings.read"
       ]
     },
+    "GET /api/capture-changes": {
+      "handler": "files.list_capture_changes",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "POST /api/capture-changes/{batch_id}/undo": {
+      "handler": "files.undo_capture_change",
+      "requires": [
+        "photos.manage"
+      ]
+    },
     "GET /api/clamav/status": {
       "handler": "submission_assignments.get_clamav_status",
       "requires": [
@@ -1877,8 +1889,20 @@
         "photos.manage"
       ]
     },
+    "POST /api/files/bulk-capture-date/preview": {
+      "handler": "files.preview_bulk_capture_date",
+      "requires": [
+        "photos.manage"
+      ]
+    },
     "POST /api/files/bulk-delete": {
       "handler": "files.bulk_delete_files",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "POST /api/files/bulk-event-link": {
+      "handler": "files.bulk_link_event",
       "requires": [
         "photos.manage"
       ]
@@ -3959,6 +3983,89 @@
       "handler": "word_import.set_last_word_import_template",
       "requires": [
         "meetings.edit"
+      ]
+    },
+    "GET /api/upload-jobs": {
+      "handler": "upload_jobs.list_upload_jobs",
+      "requires_any": [
+        [
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs": {
+      "handler": "upload_jobs.create_upload_job",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ],
+      "requires_if": [
+        "files.manage",
+        "photos.manage"
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}": {
+      "handler": "upload_jobs.get_upload_job",
+      "requires_any": [
+        [
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/client-results": {
+      "handler": "upload_jobs.report_client_results",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
+    "POST /api/upload-jobs/{job_id}/complete": {
+      "handler": "upload_jobs.complete_upload_job",
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/file-ids": {
+      "handler": "upload_jobs.list_upload_job_file_ids",
+      "requires_any": [
+        [
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
+        ]
+      ]
+    },
+    "GET /api/upload-jobs/{job_id}/items": {
+      "handler": "upload_jobs.list_upload_job_items",
+      "requires_any": [
+        [
+          "files.import",
+          "files.manage",
+          "meetings.read",
+          "photos.manage",
+          "settings.manage",
+          "submissions.read"
+        ]
       ]
     },
     "GET /api/users": {

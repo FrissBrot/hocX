@@ -664,6 +664,126 @@ export type FileBulkCaptureDateResult = {
   // Verschieben, Fotos ohne Uhrzeit (nur ganze Tage wirken): unverändert bzw. nur um Tage verschoben.
   no_time_unchanged_ids?: string[];
   date_only_ids?: string[];
+  // Korrektur für «Rückgängig» (Migration 0251); null, wenn nichts geändert wurde.
+  batch_id?: string | null;
+};
+
+// POST /api/files/bulk-capture-date/preview - schreibt nichts.
+export type CaptureEventRef = { title: string; date: string };
+export type CaptureChangeSample = {
+  id: string;
+  name: string;
+  thumbnail_url: string;
+  before: string | null;
+  before_has_time: boolean;
+  before_source: "corrected" | "exif" | "estimated";
+  after: string | null;
+  after_has_time: boolean;
+};
+export type FileBulkCaptureDatePreview = {
+  will_change: number;
+  unchanged: number;
+  no_date: number;
+  date_only_unchanged: number;
+  date_only_changed: number;
+  invalid: number;
+  not_found: number;
+  no_date_ids: string[];
+  samples: CaptureChangeSample[];
+  day_changes: number;
+  event_changes: number;
+  event_transitions: { from_event: CaptureEventRef | null; to_event: CaptureEventRef | null; count: number }[];
+};
+
+export type CaptureChangeBatch = {
+  id: string;
+  mode: "set" | "shift" | "reset";
+  params: Record<string, string | number | boolean | null>;
+  created_at: string;
+  created_by_name: string | null;
+  updated_count: number;
+  remaining: number;
+  undone_at: string | null;
+  can_undo: boolean;
+};
+
+export type CaptureChangeUndoResult = { restored_ids: string[]; conflict_ids: string[]; not_found_ids: string[] };
+
+// Upload-Verlauf (Migration 0250, /api/upload-jobs)
+export type UploadChannel =
+  | "gallery" | "document" | "protocol_image" | "todo" | "submission_link" | "abgabebox" | "word_import" | "tenant_import" | "cloud_import";
+export type UploadJobStatus = "open" | "processing" | "done" | "partial" | "failed" | "cancelled";
+export type UploadItemStatus = "uploaded" | "duplicate" | "metadata_updated" | "rejected" | "infected" | "failed" | "discarded";
+export type UploadJobCounts = {
+  total: number; uploaded: number; duplicates: number; metadata_updated: number;
+  rejected: number; infected: number; failed: number; discarded: number;
+};
+export type UploadJobRef = {
+  kind: "event" | "submission" | "cycle" | "protocol" | "todo" | "import";
+  id: string | null;
+  label: string | null;
+  on_date: string | null;
+};
+export type UploadJob = {
+  id: string;
+  channel: UploadChannel;
+  actor_kind: "user" | "submission_person" | "anonymous_link" | "platform_admin" | "system";
+  created_by_name: string | null;
+  created_by_deleted: boolean;
+  is_mine: boolean;
+  status: UploadJobStatus;
+  reconstructed: boolean;
+  created_at: string;
+  finished_at: string | null;
+  counts: UploadJobCounts;
+  ref: UploadJobRef | null;
+  image_count?: number | null;
+};
+export type UploadJobList = { items: UploadJob[]; next_cursor: string | null };
+export type UploadCameraGroup = {
+  key: string;
+  camera_make: string | null;
+  camera_model: string | null;
+  device_index: number | null;
+  count: number;
+  earliest: string | null;
+  latest: string | null;
+  with_time: number;
+  with_gps_time: number;
+  suggested_shift_minutes: number | null;
+  suggestion_samples: number;
+};
+export type UploadJobDetail = UploadJob & {
+  options: Record<string, unknown>;
+  import_job_id: string | null;
+  cameras: UploadCameraGroup[];
+  file_count: number;
+};
+export type UploadItemFileState = "ok" | "trashed" | "deleted" | "infected_later" | "scan_pending" | "hidden";
+export type UploadJobItemFile = { id: string | null; state: UploadItemFileState; is_image: boolean; thumbnail_url: string | null };
+export type UploadJobItem = {
+  id: number;
+  position: number;
+  name: string | null;
+  status: UploadItemStatus;
+  reason_code: string | null;
+  reason_params: Record<string, string | number>;
+  source: "server" | "client";
+  size_bytes: number | null;
+  mime_type: string | null;
+  applied: string[];
+  file: UploadJobItemFile | null;
+  existing_file: UploadJobItemFile | null;
+};
+export type UploadJobItemList = { items: UploadJobItem[]; next_cursor: number | null };
+export type UploadJobFileIds = { file_ids: string[]; total: number; truncated: boolean };
+export type UploadJobOfFile = {
+  id: string;
+  channel: UploadChannel;
+  created_at: string;
+  created_by_name: string | null;
+  uploaded_count: number;
+  reconstructed: boolean;
 };
 
 // Papierkorb (Migration 0199): GET /api/files/trash
@@ -714,6 +834,8 @@ export type GalleryUploadJob = {
   started_at: string | null;
   finished_at: string | null;
   error: string | null;
+  // Vorgang im Upload-Verlauf (0250)
+  upload_job_id?: string | null;
 };
 
 export type PhotoDateSource = "corrected" | "exif" | "estimated" | "upload" | "context";
@@ -754,6 +876,7 @@ export type DocumentUploadResult = {
   items: FileOverviewItem[];
   errors: string[];
   file_results?: UploadFileResult[];
+  upload_job_id?: string | null;
 };
 
 export type UploadPrecheckStatus = "upload_required" | "already_exists" | "metadata_updated" | "fallback_required";
@@ -811,6 +934,8 @@ export type StoredFileMetadata = {
   camera_model?: string | null;
   gps?: GpsMetadata | null;
   can_edit_capture_date?: boolean;
+  // Herkunftsvorgang im Upload-Verlauf - nur, wenn die Person ihn sehen darf
+  upload_job?: UploadJobOfFile | null;
 };
 
 export type SubmissionUploadLogEntry = {

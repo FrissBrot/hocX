@@ -23,7 +23,7 @@ export function clientMetadataPayload(analysis: FileAnalysis, includeGps = true)
  * Fehler des Endpunkts `null` = alles normal hochladen. */
 export async function precheckUploads(
   entries: PrecheckEntry[],
-  options: { context: PrecheckContext; estimatedTakenOn?: string | null; signal?: AbortSignal; includeGps?: boolean },
+  options: { context: PrecheckContext; estimatedTakenOn?: string | null; signal?: AbortSignal; includeGps?: boolean; uploadJobId?: string | null },
 ): Promise<Map<number, UploadPrecheckResult> | null> {
   const hashed = entries.filter((entry) => entry.analysis.sha256);
   const results = new Map<number, UploadPrecheckResult>();
@@ -36,6 +36,8 @@ export async function precheckUploads(
         body: JSON.stringify({
           context: options.context,
           estimated_taken_on: options.estimatedTakenOn || null,
+          // Upload-Verlauf: übersprungene Duplikate und ergänzte Metadaten zählen zum Vorgang
+          ...(options.uploadJobId ? { upload_job_id: options.uploadJobId } : {}),
           files: chunk.map((entry) => ({
             client_id: String(entry.index),
             sha256: entry.analysis.sha256,

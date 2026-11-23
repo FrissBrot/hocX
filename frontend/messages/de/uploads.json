@@ -1,0 +1,169 @@
+{
+  "title": "Upload-Verlauf",
+  "descriptionPhotos": "Alle Uploads von Fotos mit Ergebnis je Datei. Ein Upload lässt sich als Ganzes bearbeiten: Tags, Alben, Termin, Aufnahmedatum.",
+  "descriptionFiles": "Alle Uploads der Ablage mit Ergebnis je Datei: hochgeladen, Duplikat, abgelehnt.",
+  "backToPhotos": "‹ Fotos",
+  "backToFiles": "‹ Ablage",
+  "backToHistory": "‹ Upload-Verlauf",
+  "loading": "Wird geladen …",
+  "loadError": "Der Upload-Verlauf konnte nicht geladen werden.",
+  "empty": "Keine Uploads für diese Auswahl.",
+  "loadMore": "Mehr laden",
+  "reconstructed": "rekonstruiert",
+  "reconstructedHint": "Dieser Upload wurde nachträglich aus vorhandenen Dateien rekonstruiert. Die Zusammensetzung ist ungefähr; Duplikate und abgelehnte Dateien sind nicht bekannt.",
+  "detailTitle": "Upload vom {date}",
+  "factsLabel": "Angaben zum Upload",
+  "files": "Dateien",
+  "filesValue": "{count, plural, one {1 Datei vorhanden} other {# Dateien vorhanden}}",
+  "filter": {
+    "all": "Alle",
+    "mine": "Meine",
+    "channel": "Weg",
+    "areaPhotos": "Fotos (alle Wege)",
+    "areaFiles": "Ablage (alle Wege)",
+    "from": "Von",
+    "to": "Bis",
+    "problemsOnly": "Nur mit Problemen"
+  },
+  "column": {
+    "time": "Zeitpunkt",
+    "person": "Person",
+    "channel": "Weg",
+    "ref": "Bezug",
+    "result": "Ergebnis",
+    "status": "Status"
+  },
+  "channel": {
+    "gallery": "Foto-Upload",
+    "document": "Ablage-Upload",
+    "protocol_image": "Protokollbild",
+    "todo": "Pendenz",
+    "submission_link": "Persönlicher Link",
+    "abgabebox": "Abgabebox",
+    "word_import": "Word-Import",
+    "tenant_import": "Plattform-Import",
+    "cloud_import": "Datei-Import"
+  },
+  "status": {
+    "open": "Offen",
+    "processing": "In Arbeit",
+    "done": "Fertig",
+    "partial": "Mit Problemen",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen"
+  },
+  "itemStatus": {
+    "uploaded": "Hochgeladen",
+    "duplicate": "Duplikat",
+    "metadata_updated": "Metadaten ergänzt",
+    "rejected": "Abgelehnt",
+    "infected": "Virenfund",
+    "failed": "Fehlgeschlagen",
+    "discarded": "Verworfen"
+  },
+  "reason": {
+    "duplicate_exact": "Schon vorhanden (gleicher Inhalt)",
+    "too_large": "Zu gross",
+    "unsupported_format": "Format nicht unterstützt",
+    "scan_failed": "Virenprüfung fehlgeschlagen",
+    "infected": "Virenprüfung: infiziert",
+    "quota_exceeded": "Speicher voll",
+    "heic_unreadable": "HEIC-Datei nicht lesbar",
+    "rule_violation": "Regel der Abgabe verletzt",
+    "client_rejected": "Vom Browser abgelehnt",
+    "cancelled": "Beim Abbrechen verworfen",
+    "other": "Anderer Grund"
+  },
+  "ref": {
+    "event": "Termin",
+    "submission": "Abgabe",
+    "cycle": "Zyklus",
+    "protocol": "Protokoll",
+    "todo": "Pendenz",
+    "import": "Import-Bericht"
+  },
+  "actor": {
+    "abgabebox": "Abgabebox",
+    "submissionPerson": "Persönlicher Link",
+    "platform": "Plattform-Import",
+    "deleted": "Gelöschtes Konto",
+    "unknown": "Unbekannt"
+  },
+  "summary": {
+    "uploaded": "{count, plural, one {1 hochgeladen} other {# hochgeladen}}",
+    "duplicates": "{count, plural, one {1 Duplikat} other {# Duplikate}}",
+    "metadataUpdated": "{count, plural, one {1 ergänzt} other {# ergänzt}}",
+    "problems": "{count, plural, one {1 abgelehnt} other {# abgelehnt}}",
+    "discarded": "{count, plural, one {1 verworfen} other {# verworfen}}"
+  },
+  "options": {
+    "tags": "Tags",
+    "estimated": "Geschätztes Datum",
+    "gps": "GPS mitgesendet",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "tabs": {
+    "photos": "Fotos",
+    "results": "Ergebnisliste",
+    "corrections": "Datumskorrekturen"
+  },
+  "items": {
+    "name": "Datei",
+    "status": "Ergebnis",
+    "reason": "Grund",
+    "size": "Grösse",
+    "file": "Datei in hocX",
+    "empty": "Keine Dateien erfasst.",
+    "nameRemoved": "Name entfernt (Datei gelöscht)",
+    "browserReported": "vom Browser gemeldet"
+  },
+  "fileState": {
+    "open": "Öffnen",
+    "ok": "Vorhanden",
+    "trashed": "Im Papierkorb",
+    "deleted": "Datei gelöscht",
+    "infected_later": "Nachträglicher Virenfund",
+    "scan_pending": "Virenprüfung ausstehend",
+    "hidden": "Nicht sichtbar"
+  },
+  "cameras": {
+    "title": "Kameras",
+    "camera": "Kamera",
+    "count": "Fotos",
+    "period": "Zeitraum",
+    "withTime": "Mit Uhrzeit",
+    "actions": "Aktionen",
+    "unknown": "Ohne Kameraangabe",
+    "device": "{name} (Gerät {index})",
+    "withTimeValue": "{count, number} · {gps, plural, =0 {ohne GPS-Zeit} one {1 mit GPS-Zeit} other {# mit GPS-Zeit}}",
+    "select": "Nur diese auswählen",
+    "shift": "Zeit verschieben …",
+    "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {früher} other {später}}",
+    "gpsHint": "Laut GPS-Zeit ({samples, plural, one {1 Foto} other {# Fotos}}) vermutlich: {offset}"
+  },
+  "corrections": {
+    "when": "Zeitpunkt",
+    "what": "Korrektur",
+    "who": "Person",
+    "count": "Fotos",
+    "action": "Rückgängig",
+    "empty": "Noch keine Datumskorrekturen für diesen Upload.",
+    "modeSet": "Auf ein Datum gesetzt",
+    "modeReset": "Original wiederhergestellt",
+    "modeShift": "Verschoben: {hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {früher} other {später}}",
+    "countValue": "{count, plural, one {1 geändert} other {# geändert}} · {remaining, plural, one {1 vorhanden} other {# vorhanden}}",
+    "undo": "Rückgängig machen",
+    "undone": "{count, plural, one {1 Foto zurückgesetzt.} other {# Fotos zurückgesetzt.}}",
+    "conflicts": "{count, plural, one {1 Foto wurde inzwischen anders geändert und bleibt so.} other {# Fotos wurden inzwischen anders geändert und bleiben so.}}",
+    "undoError": "Die Korrektur konnte nicht rückgängig gemacht werden.",
+    "undoneAt": "Rückgängig gemacht am {date}",
+    "noFiles": "Keine Fotos mehr vorhanden"
+  },
+  "hint": {
+    "photos": "{count, plural, one {1 Foto hochgeladen.} other {# Fotos hochgeladen.}}",
+    "files": "{count, plural, one {1 Datei hochgeladen.} other {# Dateien hochgeladen.}}",
+    "edit": "Bearbeiten",
+    "dismiss": "Hinweis ausblenden"
+  }
+}

@@ -68,6 +68,8 @@ _TAG_DATETIME_DIGITIZED = 0x9004
 _TAG_OFFSET_TIME = 0x9010
 _TAG_OFFSET_TIME_ORIGINAL = 0x9011
 _TAG_OFFSET_TIME_DIGITIZED = 0x9012
+_TAG_BODY_SERIAL = 0xA431
+_TAG_CAMERA_SERIAL = 0xC62F
 
 _EXIF_DATETIME_RE = re.compile(r"^\s*(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?")
 _OFFSET_RE = re.compile(r"^([+-])(\d{2}):?(\d{2})$")
@@ -100,6 +102,9 @@ class ImageMetadata:
     gps_timestamp: datetime | None = None
     estimated_taken_on: date | None = None
     status: ScanStatus = "ok"
+    # Seriennummer der Kamera (EXIF), nur flüchtig für das Kürzel (camera_serial.py, E-13) - nie
+    # gespeichert, geloggt oder ausgegeben (repr=False, auch nicht in Fehlermeldungen/Logs).
+    camera_serial: str | None = field(default=None, repr=False)
 
     @property
     def has_capture_metadata(self) -> bool:
@@ -364,6 +369,7 @@ def extract_image_metadata(content: bytes) -> ImageMetadata:
                     exif_ifd = exif.get_ifd(_EXIF_IFD)
                 except Exception:
                     exif_ifd = {}
+                metadata.camera_serial = _serial_text(exif_ifd.get(_TAG_BODY_SERIAL) or exif.get(_TAG_CAMERA_SERIAL))
                 for tag, offset_tag in (
                     (_TAG_DATETIME_ORIGINAL, _TAG_OFFSET_TIME_ORIGINAL),
                     (_TAG_DATETIME_DIGITIZED, _TAG_OFFSET_TIME_DIGITIZED),
@@ -393,6 +399,15 @@ def extract_image_metadata(content: bytes) -> ImageMetadata:
     if not metadata.has_capture_metadata:
         metadata.status = "no_metadata"
     return metadata
+
+
+def _serial_text(raw: Any) -> str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode("ascii", "ignore")
+    text = str(raw).replace("\x00", "").strip()
+    return text[:64] or None
 
 
 def _hocx_marker_applies(metadata: ImageMetadata, estimated: str | None) -> bool:
@@ -555,6 +570,15 @@ def merge_missing_metadata(
                     setattr(stored_file, attribute, getattr(incoming, attribute))
                     outcome.add_applied(FIELD_GPS)
 
+    # Kürzel der Seriennummer (E-13) nur aus der eigenen Analyse der Datei, nie aus Client-Werten
+    if source != "client" and incoming.camera_serial and getattr(stored_file, "camera_serial_key", None) is None:
+        from app.services.camera_serial import serial_key
+
+        stored_file.camera_serial_key = serial_key(
+            getattr(stored_file, "tenant_id", None),
+            stored_file.camera_make or incoming.camera_make, stored_file.camera_model or incoming.camera_model, incoming.camera_serial,
+        )
+
     for attribute in ("camera_make", "camera_model"):
         value = getattr(incoming, attribute)
         if value is None:
@@ -661,6 +685,19 @@ def shifted_correction(stored_file: Any, delta: timedelta) -> tuple[datetime, bo
         return moment + delta, True
     day = moment.date() + timedelta(days=whole_shift_days(delta))
     return datetime.combine(day, CORRECTED_DATE_ONLY_TIME), False
+
+
+def correction_status(stored_file: Any, target: tuple[datetime, bool] | None) -> str:
+    """Vorschau zu set_capture_correction ohne zu schreiben: "invalid", "unchanged" oder "change"."""
+    if target is None:
+        return "unchanged" if stored_file.capture_corrected_at is None else "change"
+    naive = valid_capture_datetime(target[0])
+    if naive is None:
+        return "invalid"
+    current = stored_file.capture_corrected_at
+    if current is not None and _stored_naive(current) == naive and bool(stored_file.capture_corrected_has_time) == target[1]:
+        return "unchanged"
+    return "change"
 
 
 def set_capture_correction(

@@ -33,6 +33,13 @@ RULES: tuple[RetentionRule, ...] = (
     # PDF-Aufträge (Migration 0150): request_json kann Freitext enthalten; die PDFs selbst stehen
     # in document_export/document_registry und bleiben.
     RetentionRule("document_render_job", "COALESCE(finished_at, created_at)", "upload_job_retention_days", "status NOT IN ('queued', 'running')"),
+    # Upload-Verlauf (0250, E-9): Vorgänge mit Dateien bleiben, solange es die Dateien gibt (den
+    # Rest erledigt der Lösch-Trigger auf stored_file). Hier nur Vorgänge, die nie eine Datei
+    # hatten (nur Duplikate, Ablehnungen, Abbruch) - nach der Frist der technischen Upload-Aufträge.
+    RetentionRule(
+        "upload_job", "COALESCE(finished_at, created_at)", "upload_job_retention_days",
+        "status NOT IN ('open', 'processing') AND NOT EXISTS (SELECT 1 FROM stored_file s WHERE s.upload_job_id = upload_job.id)",
+    ),
     RetentionRule("submission_upload_log", "created_at", "submission_upload_log_retention_days"),
     RetentionRule("backup_event", "created_at", "operations_event_retention_days"),
     RetentionRule("storage_migration_event", "created_at", "operations_event_retention_days"),

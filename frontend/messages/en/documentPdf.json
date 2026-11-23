@@ -475,7 +475,8 @@
       "agenda_items": "Topics",
       "todo_fines": "Task fines",
       "notifications": "Email notifications",
-      "submission_elements": "Submission items"
+      "submission_elements": "Submission items",
+      "uploads": "Uploads"
     },
     "col": {
       "first_name": "First name",
@@ -537,7 +538,13 @@
       "completed_on": "Completed on",
       "fine_tariff": "Fine tariff",
       "sent_at": "Sent at",
-      "trashed_at": "In trash since"
+      "trashed_at": "In trash since",
+      "channel": "Channel",
+      "total": "Files",
+      "uploaded": "Uploaded",
+      "duplicates": "Duplicates",
+      "rejected": "Rejected",
+      "person": "Person"
     },
     "file": {
       "workbook": "Data report",
@@ -555,7 +562,8 @@
         "attendance": "Attendance",
         "fines": "Fines",
         "finances": "Finances",
-        "todos": "Tasks"
+        "todos": "Tasks",
+        "uploads": "Uploads"
       },
       "sheet": {
         "members": "Members",
@@ -564,7 +572,8 @@
         "fines": "Fines",
         "finances": "Finances",
         "todos": "Tasks",
-        "todoFines": "Task fines"
+        "todoFines": "Task fines",
+        "uploads": "Upload history"
       },
       "folder": {
         "lists": "Lists",

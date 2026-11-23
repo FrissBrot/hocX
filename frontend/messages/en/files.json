@@ -98,7 +98,9 @@
     "renamedToast": "File renamed.",
     "renameError": "The file could not be renamed.",
     "mimeHide": "Hide MIME",
-    "trashConfirmHint": "{count, plural, =0 {} one {} other {All # versions go with it. }}It can be restored for {days} days, after that it is deleted permanently."
+    "trashConfirmHint": "{count, plural, =0 {} one {} other {All # versions go with it. }}It can be restored for {days} days, after that it is deleted permanently.",
+    "uploadJobLink": "via upload with {count, plural, one {1 file} other {# files}} ›",
+    "uploadJobLinkReconstructed": "via upload with {count, plural, one {1 file} other {# files}} (reconstructed) ›"
   },
   "table": {
     "columnName": "Name",
@@ -141,7 +143,9 @@
     "viewToggle": "View",
     "viewList": "List",
     "viewGrid": "Tiles with preview",
-    "importButton": "Import"
+    "importButton": "Import",
+    "uploadsButton": "Uploads",
+    "editUploadAction": "Edit"
   },
   "sourceOptions": {
     "all": "All sources",

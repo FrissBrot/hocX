@@ -19,7 +19,7 @@ function fixture(name: string, as = name): File {
   return new File([new Uint8Array(bytes)], as, { type: name.endsWith(".jpg") ? "image/jpeg" : "" });
 }
 
-type PrecheckBody = { estimated_taken_on: string | null; files: { client_id: string; sha256: string; metadata: unknown }[] };
+type PrecheckBody = { estimated_taken_on: string | null; upload_job_id?: string; files: { client_id: string; sha256: string; metadata: unknown }[] };
 
 function precheckBodies(): PrecheckBody[] {
   return browserApiFetchMock.mock.calls
@@ -115,7 +115,26 @@ describe("GalleryUploadModal – Analyse, Schätzdatum und Vorab-Abgleich", () =
     expect(onSessionComplete).toHaveBeenCalledWith({
       jobIds: ["job-1"],
       precheckResults: [{ name: "schon-da.jpg", status: "metadata_updated", file_id: "existing", applied: ["estimated_taken_on"], conflicts: [] }],
+      uploadJobId: null,
     });
+  });
+
+  it("fasst Vorab-Abgleich und alle Pakete in einem Upload-Vorgang zusammen und schliesst ihn ab", async () => {
+    mockPrecheck((clientId) => (clientId === "0" ? "already_exists" : "upload_required"));
+    const fallback = browserApiFetchMock.getMockImplementation()!;
+    browserApiFetchMock.mockImplementation((url: string, init?: { body?: string }) =>
+      url === "/api/upload-jobs" ? Promise.resolve({ id: "uj-1" }) : fallback(url, init),
+    );
+    const { onClose, onSessionComplete } = renderModal([fixture("full.jpg", "da.jpg"), fixture("plain.jpg", "neu.jpg")]);
+    await waitFor(() => expect(screen.queryByText("Bilder werden geprüft…", { exact: false })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "2 Bilder hochladen" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const opened = browserApiFetchMock.mock.calls.find(([url]) => url === "/api/upload-jobs");
+    expect(JSON.parse(opened![1].body).channel).toBe("gallery");
+    expect(precheckBodies()[0].upload_job_id).toBe("uj-1");
+    expect((browserApiUploadMock.mock.calls[0][1] as FormData).get("upload_job_id")).toBe("uj-1");
+    expect(onSessionComplete.mock.calls[0][0].uploadJobId).toBe("uj-1");
+    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([url]) => url === "/api/upload-jobs/uj-1/complete")).toBe(true));
   });
 
   it("sendet Browser-Hinweise nur für HEIC-Dateien mit (IMGMETA-004)", async () => {

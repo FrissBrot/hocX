@@ -28,6 +28,7 @@ from app.schemas.files import UploadFileResult
 from app.services import submission_access_service as access_service
 from app.services import submission_upload_rules
 from app.services.file_service import FileService
+from app.services import upload_job_service
 from app.services.submission_service import SubmissionService, raw_element_ref
 from app.services.upload_pipeline import MAX_UPLOAD_BYTES, stage_upload_to_disk
 
@@ -274,6 +275,13 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offl
             to_save.append((name, content))
     file_results: list[dict] = []
     errors: list[str] = []
+    # Upload-Verlauf (0250): Vorgang «persönlicher Link» nur für die Verwaltung sichtbar (E-15) -
+    # ohne Personendaten im Vorgang (actor_kind statt Name); Konto, falls die Person eines hat.
+    history = upload_job_service.open_job(
+        db, tenant_id=access.assignment.tenant_id, channel="submission_link", created_by=access.person.id,
+        actor_kind="submission_person", status="processing", submission_assignment_id=access.assignment.id,
+        submission_element_ref=element_ref, submission_element_label=raw["label"], event_id=raw["event_id"],
+    ) if to_save else None
     if to_save:
         _items, errors = await FileService().save_document_uploads(
             db, tenant_id=access.assignment.tenant_id, files=to_save, tags=[], created_by=access.person.id,
@@ -282,7 +290,11 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offl
             # Ohne Anmeldung: nie verraten, ob eine Datei im Verein schon existiert (kein «übersprungen»
             # mit fremder ID, kein Duplikat-Text) - ausserhalb des Elements wird gespeichert.
             allow_duplicates=True,
+            before_commit=lambda: upload_job_service.record_results(db, history, file_results),
         )
+        if history is not None:
+            upload_job_service.finish(db, history)
+            db.commit()
     file_results = _merge_element_duplicates(planned, to_save, file_results, known)
     # Aufgabe nachführen (erledigt, sobald eine geprüfte Datei da ist; sonst erledigt der Scan sie)
     SubmissionService()._element_with_todo_sync(db, access.assignment, element_ref)
