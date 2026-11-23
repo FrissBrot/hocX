@@ -19,6 +19,15 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- **Protokoll nach schnellem Neuladen nicht mehr veraltet:** Sitzungsnotizen: ein lokaler Entwurf wurde
+  beim Öffnen zwar wiederhergestellt, ein Effekt setzte direkt danach wieder den alten Serverstand; ein
+  längst gespeicherter Entwurf (Neuladen vor der Antwort) blieb liegen und stellte sich später über
+  neuere Notizen anderer; und eine Speicherung löschte einen inzwischen weiter getippten Entwurf samt
+  Outbox-Eintrag. Textblöcke: landete eine Speicherung, während weiter getippt wurde, blieb die Baseline
+  alt - nach dem Neuladen galt der eigene neuere Text als Konflikt und der ältere Serverstand blieb stehen.
+  Jetzt haben auch die Notizen eine Baseline (nur übernehmen, wenn der Server unverändert ist, sonst
+  Hinweis mit «Meinen Entwurf übernehmen»), schon gespeicherte Entwürfe werden beim Öffnen aufgeräumt und
+  die Baseline rückt nach jeder bestätigten Speicherung nach. Kein Entwurf wird ohne Speicherung verworfen.
 - **Fett/Kursiv mit Satzzeichen am Rand bleibt erhalten:** Endete eine Auszeichnung mit einem Satzzeichen
   und folgte direkt ein Buchstabe (z. B. «**B!**» vor «C») oder begann sie mit einem Satzzeichen nach einem
   Buchstaben, verschob der Markdown-Export die Begrenzer nach innen («**B**!C», das Satzzeichen verlor die
