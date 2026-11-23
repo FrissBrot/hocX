@@ -362,9 +362,10 @@ def insert_upload_log(
     db.execute(
         insert(submission_upload_log_table).values(
             assignment_id=assignment_id,
-            element_ref=element_ref,
+            element_ref=_without_nul(element_ref),
             status=status,
-            error_message=error_message,
+            # Dateiname aus dem Upload (z. B. «Datei zu gross: …») kann ein NUL tragen.
+            error_message=_without_nul(error_message),
         )
     )
     db.commit()
@@ -491,6 +492,13 @@ def redact_path(path: str | None) -> str | None:
     return _PATH_SECRET.sub("/api/public/<token>", path, count=1)
 
 
+def _without_nul(value: str | None) -> str | None:
+    """Postgres-Textfelder können kein NUL enthalten (psycopg: DataError). Pfad (dekodiert, %00)
+    und Fehlertexte können eines tragen - der Eintrag scheiterte dann, und _record_error
+    verschluckt das: der Fehler verschwand ganz aus dem Fehlerprotokoll."""
+    return value.replace("\x00", "\\x00") if value is not None else None
+
+
 def insert_error_log(
     db: Session,
     *,
@@ -507,12 +515,12 @@ def insert_error_log(
             source="abgabebox-backend",
             tenant_id=tenant_id,
             actor_email=None,
-            request_method=request_method,
-            request_path=redact_path(request_path),
+            request_method=_without_nul(request_method),
+            request_path=_without_nul(redact_path(request_path)),
             status_code=status_code,
-            error_type=error_type,
-            error_message=redact(error_message)[:4000],
-            traceback=redact(traceback or "")[:20000] or None,
+            error_type=_without_nul(error_type),
+            error_message=_without_nul(redact(error_message)[:4000]),
+            traceback=_without_nul(redact(traceback or "")[:20000]) or None,
         )
     )
     db.commit()

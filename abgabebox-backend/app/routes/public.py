@@ -240,6 +240,10 @@ def _effective_upload_quota_bytes(tenant_quota_bytes: int | None, global_cap_byt
 
 
 def _get_assignment_or_404(db: Session, tenant: dict, assignment_slug: str) -> dict:
+    # NUL (%00 im Pfad) kann kein gespeicherter Slug enthalten; psycopg lehnt den Parameter sonst
+    # mit DataError ab (500 und Eintrag im Fehlerprotokoll für jeden anonymen Aufruf).
+    if "\x00" in assignment_slug:
+        raise NOT_FOUND
     assignment = repository.get_assignment_by_slug(
         db, tenant_id=tenant["id"], link_id=tenant["link_id"], public_slug=assignment_slug
     )
