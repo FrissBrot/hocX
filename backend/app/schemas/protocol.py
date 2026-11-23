@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -274,11 +274,16 @@ class ProtocolTextRead(BaseModel):
     tracked_baseline_content: str | None = None
 
 
+# todo_status.id ist SMALLINT: grössere Werte scheiterten erst in PostgreSQL («smallint out of
+# range», 400 plus Fehlerprotokoll) statt als ungültige Eingabe.
+TodoStatusId = Annotated[int, Field(ge=1, le=32767)]
+
+
 class ProtocolTodoCreate(BaseModel):
     task: str
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
-    todo_status_id: int = 1
+    todo_status_id: TodoStatusId = 1
     due_date: date | None = None
     due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
@@ -296,7 +301,7 @@ class ProtocolTodoUpdate(BaseModel):
     task: str | None = None
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
-    todo_status_id: int | None = None
+    todo_status_id: TodoStatusId | None = None
     due_date: date | None = None
     due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
