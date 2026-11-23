@@ -82,8 +82,9 @@ def test_login_setup_flow_start_is_limited_per_ticket(db):
     service = MfaService()
     pending = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
     assert pending is not None and pending.status == "setup_required"
+    before = sum(1 for _ in get_redis_sync().scan_iter("mfa:flow:*"))  # das Login-Ticket selbst
     assert _hits_limit(lambda: service.start_login_totp_enrollment(db, pending.ticket))
-    flows = sum(1 for _ in get_redis_sync().scan_iter("mfa:flow:*"))
+    flows = sum(1 for _ in get_redis_sync().scan_iter("mfa:flow:*")) - before
     assert flows <= 10
     # Ein neues Ticket (neue Anmeldung) ist nicht betroffen
     again = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
