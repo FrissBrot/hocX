@@ -8,6 +8,22 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **Plattform-Admin heisst jetzt «hocX Konsole»** (en «hocX Console», fr/it «Console hocX»): Titel in der
+  Seitenleiste, Browser-Tab aller /admin-Seiten und Login der Konsole. Kontobezeichnungen wie
+  «Plattform-Admins» (Rollen, Audit-Akteur) bleiben.
+- **Seitenleiste der Konsole mit den Massen der App:** gleicher Innenabstand, Logo, Gruppen- und
+  Eintragsabstände, Eintragshöhe 40 px und Bereichsköpfe 32 px wie die Hauptnavigation der Vereins-App
+  (die dichteren Sonderwerte aus 1.5.1 entfallen). Grosse Bereiche scrollen jetzt innerhalb der
+  Navigation, der aktive Eintrag wird dabei sichtbar gehalten; Zähler im aktiven Eintrag mit
+  ausreichendem Kontrast. Kompaktmodus und Mobilmenü unverändert bedienbar.
+- **Eigenes Favicon für die Konsole:** dasselbe hX-Zeichen, hell auf dunklem Grund
+  (`public/icons/console`: `favicon.ico`, `icon.svg`, `apple-touch-icon.png`), damit App und Konsole
+  im Tab unterscheidbar sind. `/favicon.ico` auf der Admin-Domain liefert ebenfalls das Konsolen-Icon
+  (`proxy.ts`). Das App-Favicon liegt dafür neu unter `public/favicon.ico` (statt `app/favicon.ico`,
+  gleiche Datei, Link über die Metadaten), Manifest und App-Icons bleiben unverändert.
+
 ## [1.5.1] - 2026-11-22
 
 Folgeversion zu 1.5.0. Schwerpunkte: Rest des Plattform-Admin-Umbaus (Reset-Link statt Passwort,

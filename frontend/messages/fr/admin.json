@@ -1,7 +1,7 @@
 {
   "accountManagement": {
     "title": "Comptes administrateur",
-    "description": "Accès au panneau d'administration de la plateforme lui-même - distinct de tous les utilisateurs des organisations.",
+    "description": "Accès à la Console hocX elle-même - distinct de tous les utilisateurs des organisations.",
     "newAdmin": "Nouvel admin",
     "columns": {
       "name": "Nom",
@@ -23,7 +23,7 @@
     "deactivate": "Désactiver",
     "activate": "Activer",
     "newAdminModalTitle": "Nouveau compte administrateur",
-    "newAdminModalDescription": "Crée un accès supplémentaire au panneau d'administration de la plateforme.",
+    "newAdminModalDescription": "Crée un accès supplémentaire à la Console hocX.",
     "name": "Nom",
     "email": "E-mail",
     "password": "Mot de passe",
@@ -34,7 +34,7 @@
       "selfDowngradeConfirm": "Passer votre propre compte en lecture seule ? Vous perdrez immédiatement vous-même l'accès en écriture à ce panneau.",
       "updated": "Compte administrateur mis à jour",
       "updateFailed": "Le compte administrateur n'a pas pu être mis à jour",
-      "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès au panneau d'administration de la plateforme."
+      "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès à la Console hocX."
     },
     "passkeyCount": "{count, plural, =0 {Aucune passkey} one {# passkey} other {# passkeys}}",
     "neverLoggedIn": "Jamais"

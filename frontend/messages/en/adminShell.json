@@ -1,5 +1,5 @@
 {
-  "title": "Platform admin",
+  "title": "hocX Console",
   "tagline": "Manage organizations and users across the whole system.",
   "groups": {
     "tenants": "Organizations",

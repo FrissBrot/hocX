@@ -1,0 +1,10 @@
+<!-- Favicon der hocX Konsole: Zeichen wie public/icons/icon-512.png, Grund = Token text (Light), Zeichen = Token on-solid (design/tokens.css) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="88" fill="#101828"/>
+  <g fill="#ffffff">
+    <rect x="97" y="162" width="37" height="188"/>
+    <path d="M134 262c0-35 20-57 51-57 34 0 40 24 40 52v93h-37v-89c0-17-5-27-19-27-21 0-35 14-35 40v76z"/>
+    <path d="M256 162h46l123 188h-47z"/>
+    <path d="M369 162h46L295 350h-47z"/>
+  </g>
+</svg>

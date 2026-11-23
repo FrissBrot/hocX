@@ -170,6 +170,21 @@ describe("proxy", () => {
       });
     });
 
+    it("liefert /favicon.ico auf der Admin-Domain als Konsolen-Icon, sonst das App-Favicon, ohne Sitzungsprüfung", async () => {
+      const proxyForAdmin = await adminProxy();
+      const fetchSpy = unauthenticatedBackend();
+
+      const admin = await proxyForAdmin(new NextRequest("http://0.0.0.0:3000/favicon.ico", { headers: { host: "admin.example.ch" } }));
+      expect(admin.headers.get("x-middleware-rewrite")).toBe("http://0.0.0.0:3000/icons/console/favicon.ico");
+      expect(admin.headers.get("location")).toBeNull();
+
+      const app = await proxyForAdmin(new NextRequest("http://0.0.0.0:3000/favicon.ico", { headers: { host: "app.example.ch" } }));
+      expect(app.headers.get("x-middleware-rewrite")).toBeNull();
+      expect(app.headers.get("location")).toBeNull();
+      expect(app.status).toBe(200);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it("schickt bei Seiten der Haupt-App keinen Gate-Header mit", async () => {
       const proxyForAdmin = await adminProxy();
       const fetchSpy = unauthenticatedBackend();
@@ -210,6 +225,8 @@ describe("proxy", () => {
       expect(other.status).toBe(404);
       const own = await adminProxy(new NextRequest("http://0.0.0.0:3000/login", { headers: { host: "admin.example.ch" } }));
       expect(own.headers.get("x-middleware-rewrite")).toBe("http://0.0.0.0:3000/admin/login");
+      const icon = await adminProxy(new NextRequest("http://0.0.0.0:3000/favicon.ico", { headers: { host: "admin.example.ch" } }));
+      expect(icon.headers.get("x-middleware-rewrite")).toBe("http://0.0.0.0:3000/icons/console/favicon.ico");
     });
   });
 
