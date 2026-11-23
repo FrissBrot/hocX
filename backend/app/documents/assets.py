@@ -52,11 +52,16 @@ def get_asset(db: Session, tenant_id: int, public_id: uuid.UUID | str | None) ->
     return db.scalar(select(DocumentAsset).where(DocumentAsset.tenant_id == tenant_id, DocumentAsset.public_id == value))
 
 
-def assets_by_ids(db: Session, tenant_id: int, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, DocumentAsset]:
+def assets_by_ids(db: Session, tenant_id: int, ids: Iterable[uuid.UUID], *, lock: bool = False) -> dict[uuid.UUID, DocumentAsset]:
+    """``lock=True``: Schlüsselsperre (FOR KEY SHARE) bis zum Commit, für Schreibpfade, die einen
+    Verweis auf die Assets speichern. ``delete_asset`` wartet darauf und sieht den Verweis danach."""
     wanted = {value for value in ids if value is not None}
     if not wanted:
         return {}
-    rows = db.scalars(select(DocumentAsset).where(DocumentAsset.tenant_id == tenant_id, DocumentAsset.public_id.in_(wanted)))
+    statement = select(DocumentAsset).where(DocumentAsset.tenant_id == tenant_id, DocumentAsset.public_id.in_(wanted))
+    if lock:
+        statement = statement.order_by(DocumentAsset.id).with_for_update(read=True, key_share=True)
+    rows = db.scalars(statement)
     return {row.public_id: row for row in rows}
 
 
@@ -209,6 +214,14 @@ def _text_type():
 
 
 def delete_asset(db: Session, asset: DocumentAsset) -> None:
+    # Erst sperren, dann Verwendungen suchen: Verweise stehen nur im JSON (kein Fremdschlüssel).
+    # Ein gleichzeitiges Speichern eines Brand-Profils hält eine Schlüsselsperre auf dem Asset
+    # (assets_by_ids(lock=True)); FOR UPDATE wartet darauf, die Suche danach sieht die neue
+    # Revision (READ COMMITTED). Ohne Sperre zeigte das Profil danach auf ein gelöschtes Asset.
+    db.flush()
+    locked = db.scalar(select(DocumentAsset).where(DocumentAsset.id == asset.id).with_for_update().execution_options(populate_existing=True))
+    if locked is None:
+        return  # gleichzeitig schon gelöscht
     if asset_references(db, asset):
         raise AssetValidationError("apiError.assetInUse")
     storage_path = asset.storage_path
@@ -298,6 +311,9 @@ def merge_duplicates(db: Session, tenant_id: int) -> int:
         for asset in ordered[1:]:
             if asset.id in referenced:
                 continue
-            delete_asset(db, asset)
+            try:
+                delete_asset(db, asset)
+            except AssetValidationError:
+                continue  # inzwischen verwendet (gleichzeitig gespeichert): Kopie bleibt
             removed += 1
     return removed

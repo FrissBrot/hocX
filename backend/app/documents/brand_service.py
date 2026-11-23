@@ -97,7 +97,8 @@ def tokens_of(revision: DocumentBrandRevision | None) -> BrandTokens:
 
 def _check_asset_refs(db: Session, tenant_id: int, tokens: BrandTokens) -> None:
     ids = tokens.asset_ids()
-    found = asset_service.assets_by_ids(db, tenant_id, ids)
+    # Sperre bis zum Commit: ein gleichzeitiges Löschen des Assets wartet und sieht den Verweis
+    found = asset_service.assets_by_ids(db, tenant_id, ids, lock=True)
     for asset_id in ids:
         asset = found.get(asset_id)
         if asset is None:
