@@ -445,6 +445,17 @@ def _invite_one(db: Session, user: CurrentUser, participant: Participant):
     if requires_mfa(load_role_permissions(db, participant.id)[0]):
         require_recent_auth(user, kind=ADMIN, action="participant.invite_admin")
     enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
+    _ensure_invitable(db, user, participant)
+    token = account_links.invite(db, participant, actor_user_id=user.user_id)
+    AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
+    return token
+
+
+def _ensure_invitable(db: Session, user: CurrentUser, participant: Participant) -> None:
+    """Prüfungen einer Einladung, die nicht von der Rolle der Person abhängen (Login, Status,
+    E-Mail, Mailversand, Benutzerlimit). Die Mehrfachaktion ruft sie auch VOR dem Rollenwechsel
+    auf, damit sich die Rolle nur ändert, wenn die Einladung danach auch rausgeht."""
+    _ensure_can_manage_login(db, user, participant)
     if participant.login_enabled:
         raise HTTPException(status_code=409, detail={"code": "already_has_login", "message": "Diese Person hat bereits einen Login."})
     if not participant.is_active:
@@ -458,9 +469,6 @@ def _invite_one(db: Session, user: CurrentUser, participant: Participant):
         raise HTTPException(status_code=409, detail={"code": "email_not_configured", "message": "Der E-Mail-Versand ist nicht eingerichtet."})
     UserService().ensure_login_email_available(db, participant.email, excluding_user_id=participant.id)
     user_limit_service.ensure_login_capacity(db, participant.tenant_id, for_user_id=participant.id)
-    token = account_links.invite(db, participant, actor_user_id=user.user_id)
-    AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
-    return token
 
 
 # Gründe für übersprungene Personen in Mehrfachaktionen (Codes aus den Einzelprüfungen)
@@ -522,6 +530,9 @@ def bulk_invite_participants(payload: ParticipantBulkInvite, db: Session = Depen
             continue
         try:
             if payload.role_id is not None:
+                # Erst prüfen, ob die Einladung möglich ist: update_user committet den Rollenwechsel,
+                # ein späteres Scheitern (Limit, E-Mail vergeben …) liesse sonst die neue Rolle stehen.
+                _ensure_invitable(db, user, participant)
                 UserService().update_user(db, participant.id, UserUpdate(role_ids=[payload.role_id]), user)
             _invite_one(db, user, participant)
         except HTTPException as exc:

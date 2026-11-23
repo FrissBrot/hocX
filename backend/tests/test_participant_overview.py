@@ -146,3 +146,24 @@ def test_bulk_roles_add_remove_and_guards(db):
     )
     assert last_admin.done == []
     assert [item.reason for item in last_admin.skipped] == ["protected"]
+
+
+def test_bulk_invite_keeps_role_when_the_invite_fails(db, mail, monkeypatch):
+    """Die Rolle soll nur ändern, wer tatsächlich eingeladen wird: scheitert die Einladung (hier am
+    Benutzerlimit), bleibt die bisherige Rolle - die Person steht ja als übersprungen da."""
+    tenant = make_tenant(db)
+    actor = _actor(db, tenant)  # einziger Login
+    tenant.user_limit_override = 1
+    person = _person(db, tenant, "Am Limit", "am-limit@example.com")
+    kassier = role_service.system_role(db, tenant.id, "kassier")
+    person_id, person_public_id, kassier_id = person.id, person.public_id, kassier.public_id
+    db.commit()
+    # Die Testsitzung rollt bei db.rollback() alles zurück (auch Committetes); in Produktion bleibt
+    # ein bereits committeter Rollenwechsel bestehen. Darum hier wie dort: nur Offenes verwerfen.
+    monkeypatch.setattr(db, "rollback", lambda: None)
+    result = participant_routes.bulk_invite_participants(
+        ParticipantBulkInvite(participant_ids=[person_public_id], role_id=kassier_id), db=db, user=actor,
+    )
+    assert result.done == []
+    assert [item.participant_id for item in result.skipped] == [person_public_id]
+    assert [role.system_key for role in role_service.roles_by_user(db, [person_id])[person_id]] == ["reader"]
