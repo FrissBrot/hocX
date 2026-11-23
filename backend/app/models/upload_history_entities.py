@@ -44,7 +44,8 @@ class UploadJob(Base):
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
     protocol_todo_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="SET NULL"))
     submission_upload_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_upload.id", ondelete="SET NULL"))
-    import_job_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("import_job.id", ondelete="SET NULL"))
+    # FK (tenant_id, import_job_id) -> import_job, ON DELETE SET NULL nur für diese Spalte (0250)
+    import_job_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
     # Protokollbilder: ein Vorgang je Protokoll und Tag (E-6)
     group_day: Mapped[date | None] = mapped_column(Date)
     # Auszug der Upload-Optionen (Tags, Schätzdatum, include_gps …) - nie GPS-Werte oder Browser-Hinweise

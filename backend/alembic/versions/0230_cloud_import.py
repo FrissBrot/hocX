@@ -63,7 +63,10 @@ def upgrade() -> None:
                 status IN ('draft', 'ready', 'queued', 'running', 'cancel_requested', 'cancelled', 'done', 'failed')
             ),
             CONSTRAINT ck_import_job_source CHECK (source IN ('zip', 'folder')),
-            CONSTRAINT ck_import_job_type_filter CHECK (type_filter IN ('all', 'images', 'documents'))
+            CONSTRAINT ck_import_job_type_filter CHECK (type_filter IN ('all', 'images', 'documents')),
+            -- Ziel des zusammengesetzten Fremdschlüssels von import_item/upload_job: die Datenbank
+            -- garantiert so, dass Einträge im Mandanten ihres Auftrags liegen
+            CONSTRAINT uq_import_job_tenant_id UNIQUE (tenant_id, id)
         )
         """
     )
@@ -79,7 +82,7 @@ def upgrade() -> None:
         CREATE TABLE import_item (
             id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             tenant_id bigint NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-            job_id uuid NOT NULL REFERENCES import_job(id) ON DELETE CASCADE,
+            job_id uuid NOT NULL,
             path text NOT NULL,
             size_bytes bigint NOT NULL DEFAULT 0,
             modified_at timestamptz,
@@ -102,6 +105,8 @@ def upgrade() -> None:
             existing_file_id bigint REFERENCES stored_file(id) ON DELETE SET NULL,
             attempts smallint NOT NULL DEFAULT 0,
             CONSTRAINT uq_import_item_job_path UNIQUE (job_id, path),
+            CONSTRAINT fk_import_item_job FOREIGN KEY (tenant_id, job_id)
+                REFERENCES import_job (tenant_id, id) ON DELETE CASCADE,
             CONSTRAINT ck_import_item_status CHECK (
                 status IN ('listed', 'queued', 'staged', 'imported', 'duplicate', 'skipped', 'failed', 'cancelled')
             ),

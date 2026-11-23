@@ -96,7 +96,7 @@ def upgrade() -> None:
             protocol_id bigint REFERENCES protocol(id) ON DELETE SET NULL,
             protocol_todo_id bigint REFERENCES protocol_todo(id) ON DELETE SET NULL,
             submission_upload_id bigint REFERENCES submission_upload(id) ON DELETE SET NULL,
-            import_job_id uuid REFERENCES import_job(id) ON DELETE SET NULL,
+            import_job_id uuid,
             group_day date,
             options jsonb NOT NULL DEFAULT '{{}}'::jsonb,
             status text NOT NULL DEFAULT 'open',
@@ -113,6 +113,9 @@ def upgrade() -> None:
             client_closed_at timestamptz,
             finished_at timestamptz,
             CONSTRAINT uq_upload_job_tenant_id UNIQUE (tenant_id, id),
+            -- Mandantengleich wie stored_file.upload_job_id (Security-Review 1.6, F-2)
+            CONSTRAINT fk_upload_job_import_job FOREIGN KEY (tenant_id, import_job_id)
+                REFERENCES import_job (tenant_id, id) ON DELETE SET NULL (import_job_id),
             CONSTRAINT ck_upload_job_channel CHECK (channel IN {_in(CHANNELS)}),
             CONSTRAINT ck_upload_job_actor_kind CHECK (actor_kind IN {_in(ACTOR_KINDS)}),
             CONSTRAINT ck_upload_job_status CHECK (status IN {_in(JOB_STATUSES)})

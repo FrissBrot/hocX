@@ -5,6 +5,7 @@ import asyncio
 import io
 import uuid
 import zipfile
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -26,6 +27,12 @@ def _isolated_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbnails"))
+
+
+@pytest.fixture(autouse=True)
+def _ample_disk(monkeypatch):
+    """Plattenreserve unabhängig vom Füllstand des Test-Hosts (eigener Test unten)."""
+    monkeypatch.setattr(jobs.shutil, "disk_usage", lambda _path: SimpleNamespace(total=100 * 1024**3, used=0, free=100 * 1024**3))
 
 
 @pytest.fixture(autouse=True)
@@ -149,6 +156,19 @@ def test_rls_hides_import_rows_of_other_tenants(db):
         assert db.scalar(select(func.count()).select_from(ImportItem)) == 0
     with as_app(db, tenant.id):
         assert db.scalar(select(func.count()).select_from(ImportItem)) == 1
+
+
+def test_import_item_must_belong_to_the_tenant_of_its_job(db):
+    """Security-Review 1.6, F-2: zusammengesetzter Fremdschlüssel (tenant_id, job_id)."""
+    from sqlalchemy.exc import IntegrityError
+
+    tenant, other = make_tenant(db, "A"), make_tenant(db, "B")
+    job = _create(db, _admin(db, tenant))
+    savepoint = db.begin_nested()
+    db.add(ImportItem(tenant_id=other.id, job_id=job.id, path="x.png", kind="image"))
+    with pytest.raises(IntegrityError):
+        db.flush()
+    savepoint.rollback()
 
 
 # --- ZIP-Quelle -------------------------------------------------------------------------------
@@ -481,6 +501,37 @@ def test_upload_precheck_rejects_wrong_status_and_quota(db):
     with pytest.raises(jobs.ImportFailure) as exc:
         jobs.check_upload_allowed(db, job, kind="archive", content_length=500 * 1024**2)
     assert exc.value.code == "quota_exceeded"
+
+
+def test_archive_after_staging_counts_earlier_archives_against_quota(db, monkeypatch):
+    """Security-Review 1.6, F-1: ohne Content-Length prüft erst add_archive - und zwar die Summe
+    aller gestagten Archive des Auftrags, nicht nur das neue."""
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    job = _create(db, owner)
+    _add_zip(db, owner, job.id, {"a.txt": b"x" * 2000}, name="teil-1.zip")
+    first = db.get(ImportJob, job.id)
+    staged_first = sum(int(archive["size"]) for archive in first.archives)
+    monkeypatch.setattr(jobs, "STAGING_QUOTA_TOLERANCE", 0)
+    tenant.storage_quota_bytes = staged_first + 50
+    db.flush()
+    with pytest.raises(HTTPException) as exc:
+        _add_zip(db, owner, job.id, {"b.txt": b"y" * 2000}, name="teil-2.zip")
+    assert exc.value.detail["code"] == "quota_exceeded"
+    assert len(db.get(ImportJob, job.id).archives) == 1
+
+
+def test_archive_is_rejected_when_the_disk_reserve_would_be_used(db, monkeypatch):
+    """Plattenreserve auch nach dem Empfang (F-1): ein Archiv ohne Content-Length darf die
+    letzten 10 % des Datenträgers nicht belegen."""
+    tenant = make_tenant(db)
+    owner = _admin(db, tenant)
+    job = _create(db, owner)
+    monkeypatch.setattr(jobs.shutil, "disk_usage", lambda _path: SimpleNamespace(total=1000, used=950, free=50))
+    with pytest.raises(HTTPException) as exc:
+        _add_zip(db, owner, job.id, {"a.txt": b"x"})
+    assert exc.value.status_code == 507
+    assert db.get(ImportJob, job.id).archives == []
 
 
 def test_import_stops_when_the_requester_lost_the_permission(db):

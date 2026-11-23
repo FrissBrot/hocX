@@ -167,8 +167,13 @@ def test_bulk_event_link_sets_and_returns_to_auto(db):
 def test_cloud_import_is_one_job_with_items_and_report_link(db, monkeypatch, tmp_path):
     from app.core.config import settings
     from app.api.routes import cloud_import as import_routes
+    from types import SimpleNamespace
+
+    from app.services.cloud_import import jobs as import_jobs
     from tests.test_cloud_import_jobs import _admin, _png as import_png, _pdf, _run_worker, _zip_job
 
+    # Plattenreserve unabhängig vom Füllstand des Test-Hosts
+    monkeypatch.setattr(import_jobs.shutil, "disk_usage", lambda _path: SimpleNamespace(total=100 * 1024**3, used=0, free=100 * 1024**3))
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbnails"))

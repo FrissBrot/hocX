@@ -12,7 +12,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, SmallInteger, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, SmallInteger, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,6 +34,7 @@ class ImportJob(Base):
         CheckConstraint("type_filter IN ('all', 'images', 'documents')", name="ck_import_job_type_filter"),
         Index("idx_import_job_tenant", "tenant_id", text("created_at DESC")),
         Index("idx_import_job_status_lease", "status", "lease_until"),
+        UniqueConstraint("tenant_id", "id", name="uq_import_job_tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
@@ -74,6 +75,7 @@ class ImportItem(Base):
         CheckConstraint(f"status IN {IMPORT_ITEM_STATUSES}", name="ck_import_item_status"),
         CheckConstraint("kind IN ('image', 'document', 'other')", name="ck_import_item_kind"),
         UniqueConstraint("job_id", "path", name="uq_import_item_job_path"),
+        ForeignKeyConstraint(["tenant_id", "job_id"], ["import_job.tenant_id", "import_job.id"], ondelete="CASCADE", name="fk_import_item_job"),
         Index("idx_import_item_job_status", "job_id", "status", "id"),
         Index("idx_import_item_tenant", "tenant_id"),
         Index("idx_import_item_stored_file", "stored_file_id", postgresql_where=text("stored_file_id IS NOT NULL")),
@@ -82,7 +84,9 @@ class ImportItem(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    job_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False)
+    # FK (tenant_id, job_id) -> import_job (Migration 0230, fk_import_item_job): Eintrag und Auftrag
+    # liegen immer im selben Mandanten
+    job_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
     modified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

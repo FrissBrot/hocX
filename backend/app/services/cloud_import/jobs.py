@@ -280,6 +280,9 @@ def add_archive(db: Session, job: ImportJob, staged: Path) -> int:
     archive_bytes = sum(int(archive.get("size") or 0) for archive in job.archives) + staged.stat().st_size
     if archive_bytes > settings.cloud_import_max_job_bytes:
         raise ImportFailure(413, "too_many_bytes", {"max_gb": settings.cloud_import_max_job_bytes // 1024**3})
+    # Nach dem Empfang erneut (Security-Review 1.6, F-1): ohne Content-Length prüft
+    # check_upload_allowed vorab nichts, und gestagte Archive desselben Auftrags zählen mit.
+    _check_quota_and_disk(db, job.tenant_id, archive_bytes, incoming=0)
     entries = read_zip_listing(staged, archive_index)
     if archive_index == 0 and paths.is_takeout([entry.path for entry in entries]):
         job.takeout = True
@@ -719,16 +722,24 @@ def check_upload_allowed(db: Session, job: ImportJob, *, kind: str, content_leng
     else:
         if job.status not in ("queued", "running") or job.source != "folder":
             raise ImportFailure(409, "invalid_status", {"status": job.status})
+        archive_bytes = 0
     if content_length is None:
+        # Ohne Länge prüft add_archive nach dem Empfang (Ordner-Uploads begrenzt MAX_STAGED_BYTES)
         return
-    quota = quota_info(db, job.tenant_id, 0)
-    if quota.limit_bytes is not None and quota.used_bytes + content_length > quota.limit_bytes + STAGING_QUOTA_TOLERANCE:
+    _check_quota_and_disk(db, job.tenant_id, archive_bytes, incoming=content_length)
+
+
+def _check_quota_and_disk(db: Session, tenant_id: int, staged_bytes: int, *, incoming: int) -> None:
+    """Kontingent (belegt + schon gestagte Archive des Auftrags + neu) und Plattenreserve.
+    `incoming` ist vor dem Empfang die angekündigte Länge, danach 0 (dann schon auf der Platte)."""
+    quota = quota_info(db, tenant_id, 0)
+    if quota.limit_bytes is not None and quota.used_bytes + staged_bytes + incoming > quota.limit_bytes + STAGING_QUOTA_TOLERANCE:
         raise ImportFailure(409, "quota_exceeded")
     root = Path(settings.upload_root)
     root.mkdir(parents=True, exist_ok=True)
     usage = shutil.disk_usage(root)
     # Mindestens STAGING_MIN_FREE_RATIO des Datenträgers bleibt für alle übrigen Uploads frei.
-    if usage.free - content_length < usage.total * STAGING_MIN_FREE_RATIO:
+    if usage.free - incoming < usage.total * STAGING_MIN_FREE_RATIO:
         raise ImportFailure(507, "disk_full")
 
 

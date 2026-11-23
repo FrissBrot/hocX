@@ -1702,7 +1702,9 @@ def undo_capture_change(batch_id: uuid.UUID, db: Session = Depends(get_db), user
     if user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Korrektur nicht gefunden")
     batch = _capture_batch_or_404(db, user, batch_id)
-    db.execute(select(CaptureChangeBatch.id).where(CaptureChangeBatch.id == batch.id).with_for_update())
+    # Sperren und neu laden (Security-Review 1.6, F-3): ein gleichzeitiges zweites «Rückgängig»
+    # wartet hier und sieht danach das gesetzte undone_at statt des vorher geladenen Werts
+    db.refresh(batch, with_for_update=True)
     if batch.undone_at is not None:
         raise HTTPException(status_code=409, detail="Diese Korrektur wurde bereits rückgängig gemacht")
     readable = context_visibility_service.readable_assignment_ids(db, user)
