@@ -337,10 +337,11 @@ class ValidatedSession:
         return datetime.fromtimestamp(int(self.data.get("iat", 0)), UTC)
 
 
-def validate_session_token(db: Session, token: str | None) -> ValidatedSession | None:
+def validate_session_token(db: Session, token: str | None, *, touch: bool = True) -> ValidatedSession | None:
     """Gemeinsame Kontoprüfung für REST und WebSocket (SEC-AUTH-014): Signatur und Ablauf, Konto
     aktiv, Login erlaubt, nicht ausgetreten, kein Widerruf seit Ausstellung, Session im Register
-    aktiv (Inaktivität, absolute Dauer, Einzel-Widerruf). Die MFA-Regeln prüfen die Aufrufer."""
+    aktiv (Inaktivität, absolute Dauer, Einzel-Widerruf). Die MFA-Regeln prüfen die Aufrufer.
+    touch=False: keine Aktivität vermerken (siehe sessions.validate)."""
     session_data = parse_session_token(token)
     if session_data is None:
         return None
@@ -356,7 +357,7 @@ def validate_session_token(db: Session, token: str | None) -> ValidatedSession |
     if session_data.get("sid"):
         from app.auth_security import sessions
 
-        record = sessions.validate(db, session_data["sid"], user.id)
+        record = sessions.validate(db, session_data["sid"], user.id, touch=touch)
         if record is None:
             return None
     return ValidatedSession(user=user, data=session_data, record=record)
