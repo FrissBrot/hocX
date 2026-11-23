@@ -16,7 +16,7 @@ from app.api.routes import share_links as share_links_routes
 from app.core.config import settings
 from app.core.storage import MAIN, get_object_store
 from app.models.document_entities import Document, DocumentExtraction, DocumentFile, DocumentVersion
-from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
+from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, ShareLink, StoredFile
 from app.schemas.files import ShareLinkCreate
 from tests.factories import make_current_user, make_tenant
 from tests.image_fixtures import response_bytes
@@ -768,3 +768,19 @@ def test_share_link_list_hides_links_to_files_the_account_cannot_read(db):
     with pytest.raises(HTTPException) as hidden:
         share_links_routes.revoke_share_link(draft_link.id, db, photographer)
     assert hidden.value.status_code == 404
+
+
+def test_creator_can_still_revoke_a_link_after_losing_read_access(db):
+    """Security-Review 1.5.2: verliert der Ersteller das Leserecht (Rolle geändert), muss er
+    seinen öffentlichen Link trotzdem sehen und widerrufen können - der Link bleibt sonst aktiv."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    draft_link = share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+    demoted = dataclasses.replace(writer, permissions=frozenset({"meetings.read", "photos.read", "sharing.public"}))
+
+    assert [row.name for row in share_links_routes.list_share_links(db, demoted)] == ["Entwurf"]
+    share_links_routes.revoke_share_link(draft_link.id, db, demoted)
+    assert db.get(ShareLink, draft_link.id).revoked_at is not None

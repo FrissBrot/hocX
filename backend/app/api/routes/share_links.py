@@ -52,21 +52,28 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
     )
 
 
-def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink) -> bool:
+def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink, readable: dict[int, bool] | None = None) -> bool:
     """Datei-Link: jede Datei darin muss das Konto selbst lesen dürfen wie im Einzelabruf
     (Protokollbilder/-exporte nur aus lesbaren Protokollen, Nachtlauf 2026-11-22) - die Token-URL
-    öffnet sie ohne Anmeldung. Album-Links folgen dem Album (bewusste Weitergabe, add_album_items)."""
-    if link.album_id is not None:
+    öffnet sie ohne Anmeldung. Album-Links folgen dem Album (bewusste Weitergabe, add_album_items).
+    Den eigenen Link sieht und widerruft der Ersteller immer (er kennt die URL ohnehin), auch wenn
+    er das Leserecht inzwischen verloren hat. ``readable``: Zwischenspeicher je Datei für Listen."""
+    if link.album_id is not None or (link.created_by is not None and link.created_by == user.user_id):
         return True
+    cache = readable if readable is not None else {}
     internal_ids = db.scalars(
         select(StoredFile.id)
         .join(ShareLinkFile, ShareLinkFile.file_id == StoredFile.public_id)
         .where(ShareLinkFile.share_link_id == link.id, StoredFile.tenant_id == link.tenant_id)
     ).all()
     for internal_id in internal_ids:
-        try:
-            access_service.ensure_can_read_stored_file(db, user, internal_id, allow_context_grant=False)
-        except HTTPException:
+        if internal_id not in cache:
+            try:
+                access_service.ensure_can_read_stored_file(db, user, internal_id, allow_context_grant=False)
+                cache[internal_id] = True
+            except HTTPException:
+                cache[internal_id] = False
+        if not cache[internal_id]:
             return False
     return True
 
@@ -155,11 +162,13 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
         raise HTTPException(status_code=400, detail="No active tenant")
     rows = share_link_service.list_for_tenant(db, user.current_tenant_id)
     kinds = share_link_service.content_kinds(db, [row.link for row in rows])
-    # Nur Links, deren Inhalt man selbst sehen darf (die Token-URL öffnet ihn ohne Anmeldung)
+    # Nur Links, deren Inhalt man selbst sehen darf (die Token-URL öffnet ihn ohne Anmeldung);
+    # Leseprüfung je Datei nur einmal, auch wenn sie in mehreren Links steckt
+    readable: dict[int, bool] = {}
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
         for row in rows
-        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link)
+        if share_link_service.may_see(user.can, kinds.get(row.link.id, set())) and _may_read_link_files(db, user, row.link, readable)
     ]
 
 
