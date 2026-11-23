@@ -47,3 +47,37 @@ def test_expired_or_revoked_invites_do_not_count(db):
     revoked.revoked_at = datetime.now(UTC)
     db.flush()
     assert user_limit_service.pending_invite_count(db, tenant.id) == 0
+
+
+def test_reentry_of_a_former_login_respects_the_limit(db):
+    """Ausgetretene mit Login zählen nicht zum Limit; wird das Austrittsdatum entfernt oder in die
+    Zukunft verschoben, gilt der Login wieder (has_left) - das ist ein weiteres aktives Konto und
+    muss wie Reaktivieren gegen das Limit geprüft werden (Personen- und Benutzer-Route)."""
+    from datetime import date
+
+    from app.schemas.participant import ParticipantUpdate
+    from app.schemas.user import UserUpdate
+    from app.services.participant_service import ParticipantService
+    from app.services.todo_fine_service import today
+    from app.services.user_service import UserService
+    from tests.factories import make_current_user
+
+    tenant = make_tenant(db, "Limit Wiedereintritt")
+    tenant.user_limit_override = 1
+    admin = make_app_user(db, "reentry-admin@example.com", tenant_id=tenant.id, role_code="admin")  # 1 Login = Limit
+    former = make_app_user(db, "reentry-former@example.com", tenant_id=tenant.id, role_code="reader")
+    former.left_at = date(2020, 1, 1)
+    db.flush()
+    assert user_limit_service.login_account_count(db, tenant.id) == 1
+
+    with pytest.raises(HTTPException) as via_person:
+        ParticipantService().update_participant(db, former.id, ParticipantUpdate(left_at=None), tenant_id=tenant.id)
+    assert via_person.value.status_code == 409
+    actor = make_current_user(tenant.id, role="admin", user_id=admin.id)
+    with pytest.raises(HTTPException) as via_user:
+        UserService().update_user(db, former.id, UserUpdate(left_at=today()), actor)
+    assert via_user.value.status_code == 409
+    db.refresh(former)
+    assert former.left_at == date(2020, 1, 1)
+    # Ein anderes, früheres Austrittsdatum (bleibt ausgetreten) ist kein Wiedereintritt
+    ParticipantService().update_participant(db, former.id, ParticipantUpdate(left_at=date(2019, 1, 1)), tenant_id=tenant.id)

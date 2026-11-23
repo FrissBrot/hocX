@@ -29,6 +29,14 @@ def login_account_count(db: Session, tenant_id: int) -> int:
     ) or 0)
 
 
+def counts_towards_limit(login_enabled: bool | None, is_active: bool | None, left_at) -> bool:
+    """Dieselbe Regel wie login_account_count für ein einzelnes Konto (vor bzw. nach einer
+    Änderung): Login an, aktiv und nicht ausgetreten (Austrittsdatum heute oder später)."""
+    from app.services.todo_fine_service import today
+
+    return bool(login_enabled and is_active and (left_at is None or left_at >= today()))
+
+
 def effective_user_limit(db: Session, tenant: Tenant) -> int | None:
     if tenant.user_limit_override is not None:
         return tenant.user_limit_override

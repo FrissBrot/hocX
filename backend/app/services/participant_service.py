@@ -113,8 +113,11 @@ class ParticipantService:
         left_at = values.get("left_at", participant.left_at)
         if joined_at and left_at and left_at < joined_at:
             raise ValueError("left_at must not be before joined_at")
-        if participant.login_enabled and not participant.is_active and values.get("is_active") is True:
-            # Reaktivieren eines Kontos mit Login zählt zum Benutzerlimit des Abos
+        if user_limit_service.counts_towards_limit(
+            participant.login_enabled, values.get("is_active", participant.is_active), left_at,
+        ) and not user_limit_service.counts_towards_limit(participant.login_enabled, participant.is_active, participant.left_at):
+            # Reaktivieren oder Wiedereintritt (Austrittsdatum entfernt/verschoben) eines Kontos mit
+            # Login zählt zum Benutzerlimit des Abos
             user_limit_service.ensure_login_capacity(db, tenant_id, for_user_id=participant.id)
         if _account_relevant_change(participant, values):
             account_notifications.revoke_all_links(db, participant.id)
