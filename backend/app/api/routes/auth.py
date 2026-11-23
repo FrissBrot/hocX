@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.client_ip import client_ip
+from app.core.client_ip import client_ip, rate_limit_source
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
 from app.core.rate_limit import enforce_rate_limit, within_limit
@@ -37,7 +37,7 @@ from app.schemas.notifications import (
 )
 from app.core.permissions import P
 from app.services import context_visibility_service, domain_bridge_service
-from app.core.auth_pseudonym import normalize_email, source_address
+from app.core.auth_pseudonym import normalize_email
 from app.schemas.step_up import EmailChallengeResendRequest, StepUpOptionsRead, StepUpRead, StepUpRequest
 from app.services.auth_service import AuthService
 from app.services.step_up_service import StepUpService
@@ -49,9 +49,8 @@ step_up_service = StepUpService()
 
 
 def _source(request: Request) -> str:
-    """Quelle für Ratelimits: IPv4 je Adresse, IPv6 je /64 (SEC-AUTH-007, wie der Login) - ein
-    Anschluss hat ein ganzes /64, Grenzen je /128 liessen sich mit jeder neuen Adresse umgehen."""
-    return source_address(client_ip(request)).exact
+    """Quelle für Ratelimits: IPv4 je Adresse, IPv6 je /64 (core.client_ip.rate_limit_source)."""
+    return rate_limit_source(request)
 
 
 def _expected_origin(request: Request) -> str:

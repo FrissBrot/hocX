@@ -74,3 +74,28 @@ def test_ipv4_sources_are_still_counted_per_address(db):
         for i in range(1, 26)
     ]
     assert codes == [404] * 25
+
+
+def test_rate_limit_source_groups_ipv6_by_64():
+    from app.core.client_ip import rate_limit_source
+
+    first = rate_limit_source(_request_from("2001:db8:9:9::1", "/x"))
+    assert first == rate_limit_source(_request_from("2001:db8:9:9::ffff", "/x"))
+    assert first != rate_limit_source(_request_from("2001:db8:9:a::1", "/x"))
+    assert rate_limit_source(_request_from("198.51.100.7", "/x")) != rate_limit_source(_request_from("198.51.100.8", "/x"))
+
+
+def test_no_rate_limit_key_uses_the_raw_client_ip():
+    """Security-Review 1.5.2: dasselbe Muster steckte auch in Logo-, Freigabe-, Kalender- und
+    Abgabe-Ratelimits. Jeder IP-basierte Schlüssel nimmt rate_limit_source (IPv6 je /64)."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "app"
+    pattern = re.compile(r"(enforce_rate_limit|within_limit|consume)\([^)]*\{\s*client_ip\(")
+    offenders = []
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if pattern.search(text) or re.search(r"\bip = client_ip\(request\)\s*\n\s*enforce_rate_limit", text):
+            offenders.append(str(path.relative_to(root)))
+    assert offenders == []

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
 from app.core.config import settings
-from app.core.client_ip import client_ip
+from app.core.client_ip import rate_limit_source
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
 from app.models.document_entities import FILE_ROLE_ORIGINAL, FILE_ROLE_PREVIEW, Document, DocumentExtraction, DocumentFile, DocumentVersion
@@ -46,7 +46,7 @@ def _enforce_rate_limit(request: Request, scope: str, *, limit: int) -> None:
     """Eigener Zaehler pro Endpunkt-Art: ein gemeinsamer Zaehler liess die Vorschaubilder einer
     groesseren Galerie (je ein Request) das niedrige ZIP-Limit schon beim Seitenaufruf aufbrauchen -
     "Alle herunterladen" lieferte dann ein 429-JSON statt des ZIPs."""
-    enforce_rate_limit(f"public-share:{scope}:{client_ip(request)}", limit=limit, period_seconds=60)
+    enforce_rate_limit(f"public-share:{scope}:{rate_limit_source(request)}", limit=limit, period_seconds=60)
 
 
 def _resolve_link_or_404(db: Session, token: str) -> ShareLink:

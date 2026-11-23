@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
-from app.core.client_ip import client_ip
+from app.core.client_ip import rate_limit_source
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user, require_permission
 from app.core.tenant_scope import tenant_scope_suspended
 from app.models import Participant, Tenant, TenantDomain
@@ -172,7 +172,7 @@ def tenant_profile_image(
     eigenen App-Domain, Prüfseite mit freigegebener Identität, tenant_service.tenant_logo_is_public);
     angemeldet für den eigenen Mandanten und vertraute Partner. Alles andere - unbekannt, fremd,
     kein Logo, kein Rasterbild - ergibt dieselbe 404."""
-    ip = client_ip(request)
+    ip = rate_limit_source(request)
     enforce_rate_limit(f"tenant-logo:{ip}", limit=TENANT_LOGO_LIMIT_PER_MINUTE, period_seconds=60, fail_open=True)
     try:
         public_id = uuid.UUID(tenant_id)
