@@ -395,10 +395,11 @@ def _compute_statistics_overview(
 
     # ── Participants ─────────────────────────────────────────────────────────
     participants = db.execute(
-        select(Participant.is_active).where(Participant.tenant_id == tenant_id)
+        select(Participant.is_active, Participant.left_at).where(Participant.tenant_id == tenant_id)
     ).all()
     participants_total = len(participants)
-    participants_active = sum(1 for p in participants if p.is_active)
+    # Aktiv = nicht deaktiviert und nicht ausgetreten (Austrittsdatum vor heute, wie has_left)
+    participants_active = sum(1 for p in participants if p.is_active and (p.left_at is None or p.left_at >= today))
 
     # ── Jahre und Vorjahresvergleich (Dashboard v2) ─────────────────────────
     available_years = sorted({y for y in fetch_protocol_years(db, tenant_id, template_ids) if y <= today.year} | {today.year})
