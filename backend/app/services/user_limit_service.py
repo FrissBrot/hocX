@@ -38,10 +38,13 @@ def effective_user_limit(db: Session, tenant: Tenant) -> int | None:
 
 def pending_invite_count(db: Session, tenant_id: int, *, excluding_user_id: int | None = None) -> int:
     """Konten ohne Login mit offener, gültiger Einladung (ohne die Person selbst, wenn sie gerade
-    eingeladen wird oder annimmt - ihre eigene Einladung belegt keinen zusätzlichen Platz)."""
+    eingeladen wird oder annimmt - ihre eigene Einladung belegt keinen zusätzlichen Platz).
+    Ausgetretene (AppUser.has_left) zählen wie bei login_account_count nicht: sie können die
+    Einladung nie annehmen."""
     from datetime import UTC, datetime
 
     from app.models import AccountToken
+    from app.services.todo_fine_service import today
 
     statement = (
         select(func.count(func.distinct(AccountToken.user_id)))
@@ -50,6 +53,7 @@ def pending_invite_count(db: Session, tenant_id: int, *, excluding_user_id: int 
             AccountToken.tenant_id == tenant_id, AccountToken.purpose == "invite",
             AccountToken.used_at.is_(None), AccountToken.revoked_at.is_(None), AccountToken.expires_at > datetime.now(UTC),
             AppUser.login_enabled.is_(False), AppUser.is_active.is_(True),
+            or_(AppUser.left_at.is_(None), AppUser.left_at >= today()),
         )
     )
     if excluding_user_id is not None:
