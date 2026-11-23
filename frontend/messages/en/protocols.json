@@ -478,14 +478,6 @@
   "participantFallback": "Participant",
   "pendingLabel": "Pending",
   "protocolNumbered": "Protocol {number}",
-  "quickActions": {
-    "ariaLabel": "Quick menu",
-    "collaborationView": "Collaboration view",
-    "collaborationViewSoon": "Collaboration view (coming soon)",
-    "createTodo": "Create todo",
-    "createAgendaItem": "Add topic",
-    "sessionNotes": "Open session notes"
-  },
   "refreshDataAction": "⟳ Refresh data",
   "removeColumn": "Remove column",
   "reopenTodo": "Reopen todo",
@@ -551,7 +543,6 @@
     "assigneeLabel": "Person",
     "dueLabel": "Due",
     "tagLabel": "Category / tag",
-    "dueEmpty": "No results",
     "sectionLabel": "For item",
     "sectionCustom": "Own tag"
   },

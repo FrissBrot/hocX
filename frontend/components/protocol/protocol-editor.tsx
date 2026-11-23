@@ -268,6 +268,15 @@ export function ProtocolEditor({
   const [transitionDialogOpen, setTransitionDialogOpen] = useState(false);
   // Tablet (schmales Fenster): Gliederung als Überlagerung ein-/ausblenden
   const [outlineOpen, setOutlineOpen] = useState(false);
+  // Geöffnete Gliederung (Tablet): Fokus auf den aktiven Punkt, damit Pfeile/Escape dort wirken
+  useEffect(() => {
+    if (!outlineOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const pane = document.getElementById("protocol-outline-pane");
+      (pane?.querySelector<HTMLElement>('[aria-current="location"]') ?? pane?.querySelector<HTMLElement>(".protocol-outline-item"))?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [outlineOpen]);
   // Anliegen (agenda_item): ohne eigenen Block unter ihrem Traktandum, siehe
   // backend app/services/agenda_item_service.py. Geladen im Client, neu bei Collab-Meldung.
   const [agendaItems, setAgendaItems] = useState<ProtocolAgendaItem[]>(initialAgendaItems ?? []);

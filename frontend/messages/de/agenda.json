@@ -68,7 +68,6 @@
     "titleLabel": "Titel des Anliegens",
     "bodyPlaceholder": "Text zum Anliegen",
     "actions": "Aktionen für das Anliegen",
-    "quickCreateTitle": "Anliegen erfassen",
     "quickCreateDescription": "Erscheint in diesem Protokoll unter dem gewählten Traktandum.",
     "sectionLabel": "Traktandum",
     "sectionNone": "Weitere Anliegen (ohne Traktandum)"

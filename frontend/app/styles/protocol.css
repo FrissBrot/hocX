@@ -2343,8 +2343,8 @@ button.protocol-save-state-error { min-height: 0; width: auto; padding: 2px var(
 .session-panel-notes {
   width: 100%;
   resize: vertical;
-  min-height: 90px;
-  font-size: var(--text-base);
+  min-height: 320px;
+  font-size: var(--text-md);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);

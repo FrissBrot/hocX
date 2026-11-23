@@ -478,14 +478,6 @@
   "participantFallback": "Teilnehmer",
   "pendingLabel": "Ausstehend",
   "protocolNumbered": "Protokoll {number}",
-  "quickActions": {
-    "ariaLabel": "Schnellmenü",
-    "collaborationView": "Kollaborationsansicht",
-    "collaborationViewSoon": "Kollaborationsansicht (bald verfügbar)",
-    "createTodo": "Pendenz erstellen",
-    "createAgendaItem": "Anliegen erfassen",
-    "sessionNotes": "Sitzungsnotizen öffnen"
-  },
   "refreshDataAction": "⟳ Daten aktualisieren",
   "removeColumn": "Spalte entfernen",
   "reopenTodo": "Pendenz wieder öffnen",
@@ -551,7 +543,6 @@
     "assigneeLabel": "Person",
     "dueLabel": "Fällig",
     "tagLabel": "Kategorie / Tag",
-    "dueEmpty": "Keine Treffer",
     "sectionLabel": "Zu Punkt",
     "sectionCustom": "Eigener Tag"
   },

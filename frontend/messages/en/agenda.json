@@ -68,7 +68,6 @@
     "titleLabel": "Topic title",
     "bodyPlaceholder": "Text of the topic",
     "actions": "Topic actions",
-    "quickCreateTitle": "Add topic",
     "quickCreateDescription": "Appears in this protocol under the chosen agenda item.",
     "sectionLabel": "Agenda item",
     "sectionNone": "Further topics (no agenda item)"

@@ -478,14 +478,6 @@
   "participantFallback": "Partecipante",
   "pendingLabel": "In sospeso",
   "protocolNumbered": "Verbale {number}",
-  "quickActions": {
-    "ariaLabel": "Menu rapido",
-    "collaborationView": "Vista collaborazione",
-    "collaborationViewSoon": "Vista collaborazione (presto disponibile)",
-    "createTodo": "Crea attività",
-    "createAgendaItem": "Aggiungi argomento",
-    "sessionNotes": "Apri note della seduta"
-  },
   "refreshDataAction": "⟳ Aggiorna dati",
   "removeColumn": "Rimuovi colonna",
   "reopenTodo": "Riapri attività",
@@ -551,7 +543,6 @@
     "assigneeLabel": "Persona",
     "dueLabel": "Scadenza",
     "tagLabel": "Categoria / tag",
-    "dueEmpty": "Nessun risultato",
     "sectionLabel": "Per il punto",
     "sectionCustom": "Tag personalizzato"
   },

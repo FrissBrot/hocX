@@ -478,14 +478,6 @@
   "participantFallback": "Participant",
   "pendingLabel": "En attente",
   "protocolNumbered": "Procès-verbal {number}",
-  "quickActions": {
-    "ariaLabel": "Menu rapide",
-    "collaborationView": "Vue collaboration",
-    "collaborationViewSoon": "Vue collaboration (bientôt disponible)",
-    "createTodo": "Créer une tâche",
-    "createAgendaItem": "Ajouter un sujet",
-    "sessionNotes": "Ouvrir les notes de séance"
-  },
   "refreshDataAction": "⟳ Actualiser les données",
   "removeColumn": "Supprimer la colonne",
   "reopenTodo": "Rouvrir la tâche",
@@ -551,7 +543,6 @@
     "assigneeLabel": "Personne",
     "dueLabel": "Échéance",
     "tagLabel": "Catégorie / tag",
-    "dueEmpty": "Aucun résultat",
     "sectionLabel": "Pour le point",
     "sectionCustom": "Tag personnalisé"
   },
