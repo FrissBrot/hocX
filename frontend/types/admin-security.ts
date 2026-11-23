@@ -199,3 +199,33 @@ export type TenantSecurityActivity = {
   accounts: TenantSecurityAccount[];
   events: TenantSecurityEvent[];
 };
+
+// ── Alarmregeln (1.6) ──
+
+export type AlertRuleState = "fired" | "near" | "quiet";
+
+/** GET /api/admin/auth-security/alert-rules */
+export type AlertRuleRow = {
+  rule: string;
+  window_minutes: number;
+  value: number;
+  threshold: number;
+  comparator: ">=" | ">";
+  state: AlertRuleState;
+  severity: "critical" | "warning";
+  fired: number;
+  triggers_30d: number;
+  daily_30d: number[];
+  recent: { at: string; subject: string | null; severity: string }[];
+  settings: Record<string, number | string | boolean>;
+};
+
+/** GET /api/admin/auth-security/alert-rules/{rule}/series */
+export type AlertRuleSeries = {
+  rule: string;
+  bucket_minutes: number;
+  hours: number;
+  threshold: number;
+  comparator: ">=" | ">";
+  points: { start: string; value: number }[];
+};

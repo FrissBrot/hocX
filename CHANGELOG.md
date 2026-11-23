@@ -42,6 +42,11 @@ Installationen aktualisieren können.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
+- **Konsole › Sicherheit › Alarmregeln (1.6, vorher «Warnungen»):** alle zehn Regeln mit aktuellem
+  Messwert gegen die Schwelle – auch unterhalb («ruhig», «nahe Schwelle», «ausgelöst») –, Bedingung in
+  Worten, Kurve der letzten 24 h je Regel (mit Tabellenalternative), Auslösungen der letzten 30 Tage
+  aus dem Systemmonitor und die wirksamen Einstellungen (nur lesen, geändert wird in der
+  Serverkonfiguration). Ausgelöste Warnungen lassen sich weiterhin quittieren, jetzt mit Notiz.
 - **Konsole › Sicherheit › Anmeldeereignisse neu (1.6):** Filter nach Konto-, Netz- und
   Geräte-Pseudonym (Klick auf ein Pseudonym oder Eingabe wie `netz:3f9a1c07`), Land, Typ, Ergebnis
   und Mandant (Suche statt Mandantenliste); der Zeitraum ist Pflicht (1 h bis 14 Tage). Ein

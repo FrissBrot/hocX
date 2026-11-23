@@ -59,6 +59,16 @@
       "platform": true,
       "admin_level": "O"
     },
+    "GET /api/admin/auth-security/alert-rules": {
+      "handler": "admin_auth_security.auth_security_alert_rules",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/alert-rules/{rule}/series": {
+      "handler": "admin_auth_security.auth_security_alert_rule_series",
+      "platform": true,
+      "admin_level": "O"
+    },
     "GET /api/admin/auth-security/alerts": {
       "handler": "admin_auth_security.auth_security_alerts",
       "platform": true,

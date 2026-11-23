@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useAdminResource } from "@/components/admin/security/use-admin-resource";
 import { browserApiFetch } from "@/lib/api/client";
@@ -58,6 +59,7 @@ export function SecurityAlertList({
                 <div className="muted admin-cell-sub">
                   {t("alerts.acknowledgedBy", { name: alert.acknowledged_by ?? "—", time: formatDateTime(alert.acknowledged_at, locale) })}
                 </div>
+                {alert.acknowledged_note ? <div className="muted admin-cell-sub">{t("alerts.noteShown", { note: alert.acknowledged_note })}</div> : null}
               </>
             ) : (
               <Badge variant="warning">{t("alerts.open")}</Badge>
@@ -84,37 +86,65 @@ export function SecurityAlertList({
 
 export function SecurityAlertsView({ canWrite = true }: { canWrite?: boolean }) {
   const t = useTranslations("adminSecurity");
-  const confirm = useConfirm();
   const showToast = useToast();
   const alerts = useAdminResource<AuthAlert[]>("/api/admin/auth-security/alerts");
+  const [acknowledging, setAcknowledging] = useState<AuthAlert | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
   if (alerts.forbidden) return <StatusBanner tone="neutral" message={t("ownerOnly")} />;
 
-  async function toggleAck(alert: AuthAlert) {
-    const acknowledging = !alert.acknowledged_at;
-    if (acknowledging) {
-      const ok = await confirm({ message: t("alerts.acknowledgeConfirm"), confirmLabel: t("alerts.acknowledge") });
-      if (!ok) return;
-    }
+  async function send(alert: AuthAlert, acknowledge: boolean, text?: string) {
+    setBusy(true);
     try {
-      await browserApiFetch(`/api/admin/auth-security/alerts/${acknowledging ? "ack" : "unack"}`, {
+      await browserApiFetch(`/api/admin/auth-security/alerts/${acknowledge ? "ack" : "unack"}`, {
         method: "POST",
-        body: JSON.stringify({ key: alert.key }),
+        body: JSON.stringify(acknowledge && text ? { key: alert.key, note: text } : { key: alert.key }),
       });
-      showToast(acknowledging ? t("alerts.acknowledgedToast") : t("alerts.reopenedToast"), "success");
+      showToast(acknowledge ? t("alerts.acknowledgedToast") : t("alerts.reopenedToast"), "success");
+      setAcknowledging(null);
+      setNote("");
       alerts.reload();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
+    } finally {
+      setBusy(false);
     }
   }
 
+  function toggleAck(alert: AuthAlert) {
+    // Quittieren mit optionaler Notiz (1.5.1, bleibt in 1.6; in 1.7 wird daraus der Vorfall-Status)
+    if (alert.acknowledged_at) void send(alert, false);
+    else setAcknowledging(alert);
+  }
+
   return (
-    <section className="card section-stack">
+    <section className="card section-stack" aria-labelledby="security-open-alerts">
+      <h2 id="security-open-alerts" className="section-title">{t("alerts.openTitle")}</h2>
       {alerts.failed ? <StatusBanner tone="error" message={t("loadFailed")} /> : null}
       <p className="muted">{t("alerts.ackHelp")}</p>
       <div className="admin-security-toolbar">
         <button type="button" className="button-secondary" onClick={alerts.reload}>{t("refresh")}</button>
       </div>
       <SecurityAlertList alerts={alerts.data ?? []} loading={alerts.loading} onToggleAck={canWrite ? toggleAck : undefined} />
+      <Modal open={acknowledging !== null} title={t("alerts.acknowledgeTitle")} description={t("alerts.acknowledgeConfirm")} onClose={() => setAcknowledging(null)}>
+        <ModalSaveForm
+          className="section-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (acknowledging) return send(acknowledging, true, note.trim() || undefined);
+          }}
+        >
+          <label className="field-stack">
+            <span className="field-label">{t("alerts.noteLabel")}</span>
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} />
+            <span className="field-help">{t("alerts.noteHelp")}</span>
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setAcknowledging(null)}>{t("blocks.cancel")}</button>
+            <button type="submit" className="button-primary" disabled={busy}>{t("alerts.acknowledge")}</button>
+          </div>
+        </ModalSaveForm>
+      </Modal>
     </section>
   );
 }

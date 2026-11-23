@@ -161,6 +161,22 @@ def _alerts_with_acks(db: Session) -> list[dict]:
     return result
 
 
+AlertRule = Literal["stuffing", "spraying", "account_attack", "admin_mfa", "admin_new_device", "blocks", "network", "cross_tenant", "tenant", "limiter"]
+
+
+@router.get("/auth-security/alert-rules")
+def auth_security_alert_rules(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Alle Alarmregeln mit Messwert gegen Schwelle (auch darunter, 30 s Cache wie die Warnungen),
+    Auslösungen der letzten 30 Tage und wirksamen Einstellungen (nur lesen)."""
+    return read_service.alert_rules(db)
+
+
+@router.get("/auth-security/alert-rules/{rule}/series")
+def auth_security_alert_rule_series(rule: AlertRule, db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Messwert einer Regel über 24 h (Abschnitt = Fenster der Regel, 60 s Cache)."""
+    return read_service.alert_rule_series(db, rule)
+
+
 @router.get("/auth-security/alerts")
 def auth_security_alerts(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
     """Aktuell ausgelöste Alarmregeln (dieselben wie im Systemmonitor, nur Zahlen und Pseudonyme),

@@ -4,7 +4,7 @@
     "overview": "Overview",
     "events": "Sign-in events",
     "blocks": "Blocks",
-    "alerts": "Alerts",
+    "alerts": "Alert rules",
     "audit": "Audit log",
     "policy": "Policies"
   },
@@ -62,7 +62,7 @@
     "noTopNetworks": "No failed attempts from single networks.",
     "noTopAccounts": "No accounts with failed attempts.",
     "alertsTitle": "Current alerts",
-    "allAlerts": "All alerts",
+    "allAlerts": "Go to alert rules",
     "auditLink": "Open audit log"
   },
   "events": {
@@ -310,8 +310,8 @@
     }
   },
   "alerts": {
-    "title": "Alerts",
-    "description": "Currently triggered alert rules of the sign-in protection. The same rules also notify via ntfy.",
+    "title": "Alert rules",
+    "description": "Ten rules check the sign-in protection continuously. Per rule: current value against the threshold, history and triggers in the last 30 days. The same rules also notify via ntfy.",
     "empty": "No alert rule is currently triggered.",
     "columns": {
       "severity": "Severity",
@@ -343,7 +343,12 @@
     "acknowledgedToast": "Warning acknowledged",
     "reopenedToast": "Warning reopened",
     "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again.",
-    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event)."
+    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event).",
+    "openTitle": "Triggered alerts",
+    "acknowledgeTitle": "Acknowledge alert",
+    "noteLabel": "Note (optional)",
+    "noteHelp": "Briefly what is being checked – no personal data.",
+    "noteShown": "Note: {note}"
   },
   "audit": {
     "title": "Audit log",
@@ -408,5 +413,61 @@
       "hash": "comparison of login addresses",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "failures",
+      "spraying": "accounts",
+      "account_attack": "attempts",
+      "admin_mfa": "codes",
+      "admin_new_device": "sign-ins",
+      "blocks": "blocks",
+      "network": "attempts",
+      "cross_tenant": "tenants",
+      "tenant": "accounts",
+      "limiter": "outages"
+    },
+    "conditions": {
+      "stuffing": "At least {threshold} failed attempts (max. of minimum and factor × usual rate) from many networks in {minutes} minutes. Switches on attack mode.",
+      "spraying": "At least {threshold} different accounts are tried from one network with a wrong password in {minutes} minutes.",
+      "account_attack": "At least {threshold} failed attempts on one account from several networks in {minutes} minutes. Critical for accounts with admin rights.",
+      "admin_mfa": "At least {threshold} wrong MFA codes of a platform admin in {minutes} minutes.",
+      "admin_new_device": "A platform admin signs in from an unknown device (window {minutes} minutes).",
+      "blocks": "More than {threshold} blocks in {minutes} minutes.",
+      "network": "At least {threshold} failed attempts from one network (IPv4 /24, IPv6 /48) in {minutes} minutes.",
+      "cross_tenant": "Failed attempts from one network against at least {threshold} tenants in {minutes} minutes.",
+      "tenant": "At least {threshold} different accounts of one tenant with failed attempts in {minutes} minutes.",
+      "limiter": "At least {threshold} rate limiter outage in {minutes} minutes. Unknown devices are then rejected."
+    },
+    "title": "Rules",
+    "description": "Thresholds are changed in the server configuration and only shown here.",
+    "listLabel": "Alert rules",
+    "empty": "No rule in this state.",
+    "states": {
+      "all": "All",
+      "fired": "Triggered",
+      "near": "Near threshold",
+      "quiet": "Quiet"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# minute} other {# minutes}}",
+    "triggered30": "{count, plural, one {# × in 30 d} other {# × in 30 d}}",
+    "facts": {
+      "now": "Now",
+      "threshold": "Threshold",
+      "window": "Window",
+      "triggered": "Triggered 30 d"
+    },
+    "thresholdAbove": "above {threshold} {unit}",
+    "thresholdAtLeast": "from {threshold} {unit}",
+    "settingsTitle": "Settings",
+    "noSettings": "Fixed rule without a setting.",
+    "settingsHelp": "Notification via ntfy with debouncing and reminder. An alert clears by itself {minutes, plural, one {# minute} other {# minutes}} after the last event.",
+    "recentTitle": "Last triggered",
+    "noRecent": "Not triggered in the last 30 days.",
+    "seriesTitle": "Value, 24 hours",
+    "seriesThreshold": "dashed: threshold {threshold} {unit}",
+    "seriesSummary": "Highest value {peak}, threshold {threshold}; {over, plural, =0 {no section} one {# section} other {# sections}} above the threshold (sections of {minutes} minutes).",
+    "seriesApprox": "Approximation: fixed sections of {minutes} minutes instead of the rule's sliding window."
   }
 }

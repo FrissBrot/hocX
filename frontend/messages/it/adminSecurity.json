@@ -4,7 +4,7 @@
     "overview": "Panoramica",
     "events": "Eventi di accesso",
     "blocks": "Blocchi",
-    "alerts": "Avvisi",
+    "alerts": "Regole di allarme",
     "audit": "Registro di audit",
     "policy": "Regole"
   },
@@ -62,7 +62,7 @@
     "noTopNetworks": "Nessun tentativo fallito da singole reti.",
     "noTopAccounts": "Nessun account con tentativi falliti.",
     "alertsTitle": "Avvisi attuali",
-    "allAlerts": "Tutti gli avvisi",
+    "allAlerts": "Alle regole di allarme",
     "auditLink": "Apri il registro di audit"
   },
   "events": {
@@ -310,8 +310,8 @@
     }
   },
   "alerts": {
-    "title": "Avvisi",
-    "description": "Regole di allarme attualmente attivate dalla protezione degli accessi. Le stesse regole notificano anche via ntfy.",
+    "title": "Regole di allarme",
+    "description": "Dieci regole controllano costantemente la protezione degli accessi. Per regola: valore attuale rispetto alla soglia, andamento e attivazioni degli ultimi 30 giorni. Le stesse regole notificano anche via ntfy.",
     "empty": "Al momento nessuna regola di allarme è attiva.",
     "columns": {
       "severity": "Gravità",
@@ -343,7 +343,12 @@
     "acknowledgedToast": "Presa visione confermata",
     "reopenedToast": "Avviso riaperto",
     "ackHelp": "Gli avvisi confermati restano visibili ma non contano più nella campanella e nella panoramica. Se un avviso si ripresenta dopo essere cessato, è di nuovo aperto.",
-    "clearsAt": "Si risolve da sé alle {time} se nel frattempo non succede nulla di nuovo (finestra di {minutes, plural, one {# minuto} other {# minuti}} dall'ultimo evento)."
+    "clearsAt": "Si risolve da sé alle {time} se nel frattempo non succede nulla di nuovo (finestra di {minutes, plural, one {# minuto} other {# minuti}} dall'ultimo evento).",
+    "openTitle": "Avvisi attivati",
+    "acknowledgeTitle": "Conferma avviso",
+    "noteLabel": "Nota (facoltativa)",
+    "noteHelp": "Brevemente cosa si sta verificando – senza dati personali.",
+    "noteShown": "Nota: {note}"
   },
   "audit": {
     "title": "Registro di audit",
@@ -408,5 +413,61 @@
       "hash": "confronto degli indirizzi di accesso",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "tentativi falliti",
+      "spraying": "account",
+      "account_attack": "tentativi",
+      "admin_mfa": "codici",
+      "admin_new_device": "accessi",
+      "blocks": "blocchi",
+      "network": "tentativi",
+      "cross_tenant": "mandanti",
+      "tenant": "account",
+      "limiter": "guasti"
+    },
+    "conditions": {
+      "stuffing": "Almeno {threshold} tentativi falliti (max. tra minimo e fattore × tasso abituale) da molte reti in {minutes} minuti. Attiva la modalità attacco.",
+      "spraying": "Almeno {threshold} account diversi vengono provati da una rete con password errata in {minutes} minuti.",
+      "account_attack": "Almeno {threshold} tentativi falliti su un account da più reti in {minutes} minuti. Critico per account con diritti di amministrazione.",
+      "admin_mfa": "Almeno {threshold} codici MFA errati di un admin della piattaforma in {minutes} minuti.",
+      "admin_new_device": "Un admin della piattaforma accede da un dispositivo sconosciuto (finestra {minutes} minuti).",
+      "blocks": "Più di {threshold} blocchi in {minutes} minuti.",
+      "network": "Almeno {threshold} tentativi falliti da una rete (IPv4 /24, IPv6 /48) in {minutes} minuti.",
+      "cross_tenant": "Tentativi falliti da una rete contro almeno {threshold} mandanti in {minutes} minuti.",
+      "tenant": "Almeno {threshold} account diversi di un mandante con tentativi falliti in {minutes} minuti.",
+      "limiter": "Almeno {threshold} guasto del limitatore in {minutes} minuti. I dispositivi sconosciuti vengono allora respinti."
+    },
+    "title": "Regole",
+    "description": "Le soglie si modificano nella configurazione del server e qui sono solo visualizzate.",
+    "listLabel": "Regole di allarme",
+    "empty": "Nessuna regola in questo stato.",
+    "states": {
+      "all": "Tutte",
+      "fired": "Attivata",
+      "near": "Vicina alla soglia",
+      "quiet": "Tranquilla"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# minuto} other {# minuti}}",
+    "triggered30": "{count, plural, one {# × in 30 g} other {# × in 30 g}}",
+    "facts": {
+      "now": "Ora",
+      "threshold": "Soglia",
+      "window": "Finestra",
+      "triggered": "Attivata 30 g"
+    },
+    "thresholdAbove": "oltre {threshold} {unit}",
+    "thresholdAtLeast": "da {threshold} {unit}",
+    "settingsTitle": "Impostazioni",
+    "noSettings": "Regola fissa senza impostazione.",
+    "settingsHelp": "Notifica via ntfy con antirimbalzo e promemoria. Un avviso si spegne da solo {minutes, plural, one {# minuto} other {# minuti}} dopo l'ultimo evento.",
+    "recentTitle": "Ultime attivazioni",
+    "noRecent": "Non attivata negli ultimi 30 giorni.",
+    "seriesTitle": "Valore, 24 ore",
+    "seriesThreshold": "tratteggiato: soglia {threshold} {unit}",
+    "seriesSummary": "Valore massimo {peak}, soglia {threshold}; {over, plural, =0 {nessuna sezione} one {# sezione} other {# sezioni}} sopra la soglia (sezioni di {minutes} minuti).",
+    "seriesApprox": "Approssimazione: sezioni fisse di {minutes} minuti invece della finestra mobile della regola."
   }
 }

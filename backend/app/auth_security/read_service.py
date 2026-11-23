@@ -288,20 +288,20 @@ def tenant_warnings(db: Session, tenant_id: int) -> list[dict]:
 
 _ALERTS_CACHE_SECONDS = 30
 _alerts_cache: tuple[float, list[dict]] | None = None
+# Messwerte aller Regeln aus demselben detect()-Lauf (1.6, Seite «Alarmregeln»)
+_measured_cache: dict | None = None
 
 
-def platform_alerts(db: Session) -> list[dict]:
-    """Aktuell ausgelöste Alarmregeln (``threats.detect``), dieselben Schlüssel wie im Systemmonitor.
-    30 s im Prozess zwischengespeichert: Übersicht und Warnungsseite fragen kurz nacheinander, die
-    Erkennung läuft über mehrere Abfragen auf auth_event (Security-Review N4)."""
-    global _alerts_cache
+def _detect(db: Session) -> tuple[list[dict], dict]:
+    global _alerts_cache, _measured_cache
     import time
 
     from app.auth_security import threats
 
     now = time.monotonic()
-    if _alerts_cache is not None and now - _alerts_cache[0] < _ALERTS_CACHE_SECONDS:
-        return [dict(item) for item in _alerts_cache[1]]
+    if _alerts_cache is not None and _measured_cache is not None and now - _alerts_cache[0] < _ALERTS_CACHE_SECONDS:
+        return [dict(item) for item in _alerts_cache[1]], dict(_measured_cache)
+    measured: dict = {}
     alerts = [
         {
             "key": threat.key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity, "title": threat.title,
@@ -309,10 +309,106 @@ def platform_alerts(db: Session) -> list[dict]:
             # Ohne neues Ereignis klingt die Warnung von selbst ab (Fenster aus threats.RULE_WINDOW_MINUTES)
             "clears_at": threat.last_at + timedelta(minutes=threat.window_minutes) if threat.last_at else None,
         }
-        for threat in threats.detect(db)
+        for threat in threats.detect(db, measured)
     ]
     _alerts_cache = (now, alerts)
-    return [dict(item) for item in alerts]
+    _measured_cache = measured
+    return [dict(item) for item in alerts], dict(measured)
+
+
+def platform_alerts(db: Session) -> list[dict]:
+    """Aktuell ausgelöste Alarmregeln (``threats.detect``), dieselben Schlüssel wie im Systemmonitor.
+    30 s im Prozess zwischengespeichert: Übersicht und Warnungsseite fragen kurz nacheinander, die
+    Erkennung läuft über mehrere Abfragen auf auth_event (Security-Review N4)."""
+    return _detect(db)[0]
+
+
+# ── Plattform: Alarmregeln (1.6) ───────────────────────────────────────
+
+NEAR_RATIO = 0.6
+TRIGGER_DAYS = 30
+_RECENT_PER_RULE = 3
+_series_cache: dict[str, tuple[float, dict]] = {}
+_SERIES_CACHE_SECONDS = 60
+
+
+def _rule_triggers(db: Session) -> dict[str, dict]:
+    """Auslösungen der letzten 30 Tage aus dem Verlauf des Systemmonitors (system_health_event,
+    Art «problem», Schlüssel ``auth:<regel>[:<subjekt>]``): Anzahl, je Tag, letzte drei."""
+    start = datetime.now(UTC) - timedelta(days=TRIGGER_DAYS)
+    rows = db.execute(
+        text(
+            "SELECT split_part(subject, ':', 2) AS rule, split_part(subject, ':', 3) AS subject, severity, created_at FROM system_health_event "
+            "WHERE kind = 'problem' AND subject LIKE 'auth:%' AND created_at > :start ORDER BY created_at DESC LIMIT 5000"
+        ),
+        {"start": start},
+    ).mappings()
+    today = datetime.now(UTC).date()
+    result: dict[str, dict] = {}
+    for row in rows:
+        item = result.setdefault(row["rule"], {"count": 0, "daily": [0] * TRIGGER_DAYS, "recent": []})
+        item["count"] += 1
+        age = (today - row["created_at"].astimezone(UTC).date()).days
+        if 0 <= age < TRIGGER_DAYS:
+            item["daily"][TRIGGER_DAYS - 1 - age] += 1
+        if len(item["recent"]) < _RECENT_PER_RULE:
+            item["recent"].append({"at": row["created_at"], "subject": (row["subject"] or None) and row["subject"][:12], "severity": row["severity"]})
+    return result
+
+
+def alert_rules(db: Session) -> list[dict]:
+    """Alle zehn Regeln mit Messwert gegen Schwelle (auch darunter), Zustand, Auslösungen 30 Tage
+    und wirksamen Einstellungen (nur lesen)."""
+    from app.auth_security import threats
+    from app.core.config import settings
+
+    alerts, measured = _detect(db)
+    triggers = _rule_triggers(db)
+    result = []
+    for rule, window in threats.RULE_WINDOW_MINUTES.items():
+        measurement = measured.get(rule)
+        fired = [alert for alert in alerts if alert["rule"] == rule]
+        value = measurement.value if measurement else 0.0
+        threshold = measurement.threshold if measurement else 0.0
+        if fired:
+            state = "fired"
+        elif threshold and value / threshold >= NEAR_RATIO:
+            state = "near"
+        else:
+            state = "quiet"
+        history = triggers.get(rule, {"count": 0, "daily": [0] * TRIGGER_DAYS, "recent": []})
+        result.append({
+            "rule": rule, "window_minutes": window, "value": value, "threshold": threshold,
+            "comparator": measurement.comparator if measurement else ">=", "state": state,
+            "severity": "critical" if any(alert["severity"] == "critical" for alert in fired) else threats.RULE_SEVERITY.get(rule, "warning"),
+            "fired": len(fired), "triggers_30d": history["count"], "daily_30d": history["daily"], "recent": history["recent"],
+            "settings": {name: getattr(settings, name) for name in threats.RULE_SETTINGS[rule]},
+        })
+    return result
+
+
+def alert_rule_series(db: Session, rule: str) -> dict:
+    """Kurve 24 h einer Regel mit allen Abschnitten (auch leeren), 60 s zwischengespeichert."""
+    import time
+
+    from app.auth_security import threats
+
+    now = time.monotonic()
+    cached = _series_cache.get(rule)
+    if cached and now - cached[0] < _SERIES_CACHE_SECONDS:
+        return cached[1]
+    raw = threats.series(db, rule)
+    step = timedelta(minutes=raw["bucket_minutes"])
+    end = datetime.now(UTC)
+    first = datetime.fromtimestamp((int((end - timedelta(hours=raw["hours"])).timestamp()) // int(step.total_seconds()) + 1) * int(step.total_seconds()), UTC)
+    points = []
+    at = first
+    while at <= end:
+        points.append({"start": at, "value": raw["values"].get(at, 0.0)})
+        at += step
+    result = {**{key: value for key, value in raw.items() if key != "values"}, "points": points}
+    _series_cache[rule] = (now, result)
+    return result
 
 
 def platform_counters(db: Session) -> dict:

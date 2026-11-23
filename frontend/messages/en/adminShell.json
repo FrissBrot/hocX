@@ -21,7 +21,7 @@
     "securityOverview": "Security",
     "securityEvents": "Sign-in events",
     "securityBlocks": "Blocks",
-    "securityAlerts": "Alerts",
+    "securityAlerts": "Alert rules",
     "auditLog": "Audit log",
     "securityPolicy": "Policies",
     "systemStatus": "System status",

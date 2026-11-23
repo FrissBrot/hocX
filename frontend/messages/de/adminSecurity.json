@@ -4,7 +4,7 @@
     "overview": "Übersicht",
     "events": "Anmeldeereignisse",
     "blocks": "Sperren",
-    "alerts": "Warnungen",
+    "alerts": "Alarmregeln",
     "audit": "Audit-Log",
     "policy": "Richtlinien"
   },
@@ -62,7 +62,7 @@
     "noTopNetworks": "Keine Fehlversuche aus einzelnen Netzen.",
     "noTopAccounts": "Keine Konten mit Fehlversuchen.",
     "alertsTitle": "Aktuelle Warnungen",
-    "allAlerts": "Alle Warnungen",
+    "allAlerts": "Zu den Alarmregeln",
     "auditLink": "Audit-Log öffnen"
   },
   "events": {
@@ -310,8 +310,8 @@
     }
   },
   "alerts": {
-    "title": "Warnungen",
-    "description": "Aktuell ausgelöste Alarmregeln des Anmeldeschutzes. Dieselben Regeln melden auch über ntfy.",
+    "title": "Alarmregeln",
+    "description": "Zehn Regeln prüfen den Anmeldeschutz laufend. Je Regel: aktueller Messwert gegen die Schwelle, Verlauf und Auslösungen der letzten 30 Tage. Dieselben Regeln melden auch über ntfy.",
     "empty": "Zurzeit ist keine Alarmregel ausgelöst.",
     "columns": {
       "severity": "Schwere",
@@ -343,7 +343,12 @@
     "acknowledgedToast": "Warnung quittiert",
     "reopenedToast": "Warnung wieder offen",
     "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen.",
-    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis)."
+    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis).",
+    "openTitle": "Ausgelöste Warnungen",
+    "acknowledgeTitle": "Warnung quittieren",
+    "noteLabel": "Notiz (optional)",
+    "noteHelp": "Kurz, was geprüft wird – ohne Personendaten.",
+    "noteShown": "Notiz: {note}"
   },
   "audit": {
     "title": "Audit-Log",
@@ -408,5 +413,61 @@
       "hash": "Abgleich der Login-Adressen",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "Fehlversuche",
+      "spraying": "Konten",
+      "account_attack": "Versuche",
+      "admin_mfa": "Codes",
+      "admin_new_device": "Anmeldungen",
+      "blocks": "Sperren",
+      "network": "Versuche",
+      "cross_tenant": "Mandanten",
+      "tenant": "Konten",
+      "limiter": "Ausfälle"
+    },
+    "conditions": {
+      "stuffing": "Mindestens {threshold} Fehlversuche (max. aus Mindestwert und Faktor × gewohnte Rate) aus vielen Netzen in {minutes} Minuten. Schaltet den Angriffsmodus ein.",
+      "spraying": "Mindestens {threshold} verschiedene Konten werden aus einem Netz in {minutes} Minuten mit falschem Passwort probiert.",
+      "account_attack": "Mindestens {threshold} Fehlversuche auf ein Konto aus mehreren Netzen in {minutes} Minuten. Bei Konten mit Adminrechten kritisch.",
+      "admin_mfa": "Mindestens {threshold} falsche MFA-Codes eines Plattform-Admins in {minutes} Minuten.",
+      "admin_new_device": "Ein Plattform-Admin meldet sich von einem unbekannten Gerät an (Fenster {minutes} Minuten).",
+      "blocks": "Mehr als {threshold} Sperren in {minutes} Minuten.",
+      "network": "Mindestens {threshold} Fehlversuche aus einem Netz (IPv4 /24, IPv6 /48) in {minutes} Minuten.",
+      "cross_tenant": "Fehlversuche aus einem Netz gegen mindestens {threshold} Mandanten in {minutes} Minuten.",
+      "tenant": "Mindestens {threshold} verschiedene Konten eines Mandanten mit Fehlversuchen in {minutes} Minuten.",
+      "limiter": "Mindestens {threshold} Ausfall des Rate-Limiters in {minutes} Minuten. Unbekannte Geräte werden dann abgewiesen."
+    },
+    "title": "Regeln",
+    "description": "Schwellen werden in der Serverkonfiguration geändert und hier nur angezeigt.",
+    "listLabel": "Alarmregeln",
+    "empty": "Keine Regel in diesem Zustand.",
+    "states": {
+      "all": "Alle",
+      "fired": "Ausgelöst",
+      "near": "Nahe Schwelle",
+      "quiet": "Ruhig"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# Minute} other {# Minuten}}",
+    "triggered30": "{count, plural, one {# × in 30 T} other {# × in 30 T}}",
+    "facts": {
+      "now": "Jetzt",
+      "threshold": "Schwelle",
+      "window": "Fenster",
+      "triggered": "Ausgelöst 30 T"
+    },
+    "thresholdAbove": "über {threshold} {unit}",
+    "thresholdAtLeast": "ab {threshold} {unit}",
+    "settingsTitle": "Einstellungen",
+    "noSettings": "Feste Regel ohne Einstellung.",
+    "settingsHelp": "Benachrichtigung über ntfy mit Entprellung und Erinnerung. Eine Warnung klingt {minutes, plural, one {# Minute} other {# Minuten}} nach dem letzten Ereignis von selbst ab.",
+    "recentTitle": "Zuletzt ausgelöst",
+    "noRecent": "In den letzten 30 Tagen nicht ausgelöst.",
+    "seriesTitle": "Messwert, 24 Stunden",
+    "seriesThreshold": "gestrichelt: Schwelle {threshold} {unit}",
+    "seriesSummary": "Höchster Wert {peak}, Schwelle {threshold}; {over, plural, =0 {kein Abschnitt} one {# Abschnitt} other {# Abschnitte}} über der Schwelle (Abschnitte zu {minutes} Minuten).",
+    "seriesApprox": "Näherung: feste Abschnitte zu {minutes} Minuten statt des gleitenden Fensters der Regel."
   }
 }

@@ -650,3 +650,196 @@
 .admin-security-trace-item:hover {
   border-color: var(--accent);
 }
+
+/* ── 1.6 Alarmregeln (Design «hocX Sicherheit Alarmregeln») ──────────────────────── */
+
+.admin-security-rules-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+@media (min-width: 901px) {
+  .admin-security-rules-layout {
+    grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  }
+}
+
+.admin-security-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-security-rule {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-security-rule:hover {
+  border-color: var(--border-strong);
+}
+
+.admin-security-rule-fired {
+  border-color: var(--warning);
+}
+
+.admin-security-rule-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Kontrast (axe): gedämpfter Text auf --accent-soft reicht nicht */
+.admin-security-rule-selected .muted,
+.admin-security-rule-selected code {
+  color: var(--text);
+}
+
+.admin-security-rule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-security-rule-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-security-rule-name code {
+  font-size: var(--text-xs);
+}
+
+.admin-security-rule-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.admin-security-rule-value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-security-rule-fill-fired { background: var(--danger); }
+.admin-security-rule-fill-near { background: var(--warning); }
+.admin-security-rule-fill-quiet { background: var(--success); }
+
+.admin-security-rule-history {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.admin-security-mini-bars {
+  display: flex;
+  height: 16px;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.admin-security-mini-bars > span {
+  width: 3px;
+  height: 14%;
+  border-radius: var(--radius-xs);
+  background: var(--border-strong);
+}
+
+.admin-security-mini-bars > .admin-security-mini-bar-on {
+  height: 100%;
+}
+
+.admin-security-mini-bars > .admin-security-mini-bar-warning { background: var(--warning); }
+.admin-security-mini-bars > .admin-security-mini-bar-critical { background: var(--danger); }
+
+.admin-security-rule-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.admin-security-rule-condition {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.admin-security-series {
+  position: relative;
+  display: flex;
+  height: 120px;
+  align-items: flex-end;
+  gap: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-security-series-bar {
+  min-width: 0;
+  flex: 1;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--chart-1);
+  opacity: 0.55;
+}
+
+.admin-security-series-bar-hit {
+  background: var(--danger);
+  opacity: 1;
+}
+
+.admin-security-series-threshold {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 2px dashed var(--warning);
+  pointer-events: none;
+}
+
+.admin-security-rule-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.admin-security-rule-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.admin-security-rule-facts dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-security-rule-facts dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

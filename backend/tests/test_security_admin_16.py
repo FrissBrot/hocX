@@ -18,7 +18,7 @@ from starlette.requests import Request
 
 from app.api.routes import admin as admin_routes
 from app.api.routes import admin_auth_security
-from app.auth_security import blocks, read_service
+from app.auth_security import blocks, read_service, threats
 from app.auth_security.guard import LoginGuard
 from app.core import rate_limit
 from app.core.admin_security import CurrentAdmin, get_current_admin
@@ -43,6 +43,8 @@ def _flush() -> None:
 def _clean(monkeypatch):
     _flush()
     monkeypatch.setattr(read_service, "_ladder_cache", None)
+    monkeypatch.setattr(read_service, "_alerts_cache", None)
+    monkeypatch.setattr(read_service, "_series_cache", {})
     yield
     _flush()
 
@@ -317,3 +319,56 @@ def test_support_cannot_read_events_or_block_sources(db):
     assert client.get("/api/admin/auth-security/events", params={"tenant_id": str(uuid.uuid4())}).status_code == 403   # kein 404-Orakel
     assert client.post(f"/api/admin/auth-security/events/{event_id}/block", json={"minutes": 5, "reason": "nicht erlaubt"}).status_code == 403
     assert blocks.is_blocked("198.51.100.70") is None
+
+
+# ── Alarmregeln ────────────────────────────────────────────────────────────────────────────
+
+
+def _rule(rules: list[dict], name: str) -> dict:
+    return next(item for item in rules if item["rule"] == name)
+
+
+def test_alert_rules_show_values_below_threshold_and_fire(db, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "auth_alert_spraying_accounts", 4)
+    net = _hex(16)
+    for _ in range(3):
+        _insert_event(db, subject_hash=_hex(), src_net_hash=net, minutes_ago=2)
+    client = _client(db, _admin(db))
+    rules = client.get("/api/admin/auth-security/alert-rules").json()
+    assert {item["rule"] for item in rules} == set(threats.RULE_WINDOW_MINUTES)
+    spraying = _rule(rules, "spraying")
+    assert spraying["value"] >= 3 and spraying["threshold"] == 4 and spraying["fired"] == 0
+    assert spraying["state"] in ("near", "quiet") and spraying["settings"] == {"auth_alert_spraying_accounts": 4}
+    assert _rule(rules, "blocks")["comparator"] == ">"
+
+    _insert_event(db, subject_hash=_hex(), src_net_hash=net, minutes_ago=1)
+    monkeypatch.setattr(read_service, "_alerts_cache", None)
+    spraying = _rule(client.get("/api/admin/auth-security/alert-rules").json(), "spraying")
+    assert spraying["state"] == "fired" and spraying["fired"] >= 1
+
+
+def test_alert_rule_triggers_from_monitor_history_and_series(db):
+    db.execute(text(
+        "INSERT INTO system_health_event (kind, subject, reason, severity, title, message, created_at) VALUES "
+        "('problem', 'auth:network:3f9a1c07be42abcd', 'network', 'warning', 't', 'm', now() - interval '2 days'), "
+        "('resolved', 'auth:network:3f9a1c07be42abcd', 'network', 'info', 't', 'm', now() - interval '2 days'), "
+        "('problem', 'auth:network_x', 'x', 'warning', 't', 'm', now() - interval '40 days')"
+    ))
+    client = _client(db, _admin(db))
+    network = _rule(client.get("/api/admin/auth-security/alert-rules").json(), "network")
+    assert network["triggers_30d"] >= 1 and len(network["daily_30d"]) == 30 and network["daily_30d"][-3] >= 1
+    assert network["recent"][0]["subject"] == "3f9a1c07be42"
+    _insert_event(db, subject_hash=_hex(), src_net_hash=_hex(16), minutes_ago=30)
+    series = client.get("/api/admin/auth-security/alert-rules/account_attack/series").json()
+    assert series["bucket_minutes"] == 15 and 95 <= len(series["points"]) <= 97
+    assert any(point["value"] >= 1 for point in series["points"])
+    assert client.get("/api/admin/auth-security/alert-rules/limiter/series").json()["bucket_minutes"] == 15
+    assert client.get("/api/admin/auth-security/alert-rules/erfunden/series").status_code == 422
+
+
+def test_alert_rules_are_owner_only(db):
+    client = _client(db, _admin(db, "support"))
+    assert client.get("/api/admin/auth-security/alert-rules").status_code == 403
+    assert client.get("/api/admin/auth-security/alert-rules/spraying/series").status_code == 403

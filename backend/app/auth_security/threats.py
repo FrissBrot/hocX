@@ -80,7 +80,109 @@ def _baseline(db: Session) -> float:
     return update_baseline(db) or 0.0
 
 
-def detect(db: Session) -> list[Threat]:
+# ── Messwerte (1.6, Seite «Alarmregeln») ────────────────────────────────────────────────────
+# Je Regel: Bedingung, Gruppierung (None = ein Wert) und Messgrösse - dieselben wie in detect().
+# Der Messwert ist das Maximum über alle Gruppen im Fenster, auch unter der Schwelle.
+_RULE_SQL: dict[str, tuple[str, str | None, str]] = {
+    "stuffing": (_FAILURE, None, "count(*)"),
+    "spraying": ("event_type = 'login.password' AND outcome = 'failure' AND src_net_hash IS NOT NULL", "src_net_hash", "count(DISTINCT subject_hash)"),
+    "account_attack": (f"{_FAILURE} AND subject_hash IS NOT NULL", "subject_hash", "count(*)"),
+    "admin_mfa": ("event_type IN ('admin.login.mfa', 'admin.stepup') AND outcome = 'failure' AND platform_admin_id IS NOT NULL", "platform_admin_id", "count(*)"),
+    "admin_new_device": ("event_type = 'admin.login.success' AND (details->>'new_device')::boolean AND platform_admin_id IS NOT NULL", None, "count(*)"),
+    "blocks": ("event_type = 'block.set'", None, "count(*)"),
+    "network": (f"{_FAILURE} AND src_net_hash IS NOT NULL", "src_net_hash", "count(*)"),
+    "cross_tenant": (f"{_FAILURE} AND src_net_hash IS NOT NULL AND tenant_id IS NOT NULL", "src_net_hash", "count(DISTINCT tenant_id)"),
+    "tenant": ("event_type = 'login.password' AND outcome = 'failure' AND tenant_id IS NOT NULL", "tenant_id", "count(DISTINCT subject_hash)"),
+    "limiter": ("event_type = 'ratelimit.backend_error'", None, "count(*)"),
+}
+# Einstellungen je Regel (nur Anzeige, Seite «Alarmregeln»; geändert in der Server-Konfiguration)
+RULE_SETTINGS: dict[str, tuple[str, ...]] = {
+    "stuffing": ("auth_alert_stuffing_min", "auth_global_attack_factor", "auth_alert_stuffing_networks"),
+    "spraying": ("auth_alert_spraying_accounts",),
+    "account_attack": ("auth_alert_account_failures", "auth_alert_account_networks"),
+    "admin_mfa": ("auth_alert_admin_mfa_failures",),
+    "admin_new_device": (),
+    "blocks": ("auth_alert_blocks_per_hour",),
+    "network": ("auth_wide_failures_alert_hour",),
+    "cross_tenant": ("auth_alert_cross_tenant",),
+    "tenant": ("auth_tenant_accounts_alert",),
+    "limiter": (),
+}
+RULE_SEVERITY = {"stuffing": "critical", "admin_mfa": "critical", "limiter": "critical"}
+# Kurve: Abschnittsbreite = Fenster der Regel, mindestens 15 min (Limiter: 5 min wären 288 Balken)
+SERIES_MIN_BUCKET_MINUTES = 15
+
+
+@dataclass(frozen=True)
+class Measurement:
+    rule: str
+    value: float
+    threshold: float
+    # ">=" (ab Schwelle) bzw. ">" (über der Schwelle, nur «blocks»)
+    comparator: str = ">="
+
+
+def threshold_for(db: Session, rule: str) -> tuple[float, str]:
+    if rule == "stuffing":
+        return max(settings.auth_alert_stuffing_min, settings.auth_global_attack_factor * _baseline(db)), ">="
+    return {
+        "spraying": (settings.auth_alert_spraying_accounts, ">="),
+        "account_attack": (settings.auth_alert_account_failures, ">="),
+        "admin_mfa": (settings.auth_alert_admin_mfa_failures, ">="),
+        "admin_new_device": (1, ">="),
+        "blocks": (settings.auth_alert_blocks_per_hour, ">"),
+        "network": (settings.auth_wide_failures_alert_hour, ">="),
+        "cross_tenant": (settings.auth_alert_cross_tenant, ">="),
+        "tenant": (settings.auth_tenant_accounts_alert, ">="),
+        "limiter": (1, ">="),
+    }[rule]
+
+
+def _measure(db: Session, rule: str) -> float:
+    condition, group, value = _RULE_SQL[rule]
+    if group is None:
+        sql = f"SELECT {value} FROM auth_event WHERE {condition} AND {_window(rule)}"  # sql-ok: feste Fragmente aus _RULE_SQL
+    else:
+        sql = f"SELECT coalesce(max(v), 0) FROM (SELECT {value} AS v FROM auth_event WHERE {condition} AND {_window(rule)} GROUP BY {group}) s"  # sql-ok: feste Fragmente
+    return float(db.execute(text(sql)).scalar() or 0)
+
+
+def measurements(db: Session) -> dict[str, Measurement]:
+    """Aktueller Messwert jeder Regel (Maximum im Fenster) mit Schwelle - auch unter der Schwelle."""
+    result = {}
+    for rule in RULE_WINDOW_MINUTES:
+        threshold, comparator = threshold_for(db, rule)
+        result[rule] = Measurement(rule=rule, value=_measure(db, rule), threshold=float(threshold), comparator=comparator)
+    return result
+
+
+def series(db: Session, rule: str, *, hours: int = 24) -> dict:
+    """Messwert je Abschnitt über ``hours`` (Abschnitt = Fenster der Regel, mind. 15 min). Feste
+    Abschnitte statt gleitendem Fenster: eine Näherung der Regel, für den Verlauf ausreichend."""
+    condition, group, value = _RULE_SQL[rule]
+    bucket = max(SERIES_MIN_BUCKET_MINUTES, RULE_WINDOW_MINUTES[rule])
+    params = {"hours": hours, "bucket": bucket * 60}
+    bucket_sql = "to_timestamp(floor(extract(epoch FROM ts) / :bucket) * :bucket)"
+    if group is None:
+        sql = (
+            f"SELECT {bucket_sql} AS b, {value} AS v FROM auth_event WHERE {condition} "  # sql-ok: feste Fragmente aus _RULE_SQL
+            "AND ts > now() - make_interval(hours => :hours) GROUP BY 1"
+        )
+    else:
+        sql = (
+            f"SELECT b, max(v) AS v FROM (SELECT {bucket_sql} AS b, {value} AS v FROM auth_event WHERE {condition} "  # sql-ok: feste Fragmente
+            f"AND ts > now() - make_interval(hours => :hours) GROUP BY 1, {group}) s GROUP BY b"  # sql-ok: feste Gruppierung
+        )
+    values = {row.b: float(row.v or 0) for row in db.execute(text(sql), params)}
+    threshold, comparator = threshold_for(db, rule)
+    return {"rule": rule, "bucket_minutes": bucket, "hours": hours, "threshold": float(threshold), "comparator": comparator, "values": values}
+
+
+def detect(db: Session, measured: dict[str, Measurement] | None = None) -> list[Threat]:
+    """Ausgelöste Regeln. Mit ``measured`` (1.6) zusätzlich die Messwerte aller Regeln, auch unter
+    der Schwelle (``measurements``), in dasselbe Wörterbuch."""
+    if measured is not None:
+        measured.update(measurements(db))
     threats: list[Threat] = []
 
     total, networks, last = db.execute(text(f"SELECT count(*), count(DISTINCT src_net_hash), max(ts) FROM auth_event WHERE {_FAILURE} AND {_window('stuffing')}")).one()  # sql-ok: feste Bedingungen

@@ -4,7 +4,7 @@
     "overview": "Vue d’ensemble",
     "events": "Événements de connexion",
     "blocks": "Blocages",
-    "alerts": "Alertes",
+    "alerts": "Règles d'alerte",
     "audit": "Journal d’audit",
     "policy": "Règles"
   },
@@ -62,7 +62,7 @@
     "noTopNetworks": "Aucune tentative échouée depuis un réseau isolé.",
     "noTopAccounts": "Aucun compte avec des tentatives échouées.",
     "alertsTitle": "Alertes actuelles",
-    "allAlerts": "Toutes les alertes",
+    "allAlerts": "Vers les règles d'alerte",
     "auditLink": "Ouvrir le journal d’audit"
   },
   "events": {
@@ -310,8 +310,8 @@
     }
   },
   "alerts": {
-    "title": "Alertes",
-    "description": "Règles d’alerte actuellement déclenchées par la protection des connexions. Les mêmes règles notifient aussi via ntfy.",
+    "title": "Règles d'alerte",
+    "description": "Dix règles surveillent en continu la protection des connexions. Par règle : valeur actuelle face au seuil, historique et déclenchements des 30 derniers jours. Les mêmes règles notifient aussi via ntfy.",
     "empty": "Aucune règle d’alerte n’est déclenchée actuellement.",
     "columns": {
       "severity": "Gravité",
@@ -343,7 +343,12 @@
     "acknowledgedToast": "Avertissement acquitté",
     "reopenedToast": "Avertissement rouvert",
     "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert.",
-    "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement)."
+    "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement).",
+    "openTitle": "Alertes déclenchées",
+    "acknowledgeTitle": "Accuser réception de l'alerte",
+    "noteLabel": "Note (facultative)",
+    "noteHelp": "Brièvement ce qui est vérifié – sans données personnelles.",
+    "noteShown": "Note : {note}"
   },
   "audit": {
     "title": "Journal d’audit",
@@ -408,5 +413,61 @@
       "hash": "comparaison des adresses de connexion",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "échecs",
+      "spraying": "comptes",
+      "account_attack": "tentatives",
+      "admin_mfa": "codes",
+      "admin_new_device": "connexions",
+      "blocks": "blocages",
+      "network": "tentatives",
+      "cross_tenant": "mandants",
+      "tenant": "comptes",
+      "limiter": "pannes"
+    },
+    "conditions": {
+      "stuffing": "Au moins {threshold} échecs (max. entre minimum et facteur × taux habituel) depuis de nombreux réseaux en {minutes} minutes. Active le mode attaque.",
+      "spraying": "Au moins {threshold} comptes différents sont essayés depuis un réseau avec un mauvais mot de passe en {minutes} minutes.",
+      "account_attack": "Au moins {threshold} échecs sur un compte depuis plusieurs réseaux en {minutes} minutes. Critique pour les comptes avec droits d'administration.",
+      "admin_mfa": "Au moins {threshold} codes MFA erronés d'un admin plateforme en {minutes} minutes.",
+      "admin_new_device": "Un admin plateforme se connecte depuis un appareil inconnu (fenêtre {minutes} minutes).",
+      "blocks": "Plus de {threshold} blocages en {minutes} minutes.",
+      "network": "Au moins {threshold} échecs depuis un réseau (IPv4 /24, IPv6 /48) en {minutes} minutes.",
+      "cross_tenant": "Échecs depuis un réseau contre au moins {threshold} mandants en {minutes} minutes.",
+      "tenant": "Au moins {threshold} comptes différents d'un mandant avec des échecs en {minutes} minutes.",
+      "limiter": "Au moins {threshold} panne du limiteur de débit en {minutes} minutes. Les appareils inconnus sont alors refusés."
+    },
+    "title": "Règles",
+    "description": "Les seuils se modifient dans la configuration du serveur et ne sont qu'affichés ici.",
+    "listLabel": "Règles d'alerte",
+    "empty": "Aucune règle dans cet état.",
+    "states": {
+      "all": "Toutes",
+      "fired": "Déclenchée",
+      "near": "Proche du seuil",
+      "quiet": "Calme"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# minute} other {# minutes}}",
+    "triggered30": "{count, plural, one {# × en 30 j} other {# × en 30 j}}",
+    "facts": {
+      "now": "Maintenant",
+      "threshold": "Seuil",
+      "window": "Fenêtre",
+      "triggered": "Déclenchée 30 j"
+    },
+    "thresholdAbove": "au-dessus de {threshold} {unit}",
+    "thresholdAtLeast": "dès {threshold} {unit}",
+    "settingsTitle": "Paramètres",
+    "noSettings": "Règle fixe sans paramètre.",
+    "settingsHelp": "Notification via ntfy avec anti-rebond et rappel. Une alerte s'éteint d'elle-même {minutes, plural, one {# minute} other {# minutes}} après le dernier événement.",
+    "recentTitle": "Derniers déclenchements",
+    "noRecent": "Pas déclenchée ces 30 derniers jours.",
+    "seriesTitle": "Valeur, 24 heures",
+    "seriesThreshold": "pointillé : seuil {threshold} {unit}",
+    "seriesSummary": "Valeur maximale {peak}, seuil {threshold} ; {over, plural, =0 {aucune section} one {# section} other {# sections}} au-dessus du seuil (sections de {minutes} minutes).",
+    "seriesApprox": "Approximation : sections fixes de {minutes} minutes au lieu de la fenêtre glissante de la règle."
   }
 }
