@@ -113,8 +113,12 @@ test("Pendenz: Datei einsammeln im Abschnitt Dateien", async ({ request, page, b
     }).toPass({ timeout: 45_000 });
     await fileChooser!.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
     await expect(publicPage.getByRole("button", { name: "Abgeben" })).toBeEnabled();
-    await publicPage.getByRole("button", { name: "Abgeben" }).click();
-    await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible({ timeout: 30_000 });
+    // Der Sicherheitscheck (Captcha-Widget) meldet sich kurz nach dem Laden fertig; ein zu früher
+    // Klick zeigt «Sicherheitscheck läuft noch» und sendet nichts - dann erneut abgeben.
+    await expect(async () => {
+      await publicPage.getByRole("button", { name: "Abgeben" }).click();
+      await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 60_000 });
   } finally {
     await publicContext.close();
   }
