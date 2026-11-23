@@ -398,7 +398,9 @@ def test_assigned_reviewer_sees_only_assigned_submission_photos(db, org):
     def timeline_total(viewer):
         return sum(day.count for day in files_routes.files_timeline(only_images=True, search=None, tags=None, sort_dir="desc", db=db, user=viewer))
 
-    assert timeline_total(user) == timeline_total(org.admin_user) - 1
+    # -2: das Abgabe-Foto des anderen Auftrags und das Bild aus dem Protokollentwurf (seit 1.5.2
+    # zählen Listen Protokollbilder nur mit Leserecht auf das Protokoll, wie der Einzelabruf)
+    assert timeline_total(user) == timeline_total(org.admin_user) - 2
     found = {item.name for item in search_routes.global_search(GlobalSearchQuery.model_construct(q="foto"), db=db, user=user).files}
     assert "lager-foto.jpg" in found and "andere-foto.jpg" not in found
 
@@ -436,7 +438,8 @@ def test_reviewer_scope_also_limits_tags_stats_and_album_overview(db, org):
 
     stats_admin = files_routes.get_file_stats(db=db, user=org.admin_user)
     stats_user = files_routes.get_file_stats(db=db, user=user)
-    assert stats_user.photo_count == stats_admin.photo_count - 1
+    # -2: anderer Auftrag und Bild aus dem Protokollentwurf (1.5.2, siehe oben)
+    assert stats_user.photo_count == stats_admin.photo_count - 2
 
     def album_count(viewer):
         return next(entry.photo_count for entry in files_routes.list_albums(db=db, user=viewer) if entry.id == album.id)

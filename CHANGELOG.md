@@ -27,7 +27,8 @@ Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes
   einer Deaktivierung abgemeldet; offene Einladungs- und Zurücksetzungslinks verfallen.
 - **Einmalige Empfehlung:** öffentliche Datei-Freigabelinks unter Mandant-Einstellungen ›
   Zugangslinks sichten und Links auf Bilder oder Exporte aus noch nicht abgeschlossenen Protokollen
-  widerrufen, falls solche angelegt wurden.
+  widerrufen, falls solche angelegt wurden. Dasselbe für Album-Links auf Alben mit Bildern aus
+  Protokollentwürfen (die neue Prüfung greift beim Erstellen, bestehende Links bleiben).
 
 ### Sicherheit
 
@@ -39,6 +40,15 @@ Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes
   Personenseite oder den Word-Import.
 - Öffentliche Freigabelinks auf Dateien entstehen und erscheinen nur noch für Dateien, die das
   eigene Konto selbst öffnen darf; der Ersteller kann seinen Link immer widerrufen.
+- Bilder aus Protokollentwürfen: Dateiübersicht, Fotos, Zeitleiste, Zahlen, Tag-Vorschläge, Suche
+  und Ähnlichkeitsgruppen zeigen Protokollbilder und -exporte nur noch, wenn das Konto das Protokoll
+  lesen darf (bisher erschienen Name, Protokollnummer und Blocktitel von Entwürfen). Ein in einen
+  neuen Entwurf übernommenes Bild erscheint nur mit dem Kontext des lesbaren Protokolls.
+- Übernommene Protokollbilder: die Leseprüfung berücksichtigt jetzt alle Protokolle, in denen das
+  Bild steckt (lesbar, sobald eines lesbar ist), statt zufällig eines davon.
+- Öffentliche Album-Links: nur noch, wenn das eigene Konto jedes Foto des Albums öffnen darf
+  (keine Entwurfsbilder ohne Leserecht, keine Abgabe-Fotos ausserhalb der Reichweite «nur
+  zugewiesene»); Abgabe-Alben nicht lesbarer Aufträge lassen sich nicht mehr über die ID teilen.
 - Live-Photo-Clips folgen dem Recht «Fotos lesen» wie das zugehörige Foto.
 - Offene Protokoll-Tabs halten eine Sitzung nicht mehr über die Inaktivitätsgrenze hinaus am Leben.
 - Vorgänge zum zweiten Faktor (Passkey/Authenticator einrichten, Passkey-Anmeldung, Bestätigung)

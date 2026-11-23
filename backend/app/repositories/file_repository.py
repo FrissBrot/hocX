@@ -1,12 +1,16 @@
 import json
 import uuid
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Date, String, and_, case, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
+
+if TYPE_CHECKING:
+    from app.services.access_service import ProtocolReadScope
 
 from app.models import (
     DocumentAsset,
@@ -429,6 +433,7 @@ class StoredFileRepository:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        protocol_scope: "ProtocolReadScope | None" = None,
     ):
         """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
         Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen.
@@ -530,6 +535,24 @@ class StoredFileRepository:
             from app.services.context_visibility_service import abgabe_scope_clause
 
             query = query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
+        if protocol_scope is not None:
+            # Protokollbezug wie im Einzelabruf (1.5.2, Verdacht 2): Dateien nur aus lesbaren
+            # Protokollen, Zeilen mit Protokollkontext nur für genau dieses lesbare Protokoll.
+            from app.services.access_service import protocol_overview_clause, protocol_unreadable_link_clause
+
+            query = query.where(protocol_overview_clause(union_query, protocol_scope))
+            if search and search.strip():
+                # Das Suchdokument (photo_search_doc) enthält Titel, Blocktitel und Datum ALLER
+                # Protokolle einer Datei. Hängt eine sonst lesbare Datei (übernommenes Bild) auch an
+                # einem nicht lesbaren Entwurf, verriete ein Treffer dessen Text (Security-Review
+                # 1.5.2): solche Dateien findet die Suche nur über den Dateinamen.
+                query = query.where(
+                    or_(
+                        union_query.c.tenant_id != protocol_scope.tenant_id,
+                        ~protocol_unreadable_link_clause(union_query.c.id, protocol_scope),
+                        union_query.c.original_name.ilike(contains_pattern(search.strip()), escape=LIKE_ESCAPE),
+                    )
+                )
         return query, union_query, scores
 
     def _search_plan(self, db: Session, tenant_id: int | None, search: str | None, viewer_tenant_id: int | None):
@@ -582,6 +605,7 @@ class StoredFileRepository:
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
+        protocol_scope: "ProtocolReadScope | None" = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -616,7 +640,7 @@ class StoredFileRepository:
             tenant_id, search_plan=plan, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
             date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
-            readable_assignment_ids=readable_assignment_ids,
+            readable_assignment_ids=readable_assignment_ids, protocol_scope=protocol_scope,
         )
 
         sort_column = {
@@ -666,7 +690,10 @@ class StoredFileRepository:
         )
         return db.execute(query).one()
 
-    def tenant_file_stats(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> Row:
+    def tenant_file_stats(
+        self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None,
+        protocol_scope: "ProtocolReadScope | None" = None,
+    ) -> Row:
         """Counts/bytes behind the Dateien page's stat cards - same union as
         list_tenant_files (not storage_service's admin-only, per-origin-table breakdown) so
         these numbers always match what the Fotos/Dateien pages actually list."""
@@ -679,20 +706,33 @@ class StoredFileRepository:
             func.count().filter(is_document).label("document_count"),
             func.coalesce(func.sum(union_query.c.file_size_bytes), 0).label("total_bytes"),
         ).where(union_query.c.scan_status != "infected")
-        query = self._scope(query, union_query, readable_assignment_ids)
+        query = self._scope(query, union_query, readable_assignment_ids, protocol_scope)
         return db.execute(query).one()
 
-    def get_file_overview_row(self, db: Session, tenant_id: int, stored_file_id: int) -> Row | None:
+    def get_file_overview_row(
+        self, db: Session, tenant_id: int, stored_file_id: int, *, protocol_scope: "ProtocolReadScope | None" = None
+    ) -> Row | None:
         """Single files-overview row (source/ref_label/ref_date/origin_tag/tags) for the
         file-detail metadata panel - None if this stored_file isn't one of the three
         "Dateien" origins (e.g. a tenant logo or generated PDF export, both deliberately
         excluded from the overview, see _files_overview_branches)."""
         branches = self._files_overview_branches(tenant_id)
         union_query = union_all(*branches.values()).subquery("files_overview")
-        query = select(union_query).where(union_query.c.id == stored_file_id).limit(1)
-        return db.execute(query).first()
+        query = select(union_query).where(union_query.c.id == stored_file_id)
+        if protocol_scope is not None:
+            # Die Datei selbst ist schon geprüft (lesbar); hier nur der gezeigte Kontext: nie der
+            # eines nicht lesbaren Protokolls (übernommenes Bild, 1.5.2 Verdacht 2/3).
+            from app.services.access_service import protocol_context_clause
 
-    def list_tag_sources(self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None) -> list[Row]:
+            query = query.where(protocol_context_clause(union_query.c.source, union_query.c.ref_id, protocol_scope))
+        # Feste Reihenfolge statt der zufällig ersten Zeile: jüngster Bezug zuerst
+        query = query.order_by(union_query.c.ref_date.desc().nulls_last(), union_query.c.ref_id.desc().nulls_last(), union_query.c.source)
+        return db.execute(query.limit(1)).first()
+
+    def list_tag_sources(
+        self, db: Session, tenant_id: int, *, readable_assignment_ids: set[int] | None = None,
+        protocol_scope: "ProtocolReadScope | None" = None,
+    ) -> list[Row]:
         """Raw (tags, origin_tag) pairs across every file the tenant has, for building the
         tag-suggestion/autocomplete list - see MAX_TAG_SOURCE_ROWS for why this isn't paged."""
         branches = self._files_overview_branches(tenant_id)
@@ -702,17 +742,21 @@ class StoredFileRepository:
             .where(union_query.c.scan_status != "infected")
             .limit(MAX_TAG_SOURCE_ROWS)
         )
-        query = self._scope(query, union_query, readable_assignment_ids)
+        query = self._scope(query, union_query, readable_assignment_ids, protocol_scope)
         return list(db.execute(query).all())
 
     @staticmethod
-    def _scope(query, union_query, readable_assignment_ids: set[int] | None):
-        """Reichweite «nur zugewiesene» (Phase 4/5) wie in list_tenant_files."""
-        if readable_assignment_ids is None:
-            return query
-        from app.services.context_visibility_service import abgabe_scope_clause
+    def _scope(query, union_query, readable_assignment_ids: set[int] | None, protocol_scope: "ProtocolReadScope | None" = None):
+        """Reichweite «nur zugewiesene» (Phase 4/5) und Protokoll-Leserecht wie in list_tenant_files."""
+        if readable_assignment_ids is not None:
+            from app.services.context_visibility_service import abgabe_scope_clause
 
-        return query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
+            query = query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
+        if protocol_scope is not None:
+            from app.services.access_service import protocol_overview_clause
+
+            query = query.where(protocol_overview_clause(union_query, protocol_scope))
+        return query
 
     def list_pipeline_status(
         self,

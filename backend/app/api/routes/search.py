@@ -27,6 +27,7 @@ from app.models.entities import ElementDefinition, ListDefinition, Participant
 from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchList, SearchPerson
 from app.services.file_service import FileService
 from app.services import context_visibility_service
+from app.services.access_service import AccessService
 from app.core.sql_like import contains_pattern
 
 router = APIRouter()
@@ -81,13 +82,13 @@ def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LI
 
 def search_files(
     db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, documents: bool = True, images: bool = True,
-    readable_assignment_ids: set[int] | None = None,
+    readable_assignment_ids: set[int] | None = None, protocol_scope=None,
 ) -> list[SearchFile]:
     """Dokumente nur mit files.read, Fotos nur mit photos.read (getrennte Rechte, Phase 3);
     Abgabe-Dateien nur aus lesbaren Aufträgen (Reichweite «nur zugewiesene», Phase 4/5)."""
     service = FileService()
     # Beste Treffer zuerst (tolerante Fotosuche, services/photo_search.py)
-    scope = {"readable_assignment_ids": readable_assignment_ids, "sort_by": "relevance"}
+    scope = {"readable_assignment_ids": readable_assignment_ids, "protocol_scope": protocol_scope, "sort_by": "relevance"}
     document_items = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query, **scope) if documents else []
     image_items = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query, **scope) if images else []
     return [
@@ -190,6 +191,8 @@ def global_search(
             search_files(
                 db, tenant_id, query, documents=user.can(P.FILES_READ), images=user.can(P.PHOTOS_READ),
                 readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+                # Protokollbilder/-exporte nur aus lesbaren Protokollen (1.5.2, Verdacht 2)
+                protocol_scope=AccessService().protocol_read_scope(db, user),
             )
             if user.can(P.FILES_READ) or user.can(P.PHOTOS_READ) else []
         ),

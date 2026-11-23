@@ -679,3 +679,114 @@ def test_timeline_route_requires_files_manage(db):
     with pytest.raises(HTTPException) as exc_info:
         files_routes.files_timeline(only_images=True, search=None, tags=None, sort_dir="desc", db=db, user=reader)
     assert exc_info.value.status_code == 403
+
+
+# ── Entwurfsbilder (1.5.2, Verdacht 2 und 3) ─────────────────────────────────────────────────
+
+
+def _photographer(tenant_id):
+    """Eigene Rolle «Fotos & Links»: Fotos lesen/verwalten, Protokolle nur abgeschlossene."""
+    import dataclasses
+
+    writer = make_current_user(tenant_id, role="writer")
+    return dataclasses.replace(writer, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+
+
+def _list(db, user, **filters):
+    params = {
+        "date_from": None, "date_to": None, "skip": 0, "limit": 60, "source": None, "only_images": False, "exclude_images": False,
+        "search": None, "tags": None, "sort_by": "created_at", "sort_dir": "desc",
+    }
+    return files_routes.list_files(db=db, user=user, **{**params, **filters})
+
+
+def test_list_files_hides_draft_protocol_images_from_accounts_that_cannot_read_the_draft(db):
+    """Verdacht 2 (1.5.2): GET /files lieferte Name, Protokollnummer, Blocktitel und Tags von
+    Entwurfsbildern an Konten, die den Entwurf selbst nicht lesen dürfen (Einzelabruf 404).
+    Dasselbe gilt für Zeitleiste, Zahlen und Tag-Vorschläge."""
+    tenant = make_tenant(db)
+    draft, draft_file = _make_protocol_image(db, tenant.id)
+    photographer = _photographer(tenant.id)
+    writer = make_current_user(tenant.id, role="writer")
+    db.commit()
+
+    assert {item.id for item in _list(db, writer)} == {draft_file.public_id}
+    assert _list(db, photographer) == []
+    assert files_routes.get_file_stats(db=db, user=photographer).photo_count == 0
+    assert not any("7/2026" in tag for tag in files_routes.list_file_tags(query=None, limit=50, db=db, user=photographer))
+    timeline = files_routes.files_timeline(only_images=False, search=None, tags=None, sort_dir="desc", db=db, user=photographer)
+    assert sum(day.count for day in timeline) == 0
+
+    # Abgeschlossen: wie im Einzelabruf für alle mit meetings.read sichtbar
+    draft.status = "abgeschlossen"
+    db.commit()
+    assert {item.id for item in _list(db, photographer)} == {draft_file.public_id}
+
+
+def test_list_files_shows_carried_over_image_only_in_the_readable_protocol_context(db):
+    """Übernommenes Bild (gleiche Datei in abgeschlossenem Protokoll und neuem Entwurf): wer nur
+    abgeschlossene Protokolle liest, sieht die Datei einmal - mit dem Kontext des abgeschlossenen
+    Protokolls, nie mit Nummer/Blocktitel des Entwurfs."""
+    from app.models.entities import ProtocolImage
+
+    tenant = make_tenant(db)
+    final, stored_file = _make_protocol_image(db, tenant.id)
+    final.status = "abgeschlossen"
+    template = make_template(db, tenant.id, name="Neu")
+    draft = make_protocol(db, tenant.id, template.id, protocol_number="8/2026", protocol_date=date(2026, 4, 1))
+    block = make_protocol_element_block(db, make_protocol_element(db, draft.id).id, configuration_snapshot_json={})
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored_file.id, sort_index=0))
+    db.commit()
+
+    items = _list(db, _photographer(tenant.id))
+    assert [item.ref_label for item in items] == ["7/2026"]
+    writer_items = _list(db, make_current_user(tenant.id, role="writer"))
+    assert sorted(item.ref_label for item in writer_items) == ["7/2026", "8/2026"]
+
+
+def test_file_metadata_never_shows_the_draft_context_of_a_carried_over_image(db):
+    """Metadaten einer lesbaren Datei (übernommenes Bild): Herkunft immer aus einem lesbaren
+    Protokoll, nicht zufällig aus dem Entwurf (get_file_overview_row nahm die erste Zeile)."""
+    from sqlalchemy import select
+
+    from app.models.entities import ProtocolElement, ProtocolElementBlock, ProtocolImage
+
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id, name="Neu")
+    # Entwurf zuerst verknüpft: ohne Regel lieferte die erste Zeile dessen Kontext
+    draft = make_protocol(db, tenant.id, template.id, protocol_number="8/2026", protocol_date=date(2026, 4, 1))
+    draft_block = make_protocol_element_block(db, make_protocol_element(db, draft.id).id, configuration_snapshot_json={})
+    final, stored_file = _make_protocol_image(db, tenant.id)
+    final.status = "abgeschlossen"
+    db.execute(ProtocolImage.__table__.delete().where(ProtocolImage.stored_file_id == stored_file.id))
+    db.add(ProtocolImage(protocol_element_block_id=draft_block.id, stored_file_id=stored_file.id, sort_index=0))
+    db.flush()
+    final_block_id = db.scalar(
+        select(ProtocolElementBlock.id).join(ProtocolElement).where(ProtocolElement.protocol_id == final.id)
+    )
+    db.add(ProtocolImage(protocol_element_block_id=final_block_id, stored_file_id=stored_file.id, sort_index=0))
+    db.commit()
+
+    metadata = files_routes.get_stored_file_metadata(stored_file.public_id, db=db, user=_photographer(tenant.id))
+    assert metadata.ref_label == "7/2026"
+
+
+def test_search_does_not_reveal_text_of_a_draft_the_account_cannot_read(db):
+    """Security-Review 1.5.2: das Suchdokument enthält Titel/Blocktitel aller Protokolle einer
+    Datei. Ein übernommenes Bild (lesbar über das abgeschlossene Protokoll) darf über Wörter, die
+    nur im nicht lesbaren Entwurf stehen, nicht auffindbar sein - über den Dateinamen schon."""
+    from app.models.entities import ProtocolImage
+
+    tenant = make_tenant(db)
+    final, stored_file = _make_protocol_image(db, tenant.id)
+    final.status = "abgeschlossen"
+    template = make_template(db, tenant.id, name="Neu")
+    draft = make_protocol(db, tenant.id, template.id, protocol_number="8/2026", protocol_date=date(2026, 4, 1))
+    draft.title = "Geheimplan Vorstand"
+    block = make_protocol_element_block(db, make_protocol_element(db, draft.id).id, configuration_snapshot_json={})
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored_file.id, sort_index=0))
+    db.commit()
+
+    photographer = _photographer(tenant.id)
+    assert _list(db, photographer, search="Geheimplan") == []
+    assert [item.id for item in _list(db, photographer, search="lager-foto")] == [stored_file.public_id]

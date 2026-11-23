@@ -6,16 +6,16 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
-from app.models.entities import ShareLink, ShareLinkFile, StoredFile
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile, StoredFile
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
-from app.services.access_service import AccessService
+from app.services.access_service import AccessService, protocol_file_clause
 from app.services import context_visibility_service, photo_album_share_service, share_link_service
 from app.services.audit_service import AuditService
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
@@ -78,6 +78,30 @@ def _may_read_link_files(db: Session, user: CurrentUser, link: ShareLink, readab
     return True
 
 
+def _album_holds_unreadable_photos(db: Session, user: CurrentUser, album: PhotoAlbum) -> bool:
+    """Liegen im Album Fotos des eigenen Vereins, die das Konto selbst nicht öffnen dürfte (1.5.2,
+    Verdacht 1)? Entwurfsbilder ohne Leserecht auf den Entwurf, Abgabe-Fotos ausserhalb der
+    Reichweite «nur zugewiesene». Der Album-Link gäbe sie ohne Anmeldung weiter. Eine Abfrage
+    für das ganze Album (nicht je Foto); Fotos eines Partners folgen dessen Album-Freigabe.
+    Gezählt werden alle Einträge, auch noch nicht freigegebene - sie erscheinen nach der Freigabe."""
+    conditions = []
+    scope = access_service.protocol_read_scope(db, user)
+    if scope is not None:
+        conditions.append(~protocol_file_clause(StoredFile.id, scope))
+    readable_assignments = context_visibility_service.readable_assignment_ids(db, user)
+    if readable_assignments is not None:
+        conditions.append(~context_visibility_service.abgabe_scope_clause(StoredFile.id, readable_assignments))
+    if not conditions:
+        return False
+    hidden = db.scalar(
+        select(func.count())
+        .select_from(PhotoAlbumItem)
+        .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+        .where(PhotoAlbumItem.album_id == album.id, StoredFile.tenant_id == user.current_tenant_id, or_(*conditions))
+    )
+    return bool(hidden)
+
+
 MAX_LINK_FILES = 200
 
 
@@ -103,6 +127,18 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         album = photo_album_share_service.get_accessible_album(db, payload.album_id, user.current_tenant_id)
         if album is None:
             raise HTTPException(status_code=404, detail="Album nicht gefunden")
+        if album.submission_assignment_id is not None and album.tenant_id == user.current_tenant_id:
+            # Abgabe-Album eines Auftrags ausserhalb der eigenen Reichweite: wie in der Albenliste
+            # gar nicht sichtbar (list_albums_with_stats), also wie unbekannt (1.5.2, Verdacht 1)
+            readable_assignments = context_visibility_service.readable_assignment_ids(db, user)
+            if readable_assignments is not None and album.submission_assignment_id not in readable_assignments:
+                raise HTTPException(status_code=404, detail="Album nicht gefunden")
+        if _album_holds_unreadable_photos(db, user, album):
+            # Nur Rollenrechte wie beim Datei-Link: der Link zeigt das ganze Album ohne Anmeldung.
+            raise HTTPException(
+                status_code=403,
+                detail="Das Album enthält Fotos, die du selbst nicht öffnen darfst. Teilen kann es nur, wer alle Fotos sehen darf.",
+            )
         if not photo_album_share_service.may_create_public_link(db, album, user.current_tenant_id):
             # SEC-002: der Besitzer hat öffentliche Links für diesen Partner abgeschaltet.
             raise HTTPException(status_code=403, detail="Der Besitzer dieses Albums erlaubt keine öffentlichen Links.")
