@@ -252,6 +252,33 @@ ist überflüssig. Ist das alte Volume schon gelöscht, legt PostgreSQL 16 ein l
 einspielen. Ein Dump von PostgreSQL 18 lässt sich in 16 meist, aber nicht garantiert einspielen;
 für den Rückweg deshalb den Dump *vor* dem Update (`…-pre-v1.2.0…`) nehmen.
 
+**Rückweg hinter das Redis-8-Update (1.6 → 1.5.x):** Ab 1.6 läuft Redis 8 (`redis:8-alpine`). Redis 8
+schreibt seinen Snapshot (`dump.rdb` im anonymen `/data`-Volume des Dienstes `redis`) im RDB-Format 15,
+das Redis 7 nicht lesen kann: ein Redis-7-Container auf diesem Volume bricht beim Start mit «Can't handle
+RDB format version 15» ab (geprüft 2026-11-23). Der automatische Rollback von `deploy.sh` ist davon nicht
+betroffen - er tauscht nur die App-Images, Redis bleibt auf der Version aus dem Deploy-Code. Wer bewusst
+auf den Deploy-Code von 1.5.x zurückgeht, muss **vorher** den Redis-Dienst samt Volume entfernen
+(vom Betreiber akzeptiert). Dabei geht alles verloren, was nur in Redis liegt: Login-Tickets und MFA-Flows
+(wer gerade mitten in einer Anmeldung ist, beginnt neu), Domain-Bridge-Tokens, Rate-Limit- und
+Sperrzähler sowie temporäre Anmeldesperren (Stufe 4/5), Kollaborations-Sperren und Präsenz im
+Protokoll-Editor, der Cache der Leak-Prüfung und Überlast-Markierungen. Angemeldete Sessions (signiertes
+Cookie + Session-Register in PostgreSQL) und die Job-Warteschlange (PostgreSQL) bleiben erhalten:
+
+```bash
+docker compose --env-file .env -f docker-compose.release.yml rm -s -f -v redis   # -v: anonymes /data-Volume mit
+./scripts/deploy.sh prod                                                          # Deploy-Code 1.5.x startet Redis 7 leer
+```
+
+Prüfen: `docker compose -f docker-compose.release.yml logs redis` zeigt «Ready to accept connections»
+und keine RDB-Fehlermeldung. Ein Rollback nur der App-Images (gleicher Deploy-Code) braucht diesen Schritt nicht.
+
+Hinweise zu Redis 8: Lizenz ist ab 8.0 wahlweise AGPLv3, RSALv2 oder SSPLv1 (Redis 7.4 war RSALv2/SSPLv1);
+hocX betreibt das unveränderte offizielle Image nur intern und verteilt Redis nicht weiter. Das Image lädt
+beim Start automatisch die mitgelieferten Module (Search, JSON, TimeSeries, Bloom, Vector Sets; ca. 20 MiB
+RSS statt 4 MiB); hocX nutzt sie nicht. Konfiguration (`requirepass` aus dem Secret, `maxmemory` mit
+`noeviction`), Standardbenutzer-ACL und RDB-Snapshots (`save 3600 1 300 100 60 10000`) verhalten sich wie
+unter Redis 7.
+
 Verschlüsselte Dumps (`.sql.gz.gpg`, siehe Abschnitt 10 «Verschlüsselung der Dumps») brauchen den
 privaten Schlüssel aus der Notfallmappe: `BACKUP_DUMP_PRIVATE_KEY_PATH=/pfad/dump-private.asc` vor
 den Aufruf setzen oder den Schlüssel im GPG-Schlüsselbund des Benutzers haben.

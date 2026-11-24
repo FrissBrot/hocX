@@ -1,4 +1,4 @@
-FROM python:3.13-slim@sha256:5dde09372dfa8e7762892b2a12619fcf6c23b0b78bce1058a9fa5a3a7a40e68e
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # silent upstream file change can't swap in a different model without this build noticing.
 ARG YUNET_MODEL_URL=https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2026may.onnx
 ARG YUNET_MODEL_SHA256=ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0
-# No curl in python:3.13-slim (same reasoning as backend's healthcheck comment) - urllib
+# No curl in python:3.15-slim (same reasoning as backend's healthcheck comment) - urllib
 # from the stdlib is enough for one pinned, hash-verified download at build time.
 RUN mkdir -p /app/models && python3 -c "\
 import hashlib, sys, urllib.request; \

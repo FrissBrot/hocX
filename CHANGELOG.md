@@ -151,6 +151,29 @@ Installationen aktualisieren können.
   der Hinweis «Vorlage wurde geändert» mit «Neu laden», der Schalter «Nachverfolgen» (statt
   An/Aus-Menü) und der Hauptknopf. Abläufe, Bedingungen und Rückfragen beim Statuswechsel sind
   unverändert.
+- **pypdf 7.1.1** (vorher 6.21.4) für die XMP-Ergänzung der Dokument-Engine. Keine Code-Änderung nötig
+  (`PdfWriter(..., incremental=True)` unverändert). Neu erzeugt pypdf die zweite Datei-ID im Trailer
+  zufällig statt als MD5 über den Inhalt; jeder Export hat ohnehin eine eigene Dokument-ID, der
+  SHA-256 im Register gilt weiterhin für genau die ausgelieferten Bytes.
+- **jsdom 31.0.1** (vorher 30.1.3) als Testumgebung für Vitest im Frontend. Die neue CSS-Engine
+  serialisiert Inline-Prozentwerte wie Browser auf sechs signifikante Stellen; ein Speicherbalken-Test
+  vergleicht deshalb numerisch.
+- **Playwright 1.65.1** (vorher 1.64.1) für die E2E-Tests; das Docker-Image der E2E-Läufe
+  (`mcr.microsoft.com/playwright:v1.65.1-noble`) ist jetzt per Digest gepinnt. Der Spec `security-devices`
+  wartete nach «Gerät abmelden» nur auf den Toast und zählte die Abmelde-Knöpfe, bevor die Liste neu geladen
+  war; mit 1.65 traf er dieses Fenster reproduzierbar. Er wartet jetzt, bis die abgemeldete Zeile weg ist.
+- **Redis 8.10** (vorher 7.4, `redis:8-alpine` per Digest) in allen Compose-Dateien (Dev, Release, Tests)
+  und den CI-Diensten. Konfiguration (`requirepass` aus dem Secret, `maxmemory` + `noeviction`), ACL des
+  Standardbenutzers und RDB-Snapshots unverändert; redis-py 8.1 (Lua-Skripte der Rate-Limits und
+  Kollaborations-Sperren, Pub/Sub) läuft unverändert. Das Image lädt zusätzlich die mitgelieferten Module
+  (Search, JSON, TimeSeries, Bloom, Vector Sets), hocX nutzt sie nicht. Lizenz ab Redis 8: AGPLv3/RSALv2/SSPLv1
+  (wahlweise); hocX betreibt das unveränderte Image nur intern.
+  **Rollback auf einen Deploy-Code mit Redis 7 nur mit geleertem Redis-Volume** (Redis 7 liest das RDB-Format 15
+  nicht): Login-Tickets, MFA-Flows, Rate-Limit-/Sperrzähler, temporäre Anmeldesperren und Kollaborations-Sperren
+  gehen dabei verloren; Sessions und Job-Warteschlange liegen in PostgreSQL und bleiben (RUNBOOK Abschnitt 5). Der automatische App-Rollback von `deploy.sh` ist nicht betroffen.
+- **Python 3.15** (3.15.2, vorher 3.13; Dokumentation vorher 3.12) für alle Python-Images: Backend inkl.
+  Worker-Dienste, Abgabebox-Backend, Foto-Analyse-Worker, Dokumentationsseite (`python:3.15-slim` per Digest),
+  CI (`setup-python`) entsprechend. PyYAML 6.0.4 (vorher 6.0.3, ohne Wheel für 3.15).
 
 ### Update
 

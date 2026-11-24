@@ -135,7 +135,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
@@ -297,7 +297,7 @@ services:
       - geoip_data:/var/lib/hocx/geoip:ro
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
-      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # Kein curl im python:3.15-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
       interval: 30s
@@ -594,7 +594,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
     command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
-      # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
+      # Kein curl im python:3.15-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
       interval: 30s
       timeout: 10s

@@ -47,9 +47,11 @@ describe("StorageBreakdown", () => {
 
     const segments = container.querySelectorAll(".storage-usage-segment:not(.storage-usage-segment-free)");
     // barTotal is total_bytes (1200) here, since quota (1000) is NOT greater than it -
-    // 500/1200 and 300/1200.
-    expect((segments[0] as HTMLElement).style.width).toBe(`${(500 / 1200) * 100}%`);
-    expect((segments[1] as HTMLElement).style.width).toBe(`${(300 / 1200) * 100}%`);
+    // 500/1200 and 300/1200. Als Zahl vergleichen: jsdom 31 serialisiert Inline-Prozentwerte wie
+    // Browser auf 6 signifikante Stellen («41.6667%»), nicht mit voller Gleitkommagenauigkeit.
+    expect(parseFloat((segments[0] as HTMLElement).style.width)).toBeCloseTo((500 / 1200) * 100, 3);
+    expect(parseFloat((segments[1] as HTMLElement).style.width)).toBeCloseTo((300 / 1200) * 100, 3);
+    expect((segments[0] as HTMLElement).style.width).toMatch(/%$/);
     // No free-space segment once already over quota.
     expect(container.querySelector(".storage-usage-segment-free")).toBeNull();
   });

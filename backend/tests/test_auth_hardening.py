@@ -669,6 +669,10 @@ def test_step_up_with_password_only_for_accounts_without_factor(db):
 
     user = make_app_user(db, email="stepup-pw@example.com", tenant_id=make_tenant(db).id, role_code="admin")
     current = build_current_user(db, user)
+    # Wie ein echtes Alt-Token mit Ablauf: ohne token_expires_at übernimmt adopt_legacy «jetzt» als
+    # Ende, das neue Cookie hätte exp = aktuelle Sekunde und wäre nach einem Sekundenwechsel vor dem
+    # parse_session_token unten schon abgelaufen (sporadisch rot im vollen Lauf).
+    current.token_expires_at = datetime.now(UTC) + timedelta(hours=1)
     with pytest.raises(HTTPException) as exc:
         StepUpService().verify(db, Response(), current, StepUpRequest(method="password", password="falsch"), request_host=None)
     assert exc.value.status_code == 401
