@@ -224,6 +224,7 @@ grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' d
 # 1.6.0: Import-Rolle hocx_geo (Migration 0260) - Passwort fürs Backend (Migration), URL nur im job-worker
 grep -q 'GEO_DB_PASSWORD_FILE: /run/secrets/geo_db_password' docker-compose.release.yml
 grep -q 'GEO_DATABASE_URL_FILE: /run/secrets/geo_database_url' docker-compose.release.yml
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'write_secret_file "$secrets_dir" geo_database_url' scripts/deploy.sh
 
 # Keine Dokumentsignatur mehr: weder Zertifikate noch Signatur-Konfiguration im Release.
