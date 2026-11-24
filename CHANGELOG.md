@@ -8,6 +8,8 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.6.0] - 2026-11-24
+
 ### Hinzugefügt
 
 - **Protokoll-Editor neu (Design «Protokoll-Editor 1a», 1.6):** Kopf mit Status, Titel,
