@@ -52,6 +52,8 @@ describe("createTextDraftStore (T3)", () => {
     store.setMany([["a", "jetzt Text"], ["b", " "]]);
     expect(onEmptiness).toHaveBeenCalledTimes(1);
     expect(store.getEmptinessKey()).toBe("b");
+  });
+});
 
 describe("settleDraftAfterSave", () => {
   beforeEach(() => {

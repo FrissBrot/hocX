@@ -64,6 +64,15 @@ describe("jumpToSection", () => {
   });
 });
 
+function scrollBox(scrollTop: number, scrollHeight = 2000, clientHeight = 800) {
+  const container = document.createElement("div");
+  Object.defineProperty(container, "scrollHeight", { value: scrollHeight });
+  Object.defineProperty(container, "clientHeight", { value: clientHeight });
+  container.scrollTop = scrollTop;
+  container.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+  return container;
+}
+
 describe("nativeSmoothScroll", () => {
   it("meldet das Ende bei scrollend genau einmal", () => {
     const container = scrollBox(300);

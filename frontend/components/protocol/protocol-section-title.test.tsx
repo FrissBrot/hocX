@@ -24,7 +24,7 @@ describe("ProtocolSectionTitle", () => {
   it("zeigt die Nummer zweistellig und den Titel als Überschrift", () => {
     setup();
     expect(screen.getByText("03")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Punkt 3 Kasse" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /Punkt 3\s*Kasse/ })).toBeInTheDocument();
   });
 
   it("benennt per Menü und Tastatur um (Enter speichert, Escape bricht ab)", async () => {

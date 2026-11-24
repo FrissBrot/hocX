@@ -228,6 +228,7 @@ describe("Schnelle Pendenz", () => {
     field.focus();
     field.setSelectionRange(6, 39);
     act(() => ref.current?.prefillTodoFromSelection());
-    expect((screen.getByRole("textbox", { name: "Aufgabe" }) as HTMLInputElement).value).toBe("Mittag reservieren für Skiweekend");
+    // Die Schublade ist noch zu (Kürzel bzw. Dock-Knopf füllen vor dem Öffnen vor)
+    expect((screen.getByRole("textbox", { name: "Aufgabe", hidden: true }) as HTMLInputElement).value).toBe("Mittag reservieren für Skiweekend");
   });
 });
