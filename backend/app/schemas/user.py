@@ -173,6 +173,8 @@ class UserUpdate(BaseModel):
 
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
+    # Veraltet seit 1.6 (Akkordeon und Rad-Effekt im Protokoll-Editor entfallen): ältere Clients
+    # senden die Felder noch, sie werden ignoriert. In 1.7 entfernen.
     protocol_accordion_enabled: bool | None = None
     protocol_wheel_enabled: bool | None = None
 
@@ -219,8 +221,6 @@ class SessionUserRead(BaseModel):
     display_name: str
     email: str
     preferred_language: str
-    protocol_accordion_enabled: bool = True
-    protocol_wheel_enabled: bool = False
 
 
 class SessionRead(BaseModel):

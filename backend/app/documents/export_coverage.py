@@ -126,7 +126,7 @@ def protocol_pdf_coverage(db: Session, user: CurrentUser | None, tenant_id: int,
         for element in elements:
             element_id = str(element.public_id)
             blocks = [block for block in content.blocks(element.id) if not removed_in_editor(block)]
-            if not element.export_visible_snapshot:
+            if not element.export_visible_snapshot or not element.is_visible_snapshot:
                 coverage.elements.append(CoverageEntry(element_id, "element_not_exported"))
                 continue
             if trim_section_name(element.section_name_snapshot).lower() == SESSION_NOTES_SECTION:

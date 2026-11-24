@@ -1674,6 +1674,13 @@
         "writer"
       ]
     },
+    "PATCH /api/protocol-images/{image_id}": {
+      "handler": "files.patch_image_caption",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "DELETE /api/protocol-todos/{todo_id}": {
       "handler": "todos.delete_todo",
       "allowed": [
@@ -1910,6 +1917,13 @@
         "writer"
       ]
     },
+    "PUT /api/protocols/{protocol_id}/element-order": {
+      "handler": "protocol_elements.put_protocol_element_order",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "GET /api/protocols/{protocol_id}/elements": {
       "handler": "protocol_elements.list_protocol_elements",
       "allowed": [
@@ -1917,6 +1931,13 @@
         "writer",
         "kassier",
         "reader"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/elements": {
+      "handler": "protocol_elements.create_protocol_element",
+      "allowed": [
+        "admin",
+        "writer"
       ]
     },
     "GET /api/protocols/{protocol_id}/fines": {
@@ -1996,6 +2017,22 @@
     },
     "POST /api/protocols/{protocol_id}/sync-template": {
       "handler": "protocols.sync_protocol_with_template",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/template-changes": {
+      "handler": "protocols.get_protocol_template_changes",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/template-changes/apply": {
+      "handler": "protocols.apply_protocol_template_changes",
       "allowed": [
         "admin",
         "writer"

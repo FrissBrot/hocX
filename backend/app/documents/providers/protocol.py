@@ -465,7 +465,8 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
     template_rows = _template_rows(ctx, {element.template_element_id for element in elements if element.template_element_id is not None})
     result: list[ElementModel] = []
     for element in elements:
-        if not element.export_visible_snapshot:
+        # Im Protokoll ausgeblendete Traktanden (Editor 1a) erscheinen wie nicht exportierte nicht
+        if not element.export_visible_snapshot or not element.is_visible_snapshot:
             continue
         section_title = titles.get(element.id) or element.section_name_snapshot
         if trim_section_name(section_title).lower() == SESSION_NOTES_SECTION:
@@ -581,6 +582,8 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
     result: list[ElementModel] = []
     for template_element, definition in rows:
         if invitation_only and not invitation_visible(template_element.configuration_json):
+            continue
+        if not template_element.is_visible:
             continue
         element = by_template_element.get(template_element.id)
         section_title = (titles.get(element.id) if element is not None else None) or (element.section_name_snapshot if element is not None else definition.title)

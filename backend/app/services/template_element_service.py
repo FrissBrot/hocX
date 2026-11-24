@@ -60,6 +60,7 @@ class TemplateElementService:
             behavior=resolve_element_wide_behavior(template_element_config, raw_blocks),
             definition_is_library=definition.is_library,
             definition_usage_count=usage_count,
+            is_visible=template_element.is_visible,
         )
 
     def list_template_elements(self, db: Session, template_id: int) -> list[TemplateElementRead]:
@@ -145,6 +146,8 @@ class TemplateElementService:
         if entity is None:
             return None
         values = payload.model_dump(exclude_unset=True)
+        if values.get("is_visible", True) is None:
+            values.pop("is_visible")
         if not values:
             return self.get_template_element(db, template_element_id)
         if "configuration_json" in values:
