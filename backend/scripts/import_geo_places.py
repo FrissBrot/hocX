@@ -40,7 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     from app.services import geo_places, photo_places
 
     report: dict = {}
-    db = SessionLocal()
+    # Import mit der Rolle hocx_geo (GEO_DATABASE_URL), sonst der Owner-Zugang dieses Containers;
+    # die App-Rolle hocx_app darf die Zwischenablage nicht beschreiben (Migration 0260).
+    db = geo_places.geo_session(allow_owner=True)
     try:
         min_rows = 1 if args.fixture else None
         cities = FIXTURE / "cities.txt" if args.fixture else args.geonames_cities
@@ -57,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         if swiss:
             report["swissnames3d"] = geo_places.import_swissnames_file(db, swiss, version=args.version, min_rows=min_rows)
         if args.resolve:
+            db.close()
+            db = SessionLocal()
             while True:
                 result = photo_places.resolve_backlog(db)
                 report.setdefault("resolve", []).append(result)

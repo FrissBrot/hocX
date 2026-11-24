@@ -64,6 +64,12 @@ password="$(value_of "$ENV_FILE" PHOTO_WORKER_DB_PASSWORD)"
 test "$(value_of "$ENV_FILE" PHOTO_WORKER_DATABASE_URL)" = \
   "postgresql+psycopg://hocx_photo_worker:${password}@db:5432/hocx" \
   || fail "PHOTO_WORKER_DATABASE_URL passt nicht zum Passwort"
+# 1.6.0: Import-Rolle hocx_geo (Migration 0260)
+grep -q 'ergaenzt: GEO_DB_PASSWORD' "$TEST_DIR/out.txt" || fail "GEO_DB_PASSWORD-Ergaenzung nicht gemeldet"
+geo_password="$(value_of "$ENV_FILE" GEO_DB_PASSWORD)"
+[[ "$geo_password" =~ ^[0-9a-f]{64}$ ]] || fail "GEO_DB_PASSWORD ist kein 64-stelliger Hex-Wert"
+test "$(value_of "$ENV_FILE" GEO_DATABASE_URL)" = "postgresql+psycopg://hocx_geo:${geo_password}@db:5432/hocx" \
+  || fail "GEO_DATABASE_URL passt nicht zum Passwort"
 # MAIN-OPS-005: Redis-Passwort fuer bestehende Installationen erzeugen.
 grep -q 'ergaenzt: REDIS_PASSWORD' "$TEST_DIR/out.txt" || fail "REDIS_PASSWORD-Ergaenzung nicht gemeldet"
 [[ "$(value_of "$ENV_FILE" REDIS_PASSWORD)" =~ ^[0-9a-f]{64}$ ]] || fail "REDIS_PASSWORD ist kein 64-stelliger Hex-Wert"
@@ -173,7 +179,7 @@ migrate_env_file "$ENV_FILE" > /dev/null
 load_env_file "$ENV_FILE"
 for variable in POSTGRES_PASSWORD APP_DB_PASSWORD AUTH_SECRET ADMIN_AUTH_SECRET \
   INITIAL_ADMIN_PASSWORD ABGABEBOX_DB_PASSWORD ABGABEBOX_CAPTCHA_SESSION_SECRET \
-  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL REDIS_PASSWORD; do
+  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL GEO_DB_PASSWORD GEO_DATABASE_URL REDIS_PASSWORD; do
   test -n "${!variable-}" || fail "$variable ist nach der Migration leer"
 done
 

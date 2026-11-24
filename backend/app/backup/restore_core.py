@@ -123,10 +123,10 @@ def restore_database(view: RepositoryView, archive: str, metadata: dict[str, Any
     return {"dump_bytes": size, "toc_entries": len(toc)}
 
 
-# Eingeschränkte Rollen der Anwendung (Migrationen 0001/0067). Rollen sind clusterweit und nicht
+# Eingeschränkte Rollen der Anwendung (Migrationen 0001/0067/0260). Rollen sind clusterweit und nicht
 # Teil von pg_dump - auf einem neuen Server müssen sie vor dem Restore existieren.
 APP_ROLE_PASSWORD_ENV = {"hocx_app": "APP_DB_PASSWORD", "hocx_abgabebox": "ABGABEBOX_DB_PASSWORD",
-                         "hocx_photo_worker": "PHOTO_WORKER_DB_PASSWORD"}
+                         "hocx_photo_worker": "PHOTO_WORKER_DB_PASSWORD", "hocx_geo": "GEO_DB_PASSWORD"}
 
 
 def _env_secret(name: str) -> str | None:
@@ -144,18 +144,23 @@ APP_ROLE_SETTINGS = {
     "hocx_app": {"idle_in_transaction_session_timeout": "30min"},
     "hocx_abgabebox": {"statement_timeout": "30s", "idle_in_transaction_session_timeout": "15min"},
     "hocx_photo_worker": {"statement_timeout": "60s", "idle_in_transaction_session_timeout": "15min"},
+    # Import der Ortsdaten (Migration 0260): lange Übernahme, darum ohne statement_timeout
+    "hocx_geo": {"idle_in_transaction_session_timeout": "15min"},
 }
+# Verbindungsgrenzen wie in der anlegenden Migration
+APP_ROLE_CONNECTION_LIMIT = {"hocx_geo": 4}
 
 
 def ensure_app_roles(pg: PgTools, *, statement_timeout: str = "30s") -> dict[str, str]:
     """Legt fehlende hocX-Rollen an (wie Migration 0001) und setzt ihre Passwörter aus
-    APP_DB_PASSWORD/ABGABEBOX_DB_PASSWORD/PHOTO_WORKER_DB_PASSWORD(_FILE), falls vorhanden.
+    APP_DB_PASSWORD/ABGABEBOX_DB_PASSWORD/PHOTO_WORKER_DB_PASSWORD/GEO_DB_PASSWORD(_FILE), falls vorhanden.
     Passwörter gehen über stdin an psql, nie als Argument."""
     result: dict[str, str] = {}
     for role, env_name in APP_ROLE_PASSWORD_ENV.items():
         exists = pg.psql(f"SELECT 1 FROM pg_roles WHERE rolname = '{role}';", database="postgres") == "1"
         if not exists:
-            pg.psql(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;", database="postgres")
+            limit = f" CONNECTION LIMIT {int(APP_ROLE_CONNECTION_LIMIT[role])}" if role in APP_ROLE_CONNECTION_LIMIT else ""
+            pg.psql(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT{limit};", database="postgres")
         password = _env_secret(env_name)
         if password:
             escaped = password.replace("'", "''")

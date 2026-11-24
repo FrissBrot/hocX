@@ -229,6 +229,8 @@ services:
       # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
       # needed here too since this service's `command` below runs `alembic upgrade head`.
       PHOTO_WORKER_DB_PASSWORD: ${PHOTO_WORKER_DB_PASSWORD}
+      # Migration 0260 legt die Import-Rolle hocx_geo an (Foto-Standorte, Ortsdaten)
+      GEO_DB_PASSWORD: ${GEO_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       # `env_file: .env` below always loads the *literal* .env file, regardless of which
       # --env-file was passed to `docker compose` (e2e/tests pass a different one) - only
@@ -901,6 +903,8 @@ services:
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
+      # Nur für den Import der Ortsdaten (Rolle hocx_geo, Migration 0260), sonst hocx_app
+      GEO_DATABASE_URL: ${GEO_DATABASE_URL:-}
       HOCX_PROCESS_KIND: job-worker
       # Wie beim Backend explizit, damit e2e/tests ihre eigene --env-file durchreichen.
       # AUTH_SECRET ersetzt der Prozess durch einen Zufallswert (SESSIONLESS_PROCESS_KINDS).

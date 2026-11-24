@@ -221,6 +221,10 @@ grep -q '^      - "5001"$' docker-compose.release.yml
 grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
+# 1.6.0: Import-Rolle hocx_geo (Migration 0260) - Passwort fürs Backend (Migration), URL nur im job-worker
+grep -q 'GEO_DB_PASSWORD_FILE: /run/secrets/geo_db_password' docker-compose.release.yml
+grep -q 'GEO_DATABASE_URL_FILE: /run/secrets/geo_database_url' docker-compose.release.yml
+grep -q 'write_secret_file "$secrets_dir" geo_database_url' scripts/deploy.sh
 
 # Keine Dokumentsignatur mehr: weder Zertifikate noch Signatur-Konfiguration im Release.
 if grep -q 'DOCUMENT_SIGNING\|hocx-signing' docker-compose.release.yml scripts/deploy.sh; then

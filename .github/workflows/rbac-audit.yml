@@ -79,6 +79,7 @@ jobs:
       APP_DB_PASSWORD: ci-rbac-audit-dummy-app-password
       ABGABEBOX_DB_PASSWORD: ci-rbac-audit-dummy-abgabebox-password
       PHOTO_WORKER_DB_PASSWORD: ci-rbac-audit-dummy-photo-worker-password
+      GEO_DB_PASSWORD: ci-rbac-audit-dummy-geo-password
       AUTH_SECRET: ci-rbac-audit-dummy-secret-0123456789
       ADMIN_AUTH_SECRET: ci-rbac-audit-dummy-admin-secret-0123456789
       STORAGE_CREDENTIALS_KEY: ci-rbac-audit-dummy-storage-key-0123456789

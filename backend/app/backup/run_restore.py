@@ -74,7 +74,7 @@ from app.models import BackupJob, BackupRestoreJob, StorageGeneration, StorageMi
 _logger = logging.getLogger("hocx.backup.restore_job")
 
 BACKUP_TABLES = ("backup_settings", "backup_set", "backup_job", "backup_pool_archive", "backup_content", "backup_restore_job", "backup_event")
-APP_ROLES = ("hocx_app", "hocx_abgabebox", "hocx_photo_worker")
+APP_ROLES = ("hocx_app", "hocx_abgabebox", "hocx_photo_worker", "hocx_geo")
 CUTOVER_LOCK_TIMEOUT = "20s"
 
 

@@ -435,11 +435,14 @@ Umkreis, Ort von Hand, Nachtragen), `app/api/routes/photo_places.py`, Migration
 Seen, Gletscher) und swisstopo swissNAMES3D (Gipfel, Hütten, Pässe, Seen, Gletscher, Flurnamen,
 Quartiere, Weiler < 100 Einwohner, Stationen, Aussichtspunkte; LV95 → WGS84 nach den
 Näherungsformeln von swisstopo, ~1 m). Keine Tabelle mit `tenant_id`, darum keine RLS; die
-Laufzeitrolle `hocx_app` darf `geo_place` und `geo_dataset` nur lesen (Test
-`test_global_tables_are_read_only_for_runtime_role`). Der Job `geo_places_update` (job-worker,
+Laufzeitrolle `hocx_app` darf `geo_place` und `geo_dataset` nur lesen und hat keinen Zugriff auf die
+Zwischenablage. Schreiben darf nur die eigene Rolle `hocx_geo` (`GEO_DB_PASSWORD`, im job-worker
+`GEO_DATABASE_URL`, `geo_places.geo_session`): Zwischenablage `geo_place_import` und
+`hocx_geo_import_apply`, Lesen der Ortsdaten, kein Zugriff auf Mandantentabellen (Tests in
+`test_tenant_rls.py` und `test_photo_places.py`). Der Job `geo_places_update` (job-worker,
 täglich geprüft, lädt nur bei neuer Ausgabe bzw. GeoNames nach 30 Tagen) lädt über HTTPS nur von
 `download.geonames.org` und `data.geo.admin.ch` (keine Weiterleitungen, Grössen- und Zeitlimit),
-prüft swissNAMES3D gegen die SHA-256 aus der STAC-API, GeoNames gegen `Content-Length` und ZIP-CRC,
+importiert mit der Rolle `hocx_geo`, prüft swissNAMES3D gegen die SHA-256 aus der STAC-API, GeoNames gegen `Content-Length` und ZIP-CRC,
 schreibt per `COPY` in die Zwischenablage `geo_place_import` und übernimmt sie mit
 `hocx_geo_import_apply` (SECURITY DEFINER: bekannte Quelle, Schlüsselpräfix `gn:`/`sn:`,
 Mindestmenge, höchstens 50 % Schwund, Upsert je Schlüssel). Ohne Netz:

@@ -9,11 +9,16 @@ Globale Referenzdaten (kein Mandantendatum, darum ohne ``tenant_id``/RLS):
   Indizes über ``point(longitude, latitude)`` (Kern-Postgres, kein PostGIS: das offizielle
   ``postgres:18``-Image bringt es nicht mit; ``cube``/``earthdistance`` wären vorhanden, die
   Kern-Typen ``point``/``box`` reichen aber für Bounding-Box + Haversine).
-- ``geo_place_import`` (UNLOGGED): Zwischenablage des Imports. Nur sie darf die Laufzeitrolle
-  beschreiben; ``hocx_geo_import_apply`` (SECURITY DEFINER, prüft Quelle, Schlüsselpräfix,
+- ``geo_place_import`` (UNLOGGED): Zwischenablage des Imports. Nur sie darf die Import-Rolle
+  ``hocx_geo`` beschreiben; ``hocx_geo_import_apply`` (SECURITY DEFINER, prüft Quelle, Schlüsselpräfix,
   Mindestmenge und Schwund) übernimmt sie in ``geo_place``. ``geo_place`` und ``geo_dataset``
   sind für ``hocx_app`` nur lesbar.
 - ``geo_dataset``: Stand je Quelle (Version, SHA-256, Grösse, Zeilen, Generation).
+- Eigene DB-Rolle ``hocx_geo`` (Passwort ``GEO_DB_PASSWORD``, User-Entscheid nach dem
+  Security-Review): nur sie darf in ``geo_place_import`` schreiben und ``hocx_geo_import_apply``
+  ausführen; Lesen auf ``geo_place``/``geo_dataset``, kein Zugriff auf Mandantentabellen. Der
+  job-worker nutzt sie nur für den Import (``GEO_DATABASE_URL``). ``hocx_app`` liest die
+  Ortsdaten nur und hat keinen Zugriff auf die Zwischenablage.
 
 Mandantendaten:
 
@@ -42,8 +47,10 @@ Create Date: 2026-11-23
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0260_photo_places"
@@ -62,6 +69,49 @@ KINDS = (
 PRECISE_KINDS_SQL = "('hamlet', 'district', 'peak', 'pass', 'hut', 'lake', 'glacier', 'poi', 'station', 'field')"
 LOCALITY_KINDS_SQL = "('city', 'town', 'village')"
 
+
+GEO_ROLE = "hocx_geo"
+
+
+def _read_password(env_var: str) -> str | None:
+    # Wie 0067 (eigenständige Kopie: Revisionen importieren einander nicht für Rollen-Helfer)
+    password = os.environ.get(env_var)
+    if not password and (password_file := os.environ.get(f"{env_var}_FILE")):
+        with open(password_file, encoding="utf-8") as secret_file:
+            password = secret_file.read().rstrip("\r\n")
+    return password or None
+
+
+def _ensure_geo_role() -> None:
+    """Rolle anlegen (Passwort Pflicht) bzw. bei vorhandener Rolle das Passwort nur setzen, wenn
+    eines übergeben wird. So laufen auch Migrationen des backup-workers auf wiederhergestellten
+    Datenbanken (Restore, Restore-Test) ohne GEO_DB_PASSWORD, und eine temporäre Restore-DB setzt
+    das clusterweite Passwort nicht neu (Security-Review)."""
+    exists = op.get_bind().execute(sa.text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": GEO_ROLE}).scalar()
+    password = _read_password("GEO_DB_PASSWORD")
+    if not exists and not password:
+        raise RuntimeError(
+            "GEO_DB_PASSWORD muss vor dieser Migration gesetzt sein "
+            f"(Passwort fuer die eingeschraenkte Postgres-Rolle '{GEO_ROLE}')."
+        )
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{GEO_ROLE}') THEN
+                CREATE ROLE {GEO_ROLE} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+                    NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 4;
+            END IF;
+        END
+        $$;
+        """  # sql-ok: fester Rollenname
+    )
+    # Rolleneinstellungen wie die übrigen Laufzeitrollen (0135, restore_core.APP_ROLE_SETTINGS)
+    op.execute(f"ALTER ROLE {GEO_ROLE} SET idle_in_transaction_session_timeout = '15min'")  # sql-ok: fester Rollenname
+    if password:
+        # Passwort als gebundener Wert geht in ALTER ROLE nicht; Literal mit verdoppelten Hochkommas
+        escaped = password.replace("'", "''")
+        op.execute(f"ALTER ROLE {GEO_ROLE} PASSWORD '{escaped}'")  # sql-ok: fester Rollenname, Passwort maskiert
 
 def _load(name: str):
     path = Path(__file__).with_name(name)
@@ -352,9 +402,8 @@ CREATE OR REPLACE FUNCTION public.hocx_photo_search_touch_photo_location() RETUR
 -- Fehlendes der Quelle löschen). Läuft als Eigentümer, darum strenge Prüfungen: bekannte Quelle,
 -- Schlüssel mit dem Präfix der Quelle, Mindestmenge, höchstens halb so viele Zeilen wie bisher
 -- gehen verloren.
--- Bewusstes Restrisiko (Security-Review): eine kompromittierte Laufzeitrolle könnte über diesen
--- Weg Ortsnamen verfälschen (keine Mandantendaten, keine Koordinaten von Fotos). Eine eigene
--- DB-Rolle nur für den job-worker wäre strenger, bräuchte aber ein neues Secret.
+-- Ausführen darf nur die Import-Rolle hocx_geo (Security-Review: nicht hocx_app, sonst könnte eine
+-- kompromittierte Laufzeitrolle die globalen Ortsnamen verfälschen).
 CREATE OR REPLACE FUNCTION public.hocx_geo_import_apply(p_source text, p_version text, p_sha256 text, p_bytes bigint,
                                                          p_min_rows integer)
     RETURNS jsonb
@@ -645,15 +694,24 @@ def upgrade() -> None:
             END LOOP;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hocx_app') THEN
                 GRANT SELECT ON TABLE public.geo_place, public.geo_dataset TO hocx_app;
-                GRANT SELECT, INSERT, DELETE ON TABLE public.geo_place_import TO hocx_app;
                 GRANT EXECUTE ON FUNCTION public.hocx_photo_location_refresh(bigint[]) TO hocx_app;
-                GRANT EXECUTE ON FUNCTION public.hocx_geo_import_apply(text, text, text, bigint, integer) TO hocx_app;
             END IF;
         END
         $$
         """
     )
     op.execute("REVOKE ALL ON TABLE public.geo_place, public.geo_dataset, public.geo_place_import FROM PUBLIC")
+
+    # Import-Rolle: Zwischenablage schreiben, Übernahme ausführen, Ortsdaten lesen - sonst nichts
+    _ensure_geo_role()
+    db_name = op.get_bind().execute(sa.text("SELECT current_database()")).scalar()
+    op.execute(f'GRANT CONNECT ON DATABASE "{db_name}" TO {GEO_ROLE}')  # sql-ok: Datenbankname aus current_database()
+    op.execute(f"GRANT USAGE ON SCHEMA public TO {GEO_ROLE}")  # sql-ok: fester Rollenname
+    op.execute(f"GRANT SELECT ON TABLE public.geo_place, public.geo_dataset TO {GEO_ROLE}")  # sql-ok: feste Namen
+    op.execute(f"GRANT SELECT, INSERT, DELETE ON TABLE public.geo_place_import TO {GEO_ROLE}")  # sql-ok: feste Namen
+    op.execute(
+        f"GRANT EXECUTE ON FUNCTION public.hocx_geo_import_apply(text, text, text, bigint, integer) TO {GEO_ROLE}"  # sql-ok: feste Namen
+    )
 
     # Bestand: GPS-Fotos bekommen sofort ihre Zeile (ohne Ortsnamen, solange keine Ortsdaten
     # importiert sind) - Umkreissuche über Koordinaten geht damit ab dem ersten Import; die
@@ -669,6 +727,25 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Rechte nur in dieser Datenbank entziehen; die Rolle ist clusterweit und bleibt bestehen, wenn
+    # eine andere Datenbank (z. B. hocx_pre_restore_*) noch Rechte für sie hält.
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT FROM pg_roles WHERE rolname = '{GEO_ROLE}') THEN
+                EXECUTE 'DROP OWNED BY {GEO_ROLE}';
+                EXECUTE format('REVOKE CONNECT ON DATABASE %I FROM {GEO_ROLE}', current_database());
+                BEGIN
+                    DROP ROLE {GEO_ROLE};
+                EXCEPTION WHEN dependent_objects_still_exist THEN
+                    RAISE NOTICE 'Rolle {GEO_ROLE} bleibt: Rechte in anderen Datenbanken';
+                END;
+            END IF;
+        END
+        $$;
+        """  # sql-ok: fester Rollenname
+    )
     op.execute(_search_functions_0217())
     for event in ("insert", "update", "delete"):
         op.execute(f"DROP TRIGGER IF EXISTS trg_photo_search_{event} ON photo_location")  # sql-ok: feste Namen

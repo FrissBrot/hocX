@@ -41,7 +41,7 @@ set_empty_env_placeholder() {
 
 migrate_env_file() {
   local env_file="$1"
-  local tmp_file backup_file key password photo_url
+  local tmp_file backup_file key password photo_url geo_password geo_url
   local changed=false
   local -a notes=()
 
@@ -95,6 +95,32 @@ migrate_env_file() {
     printf "PHOTO_WORKER_DATABASE_URL='postgresql+psycopg://hocx_photo_worker:%s@db:5432/%s'\n" \
       "$password" "$(env_file_value "$env_file" POSTGRES_DB)" >> "$tmp_file"
     notes+=("ergaenzt: PHOTO_WORKER_DATABASE_URL")
+    changed=true
+  fi
+
+  # 1.6.0: eigene DB-Rolle hocx_geo nur fuer den Import der Ortsdaten (Migration 0260).
+  geo_password="$(env_file_value "$env_file" GEO_DB_PASSWORD)"
+  if [ -z "$geo_password" ]; then
+    command -v openssl > /dev/null 2>&1 || {
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl wird zum sicheren Erzeugen der Secrets benoetigt." >&2
+      return 1
+    }
+    geo_password="$(openssl rand -hex 32)"
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?GEO_DB_PASSWORD=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "GEO_DB_PASSWORD='%s'\n" "$geo_password" >> "$tmp_file"
+    notes+=("ergaenzt: GEO_DB_PASSWORD (neu erzeugt)")
+    changed=true
+  fi
+  geo_url="$(env_file_value "$env_file" GEO_DATABASE_URL)"
+  if [ -z "$geo_url" ]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?GEO_DATABASE_URL=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "GEO_DATABASE_URL='postgresql+psycopg://hocx_geo:%s@db:5432/%s'\n" \
+      "$geo_password" "$(env_file_value "$env_file" POSTGRES_DB)" >> "$tmp_file"
+    notes+=("ergaenzt: GEO_DATABASE_URL")
     changed=true
   fi
 

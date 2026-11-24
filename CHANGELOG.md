@@ -76,7 +76,12 @@ Installationen aktualisieren können.
   Ortsnamen). Keine neue Extension (kein PostGIS). Neue Jobs im job-worker: `geo_places_update`
   (lädt beim ersten Lauf ~70 MB aus `download.geonames.org` und `data.geo.admin.ch`, danach nur
   bei neuer Ausgabe; ~0,85 Mio. Orte, rund 300 MB in Postgres inkl. Indizes) und `photo_places_resolve` (trägt
-  Ortsnamen des Altbestands in Stücken nach). Optionale Einstellungen `GEO_PLACES_AUTO_UPDATE`
+  Ortsnamen des Altbestands in Stücken nach). **Neues Secret `GEO_DB_PASSWORD` mit
+  `GEO_DATABASE_URL`** für die eigene DB-Rolle `hocx_geo` (nur Import der Ortsdaten: Zwischenablage
+  und Übernahme; `hocx_app` liest die Ortsdaten nur, `hocx_geo` sieht keine Mandantendaten).
+  `scripts/deploy.sh` ergänzt es bei bestehenden Installationen automatisch (RUNBOOK Abschnitt 26);
+  ohne Passwort bricht die Migration ab, der job-worker startet in der Produktion nicht ohne
+  `GEO_DATABASE_URL`. Optionale Einstellungen `GEO_PLACES_AUTO_UPDATE`
   (true), `GEO_PLACES_COUNTRIES` (CH,LI,AT,DE,FR,IT), `GEO_PLACES_MAX_AGE_DAYS` (30). Ohne Netz:
   `python -m scripts.import_geo_places` mit lokalen Dateien.
 

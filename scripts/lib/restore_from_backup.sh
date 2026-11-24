@@ -220,7 +220,7 @@ restore_setup_backup() {
 # nie als Argument.
 restore_cli() {
   "${DC[@]}" run --rm --no-deps -T \
-    -e APP_DB_PASSWORD -e ABGABEBOX_DB_PASSWORD -e PHOTO_WORKER_DB_PASSWORD \
+    -e APP_DB_PASSWORD -e ABGABEBOX_DB_PASSWORD -e PHOTO_WORKER_DB_PASSWORD -e GEO_DB_PASSWORD \
     -e LOCAL_S3_ACCESS_KEY -e LOCAL_S3_SECRET_KEY -e LOCAL_S3_ABGABEBOX_ACCESS_KEY -e LOCAL_S3_ABGABEBOX_SECRET_KEY \
     --entrypoint python backup-worker -m app.backup.cli "$@"
 }

@@ -114,6 +114,42 @@ def test_import_rejects_wrong_prefix_and_shrinkage(places):
     places.execute(text("ROLLBACK TO SAVEPOINT apply_check"))
 
 
+def test_import_runs_as_geo_role_and_app_role_cannot_stage(db):
+    """Import mit der Rolle hocx_geo (wie der job-worker über GEO_DATABASE_URL); hocx_app darf weder
+    in die Zwischenablage schreiben noch die Übernahme ausführen (User-Entscheid nach Review)."""
+    tenant = make_tenant(db)
+    db.flush()
+    db.execute(text("SET LOCAL ROLE hocx_geo"))
+    result = geo_places.import_geonames_files(
+        db, cities=FIXTURE / "cities.txt", admin1=FIXTURE / "admin1.txt", countries={"CH": FIXTURE / "CH.txt"},
+        version="test", min_rows=1,
+    )
+    assert result["inserted"] > 0
+    db.execute(text("SAVEPOINT geo_role_check"))
+    with pytest.raises(DBAPIError):
+        db.execute(text("SELECT count(*) FROM stored_file"))
+    db.execute(text("ROLLBACK TO SAVEPOINT geo_role_check"))
+    db.execute(text("RESET ROLE"))
+    with as_app(db, tenant.id):
+        assert db.scalar(text("SELECT count(*) FROM geo_place")) > 0
+        for statement in (
+            "INSERT INTO geo_place_import (place_key, source, kind, name, latitude, longitude, names) "
+            "VALUES ('gn:1', 'geonames', 'village', 'X', 46, 7, 'X')",
+            "SELECT public.hocx_geo_import_apply('geonames', 'x', NULL, NULL, 1)",
+        ):
+            db.execute(text("SAVEPOINT app_role_check"))
+            with pytest.raises(DBAPIError):
+                db.execute(text(statement))
+            db.execute(text("ROLLBACK TO SAVEPOINT app_role_check"))
+
+
+def test_geo_session_requires_geo_url_in_production(monkeypatch):
+    monkeypatch.setattr(geo_places.settings, "geo_database_url", "")
+    monkeypatch.setattr(geo_places.settings, "environment", "production")
+    with pytest.raises(geo_places.GeoPlacesError):
+        geo_places.geo_session()
+
+
 def test_global_tables_are_read_only_for_runtime_role(places):
     tenant = make_tenant(places)
     with as_app(places, tenant.id):

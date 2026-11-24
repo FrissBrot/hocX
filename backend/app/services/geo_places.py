@@ -40,8 +40,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -517,10 +518,40 @@ def _dataset(db: Session) -> dict[str, dict]:
     }
 
 
-def update_places(db: Session, *, now: datetime | None = None) -> dict:
-    """Job geo_places_update: lädt neue Ausgaben, sonst nichts. Fehler einer Quelle brechen ab."""
+_geo_engine = None
+
+
+def geo_session(*, allow_owner: bool = False) -> Session:
+    """Session mit der Import-Rolle hocx_geo (GEO_DATABASE_URL). Nur sie darf in die Zwischenablage
+    schreiben und hocx_geo_import_apply ausführen; hocx_app nicht. Ohne GEO_DATABASE_URL: die
+    Owner-URL (DATABASE_URL) nur ausserhalb der Produktion bzw. für das vom Betrieb gestartete
+    Skript scripts/import_geo_places.py (allow_owner)."""
+    global _geo_engine
+    url = settings.geo_database_url
+    if not url:
+        if not (allow_owner or not settings.is_production):
+            raise GeoPlacesError("GEO_DATABASE_URL fehlt (DB-Rolle hocx_geo, Migration 0260)")
+        url = settings.database_url
+    if _geo_engine is None or str(_geo_engine.url) != str(make_url(url)):
+        if _geo_engine is not None:
+            _geo_engine.dispose()
+        _geo_engine = create_engine(
+            url, future=True, pool_pre_ping=True, hide_parameters=True, poolclass=NullPool,
+            connect_args={"application_name": f"hocx-{settings.process_kind}-geo"},
+        )
+    return Session(bind=_geo_engine, autoflush=False, future=True)
+
+
+def update_places(_db: Session | None = None, *, now: datetime | None = None) -> dict:
+    """Job geo_places_update: lädt neue Ausgaben, sonst nichts. Fehler einer Quelle brechen ab.
+    Schreibt nur über die Import-Rolle hocx_geo (geo_session), nie mit der Session des Loops."""
     if not settings.geo_places_auto_update:
         return {"skipped": "disabled"}
+    with geo_session() as db:
+        return _update_places(db, now=now)
+
+
+def _update_places(db: Session, *, now: datetime | None = None) -> dict:
     now = now or datetime.now(UTC)
     current = _dataset(db)
     db.commit()

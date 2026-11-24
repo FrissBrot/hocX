@@ -278,11 +278,13 @@ create_env_file() {
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_CAPTCHA_SESSION_SECRET="$(generate_secret)"
   PHOTO_WORKER_DB_PASSWORD="$(generate_secret)"
+  GEO_DB_PASSWORD="$(generate_secret)"
   REDIS_PASSWORD="$(generate_secret)"
   DATABASE_URL="postgresql+psycopg://hocx:${POSTGRES_PASSWORD}@db:5432/hocx"
   APP_DATABASE_URL="postgresql+psycopg://hocx_app:${APP_DB_PASSWORD}@db:5432/hocx"
   ABGABEBOX_DATABASE_URL="postgresql+psycopg://hocx_abgabebox:${ABGABEBOX_DB_PASSWORD}@db:5432/hocx"
   PHOTO_WORKER_DATABASE_URL="postgresql+psycopg://hocx_photo_worker:${PHOTO_WORKER_DB_PASSWORD}@db:5432/hocx"
+  GEO_DATABASE_URL="postgresql+psycopg://hocx_geo:${GEO_DB_PASSWORD}@db:5432/hocx"
 
   umask 077
   ENV_TMP_FILE="$(mktemp "$PROJECT_DIR/.env.tmp.XXXXXX")"
@@ -324,6 +326,8 @@ create_env_file() {
   write_env_value ABGABEBOX_CAPTCHA_SESSION_SECRET "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_env_value PHOTO_WORKER_DB_PASSWORD "$PHOTO_WORKER_DB_PASSWORD"
   write_env_value PHOTO_WORKER_DATABASE_URL "$PHOTO_WORKER_DATABASE_URL"
+  write_env_value GEO_DB_PASSWORD "$GEO_DB_PASSWORD"
+  write_env_value GEO_DATABASE_URL "$GEO_DATABASE_URL"
   write_env_value REDIS_PASSWORD "$REDIS_PASSWORD"
   if [ -n "$DEMO_TOTP_SEED" ]; then
     write_env_value DEMO_TOTP_SEED "$DEMO_TOTP_SEED"
@@ -432,10 +436,10 @@ run_preflight() {
   fi
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
-      ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
+      ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|hocx_geo|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
         return 1
         ;;
@@ -513,6 +517,8 @@ write_secret_files() {
   write_secret_file "$secrets_dir" abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
   write_secret_file "$secrets_dir" photo_worker_db_password "$PHOTO_WORKER_DB_PASSWORD"
   write_secret_file "$secrets_dir" photo_worker_database_url "$PHOTO_WORKER_DATABASE_URL"
+  write_secret_file "$secrets_dir" geo_db_password "$GEO_DB_PASSWORD"
+  write_secret_file "$secrets_dir" geo_database_url "$GEO_DATABASE_URL"
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
