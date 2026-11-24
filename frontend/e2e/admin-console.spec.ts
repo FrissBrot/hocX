@@ -203,19 +203,44 @@ test.describe("Admin-Konsole: 390 px ohne horizontales Überlaufen", () => {
   test.use({ storageState: authFiles.platformAdmin, viewport: { width: 390, height: 844 } });
   test.setTimeout(480_000);
 
-  test("alle Admin-Seiten passen in 390 px", async ({ page }) => {
+  test("alle Admin-Seiten passen in 390 px, Reiter überlappen nicht", async ({ page }) => {
     const tenants = await (await page.request.get("/api/admin/tenants?limit=1&offset=0")).json();
     const tenantId = tenants.items?.[0]?.id as string | undefined;
     const tenantTabs = ["", "/profile", "/subscription", "/features", "/users", "/domains", "/verification", "/storage", "/usage", "/activity", "/security", "/technical"];
     const pages = tenantId ? [...ADMIN_PAGES, ...tenantTabs.map((tab) => `/admin/tenants/${tenantId}${tab}`)] : ADMIN_PAGES;
     const tooWide: string[] = [];
+    const overlapping: string[] = [];
     for (const path of pages) {
       await expectHealthyPage(page, path);
       await page.waitForLoadState("networkidle").catch(() => undefined);
       const width = await page.evaluate(() => document.documentElement.scrollWidth);
       if (width > 391) tooWide.push(`${path}: ${width}px`);
+      // Reiterbeschriftungen dürfen sich nicht überlappen (Textbreite, nicht nur die Box des Reiters:
+      // geschrumpfte Reiter liessen den Text über den Nachbarn laufen)
+      const overlaps = await page.evaluate(() => {
+        const found: string[] = [];
+        for (const list of Array.from(document.querySelectorAll('[role="tablist"]'))) {
+          const boxes = Array.from(list.querySelectorAll('[role="tab"]')).map((tab) => {
+            const range = document.createRange();
+            range.selectNodeContents(tab);
+            return { label: (tab.textContent ?? "").trim(), rect: range.getBoundingClientRect() };
+          }).filter((item) => item.rect.width > 0 && item.rect.height > 0);
+          for (let i = 0; i < boxes.length; i += 1) {
+            for (let j = i + 1; j < boxes.length; j += 1) {
+              const a = boxes[i].rect;
+              const b = boxes[j].rect;
+              if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) {
+                found.push(`${boxes[i].label} / ${boxes[j].label}`);
+              }
+            }
+          }
+        }
+        return found;
+      });
+      if (overlaps.length) overlapping.push(`${path}: ${overlaps.join(", ")}`);
     }
     expect(tooWide, tooWide.join("\n")).toEqual([]);
+    expect(overlapping, overlapping.join("\n")).toEqual([]);
   });
 });
 

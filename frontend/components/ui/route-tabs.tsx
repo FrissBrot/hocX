@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { useEffect, useRef } from "react";
 
 import { rovingKeyDown } from "@/lib/a11y/roving";
 
@@ -20,6 +21,18 @@ export function RouteTabs({
   activeHref: string;
   variant?: "underline" | "pill";
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // Schmale Breite: die Leiste scrollt quer - den aktiven Reiter sichtbar halten (nur die Leiste
+  // scrollen, nie die Seite)
+  useEffect(() => {
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return;
+    const left = active.offsetLeft - list.offsetLeft;
+    if (left < list.scrollLeft || left + active.offsetWidth > list.scrollLeft + list.clientWidth) {
+      list.scrollLeft = Math.max(0, left - (list.clientWidth - active.offsetWidth) / 2);
+    }
+  }, [activeHref]);
   if (tabs.length < 2) {
     return null;
   }
@@ -28,6 +41,7 @@ export function RouteTabs({
   return (
     // Tabs als Links (manuelle Aktivierung): Pfeile verschieben nur den Fokus, Enter öffnet die Route
     <div
+      ref={listRef}
       className={isPill ? "filter-tabs" : "tabs-list route-tabs"}
       role="tablist"
       onKeyDown={(event) => rovingKeyDown(event, { itemSelector: '[role="tab"]' })}

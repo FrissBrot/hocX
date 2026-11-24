@@ -1004,6 +1004,13 @@
   scrollbar-width: thin;
 }
 
+/* ... und behalten dabei ihre Breite: geschrumpfte Reiter liessen die Beschriftungen bei 390 px
+   übereinanderlaufen (Analysen, Backups) - wie .route-tabs in globals.css */
+.admin-frame .tabs-list .tabs-trigger {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* Kopf mit Zeitraum-Umschaltern: auf schmalen Bildschirmen umbrechen statt überlaufen */
 .admin-frame .page-header > * {
   min-width: 0;

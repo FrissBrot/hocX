@@ -2943,6 +2943,10 @@ button.table-row-link.table-row-toggle {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
+  /* Nicht schrumpfen: sonst werden die Reiter schmaler als ihre Beschriftung und die Texte
+     überlappen sich bei 390 px (Sicherheitsbereich, Mandanten-Detail) - die Leiste scrollt quer */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tabs-panel {
