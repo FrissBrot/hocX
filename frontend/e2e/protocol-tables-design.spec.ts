@@ -80,7 +80,7 @@ test("Termine, Listen, Pendenzen und Kopf im neuen Design", async ({ request, pa
   }
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`/protocols/${protocol.id}`);
+  await openProtocol(page, protocol.id);
 
   // Kopf: Workflow-Leiste mit aktuellem Schritt, Schalter und Hauptknopf
   const steps = page.getByRole("list", { name: "Ablauf des Protokolls" });
