@@ -1,3 +1,4 @@
+import { openProtocol } from "./protocol-page";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Protokoll-Editor 1a (1.6): Blöcke statisch bis zur Aktivierung (Knopf, Klick, Strg+Enter,
@@ -21,7 +22,7 @@ async function threePointProtocol(request: APIRequestContext, label: string) {
   const points = [
     { title: "Begrüssung", blocks: [{ title: "Text", type: 1 }] },
     { title: "Pendenzen", blocks: [{ title: "Aufgaben", type: 2 }] },
-    { title: "Varia", blocks: [{ title: "Notiz", type: 1 }, { title: "Stichworte", type: 9 }] },
+    { title: "Varia", blocks: [{ title: "Notiz", type: 1 }, { title: "Stichworte", type: 8 }] },
   ];
   for (const [index, point] of points.entries()) {
     const definition = await post(request, "/api/element-definitions", {
@@ -46,7 +47,7 @@ test.describe("Protokoll-Editor 1a", () => {
 
   test("Blöcke aktivieren: Knopf, Strg+Enter blockweise, Escape verlässt", async ({ request, page }) => {
     const { protocol } = await threePointProtocol(request, "Bloecke");
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     // Statisch: kein Editor im Dokument
     await expect(page.locator(".protocol-doc-section")).toHaveCount(3);
     await expect(page.locator(".rich-text-editor-content")).toHaveCount(0);
@@ -88,7 +89,7 @@ test.describe("Protokoll-Editor 1a", () => {
 
   test("Gliederung: Sprung zum Punkt und Sortieren per Tastatur", async ({ request, page }) => {
     const { protocol, elements } = await threePointProtocol(request, "Gliederung");
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     const outline = page.getByRole("navigation", { name: "Gliederung des Protokolls" });
     await expect(outline.getByRole("listitem")).toHaveCount(3);
     const variaItem = outline.locator(".protocol-outline-item", { hasText: "Varia" });
@@ -113,7 +114,7 @@ test.describe("Protokoll-Editor 1a", () => {
 
   test("Dock und Schublade: Kürzel, Escape, Status & Zusammenarbeit", async ({ request, page }) => {
     const { protocol } = await threePointProtocol(request, "Dock");
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     const drawer = page.locator("#protocol-drawer");
     await expect(drawer).toBeHidden();
 
@@ -144,7 +145,7 @@ test.describe("Protokoll-Editor 1a", () => {
 
   test("Suche: Strg+F öffnet die Protokollsuche und springt zum Treffer", async ({ request, page }) => {
     const { protocol, elements } = await threePointProtocol(request, "Suche");
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     await expect(page.locator(".protocol-doc-section")).toHaveCount(3);
     await page.keyboard.press("ControlOrMeta+f");
     const dialog = page.getByRole("dialog");
@@ -161,7 +162,7 @@ test.describe("Protokoll-Editor 1a", () => {
 
   test("Statuswechsel nur nach Rückfrage", async ({ request, page }) => {
     const { protocol } = await threePointProtocol(request, "Status");
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     await page.getByRole("button", { name: "Vorbereitung abschliessen" }).click();
     const dialog = page.getByRole("dialog", { name: "Vorbereitung abschliessen?" });
     await expect(dialog).toBeVisible();
@@ -179,7 +180,7 @@ test.describe("Protokoll-Editor 1a", () => {
   test("Tablet: Gliederung als Überlagerung, Status-Varianten hell/dunkel", async ({ request, page }) => {
     const { protocol } = await threePointProtocol(request, "Tablet");
     await page.setViewportSize({ width: 1100, height: 820 });
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     const outlinePane = page.locator("#protocol-outline-pane");
     await expect(outlinePane).toBeHidden();
     await page.getByRole("button", { name: "Gliederung", exact: true }).click();

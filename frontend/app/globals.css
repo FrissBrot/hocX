@@ -5101,11 +5101,12 @@ button.table-row-link.table-row-toggle {
     transition: transform var(--dur-base) ease, visibility 0s;
   }
 
+  /* Nur der Rand der Schreibansicht (Innenabstand), nicht über der Gliederung des Editors 1a */
   .app-frame-writing .sidebar-edge-trigger {
     display: block;
     position: fixed;
     inset: 0 auto 0 0;
-    width: 24px;
+    width: var(--space-3);
     z-index: calc(var(--z-sidebar) - 1);
   }
 
@@ -5264,11 +5265,12 @@ button.table-row-link.table-row-toggle {
 }
 
 @media (max-width: 900px) {
+  /* Nur der Rand der Schreibansicht (Innenabstand), nicht über der Gliederung des Editors 1a */
   .app-frame-writing .sidebar-edge-trigger {
     display: block;
     position: fixed;
     inset: 0 auto 0 0;
-    width: 28px;
+    width: var(--space-3);
     z-index: calc(var(--z-sidebar) - 1);
   }
 

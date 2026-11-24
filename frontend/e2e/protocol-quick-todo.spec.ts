@@ -1,3 +1,4 @@
+import { openProtocol } from "./protocol-page";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // «Schnelle Pendenz» im Protokoll-Editor (session-panel.tsx in der Schublade, protocol-dock.tsx): Pendenz mit Person, Fälligkeit und
@@ -45,7 +46,7 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
     const protocol = await post(request, "/api/protocols/from-template", { template_id: template.id, protocol_date: new Date().toISOString().slice(0, 10), title: `E2E Schnell ${suffix}` });
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
     await expect(page.locator(".protocol-dock")).toBeVisible();
     const flyout = page.locator("#protocol-drawer");
     const dockTodo = page.locator('[data-drawer-button="todo"]');

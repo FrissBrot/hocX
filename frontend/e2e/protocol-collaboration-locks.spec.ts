@@ -1,3 +1,4 @@
+import { openProtocol } from "./protocol-page";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 
 import { authFiles } from "./auth";
@@ -18,7 +19,7 @@ async function post(request: APIRequestContext, path: string, data: unknown) {
 async function openAs(browser: Browser, storageState: string, protocolId: string): Promise<Page> {
   const context = await browser.newContext({ storageState, viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  await page.goto(`/protocols/${protocolId}`);
+  await openProtocol(page, protocolId);
   await expect(page.locator('.editor-block-card[data-block-type="text"] .editor-block-edit')).toHaveCount(2);
   return page;
 }

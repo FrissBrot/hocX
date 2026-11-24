@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { openProtocol } from "./protocol-page";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 // Performance-Quick-Wins im Protokoll-Editor (1.5.1, Audit perf-protocol-editor 2026-11-22):
@@ -39,7 +40,7 @@ test("Bilderraster zeigt die Vorschau, das Vollbild das Original", async ({ requ
   });
   expect(upload.ok(), await upload.text()).toBeTruthy();
 
-  await page.goto(`/protocols/${protocol.id}`);
+  await openProtocol(page, protocol.id);
   const tile = page.locator(".image-grid img.image-lightbox-trigger").first();
   await expect(tile).toBeVisible();
   await expect(tile).toHaveAttribute("src", /\/api\/stored-files\/[^/]+\/thumbnail$/);
@@ -54,7 +55,7 @@ test("Bilderraster zeigt die Vorschau, das Vollbild das Original", async ({ requ
 
 test("Entwurf übersteht sofortiges Neuladen trotz gebündeltem Speichern", async ({ request, page }) => {
   const { protocol } = await protocolWith(request, "Entwurf", [{ type: 1, title: "Text" }]);
-  await page.goto(`/protocols/${protocol.id}`);
+  await openProtocol(page, protocol.id);
   // Statisch, bis der Block aktiviert wird: dann erst lädt Tiptap
   await expect(page.locator(".rich-text-editor-content")).toHaveCount(0);
   await page.getByRole("button", { name: /bearbeiten$/ }).first().click();
@@ -91,7 +92,7 @@ test("Statistik-Diagramm lädt beim Öffnen genau einmal", async ({ request, pag
   page.on("request", (req) => {
     if (req.url().includes("/api/statistics/overview")) statsRequests.push(req.url());
   });
-  await page.goto(`/protocols/${protocol.id}`);
+  await openProtocol(page, protocol.id);
   // Recharts wird nachgeladen und zeichnet
   await expect(page.locator(".protocol-doc-section .recharts-wrapper").first()).toBeVisible();
   await page.waitForTimeout(2000);

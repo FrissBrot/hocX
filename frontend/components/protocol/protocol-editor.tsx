@@ -2,6 +2,7 @@
 
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { announce } from "@/lib/a11y/announce";
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
@@ -268,6 +269,12 @@ export function ProtocolEditor({
   const [transitionDialogOpen, setTransitionDialogOpen] = useState(false);
   // Tablet (schmales Fenster): Gliederung als Überlagerung ein-/ausblenden
   const [outlineOpen, setOutlineOpen] = useState(false);
+  // Überlagerte Gliederung (Tablet): Escape schliesst wie bei anderen Popups, Fokus zurück
+  const outlinePaneRef = useRef<HTMLDivElement | null>(null);
+  usePopupEscape(outlineOpen, () => {
+    setOutlineOpen(false);
+    document.querySelector<HTMLElement>(".protocol-outline-toggle")?.focus();
+  }, outlinePaneRef);
   // Geöffnete Gliederung (Tablet): Fokus auf den aktiven Punkt, damit Pfeile/Escape dort wirken
   useEffect(() => {
     if (!outlineOpen) return;
@@ -2471,16 +2478,7 @@ export function ProtocolEditor({
       </StatusTransitionDialog>
 
       <div className={`protocol-workspace${outlineOpen ? " protocol-workspace-outline-open" : ""}`}>
-        <div
-          className="protocol-outline-pane"
-          id="protocol-outline-pane"
-          onKeyDown={(event) => {
-            if (event.key !== "Escape" || !outlineOpen || event.defaultPrevented) return;
-            event.preventDefault();
-            setOutlineOpen(false);
-            document.querySelector<HTMLElement>(".protocol-outline-toggle")?.focus();
-          }}
-        >
+        <div className="protocol-outline-pane" id="protocol-outline-pane" ref={outlinePaneRef}>
           <ProtocolOutline
             items={outlineItems}
             selectedId={selectedElementId}

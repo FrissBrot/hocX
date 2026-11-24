@@ -10,6 +10,7 @@ import { Autolink } from "@/components/ui/autolink-extension";
 import { richTextMarkdownExtensions, type MarkdownStorage } from "@/components/ui/rich-text-markdown";
 import { formatCombo, type KeyNameTranslator } from "@/lib/keyboard/registry";
 import { isApplePlatform, useIsApple, useShortcutLabel } from "@/lib/search/shortcuts";
+import { dispatchShortcut } from "@/lib/keyboard/use-shortcut";
 
 // Tastenkürzel der Toolbar-Knöpfe (Tiptap-StarterKit, Mod = Strg bzw. ⌘)
 const BULLET_LIST_COMBO = "Mod+Shift+8";
@@ -96,6 +97,12 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
       if (emitTimerRef.current) emitNowRef.current(editor);
     },
     editorProps: {
+      // Strg/⌘+Enter gehört den Seiten-Kürzeln (Protokoll: nächster Block), nicht dem harten
+      // Umbruch von Tiptap. Ohne registriertes Kürzel bleibt der Umbruch wie bisher.
+      handleKeyDown(_view, event) {
+        if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || event.altKey) return false;
+        return dispatchShortcut(event);
+      },
       attributes: {
         class: "rich-text-editor-content",
         ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
@@ -140,8 +147,9 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     const flush = () => {
       if (emitTimerRef.current && editorRef.current) emitNowRef.current(editorRef.current);
     };
-    window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
+    // capture: vor dem pagehide-Handler des Offline-Speichers, der die Entwürfe dann gleich schreibt
+    window.addEventListener("pagehide", flush, { capture: true });
+    return () => window.removeEventListener("pagehide", flush, { capture: true });
   }, [emitDelayMs]);
 
   // Aktivierter Block: Cursor ans Ende, ohne das Dokument zu verschieben
