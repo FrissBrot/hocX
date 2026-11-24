@@ -9,7 +9,56 @@ export type AuthTopNetwork = { src_net_hash: string | null; failures: number; ac
 
 export type AuthTopAccount = { subject_hash: string | null; user_id: number | null; tenant_id: number | null; failures: number; networks: number; last_seen: string };
 
-export type AuthBlock = { subject: string; scope: "source" | "net"; until: number; reason: string; manual: boolean; stage: number; remaining_seconds: number };
+export type AuthBlockScope = "source" | "net" | "net_fp";
+
+/** Aktive Sperre (1.6: Beginn, Dauer, Abgewiesen-Zähler, setzender Admin). `subject` ist der
+ * Schlüssel für Aufheben/Verlängern, angezeigt wird nur `short`. */
+export type AuthBlock = {
+  subject: string;
+  short: string;
+  scope: AuthBlockScope;
+  until: number;
+  reason: string;
+  manual: boolean;
+  stage: number;
+  remaining_seconds: number;
+  created: number;
+  minutes: number;
+  admin_id: number | null;
+  admin_name: string | null;
+  incident_id: number | null;
+  repeat: number;
+  rejected: number;
+};
+
+/** GET /api/admin/auth-security/blocks/ladder */
+export type AuthDefenseLadder = {
+  events_24h: { observed: number; limited: number; challenged: number };
+  automatic: number;
+  manual: number;
+  strikes: number;
+  durations: number[];
+  max_automatic_minutes: number;
+  max_manual_minutes: number;
+};
+
+export type AuthBlockHistoryBar = {
+  start: string;
+  end: string;
+  minutes: number;
+  manual: boolean;
+  stage: number | null;
+  reason: string | null;
+  cleared: boolean;
+  replaced: boolean;
+};
+
+/** GET /api/admin/auth-security/blocks/history (7 Tage) */
+export type AuthBlockHistory = {
+  start: string;
+  end: string;
+  sources: { subject: string; scope: AuthBlockScope | null; country: string | null; bars: AuthBlockHistoryBar[] }[];
+};
 
 export type AuthSecuritySummary = {
   timeseries: AuthTimeseriesPoint[];
@@ -62,23 +111,64 @@ export type ResolvedSubject = {
   is_active: boolean | null;
 };
 
+/** Zeile der Ereignisliste (1.6): Pseudonyme gekürzt (12 Zeichen), Mandant als öffentliche ID + Name. */
 export type AuthEventRow = {
   event_id: string;
   ts: string;
   event_type: string;
   outcome: AuthOutcome;
   actor_kind: string;
-  actor_user_id: number | null;
   platform_admin_id: number | null;
-  tenant_id: number | null;
+  tenant_id: string | null;
+  tenant_name: string | null;
   subject_hash: string | null;
   src_net_hash: string | null;
   device_hash: string | null;
+  /** Ländercode der Quelle (lokale GeoIP-Datenbank), nie die IP */
+  src_country: string | null;
   risk_score: number | null;
   risk_reasons: string[];
+  enforcement: string | null;
   user_agent_family: string | null;
-  /** Ländercode der Quelle (lokale GeoIP-Datenbank), nie die IP */
-  src_country?: string | null;
+};
+
+/** GET /api/admin/auth-security/events (Keyset) */
+export type AuthEventPage = { items: AuthEventRow[]; next_cursor: string | null; start: string; end: string };
+
+export type AuthEventHistogram = {
+  start: string;
+  end: string;
+  bucket_seconds: number;
+  buckets: ({ start: string } & Record<AuthOutcome, number>)[];
+  outcome_counts: Record<AuthOutcome, number>;
+  total: number;
+};
+
+export type AuthEventGroup = {
+  key: string;
+  events: number;
+  failure: number;
+  blocked: number;
+  challenged: number;
+  success: number;
+  distinct_other: number;
+  tenants: number;
+  max_risk: number | null;
+  last_at: string;
+  country: string | null;
+  tenant_name: string | null;
+};
+
+export type AuthEventDetail = AuthEventRow & {
+  policy_version: string | null;
+  endpoint: string | null;
+  host_kind: string | null;
+  reasons: { code: string; weight: number | null }[];
+  has_weights: boolean;
+  details: Record<string, unknown>;
+  related: Partial<Record<"net" | "subject" | "country", number>>;
+  related_hours: number;
+  can_block: boolean;
 };
 
 export type AuthPolicy = Record<string, Record<string, number | string | boolean>>;
@@ -108,4 +198,34 @@ export type TenantSecurityActivity = {
   warnings: TenantSecurityWarning[];
   accounts: TenantSecurityAccount[];
   events: TenantSecurityEvent[];
+};
+
+// ── Alarmregeln (1.6) ──
+
+export type AlertRuleState = "fired" | "near" | "quiet";
+
+/** GET /api/admin/auth-security/alert-rules */
+export type AlertRuleRow = {
+  rule: string;
+  window_minutes: number;
+  value: number;
+  threshold: number;
+  comparator: ">=" | ">";
+  state: AlertRuleState;
+  severity: "critical" | "warning";
+  fired: number;
+  triggers_30d: number;
+  daily_30d: number[];
+  recent: { at: string; subject: string | null; severity: string }[];
+  settings: Record<string, number | string | boolean>;
+};
+
+/** GET /api/admin/auth-security/alert-rules/{rule}/series */
+export type AlertRuleSeries = {
+  rule: string;
+  bucket_minutes: number;
+  hours: number;
+  threshold: number;
+  comparator: ">=" | ">";
+  points: { start: string; value: number }[];
 };

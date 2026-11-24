@@ -21,7 +21,7 @@
     "securityOverview": "Sicherheit",
     "securityEvents": "Anmeldeereignisse",
     "securityBlocks": "Sperren",
-    "securityAlerts": "Warnungen",
+    "securityAlerts": "Alarmregeln",
     "auditLog": "Audit-Log",
     "securityPolicy": "Richtlinien",
     "systemStatus": "Systemstatus",

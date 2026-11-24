@@ -24,7 +24,7 @@ Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tok
 | Status | `--success` `--warning` `--danger` (Vollton), `-bg`/`-fg` (Fläche/Text darauf), `--info-*`, `--neutral-*` | Bedeutung immer über diese Tokens, nie über Tailwind-Hex |
 | Auf Vollfarbe | `--on-solid` | Textfarbe auf `--accent`/`--success`/Scrims. Statt `#fff` |
 | Primärbutton | `--primary` `--primary-strong` `--primary-contrast` | Nur für `.button-primary` |
-| Diagramme | `--chart-1..5`, Bedeutungsfarben via Status-Tokens | Gemeinsame Zuordnung: `lib/constants/chart-colors.ts` |
+| Diagramme | `--chart-1..5`, Bedeutungsfarben via Status-Tokens, `--violet` | Gemeinsame Zuordnung: `lib/constants/chart-colors.ts`. `--violet` (Light/Dark) markiert automatische Sperren im Sicherheitsbereich |
 | Radius | `--radius-xs` 4 · `-sm` 8 · `-md` 12 · `-lg` 16 · `-xl` 24 · `-pill` | Eingabefelder/Buttons `sm`, Karten `md`–`lg`, Modals `xl`, Chips/Badges `pill`. Kreise: `50%` |
 | Schrift | `--text-xs` 12 · `-sm` 13 · `-base` 14 · `-md` 15 · `-lg` 16 · `-xl` 20 · `-2xl` 24 · `-3xl` 32 | Fließtext/Felder `base`, Hilfetexte `sm`/`xs`, Überschriften `xl`+ |
 | Gewicht | 400 Text · 500 Betonung · 600 Buttons/Labels · 700 Überschriften | Kein 650/800 |

@@ -4,7 +4,7 @@
     "overview": "Overview",
     "events": "Sign-in events",
     "blocks": "Blocks",
-    "alerts": "Alerts",
+    "alerts": "Alert rules",
     "audit": "Audit log",
     "policy": "Policies"
   },
@@ -62,12 +62,12 @@
     "noTopNetworks": "No failed attempts from single networks.",
     "noTopAccounts": "No accounts with failed attempts.",
     "alertsTitle": "Current alerts",
-    "allAlerts": "All alerts",
+    "allAlerts": "Go to alert rules",
     "auditLink": "Open audit log"
   },
   "events": {
     "title": "Sign-in events",
-    "description": "Latest events of the sign-in protection. Accounts, networks and devices only appear as shortened pseudonyms.",
+    "description": "All events of the sign-in protection. Clicking a pseudonym filters by it – follow a trail from network to account to tenant. Accounts, networks and devices are only shown shortened.",
     "typeLabel": "Event type",
     "typeAll": "All types",
     "outcomeLabel": "Outcome",
@@ -80,9 +80,12 @@
       "subject": "Account",
       "network": "Network",
       "risk": "Risk",
-      "client": "Device",
-      "actions": "Actions",
-      "country": "Country"
+      "client": "Client",
+      "country": "Country",
+      "device": "Device (pseudonym)",
+      "enforcement": "Enforcement",
+      "policy": "Policy",
+      "details": "Details"
     },
     "actorKinds": {
       "user": "User",
@@ -93,7 +96,6 @@
     "empty": "No events for this selection.",
     "previous": "Newer",
     "next": "Older",
-    "pageInfo": "Entries {from, number}–{to, number}",
     "resolve": "Show account",
     "resolveConfirm": "Map this event's pseudonym to an account? This requires a passkey confirmation and is recorded in the audit log.",
     "countrySource": "Country data: <link>“IP to Country Lite” by DB-IP.com</link> (CC BY 4.0), looked up locally, no IP address stored.",
@@ -112,28 +114,90 @@
       "privileged_account": "privileged account",
       "attack_mode": "attack mode",
       "degraded": "degraded mode (no Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Individual",
+      "net": "By network",
+      "subject": "By account"
+    },
+    "listLabel": "Events",
+    "pageInfoKeyset": "Page {page, number} · {count, plural, one {# entry} other {# entries}} · newest first",
+    "filtersLabel": "Event filters",
+    "pivots": {
+      "subject": "account",
+      "net": "network",
+      "device": "device",
+      "country": "country"
+    },
+    "tokenLabel": "Enter filter",
+    "removePivot": "Remove filter {filter}",
+    "tokenPlaceholder": "e.g. network:3f9a1c07 or country:NL",
+    "tokenInvalid": "Unknown filter. Possible: account:, network:, device: (at least 4 characters) or country: (e.g. CH).",
+    "tokenHelp": "Press Enter to apply. Clicking a pseudonym in the list filters too.",
+    "tenantLabel": "Tenant",
+    "tenantAll": "All tenants",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 days",
+      "14d": "14 days"
+    },
+    "liveOn": "Live (30 s)",
+    "liveOff": "Live off",
+    "reset": "Reset filters",
+    "histogramTitle": "Filtered events over time",
+    "histogramOther": "Rejected/checked",
+    "histogramSummary": "{failure, number} failed attempts, {other, number} rejected or checked and {success, number} successful events in the selected period.",
+    "barTitle": "{time}: {failure, number} failed · {other, number} rejected/checked · {success, number} successful",
+    "now": "now",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "moderate",
+      "high": "high",
+      "critical": "critical"
+    },
+    "openEvent": "Open event {type} from {time}",
+    "filterBy": "Filter by {filter} {value}",
+    "groupColumns": {
+      "net": "Network",
+      "subject": "Account",
+      "distribution": "Distribution",
+      "events": "Events",
+      "accounts": "Accounts",
+      "networks": "Networks",
+      "maxRisk": "Max. risk",
+      "last": "Last"
+    },
+    "distribution": "{failure, number} failed, {other, number} rejected/checked, {success, number} successful",
+    "closeDetail": "Close detail",
+    "riskHeading": "Risk {score} · {level}",
+    "riskNone": "No risk score",
+    "noReasons": "No risk signal.",
+    "noWeights": "Older events (before 1.6) only store the reasons, not the weights.",
+    "trace": "Follow the trail (±{hours} h)",
+    "traceKinds": {
+      "net": "Same network",
+      "subject": "Same account",
+      "country": "Same country"
+    },
+    "blockSource": "Block source",
+    "blocked": "Network blocked.",
+    "blockTitle": "Block network {net}",
+    "blockDescription": "Manual block (stage 5) of this event's network (IPv4 /24, IPv6 /48). Confirmed with a passkey and recorded in the audit log. Platform admins remain exempt.",
+    "blockShared": "This network produced {count, plural, one {# event} other {# events}} within ±{hours} h. A shared network (company NAT, proxy, school) blocks everyone without a known device."
   },
   "blocks": {
     "title": "Blocks",
-    "description": "Active IP blocks of the sign-in protection. Setting and lifting require a passkey confirmation.",
+    "description": "Temporary blocks of sources for the sign-in endpoints – never for accounts on known devices, never permanent. A pseudonym is blocked, never an address. Setting, extending and lifting require passkey confirmation.",
     "add": "Manual block",
-    "columns": {
-      "subject": "Source (pseudonym)",
-      "scope": "Scope",
-      "stage": "Stage",
-      "kind": "Type",
-      "reason": "Reason",
-      "until": "Until",
-      "actions": "Actions"
-    },
     "scopes": {
       "source": "Single address",
-      "net": "Network"
+      "net": "Network",
+      "net_fp": "Network (from event)"
     },
     "manual": "Manual",
     "automatic": "Automatic",
-    "unblock": "Unblock",
+    "unblock": "Lift",
     "unblockConfirm": "Lift the block for {subject}? Sign-ins from this source will be possible again.",
     "unblocked": "Block lifted.",
     "created": "Block set.",
@@ -146,13 +210,109 @@
     "minutesLabel": "Duration in minutes",
     "minutesHelp": "At most {max, number} minutes.",
     "reasonLabel": "Reason",
-    "save": "Block",
+    "save": "Block with passkey",
     "cancel": "Cancel",
-    "readOnly": "Only owners can set or lift blocks."
+    "readOnly": "Only owners can set or lift blocks.",
+    "activeTitle": "Active blocks",
+    "cardLabel": "Block {subject}",
+    "remaining": "remaining",
+    "remainingDays": "{days} d {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Remaining share of the block duration",
+    "stageBadge": "Stage {stage}",
+    "repeat": "block no. {count} in 7 days",
+    "facts": {
+      "reason": "Reason",
+      "rejected": "Rejected",
+      "by": "Set by"
+    },
+    "unknownAdmin": "Platform admin",
+    "extend": "Extend",
+    "extendTitle": "Extend block {subject}",
+    "extendDescription": "The block then becomes a manual block (stage 5). Confirmed with a passkey and recorded in the audit log.",
+    "extendSave": "Extend with passkey",
+    "extended": "Block extended.",
+    "modalDescription": "Stage 5. Confirmed with a passkey and recorded in the audit log.",
+    "reasonHelp": "Required, e.g. abuse report or incident.",
+    "durationLabel": "Duration",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 days",
+      "43200": "30 days",
+      "custom": "Custom"
+    },
+    "scopeOptions": {
+      "source": "Single address (/32, /64)",
+      "net": "Network (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Hard source limit reached repeatedly",
+      "risk_critical": "Critical risk repeatedly",
+      "manual": "Manual",
+      "extend": "Extended"
+    },
+    "ladder": {
+      "title": "Defence stages",
+      "hint": "Stages 1–3: events in the last 24 h · stages 4–5: active blocks",
+      "stage": "Stage {stage}",
+      "events24h": "Events 24 h",
+      "activeNow": "active",
+      "stages": {
+        "1": {
+          "title": "Observe",
+          "text": "Event only, no restriction (failed attempts)."
+        },
+        "2": {
+          "title": "Limits lowered",
+          "text": "Attempt rate or failure limit exceeded, attempt rejected."
+        },
+        "3": {
+          "title": "Extra check",
+          "text": "Unknown devices need an email code or second factor."
+        },
+        "4": {
+          "title": "Temporarily blocked",
+          "text": "After repeated hard limits: sign-in endpoints closed for the source."
+        },
+        "5": {
+          "title": "Manually blocked",
+          "text": "By a platform admin with reason and expiry."
+        }
+      },
+      "strikes": "Stage 4 after {strikes} strikes in 24 h",
+      "durations": "Duration per repetition within 7 days: {durations} min",
+      "limits": "Automatic at most {automatic} h, manual at most {manual} days",
+      "adminsExempt": "Platform admins are exempt (emergency access)"
+    },
+    "history": {
+      "title": "History, 7 days",
+      "summary": "{sources, plural, =0 {No blocks} one {# source} other {# sources}} with {bars, plural, one {# block} other {# blocks}}, {manual, number} of them manual. Repetitions get longer.",
+      "showTable": "Data as table",
+      "showChart": "As chart",
+      "empty": "There were no blocks in the last 7 days.",
+      "barLabel": "{kind}, from {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "lifted early",
+        "extended": "extended",
+        "active": "active",
+        "expired": "expired"
+      },
+      "columns": {
+        "source": "Source",
+        "kind": "Type",
+        "start": "Start",
+        "end": "End",
+        "minutes": "Minutes",
+        "status": "Status"
+      }
+    }
   },
   "alerts": {
-    "title": "Alerts",
-    "description": "Currently triggered alert rules of the sign-in protection. The same rules also notify via ntfy.",
+    "title": "Alert rules",
+    "description": "Ten rules check the sign-in protection continuously. Per rule: current value against the threshold, history and triggers in the last 30 days. The same rules also notify via ntfy.",
     "empty": "No alert rule is currently triggered.",
     "columns": {
       "severity": "Severity",
@@ -184,7 +344,12 @@
     "acknowledgedToast": "Warning acknowledged",
     "reopenedToast": "Warning reopened",
     "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again.",
-    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event)."
+    "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event).",
+    "openTitle": "Triggered alerts",
+    "acknowledgeTitle": "Acknowledge alert",
+    "noteLabel": "Note (optional)",
+    "noteHelp": "Briefly what is being checked – no personal data.",
+    "noteShown": "Note: {note}"
   },
   "audit": {
     "title": "Audit log",
@@ -249,5 +414,61 @@
       "hash": "comparison of login addresses",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "failures",
+      "spraying": "accounts",
+      "account_attack": "attempts",
+      "admin_mfa": "codes",
+      "admin_new_device": "sign-ins",
+      "blocks": "blocks",
+      "network": "attempts",
+      "cross_tenant": "tenants",
+      "tenant": "accounts",
+      "limiter": "outages"
+    },
+    "conditions": {
+      "stuffing": "At least {threshold} failed attempts (max. of minimum and factor × usual rate) from many networks in {minutes} minutes. Switches on attack mode.",
+      "spraying": "At least {threshold} different accounts are tried from one network with a wrong password in {minutes} minutes.",
+      "account_attack": "At least {threshold} failed attempts on one account from several networks in {minutes} minutes. Critical for accounts with admin rights.",
+      "admin_mfa": "At least {threshold} wrong MFA codes of a platform admin in {minutes} minutes.",
+      "admin_new_device": "A platform admin signs in from an unknown device (window {minutes} minutes).",
+      "blocks": "More than {threshold} blocks in {minutes} minutes.",
+      "network": "At least {threshold} failed attempts from one network (IPv4 /24, IPv6 /48) in {minutes} minutes.",
+      "cross_tenant": "Failed attempts from one network against at least {threshold} tenants in {minutes} minutes.",
+      "tenant": "At least {threshold} different accounts of one tenant with failed attempts in {minutes} minutes.",
+      "limiter": "At least {threshold} rate limiter outage in {minutes} minutes. Unknown devices are then rejected."
+    },
+    "title": "Rules",
+    "description": "Thresholds are changed in the server configuration and only shown here.",
+    "listLabel": "Alert rules",
+    "empty": "No rule in this state.",
+    "states": {
+      "all": "All",
+      "fired": "Triggered",
+      "near": "Near threshold",
+      "quiet": "Quiet"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# minute} other {# minutes}}",
+    "triggered30": "{count, plural, one {# × in 30 d} other {# × in 30 d}}",
+    "facts": {
+      "now": "Now",
+      "threshold": "Threshold",
+      "window": "Window",
+      "triggered": "Triggered 30 d"
+    },
+    "thresholdAbove": "above {threshold} {unit}",
+    "thresholdAtLeast": "from {threshold} {unit}",
+    "settingsTitle": "Settings",
+    "noSettings": "Fixed rule without a setting.",
+    "settingsHelp": "Notification via ntfy with debouncing and reminder. An alert clears by itself {minutes, plural, one {# minute} other {# minutes}} after the last event.",
+    "recentTitle": "Last triggered",
+    "noRecent": "Not triggered in the last 30 days.",
+    "seriesTitle": "Value, 24 hours",
+    "seriesThreshold": "dashed: threshold {threshold} {unit}",
+    "seriesSummary": "Highest value {peak}, threshold {threshold}; {over, plural, =0 {no section} one {# section} other {# sections}} above the threshold (sections of {minutes} minutes).",
+    "seriesApprox": "Approximation: fixed sections of {minutes} minutes instead of the rule's sliding window."
   }
 }

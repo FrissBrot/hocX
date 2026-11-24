@@ -4,7 +4,7 @@
     "overview": "Vue d’ensemble",
     "events": "Événements de connexion",
     "blocks": "Blocages",
-    "alerts": "Alertes",
+    "alerts": "Règles d'alerte",
     "audit": "Journal d’audit",
     "policy": "Règles"
   },
@@ -62,12 +62,12 @@
     "noTopNetworks": "Aucune tentative échouée depuis un réseau isolé.",
     "noTopAccounts": "Aucun compte avec des tentatives échouées.",
     "alertsTitle": "Alertes actuelles",
-    "allAlerts": "Toutes les alertes",
+    "allAlerts": "Vers les règles d'alerte",
     "auditLink": "Ouvrir le journal d’audit"
   },
   "events": {
     "title": "Événements de connexion",
-    "description": "Derniers événements de la protection des connexions. Comptes, réseaux et appareils n’apparaissent que sous forme de pseudonymes abrégés.",
+    "description": "Tous les événements de la protection de connexion. Un clic sur un pseudonyme filtre dessus – pour suivre une piste du réseau au compte puis au mandant. Comptes, réseaux et appareils n'apparaissent qu'abrégés.",
     "typeLabel": "Type d’événement",
     "typeAll": "Tous les types",
     "outcomeLabel": "Résultat",
@@ -80,9 +80,12 @@
       "subject": "Compte",
       "network": "Réseau",
       "risk": "Risque",
-      "client": "Appareil",
-      "actions": "Actions",
-      "country": "Pays"
+      "client": "Client",
+      "country": "Pays",
+      "device": "Appareil (pseudonyme)",
+      "enforcement": "Application",
+      "policy": "Règle",
+      "details": "Détails"
     },
     "actorKinds": {
       "user": "Utilisateur",
@@ -93,7 +96,6 @@
     "empty": "Aucun événement pour cette sélection.",
     "previous": "Plus récents",
     "next": "Plus anciens",
-    "pageInfo": "Entrées {from, number}–{to, number}",
     "resolve": "Afficher le compte",
     "resolveConfirm": "Associer le pseudonyme de cet événement à un compte ? Cela exige une confirmation par passkey et est consigné dans le journal d'audit.",
     "countrySource": "Pays : <link>« IP to Country Lite » de DB-IP.com</link> (CC BY 4.0), déterminé localement, sans adresse IP enregistrée.",
@@ -112,28 +114,90 @@
       "privileged_account": "compte privilégié",
       "attack_mode": "mode attaque",
       "degraded": "mode dégradé (sans Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Individuel",
+      "net": "Par réseau",
+      "subject": "Par compte"
+    },
+    "listLabel": "Événements",
+    "pageInfoKeyset": "Page {page, number} · {count, plural, one {# entrée} other {# entrées}} · les plus récentes d'abord",
+    "filtersLabel": "Filtres des événements",
+    "pivots": {
+      "subject": "compte",
+      "net": "réseau",
+      "device": "appareil",
+      "country": "pays"
+    },
+    "tokenLabel": "Saisir un filtre",
+    "removePivot": "Retirer le filtre {filter}",
+    "tokenPlaceholder": "p. ex. réseau:3f9a1c07 ou pays:NL",
+    "tokenInvalid": "Filtre inconnu. Possibles : compte:, réseau:, appareil: (au moins 4 caractères) ou pays: (p. ex. CH).",
+    "tokenHelp": "Valider avec Entrée. Un clic sur un pseudonyme dans la liste filtre aussi.",
+    "tenantLabel": "Mandant",
+    "tenantAll": "Tous les mandants",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 jours",
+      "14d": "14 jours"
+    },
+    "liveOn": "En direct (30 s)",
+    "liveOff": "Direct désactivé",
+    "reset": "Réinitialiser les filtres",
+    "histogramTitle": "Évolution des événements filtrés",
+    "histogramOther": "Refusés/contrôlés",
+    "histogramSummary": "{failure, number} échecs, {other, number} événements refusés ou contrôlés et {success, number} réussis sur la période choisie.",
+    "barTitle": "{time} : {failure, number} échecs · {other, number} refusés/contrôlés · {success, number} réussis",
+    "now": "maintenant",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "modéré",
+      "high": "élevé",
+      "critical": "critique"
+    },
+    "openEvent": "Ouvrir l'événement {type} de {time}",
+    "filterBy": "Filtrer par {filter} {value}",
+    "groupColumns": {
+      "net": "Réseau",
+      "subject": "Compte",
+      "distribution": "Répartition",
+      "events": "Événements",
+      "accounts": "Comptes",
+      "networks": "Réseaux",
+      "maxRisk": "Risque max.",
+      "last": "Dernier"
+    },
+    "distribution": "{failure, number} échecs, {other, number} refusés/contrôlés, {success, number} réussis",
+    "closeDetail": "Fermer le détail",
+    "riskHeading": "Risque {score} · {level}",
+    "riskNone": "Aucune valeur de risque",
+    "noReasons": "Aucun signal de risque.",
+    "noWeights": "Les événements plus anciens (avant 1.6) n'enregistrent que les motifs, sans pondération.",
+    "trace": "Suivre la piste (±{hours} h)",
+    "traceKinds": {
+      "net": "Même réseau",
+      "subject": "Même compte",
+      "country": "Même pays"
+    },
+    "blockSource": "Bloquer la source",
+    "blocked": "Réseau bloqué.",
+    "blockTitle": "Bloquer le réseau {net}",
+    "blockDescription": "Blocage manuel (niveau 5) du réseau de cet événement (IPv4 /24, IPv6 /48). Confirmé par passkey et consigné dans le journal d'audit. Les admins plateforme restent exemptés.",
+    "blockShared": "Ce réseau a produit {count, plural, one {# événement} other {# événements}} en ±{hours} h. Un réseau partagé (NAT d'entreprise, proxy, école) bloque toutes les personnes sans appareil connu."
   },
   "blocks": {
     "title": "Blocages",
-    "description": "Blocages IP actifs de la protection des connexions. Les poser et les lever exige une confirmation par passkey.",
+    "description": "Blocages temporaires de sources pour les points de connexion – jamais pour des comptes sur des appareils connus, jamais définitifs. On bloque un pseudonyme, jamais une adresse. Poser, prolonger et lever exigent une confirmation par passkey.",
     "add": "Blocage manuel",
-    "columns": {
-      "subject": "Source (pseudonyme)",
-      "scope": "Portée",
-      "stage": "Niveau",
-      "kind": "Type",
-      "reason": "Motif",
-      "until": "Jusqu’à",
-      "actions": "Actions"
-    },
     "scopes": {
       "source": "Adresse unique",
-      "net": "Réseau"
+      "net": "Réseau",
+      "net_fp": "Réseau (depuis un événement)"
     },
     "manual": "Manuel",
     "automatic": "Automatique",
-    "unblock": "Débloquer",
+    "unblock": "Lever",
     "unblockConfirm": "Lever le blocage de {subject} ? Les connexions depuis cette source seront à nouveau possibles.",
     "unblocked": "Blocage levé.",
     "created": "Blocage posé.",
@@ -146,13 +210,109 @@
     "minutesLabel": "Durée en minutes",
     "minutesHelp": "Au maximum {max, number} minutes.",
     "reasonLabel": "Motif",
-    "save": "Bloquer",
+    "save": "Bloquer avec passkey",
     "cancel": "Annuler",
-    "readOnly": "Seuls les owners peuvent poser ou lever des blocages."
+    "readOnly": "Seuls les owners peuvent poser ou lever des blocages.",
+    "activeTitle": "Blocages actifs",
+    "cardLabel": "Blocage {subject}",
+    "remaining": "restant",
+    "remainingDays": "{days} j {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Part restante de la durée du blocage",
+    "stageBadge": "Niveau {stage}",
+    "repeat": "{count}e blocage en 7 jours",
+    "facts": {
+      "reason": "Motif",
+      "rejected": "Refusés",
+      "by": "Posé par"
+    },
+    "unknownAdmin": "Admin plateforme",
+    "extend": "Prolonger",
+    "extendTitle": "Prolonger le blocage {subject}",
+    "extendDescription": "Le blocage devient ensuite un blocage manuel (niveau 5). Confirmé par passkey et consigné dans le journal d'audit.",
+    "extendSave": "Prolonger avec passkey",
+    "extended": "Blocage prolongé.",
+    "modalDescription": "Niveau 5. Confirmé par passkey et consigné dans le journal d'audit.",
+    "reasonHelp": "Obligatoire, p. ex. signalement d'abus ou incident.",
+    "durationLabel": "Durée",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 jours",
+      "43200": "30 jours",
+      "custom": "Autre"
+    },
+    "scopeOptions": {
+      "source": "Adresse unique (/32, /64)",
+      "net": "Réseau (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Limite stricte de la source atteinte à répétition",
+      "risk_critical": "Risque critique répété",
+      "manual": "Manuel",
+      "extend": "Prolongé"
+    },
+    "ladder": {
+      "title": "Niveaux de défense",
+      "hint": "Niveaux 1–3 : événements des dernières 24 h · niveaux 4–5 : blocages actifs",
+      "stage": "Niveau {stage}",
+      "events24h": "Événements 24 h",
+      "activeNow": "actifs",
+      "stages": {
+        "1": {
+          "title": "Observer",
+          "text": "Événement seulement, aucune restriction (échecs)."
+        },
+        "2": {
+          "title": "Limites abaissées",
+          "text": "Fréquence ou limite d'échecs dépassée, tentative refusée."
+        },
+        "3": {
+          "title": "Contrôle supplémentaire",
+          "text": "Les appareils inconnus doivent fournir un code e-mail ou un second facteur."
+        },
+        "4": {
+          "title": "Bloqué temporairement",
+          "text": "Après des limites strictes répétées : points de connexion fermés pour la source."
+        },
+        "5": {
+          "title": "Bloqué manuellement",
+          "text": "Par un admin plateforme, avec motif et échéance."
+        }
+      },
+      "strikes": "Niveau 4 dès {strikes} avertissements en 24 h",
+      "durations": "Durée par répétition sur 7 jours : {durations} min",
+      "limits": "Automatique au plus {automatic} h, manuel au plus {manual} jours",
+      "adminsExempt": "Les admins plateforme sont exemptés (accès d'urgence)"
+    },
+    "history": {
+      "title": "Historique, 7 jours",
+      "summary": "{sources, plural, =0 {Aucun blocage} one {# source} other {# sources}} avec {bars, plural, one {# blocage} other {# blocages}}, dont {manual, number} manuels. Les répétitions s'allongent.",
+      "showTable": "Données en tableau",
+      "showChart": "En graphique",
+      "empty": "Aucun blocage ces 7 derniers jours.",
+      "barLabel": "{kind}, dès {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "levé avant terme",
+        "extended": "prolongé",
+        "active": "actif",
+        "expired": "expiré"
+      },
+      "columns": {
+        "source": "Source",
+        "kind": "Type",
+        "start": "Début",
+        "end": "Fin",
+        "minutes": "Minutes",
+        "status": "Statut"
+      }
+    }
   },
   "alerts": {
-    "title": "Alertes",
-    "description": "Règles d’alerte actuellement déclenchées par la protection des connexions. Les mêmes règles notifient aussi via ntfy.",
+    "title": "Règles d'alerte",
+    "description": "Dix règles surveillent en continu la protection des connexions. Par règle : valeur actuelle face au seuil, historique et déclenchements des 30 derniers jours. Les mêmes règles notifient aussi via ntfy.",
     "empty": "Aucune règle d’alerte n’est déclenchée actuellement.",
     "columns": {
       "severity": "Gravité",
@@ -184,7 +344,12 @@
     "acknowledgedToast": "Avertissement acquitté",
     "reopenedToast": "Avertissement rouvert",
     "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert.",
-    "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement)."
+    "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement).",
+    "openTitle": "Alertes déclenchées",
+    "acknowledgeTitle": "Accuser réception de l'alerte",
+    "noteLabel": "Note (facultative)",
+    "noteHelp": "Brièvement ce qui est vérifié – sans données personnelles.",
+    "noteShown": "Note : {note}"
   },
   "audit": {
     "title": "Journal d’audit",
@@ -249,5 +414,61 @@
       "hash": "comparaison des adresses de connexion",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "échecs",
+      "spraying": "comptes",
+      "account_attack": "tentatives",
+      "admin_mfa": "codes",
+      "admin_new_device": "connexions",
+      "blocks": "blocages",
+      "network": "tentatives",
+      "cross_tenant": "mandants",
+      "tenant": "comptes",
+      "limiter": "pannes"
+    },
+    "conditions": {
+      "stuffing": "Au moins {threshold} échecs (max. entre minimum et facteur × taux habituel) depuis de nombreux réseaux en {minutes} minutes. Active le mode attaque.",
+      "spraying": "Au moins {threshold} comptes différents sont essayés depuis un réseau avec un mauvais mot de passe en {minutes} minutes.",
+      "account_attack": "Au moins {threshold} échecs sur un compte depuis plusieurs réseaux en {minutes} minutes. Critique pour les comptes avec droits d'administration.",
+      "admin_mfa": "Au moins {threshold} codes MFA erronés d'un admin plateforme en {minutes} minutes.",
+      "admin_new_device": "Un admin plateforme se connecte depuis un appareil inconnu (fenêtre {minutes} minutes).",
+      "blocks": "Plus de {threshold} blocages en {minutes} minutes.",
+      "network": "Au moins {threshold} échecs depuis un réseau (IPv4 /24, IPv6 /48) en {minutes} minutes.",
+      "cross_tenant": "Échecs depuis un réseau contre au moins {threshold} mandants en {minutes} minutes.",
+      "tenant": "Au moins {threshold} comptes différents d'un mandant avec des échecs en {minutes} minutes.",
+      "limiter": "Au moins {threshold} panne du limiteur de débit en {minutes} minutes. Les appareils inconnus sont alors refusés."
+    },
+    "title": "Règles",
+    "description": "Les seuils se modifient dans la configuration du serveur et ne sont qu'affichés ici.",
+    "listLabel": "Règles d'alerte",
+    "empty": "Aucune règle dans cet état.",
+    "states": {
+      "all": "Toutes",
+      "fired": "Déclenchée",
+      "near": "Proche du seuil",
+      "quiet": "Calme"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# minute} other {# minutes}}",
+    "triggered30": "{count, plural, one {# × en 30 j} other {# × en 30 j}}",
+    "facts": {
+      "now": "Maintenant",
+      "threshold": "Seuil",
+      "window": "Fenêtre",
+      "triggered": "Déclenchée 30 j"
+    },
+    "thresholdAbove": "au-dessus de {threshold} {unit}",
+    "thresholdAtLeast": "dès {threshold} {unit}",
+    "settingsTitle": "Paramètres",
+    "noSettings": "Règle fixe sans paramètre.",
+    "settingsHelp": "Notification via ntfy avec anti-rebond et rappel. Une alerte s'éteint d'elle-même {minutes, plural, one {# minute} other {# minutes}} après le dernier événement.",
+    "recentTitle": "Derniers déclenchements",
+    "noRecent": "Pas déclenchée ces 30 derniers jours.",
+    "seriesTitle": "Valeur, 24 heures",
+    "seriesThreshold": "pointillé : seuil {threshold} {unit}",
+    "seriesSummary": "Valeur maximale {peak}, seuil {threshold} ; {over, plural, =0 {aucune section} one {# section} other {# sections}} au-dessus du seuil (sections de {minutes} minutes).",
+    "seriesApprox": "Approximation : sections fixes de {minutes} minutes au lieu de la fenêtre glissante de la règle."
   }
 }

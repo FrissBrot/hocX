@@ -64,7 +64,11 @@ OUTCOMES = frozenset({"success", "failure", "blocked", "challenged", "info"})
 _ALLOWED_DETAIL_KEYS = frozenset({
     "reason", "factor", "layer", "count", "limit", "minutes", "by_admin", "method", "purpose", "action",
     "error", "stage", "scope", "revoked", "known_device", "new_device", "new_network", "mode", "kind",
+    # 1.6 Sperren: gekürztes Subjekt der Sperre, setzender Admin, Vorfall (ab 1.7), Wiederholung
+    "subject", "admin_id", "incident_id", "repeat",
 })
+# Risiko-Gewichte je Grund (1.6, ``details.weights``): nur bekannte Codes als Schlüssel, ganze Zahlen
+_MAX_WEIGHTS = 20
 
 _lost = 0
 _last_error_logged = 0.0
@@ -76,11 +80,26 @@ def lost_events() -> int:
     return _lost
 
 
+def _clean_weights(weights) -> dict[str, int] | None:
+    if not isinstance(weights, dict):
+        return None
+    clean: dict[str, int] = {}
+    for reason, weight in list(weights.items())[:_MAX_WEIGHTS]:
+        if isinstance(reason, str) and reason.replace("_", "").isalnum() and len(reason) <= 40 and isinstance(weight, int) and not isinstance(weight, bool):
+            clean[reason] = max(0, min(100, weight))
+    return clean or None
+
+
 def _clean_details(details: dict | None) -> dict:
     if not details:
         return {}
     clean: dict = {}
     for key, value in details.items():
+        if key == "weights":
+            weights = _clean_weights(value)
+            if weights:
+                clean[key] = weights
+            continue
         if key not in _ALLOWED_DETAIL_KEYS:
             continue
         if isinstance(value, (bool, int, float)) or value is None:
@@ -103,11 +122,15 @@ def record(
     session_id: uuid.UUID | None = None,
     risk_score: int | None = None,
     risk_reasons: Iterable[str] = (),
+    risk_weights: dict[str, int] | None = None,
     enforcement: str | None = None,
     details: dict | None = None,
     ctx: request_context.RequestContext | None = None,
 ) -> None:
-    """Schreibt ein Ereignis. Wirft nie (ausser bei Programmierfehlern im Typ)."""
+    """Schreibt ein Ereignis. Wirft nie (ausser bei Programmierfehlern im Typ).
+
+    ``risk_weights`` (1.6): Gewicht je Risikogrund, landet in ``details.weights`` - für die
+    Erklärung im Ereignis-Detail. Ältere Ereignisse haben nur die Gründe."""
     if event_type not in EVENT_TYPES:
         raise ValueError(f"unbekannter auth_event-Typ: {event_type}")
     if outcome not in OUTCOMES:
@@ -137,7 +160,7 @@ def record(
         "host_kind": ctx.host_kind,
         "user_agent_family": ctx.user_agent_family,
         "src_country": ctx.country,
-        "details": _clean_details(details),
+        "details": _clean_details({**(details or {}), **({"weights": risk_weights} if risk_weights and risk_score is not None else {})}),
     }
     _write(params)
 

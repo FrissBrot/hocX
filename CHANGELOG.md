@@ -103,6 +103,35 @@ Installationen aktualisieren können.
 - Vorlagen-Traktanden haben eine Sichtbarkeit (`is_visible`), die neue Protokolle übernehmen
   (Migration `0270_protocol_agenda_edit`).
 
+- **Konsole › Audit-Log: gespeicherte Ansichten und Token-Suche (1.6):** Ansichten «Alle Ereignisse»,
+  «Fehlgeschlagen», «Anmeldungen», «Löschungen», «Plattform-Admin» und «Datenschutz» mit Zählern für
+  den gewählten Zeitraum. Das Suchfeld versteht `quelle:`, `aktion:` und `vorgang:` (z. B.
+  `vorgang:gelöscht`); `person:` und `mandant:` öffnen die Auswahl (Personen über die Admin-Suche,
+  Mandanten über die Mandantensuche) – in der Adresse stehen nur IDs, nie Namen.
+- **Konsole › Sicherheit › Alarmregeln (1.6, vorher «Warnungen»):** alle zehn Regeln mit aktuellem
+  Messwert gegen die Schwelle – auch unterhalb («ruhig», «nahe Schwelle», «ausgelöst») –, Bedingung in
+  Worten, Kurve der letzten 24 h je Regel (mit Tabellenalternative), Auslösungen der letzten 30 Tage
+  aus dem Systemmonitor und die wirksamen Einstellungen (nur lesen, geändert wird in der
+  Serverkonfiguration). Ausgelöste Warnungen lassen sich weiterhin quittieren, jetzt mit Notiz.
+- **Konsole › Sicherheit › Anmeldeereignisse neu (1.6):** Filter nach Konto-, Netz- und
+  Geräte-Pseudonym (Klick auf ein Pseudonym oder Eingabe wie `netz:3f9a1c07`), Land, Typ, Ergebnis
+  und Mandant (Suche statt Mandantenliste); der Zeitraum ist Pflicht (1 h bis 14 Tage). Ein
+  Histogramm zeigt die gefilterten Ereignisse (mit Tabellenalternative), die Ergebnis-Reiter zählen
+  mit. Ansicht «Nach Netz» bzw. «Nach Konto» gruppiert die Treffer. Blättern ohne Offset
+  (Keyset), Live-Aktualisierung alle 30 s. Das Detail erklärt das Risiko mit den Gewichten der
+  Gründe (ab 1.6 gespeichert, ältere Ereignisse nur mit Gründen), zeigt «Spur verfolgen» (gleiches
+  Netz, Konto, Land) und bietet «Quelle sperren» – sperrt das Netz des Ereignisses (/24, /48) mit
+  Passkey-Bestätigung. Filter stehen in der URL, nur als Codes und Pseudonym-Präfixe.
+- **Konsole › Sicherheit › Sperren neu (1.6):** Abwehrleiter mit allen fünf Stufen (Stufen 1–3 als
+  Ereignisse der letzten 24 h, 4–5 als aktive Sperren), Karten je Sperre mit Countdown, Grund,
+  Zähler «Abgewiesen», gesetzt von, **Verlängern** (macht die Sperre zur manuellen Sperre Stufe 5,
+  Begründung Pflicht) und Aufheben – beides mit Passkey-Bestätigung und Audit-Eintrag. Verlauf der
+  letzten 7 Tage als Zeitleiste je Quelle (mit Tabellenalternative). Die manuelle Sperre bietet
+  Voreinstellungen (1 h bis 30 Tage) und freie Minuten. Neu kann eine Sperre auch einen
+  **Netz-Fingerprint** (Pseudonym der Anmeldeereignisse, /24 bzw. /48) treffen; Plattform-Admins
+  bleiben ausgenommen. `block.set`/`block.clear` tragen jetzt gekürztes Subjekt, Admin und
+  (vorbereitet für 1.7) Vorfall.
+
 ### Geändert
 
 - **Protokoll-Editor:** Akkordeon, Rad-Effekt und die beiden Profileinstellungen dazu sind
@@ -199,7 +228,7 @@ Installationen aktualisieren können.
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
-  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0270`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0260` → `0270` → `0280`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im

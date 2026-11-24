@@ -126,9 +126,11 @@ STEP_UP = {
     # Anmeldeschutz: Sperre aufheben hilft einer gestohlenen Session, sperren trifft Verfügbarkeit
     ("POST", "/api/admin/auth-security/blocks"): "security-block",
     ("DELETE", "/api/admin/auth-security/blocks/{subject}"): "security-block",
+    ("POST", "/api/admin/auth-security/blocks/{subject}/extend"): "security-block",
     # 1.5.1: Export und Subjekt-Auflösung (Personenbezug) mit eigenem Zweck
     ("POST", "/api/admin/auth-security/export"): "security-export",
     ("POST", "/api/admin/auth-security/events/{event_id}/resolve-subject"): "security-resolve",
+    ("POST", "/api/admin/auth-security/events/{event_id}/block"): "security-block",
     # 1.5.1: Zurücksetzungslink statt Passwort setzen
     ("POST", "/api/admin/users/{user_id}/password-reset"): "user-credentials",
     ("POST", "/api/admin/tenants/import/authorize"): "tenant-import",

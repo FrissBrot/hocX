@@ -17,23 +17,23 @@ import tempfile
 import uuid
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app.auth_security import blocks, read_service
+from app.auth_security import blocks, event_query, read_service
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.admin_step_up import require_step_up
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
-from app.schemas.base import MAX_QUERY_OFFSET
 from app.services import export_crypto
 from app.services.audit_service import AuditService
 
@@ -43,8 +43,13 @@ audit = AuditService()
 
 class BlockCreate(BaseModel):
     ip: str | None = Field(default=None, max_length=64)
-    subject: str | None = Field(default=None, max_length=64)
+    subject: str | None = Field(default=None, max_length=64, pattern=r"^[0-9a-f]{16,64}$")
     scope: Literal["source", "net"] = "source"
+    minutes: int = Field(ge=1, le=blocks.MAX_MANUAL_MINUTES)
+    reason: str = Field(min_length=3, max_length=200)
+
+
+class BlockExtend(BaseModel):
     minutes: int = Field(ge=1, le=blocks.MAX_MANUAL_MINUTES)
     reason: str = Field(min_length=3, max_length=200)
 
@@ -92,7 +97,7 @@ def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin =
         "open_alerts": len(open_alerts),
         "critical_alerts": sum(1 for alert in open_alerts if alert["severity"] == "critical"),
         "acknowledged_alerts": len(alerts) - len(open_alerts),
-        "active_blocks": len(read_service.active_blocks()),
+        "active_blocks": len(blocks.active_blocks()),
     }
 
 
@@ -155,6 +160,22 @@ def _alerts_with_acks(db: Session) -> list[dict]:
             "acknowledged_note": row.acknowledged_note if current else None,
         })
     return result
+
+
+AlertRule = Literal["stuffing", "spraying", "account_attack", "admin_mfa", "admin_new_device", "blocks", "network", "cross_tenant", "tenant", "limiter"]
+
+
+@router.get("/auth-security/alert-rules")
+def auth_security_alert_rules(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Alle Alarmregeln mit Messwert gegen Schwelle (auch darunter, 30 s Cache wie die Warnungen),
+    Auslösungen der letzten 30 Tage und wirksamen Einstellungen (nur lesen)."""
+    return read_service.alert_rules(db)
+
+
+@router.get("/auth-security/alert-rules/{rule}/series")
+def auth_security_alert_rule_series(rule: AlertRule, db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
+    """Messwert einer Regel über 24 h (Abschnitt = Fenster der Regel, 60 s Cache)."""
+    return read_service.alert_rule_series(db, rule)
 
 
 @router.get("/auth-security/alerts")
@@ -230,20 +251,130 @@ def auth_security_policy(_admin: CurrentAdmin = Depends(require_admin_owner)):
     return {group: {name: getattr(settings, name) for name in names} for group, names in POLICY_SETTINGS.items()}
 
 
-@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
-def auth_security_events(
+# ── Ereignisse (1.6: Filter, Keyset, Gruppen, Histogramm, Detail, Quelle sperren) ─────────────
+
+_HEX_PREFIX = r"^[0-9a-f]{4,32}$"
+
+
+def event_filter(
+    # Rechte zuerst: ein Support-Admin soll über die Mandanten-ID nichts erfahren (wie audit_filter)
+    _owner: CurrentAdmin = Depends(require_admin_owner),
     db: Session = Depends(get_db),
+    range_: Literal["1h", "24h", "7d", "14d"] = Query("24h", alias="range"),
+    subject: str | None = Query(None, pattern=_HEX_PREFIX),
+    net: str | None = Query(None, pattern=_HEX_PREFIX),
+    device: str | None = Query(None, pattern=_HEX_PREFIX),
+    country: str | None = Query(None, pattern=r"^[A-Z]{2}$"),
     event_type: str | None = Query(None, max_length=64),
     outcome: Literal["success", "failure", "blocked", "challenged", "info"] | None = None,
-    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET),
-    limit: int = Query(100, ge=1, le=500),
+    tenant_id: uuid.UUID | None = None,
+) -> event_query.EventFilter:
+    """Filter der Ereignisseite: Zeitraum Pflicht (höchstens 14 Tage), Pseudonyme nur als Präfix
+    der gekürzten Anzeige, Mandant über die öffentliche ID (TenantPicker)."""
+    internal_tenant = None
+    if tenant_id is not None:
+        internal_tenant = db.scalar(text("SELECT id FROM tenant WHERE public_id = :id"), {"id": tenant_id})
+        if internal_tenant is None:
+            raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    result = event_query.EventFilter(
+        range=range_, subject=subject, net=net, device=device, country=country, event_type=event_type, outcome=outcome,
+        tenant_id=internal_tenant,
+    )
+    try:
+        event_query.validate(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
+
+
+@router.get("/auth-security/events", dependencies=[Depends(require_admin_owner)])
+def auth_security_events(
+    filters: event_query.EventFilter = Depends(event_filter),
+    db: Session = Depends(get_db),
+    cursor: str | None = Query(None, max_length=200),
+    limit: int = Query(50, ge=1, le=200),
 ):
-    return read_service.recent_events(db, limit=limit, offset=offset, event_type=event_type, outcome=outcome)
+    """Anmeldeereignisse, neueste zuerst, mit Keyset-Pagination (``next_cursor``)."""
+    try:
+        return event_query.list_events(db, filters, cursor=cursor, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/auth-security/events/histogram", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_histogram(filters: event_query.EventFilter = Depends(event_filter), db: Session = Depends(get_db)):
+    """Verlauf der gefilterten Ereignisse (48 Abschnitte) und Zähler je Ergebnis; 30 s Cache."""
+    return event_query.histogram(db, filters)
+
+
+@router.get("/auth-security/events/groups", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_groups(
+    by: Literal["net", "subject"],
+    filters: event_query.EventFilter = Depends(event_filter),
+    db: Session = Depends(get_db),
+):
+    """Gefilterte Ereignisse gruppiert nach Netz oder Konto (höchstens 50, 30 s Cache)."""
+    return event_query.groups(db, filters, by)
+
+
+@router.get("/auth-security/events/{event_id}", dependencies=[Depends(require_admin_owner)])
+def auth_security_event_detail(event_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Detail eines Ereignisses: Risiko mit Gewichten (ab 1.6), Felder, Zähler «Spur verfolgen»."""
+    detail = event_query.event_detail(db, event_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Ereignis nicht gefunden")
+    return detail
+
+
+@router.post("/auth-security/events/{event_id}/block", status_code=201, dependencies=[Depends(require_step_up("security-block"))])
+def block_event_source(event_id: uuid.UUID, payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+    """«Quelle sperren»: manuelle Sperre (Stufe 5) des Netz-Fingerprints des Ereignisses (/24 bzw.
+    /48, User-Entscheid 2026-11-23). Ereignisse eines Plattform-Admins werden nicht gesperrt."""
+    try:
+        fingerprint, actor_kind = event_query.block_subject(db, event_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Ereignis nicht gefunden") from exc
+    if actor_kind == "admin":
+        raise HTTPException(status_code=422, detail={"code": "admin_source", "message": "Quellen von Plattform-Admins werden nicht gesperrt."})
+    if not fingerprint:
+        raise HTTPException(status_code=422, detail={"code": "no_network", "message": "Zu diesem Ereignis ist kein Netz bekannt."})
+    try:
+        block = blocks.set_manual(subject=fingerprint, scope="net_fp", minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    event_query.clear_cache()
+    _block_audit(db, admin, "admin.auth_block_set", block, source="event", event_id=str(event_id))
+    return {"subject": block.short, "until": block.until}
 
 
 @router.get("/auth-security/blocks", dependencies=[Depends(require_admin_owner)])
-def auth_security_blocks():
-    return read_service.active_blocks()
+def auth_security_blocks(db: Session = Depends(get_db)):
+    """Aktive Sperren (1.6: mit Beginn, Dauer, Abgewiesen-Zähler und setzendem Admin)."""
+    return read_service.active_blocks(db)
+
+
+@router.get("/auth-security/blocks/ladder", dependencies=[Depends(require_admin_owner)])
+def auth_security_block_ladder(db: Session = Depends(get_db)):
+    """Abwehrleiter: Stufen 1-3 als Ereignisse der letzten 24 h (30 s zwischengespeichert), Stufen 4/5
+    als aktive Sperren."""
+    return read_service.defense_ladder(db)
+
+
+@router.get("/auth-security/blocks/history", dependencies=[Depends(require_admin_owner)])
+def auth_security_block_history(db: Session = Depends(get_db)):
+    """Verlauf der Sperren der letzten 7 Tage (nur gekürzte Pseudonyme)."""
+    return read_service.block_history(db)
+
+
+# Schlüssel einer Sperre: Netz-Fingerprint (16) oder Zähler-Pseudonym (24 Hex-Zeichen)
+_BLOCK_SUBJECT = r"^[0-9a-f]{16}([0-9a-f]{8})?$"
+
+
+def _block_audit(db: Session, admin: CurrentAdmin, action: str, block: blocks.Block, **details) -> None:
+    audit.log(
+        db, action=action, actor_email=admin.email,
+        details={"subject": block.short, "scope": block.scope, "minutes": block.minutes, "reason": block.reason, **details},
+    )
 
 
 @router.post("/auth-security/blocks", status_code=201, dependencies=[Depends(require_step_up("security-block"))])
@@ -254,12 +385,27 @@ def create_block(payload: BlockCreate, db: Session = Depends(get_db), admin: Cur
         block = blocks.set_manual(ip=payload.ip, subject=payload.subject, scope=payload.scope, minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    audit.log(db, action="admin.auth_block_set", actor_email=admin.email, details={"scope": block.scope, "minutes": payload.minutes, "reason": block.reason})
-    return {"subject": block.subject, "until": block.until}
+    _block_audit(db, admin, "admin.auth_block_set", block, source="manual")
+    return {"subject": block.short, "until": block.until}
+
+
+@router.post("/auth-security/blocks/{subject}/extend", dependencies=[Depends(require_step_up("security-block"))])
+def extend_block(subject: Annotated[str, PathParam(pattern=_BLOCK_SUBJECT)], payload: BlockExtend, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+    """Verlängern = manuelle Sperre Stufe 5 derselben Quelle (Begründung Pflicht, auditiert)."""
+    if len(subject) > 64:
+        raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
+    try:
+        block = blocks.extend(subject, minutes=payload.minutes, reason=payload.reason, admin_id=admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if block is None:
+        raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
+    _block_audit(db, admin, "admin.auth_block_extended", block, added_minutes=payload.minutes)
+    return {"subject": block.short, "until": block.until}
 
 
 @router.delete("/auth-security/blocks/{subject}", status_code=204, dependencies=[Depends(require_step_up("security-block"))])
-def delete_block(subject: str, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
+def delete_block(subject: Annotated[str, PathParam(pattern=_BLOCK_SUBJECT)], db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     if len(subject) > 64 or not blocks.clear(subject, admin_id=admin.admin_id):
         raise HTTPException(status_code=404, detail="Sperre nicht gefunden")
     audit.log(db, action="admin.auth_block_cleared", actor_email=admin.email, details={"subject": subject[:12]})

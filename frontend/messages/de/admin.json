@@ -1538,7 +1538,8 @@
       "actorSelected": "Gleiche Person",
       "source": "Quelle {source}",
       "entity": "Objekt {entity}",
-      "remove": "Filter «{filter}» entfernen"
+      "remove": "Filter «{filter}» entfernen",
+      "verb": "Vorgang: {verb}"
     },
     "stats": {
       "events": "Ereignisse",
@@ -1571,6 +1572,35 @@
       "person": "Alle dieser Person",
       "source": "Gleiche Quelle",
       "action": "Gleiche Aktion"
+    },
+    "views": {
+      "label": "Gespeicherte Ansichten",
+      "all": "Alle Ereignisse",
+      "failures": "Fehlgeschlagen",
+      "auth": "Anmeldungen",
+      "deletions": "Löschungen",
+      "admin": "Plattform-Admin",
+      "privacy": "Datenschutz"
+    },
+    "tokens": {
+      "placeholder": "Suchen oder filtern, z. B. quelle:26ca aktion:protocol vorgang:gelöscht",
+      "label": "Suchen oder filtern",
+      "keysLabel": "Filter-Schlüssel:",
+      "invalid": "Nicht verstanden: {tokens}. Filter-Schlüssel:",
+      "keys": {
+        "person": "person",
+        "tenant": "mandant",
+        "source": "quelle",
+        "action": "aktion",
+        "verb": "vorgang"
+      }
+    },
+    "person": {
+      "all": "Alle Personen",
+      "placeholder": "Person wählen",
+      "searchPlaceholder": "Name oder E-Mail (mind. 3 Zeichen)",
+      "adminLabel": "{name} (Plattform-Admin)",
+      "selected": "Person gewählt"
     }
   },
   "emailLog": {

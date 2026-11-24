@@ -1538,7 +1538,8 @@
       "actorSelected": "Stessa persona",
       "source": "Fonte {source}",
       "entity": "Oggetto {entity}",
-      "remove": "Rimuovi filtro «{filter}»"
+      "remove": "Rimuovi filtro «{filter}»",
+      "verb": "Operazione: {verb}"
     },
     "stats": {
       "events": "Eventi",
@@ -1571,6 +1572,35 @@
       "person": "Tutto di questa persona",
       "source": "Stessa fonte",
       "action": "Stessa azione"
+    },
+    "views": {
+      "label": "Viste salvate",
+      "all": "Tutti gli eventi",
+      "failures": "Falliti",
+      "auth": "Accessi",
+      "deletions": "Eliminazioni",
+      "admin": "Admin piattaforma",
+      "privacy": "Protezione dei dati"
+    },
+    "tokens": {
+      "placeholder": "Cerca o filtra, p. es. fonte:26ca azione:protocol operazione:eliminato",
+      "label": "Cerca o filtra",
+      "keysLabel": "Chiavi di filtro:",
+      "invalid": "Non compreso: {tokens}. Chiavi di filtro:",
+      "keys": {
+        "person": "persona",
+        "tenant": "mandante",
+        "source": "fonte",
+        "action": "azione",
+        "verb": "operazione"
+      }
+    },
+    "person": {
+      "all": "Tutte le persone",
+      "placeholder": "Scegli persona",
+      "searchPlaceholder": "Nome o e-mail (almeno 3 caratteri)",
+      "adminLabel": "{name} (admin piattaforma)",
+      "selected": "Persona scelta"
     }
   },
   "emailLog": {

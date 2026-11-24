@@ -138,6 +138,7 @@ class AuthService:
                 event_type="login.password", outcome="blocked" if deny_without_smtp else "failure", user_id=user.id if user else None,
                 tenant_id=user.tenant_id if user else None, subject_hash=check.subject, device_hash=device_hash,
                 risk_score=check.pre.score if check.pre else None, risk_reasons=check.pre.reasons if check.pre else (),
+                risk_weights=check.pre.weights if check.pre else None,
                 enforcement="deny" if deny_without_smtp else "none", details={"reason": reason, "known_device": known is not None},
             )
             # Sicherheitsereignis (PRIV-013): die eingegebene E-Mail wird nicht gespeichert, nur das
@@ -169,7 +170,10 @@ class AuthService:
             assessment = risk.Assessment(score=0, reasons=["degraded"], level=risk.NORMAL)
         else:
             assessment = guard.full_assessment(db, check, user_id=user.id, tenant_id=user.tenant_id, privileged=requires_mfa(permissions))
-        risk_context = {"score": assessment.score, "reasons": assessment.reasons, "level": assessment.level, "known_device": known is not None}
+        risk_context = {
+            "score": assessment.score, "reasons": assessment.reasons, "weights": assessment.weights, "level": assessment.level,
+            "known_device": known is not None,
+        }
         needs_verification = (
             known is None and risk.enforcing()
             and (check.force_verification or assessment.level in (risk.MODERATE, risk.HIGH, risk.CRITICAL))
@@ -180,7 +184,7 @@ class AuthService:
             events.record(
                 ctx=ctx,
                 event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
-                device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="deny",
+                device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, risk_weights=assessment.weights, enforcement="deny",
                 details={"reason": "verification_unavailable"},
             )
             raise _login_denied()
@@ -210,7 +214,7 @@ class AuthService:
                 events.record(
                     ctx=ctx,
                     event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
-                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, risk_weights=assessment.weights, enforcement="email_code",
                     details={"reason": "email_unavailable"},
                 )
                 raise email_challenge.email_unavailable()
@@ -222,14 +226,14 @@ class AuthService:
                 events.record(
                     ctx=ctx,
                     event_type="login.password", outcome="blocked", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
-                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                    device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, risk_weights=assessment.weights, enforcement="email_code",
                     details={"reason": "email_unavailable"},
                 )
                 raise email_challenge.email_unavailable() from None  # erwartet, schon in email_challenge._send erfasst
             events.record(
                 ctx=ctx,
                 event_type="login.password", outcome="challenged", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
-                device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, enforcement="email_code",
+                device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, risk_weights=assessment.weights, enforcement="email_code",
             )
             return LoginResponse(authenticated=False, mfa=MfaPendingLoginRead(
                 status="email_verification_required", ticket=ticket, required=True, user_display_name=user.display_name,
@@ -239,7 +243,7 @@ class AuthService:
         events.record(
             ctx=ctx,
             event_type="login.password", outcome="success", user_id=user.id, tenant_id=user.tenant_id, subject_hash=check.subject,
-            device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons,
+            device_hash=device_hash, risk_score=assessment.score, risk_reasons=assessment.reasons, risk_weights=assessment.weights,
             enforcement=("mfa" if has_factor else "none") if risk.enforcing() else "monitor",
         )
 
@@ -610,6 +614,7 @@ class AuthService:
         events.record(
             event_type="login.success", outcome="success", user_id=user.id, tenant_id=user.tenant_id, device_hash=device.device_hash,
             session_id=record.id, risk_score=risk_context.get("score"), risk_reasons=reasons,
+            risk_weights=risk_context.get("weights") if isinstance(risk_context.get("weights"), dict) else None,
             enforcement=str(risk_context.get("verified") or ("mfa" if mfa_verified else "none")),
             details={"known_device": known_before, "new_device": not known_before, "method": "+".join(amr or ["pwd"])},
         )

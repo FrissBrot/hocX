@@ -1538,7 +1538,8 @@
       "actorSelected": "Same person",
       "source": "Source {source}",
       "entity": "Object {entity}",
-      "remove": "Remove filter «{filter}»"
+      "remove": "Remove filter «{filter}»",
+      "verb": "Operation: {verb}"
     },
     "stats": {
       "events": "Events",
@@ -1571,6 +1572,35 @@
       "person": "All by this person",
       "source": "Same source",
       "action": "Same action"
+    },
+    "views": {
+      "label": "Saved views",
+      "all": "All events",
+      "failures": "Failed",
+      "auth": "Sign-ins",
+      "deletions": "Deletions",
+      "admin": "Platform admin",
+      "privacy": "Data protection"
+    },
+    "tokens": {
+      "placeholder": "Search or filter, e.g. source:26ca action:protocol operation:deleted",
+      "label": "Search or filter",
+      "keysLabel": "Filter keys:",
+      "invalid": "Not understood: {tokens}. Filter keys:",
+      "keys": {
+        "person": "person",
+        "tenant": "tenant",
+        "source": "source",
+        "action": "action",
+        "verb": "operation"
+      }
+    },
+    "person": {
+      "all": "All people",
+      "placeholder": "Choose person",
+      "searchPlaceholder": "Name or email (at least 3 characters)",
+      "adminLabel": "{name} (platform admin)",
+      "selected": "Person selected"
     }
   },
   "emailLog": {

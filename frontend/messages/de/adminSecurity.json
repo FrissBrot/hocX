@@ -4,7 +4,7 @@
     "overview": "Übersicht",
     "events": "Anmeldeereignisse",
     "blocks": "Sperren",
-    "alerts": "Warnungen",
+    "alerts": "Alarmregeln",
     "audit": "Audit-Log",
     "policy": "Richtlinien"
   },
@@ -62,12 +62,12 @@
     "noTopNetworks": "Keine Fehlversuche aus einzelnen Netzen.",
     "noTopAccounts": "Keine Konten mit Fehlversuchen.",
     "alertsTitle": "Aktuelle Warnungen",
-    "allAlerts": "Alle Warnungen",
+    "allAlerts": "Zu den Alarmregeln",
     "auditLink": "Audit-Log öffnen"
   },
   "events": {
     "title": "Anmeldeereignisse",
-    "description": "Letzte Ereignisse des Anmeldeschutzes. Konten, Netze und Geräte erscheinen nur als gekürzte Pseudonyme.",
+    "description": "Alle Ereignisse des Anmeldeschutzes. Ein Klick auf ein Pseudonym filtert danach – so folgst du einer Spur von Netz zu Konto zu Mandant. Konten, Netze und Geräte erscheinen nur gekürzt.",
     "typeLabel": "Ereignistyp",
     "typeAll": "Alle Typen",
     "outcomeLabel": "Ergebnis",
@@ -80,9 +80,12 @@
       "subject": "Konto",
       "network": "Netz",
       "risk": "Risiko",
-      "client": "Gerät",
-      "actions": "Aktionen",
-      "country": "Land"
+      "client": "Client",
+      "country": "Land",
+      "device": "Gerät (Pseudonym)",
+      "enforcement": "Durchsetzung",
+      "policy": "Richtlinie",
+      "details": "Details"
     },
     "actorKinds": {
       "user": "Benutzer",
@@ -93,7 +96,6 @@
     "empty": "Keine Ereignisse für diese Auswahl.",
     "previous": "Neuere",
     "next": "Ältere",
-    "pageInfo": "Einträge {from, number}–{to, number}",
     "resolve": "Konto anzeigen",
     "resolveConfirm": "Das Pseudonym dieses Ereignisses einem Konto zuordnen? Die Zuordnung braucht eine Passkey-Bestätigung und wird im Audit-Log festgehalten.",
     "countrySource": "Länderangaben: <link>«IP to Country Lite» von DB-IP.com</link> (CC BY 4.0), lokal ermittelt, ohne gespeicherte IP-Adresse.",
@@ -112,28 +114,90 @@
       "privileged_account": "Konto mit Verwaltungsrechten",
       "attack_mode": "Angriffsmodus",
       "degraded": "Notbetrieb (ohne Redis)"
-    }
+    },
+    "groups": {
+      "flat": "Einzeln",
+      "net": "Nach Netz",
+      "subject": "Nach Konto"
+    },
+    "listLabel": "Ereignisse",
+    "pageInfoKeyset": "Seite {page, number} · {count, plural, one {# Eintrag} other {# Einträge}} · neueste zuerst",
+    "filtersLabel": "Filter der Ereignisse",
+    "pivots": {
+      "subject": "konto",
+      "net": "netz",
+      "device": "gerät",
+      "country": "land"
+    },
+    "tokenLabel": "Filter eingeben",
+    "removePivot": "Filter {filter} entfernen",
+    "tokenPlaceholder": "z. B. netz:3f9a1c07 oder land:NL",
+    "tokenInvalid": "Unbekannter Filter. Möglich: konto:, netz:, gerät: (mind. 4 Zeichen) oder land: (z. B. CH).",
+    "tokenHelp": "Mit Enter übernehmen. Ein Klick auf ein Pseudonym in der Liste filtert ebenfalls.",
+    "tenantLabel": "Mandant",
+    "tenantAll": "Alle Mandanten",
+    "ranges": {
+      "1h": "1 h",
+      "24h": "24 h",
+      "7d": "7 Tage",
+      "14d": "14 Tage"
+    },
+    "liveOn": "Live (30 s)",
+    "liveOff": "Live aus",
+    "reset": "Filter zurücksetzen",
+    "histogramTitle": "Verlauf der gefilterten Ereignisse",
+    "histogramOther": "Abgewiesen/geprüft",
+    "histogramSummary": "{failure, number} Fehlversuche, {other, number} abgewiesene oder geprüfte und {success, number} erfolgreiche Ereignisse im gewählten Zeitraum.",
+    "barTitle": "{time}: {failure, number} fehlgeschlagen · {other, number} abgewiesen/geprüft · {success, number} erfolgreich",
+    "now": "jetzt",
+    "riskLevels": {
+      "normal": "normal",
+      "moderate": "moderat",
+      "high": "hoch",
+      "critical": "kritisch"
+    },
+    "openEvent": "Ereignis {type} von {time} öffnen",
+    "filterBy": "Nach {filter} {value} filtern",
+    "groupColumns": {
+      "net": "Netz",
+      "subject": "Konto",
+      "distribution": "Verteilung",
+      "events": "Ereignisse",
+      "accounts": "Konten",
+      "networks": "Netze",
+      "maxRisk": "Max. Risiko",
+      "last": "Zuletzt"
+    },
+    "distribution": "{failure, number} fehlgeschlagen, {other, number} abgewiesen/geprüft, {success, number} erfolgreich",
+    "closeDetail": "Detail schliessen",
+    "riskHeading": "Risiko {score} · {level}",
+    "riskNone": "Kein Risikowert",
+    "noReasons": "Kein Risikosignal.",
+    "noWeights": "Ältere Ereignisse (vor 1.6) speichern nur die Gründe, keine Gewichte.",
+    "trace": "Spur verfolgen (±{hours} h)",
+    "traceKinds": {
+      "net": "Gleiches Netz",
+      "subject": "Gleiches Konto",
+      "country": "Gleiches Land"
+    },
+    "blockSource": "Quelle sperren",
+    "blocked": "Netz gesperrt.",
+    "blockTitle": "Netz {net} sperren",
+    "blockDescription": "Manuelle Sperre (Stufe 5) des Netzes dieses Ereignisses (IPv4 /24, IPv6 /48). Wird mit Passkey bestätigt und im Audit-Log vermerkt. Plattform-Admins bleiben ausgenommen.",
+    "blockShared": "Aus diesem Netz kamen {count, plural, one {# Ereignis} other {# Ereignisse}} in ±{hours} h. Ein geteiltes Netz (Firmen-NAT, Proxy, Schule) sperrt alle Personen ohne bekanntes Gerät."
   },
   "blocks": {
     "title": "Sperren",
-    "description": "Aktive IP-Sperren des Anmeldeschutzes. Setzen und Aufheben verlangen eine Passkey-Bestätigung.",
+    "description": "Befristete Sperren von Quellen für die Anmelde-Endpunkte – nie für Konten mit bekannten Geräten, nie dauerhaft. Gesperrt wird ein Pseudonym, nie eine Adresse. Setzen, Verlängern und Aufheben verlangen eine Passkey-Bestätigung.",
     "add": "Manuelle Sperre",
-    "columns": {
-      "subject": "Quelle (Pseudonym)",
-      "scope": "Umfang",
-      "stage": "Stufe",
-      "kind": "Art",
-      "reason": "Grund",
-      "until": "Bis",
-      "actions": "Aktionen"
-    },
     "scopes": {
       "source": "Einzelne Adresse",
-      "net": "Netz"
+      "net": "Netz",
+      "net_fp": "Netz (aus Ereignis)"
     },
     "manual": "Manuell",
     "automatic": "Automatisch",
-    "unblock": "Entsperren",
+    "unblock": "Aufheben",
     "unblockConfirm": "Sperre für {subject} aufheben? Anmeldungen aus dieser Quelle sind danach wieder möglich.",
     "unblocked": "Sperre aufgehoben.",
     "created": "Sperre gesetzt.",
@@ -146,13 +210,109 @@
     "minutesLabel": "Dauer in Minuten",
     "minutesHelp": "Höchstens {max, number} Minuten.",
     "reasonLabel": "Grund",
-    "save": "Sperren",
+    "save": "Mit Passkey sperren",
     "cancel": "Abbrechen",
-    "readOnly": "Nur Owner können Sperren setzen oder aufheben."
+    "readOnly": "Nur Owner können Sperren setzen oder aufheben.",
+    "activeTitle": "Aktive Sperren",
+    "cardLabel": "Sperre {subject}",
+    "remaining": "verbleibend",
+    "remainingDays": "{days} T {hours} h",
+    "remainingHours": "{hours} h {minutes} min",
+    "remainingMinutes": "{minutes}:{seconds}",
+    "remainingShare": "Verbleibender Anteil der Sperrdauer",
+    "stageBadge": "Stufe {stage}",
+    "repeat": "{count}. Sperre in 7 Tagen",
+    "facts": {
+      "reason": "Grund",
+      "rejected": "Abgewiesen",
+      "by": "Gesetzt von"
+    },
+    "unknownAdmin": "Plattform-Admin",
+    "extend": "Verlängern",
+    "extendTitle": "Sperre {subject} verlängern",
+    "extendDescription": "Die Sperre wird danach eine manuelle Sperre (Stufe 5). Mit Passkey bestätigt und im Audit-Log vermerkt.",
+    "extendSave": "Mit Passkey verlängern",
+    "extended": "Sperre verlängert.",
+    "modalDescription": "Stufe 5. Wird mit Passkey bestätigt und im Audit-Log vermerkt.",
+    "reasonHelp": "Pflicht, z. B. Abuse-Meldung oder Vorfall.",
+    "durationLabel": "Dauer",
+    "presets": {
+      "60": "1 h",
+      "360": "6 h",
+      "1440": "24 h",
+      "10080": "7 Tage",
+      "43200": "30 Tage",
+      "custom": "Eigene"
+    },
+    "scopeOptions": {
+      "source": "Einzeladresse (/32, /64)",
+      "net": "Netz (/24, /48)"
+    },
+    "reasons": {
+      "source_hard": "Harte Grenze der Quelle wiederholt erreicht",
+      "risk_critical": "Kritisches Risiko wiederholt",
+      "manual": "Manuell",
+      "extend": "Verlängert"
+    },
+    "ladder": {
+      "title": "Abwehrstufen",
+      "hint": "Stufen 1–3: Ereignisse der letzten 24 h · Stufen 4–5: aktive Sperren",
+      "stage": "Stufe {stage}",
+      "events24h": "Ereignisse 24 h",
+      "activeNow": "aktiv",
+      "stages": {
+        "1": {
+          "title": "Beobachten",
+          "text": "Nur Ereignis, keine Einschränkung (Fehlversuche)."
+        },
+        "2": {
+          "title": "Grenzen gesenkt",
+          "text": "Versuchsrate oder Fehlversuchsgrenze überschritten, Versuch abgewiesen."
+        },
+        "3": {
+          "title": "Zusatzprüfung",
+          "text": "Unbekannte Geräte brauchen E-Mail-Code oder zweiten Faktor."
+        },
+        "4": {
+          "title": "Befristet gesperrt",
+          "text": "Nach wiederholten harten Grenzen: Anmelde-Endpunkte für die Quelle zu."
+        },
+        "5": {
+          "title": "Manuell gesperrt",
+          "text": "Von Plattform-Admin mit Begründung und Ablauf."
+        }
+      },
+      "strikes": "Stufe 4 ab {strikes} Strikes in 24 h",
+      "durations": "Dauer je Wiederholung in 7 Tagen: {durations} min",
+      "limits": "Automatisch höchstens {automatic} h, manuell höchstens {manual} Tage",
+      "adminsExempt": "Plattform-Admins sind ausgenommen (Notfallzugang)"
+    },
+    "history": {
+      "title": "Verlauf, 7 Tage",
+      "summary": "{sources, plural, =0 {Keine Sperren} one {# Quelle} other {# Quellen}} mit {bars, plural, one {# Sperre} other {# Sperren}}, davon {manual, number} manuell. Wiederholungen werden länger.",
+      "showTable": "Daten als Tabelle",
+      "showChart": "Als Diagramm",
+      "empty": "In den letzten 7 Tagen gab es keine Sperren.",
+      "barLabel": "{kind}, ab {start}, {minutes, number} min, {status}",
+      "status": {
+        "cleared": "vorzeitig aufgehoben",
+        "extended": "verlängert",
+        "active": "aktiv",
+        "expired": "abgelaufen"
+      },
+      "columns": {
+        "source": "Quelle",
+        "kind": "Art",
+        "start": "Beginn",
+        "end": "Ende",
+        "minutes": "Minuten",
+        "status": "Status"
+      }
+    }
   },
   "alerts": {
-    "title": "Warnungen",
-    "description": "Aktuell ausgelöste Alarmregeln des Anmeldeschutzes. Dieselben Regeln melden auch über ntfy.",
+    "title": "Alarmregeln",
+    "description": "Zehn Regeln prüfen den Anmeldeschutz laufend. Je Regel: aktueller Messwert gegen die Schwelle, Verlauf und Auslösungen der letzten 30 Tage. Dieselben Regeln melden auch über ntfy.",
     "empty": "Zurzeit ist keine Alarmregel ausgelöst.",
     "columns": {
       "severity": "Schwere",
@@ -184,7 +344,12 @@
     "acknowledgedToast": "Warnung quittiert",
     "reopenedToast": "Warnung wieder offen",
     "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen.",
-    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis)."
+    "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis).",
+    "openTitle": "Ausgelöste Warnungen",
+    "acknowledgeTitle": "Warnung quittieren",
+    "noteLabel": "Notiz (optional)",
+    "noteHelp": "Kurz, was geprüft wird – ohne Personendaten.",
+    "noteShown": "Notiz: {note}"
   },
   "audit": {
     "title": "Audit-Log",
@@ -249,5 +414,61 @@
       "hash": "Abgleich der Login-Adressen",
       "none": "—"
     }
+  },
+  "rules": {
+    "units": {
+      "stuffing": "Fehlversuche",
+      "spraying": "Konten",
+      "account_attack": "Versuche",
+      "admin_mfa": "Codes",
+      "admin_new_device": "Anmeldungen",
+      "blocks": "Sperren",
+      "network": "Versuche",
+      "cross_tenant": "Mandanten",
+      "tenant": "Konten",
+      "limiter": "Ausfälle"
+    },
+    "conditions": {
+      "stuffing": "Mindestens {threshold} Fehlversuche (max. aus Mindestwert und Faktor × gewohnte Rate) aus vielen Netzen in {minutes} Minuten. Schaltet den Angriffsmodus ein.",
+      "spraying": "Mindestens {threshold} verschiedene Konten werden aus einem Netz in {minutes} Minuten mit falschem Passwort probiert.",
+      "account_attack": "Mindestens {threshold} Fehlversuche auf ein Konto aus mehreren Netzen in {minutes} Minuten. Bei Konten mit Adminrechten kritisch.",
+      "admin_mfa": "Mindestens {threshold} falsche MFA-Codes eines Plattform-Admins in {minutes} Minuten.",
+      "admin_new_device": "Ein Plattform-Admin meldet sich von einem unbekannten Gerät an (Fenster {minutes} Minuten).",
+      "blocks": "Mehr als {threshold} Sperren in {minutes} Minuten.",
+      "network": "Mindestens {threshold} Fehlversuche aus einem Netz (IPv4 /24, IPv6 /48) in {minutes} Minuten.",
+      "cross_tenant": "Fehlversuche aus einem Netz gegen mindestens {threshold} Mandanten in {minutes} Minuten.",
+      "tenant": "Mindestens {threshold} verschiedene Konten eines Mandanten mit Fehlversuchen in {minutes} Minuten.",
+      "limiter": "Mindestens {threshold} Ausfall des Rate-Limiters in {minutes} Minuten. Unbekannte Geräte werden dann abgewiesen."
+    },
+    "title": "Regeln",
+    "description": "Schwellen werden in der Serverkonfiguration geändert und hier nur angezeigt.",
+    "listLabel": "Alarmregeln",
+    "empty": "Keine Regel in diesem Zustand.",
+    "states": {
+      "all": "Alle",
+      "fired": "Ausgelöst",
+      "near": "Nahe Schwelle",
+      "quiet": "Ruhig"
+    },
+    "valueLine": "{value} / {threshold} {unit} · {severity} · {minutes} min",
+    "window": "{minutes, plural, one {# Minute} other {# Minuten}}",
+    "triggered30": "{count, plural, one {# × in 30 T} other {# × in 30 T}}",
+    "facts": {
+      "now": "Jetzt",
+      "threshold": "Schwelle",
+      "window": "Fenster",
+      "triggered": "Ausgelöst 30 T"
+    },
+    "thresholdAbove": "über {threshold} {unit}",
+    "thresholdAtLeast": "ab {threshold} {unit}",
+    "settingsTitle": "Einstellungen",
+    "noSettings": "Feste Regel ohne Einstellung.",
+    "settingsHelp": "Benachrichtigung über ntfy mit Entprellung und Erinnerung. Eine Warnung klingt {minutes, plural, one {# Minute} other {# Minuten}} nach dem letzten Ereignis von selbst ab.",
+    "recentTitle": "Zuletzt ausgelöst",
+    "noRecent": "In den letzten 30 Tagen nicht ausgelöst.",
+    "seriesTitle": "Messwert, 24 Stunden",
+    "seriesThreshold": "gestrichelt: Schwelle {threshold} {unit}",
+    "seriesSummary": "Höchster Wert {peak}, Schwelle {threshold}; {over, plural, =0 {kein Abschnitt} one {# Abschnitt} other {# Abschnitte}} über der Schwelle (Abschnitte zu {minutes} Minuten).",
+    "seriesApprox": "Näherung: feste Abschnitte zu {minutes} Minuten statt des gleitenden Fensters der Regel."
   }
 }

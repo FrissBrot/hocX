@@ -29,6 +29,7 @@ function render(ui: ReactElement) {
     </ToastProvider>,
   );
 }
+import { SecurityAlertRules } from "./security-alert-rules";
 import { SecurityAlertsView } from "./security-alerts";
 import { SecurityEvents } from "./security-events";
 import { SecurityOverview } from "./security-overview";
@@ -67,10 +68,15 @@ describe("Sicherheitsbereich (Plattform)", () => {
   });
 
   it("Ereignisliste übernimmt den Filter aus der URL", async () => {
-    respond({ "/api/admin/auth-security/events": [] });
+    respond({
+      "/api/admin/auth-security/events/histogram": { start: "2026-11-22T10:00:00Z", end: "2026-11-23T10:00:00Z", bucket_seconds: 1800, buckets: [], outcome_counts: { success: 0, failure: 0, blocked: 0, challenged: 0, info: 0 }, total: 0 },
+      "/api/admin/auth-security/events": { items: [], next_cursor: null, start: "2026-11-22T10:00:00Z", end: "2026-11-23T10:00:00Z" },
+    });
     render(<SecurityEvents />);
     expect(await screen.findByText("Keine Ereignisse für diese Auswahl.")).toBeInTheDocument();
-    expect(browserApiFetchMock.mock.calls[0][0]).toContain("outcome=failure");
+    const listCall = browserApiFetchMock.mock.calls.find(([path]) => String(path).startsWith("/api/admin/auth-security/events?"));
+    expect(listCall?.[0]).toContain("outcome=failure");
+    expect(listCall?.[0]).toContain("range=24h");
   });
 
   it("Warnungen lassen sich nach Rückfrage quittieren (1.5.1)", async () => {
@@ -80,11 +86,35 @@ describe("Sicherheitsbereich (Plattform)", () => {
     });
     render(<SecurityAlertsView />);
     fireEvent.click(await screen.findByRole("button", { name: "Quittieren" }));
-    const dialog = await screen.findByRole("alertdialog");
+    const dialog = await screen.findByRole("dialog", { name: "Warnung quittieren" });
+    fireEvent.change(within(dialog).getByLabelText(/^Notiz \(optional\)/), { target: { value: "wird geprüft" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Quittieren" }));
     await waitFor(() =>
-      expect(browserApiFetchMock).toHaveBeenCalledWith("/api/admin/auth-security/alerts/ack", expect.objectContaining({ method: "POST", body: JSON.stringify({ key: "auth:spraying:abc" }) })),
+      expect(browserApiFetchMock).toHaveBeenCalledWith(
+        "/api/admin/auth-security/alerts/ack",
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ key: "auth:spraying:abc", note: "wird geprüft" }) }),
+      ),
     );
+  });
+
+  it("Alarmregeln zeigen Messwert gegen Schwelle und die Kurve der gewählten Regel (1.6)", async () => {
+    const rule = (name: string, state: string, value: number) => ({
+      rule: name, window_minutes: 15, value, threshold: 10, comparator: ">=", state, severity: "warning", fired: state === "fired" ? 1 : 0,
+      triggers_30d: 2, daily_30d: Array(30).fill(0), recent: [{ at: "2026-11-22T09:24:00Z", subject: "3f9a1c07be42", severity: "warning" }],
+      settings: { auth_alert_spraying_accounts: 10 },
+    });
+    respond({
+      "/api/admin/auth-security/alert-rules/spraying/series": { rule: "spraying", bucket_minutes: 15, hours: 24, threshold: 10, comparator: ">=", points: [{ start: "2026-11-23T09:00:00Z", value: 14 }] },
+      "/api/admin/auth-security/alert-rules": [rule("spraying", "fired", 14), rule("tenant", "quiet", 1)],
+    });
+    render(<SecurityAlertRules />);
+    expect(await screen.findByRole("heading", { name: "Password Spraying aus einem Netz", level: 2 })).toBeInTheDocument();
+    expect(screen.getByText("14 / 10 Konten · Warnung · 15 min")).toBeInTheDocument();
+    expect(screen.getByText("AUTH_ALERT_SPRAYING_ACCOUNTS")).toBeInTheDocument();
+    expect(await screen.findByText(/Höchster Wert 14, Schwelle 10; 1 Abschnitt über der Schwelle/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Ruhig/ }));
+    expect(await screen.findByRole("button", { name: /Viele Konten eines Mandanten/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Password Spraying/ })).toBeNull();
   });
 
   it("Richtlinien zeigen Werte gruppiert", async () => {

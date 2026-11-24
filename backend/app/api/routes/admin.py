@@ -252,6 +252,7 @@ class AuditFilter:
     entity_id: int | None = None
     categories: list[str] | None = None
     source: str | None = None
+    verb: str | None = None
 
     def params(self) -> dict:
         return {
@@ -259,7 +260,25 @@ class AuditFilter:
             "start": self.start, "end": self.end, "actor_kind": self.actor_kind, "actor_email": self.actor_email,
             "actor_user_id": self.actor_user_id, "entity_type": self.entity_type, "entity_id": self.entity_id,
             "categories": self.categories, "source": prefix_pattern(self.source) if self.source else None,
+            "verb_pattern": AUDIT_VERB_PATTERNS[self.verb] if self.verb else None,
         }
+
+
+# Vorgang (1.6, Token «vorgang:») wie frontend lib/audit-labels.ts::auditVerb - feste Muster auf das
+# letzte Segment der Aktion; der Wert kommt nur aus dieser Tabelle (gebunden, kein Benutzertext).
+AUDIT_VERB_PATTERNS: dict[str, str] = {
+    "deleted": "(deleted|^delete$|purge|cleanup)",
+    "created": "(created|^create$|upserted|added|requested|^upload$|duplicate)",
+    "updated": "(updated|^update$|changed|synced|reordered|assigned|edit|reverted|regenerated|rotated|render)",
+    "viewed": "viewed",
+    "exported": "exported",
+    "restored": "(restored|^restore$)",
+    "revoked": "(revoked|withdrawn|cancel|rejected|reopened)",
+    "published": "(publish|approved)",
+    "login": "^login$",
+    "loginFailed": "login_failed",
+}
+AuditVerb = Literal["deleted", "created", "updated", "viewed", "exported", "restored", "revoked", "published", "login", "loginFailed"]
 
 
 # Akteur-Art: Plattform-Admins schreiben nur actor_email (ohne actor_user_id), Konten
@@ -279,7 +298,8 @@ AUDIT_FILTER_SQL = """
       AND (CAST(:entity_type AS text) IS NULL OR l.entity_type = :entity_type)
       AND (CAST(:entity_id AS bigint) IS NULL OR l.entity_id = :entity_id)
       AND (CAST(:categories AS text[]) IS NULL OR split_part(l.action, '.', 1) = ANY(CAST(:categories AS text[])))
-      AND (CAST(:source AS text) IS NULL OR l.ip_hash LIKE :source ESCAPE '\\')"""
+      AND (CAST(:source AS text) IS NULL OR l.ip_hash LIKE :source ESCAPE '\\')
+      AND (CAST(:verb_pattern AS text) IS NULL OR substring(l.action from '[^.]*$') ~ :verb_pattern)"""
 
 AUDIT_RANGES = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30), "90d": timedelta(days=90)}
 AuditRange = Literal["24h", "7d", "30d", "90d"]
@@ -303,6 +323,7 @@ def audit_filter(
     entity_id: int | None = Query(default=None, ge=1),
     category: list[str] | None = Query(default=None, max_length=60),
     source: str | None = Query(default=None, pattern=r"^[0-9a-f]{4,64}$"),
+    verb: AuditVerb | None = None,
 ) -> AuditFilter:
     """Filter aus der Anfrage: nur IDs und Codes (Akteur über öffentliche ID, nie über die E-Mail;
     Quelle als Präfix des gekürzten Hashes). ``range`` (24h/7d/30d/90d) geht vor from/to."""
@@ -328,7 +349,7 @@ def audit_filter(
     return AuditFilter(
         tenant_id=_resolve_tenant_id(db, tenant_id) if tenant_id is not None else None, action=action, outcome=outcome,
         start=start, end=end, actor_kind=actor_kind, actor_email=actor_email, actor_user_id=actor_user_id,
-        entity_type=entity_type, entity_id=entity_id, categories=list(category) if category else None, source=source,
+        entity_type=entity_type, entity_id=entity_id, categories=list(category) if category else None, source=source, verb=verb,
     )
 
 
@@ -423,6 +444,51 @@ def audit_log_timeline(
         "range": range_, "bucket_seconds": int(width_seconds), "buckets": bars, "totals": dict(totals),
         "by_category": {key: int(value) for key, value in by_category.items()}, "retention_days": settings.audit_log_retention_days,
     }
+
+
+# Gespeicherte Ansichten des Audit-Logs (1.6, Design «hocX Audit-Log»): feste Filter, Zähler je
+# Zeitraum (und Mandant). Bereiche wie frontend lib/audit-labels.ts (auth = user, Datenschutz).
+AUDIT_VIEW_PRIVACY_CATEGORIES = ("personal_data", "privacy_settings", "public_link", "retention", "activity")
+_AUDIT_VIEW_CACHE_SECONDS = 60
+_audit_view_cache: dict[tuple, tuple[float, dict]] = {}
+
+
+@router.get("/audit-log/views")
+def audit_log_views(
+    range_: AuditRange = Query("7d", alias="range"),
+    tenant_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Zähler der gespeicherten Ansichten (Alle, Fehlgeschlagen, Anmeldungen, Löschungen,
+    Plattform-Admin, Datenschutz) im Zeitraum - nur Zahlen, 60 s zwischengespeichert."""
+    import time as _time
+
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    key = (range_, internal_tenant_id)
+    now = _time.monotonic()
+    cached = _audit_view_cache.get(key)
+    if cached and now - cached[0] < _AUDIT_VIEW_CACHE_SECONDS:
+        return cached[1]
+    row = db.execute(
+        text(
+            "SELECT count(*) AS total, count(*) FILTER (WHERE l.outcome = 'failure') AS failures, "
+            "count(*) FILTER (WHERE split_part(l.action, '.', 1) = 'user') AS auth, "
+            "count(*) FILTER (WHERE substring(l.action from '[^.]*$') ~ :deleted) AS deletions, "
+            "count(*) FILTER (WHERE l.actor_user_id IS NULL AND l.actor_email IS NOT NULL) AS admin, "
+            "count(*) FILTER (WHERE split_part(l.action, '.', 1) = ANY(:privacy)) AS privacy "
+            "FROM audit_log l WHERE l.created_at >= :start AND (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)"
+        ),
+        {"start": datetime.now(timezone.utc) - AUDIT_RANGES[range_], "tenant_id": internal_tenant_id,
+         "deleted": AUDIT_VERB_PATTERNS["deleted"], "privacy": list(AUDIT_VIEW_PRIVACY_CATEGORIES)},
+    ).mappings().one()
+    counts = {name: int(value or 0) for name, value in row.items()}
+    counts["all"] = counts.pop("total")
+    result = {"range": range_, "counts": counts}
+    if len(_audit_view_cache) > 64:
+        _audit_view_cache.clear()
+    _audit_view_cache[key] = (now, result)
+    return result
 
 
 AUDIT_CONTEXT_HOURS = 6
