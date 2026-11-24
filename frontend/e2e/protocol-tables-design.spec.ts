@@ -1,3 +1,4 @@
+import { openProtocol } from "./protocol-page";
 import { test, expect, APIRequestContext, Page } from "@playwright/test";
 
 // Protokoll-Editor im Design «Termine, Listen & Pendenzen» und «Protokoll-Header»: Terminliste
