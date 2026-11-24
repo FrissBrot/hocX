@@ -80,6 +80,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Datei-Import (Migration 0230_cloud_import, services/cloud_import/worker.py). 046-049 bleiben
     # für parallel entwickelte Jobs frei.
     "cloud_import": 202600050,
+    # Kamera-Kürzel für Altfotos (Migration 0253, services/camera_serial_backfill.py)
+    "camera_serial_backfill": 202600051,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

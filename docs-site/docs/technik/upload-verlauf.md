@@ -12,7 +12,7 @@ Plan: `audit-reports/plans/2026-11-21-upload-history-plan.md` (Entscheide 21./22
 | Dienst (öffnen, aufnehmen, Items, Abschluss, Sichtbarkeit, Kameras) | `backend/app/services/upload_job_service.py` |
 | API `/api/upload-jobs*` | `backend/app/api/routes/upload_jobs.py` |
 | Datumskorrektur, Vorschau, Rückgängig | `routes/files.py` (`/files/bulk-capture-date[/preview]`, `/capture-changes*`), `services/capture_change_service.py` |
-| Kamera-Kürzel | `services/camera_serial.py` |
+| Kamera-Kürzel | `services/camera_serial.py`, Nachtrag für Altfotos `services/camera_serial_backfill.py` (Migration `0253_camera_serial_backfill`) |
 | Altbestand | `services/upload_history_backfill.py`, `python -m app.workers.upload_history_backfill` |
 | Oberfläche | `frontend/components/uploads/*`, `app/{photos,files}/uploads` |
 
@@ -77,8 +77,18 @@ erscheinen, sonst nichts. Die Seriennummer selbst wird weder gespeichert noch ge
 ausgegeben; die Abgabebox und der document-worker berechnen kein Kürzel. Klon und Mandanten-Import
 übernehmen das Kürzel nicht.
 
-**Altbestand:** Nur Dateien, die der bestehende Metadaten-Backfill ohnehin liest, erhalten ein
-Kürzel. Ein eigener Lauf über alle Originale (S3) wurde wegen der Last bewusst nicht gebaut.
+**Altbestand:** Der Hintergrundjob `camera_serial_backfill` (job-worker, alle 2 min, Lock
+202600051, `services/camera_serial_backfill.py`, Migration `0253_camera_serial_backfill`) trägt das
+Kürzel für Fotos von vor 1.6 nach. Je Mandant hält `camera_serial_backfill` den Stand
+(`last_file_id`, `upper_file_id` = grösste Bild-ID bei der Aufnahme, Zähler `checked`/`keyed`/
+`no_serial`/`missing`/`failed`, `finished_at`). Ein Tick arbeitet höchstens
+`CAMERA_SERIAL_BACKFILL_FILES_PER_TICK` (200) Dateien in Chargen zu 50 ab, die Mandanten reihum
+(ältester Stand zuerst); jede Charge committet ihren Stand, ein Abbruch setzt dort fort. Während
+einer Charge ist die Session an den RLS-Bereich des Mandanten gebunden. Gelesen werden nur saubere
+Bilder ohne Kürzel mit Kamera-Angabe (oder ohne Metadaten-Analyse), auch im Papierkorb; bei JPEGs nur
+die ersten 512 KB, sonst höchstens 64 MB. Fehlt das Original, zählt es als `missing`. Neue Mandanten
+werden beim nächsten Tick aufgenommen (ohne Altfotos sofort fertig). Der document-worker (ohne
+`ADMIN_AUTH_SECRET`) tut nichts.
 
 ## Aufbewahrung (E-9)
 

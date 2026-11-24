@@ -633,6 +633,10 @@
       "cloud_import": {
         "title": "Importazione di file",
         "description": "Elabora le importazioni di file avviate (ZIP, Google Takeout, cartelle) tramite la pipeline di caricamento e ripulisce importazioni e rapporti scaduti."
+      },
+      "camera_serial_backfill": {
+        "title": "Completare i codici fotocamera",
+        "description": "Legge il numero di serie della fotocamera dai dati delle foto caricate prima della 1.6 e salva solo un codice cifrato per club, così modelli uguali appaiono separati nella cronologia dei caricamenti. Per organizzazione e a blocchi, riprende dopo un'interruzione."
       }
     }
   },

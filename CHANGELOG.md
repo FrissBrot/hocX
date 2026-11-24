@@ -44,6 +44,11 @@ Installationen aktualisieren können.
   Ergebnisliste ausgewählten Dateien - mit Vorschau, Rückgängig im Reiter «Datumskorrekturen» (zeigt
   den gesetzten Wert) und Audit-Eintrag mit Bezug zum Upload. Dokumente haben kein Aufnahmedatum,
   bleiben unverändert und werden für Personen mit «Dateien verwalten» als solche gemeldet.
+- **Kamera-Kürzel für bestehende Fotos:** Der neue Hintergrundjob «Kamera-Kürzel nachtragen»
+  (`camera_serial_backfill`, job-worker) liest bei Fotos von vor 1.6 die Seriennummer aus der EXIF und
+  speichert wie beim Upload nur das Kürzel je Verein (nie die Seriennummer). Er arbeitet je Verein in
+  Teilen, merkt sich den Stand und setzt nach einem Neustart fort; gleiche Kameramodelle erscheinen
+  danach auch in älteren Uploads getrennt. Migration `0253_camera_serial_backfill`.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 
