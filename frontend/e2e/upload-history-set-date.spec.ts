@@ -51,10 +51,11 @@ test("Upload-Verlauf: «Datum setzen» für alle Fotos eines Vorgangs, Auswahl u
     await expect(dialog.getByRole("tab", { name: "Auf Datum setzen" })).toHaveAttribute("aria-selected", "true");
 
     // Datum und Uhrzeit per Tastatur (Kurzformen werden korrigiert: 1430 → 14:30)
-    await dialog.getByLabel("Datum").focus();
+    await dialog.getByRole("textbox", { name: "Datum", exact: true }).focus();
     await page.keyboard.type("02.05.2026");
+    await page.keyboard.press("Tab"); // Kalender-Knopf des Datumsfelds
     await page.keyboard.press("Tab");
-    await expect(dialog.getByLabel("Uhrzeit (optional)")).toBeFocused();
+    await expect(dialog.getByRole("textbox", { name: "Uhrzeit (optional)", exact: true })).toBeFocused();
     await page.keyboard.type("1430");
     await page.keyboard.press("Tab");
     await dialog.getByRole("button", { name: "Vorschau" }).click();
@@ -87,8 +88,8 @@ test("Upload-Verlauf: «Datum setzen» für alle Fotos eines Vorgangs, Auswahl u
     await expect(toolbar).toBeVisible();
     await toolbar.getByRole("button", { name: "Datum setzen …" }).click();
     const selectionDialog = page.getByRole("dialog", { name: "Aufnahmedatum ändern" });
-    await selectionDialog.getByLabel("Datum").fill("03.05.2026");
-    await selectionDialog.getByLabel("Datum").blur();
+    await selectionDialog.getByRole("textbox", { name: "Datum", exact: true }).fill("03.05.2026");
+    await selectionDialog.getByRole("textbox", { name: "Datum", exact: true }).blur();
     const second = page.waitForResponse((r) => r.url().endsWith("/api/files/bulk-capture-date") && r.request().method() === "POST");
     await selectionDialog.getByRole("button", { name: "Übernehmen" }).click();
     await page.getByRole("alertdialog", { name: "Aufnahmedatum ändern?" }).getByRole("button", { name: "Datum ändern" }).click();
