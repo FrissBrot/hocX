@@ -40,6 +40,11 @@ describe("MarkdownView", () => {
     expect(links[0].getAttribute("rel")).toBe("noopener noreferrer");
   });
 
+  it("liest Zahl-Entitäten an Auszeichnungsrändern (Markdown-Fix 1.5.2)", () => {
+    expect(html("**B!**&#67; und x**!B**")).toBe('<div class="markdown-view"><p><strong>B!</strong>C und x<strong>!B</strong></p></div>');
+    expect(html("a&#x41;")).toBe('<div class="markdown-view"><p>aA</p></div>');
+  });
+
   it("lässt Unterstriche im Wort stehen", () => {
     expect(html("datei_name_neu")).toBe('<div class="markdown-view"><p>datei_name_neu</p></div>');
   });

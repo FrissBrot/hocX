@@ -75,7 +75,12 @@ export function parseMarkdownBlocks(markdown: string): BlockNode[] {
 }
 
 function decodeEntities(text: string): string {
-  return text.replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (_, name: string) => ENTITIES[name] ?? _);
+  return text.replace(/&(#39|amp|lt|gt|quot|nbsp|#\d{1,7}|#x[0-9a-fA-F]{1,6});/g, (match, name: string) => {
+    if (ENTITIES[name]) return ENTITIES[name];
+    // Zahl-Entitäten schreibt der Editor an Auszeichnungsrändern («**B!**&#67;», rich-text-markdown.ts)
+    const code = name.startsWith("#x") ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+  });
 }
 
 /** Text mit nackten Links in Knoten zerlegen. */
