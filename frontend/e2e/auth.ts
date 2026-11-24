@@ -10,3 +10,7 @@ export const authFiles = {
 
 // Software-Passkey des Plattform-Admins (soft-passkey.ts), damit ein späterer Lauf sich wieder anmeldet.
 export const platformAdminPasskeyFile = "e2e/.auth/platform-admin-passkey.json";
+
+// TOTP-Secrets der Mandantenkonten aus auth.setup.ts (nur Laufzeit, e2e/.auth ist gitignored), damit
+// eine Spec eine abgelaufene Bestätigung (step_up_required, 15 min) per TOTP erneuern kann.
+export const tenantTotpFile = "e2e/.auth/tenant-totp.json";

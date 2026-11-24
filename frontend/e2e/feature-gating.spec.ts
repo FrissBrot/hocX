@@ -1,5 +1,6 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
+import { withTenantStepUp } from "./step-up";
 
 const ALL_DEMO_FEATURES = ["finance", "abgabebox", "custom_domain"];
 
@@ -92,9 +93,11 @@ test("disabling finance/abgabebox hides the nav links and blocks the routes", as
     expect((await writerApi.get("/api/submission-assignments")).status()).toBe(200);
     expect((await publicApi.get(`/api/public/${linkToken}/assignments`)).status()).toBe(200);
 
-    const createDomain = await tenantAdminApi.post(`/api/tenants/${tenantId}/domains`, {
-      data: { purpose: "app", domain: "e2e-custom-domain-gating.example.com" },
-    });
+    const createDomain = await withTenantStepUp(tenantAdminApi, process.env.E2E_USER_EMAIL ?? "admin@hocx.local", () =>
+      tenantAdminApi.post(`/api/tenants/${tenantId}/domains`, {
+        data: { purpose: "app", domain: "e2e-custom-domain-gating.example.com" },
+      }),
+    );
     expect(createDomain.ok(), await createDomain.text()).toBeTruthy();
     createdDomainId = (await createDomain.json()).id as string;
   } finally {

@@ -1,6 +1,6 @@
 import { test as setup, expect, request } from "@playwright/test";
 import fs from "node:fs/promises";
-import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { authFiles, platformAdminPasskeyFile, tenantTotpFile } from "./auth";
 import { SoftPasskey } from "./soft-passkey";
 import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 
@@ -102,6 +102,7 @@ setup("creates reproducible role and tenant sessions", async () => {
   await (await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.admin)).dispose();
   await (await authenticate("writer@hocx.local", authFiles.writer)).dispose();
   await (await authenticate("reader@hocx.local", authFiles.reader)).dispose();
+  await fs.writeFile(tenantTotpFile, JSON.stringify(Object.fromEntries([...totpFactors].map(([email, factor]) => [email, factor.secret]))), { mode: 0o600 });
   const platformAdmin = await authenticateAdmin("platform-admin@hocx.local", authFiles.platformAdmin);
 
   // Jedes Konto gehört genau einem Mandanten, ein Konto mit "zweitem Mandanten" gibt es nicht
