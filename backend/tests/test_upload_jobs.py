@@ -305,3 +305,38 @@ def test_backfill_reconstructs_exact_and_heuristic_jobs_idempotently(db):
     assert all(job.reconstructed and job.options["reconstruction"] == "heuristic" for job in jobs)
     assert sorted(job.uploaded for job in jobs) == [1, 2]
     assert backfill_tenant(db, tenant.id).files == 0
+
+
+def test_upload_history_hides_files_carried_into_an_unreadable_draft(db):
+    """Integration 1.6 mit 1.5.2 (ProtocolReadScope): ein Foto, das nur an einem nicht lesbaren
+    Protokollentwurf hängt, ist in GET /files verborgen - der Upload-Verlauf nennt es dann weder
+    in «Alle auswählen» (file-ids, auch nicht in total) noch in den Zählern des Vorgangs."""
+    import dataclasses
+    from datetime import date
+
+    from app.models.entities import ProtocolImage
+    from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template
+
+    tenant = make_tenant(db)
+    writer = _user(db, tenant.id)
+    opened = _open(db, writer)
+    _gallery(db, writer, [_file(jpeg(color=(9, 90, 9)), "lager.jpg", "image/jpeg")], upload_job_id=opened.id)
+    service.process_pending_gallery_upload_jobs(db)
+    stored = db.scalar(select(StoredFile).where(StoredFile.upload_job_id == opened.id))
+    template = make_template(db, tenant.id)
+    draft = make_protocol(db, tenant.id, template.id, protocol_number="9/2026", protocol_date=date(2026, 5, 1))
+    block = make_protocol_element_block(db, make_protocol_element(db, draft.id).id, configuration_snapshot_json={})
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored.id, sort_index=0))
+    db.commit()
+    photographer = dataclasses.replace(
+        make_current_user(tenant.id, role="writer"),
+        permissions=frozenset({"meetings.read", "photos.read", "photos.manage"}),
+    )
+
+    mine = routes.list_upload_job_file_ids(opened.id, only_images=True, camera=None, db=db, user=writer)
+    assert mine.file_ids == [stored.public_id] and mine.total == 1
+    theirs = routes.list_upload_job_file_ids(opened.id, only_images=True, camera=None, db=db, user=photographer)
+    assert theirs.file_ids == [] and theirs.total == 0
+    detail = routes.get_upload_job(opened.id, db=db, user=photographer)
+    assert (detail.file_count, detail.image_count) == (0, 0)
+    assert routes.get_upload_job(opened.id, db=db, user=writer).image_count == 1

@@ -40,7 +40,7 @@ from app.schemas.upload_jobs import (
 )
 from app.services import context_visibility_service, public_id_service, upload_job_service
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
-from app.services.access_service import AccessService
+from app.services.access_service import AccessService, protocol_file_clause
 from app.services.file_trash_service import may_manage
 
 router = APIRouter()
@@ -260,17 +260,29 @@ def list_upload_jobs(
 def get_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     _require_read(user)
     job = upload_job_service.get_visible_job(db, user, job_id)
-    files = db.execute(
+    count_query = (
         select(func.count(), func.count().filter(StoredFile.mime_type.like("image/%")))
         .select_from(StoredFile)
         .where(StoredFile.tenant_id == job.tenant_id, StoredFile.upload_job_id == job.id)
         .execution_options(include_trashed=True)
-    ).one()
+    )
+    protocol_visible = _protocol_visible(db, user)
+    if protocol_visible is not None:
+        count_query = count_query.where(protocol_visible)
+    files = db.execute(count_query).one()
     return _to_read(
         job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id, user), cls=UploadJobDetail,
         options=job.options or {}, import_job_id=job.import_job_id, file_count=int(files[0]), image_count=int(files[1]),
         cameras=upload_job_service.camera_groups(db, job),
     )
+
+
+def _protocol_visible(db: Session, user: CurrentUser):
+    """Wie GET /files (1.5.2, ProtocolReadScope): Dateien, die nur an nicht lesbaren Protokollen
+    hängen (z. B. in einen Entwurf übernommene Fotos), erscheinen im Upload-Verlauf weder mit ID
+    noch in Zählern. None = keine Einschränkung."""
+    scope = AccessService().protocol_read_scope(db, user)
+    return None if scope is None else protocol_file_clause(StoredFile.id, scope)
 
 
 def _file_states(db: Session, user: CurrentUser, file_ids: set[int]) -> dict[int, UploadJobItemFile]:
@@ -284,10 +296,21 @@ def _file_states(db: Session, user: CurrentUser, file_ids: set[int]) -> dict[int
         .execution_options(include_trashed=True)
     ).all()
     visible = service.visible_overview_items(db, user, [row.public_id for row in rows if row.deleted_at is None])
+    # Papierkorb: Zustand (und damit der Name) nur, wenn die Datei nicht ausschliesslich an nicht
+    # lesbaren Protokollen hängt - sonst wie eine unsichtbare Datei
+    protocol_visible = _protocol_visible(db, user)
+    trashed_hidden: set[int] = set()
+    trashed = [row.id for row in rows if row.deleted_at is not None]
+    if protocol_visible is not None and trashed:
+        trashed_hidden = set(trashed) - set(
+            db.scalars(select(StoredFile.id).where(StoredFile.id.in_(trashed), protocol_visible).execution_options(include_trashed=True))
+        )
     states: dict[int, UploadJobItemFile] = {}
     for row in rows:
         is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
-        if row.deleted_at is not None:
+        if row.id in trashed_hidden:
+            state = "hidden"
+        elif row.deleted_at is not None:
             state = "trashed"
         elif row.scan_status in BLOCKED_SCAN_STATUSES:
             state = "infected_later"
@@ -381,5 +404,10 @@ def list_upload_job_file_ids(
                 )
             )
         )
+    protocol_visible = _protocol_visible(db, user)
+    if protocol_visible is not None and rows:
+        shown = set(db.scalars(select(StoredFile.id).where(StoredFile.id.in_([row.id for row in rows]), protocol_visible)))
+        # Nicht sichtbare Dateien zählen auch nicht in total (kein Hinweis auf ihre Existenz)
+        rows = [row for row in rows if row.id in shown]
     writable = [row.public_id for row in rows if row.id not in outside and may_manage(user, row.mime_type)]
     return UploadJobFileIds(file_ids=writable, total=len(rows), truncated=truncated)

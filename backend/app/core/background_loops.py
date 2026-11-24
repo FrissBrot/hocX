@@ -85,8 +85,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "password_breach_recheck": 202600070,
     # Kamera-Kürzel für Altfotos (Migration 0253, services/camera_serial_backfill.py)
     "camera_serial_backfill": 202600051,
-    # Foto-Standorte (Migration 0260_photo_places): Ortsdaten laden, Ortsnamen nachtragen. 051-060
-    # bleiben für parallel entwickelte Jobs frei; 202600063 hält hocx_geo_import_apply als Xact-Lock.
+    # Foto-Standorte (Migration 0260_photo_places): Ortsdaten laden, Ortsnamen nachtragen.
+    # 202600063 hält hocx_geo_import_apply als Xact-Lock (RESERVED_LOCK_IDS).
     "geo_places_update": 202600061,
     "photo_places_resolve": 202600062,
 }
@@ -109,6 +109,7 @@ RESERVED_LOCK_IDS: dict[str, int] = {
     # Backup-Worker: genau ein Schreiber auf Repository und Inhaltsindex (app/workers/backup_worker.py).
     "backup_worker_repository": 202600024,
     "geo_import_apply": 202600063,  # SQL-Funktion hocx_geo_import_apply (Migration 0260)
+    "cashflow_sync": 202600040,  # services/cashflow_service.py::SYNC_LOCK_ID
 }
 
 _ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]
