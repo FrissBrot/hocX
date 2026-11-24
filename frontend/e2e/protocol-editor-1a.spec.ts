@@ -203,4 +203,47 @@ test.describe("Protokoll-Editor 1a", () => {
       }
     }
   });
+
+  test("Traktanden: hinzufügen, umbenennen und beim Abschliessen in die Vorlage übernehmen", async ({ request, page }) => {
+    test.setTimeout(120_000);
+    const { protocol, elements } = await threePointProtocol(request, "Traktanden");
+    await openProtocol(page, protocol.id);
+    // Hinzufügen unter der Gliederung (nur in diesem Protokoll)
+    const add = page.getByRole("textbox", { name: "Traktandum hinzufügen" });
+    await add.fill("Neue Vereinsjacken");
+    await add.press("Enter");
+    await expect(page.locator(".protocol-doc-section-title", { hasText: "Neue Vereinsjacken" })).toBeVisible();
+    await expect(page.locator(".editor-block-card-active .rich-text-editor-content")).toBeFocused();
+    await page.keyboard.press("Escape");
+    // Umbenennen über das Menü am Titel
+    await page.getByRole("button", { name: "Aktionen für «Varia»" }).click();
+    await page.getByRole("menuitem", { name: "Umbenennen" }).click();
+    const title = page.getByRole("textbox", { name: "Titel des Traktandums" });
+    await title.fill("Verschiedenes");
+    await title.press("Enter");
+    await expect(page.locator(".protocol-doc-section-title", { hasText: "Verschiedenes" })).toBeVisible();
+    await expect(page.locator(`#protocol-element-${elements[2].id}`).getByText("umbenannt")).toBeVisible();
+
+    // Bis «durchgeführt», dann abschliessen: Dialog listet die Abweichungen einzeln
+    for (const status of ["vorbereitet", "durchgeführt"]) {
+      const response = await request.patch(`/api/protocols/${protocol.id}`, { data: { status } });
+      expect(response.ok(), await response.text()).toBeTruthy();
+    }
+    await openProtocol(page, protocol.id);
+    await page.getByRole("button", { name: "Protokoll abschliessen" }).click();
+    const dialog = page.getByRole("dialog", { name: "Protokoll abschliessen?" });
+    await expect(dialog.getByText("Neu: «Neue Vereinsjacken» nach «Verschiedenes»")).toBeVisible();
+    await expect(dialog.getByText("Umbenannt: «Varia» → «Verschiedenes»")).toBeVisible();
+    for (const theme of ["light", "dark"] as const) {
+      await setTheme(page, theme);
+      await page.screenshot({ path: `${SHOTS}/vorlagen-dialog-${theme}-1440.png` });
+    }
+    await setTheme(page, "light");
+    // Nur das Umbenennen übernehmen
+    await dialog.getByRole("checkbox", { name: /Neue Vereinsjacken/ }).uncheck();
+    await dialog.getByRole("button", { name: "Protokoll abschliessen" }).click();
+    await expect.poll(async () => (await (await request.get(`/api/protocols/${protocol.id}`)).json()).status, { timeout: 30_000 }).toBe("abgeschlossen");
+    const changes = await (await request.get(`/api/protocols/${protocol.id}/template-changes`)).json();
+    expect(changes.changes.map((change: { kind: string }) => change.kind)).toEqual(["added"]);
+  });
 });
