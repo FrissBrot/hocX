@@ -73,6 +73,18 @@ Installationen aktualisieren können.
   `0254_upload_rejections`.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
+- **Foto-Standorte (1.6):** Fotos mit GPS bekommen automatisch einen Ortsnamen («Nähe
+  Blüemlisalphütte, Kandersteg BE») – präzise Orte wie Hütten, Gipfel, Pässe, Seen und Flurnamen in
+  der Nähe, sonst die Ortschaft mit Kanton bzw. Land. Der Ort steht in der Foto-Ansicht unter dem
+  Dateinamen; ein Klick zeigt Fotos aus der Umgebung. Die Fotosuche schlägt passende Orte vor
+  (Treffertyp «Ort», unscharf, Umlaute egal) und filtert dann auf den Umkreis – Gipfel/Hütte ~2 km,
+  Dorf ~5 km, Stadt/Region ~20 km, mit «+10 km» erweiterbar, näher steht weiter oben, kombinierbar
+  mit Suchbegriffen und Tags. Ortsnamen sind auch als Suchwörter auffindbar. Fotos ohne GPS
+  bekommen ihren Ort von Hand (Foto-Ansicht, Mehrfachauswahl **Ort**, *Upload › Ort für alle Fotos
+  setzen*, mit Rückgängig, `photos.manage`, auditiert); echtes GPS wird nie überschrieben.
+  Ortsnamen sehen alle, die das Foto sehen; Koordinaten bleiben bei der bisherigen Berechtigung.
+  Freigabe-Links und Partner geteilter Alben bekommen keinen Ort. Ortsdaten liegen offline in der
+  Datenbank (GeoNames CC BY 4.0, swissNAMES3D © swisstopo); keine Koordinaten gehen an Dienste.
 - **Traktanden im Protokoll anpassen (Protokoll-Editor 1a, Backend):** Traktanden lassen sich im
   Protokoll hinzufügen (mit leerem Textblock, nur in diesem Protokoll), umbenennen, aus-/einblenden
   und in einem Schritt umsortieren (`PUT /api/protocols/{id}/element-order`, 409 bei veralteter
@@ -192,6 +204,21 @@ Installationen aktualisieren können.
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im
   backend-Container (rekonstruiert den Altbestand, idempotent, siehe RUNBOOK Abschnitt 25).
+- Foto-Standorte: Migration `0260_photo_places` (globale Ortsdaten `geo_place`/`geo_dataset`, für
+  `hocx_app` nur lesbar, Import über die Zwischenablage `geo_place_import` und
+  `hocx_geo_import_apply`; Mandantentabellen `photo_location`, `place_change_batch`,
+  `place_change_item` mit RLS; Trigger auf `stored_file` und `photo_location`; Suchdokument mit
+  Ortsnamen). Keine neue Extension (kein PostGIS). Neue Jobs im job-worker: `geo_places_update`
+  (lädt beim ersten Lauf ~70 MB aus `download.geonames.org` und `data.geo.admin.ch`, danach nur
+  bei neuer Ausgabe; ~0,85 Mio. Orte, rund 300 MB in Postgres inkl. Indizes) und `photo_places_resolve` (trägt
+  Ortsnamen des Altbestands in Stücken nach). **Neues Secret `GEO_DB_PASSWORD` mit
+  `GEO_DATABASE_URL`** für die eigene DB-Rolle `hocx_geo` (nur Import der Ortsdaten: Zwischenablage
+  und Übernahme; `hocx_app` liest die Ortsdaten nur, `hocx_geo` sieht keine Mandantendaten).
+  `scripts/deploy.sh` ergänzt es bei bestehenden Installationen automatisch (RUNBOOK Abschnitt 26);
+  ohne Passwort bricht die Migration ab, der job-worker startet in der Produktion nicht ohne
+  `GEO_DATABASE_URL`. Optionale Einstellungen `GEO_PLACES_AUTO_UPDATE`
+  (true), `GEO_PLACES_COUNTRIES` (CH,LI,AT,DE,FR,IT), `GEO_PLACES_MAX_AGE_DAYS` (30). Ohne Netz:
+  `python -m scripts.import_geo_places` mit lokalen Dateien.
 
 ## [1.5.2] - 2026-11-23
 

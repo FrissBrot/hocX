@@ -34,6 +34,27 @@ Rolle; die besten Treffer stehen zuoberst.
   [Einstellungen › Suche & Synonyme](einstellungen.md#suche) fest. Treffer über ein Synonym stehen
   etwas weiter unten als direkte Treffer.
 
+## Orte {#orte}
+
+Fotos mit GPS bekommen automatisch einen **Ortsnamen**, zum Beispiel «Nähe Blüemlisalphütte,
+Kandersteg BE»: eine Hütte, ein Gipfel, ein Pass, ein See oder ein Flurname in der Nähe, sonst die
+Ortschaft mit Kanton (im Ausland mit Land). Den Ort sehen alle, die das Foto sehen; die genauen
+Koordinaten stehen weiterhin nur für Berechtigte unter *Details*.
+
+- **Umgebung suchen:** In der Foto-Ansicht steht der Ort unter dem Dateinamen – ein Klick zeigt
+  alle Fotos in der Umgebung, die nächsten zuerst. In der Suche erscheinen ab drei Buchstaben
+  passende **Orte** («Orte: Kandersteg · Dorf · BE»); ein Klick filtert auf den Umkreis. Der Umkreis
+  richtet sich nach der Art des Orts (Gipfel, Hütte ~2 km, Dorf ~5 km, Stadt oder Region ~20 km) und
+  lässt sich mit **+10 km** erweitern. Weitere Suchwörter und Tags gelten zusätzlich.
+- **Ort von Hand:** Fotos ohne GPS bekommen ihren Ort in der Foto-Ansicht (*Ort › Ort setzen*), für
+  eine Auswahl über **Ort** in der Auswahlleiste oder für einen ganzen Upload unter
+  *Uploads › Vorgang › Ort für alle Fotos setzen*. Fotos mit GPS behalten ihren Ort aus der Kamera.
+  Jede Änderung lässt sich rückgängig machen (Hinweis nach dem Speichern oder im Reiter
+  *Korrekturen* des Uploads).
+- **Freigabe-Links** und Partner-Organisationen geteilter Alben sehen keinen Ort.
+- Ortsdaten: GeoNames (CC BY 4.0) und swissNAMES3D © swisstopo, offline auf dem hocX-Server – es
+  werden keine Koordinaten an andere Dienste geschickt.
+
 ## Fotos hochladen {#hochladen}
 
 1. Klicke auf **+ Bilder hochladen** oder ziehe Bilder direkt auf die Seite.

@@ -641,6 +641,14 @@
       "camera_serial_backfill": {
         "title": "Completare i codici fotocamera",
         "description": "Legge il numero di serie della fotocamera dai dati delle foto caricate prima della 1.6 e salva solo un codice cifrato per club, così modelli uguali appaiono separati nella cronologia dei caricamenti. Per organizzazione e a blocchi, riprende dopo un'interruzione."
+      },
+      "geo_places_update": {
+        "title": "Aggiorna dati dei luoghi",
+        "description": "Carica GeoNames (CC BY 4.0) e swisstopo swissNAMES3D quando è disponibile una nuova edizione, per i nomi dei luoghi delle foto."
+      },
+      "photo_places_resolve": {
+        "title": "Completa luoghi delle foto",
+        "description": "Aggiunge i nomi dei luoghi alle foto con GPS dopo un aggiornamento dei dati o per foto meno recenti, per organizzazione a blocchi."
       }
     }
   },

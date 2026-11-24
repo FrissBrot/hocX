@@ -403,7 +403,7 @@ def cmd_swap_database(args: argparse.Namespace) -> int:
             pg.psql(f'ALTER DATABASE "{live}" RENAME TO "{pre}";', database="postgres")
         pg.psql(f'ALTER DATABASE "{restored}" RENAME TO "{live}";', database="postgres")
         pg.psql(f'ALTER DATABASE "{live}" WITH ALLOW_CONNECTIONS true;', database="postgres")
-        pg.psql(f'GRANT CONNECT ON DATABASE "{live}" TO hocx_app, hocx_abgabebox, hocx_photo_worker;', database="postgres")
+        pg.psql(f'GRANT CONNECT ON DATABASE "{live}" TO hocx_app, hocx_abgabebox, hocx_photo_worker, hocx_geo;', database="postgres")
     print(f"Fertig. Bisherige Datenbank: {pre if exists else '(keine)'}")
     return 0
 

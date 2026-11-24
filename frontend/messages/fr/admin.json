@@ -641,6 +641,14 @@
       "camera_serial_backfill": {
         "title": "Compléter les codes d’appareil",
         "description": "Lit le numéro de série de l’appareil dans les données des photos antérieures à la 1.6 et n’enregistre qu’un code chiffré par club, afin que des modèles identiques apparaissent séparément dans l’historique des téléversements. Par organisation et par lots, reprend après une interruption."
+      },
+      "geo_places_update": {
+        "title": "Mettre à jour les données de lieux",
+        "description": "Charge GeoNames (CC BY 4.0) et swisstopo swissNAMES3D lorsqu’une nouvelle édition est disponible, pour les noms de lieux des photos."
+      },
+      "photo_places_resolve": {
+        "title": "Compléter les lieux des photos",
+        "description": "Ajoute les noms de lieux aux photos avec GPS après une mise à jour des données ou pour les photos plus anciennes, par organisation et par lots."
       }
     }
   },

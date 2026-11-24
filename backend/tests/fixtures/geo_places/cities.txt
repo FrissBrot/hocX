@@ -1,0 +1,7 @@
+2660191	Kandersteg	Kandersteg	Kandershteg,Kandersteg,ZHR	46.49467	7.67326	P	PPL	CH		BE				1123	1176	1176	Europe/Zurich	2026-01-01
+2660973	Frutigen	Frutigen		46.58782	7.64751	P	PPL	CH		BE				6800	800	800	Europe/Zurich	2026-01-01
+2661552	Bern	Bern	Berne,Berna,BRN	46.94809	7.44744	P	PPLC	CH		BE				121631	540	540	Europe/Zurich	2026-01-01
+2657896	Zürich	Zuerich	Zurich,Zurigo,Zuerich,ZRH	47.36667	8.55	P	PPLA	CH		ZH				415367	415	415	Europe/Zurich	2026-01-01
+2660646	Genève	Geneve	Genf,Geneva,Ginevra	46.20222	6.14569	P	PPLA	CH		GE				183981	375	375	Europe/Zurich	2026-01-01
+3025242	Chamonix-Mont-Blanc	Chamonix-Mont-Blanc	Chamonix	45.92375	6.86933	P	PPL	FR		84				8906	1035	1035	Europe/Zurich	2026-01-01
+2988507	Paris	Paris	Parigi,Parisch	48.85341	2.3488	P	PPLC	FR		11				2138551	35	35	Europe/Zurich	2026-01-01

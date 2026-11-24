@@ -1,0 +1,2 @@
+9999001	Ladholz	Ladholz		46.5640	7.6200	P	PPL	CH		BE				0	1000	1000	Europe/Zurich	2026-01-01
+9999002	Kandersteg Bahnhof	Kandersteg Bahnhof		46.4970	7.6760	S	RSTN	CH		BE				0	1170	1170	Europe/Zurich	2026-01-01

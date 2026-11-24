@@ -77,6 +77,7 @@ services:
       APP_DB_PASSWORD: hocx_app_test
       ABGABEBOX_DB_PASSWORD: hocx_abgabebox_test
       PHOTO_WORKER_DB_PASSWORD: hocx_photo_worker_test
+      GEO_DB_PASSWORD: hocx_geo_test
       # 32+ chars required by app/core/config.py's startup check - the old value here was
       # only 27 chars and made the whole `tests` profile fail closed on boot (found while
       # fixing the MFA/rate-limit findings, which made this path exercise AUTH_SECRET-gated

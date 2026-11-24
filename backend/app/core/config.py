@@ -22,7 +22,7 @@ def _load_file_secrets() -> None:
     for variable in (
         "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "AUTH_SECRET_PREVIOUS", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
         "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY", "REDIS_PASSWORD",
-        "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET",
+        "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET", "GEO_DATABASE_URL",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -299,6 +299,18 @@ class Settings(BaseSettings):
     # das Signal still. GEOIP_AUTO_UPDATE=false: kein Download (Datei bei Bedarf selbst ablegen).
     geoip_db_path: str = "/var/lib/hocx/geoip/dbip-country-lite.mmdb"
     geoip_auto_update: bool = True
+    # Foto-Standorte (app/services/geo_places.py): Ortsdaten aus GeoNames (CC BY 4.0) und swisstopo
+    # swissNAMES3D, vom Job geo_places_update (job-worker) monatlich in Postgres geladen. Nur dieser
+    # Job lädt herunter, nie mit Koordinaten von Fotos. GEO_PLACES_AUTO_UPDATE=false: kein Download
+    # (Import dann mit scripts/import_geo_places.py aus lokalen Dateien).
+    geo_places_auto_update: bool = True
+    # Länderdateien mit Gipfeln, Hütten, Seen und Weilern (Kürzel GeoNames); weltweit sonst cities500.
+    geo_places_countries: str = "CH,LI,AT,DE,FR,IT"
+    geo_places_max_age_days: int = 30
+    # Eigene DB-Rolle hocx_geo nur für den Import (Migration 0260, GEO_DATABASE_URL[_FILE] im
+    # job-worker). Leer: ausserhalb der Produktion die Owner-URL (DATABASE_URL), in der Produktion
+    # bricht der job-worker ab, solange der automatische Import an ist.
+    geo_database_url: str = ""
 
     admin_auth_secret: str = "hocx-local-dev-admin-secret"
     admin_session_cookie: str = "hocx_admin_session"
@@ -482,6 +494,13 @@ class Settings(BaseSettings):
             )
             sys.exit(1)
         if self.is_production:
+            if self.process_kind == "job-worker" and self.geo_places_auto_update and not self.geo_database_url:
+                print(
+                    "FATAL: GEO_DATABASE_URL is not set (DB role hocx_geo for the place data import, "
+                    "Migration 0260). Run scripts/deploy.sh or set GEO_PLACES_AUTO_UPDATE=false.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
             if not self.auth_secure_cookies:
                 print("FATAL: AUTH_SECURE_COOKIES must be true in production.", file=sys.stderr)
                 sys.exit(1)

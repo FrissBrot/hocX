@@ -288,6 +288,7 @@ Spalten `gps_latitude`, `gps_longitude` (WGS84-Dezimalgrad, `DOUBLE PRECISION`),
 `gps_source`. CHECK-Constraints erzwingen Bereich und dass Breite/Länge nur gemeinsam
 vorkommen; ein Teilindex (`idx_stored_file_tenant_gps`) bereitet die spätere Kartenansicht vor
 (diese ist nicht Teil dieser Änderung).
+Ortsnamen und Umkreissuche aus diesen Spalten: Abschnitt 16.
 
 Als Wert lesbar nur über `GET /api/stored-files/{id}/metadata` (`gps`), d. h. für Benutzer mit
 Zugriff auf die Datei im eigenen Mandanten. Partner-Mandanten geteilter Alben erhalten über
@@ -417,4 +418,89 @@ bleiben unverändert gültig; fehlende Werte liefert der Backfill.
 - Exportiertes EXIF-Datum trägt die Konvention 12:00 Uhr (siehe 11.).
 - Konvertierte HEIC-Originale existieren nicht mehr; für sie sind Client-Angaben (Herkunft
   `client`) die einzige nachträgliche Quelle.
-- Eine Kartenansicht ist vorbereitet (Spalten, Index), aber nicht umgesetzt.
+- Eine Kartenansicht ist vorbereitet (Spalten, Index), aber nicht umgesetzt (auch mit den
+  Foto-Standorten aus Abschnitt 16 bewusst nicht).
+- Manuell gesetzte Orte sind nicht Teil des Mandanten-Exports (ZIP); GPS-Orte entstehen beim
+  Import aus den Koordinaten neu.
+
+## 16. Foto-Standorte (Ortsnamen, Umkreissuche, Ort von Hand)
+
+Code: `app/services/geo_places.py` (Ortsdaten laden), `app/services/photo_places.py` (Suche,
+Umkreis, Ort von Hand, Nachtragen), `app/api/routes/photo_places.py`, Migration
+`0260_photo_places.py`, Frontend `lib/photos/places.ts`, `components/photos/photo-place-*.tsx`.
+
+**Ortsdaten (global, kein Mandantendatum).** `geo_place` enthält Orte aus GeoNames (CC BY 4.0:
+`cities500` weltweit plus Länderdateien aus `GEO_PLACES_COUNTRIES`, Standard CH, LI, AT, DE, FR, IT
+– für CH nur Ortschaften mit Kantonskürzel, für die Nachbarländer auch Weiler, Gipfel, Pässe, Hütten,
+Seen, Gletscher) und swisstopo swissNAMES3D (Gipfel, Hütten, Pässe, Seen, Gletscher, Flurnamen,
+Quartiere, Weiler < 100 Einwohner, Stationen, Aussichtspunkte; LV95 → WGS84 nach den
+Näherungsformeln von swisstopo, ~1 m). Keine Tabelle mit `tenant_id`, darum keine RLS; die
+Laufzeitrolle `hocx_app` darf `geo_place` und `geo_dataset` nur lesen und hat keinen Zugriff auf die
+Zwischenablage. Schreiben darf nur die eigene Rolle `hocx_geo` (`GEO_DB_PASSWORD`, im job-worker
+`GEO_DATABASE_URL`, `geo_places.geo_session`): Zwischenablage `geo_place_import` und
+`hocx_geo_import_apply`, Lesen der Ortsdaten, kein Zugriff auf Mandantentabellen (Tests in
+`test_tenant_rls.py` und `test_photo_places.py`). Der Job `geo_places_update` (job-worker,
+täglich geprüft, lädt nur bei neuer Ausgabe bzw. GeoNames nach 30 Tagen) lädt über HTTPS nur von
+`download.geonames.org` und `data.geo.admin.ch` (keine Weiterleitungen, Grössen- und Zeitlimit),
+importiert mit der Rolle `hocx_geo`, prüft swissNAMES3D gegen die SHA-256 aus der STAC-API, GeoNames gegen `Content-Length` und ZIP-CRC,
+schreibt per `COPY` in die Zwischenablage `geo_place_import` und übernimmt sie mit
+`hocx_geo_import_apply` (SECURITY DEFINER: bekannte Quelle, Schlüsselpräfix `gn:`/`sn:`,
+Mindestmenge, höchstens 50 % Schwund, Upsert je Schlüssel). Ohne Netz:
+`python -m scripts.import_geo_places` mit lokalen Dateien; `--fixture` lädt den kleinen
+Testdatensatz (`tests/fixtures/geo_places`) für Tests und E2E. Kein PostGIS: das offizielle
+`postgres:18`-Image bringt es nicht mit. `cube`/`earthdistance` wären vorhanden, gebraucht werden
+aber nur Kern-Typen: Teil-GiST-Indizes über `point(longitude, latitude)` (präzise Orte,
+Ortschaften) für die Bounding-Box beim Reverse-Geocoding und eine eigene Haversine-Funktion
+(`hocx_geo_distance_m`).
+
+Umfang (gemessen 2026-11-24, Standardländer): Download ~70 MB (cities500 14 MB, Länderdateien
+24 MB, swissNAMES3D 33 MB), 848 000 Orte (GeoNames 511 000, swissNAMES3D 337 000; davon
+280 000 Flurnamen), `geo_place` 296 MB inkl. Indizes (Tabelle 141 MB). Reverse-Geocoding ~3 ms je
+Foto, Ortssuche 40–100 ms, Umkreis-Kandidaten auf 100 000 Fotos eines Mandanten 3–13 ms
+(2–20 km, Bitmap-Index-Scan auf `idx_photo_location_coords`).
+
+**Ort je Foto (`photo_location`, Mandantendaten mit RLS).** Ein Statement-Trigger auf
+`stored_file` ruft bei neuem bzw. geändertem GPS `hocx_photo_location_refresh` (SECURITY
+DEFINER) – damit gilt das für jeden Upload-Weg (Galerie, ZIP, Datei-Import, Abgabebox,
+Protokollbilder, Mandanten-Import), sobald der Metadaten-Scan GPS gesetzt hat. Rangfolge
+(`hocx_geo_reverse`): präziser Ort innerhalb seiner Reichweite (Hütte 800 m, Gipfel 1 km, Pass
+800 m, See/Gletscher 1,5 km, Weiler 700 m, Flurname/Aussichtspunkt 400 m, Station 300 m; Hütten
+und Gipfel vor Flurnamen), Flurnamen und Weiler nicht innerhalb eines Dorfs, Quartiere nur in
+Städten; dazu immer die Ortschaft (nächste, nach Grösse gewichtet, bis 30 km) mit Kanton bzw.
+Land. Ohne Treffer bleiben nur die Koordinaten (Umkreissuche geht trotzdem). Gespeichert:
+wirksame Koordinate, präziser Ort, Ortschaft, Kanton/Land, `search_text` (alle Schreibweisen) und
+`geo_generation`. Das Suchdokument der Fotosuche (0204/0217) nimmt die Ortsnamen in die starken
+Wörter auf.
+
+**Sichtbarkeit.** Den Ortsnamen sehen alle, die das Foto im eigenen Mandanten sehen
+(`GET /files` als `place`, `GET /stored-files/{id}/metadata` als `place`); Koordinaten weiter nur
+mit `files.manage`/`meetings.edit` (`gps`). Die Distanz in der Umkreissuche (`place.distance_m`)
+nur mit demselben Recht; ohne dieses Recht ist der Umkreis nie enger als der Standard der Ortsart
+(mind. 2 km) und die Liste nicht nach Distanz sortiert – sonst liesse sich der Aufnahmeort mit
+vielen kleinen Kreisen eingrenzen (Security-Review). Partner geteilter Alben bekommen keinen Ort (wie keine Metadaten),
+öffentliche Freigabe-Links nie (eigenes Schema `PublicShareFile` ohne Ort, Dateien ohne Ortsnamen).
+
+**Ortssuche und Umkreis.** `GET /places/search?q=` (ab 3 Zeichen, `photos.read` oder `files.read`):
+unscharf über alle Schreibweisen (`hocx_geo_fold`: klein, ohne Akzente, ä = ae = a; Trigramm-Index,
+Wortähnlichkeit für Tippfehler), gerankt nach Treffer (Name gleich, beginnt mit, enthält, ähnlich)
+und Bedeutung (Art, Einwohner, Schweiz und Nachbarländer zuerst), Dubletten (gleicher Name, < 3 km)
+zusammengefasst, ohne Koordinaten. `GET /files?near=<schlüssel>&near_km=<km>` (auch
+`/files/timeline`) filtert auf den Umkreis – Standard je Ortsart (Gipfel/Hütte/Punkt 2 km, See 3 km,
+Dorf 5 km, Kleinstadt 10 km, Stadt/Region 20 km), höchstens 200 km – und sortiert mit
+`sort_by=relevance` nach Distanz (mit Suchtext: zuerst Anzahl getroffener Wörter, dann Distanz).
+Der Filter ist eine Bounding-Box im Index `idx_photo_location_coords (tenant_id, latitude,
+longitude)`, die Haversine-Distanz läuft nur für die Kandidaten.
+
+**Ort von Hand.** `POST /photo-places/assign` (`photos.manage`, auditiert `photo.place_set` /
+`photo.place_cleared`): Ort setzen oder entfernen für bis zu 500 Fotos je Aufruf (der Browser
+stückelt grössere Auswahlen mit derselben `batch_id`), optional mit Bezug zum Upload-Vorgang.
+Nur Fotos ohne GPS (`skipped_gps`); echtes GPS ersetzt später einen manuellen Ort. Rückgängig:
+`POST /place-changes/{id}/undo` (nur, wo seither nichts geändert wurde), Liste je Vorgang:
+`GET /place-changes?upload_job_id=`. Fremde, unbekannte und nicht lesbare IDs kommen einheitlich
+als `not_found` zurück.
+
+**Altbestand und Updates.** Die Migration legt für jedes vorhandene GPS-Foto eine Zeile ohne Namen
+an; der Job `photo_places_resolve` (job-worker, alle 10 min, höchstens 5000 Fotos je Lauf) beschriftet
+je Mandant in Stücken zu 500 mit eigenem Commit alles, dessen `geo_generation` älter ist als die
+Ortsdaten – wiederaufnehmbar, auch nach jedem Datenupdate. Manuelle Orte behalten ihren Ort und
+bekommen nur die Beschriftung neu.

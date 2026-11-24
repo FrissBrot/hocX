@@ -94,6 +94,7 @@ from app.services import capture_change_service, photo_event_link_service
 from app.models.upload_history_entities import CaptureChangeBatch
 from app.schemas.upload_jobs import UploadJobOfFile
 from app.services import file_keywords
+from app.services import photo_places
 from app.services import document_service, file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
@@ -165,6 +166,10 @@ def list_files(
     date_to: date | None = Query(default=None),
     # Upload-Verlauf: nur Dateien dieses Vorgangs (404, wenn die Person ihn nicht sehen darf)
     upload_job_id: Annotated[uuid.UUID | None, Query()] = None,
+    # Foto-Standorte (0260): nur Fotos im Umkreis eines Orts (Schlüssel aus GET /places/search),
+    # Radius in km (ohne Angabe nach Ortsart); mit sort_by=relevance nach Distanz sortiert.
+    near: Annotated[str | None, Query(max_length=80)] = None,
+    near_km: Annotated[float | None, Query(ge=0.5, le=200)] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -187,6 +192,10 @@ def list_files(
     album = _get_album(db, user, album_id) if album_id is not None else None
     if exclude_album_id is not None:
         _get_album(db, user, exclude_album_id)
+    # Ohne Recht auf Koordinaten: Umkreis nie enger als der Standard der Ortsart und keine
+    # Sortierung nach Distanz (sonst liesse sich der Aufnahmeort eingrenzen, Security-Review)
+    sees_location = _sees_location(user)
+    near_filter = photo_places.resolve_near(db, near, near_km, user.current_tenant_id, precise=sees_location)
     album_share_pending = None
     if album is not None:
         if photo_album_share_service.hides_pending_items(album, user.current_tenant_id):
@@ -220,7 +229,11 @@ def list_files(
         upload_job_id=upload_job_id,
         # Protokollbilder/-exporte nur aus lesbaren Protokollen (1.5.2, Verdacht 2)
         protocol_scope=access_service.protocol_read_scope(db, user),
+        near=photo_places.near_subquery(near_filter) if near_filter is not None else None,
+        near_sort=sees_location,
     )
+    # Ortsname nur für Fotos des eigenen Mandanten; Distanz nur für Konten, die Koordinaten sehen
+    photo_places.attach_places(db, user.current_tenant_id, items, near=near_filter, with_distance=sees_location)
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
         # album - the query itself is now scoped by a JOIN on album_id (see
@@ -259,6 +272,8 @@ def files_timeline(
     tags: list[str] | None = Query(default=None),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     upload_job_id: Annotated[uuid.UUID | None, Query()] = None,
+    near: Annotated[str | None, Query(max_length=80)] = None,
+    near_km: Annotated[float | None, Query(ge=0.5, le=200)] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -270,11 +285,13 @@ def files_timeline(
         raise HTTPException(status_code=400, detail="No active tenant")
     if upload_job_id is not None:
         upload_job_service.get_visible_job(db, user, upload_job_id)
+    near_filter = photo_places.resolve_near(db, near, near_km, user.current_tenant_id, precise=_sees_location(user))
     return service.tenant_files_timeline(
         db, user.current_tenant_id, sort_dir=sort_dir, only_images=only_images, search=search, tags=tags,
         readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
         upload_job_id=upload_job_id,
         protocol_scope=access_service.protocol_read_scope(db, user),
+        near=photo_places.near_subquery(near_filter) if near_filter is not None else None,
     )
 
 
@@ -1556,7 +1573,11 @@ def get_stored_file_metadata(
 
 
 def _with_upload_job(db: Session, user: CurrentUser, stored_file: StoredFile, metadata: StoredFileMetadata) -> StoredFileMetadata:
-    """Herkunftsvorgang (Upload-Verlauf) nur, wenn die Person den Vorgang sehen darf."""
+    """Herkunftsvorgang (Upload-Verlauf) nur, wenn die Person den Vorgang sehen darf. Dazu der
+    Ortsname (0260) für alle, die das Foto sehen - nur im Mandanten des Fotos."""
+    if stored_file.tenant_id == user.current_tenant_id:
+        location = photo_places.places_for_files(db, user.current_tenant_id, [stored_file.id]).get(stored_file.id)
+        metadata = metadata.model_copy(update={"place": photo_places.place_payload(location)})
     job = upload_job_service.job_for_file(db, user, stored_file)
     if job is None:
         return metadata

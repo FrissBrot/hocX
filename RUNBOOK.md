@@ -1452,3 +1452,42 @@ unverändert gespeicherten Originaldatei (wie vor 1.6, bewusst so entschieden).
 **Datenexport:** `Uploads.xlsx` im Vereinsexport enthält neben den Vorgängen die Einträge je Datei
 (auch Namen abgelehnter Dateien), Datei-Importe mit Quellpfad und Datumskorrekturen; die Auskunft
 einer Person dasselbe für ihre eigenen Vorgänge.
+
+## 26. Foto-Standorte (1.6)
+
+Migration `0260_photo_places`: globale Ortsdaten (`geo_place`, `geo_dataset`, Zwischenablage
+`geo_place_import`), Ort je Foto (`photo_location` mit RLS), Rückgängig-Tabellen. Neue DB-Rolle
+**`hocx_geo`** nur für den Import der Ortsdaten: sie schreibt die Zwischenablage und führt
+`hocx_geo_import_apply` aus, liest `geo_place`/`geo_dataset` und hat keinen Zugriff auf
+Mandantentabellen. `hocx_app` liest die Ortsdaten nur. Technik: `backend/UPLOAD_DUPLICATES.md` §16.
+
+**Neues Secret `GEO_DB_PASSWORD` (+ `GEO_DATABASE_URL`).** Upgrade bestehender Installationen:
+
+1. `scripts/deploy.sh` wie gewohnt ausführen. `scripts/lib/env_migrate.sh` ergänzt beide Werte in
+   der `.env` (64 Hex-Zeichen, einmalig erzeugt) und meldet «ergaenzt: GEO_DB_PASSWORD»; deploy.sh
+   schreibt `.secrets/geo_db_password` (Backend, für die Migration) und `.secrets/geo_database_url`
+   (nur job-worker) und bricht ab, wenn das Passwort fehlt oder ein Platzhalter ist.
+2. Die Migration legt die Rolle an (fehlt `GEO_DB_PASSWORD` und gibt es die Rolle noch nicht,
+   bricht sie ab - wie bei den anderen Rollen). Gibt es die Rolle schon (z. B. beim Restore älterer
+   Sicherungen durch den backup-worker), läuft sie ohne Passwort durch und lässt es unverändert.
+3. Danach lädt der job-worker die Ortsdaten (Job `geo_places_update`, ~70 MB von
+   `download.geonames.org` und `data.geo.admin.ch`, ~1-2 min, ~300 MB in Postgres) und
+   `photo_places_resolve` beschriftet den Altbestand in Stücken. Läuft der job-worker in der
+   Produktion ohne `GEO_DATABASE_URL` und mit `GEO_PLACES_AUTO_UPDATE=true`, startet er nicht.
+
+Manuelle Installationen ohne deploy.sh (z. B. die Dev-Instanz mit `docker-compose.yml`): vor dem
+Update `GEO_DB_PASSWORD` (zufällig, `openssl rand -hex 32`) und
+`GEO_DATABASE_URL=postgresql+psycopg://hocx_geo:<passwort>@db:5432/<POSTGRES_DB>` in die `.env`
+eintragen. Ohne Netz zu den Quellen: `GEO_PLACES_AUTO_UPDATE=false` und
+`docker compose exec backend python -m scripts.import_geo_places --geonames-cities … --swissnames …`
+(nutzt `GEO_DATABASE_URL`, sonst den Owner-Zugang des Backends).
+
+Restore auf einen neuen Server: `restore-full` legt `hocx_geo` wie die anderen Laufzeitrollen an,
+sofern `GEO_DB_PASSWORD` gesetzt ist (`scripts/lib/restore_from_backup.sh` reicht es durch).
+**Passwort wechseln** (die Migration läuft nicht erneut, ein neuer Wert in `.env` allein ändert die
+Rolle nicht):
+
+1. In der Datenbank setzen, der Client hasht das Passwort selbst (nicht in Shell-Verlauf/Logs):
+   `docker compose -p <projekt> <compose-dateien> exec db psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c '\password hocx_geo'`
+2. Denselben Wert als `GEO_DB_PASSWORD` und in `GEO_DATABASE_URL` in die `.env` eintragen.
+3. `scripts/deploy.sh` ausführen (schreibt die Secret-Dateien neu, startet den job-worker neu).

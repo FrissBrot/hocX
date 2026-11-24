@@ -7,6 +7,7 @@ import { HelpPopover } from "@/components/ui/help-popover";
 
 import { PhotoActionIcon } from "./photo-action-icon";
 import { PhotoCaptureDateDialog } from "./photo-capture-date-dialog";
+import { PhotoPlaceDialog } from "./photo-place-dialog";
 import { KeywordsBulkDialog } from "@/components/files/keywords-bulk-dialog";
 import { menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
@@ -74,6 +75,8 @@ export function PhotoBulkBar({
   const [shareOpen, setShareOpen] = useState(false);
   const [captureDateOpen, setCaptureDateOpen] = useState(false);
   const [keywordsOpen, setKeywordsOpen] = useState(false);
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const tPlaces = useTranslations("photos.places");
   // Fortschritt gestückelter Aktionen («Tags werden gesetzt … 400/1240») und Abbruch
   const [progress, setProgress] = useState<(ChunkProgress & { label: string }) | null>(null);
   const cancelRef = useRef(false);
@@ -277,6 +280,7 @@ export function PhotoBulkBar({
           </Popover>
         </div>
         <button type="button" className="button-secondary button-ghost" onClick={() => setCaptureDateOpen(true)} disabled={busy}><PhotoActionIcon name="calendar" />{tCapture("bulkAction")}</button>
+        <button type="button" className="button-secondary button-ghost" onClick={() => setPlaceOpen(true)} disabled={busy}><PhotoActionIcon name="place" />{tPlaces("bulkAction")}</button>
         <div ref={eventAnchorRef}>
           <button type="button" className="button-secondary button-ghost" onClick={() => setEventOpen((open) => !open)} disabled={busy} aria-expanded={eventOpen}><PhotoActionIcon name="link" />{t("eventAction")}</button>
           <Popover open={eventOpen} onOpenChange={setEventOpen} anchorRef={eventAnchorRef} className="photo-bulk-album-popover" role="dialog" label={t("eventAction")}>
@@ -301,6 +305,9 @@ export function PhotoBulkBar({
       </div>
       {captureDateOpen && (
         <PhotoCaptureDateDialog open fileIds={selectedIds} onClose={() => setCaptureDateOpen(false)} onDone={onDone} uploadJobId={uploadJobId} referenceItems={referenceItems} />
+      )}
+      {placeOpen && (
+        <PhotoPlaceDialog open fileIds={selectedIds} uploadJobId={uploadJobId} onClose={() => setPlaceOpen(false)} onDone={onDone} />
       )}
       {keywordsOpen && (
         <KeywordsBulkDialog open fileIds={selectedIds} onClose={() => setKeywordsOpen(false)} onDone={onDone} />

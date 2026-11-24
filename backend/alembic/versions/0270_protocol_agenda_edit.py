@@ -22,7 +22,7 @@ Spalten mit konstantem Default sind in PostgreSQL ohne Tabellenumschreibung; die
 betrifft nur Sitzungsnotizen und Word-Import-Traktanden.
 
 Revision ID: 0270_protocol_agenda_edit
-Revises: 0254_upload_rejections
+Revises: 0260_photo_places
 Create Date: 2026-11-23
 """
 
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0270_protocol_agenda_edit"
-down_revision = "0254_upload_rejections"
+down_revision = "0260_photo_places"
 branch_labels = None
 depends_on = None
 

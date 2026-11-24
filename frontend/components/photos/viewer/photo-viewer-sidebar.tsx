@@ -14,6 +14,8 @@ import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import type { FileAlbumRef, FileOverviewItem, PhotoAlbum, StoredFileMetadata } from "@/types/api";
 import { confirmAddToSharedAlbum } from "../album-share-release";
 import { CaptureDateBox } from "./capture-date-box";
+import { PhotoViewerPlaceSection, SearchPlaceHandler } from "./photo-viewer-place";
+import type { PhotoPlace } from "@/lib/photos/places";
 import { describeExposure, describeSharpness, sharpnessFraction, ViewerGroup } from "./viewer-logic";
 
 type Props = {
@@ -29,6 +31,9 @@ type Props = {
   onCaptureDateSaved: (metadata: StoredFileMetadata) => void;
   onAlbumsChange: (albums: FileAlbumRef[]) => void;
   onTagsChange: (value: string) => void;
+  place?: PhotoPlace | null;
+  onSearchPlace?: SearchPlaceHandler;
+  onPlaceChanged?: () => void;
 };
 
 /** Rechte Seitenleiste der Foto-Ansicht (Design: 368 px, unter 900 px unter dem Bild). Folgt dem
@@ -53,6 +58,15 @@ export function PhotoViewerSidebar(props: Props) {
         <h2 className="photo-viewer-section-title" id="pv-date-title">{t("dateBox.title")}</h2>
         <CaptureDateBox key={item.id} fileId={item.id} metadataUrl={item.metadata_url} metadata={metadata} onSaved={props.onCaptureDateSaved} />
       </section>
+
+      <PhotoViewerPlaceSection
+        key={`place-${item.id}`}
+        fileId={item.id}
+        place={props.place}
+        canManage={props.canManage}
+        onSearchPlace={props.onSearchPlace}
+        onChanged={() => props.onPlaceChanged?.()}
+      />
 
       <AlbumSection item={item} albums={props.albums} canManage={props.canManage} onChange={props.onAlbumsChange} />
 

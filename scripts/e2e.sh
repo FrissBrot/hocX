@@ -71,6 +71,8 @@ start_stack() {
   prepare_abgabebox_storage
   "${DC[@]}" up -d --build
   wait_for_url http://127.0.0.1:18000/api/health
+  # Foto-Standorte: kleiner Ortsdatensatz statt Download (tests/fixtures/geo_places)
+  "${DC[@]}" exec -T backend python -m scripts.import_geo_places --fixture >/dev/null
   wait_for_url http://127.0.0.1:13000/login
   wait_for_url http://127.0.0.1:18001/api/health
   wait_for_url http://127.0.0.1:13001/

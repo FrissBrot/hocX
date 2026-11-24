@@ -184,6 +184,8 @@ services:
       # needed here too since deploy.sh runs `alembic upgrade head` through this service
       # (`run --rm backend alembic …`); the image's own CMD only starts uvicorn.
       PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
+      # Migration 0260 legt die Import-Rolle hocx_geo an (Foto-Standorte)
+      GEO_DB_PASSWORD_FILE: /run/secrets/geo_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       EXPORT_ROOT: /app/storage/exports
@@ -319,6 +321,7 @@ services:
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
+      - geo_db_password
       - storage_credentials_key
       - export_encryption_key
       - local_s3_secret_key
@@ -956,6 +959,8 @@ services:
       # PDF-Aufträge: zwei Compiles gleichzeitig, Speicherlimit je Compile-Prozess.
       DOCUMENT_RENDER_CONCURRENCY: "2"
       APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      # Nur für den Import der Ortsdaten: eigene Rolle hocx_geo (Migration 0260), sonst hocx_app
+      GEO_DATABASE_URL_FILE: /run/secrets/geo_database_url
       ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
@@ -984,9 +989,12 @@ services:
       HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
       # Job geoip_update: lädt DB-IP «IP to Country Lite» (CC BY 4.0) monatlich ins Volume geoip_data
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-true}
+      # Job geo_places_update: Ortsdaten (GeoNames CC BY 4.0, swisstopo swissNAMES3D) in Postgres
+      GEO_PLACES_AUTO_UPDATE: ${GEO_PLACES_AUTO_UPDATE:-true}
     secrets:
       - app_database_url
       - admin_auth_secret
+      - geo_database_url
       - storage_credentials_key
     volumes:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
@@ -1288,6 +1296,10 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_db_password
   photo_worker_database_url:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_database_url
+  geo_db_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/geo_db_password
+  geo_database_url:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/geo_database_url
   friendly_captcha_api_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:

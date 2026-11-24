@@ -641,6 +641,14 @@
       "camera_serial_backfill": {
         "title": "Kamera-Kürzel nachtragen",
         "description": "Liest bei Fotos von vor 1.6 die Seriennummer der Kamera aus den Bilddaten und speichert nur ein verschlüsseltes Kürzel je Verein, damit gleiche Kameramodelle im Upload-Verlauf getrennt erscheinen. Mandantenweise in Teilen, setzt nach einem Abbruch fort."
+      },
+      "geo_places_update": {
+        "title": "Ortsdaten aktualisieren",
+        "description": "Lädt GeoNames (CC BY 4.0) und swisstopo swissNAMES3D, wenn eine neue Ausgabe vorliegt, für die Ortsnamen der Fotos."
+      },
+      "photo_places_resolve": {
+        "title": "Foto-Orte nachtragen",
+        "description": "Ergänzt Ortsnamen von Fotos mit GPS nach einem Datenupdate oder für ältere Fotos, je Organisation in Stücken."
       }
     }
   },

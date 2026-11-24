@@ -63,6 +63,8 @@ describe("UploadJobDetailView", () => {
 
   it("macht eine Datumskorrektur rückgängig", async () => {
     browserApiFetchMock.mockImplementation((url: string) => {
+      // Foto-Standorte: keine Ortsänderungen in diesem Vorgang
+      if (url.startsWith("/api/place-changes?")) return Promise.resolve([]);
       if (url.startsWith("/api/capture-changes?")) {
         return Promise.resolve([{ id: "b1", mode: "shift", params: { shift_days: 0, shift_hours: -1, shift_minutes: -15 }, created_at: "2026-11-21T11:00:00Z", created_by_name: "Anna", updated_count: 2, remaining: 2, undone_at: null, can_undo: true }]);
       }

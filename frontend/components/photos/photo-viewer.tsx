@@ -29,6 +29,8 @@ import { PhotoViewerCompare } from "./viewer/photo-viewer-compare";
 import { PhotoViewerDelete } from "./viewer/photo-viewer-delete";
 import { PhotoViewerShare } from "./viewer/photo-viewer-share";
 import { PhotoViewerSidebar } from "./viewer/photo-viewer-sidebar";
+import { PhotoViewerPlaceLink, SearchPlaceHandler } from "./viewer/photo-viewer-place";
+import type { PhotoPlace } from "@/lib/photos/places";
 import {
   CompareDecisions,
   compareSuggestion,
@@ -87,6 +89,10 @@ export type PhotoViewerProps = {
   /** «Rückgängig» hat Fotos aus dem Papierkorb zurückgeholt. */
   onRestored?: (ids: string[]) => void;
   onAlbumsChanged?: (id: string, albums: FileAlbumRef[]) => void;
+  /** Foto-Standorte: Klick auf den Ort startet die Umgebungssuche (Hauptgalerie). */
+  onSearchPlace?: SearchPlaceHandler;
+  /** Ort von Hand gesetzt/entfernt - Kachel aktualisieren. */
+  onPlaceChanged?: (id: string, place: PhotoPlace | null) => void;
 };
 
 /** Foto-Einzelansicht (Design «hocX Foto-Ansicht»): dunkle Vollbildansicht mit Kopfzeile, Bühne,
@@ -106,6 +112,8 @@ export function PhotoViewer({
   onRemoved,
   onRestored,
   onAlbumsChanged,
+  onSearchPlace,
+  onPlaceChanged,
 }: PhotoViewerProps) {
   const t = useTranslations("photos.viewer");
   const tc = useTranslations("photos.viewer.compare");
@@ -121,6 +129,8 @@ export function PhotoViewer({
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [albumOverrides, setAlbumOverrides] = useState<Record<string, FileAlbumRef[]>>({});
   const albums = albumOverrides[item.id] ?? item.albums;
+  // Ort: aus den Metadaten (aktuell), sonst aus der Liste
+  const place = metadata && metadata.id === item.id ? metadata.place ?? null : item.place ?? null;
   const { schedule, flush, saving, saveError } = useDeferredPopupSave();
   // Live Photo: spielt, solange der Zeiger über der Bühne liegt, oder per Live-Knopf (Touch/Tastatur).
   const [liveHover, setLiveHover] = useState(false);
@@ -228,6 +238,16 @@ export function PhotoViewer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
+
+  function reloadPlace() {
+    const id = item.id;
+    browserApiFetch<StoredFileMetadata>(item.metadata_url)
+      .then((data) => {
+        setMetadata((current) => (current && current.id === data.id ? data : current));
+        onPlaceChanged?.(id, data.place ?? null);
+      })
+      .catch(() => {});
+  }
 
   function handleCaptureDateSaved(saved: StoredFileMetadata) {
     setMetadata((current) => (current && current.id === saved.id ? saved : current));
@@ -351,6 +371,12 @@ export function PhotoViewer({
               <span>{subtitleDate}</span>
               {dateKind ? <span className={`photo-viewer-date-badge photo-viewer-date-badge-${dateKind}`}>{t(`dateBadge.${dateKind}`)}</span> : null}
               {item.group_date && dateSource === "upload" ? <PhotoDateMarker kind="upload" /> : null}
+              {place ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <PhotoViewerPlaceLink place={place} onSearchPlace={onSearchPlace} />
+                </>
+              ) : null}
               <span aria-hidden="true">·</span>
               <span className="photo-viewer-position">{t("position", { index: index + 1, total: items.length })}</span>
             </div>
@@ -569,6 +595,9 @@ export function PhotoViewer({
           onCaptureDateSaved={handleCaptureDateSaved}
           onAlbumsChange={handleAlbumsChange}
           onTagsChange={handleTagsChange}
+          place={place}
+          onSearchPlace={onSearchPlace}
+          onPlaceChanged={reloadPlace}
         />
       </div>
     </div>,

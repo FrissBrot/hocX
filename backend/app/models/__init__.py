@@ -301,3 +301,12 @@ from app.models.upload_history_entities import (  # noqa: E402 - eigene Datei, s
 )
 
 __all__ += ["CameraSerialBackfill", "CaptureChangeBatch", "CaptureChangeItem", "UploadJob", "UploadJobItem"]
+
+from app.models.place_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0260
+    GeoPlace,
+    PhotoLocation,
+    PlaceChangeBatch,
+    PlaceChangeItem,
+)
+
+__all__ += ["GeoPlace", "PhotoLocation", "PlaceChangeBatch", "PlaceChangeItem"]

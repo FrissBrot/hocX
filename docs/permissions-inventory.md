@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 667 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 422
+- Routen gesamt: 672 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 427
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -401,6 +401,11 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/participants/{participant_id}/personal-data` | participants.export |
 | `GET /api/participants/{participant_id}/templates` | meetings.read |
 | `PUT /api/participants/{participant_id}/templates` | participants.manage |
+| `POST /api/photo-places/assign` | photos.manage |
+| `GET /api/place-changes` | photos.manage |
+| `POST /api/place-changes/{batch_id}/undo` | photos.manage |
+| `GET /api/places/search` | files.read oder photos.read |
+| `GET /api/places/sources` | files.read oder photos.read |
 | `GET /api/privacy-settings` | settings.manage |
 | `PATCH /api/privacy-settings` | settings.manage |
 | `DELETE /api/protocol-element-blocks/{protocol_element_block_id}` | meetings.edit |

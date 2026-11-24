@@ -31,7 +31,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HOCX_ENV_FILE:-$REPO_DIR/.env}"
 BACKUP_DIR="${HOCX_BACKUP_DIR:-$REPO_DIR/backups}"
 DB_CLIENT_SERVICES=(backend abgabebox-backend photo-analysis-worker)
-APP_DB_ROLES=(hocx_app hocx_abgabebox hocx_photo_worker)
+APP_DB_ROLES=(hocx_app hocx_abgabebox hocx_photo_worker hocx_geo)
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"

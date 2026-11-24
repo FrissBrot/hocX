@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
 import { GalleryUploadModal, GalleryUploadSession } from "./gallery-upload-modal";
@@ -18,6 +18,8 @@ import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
 import { PhotosNoResults, PhotosPageHeader, PhotosToolbar } from "./photos-header";
+import { PlaceFilterChip, PlaceSuggestions, placeFilterFromHit } from "./photo-place-filter";
+import { PlaceFilter, placeFilterQuery, radiusForKind, widenRadius } from "@/lib/photos/places";
 import { TrashModal } from "@/components/files/trash-modal";
 import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -129,7 +131,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     setSearchInput(value);
     setSearch(value);
   }, []);
-  const searching = search.trim() !== "";
+  // Foto-Standorte: Umkreis um einen Ort (Treffertyp «Ort» oder Klick auf den Ort in der Foto-Ansicht)
+  const [placeFilter, setPlaceFilter] = useState<PlaceFilter | null>(null);
+  const placeQuery = placeFilterQuery(placeFilter);
+  const locale = useLocale();
+  const searching = search.trim() !== "" || placeFilter !== null;
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [sortId, setSortId] = useState<string>(AUTO_SORT);
@@ -153,9 +159,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     params.set("only_images", "true");
     if (search.trim()) params.set("search", search.trim());
     tagFilter.forEach((tag) => params.append("tags", tag));
+    if (placeQuery) return `${params.toString()}&${placeQuery}`;
     return params.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter.join(",")]);
+  }, [search, tagFilter.join(","), placeQuery]);
   const timelineModeRef = useRef(timelineMode);
   timelineModeRef.current = timelineMode;
   const [hasMore, setHasMore] = useState(false);
@@ -204,7 +211,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     params.set("limit", String(PAGE_SIZE));
     params.set("sort_by", sortKey);
     params.set("sort_dir", sortDir);
-    return `/api/files?${params.toString()}`;
+    return `/api/files?${params.toString()}${placeQuery ? `&${placeQuery}` : ""}`;
   }
 
   useEffect(() => {
@@ -238,7 +245,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }, firstLoad ? 0 : 50);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly, uploadJobId]);
+  }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly, uploadJobId, placeQuery]);
 
   // Auswahl von aussen (Vorgangsdetail: «Nur diese Kamera auswählen»)
   useEffect(() => {
@@ -280,6 +287,17 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   function resetFilters() {
     setSearchNow("");
     setTagFilter([]);
+    setPlaceFilter(null);
+  }
+
+  // Klick auf den Ort in der Foto-Ansicht: Umgebungssuche um diesen Ort (Suchtext weg, Sortierung «Relevanz» = Distanz)
+  function searchAroundPlace(key: string, label: string, kind: string | null) {
+    const radius = radiusForKind(kind);
+    setViewerIndex(null);
+    setTab("all");
+    setSearchNow("");
+    setSortId(AUTO_SORT);
+    setPlaceFilter({ key, label, radiusKm: radius, baseRadiusKm: radius });
   }
 
   function loadPendingReleases() {
@@ -724,6 +742,25 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
             total={analysisProgress?.total_images ?? null}
             activeSearch={search}
             onReset={resetFilters}
+            placeChip={
+              placeFilter ? (
+                <PlaceFilterChip
+                  filter={placeFilter}
+                  onWiden={() => setPlaceFilter((current) => (current ? widenRadius(current) : current))}
+                  onRemove={() => setPlaceFilter(null)}
+                />
+              ) : null
+            }
+            placeSuggestions={
+              <PlaceSuggestions
+                query={search}
+                onSelect={(hit) => {
+                  setSearchNow("");
+                  setSortId(AUTO_SORT);
+                  setPlaceFilter(placeFilterFromHit(hit, locale));
+                }}
+              />
+            }
           />
         </>
       )}
@@ -808,7 +845,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
                 </div>
               ))}
             </div>
-          ) : items.length === 0 && !embedded && !search.trim() && tagFilter.length === 0 ? (
+          ) : items.length === 0 && !embedded && !search.trim() && tagFilter.length === 0 && !placeFilter ? (
             <EmptyState
               icon="image"
               title={t("emptyTitle")}
@@ -848,7 +885,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
               }
             />
           ) : items.length === 0 && !embedded ? (
-            <PhotosNoResults query={search} onReset={resetFilters} />
+            <PhotosNoResults query={search || placeFilter?.label || ""} onReset={resetFilters} />
           ) : items.length === 0 ? (
             <p className="muted">{t("noResults")}</p>
           ) : (
@@ -895,6 +932,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           onRemoved={handleViewerRemoved}
           onRestored={handleViewerRestored}
           onAlbumsChanged={(id, albums) => setItems((current) => current.map((item) => (item.id === id ? { ...item, albums } : item)))}
+          onSearchPlace={embedded ? undefined : searchAroundPlace}
+          onPlaceChanged={(id, place) => {
+            captureDateChangedRef.current = true;
+            setItems((current) => current.map((item) => (item.id === id ? { ...item, place } : item)));
+          }}
         />
       )}
 

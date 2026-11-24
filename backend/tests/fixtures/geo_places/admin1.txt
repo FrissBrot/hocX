@@ -1,0 +1,5 @@
+CH.BE	Bern	Bern	2661551
+CH.ZH	Zurich	Zurich	2657895
+CH.GE	Geneva	Geneva	2660645
+FR.84	Auvergne-Rhône-Alpes	Auvergne-Rhone-Alpes	11071625
+FR.11	Île-de-France	Ile-de-France	3012874

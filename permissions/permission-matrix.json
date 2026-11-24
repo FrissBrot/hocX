@@ -1539,6 +1539,41 @@
         "writer"
       ]
     },
+    "POST /api/photo-places/assign": {
+      "handler": "photo_places.assign_place",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/place-changes": {
+      "handler": "photo_places.list_place_changes",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/place-changes/{batch_id}/undo": {
+      "handler": "photo_places.undo_place_change",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/places/search": {
+      "handler": "photo_places.search_places",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/places/sources": {
+      "handler": "photo_places.place_sources",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
     "GET /api/privacy-settings": {
       "handler": "privacy_settings.get_privacy_settings",
       "allowed": [

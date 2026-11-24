@@ -137,6 +137,7 @@ jobs:
           APP_DB_PASSWORD: ci-migration-check-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-migration-check-dummy-abgabebox-password
           PHOTO_WORKER_DB_PASSWORD: ci-migration-check-dummy-photo-worker-password
+          GEO_DB_PASSWORD: ci-migration-check-dummy-geo-password
           AUTH_SECRET: ci-migration-check-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-migration-check-dummy-admin-secret-0123456789
           # Nur noch S3 (0168_s3_only): eine frische Datenbank startet auf dem lokalen S3-Profil;
@@ -248,6 +249,7 @@ jobs:
           APP_DB_PASSWORD: ci-backend-tests-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-backend-tests-dummy-abgabebox-password
           PHOTO_WORKER_DB_PASSWORD: ci-backend-tests-dummy-photo-worker-password
+          GEO_DB_PASSWORD: ci-backend-tests-dummy-geo-password
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
         run: python3 -m alembic -x seed_demo=true upgrade head
@@ -362,6 +364,7 @@ jobs:
           APP_DB_PASSWORD: ci-abgabebox-tests-app-password
           ABGABEBOX_DB_PASSWORD: ci-abgabebox-tests-password
           PHOTO_WORKER_DB_PASSWORD: ci-abgabebox-tests-photo-worker-password
+          GEO_DB_PASSWORD: ci-abgabebox-tests-geo-password
           AUTH_SECRET: ci-abgabebox-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-abgabebox-tests-dummy-admin-secret-0123456789
         run: python3 -m alembic -x seed_demo=true upgrade head
@@ -422,6 +425,7 @@ jobs:
           APP_DB_PASSWORD: ci-photo-worker-tests-app-password
           ABGABEBOX_DB_PASSWORD: ci-photo-worker-tests-abgabebox-password
           PHOTO_WORKER_DB_PASSWORD: ci-photo-worker-tests-password
+          GEO_DB_PASSWORD: ci-geo-tests-password
           AUTH_SECRET: ci-photo-worker-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-photo-worker-tests-dummy-admin-secret-0123456789
           # Nur noch S3 (0168_s3_only): die Migration legt nur das Profil an und verbindet

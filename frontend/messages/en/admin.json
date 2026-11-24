@@ -641,6 +641,14 @@
       "camera_serial_backfill": {
         "title": "Backfill camera keys",
         "description": "Reads the camera serial number from the image data of photos uploaded before 1.6 and stores only an encrypted key per club, so identical camera models appear separately in the upload history. Works per tenant in batches and resumes after an interruption."
+      },
+      "geo_places_update": {
+        "title": "Update place data",
+        "description": "Loads GeoNames (CC BY 4.0) and swisstopo swissNAMES3D when a new edition is available, for photo place names."
+      },
+      "photo_places_resolve": {
+        "title": "Fill in photo places",
+        "description": "Adds place names to photos with GPS after a data update or for older photos, per organisation in chunks."
       }
     }
   },

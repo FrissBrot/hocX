@@ -173,14 +173,14 @@ Ziel ist immer das lokale S3 des Servers. Für ein externes S3 die Schritte unte
    etwas zu verändern – dann die unvollständige Datenbank löschen und ohne `--resume` neu
    starten. `--allow-schema-upgrade` migriert
    ein älteres Schema kontrolliert. Auf einem fremden PostgreSQL ohne hocX-Rollen: `--no-owner`.
-   Die eingeschränkten Rollen (`hocx_app`, `hocx_abgabebox`, `hocx_photo_worker`) sind
+   Die eingeschränkten Rollen (`hocx_app`, `hocx_abgabebox`, `hocx_photo_worker`, `hocx_geo`) sind
    clusterweit und nicht im Dump: `restore-full` legt fehlende an und setzt ihre Passwörter, wenn
    sie dem Aufruf mitgegeben werden (Variablen ohne Wert = aus der Shell, nicht im Argument):
 
    ```bash
    set -a; . ./.env; set +a
    CLI="docker compose -p hocx run --rm --no-deps -e APP_DB_PASSWORD -e ABGABEBOX_DB_PASSWORD \
-        -e PHOTO_WORKER_DB_PASSWORD --entrypoint python backup-worker -m app.backup.cli"
+        -e PHOTO_WORKER_DB_PASSWORD -e GEO_DB_PASSWORD --entrypoint python backup-worker -m app.backup.cli"
    ```
 5. Datenbank an ihren Platz: `$CLI swap-database --live hocx --restored hocx_restored`
    (existiert `hocx` noch nicht, wird nur umbenannt).

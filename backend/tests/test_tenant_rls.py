@@ -43,6 +43,10 @@ from tests.factories import (
 
 # Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migrationen 0132 und 0151.
 TABLES_WITHOUT_RLS = {"audit_log", "overload_rejection", "system_error_log", "tenant_charge", "tenant_domain"}
+# Globale Referenzdaten ohne tenant_id (kein Mandantendatum, darum ohne RLS): für die Laufzeitrolle
+# nur lesbar. Foto-Standorte (0260): Ortsdaten aus GeoNames/swissNAMES3D, geschrieben nur über die
+# SECURITY-DEFINER-Funktion hocx_geo_import_apply aus der Zwischenablage geo_place_import.
+GLOBAL_READ_ONLY_TABLES = {"geo_place", "geo_dataset"}
 
 
 @contextmanager
@@ -86,6 +90,64 @@ def test_every_table_with_tenant_id_has_row_level_security(db):
     without_rls = {name for name, enabled in rows if not enabled}
     assert without_rls == TABLES_WITHOUT_RLS
     assert len(rows) > len(TABLES_WITHOUT_RLS)
+
+
+def test_global_reference_tables_are_read_only_for_the_runtime_role(db):
+    for table in GLOBAL_READ_ONLY_TABLES:
+        rights = db.execute(
+            text(
+                "SELECT has_table_privilege('hocx_app', CAST(:t AS regclass), 'SELECT'),"
+                " has_table_privilege('hocx_app', CAST(:t AS regclass), 'INSERT, UPDATE, DELETE, TRUNCATE')"
+            ),
+            {"t": f"public.{table}"},
+        ).one()
+        assert rights == (True, False), table
+        has_tenant = db.scalar(
+            text("SELECT count(*) FROM pg_attribute WHERE attrelid = CAST(:t AS regclass) AND attname = 'tenant_id'"),
+            {"t": f"public.{table}"},
+        )
+        assert has_tenant == 0, table
+    # Zwischenablage und Übernahme nur für die Import-Rolle hocx_geo, nie für hocx_app
+    staging = db.execute(
+        text(
+            "SELECT has_table_privilege('hocx_app', 'public.geo_place_import', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE'),"
+            " has_function_privilege('hocx_app', 'public.hocx_geo_import_apply(text, text, text, bigint, integer)', 'EXECUTE'),"
+            " has_table_privilege('hocx_geo', 'public.geo_place_import', 'INSERT'),"
+            " has_function_privilege('hocx_geo', 'public.hocx_geo_import_apply(text, text, text, bigint, integer)', 'EXECUTE')"
+        )
+    ).one()
+    assert tuple(staging) == (False, False, True, True)
+
+
+def test_geo_import_role_has_no_access_to_tenant_data(db):
+    """hocx_geo (Migration 0260) liest keine Mandantentabelle - auch keine ohne RLS."""
+    rows = db.execute(
+        text(
+            """
+            SELECT c.relname
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+             WHERE c.relkind IN ('r', 'v', 'm', 'p')
+               AND has_table_privilege('hocx_geo', c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')
+               -- Objekte von Extensions (pg_stat_statements: PUBLIC-Statistik, keine Mandantendaten)
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+            """
+        )
+    ).scalars().all()
+    assert set(rows) == {"geo_place", "geo_dataset", "geo_place_import"}
+    definers = db.execute(
+        text(
+            """
+            SELECT p.proname
+              FROM pg_proc p
+              JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+             WHERE p.prosecdef AND has_function_privilege('hocx_geo', p.oid, 'EXECUTE')
+               -- Trigger-Funktionen lassen sich nicht direkt aufrufen
+               AND p.prorettype <> 'trigger'::regtype
+            """
+        )
+    ).scalars().all()
+    assert set(definers) == {"hocx_geo_import_apply"}
 
 
 def test_scope_limits_reads_to_the_bound_tenant(db):

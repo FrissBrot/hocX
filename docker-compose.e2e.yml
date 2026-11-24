@@ -43,6 +43,8 @@ services:
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
       # Duplikate/Ähnliche werden im Hintergrund gruppiert - im E2E-Stack nicht 2 Minuten warten.
       PHOTO_SIMILARITY_REFRESH_INTERVAL_MINUTES: "0.25"
+      # Foto-Standorte: keine Downloads im E2E-Stack - scripts/e2e.sh lädt den kleinen Testdatensatz
+      GEO_PLACES_AUTO_UPDATE: "false"
   frontend:
     ports: !override
       - "127.0.0.1:13000:3000"

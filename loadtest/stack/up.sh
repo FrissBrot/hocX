@@ -23,7 +23,7 @@ cd "$LT_DIR"
 
 if [[ ! -f .env ]]; then
   hex() { openssl rand -hex 32; }
-  pg="$(hex)"; app="$(hex)"; abg="$(hex)"; photo="$(hex)"
+  pg="$(hex)"; app="$(hex)"; abg="$(hex)"; photo="$(hex)"; geo="$(hex)"
   umask 077
   cat > .env <<ENV
 COMPOSE_PROJECT_NAME=$LT_PROJECT
@@ -41,6 +41,8 @@ ABGABEBOX_DB_PASSWORD=$abg
 ABGABEBOX_DATABASE_URL=postgresql+psycopg://hocx_abgabebox:$abg@db:5432/hocx_loadtest
 PHOTO_WORKER_DB_PASSWORD=$photo
 PHOTO_WORKER_DATABASE_URL=postgresql+psycopg://hocx_photo_worker:$photo@db:5432/hocx_loadtest
+GEO_DB_PASSWORD=$geo
+GEO_DATABASE_URL=postgresql+psycopg://hocx_geo:$geo@db:5432/hocx_loadtest
 AUTH_SECRET=$(hex)
 ADMIN_AUTH_SECRET=$(hex)
 INITIAL_ADMIN_EMAIL=admin@loadtest.invalid
@@ -88,6 +90,7 @@ secret auth_secret "$AUTH_SECRET"; secret admin_auth_secret "$ADMIN_AUTH_SECRET"
 secret initial_admin_password "$INITIAL_ADMIN_PASSWORD"
 secret abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"; secret abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
 secret photo_worker_db_password "$PHOTO_WORKER_DB_PASSWORD"; secret photo_worker_database_url "$PHOTO_WORKER_DATABASE_URL"
+secret geo_db_password "$GEO_DB_PASSWORD"; secret geo_database_url "$GEO_DATABASE_URL"
 secret friendly_captcha_api_key ""; secret abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
 secret cf_dns_api_token ""; secret storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
 secret export_encryption_key "$EXPORT_ENCRYPTION_KEY"; secret garage_rpc_secret "$GARAGE_RPC_SECRET"
