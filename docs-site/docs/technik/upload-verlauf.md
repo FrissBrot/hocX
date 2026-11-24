@@ -53,6 +53,10 @@ Protokollbilder). Fremde oder unbekannte IDs ergeben 404. `file-ids` liefert nur
 Dateien; alle Bulk-Aktionen laufen über die bestehenden Endpunkte, die jede Datei erneut prüfen.
 `POST /upload-jobs` erlaubt höchstens 20 offene Vorgänge je Person.
 
+Namen abgelehnter oder fehlgeschlagener Dateien (Einträge ohne gespeicherte Datei) sieht jede Person
+mit dem Recht des Kanals, nicht nur wer hochgeladen hat (User-Entscheid nach dem Security-Review 1.6,
+F-8). Ausgeblendet wird ein Name nur, wenn die gespeicherte Datei für die Person verborgen ist.
+
 ## Datumskorrektur
 
 - `POST /files/bulk-capture-date`: zusätzlich `shift_minutes` (±525 600), `shift_seconds` (±59, nur
@@ -73,8 +77,11 @@ Seriennummer). Schlüssel = HKDF-SHA256 aus `ADMIN_AUTH_SECRET` (salt `hocx-came
 `tenant:<id>`). Kein neues Secret: `ADMIN_AUTH_SECRET` ist produktiv Pflicht, steht in Backend und
 job-worker bereit und wird wegen `secret_crypto` nicht leichtfertig gewechselt; HKDF trennt die
 Verwendung. Ein Secret-Wechsel lässt ältere und neuere Fotos derselben Kamera als zwei Geräte
-erscheinen, sonst nichts. Die Seriennummer selbst wird weder gespeichert noch geloggt noch
-ausgegeben; die Abgabebox und der document-worker berechnen kein Kürzel. Klon und Mandanten-Import
+erscheinen, sonst nichts. Die Seriennummer selbst wird in keiner Datenbankspalte gespeichert, nicht
+geloggt und von keiner API ausgegeben; die Abgabebox und der document-worker berechnen kein Kürzel.
+**Grenze:** Die Originaldatei bleibt unverändert gespeichert (der Upload entfernt nur GPS-Daten). Ihre
+EXIF-Felder `BodySerialNumber`/`CameraSerialNumber` gehen deshalb bei Downloads, geteilten Alben und
+Exporten des Originals mit, wie schon vor 1.6 (User-Entscheid F-7: so belassen, nur dokumentieren). Klon und Mandanten-Import
 übernehmen das Kürzel nicht.
 
 **Altbestand:** Nur Dateien, die der bestehende Metadaten-Backfill ohnehin liest, erhalten ein
@@ -88,7 +95,10 @@ Kürzel. Ein eigener Lauf über alle Originale (S3) wurde wegen der Last bewusst
   Dateien löschen.
 - Vorgänge, die nie eine Datei hatten: `retention_service` nach `upload_job_retention_days` (30).
 - Länger als 24 h offene Vorgänge schliesst `log_cleanup` (`upload_job_service.close_stale`).
-- Auskunft (persönlicher Datenexport) und Vereinsexport enthalten die Vorgänge ohne Dateinamen.
+- Vereinsexport (`Uploads.xlsx`, verschlüsselt wie der Rest) und Auskunft enthalten die Vorgänge,
+  die Einträge je Datei mit Name, Ergebnis und Grund (auch abgelehnte Dateien), die Datei-Importe mit
+  Quellpfad und die Datumskorrekturen mit Wert davor/danach; die Auskunft nur, was die Person selbst
+  ausgelöst hat (User-Entscheid F-6 nach dem Security-Review 1.6, ersetzt «ohne Dateinamen» aus E-9).
 
 ## Altbestand rekonstruieren (E-7)
 

@@ -16,6 +16,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text as sql
 from sqlalchemy.orm import Session
@@ -185,7 +186,10 @@ def _write_contents(db: Session, archive: EncryptedZip, job: TenantDataExport, l
         "fines": [_fines(db, tenant_id, lang, names), _todo_fines(db, tenant_id, lang, names)],
         "finances": _finances(db, tenant_id, lang),
         "todos": [_todos(db, tenant_id, lang, names)],
-        "uploads": [_uploads(db, tenant_id, lang, names)],
+        "uploads": [
+            _uploads(db, tenant_id, lang, names), _upload_items(db, tenant_id, lang),
+            _import_items(db, tenant_id, lang, names), _capture_changes(db, tenant_id, lang, names),
+        ],
     }
     for key, sheets in books.items():
         archive.add_bytes(f"{_t(lang, f'tenant.file.{key}')}.xlsx", workbook.build(sheets))
@@ -514,8 +518,7 @@ def _documents(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str, s
 
 
 def _uploads(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
-    """Upload-Verlauf (0250) als Tabelle - nur Zähler, keine Dateinamen (E-9: abgelehnte Namen nicht
-    exportieren; die gespeicherten Dateien stehen ohnehin im Export)."""
+    """Upload-Verlauf (0250): Vorgänge mit Zählern; die Einträge je Datei folgen in _upload_items."""
     rows = _rows(db, """
         SELECT j.channel, j.created_at, j.created_by, j.actor_kind, j.status, j.total, j.uploaded, j.duplicates,
                j.rejected + j.infected + j.failed AS rejected
@@ -525,5 +528,66 @@ def _uploads(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> w
     return _sheet(lang, "uploads", columns, [
         [_fmt_date(r["created_at"]), r["channel"], names.get(r["created_by"], "") if r["actor_kind"] == "user" and r["created_by"] else "",
          r["status"], r["total"], r["uploaded"], r["duplicates"], r["rejected"]]
+        for r in rows
+    ])
+
+
+def _fmt_capture(value: datetime | None, has_time: bool) -> str:
+    """Korrigiertes Aufnahmedatum wie in der App: Datum, mit Uhrzeit nur wenn erfasst (Zürcher Zeit)."""
+    if value is None:
+        return ""
+    local = value.astimezone(ZoneInfo("Europe/Zurich"))
+    return local.strftime("%d.%m.%Y %H:%M" if has_time else "%d.%m.%Y")
+
+
+def _upload_items(db: Session, tenant_id: int, lang: str) -> workbook.Sheet:
+    """Einträge des Upload-Verlaufs je Datei (Datenschutz-Entscheid F-6, 1.6): Name, Ergebnis und
+    Grund - auch abgelehnte Dateien, deren Name nur hier gespeichert ist."""
+    rows = _rows(db, """
+        SELECT j.created_at, j.channel, i.original_name, i.status, i.reason_code, i.size_bytes
+        FROM upload_job_item i JOIN upload_job j ON j.id = i.upload_job_id AND j.tenant_id = i.tenant_id
+        WHERE i.tenant_id = :t ORDER BY j.created_at, j.id, i.position, i.id
+    """, {"t": tenant_id})
+    columns = ["created_at", "channel", "name", "status", "reason", "size_bytes"]
+    return _sheet(lang, "uploadItems", columns, [
+        [_fmt_date(r["created_at"]), r["channel"], r["original_name"] or "", r["status"], r["reason_code"] or "", r["size_bytes"]]
+        for r in rows
+    ])
+
+
+def _import_items(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
+    """Datei-Import (0230) je Eintrag: Quellpfad samt Ordnernamen, Ergebnis, Tags, Alben (F-6)."""
+    rows = _rows(db, """
+        SELECT j.created_at, j.requested_by, j.source, i.path, i.status, i.result_code, i.tags, i.albums, i.estimated_date
+        FROM import_item i JOIN import_job j ON j.id = i.job_id AND j.tenant_id = i.tenant_id
+        WHERE i.tenant_id = :t ORDER BY j.created_at, j.id, i.path
+    """, {"t": tenant_id})
+    columns = ["created_at", "person", "source", "path", "status", "reason", "tags", "albums", "estimated_date"]
+
+    def joined(value: Any) -> str:
+        return ", ".join(str(item) for item in value) if isinstance(value, list) else ""
+
+    return _sheet(lang, "importItems", columns, [
+        [_fmt_date(r["created_at"]), names.get(r["requested_by"], "") if r["requested_by"] else "", r["source"], r["path"], r["status"],
+         r["result_code"] or "", joined(r["tags"]), joined(r["albums"]), _fmt_date(r["estimated_date"])]
+        for r in rows
+    ])
+
+
+def _capture_changes(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
+    """Datumskorrekturen (0251) je Foto: vorher/nachher, wer, wann, rückgängig gemacht (F-6)."""
+    rows = _rows(db, """
+        SELECT b.created_at, b.created_by, b.mode, b.undone_at, f.original_name,
+               i.prev_corrected_at, i.prev_has_time, i.new_corrected_at, i.new_has_time
+        FROM capture_change_item i
+        JOIN capture_change_batch b ON b.id = i.batch_id AND b.tenant_id = i.tenant_id
+        JOIN stored_file f ON f.id = i.stored_file_id AND f.tenant_id = i.tenant_id
+        WHERE i.tenant_id = :t ORDER BY b.created_at, b.id, i.id
+    """, {"t": tenant_id})
+    columns = ["created_at", "person", "mode", "name", "before", "after", "undone_at"]
+    return _sheet(lang, "captureChanges", columns, [
+        [_fmt_date(r["created_at"]), names.get(r["created_by"], "") if r["created_by"] else "", r["mode"], r["original_name"] or "",
+         _fmt_capture(r["prev_corrected_at"], r["prev_has_time"]), _fmt_capture(r["new_corrected_at"], r["new_has_time"]),
+         _fmt_date(r["undone_at"])]
         for r in rows
     ])

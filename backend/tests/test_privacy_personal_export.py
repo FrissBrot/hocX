@@ -117,3 +117,51 @@ def test_person_of_another_tenant_is_not_found(db):
     with pytest.raises(HTTPException) as exc:
         export_participant_personal_data(anna.public_id, ProtectedExportRequest(password=secrets.token_urlsafe(16)), db, make_current_user(other.id, role="admin"))
     assert exc.value.status_code == 404
+
+
+def _history(db, tenant_id: int, person_id: int, *, label: str):
+    """Upload-Eintrag (abgelehnt), Datei-Import und Datumskorrektur einer Person (F-6, 1.6)."""
+    from datetime import UTC, datetime
+
+    from app.models import StoredFile
+    from app.models.import_entities import ImportItem, ImportJob
+    from app.models.upload_history_entities import CaptureChangeBatch, CaptureChangeItem, UploadJob, UploadJobItem
+
+    job = UploadJob(tenant_id=tenant_id, channel="gallery", created_by=person_id, status="done")
+    imp = ImportJob(tenant_id=tenant_id, requested_by=person_id, source="zip", status="done")
+    photo = StoredFile(tenant_id=tenant_id, original_name=f"{label}-foto.jpg", mime_type="image/jpeg", storage_path=f"uploads/{label}.jpg", scan_status="clean", created_by=person_id)
+    batch = CaptureChangeBatch(tenant_id=tenant_id, created_by=person_id, mode="set")
+    db.add_all([job, imp, photo, batch])
+    db.flush()
+    db.add_all([
+        UploadJobItem(upload_job_id=job.id, tenant_id=tenant_id, original_name=f"{label}-abgelehnt.exe", status="rejected", reason_code="type_not_allowed"),
+        ImportItem(tenant_id=tenant_id, job_id=imp.id, path=f"Lager/{label}/bild.png", kind="image", status="imported"),
+        CaptureChangeItem(batch_id=batch.id, tenant_id=tenant_id, stored_file_id=photo.id,
+                          new_corrected_at=datetime(2026, 7, 1, 10, 30, tzinfo=UTC), new_has_time=True),
+    ])
+    db.flush()
+
+
+def test_personal_export_contains_own_upload_items_imports_and_date_corrections(db):
+    tenant, anna, ben = _setup(db)
+    _history(db, tenant.id, anna.id, label="anna")
+    _history(db, tenant.id, ben.id, label="ben")
+
+    data = personal.collect(db, anna)
+
+    assert [row["name"] for row in data["upload_items"]] == ["anna-abgelehnt.exe"]
+    assert data["upload_items"][0]["reason"] == "type_not_allowed"
+    assert [row["path"] for row in data["import_items"]] == ["Lager/anna/bild.png"]
+    assert [(row["name"], row["after"]) for row in data["capture_changes"]] == [("anna-foto.jpg", "01.07.2026 12:30")]
+    assert "ben" not in json.dumps({key: data[key] for key in ("upload_items", "import_items", "capture_changes")}, default=str)
+
+    password = secrets.token_urlsafe(16)
+    archive, _name = personal.build_archive(db, anna, password=password, language="de")
+    try:
+        with pyzipper.AESZipFile(archive.path) as zf:
+            zf.setpassword(password.encode())
+            book = load_workbook(io.BytesIO(zf.read("Auskunft.xlsx")))
+        assert {"Upload-Einträge", "Datei-Importe", "Datumskorrekturen"} <= set(book.sheetnames)
+        assert book["Datei-Importe"].cell(2, 3).value == "Lager/anna/bild.png"
+    finally:
+        archive.path.unlink(missing_ok=True)

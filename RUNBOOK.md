@@ -1414,3 +1414,9 @@ nicht über den Verlauf als Ganzes bearbeiten. Last: liest nur Datenbankzeilen (
 
 **Kamera-Kürzel:** abgeleitet aus `ADMIN_AUTH_SECRET` (HKDF je Mandant). Wird dieses Secret gewechselt,
 erscheinen ältere und neuere Fotos derselben Kamera als zwei Geräte; sonst keine Folgen.
+Die Seriennummer selbst steht in keiner Datenbankspalte, bleibt aber in den EXIF-Daten der
+unverändert gespeicherten Originaldatei (wie vor 1.6, bewusst so entschieden).
+
+**Datenexport:** `Uploads.xlsx` im Vereinsexport enthält neben den Vorgängen die Einträge je Datei
+(auch Namen abgelehnter Dateien), Datei-Importe mit Quellpfad und Datumskorrekturen; die Auskunft
+einer Person dasselbe für ihre eigenen Vorgänge.

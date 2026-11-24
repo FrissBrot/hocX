@@ -1,8 +1,8 @@
 """Kürzel der Kamera-Seriennummer (User-Entscheid E-13, Upload-Verlauf 1.6).
 
 Zwei Kameras desselben Modells lassen sich in den Kameragruppen eines Upload-Vorgangs nur über die
-Seriennummer unterscheiden (EXIF BodySerialNumber, sonst CameraSerialNumber). Gespeichert wird nie
-die Seriennummer selbst, sondern ein keyed Hash je Mandant:
+Seriennummer unterscheiden (EXIF BodySerialNumber, sonst CameraSerialNumber). In der Datenbank steht
+nie die Seriennummer selbst, sondern ein keyed Hash je Mandant:
 
     Schlüssel = HKDF-SHA256(ADMIN_AUTH_SECRET, salt="hocx-camera-serial-v1", info="tenant:<id>")
     Kürzel    = HMAC-SHA256(Schlüssel, Make \\x1f Model \\x1f Seriennummer)[:16 Hex-Zeichen]
@@ -19,8 +19,11 @@ Warum ein bestehendes Server-Secret über HKDF statt eines neuen Secrets:
 - Folge eines Secret-Wechsels: neue Uploads erhalten andere Kürzel; ältere und neuere Fotos
   derselben Kamera erscheinen dann als zwei Geräte. Nichts geht verloren.
 
-Die Seriennummer wird nie geloggt, nie gespeichert und nie in API-Antworten gegeben; nach aussen
-geht nur der Gruppenschlüssel (Hash über Make/Model/Kürzel) der Kameragruppen.
+Die Seriennummer wird nie geloggt, in keiner Datenbankspalte gespeichert und nie in API-Antworten
+gegeben; nach aussen geht nur der Gruppenschlüssel (Hash über Make/Model/Kürzel) der Kameragruppen.
+Grenze (Security-Review 1.6, F-7, so entschieden): die Originaldatei bleibt unverändert gespeichert -
+der Upload entfernt nur GPS-Daten -, ihre EXIF-Seriennummer geht also mit Downloads, geteilten Alben
+und Exporten des Originals mit (wie vor 1.6).
 """
 
 from __future__ import annotations

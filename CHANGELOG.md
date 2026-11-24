@@ -34,6 +34,8 @@ Installationen aktualisieren können.
   Vorschlag aus der GPS-Zeit) und Datumskorrekturen. Nach dem Upload «Bearbeiten» im Hinweis und ein
   ausblendbarer Hinweisstreifen; die Foto-Ansicht verlinkt den Upload. Sichtbar mit dem Recht des
   Bereichs, eigene Uploads immer. Ältere Uploads werden rekonstruiert und so gekennzeichnet.
+  Vereinsexport und Datenauskunft enthalten den Verlauf mit den Einträgen je Datei (auch abgelehnte
+  Dateinamen), die Datei-Importe mit Quellpfad und die Datumskorrekturen.
 - **Aufnahmedatum verschieben** um Tage, Stunden und **Minuten** mit Richtung früher/später oder
   **nach Referenzfoto** (richtige Uhrzeit eingeben oder gleicher Moment einer anderen Kamera),
   **Vorschau** mit Tages- und Terminwechseln und **Rückgängig** (exakt, solange die Fotos existieren).

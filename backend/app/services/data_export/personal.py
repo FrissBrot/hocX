@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text as sql
 from sqlalchemy.orm import Session
@@ -137,6 +138,36 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         FROM upload_job j WHERE j.tenant_id = :tenant_id AND j.created_by = :pid ORDER BY j.created_at, j.id
     """, params)]
 
+    # Datenschutz-Entscheid F-6 (1.6): eigene Upload-Einträge je Datei, eigene Datei-Importe
+    # (Quellpfade) und eigene Datumskorrekturen - wie im Vereinsexport, nur die der Person.
+    data["upload_items"] = [dict(row) for row in _rows(db, """
+        SELECT j.created_at, j.channel, i.original_name AS name, i.status, i.reason_code AS reason, i.size_bytes
+        FROM upload_job_item i JOIN upload_job j ON j.id = i.upload_job_id AND j.tenant_id = i.tenant_id
+        WHERE j.tenant_id = :tenant_id AND j.created_by = :pid ORDER BY j.created_at, j.id, i.position, i.id
+    """, params)]
+
+    data["import_items"] = [dict(row) for row in _rows(db, """
+        SELECT j.created_at, j.source, i.path, i.status, i.result_code AS reason, i.estimated_date
+        FROM import_item i JOIN import_job j ON j.id = i.job_id AND j.tenant_id = i.tenant_id
+        WHERE j.tenant_id = :tenant_id AND j.requested_by = :pid ORDER BY j.created_at, j.id, i.path
+    """, params)]
+
+    data["capture_changes"] = [
+        {
+            "created_at": row["created_at"], "mode": row["mode"], "name": row["name"],
+            "before": _capture_text(row["prev_corrected_at"], row["prev_has_time"]),
+            "after": _capture_text(row["new_corrected_at"], row["new_has_time"]), "undone_at": row["undone_at"],
+        }
+        for row in _rows(db, """
+            SELECT b.created_at, b.mode, b.undone_at, f.original_name AS name,
+                   i.prev_corrected_at, i.prev_has_time, i.new_corrected_at, i.new_has_time
+            FROM capture_change_item i
+            JOIN capture_change_batch b ON b.id = i.batch_id AND b.tenant_id = i.tenant_id
+            JOIN stored_file f ON f.id = i.stored_file_id AND f.tenant_id = i.tenant_id
+            WHERE b.tenant_id = :tenant_id AND b.created_by = :pid ORDER BY b.created_at, b.id, i.id
+        """, params)
+    ]
+
     data["responsibilities"] = [dict(row) for row in _rows(db, """
         SELECT p.protocol_number AS protocol, p.protocol_date AS date, e.element_title_snapshot AS element
         FROM protocol_element e JOIN protocol p ON p.id = e.protocol_id
@@ -251,10 +282,20 @@ _SECTIONS: dict[str, list[str]] = {
     "lists": ["list", "position"],
     "files": ["name", "mime_type", "size_bytes", "created_at", "taken_at", "trashed_at"],
     "uploads": ["channel", "created_at", "status", "total", "uploaded", "duplicates", "rejected"],
+    "upload_items": ["created_at", "channel", "name", "status", "reason", "size_bytes"],
+    "import_items": ["created_at", "source", "path", "status", "reason", "estimated_date"],
+    "capture_changes": ["created_at", "mode", "name", "before", "after", "undone_at"],
     "security": ["kind", "detail", "label", "created_at", "last_used_at"],
     "activity": ["created_at", "action", "outcome"],
     "mentions": ["protocol", "date", "block", "excerpt"],
 }
+
+
+def _capture_text(value: datetime | None, has_time: bool) -> str:
+    """Korrigiertes Aufnahmedatum als Text (Zürcher Zeit), Uhrzeit nur wenn erfasst."""
+    if value is None:
+        return ""
+    return value.astimezone(ZoneInfo("Europe/Zurich")).strftime("%d.%m.%Y %H:%M" if has_time else "%d.%m.%Y")
 
 
 def _cell(value: Any) -> Any:

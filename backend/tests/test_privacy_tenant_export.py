@@ -165,3 +165,28 @@ def test_platform_export_leaves_out_credentials_unless_asked(db):
     assert all(row["password_hash"] is None for row in manifest["tables"]["app_user"])
     assert manifest["tables"]["user_mfa_factor"] == [] and manifest["include_credentials"] is False
     assert any(row["password_hash"] == admin.password_hash for row in with_credentials["tables"]["app_user"])
+
+
+def test_tenant_export_contains_upload_items_imports_and_date_corrections(db):
+    """Datenschutz-Entscheid F-6 (1.6): Upload-Einträge je Datei (auch abgelehnte Namen),
+    Importpfade und Datumskorrekturen stehen verschlüsselt im Vereinsexport."""
+    from tests.test_privacy_personal_export import _history
+
+    tenant, admin, anna, _user = _setup(db)
+    _history(db, tenant.id, anna.id, label="anna")
+    other = make_tenant(db, "Fremdverein")
+    _history(db, other.id, make_app_user(db, email="fremd@example.com", tenant_id=other.id).id, label="fremd")
+    password = secrets.token_urlsafe(16)
+    job = tenant_export.request_export(db, tenant_id=tenant.id, user_id=admin.id, password=password, include_files=False, language="de")
+    db.commit()
+
+    tenant_export.process_pending(db)
+
+    db.refresh(job)
+    book = load_workbook(io.BytesIO(_open(db, job, password).read("Uploads.xlsx")))
+    assert {"Upload-Verlauf", "Upload-Einträge", "Datei-Importe", "Datumskorrekturen"} <= set(book.sheetnames)
+    values = [str(cell) for name in ("Upload-Einträge", "Datei-Importe", "Datumskorrekturen") for row in book[name].iter_rows(values_only=True) for cell in row]
+    assert "anna-abgelehnt.exe" in values and "type_not_allowed" in values
+    assert "Lager/anna/bild.png" in values
+    assert "anna-foto.jpg" in values and "01.07.2026 12:30" in values
+    assert not any("fremd" in value for value in values)
