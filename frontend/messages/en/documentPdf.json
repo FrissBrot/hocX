@@ -476,7 +476,11 @@
       "todo_fines": "Task fines",
       "notifications": "Email notifications",
       "submission_elements": "Submission items",
-      "uploads": "Uploads"
+      "uploads": "Uploads",
+      "capture_changes": "Date corrections",
+      "import_items": "File imports",
+      "place_changes": "Place changes",
+      "upload_items": "Upload entries"
     },
     "col": {
       "first_name": "First name",
@@ -544,7 +548,17 @@
       "uploaded": "Uploaded",
       "duplicates": "Duplicates",
       "rejected": "Rejected",
-      "person": "Person"
+      "person": "Person",
+      "after": "After",
+      "albums": "Albums",
+      "before": "Before",
+      "estimated_date": "Estimated date",
+      "mode": "Type",
+      "path": "Path",
+      "reason": "Reason",
+      "source": "Source",
+      "tags": "Tags",
+      "undone_at": "Undone on"
     },
     "file": {
       "workbook": "Data report",
@@ -573,7 +587,11 @@
         "finances": "Finances",
         "todos": "Tasks",
         "todoFines": "Task fines",
-        "uploads": "Upload history"
+        "uploads": "Upload history",
+        "captureChanges": "Date corrections",
+        "importItems": "File imports",
+        "placeChanges": "Place changes",
+        "uploadItems": "Upload entries"
       },
       "folder": {
         "lists": "Lists",

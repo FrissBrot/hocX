@@ -476,7 +476,11 @@
       "todo_fines": "Multe per compiti",
       "notifications": "Notifiche e-mail",
       "submission_elements": "Elementi di consegna",
-      "uploads": "Caricamenti"
+      "uploads": "Caricamenti",
+      "capture_changes": "Correzioni della data",
+      "import_items": "Importazioni di file",
+      "place_changes": "Modifiche del luogo",
+      "upload_items": "Voci di caricamento"
     },
     "col": {
       "first_name": "Nome",
@@ -544,7 +548,17 @@
       "uploaded": "Caricati",
       "duplicates": "Duplicati",
       "rejected": "Rifiutati",
-      "person": "Persona"
+      "person": "Persona",
+      "after": "Dopo",
+      "albums": "Album",
+      "before": "Prima",
+      "estimated_date": "Data stimata",
+      "mode": "Tipo",
+      "path": "Percorso",
+      "reason": "Motivo",
+      "source": "Origine",
+      "tags": "Tag",
+      "undone_at": "Annullato il"
     },
     "file": {
       "workbook": "Rapporto dati",
@@ -573,7 +587,11 @@
         "finances": "Finanze",
         "todos": "Compiti",
         "todoFines": "Multe per compiti",
-        "uploads": "Cronologia caricamenti"
+        "uploads": "Cronologia caricamenti",
+        "captureChanges": "Correzioni della data",
+        "importItems": "Importazioni di file",
+        "placeChanges": "Modifiche del luogo",
+        "uploadItems": "Voci di caricamento"
       },
       "folder": {
         "lists": "Liste",

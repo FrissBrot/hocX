@@ -476,7 +476,11 @@
       "todo_fines": "Pendenzen-Bussen",
       "notifications": "E-Mail-Benachrichtigungen",
       "submission_elements": "Abgabe-Elemente",
-      "uploads": "Uploads"
+      "uploads": "Uploads",
+      "capture_changes": "Datumskorrekturen",
+      "import_items": "Datei-Importe",
+      "place_changes": "Ortsänderungen",
+      "upload_items": "Upload-Einträge"
     },
     "col": {
       "first_name": "Vorname",
@@ -544,7 +548,17 @@
       "uploaded": "Hochgeladen",
       "duplicates": "Duplikate",
       "rejected": "Abgelehnt",
-      "person": "Person"
+      "person": "Person",
+      "after": "Nachher",
+      "albums": "Alben",
+      "before": "Vorher",
+      "estimated_date": "Geschätztes Datum",
+      "mode": "Art",
+      "path": "Pfad",
+      "reason": "Grund",
+      "source": "Quelle",
+      "tags": "Tags",
+      "undone_at": "Rückgängig gemacht am"
     },
     "file": {
       "workbook": "Auskunft",
@@ -573,7 +587,11 @@
         "finances": "Finanzen",
         "todos": "Aufgaben",
         "todoFines": "Pendenzen-Bussen",
-        "uploads": "Upload-Verlauf"
+        "uploads": "Upload-Verlauf",
+        "captureChanges": "Datumskorrekturen",
+        "importItems": "Datei-Importe",
+        "placeChanges": "Ortsänderungen",
+        "uploadItems": "Upload-Einträge"
       },
       "folder": {
         "lists": "Listen",

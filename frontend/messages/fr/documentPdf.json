@@ -476,7 +476,11 @@
       "todo_fines": "Amendes pour tâches",
       "notifications": "Notifications par e-mail",
       "submission_elements": "Éléments de dépôt",
-      "uploads": "Téléversements"
+      "uploads": "Téléversements",
+      "capture_changes": "Corrections de date",
+      "import_items": "Importations de fichiers",
+      "place_changes": "Modifications de lieu",
+      "upload_items": "Entrées de téléversement"
     },
     "col": {
       "first_name": "Prénom",
@@ -544,7 +548,17 @@
       "uploaded": "Téléversés",
       "duplicates": "Doublons",
       "rejected": "Refusés",
-      "person": "Personne"
+      "person": "Personne",
+      "after": "Après",
+      "albums": "Albums",
+      "before": "Avant",
+      "estimated_date": "Date estimée",
+      "mode": "Type",
+      "path": "Chemin",
+      "reason": "Motif",
+      "source": "Source",
+      "tags": "Tags",
+      "undone_at": "Annulé le"
     },
     "file": {
       "workbook": "Rapport de données",
@@ -573,7 +587,11 @@
         "finances": "Finances",
         "todos": "Tâches",
         "todoFines": "Amendes pour tâches",
-        "uploads": "Historique des téléversements"
+        "uploads": "Historique des téléversements",
+        "captureChanges": "Corrections de date",
+        "importItems": "Importations de fichiers",
+        "placeChanges": "Modifications de lieu",
+        "uploadItems": "Entrées de téléversement"
       },
       "folder": {
         "lists": "Listes",
