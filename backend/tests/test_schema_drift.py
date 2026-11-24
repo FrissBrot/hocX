@@ -38,6 +38,10 @@ _KNOWN_UNMAPPED_TABLES = {
     "platform_metric_daily",
     "tenant_metric_daily",
     "system_metric_sample",
+    # Foto-Standorte (0260): Ortsdaten-Ausgaben und Import-Zwischenablage nur über SQL
+    # (services/geo_places.py, Rolle hocx_geo, hocx_geo_import_apply), ohne ORM-Modell
+    "geo_dataset",
+    "geo_place_import",
 }
 # Feste Listenspalten vor 0186: bleiben in der Datenbank (nullable, ohne Dual-Write), damit der
 # Downgrade von 0186 sie aus den ersten zwei Spalten wieder füllen kann; das Modell kennt sie nicht
