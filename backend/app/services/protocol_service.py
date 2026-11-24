@@ -132,6 +132,24 @@ _SYNC_PARKED_SORT_INDEX = 1_000_000
 _SYNC_FORM_ROW_VALUE_KEYS = ("text_value", "participant_id", "participant_ids", "event_id")
 
 
+def resequence_protocol_elements(db: Session, elements: list[ProtocolElement]) -> None:
+    """Traktanden in genau dieser Reihenfolge auf 10, 20, ... setzen. Erst alle parken, weil
+    (protocol_id, sort_index) eindeutig ist; die Session läuft ohne Autoflush, darum flush."""
+    for position, element in enumerate(elements):
+        element.sort_index = _SYNC_PARKED_SORT_INDEX + position
+    db.flush()
+    for position, element in enumerate(elements):
+        element.sort_index = (position + 1) * 10
+        element.section_order_snapshot = element.sort_index
+    db.flush()
+
+
+def _insert_after(sequence: list, item, anchor) -> None:
+    """item hinter anchor einfügen (anchor None = an den Anfang)."""
+    index = next((i for i, entry in enumerate(sequence) if entry is anchor), None) if anchor is not None else None
+    sequence.insert(0 if index is None else index + 1, item)
+
+
 def _sync_has_value(value) -> bool:
     if value is None:
         return False
@@ -1692,6 +1710,11 @@ class ProtocolService:
         es enthält Daten - dann bleibt es am Ende stehen. dry_run liefert nur die Übersicht.
         """
         protocol = self.get_protocol_or_404_not_frozen(db, protocol_id)
+        # Gleiche Sperre wie Hinzufügen/Sortieren der Traktanden (protocol_agenda_service), damit der
+        # Abgleich nicht mit einer gleichzeitigen Umsortierung kollidiert
+        from app.documents.locking import lock_row
+
+        protocol = lock_row(db, protocol)
         template = db.get(Template, protocol.template_id)
         if template is None:
             raise ValueError("Template not found")
@@ -1749,7 +1772,6 @@ class ProtocolService:
             .where(ProtocolElement.protocol_id == protocol.id)
             .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
         ))
-        original_sort = {element.id: element.sort_index for element in old_elements}
         old_by_template_element: dict[int, ProtocolElement] = {}
         for element in old_elements:
             if element.template_element_id is not None:
@@ -1761,6 +1783,8 @@ class ProtocolService:
         db.flush()
 
         matched_ids: set[int] = set()
+        added_ids: set[int] = set()
+        deleted_ids: set[int] = set()
         sort_index = 10
         for template_element, definition in self._template_rows(db, template.id):
             fresh = self._materialize_template_element(
@@ -1778,6 +1802,7 @@ class ProtocolService:
             sort_index += 10
             old = old_by_template_element.get(template_element.id)
             if old is None:
+                added_ids.add(fresh.id)
                 summary["added_elements"].append(fresh.element_title_snapshot or fresh.section_name_snapshot)
                 continue
             matched_ids.add(old.id)
@@ -1788,20 +1813,68 @@ class ProtocolService:
             if element.id in matched_ids:
                 continue
             title = element.element_title_snapshot or element.section_name_snapshot
-            if element.template_element_id is None and element.section_name_snapshot == self._SESSION_ELEMENT_NAME:
-                element.sort_index = original_sort[element.id]
+            if element.origin != "template" or (
+                element.template_element_id is None and element.section_name_snapshot == self._SESSION_ELEMENT_NAME
+            ):
+                # Im Protokoll hinzugefügt, Sitzungsnotizen, Word-Import: nie löschen; bleibt
+                # geparkt, den Platz bestimmt _restore_agenda_order unten.
+                pass
             elif self._element_has_content(db, element, type_codes):
                 element.sort_index = sort_index
                 sort_index += 10
                 summary["kept_elements"].append(title)
             else:
+                deleted_ids.add(element.id)
                 db.delete(element)
                 summary["removed_elements"].append(title)
             db.flush()
 
+        self._restore_agenda_order(
+            db, protocol, old_elements=[element for element in old_elements if element.id not in deleted_ids], added_ids=added_ids
+        )
         self.refresh_membership_blocks(db, protocol.id, commit=False)
         db.flush()
         return summary
+
+    def _restore_agenda_order(
+        self, db: Session, protocol: Protocol, *, old_elements: list[ProtocolElement], added_ids: set[int]
+    ) -> None:
+        """Reihenfolge nach dem Abgleich (Editor 1a): Ohne eigene Reihenfolge im Protokoll gilt
+        die der Vorlage; im Protokoll hinzugefügte Traktanden (und Word-Import) bleiben hinter
+        ihrem bisherigen Vorgänger, «Sitzungsnotizen» am Ende. Hat das Protokoll eine eigene
+        Reihenfolge (agenda_order_customized), bleibt sie, und neue Vorlagen-Traktanden kommen
+        hinter ihren Vorgänger in der Vorlage. old_elements: überlebende Elemente in der
+        Reihenfolge vor dem Abgleich."""
+        current = list(db.scalars(
+            select(ProtocolElement)
+            .where(ProtocolElement.protocol_id == protocol.id)
+            .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
+        ))
+        local = [element for element in old_elements if element.origin != "template"]
+        local_ids = {element.id for element in local}
+        template_sequence = [element for element in current if element.id not in local_ids]
+        if protocol.agenda_order_customized:
+            result = list(old_elements)
+            for index, element in enumerate(template_sequence):
+                if element.id not in added_ids:
+                    continue
+                anchor = next((entry for entry in reversed(template_sequence[:index]) if entry in result), None)
+                _insert_after(result, element, anchor)
+        else:
+            result = list(template_sequence)
+            sessions = []
+            for index, element in enumerate(old_elements):
+                if element.origin == "template":
+                    continue
+                if element.origin == "session":
+                    sessions.append(element)
+                    continue
+                anchor = next((entry for entry in reversed(old_elements[:index]) if entry in result), None)
+                _insert_after(result, element, anchor)
+            result.extend(sessions)
+        # Sicherheitsnetz: nichts darf verloren gehen
+        result.extend(element for element in current if element not in result)
+        resequence_protocol_elements(db, result)
 
     def _block_sync_key(self, block: ProtocolElementBlock) -> tuple:
         config = block.configuration_snapshot_json or {}
@@ -1827,8 +1900,14 @@ class ProtocolService:
         type_codes: dict[int, str],
         summary: dict,
     ) -> None:
-        old.section_name_snapshot = fresh.section_name_snapshot
-        old.element_title_snapshot = fresh.element_title_snapshot
+        if old.template_title_snapshot is not None:
+            # Im Protokoll umbenannt: eigener Titel bleibt, nur der Vorlagentitel wird nachgeführt
+            old.template_title_snapshot = fresh.element_title_snapshot or fresh.section_name_snapshot
+        else:
+            old.section_name_snapshot = fresh.section_name_snapshot
+            old.element_title_snapshot = fresh.element_title_snapshot
+        if not old.visibility_customized:
+            old.is_visible_snapshot = fresh.is_visible_snapshot
         old.responsible_assignments_snapshot = fresh.responsible_assignments_snapshot
         old.responsible_name_display_mode = fresh.responsible_name_display_mode
         old.section_order_snapshot = fresh.section_order_snapshot
@@ -2086,7 +2165,8 @@ class ProtocolService:
             responsible_name_display_mode=responsible_name_display_mode,
             section_order_snapshot=sort_index,
             is_required_snapshot=False,
-            is_visible_snapshot=True,
+            # Ausblenden aus der Vorlage (0270; vorher ungenutzt und immer TRUE)
+            is_visible_snapshot=template_element.is_visible,
             export_visible_snapshot=True,
         )
         db.add(protocol_element)
@@ -3060,6 +3140,7 @@ class ProtocolService:
         element = ProtocolElement(
             protocol_id=protocol_id,
             template_element_id=None,
+            origin="session",
             sort_index=self._SESSION_ELEMENT_SORT,
             section_name_snapshot=self._SESSION_ELEMENT_NAME,
             section_order_snapshot=self._SESSION_ELEMENT_SORT,

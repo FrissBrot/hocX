@@ -12,6 +12,7 @@ from app.core.db import get_db
 from app.core.element_types import element_type_code
 from app.core.redis_client import get_redis_sync, publish_best_effort
 from app.core.permissions import P
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
@@ -19,6 +20,10 @@ from app.schemas.protocol import (
     ProtocolElementBlockFromEventCreate,
     ProtocolElementBlockRead,
     ProtocolElementBlockUpdate,
+    ProtocolElementCreate,
+    ProtocolElementOrderEntry,
+    ProtocolElementOrderRead,
+    ProtocolElementOrderUpdate,
     ProtocolElementRead,
     ProtocolElementUpdate,
     ProtocolTextRead,
@@ -40,6 +45,7 @@ from app.services.collaboration_service import conflicting_lock_holder_sync, pro
 from app.services.fine_tariff_service import attendance_fine_values
 from app.services.protocol_element_service import BlockConfigConflict
 from app.services.protocol_element_service import ProtocolElementService
+from app.services.protocol_agenda_service import AgendaError, OrderConflict, ProtocolAgendaService, ordered_elements
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
 
@@ -48,6 +54,52 @@ autosave_service = AutosaveService()
 service = ProtocolElementService()
 protocol_service = ProtocolService()
 access_service = AccessService()
+agenda_service = ProtocolAgendaService()
+
+# Rate-Limits der Traktanden-Bearbeitung je Konto (Editor 1a): grosszügig für normales Arbeiten,
+# begrenzt nur Skripte/Schleifen (jede Anfrage nummeriert alle Traktanden neu).
+AGENDA_ADD_LIMIT_PER_MINUTE = 60
+AGENDA_ORDER_LIMIT_PER_MINUTE = 120
+
+
+def _agenda_error(exc: AgendaError) -> HTTPException:
+    """Erwartete Ablehnungen der Traktanden-Bearbeitung: Eingabe 422, unbekannter Vorgänger 404
+    (wie fremde IDs), sonst Zustandskonflikt 409."""
+    if exc.code in {"title_required", "title_too_long", "duplicate_ids"}:
+        status_code = 422
+    elif exc.code == "anchor_not_found":
+        status_code = 404
+    else:
+        status_code = 409
+    return HTTPException(status_code=status_code, detail={"code": exc.code, "message": exc.message})
+
+
+def _broadcast_agenda_changed(
+    db: Session, protocol_id: int, action: str, element_public_id: uuid.UUID | None, user: CurrentUser
+) -> None:
+    """Andere offene Editoren über Traktanden-Änderungen informieren (Editor 1a, WS-Typ
+    agenda_changed): aktuelle Reihenfolge mit, damit «reordered» ohne Neuladen geht. Gleicher
+    Kanal wie field_update; Empfänger filtern eigene Updates über die öffentliche Nutzer-ID."""
+    publish_best_effort(
+        protocol_channel(protocol_id),
+        json.dumps({
+            "type": "agenda_changed",
+            "action": action,
+            "element_id": str(element_public_id) if element_public_id else None,
+            "element_ids": [str(element.public_id) for element in ordered_elements(db, protocol_id)],
+            "user_id": str(user.user_public_id),
+            "display_name": user.display_name,
+        }),
+    )
+
+
+def _writable_protocol_or_404(db: Session, user: CurrentUser, protocol_id: uuid.UUID) -> Protocol:
+    """Schreibrouten auf ein ganzes Protokoll: Mandant (tenant-gescopter Lookup), Leserecht
+    (sonst 404, kein Existenz-Orakel) und nicht abgeschlossen (409)."""
+    protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if protocol is None or not access_service.can_read_protocol(db, user, protocol.id):
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    return protocol_service.get_protocol_or_404_not_frozen(db, protocol.id)
 
 
 def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, user: CurrentUser) -> None:
@@ -202,6 +254,82 @@ def list_protocol_elements(
     return service.list_protocol_elements(db, protocol.id)
 
 
+@router.post("/protocols/{protocol_id}/elements", response_model=ProtocolElementRead, status_code=201)
+def create_protocol_element(
+    protocol_id: uuid.UUID,
+    payload: ProtocolElementCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Traktandum nur in diesem Protokoll (Editor 1a): ohne Vorlagenbezug, mit leerem Textblock.
+    Die Vorlage bleibt unverändert, der Vorlagen-Abgleich löscht den Punkt nicht."""
+    require_permission(user, P.MEETINGS_EDIT)
+    enforce_rate_limit(f"protocol-agenda-add:{user.user_id}", limit=AGENDA_ADD_LIMIT_PER_MINUTE, period_seconds=60)
+    protocol = _writable_protocol_or_404(db, user, protocol_id)
+    after_internal_id: int | None = None
+    if payload.after_element_id is not None:
+        anchor = public_id_service.get_by_public_id(db, ProtocolElement, payload.after_element_id, tenant_id=user.current_tenant_id)
+        if anchor is None or anchor.protocol_id != protocol.id:
+            raise HTTPException(status_code=404, detail="Protocol element not found")
+        after_internal_id = anchor.id
+    try:
+        element = agenda_service.add_element(db, protocol, title=payload.title, after_element_id=after_internal_id)
+        db.commit()
+    except AgendaError as exc:
+        # Erwartet und vor jedem Schreiben geprüft; get_db beendet die Transaktion
+        raise _agenda_error(exc) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Protocol element could not be created") from exc
+    element_public_id = element.public_id
+    _broadcast_agenda_changed(db, protocol.id, "added", element_public_id, user)
+    created = next((read for read in service.list_protocol_elements(db, protocol.id) if read.id == element_public_id), None)
+    if created is None:
+        raise HTTPException(status_code=404, detail="Protocol element not found")
+    return created
+
+
+@router.put("/protocols/{protocol_id}/element-order", response_model=ProtocolElementOrderRead)
+def put_protocol_element_order(
+    protocol_id: uuid.UUID,
+    payload: ProtocolElementOrderUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Atomares Sortieren (Editor 1a): vollständige Reihenfolge in einer Transaktion statt n
+    PATCHes. 409 order_conflict mit der aktuellen Reihenfolge, wenn der Client von einem
+    veralteten Stand ausging."""
+    require_permission(user, P.MEETINGS_EDIT)
+    enforce_rate_limit(f"protocol-agenda-order:{user.user_id}", limit=AGENDA_ORDER_LIMIT_PER_MINUTE, period_seconds=60)
+    protocol = _writable_protocol_or_404(db, user, protocol_id)
+    try:
+        ordered = agenda_service.reorder(
+            db, protocol, element_ids=payload.element_ids, expected_element_ids=payload.expected_element_ids
+        )
+        result = ProtocolElementOrderRead(
+            element_ids=[element.public_id for element in ordered],
+            elements=[ProtocolElementOrderEntry(id=element.public_id, sort_index=element.sort_index) for element in ordered],
+        )
+        db.commit()
+    except OrderConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "order_conflict",
+                "message": "Die Reihenfolge wurde inzwischen geändert",
+                "element_ids": [str(public_id) for public_id in exc.current],
+            },
+        ) from None
+    except AgendaError as exc:
+        # Erwartet und vor jedem Schreiben geprüft; get_db beendet die Transaktion
+        raise _agenda_error(exc) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Order could not be saved") from exc
+    _broadcast_agenda_changed(db, protocol.id, "reordered", None, user)
+    return result
+
+
 @router.patch("/protocol-elements/{protocol_element_id}", response_model=ProtocolElementRead)
 def patch_protocol_element(
     protocol_element_id: uuid.UUID,
@@ -218,12 +346,22 @@ def patch_protocol_element(
     protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         protocol_element = service.update_protocol_element(db, element.id, payload)
+    except AgendaError as exc:
+        # Erwartet und vor jedem Schreiben geprüft; get_db beendet die Transaktion
+        raise _agenda_error(exc) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element could not be updated") from exc
     if protocol_element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
     protocol = protocol_service.get_protocol(db, protocol_element.protocol_id)
+    fields = payload.model_fields_set
+    if payload.section_name_snapshot is not None:
+        _broadcast_agenda_changed(db, protocol.id, "renamed", protocol_element.public_id, user)
+    elif payload.is_visible_snapshot is not None:
+        _broadcast_agenda_changed(db, protocol.id, "visibility", protocol_element.public_id, user)
+    elif fields & {"sort_index", "section_order_snapshot"}:
+        _broadcast_agenda_changed(db, protocol.id, "reordered", None, user)
     return ProtocolElementRead(
         id=protocol_element.public_id,
         protocol_id=public_id_service.resolve_public_id(db, Protocol, protocol_element.protocol_id),
@@ -236,6 +374,9 @@ def patch_protocol_element(
         is_required_snapshot=protocol_element.is_required_snapshot,
         is_visible_snapshot=protocol_element.is_visible_snapshot,
         export_visible_snapshot=protocol_element.export_visible_snapshot,
+        origin=protocol_element.origin,
+        template_title=protocol_element.template_title_snapshot,
+        visibility_customized=protocol_element.visibility_customized,
         blocks=[],
     )
 

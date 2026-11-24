@@ -16,6 +16,7 @@ from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoA
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
@@ -86,7 +87,7 @@ from app.schemas.files import (
     UploadPrecheckRequest,
     UploadPrecheckResponse,
 )
-from app.schemas.protocol import ProtocolImageRead
+from app.schemas.protocol import ProtocolImageCaptionUpdate, ProtocolImageRead
 from app.services import upload_precheck_service
 from app.services import upload_job_service
 from app.services import capture_change_service, photo_event_link_service
@@ -1148,6 +1149,63 @@ def delete_image(
     if not deleted:
         raise HTTPException(status_code=404, detail="Image not found")
     return {"message": "Image deleted"}
+
+
+# Bildunterschrift nachträglich (Editor 1a) je Konto
+IMAGE_CAPTION_LIMIT_PER_MINUTE = 120
+
+
+@router.patch("/protocol-images/{image_id}", response_model=ProtocolImageRead)
+def patch_image_caption(
+    image_id: uuid.UUID,
+    payload: ProtocolImageCaptionUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Bildunterschrift eines Protokollbilds ändern. Gleiche Regeln wie Bearbeiten des Blocks:
+    meetings.edit, Protokoll lesbar und im eigenen Mandanten (sonst 404), nicht abgeschlossen und
+    Block nicht von einer anderen Person gesperrt (409). Andere Editoren erhalten die neue
+    Bildliste über denselben WS-Schlüssel wie beim Hochladen (block-<id>-images)."""
+    from app.api.routes.protocol_elements import _ensure_block_not_locked_by_other
+    from app.core.redis_client import publish_best_effort
+    from app.services.collaboration_service import protocol_channel
+
+    require_permission(user, P.MEETINGS_EDIT)
+    enforce_rate_limit(f"protocol-image-caption:{user.user_id}", limit=IMAGE_CAPTION_LIMIT_PER_MINUTE, period_seconds=60)
+    protocol_image = public_id_service.get_by_public_id(db, ProtocolImage, image_id)  # nosemgrep: public-id-lookup-without-tenant -- Bild hat keine tenant_id; Mandant über Block/Protokoll direkt darunter geprüft
+    if protocol_image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    _ensure_readable_block_or_404(db, user, protocol_image.protocol_element_block_id, "Image not found")
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_image.protocol_element_block_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    # Schreiben nur im eigenen Mandanten, auch wenn Leserechte einmal weiter reichen (Regel 1.2)
+    if protocol is None or protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Image not found")
+    _ensure_block_protocol_not_frozen(db, protocol_image.protocol_element_block_id)
+    block = db.get(ProtocolElementBlock, protocol_image.protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, block.public_id, user)
+    protocol_image.caption = payload.caption
+    db.add(protocol_image)
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Caption could not be saved") from exc
+    images = service.list_protocol_images(db, block.id)
+    publish_best_effort(
+        protocol_channel(protocol.id),
+        json.dumps({
+            "type": "field_update",
+            "field_key": f"block-{block.public_id}-images",
+            "patch": jsonable_encoder(images),
+            "user_id": str(user.user_public_id),
+            "display_name": user.display_name,
+        }),
+    )
+    updated = next((image for image in images if image.id == protocol_image.public_id), None)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return updated
 
 
 # Partner-Mandant ohne Standortfreigabe (IMGMETA-007): nur der Standort fällt weg, Datum und

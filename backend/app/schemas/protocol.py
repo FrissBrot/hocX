@@ -223,7 +223,84 @@ class ProtocolElementRead(BaseModel):
     is_visible_snapshot: bool
     export_visible_snapshot: bool
     show_when_empty: bool = False
+    # Herkunft (0270): template | protocol (im Editor hinzugefügt) | session | import
+    origin: str = "template"
+    # Titel laut Vorlage, wenn im Protokoll umbenannt (sonst null)
+    template_title: str | None = None
+    visibility_customized: bool = False
     blocks: list[ProtocolElementBlockRead] = Field(default_factory=list)
+
+
+class ProtocolElementCreate(BaseModel):
+    """Traktandum nur in diesem Protokoll hinzufügen (Editor 1a). Länge/Leere prüft der Service
+    nach dem Trimmen (422); die Grenze hier fängt nur übergrosse Eingaben ab."""
+    title: str = Field(max_length=1000)
+    after_element_id: uuid.UUID | None = None
+
+
+class ProtocolElementOrderUpdate(BaseModel):
+    """Vollständige neue Reihenfolge plus die Reihenfolge, von der der Client ausging (409 bei Abweichung)."""
+    element_ids: list[uuid.UUID] = Field(min_length=1, max_length=1000)
+    expected_element_ids: list[uuid.UUID] = Field(max_length=1000)
+
+
+class ProtocolElementOrderEntry(BaseModel):
+    id: uuid.UUID
+    sort_index: int
+
+
+class ProtocolElementOrderRead(BaseModel):
+    element_ids: list[uuid.UUID]
+    elements: list[ProtocolElementOrderEntry]
+
+
+class TemplateChangeOrderEntry(BaseModel):
+    element_id: uuid.UUID
+    template_element_id: uuid.UUID
+    title: str
+
+
+class TemplateChangeRead(BaseModel):
+    """Eine Traktanden-Abweichung gegenüber der Vorlage; welche Felder gesetzt sind, hängt von kind ab."""
+    key: str
+    kind: Literal["added", "renamed", "visibility", "order"]
+    element_id: uuid.UUID | None = None
+    template_element_id: uuid.UUID | None = None
+    title: str | None = None
+    after_template_element_id: uuid.UUID | None = None
+    after_title: str | None = None
+    old_title: str | None = None
+    new_title: str | None = None
+    old_visible: bool | None = None
+    new_visible: bool | None = None
+    old_order: list[TemplateChangeOrderEntry] | None = None
+    new_order: list[TemplateChangeOrderEntry] | None = None
+
+
+class ProtocolTemplateChangesRead(BaseModel):
+    template_id: uuid.UUID
+    template_name: str
+    template_version: int
+    can_apply: bool
+    changes: list[TemplateChangeRead]
+
+
+class ProtocolTemplateChangesApply(BaseModel):
+    keys: list[str] = Field(min_length=1, max_length=200)
+    expected_template_version: int | None = None
+
+    @field_validator("keys")
+    @classmethod
+    def _short_keys(cls, value: list[str]) -> list[str]:
+        if any(len(key) > 100 for key in value):
+            raise ValueError("key too long")
+        return value
+
+
+class ProtocolTemplateChangesApplyRead(BaseModel):
+    applied: list[str]
+    template_version: int
+    changes: list[TemplateChangeRead]
 
 
 class ProtocolElementUpdate(BaseModel):
@@ -434,6 +511,24 @@ class TodoDetails(BaseModel):
 class TodoDetailsUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=100_000)
     file_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
+
+
+IMAGE_CAPTION_MAX_LENGTH = 500
+
+
+class ProtocolImageCaptionUpdate(BaseModel):
+    """Bildunterschrift nachträglich ändern (Editor 1a). Getrimmt, leer = keine Unterschrift."""
+    caption: str | None = Field(default=None, max_length=IMAGE_CAPTION_MAX_LENGTH * 4)
+
+    @field_validator("caption")
+    @classmethod
+    def _clean_caption(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > IMAGE_CAPTION_MAX_LENGTH:
+            raise ValueError(f"Die Bildunterschrift darf höchstens {IMAGE_CAPTION_MAX_LENGTH} Zeichen lang sein")
+        return value or None
 
 
 class ProtocolImageRead(BaseModel):

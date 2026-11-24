@@ -45,10 +45,6 @@ class CurrentUser:
     current_tenant_profile_image_path: str | None
     # Währung des Vereins (tenant.finance_currency) für die Anzeige von Bussen und Konten
     current_tenant_currency: str = "CHF"
-    protocol_accordion_enabled: bool = True
-    # Rad-Effekt beim Scrollen im Protokoll-Editor; an = Akkordeon aus (Design «Protokoll-Editor v2»)
-    # Rad-Effekt standardmässig aus (ruckelte bei grossen Protokollen), nur ausdrücklich eingeschaltet an
-    protocol_wheel_enabled: bool = False
     mfa_verified: bool = False
     # MFA-Pflicht des Mandanten für alle Logins (tenant.require_mfa, Migration 0188).
     tenant_require_mfa: bool = False
@@ -488,8 +484,6 @@ def build_current_user(
         display_name=user.display_name,
         email=user.email,
         preferred_language=user.preferred_language,
-        protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
-        protocol_wheel_enabled=(user.external_identity_json or {}).get("protocol_wheel_enabled", False) is True,
         current_tenant_id=tenant.id,
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,

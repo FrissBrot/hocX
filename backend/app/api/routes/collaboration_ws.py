@@ -57,6 +57,91 @@ SESSION_REVALIDATE_INTERVAL_SECONDS = 30
 _LOCK_FIELD_KEY = re.compile(r"^block-[0-9A-Za-z-]{1,40}(-cell-[0-9A-Za-z_-]{1,80})?$")
 _BROADCAST_FIELD_KEY = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
 MAX_LOCKS_PER_CONNECTION = 50
+# «Wo ist wer» (Editor 1a): höchstens eine Fokus-Weitergabe je Intervall und Verbindung
+FOCUS_MIN_INTERVAL_SECONDS = 0.5
+_FOCUS_MODES = frozenset({"viewing", "editing"})
+
+
+def parse_focus(payload: dict, *, can_edit: bool) -> tuple[str | None, str | None, str] | None:
+    """Fokus-Meldung des Clients prüfen: element_id/block_id None oder UUID, mode viewing/editing
+    («editing» nur mit Bearbeitungsrecht, sonst viewing). Ungültig -> None (verwerfen)."""
+    ids: list[str | None] = []
+    for key in ("element_id", "block_id"):
+        value = payload.get(key)
+        if value is None:
+            ids.append(None)
+            continue
+        if not isinstance(value, str) or len(value) > 36:
+            return None
+        try:
+            ids.append(str(uuid.UUID(value)))
+        except ValueError:
+            return None
+    mode = payload.get("mode")
+    if mode not in _FOCUS_MODES:
+        return None
+    if mode == "editing" and not can_edit:
+        mode = "viewing"
+    return ids[0], ids[1], mode
+
+
+class FocusThrottle:
+    """Drosselt Fokus-Meldungen einer Verbindung: die erste geht sofort weiter, danach höchstens
+    eine je ``interval``; was dazwischen kommt, ersetzt sich (die letzte gewinnt) und geht am Ende
+    des Intervalls weiter. Unveränderte Meldungen werden nicht erneut gesendet."""
+
+    def __init__(self, send, *, interval: float = FOCUS_MIN_INTERVAL_SECONDS, on_error=None, clock=time.monotonic) -> None:
+        self._send = send
+        self._interval = interval
+        self._on_error = on_error
+        self._clock = clock
+        self._last_sent_at: float | None = None
+        self._last_value = None
+        self._pending = None
+        self._task: asyncio.Task | None = None
+        self.sent_any = False
+
+    async def submit(self, value) -> None:
+        if self._task is not None:
+            self._pending = value
+            return
+        if value == self._last_value:
+            return
+        now = self._clock()
+        if self._last_sent_at is None or now - self._last_sent_at >= self._interval:
+            await self._emit(value)
+            return
+        self._pending = value
+        self._task = asyncio.create_task(self._flush_later(self._interval - (now - self._last_sent_at)))
+
+    async def _emit(self, value) -> None:
+        self._last_sent_at = self._clock()
+        self._last_value = value
+        self.sent_any = True
+        await self._send(value)
+
+    async def _flush_later(self, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+            value, self._pending = self._pending, None
+            self._task = None
+            if value is not None and value != self._last_value:
+                await self._emit(value)
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            # Läuft ausserhalb des Empfangs-Loops: selbst melden (CLAUDE.md, Fehlererfassung)
+            if self._on_error is not None:
+                self._on_error(exc)
+
+    async def close(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
 
 
 def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
@@ -403,6 +488,30 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
 
     revalidate_task = asyncio.create_task(revalidate_session())
 
+    async def send_focus(focus: tuple[str | None, str | None, str]) -> None:
+        element_id, block_id, mode = focus
+        if mode == "editing" and not can_edit:
+            # Recht inzwischen entzogen (Revalidierung), während die Meldung gedrosselt wartete
+            mode = "viewing"
+        await collab.set_focus(protocol_id, connection_id, {
+            "user_id": user.user_id,
+            "display_name": user.display_name,
+            "element_id": element_id,
+            "block_id": block_id,
+            "mode": mode,
+        })
+        await collab.publish(protocol_id, {
+            "type": "presence_focus",
+            "user_id": str(user.user_public_id),
+            "display_name": user.display_name,
+            "connection_id": connection_id,
+            "element_id": element_id,
+            "block_id": block_id,
+            "mode": mode,
+        })
+
+    focus_throttle = FocusThrottle(send_focus, on_error=lambda exc: _record_ws_error(exc, user))
+
     try:
         await collab.join(protocol_id, connection_id, user.user_id, user.display_name)
         presence = await collab.presence_snapshot(protocol_id)
@@ -412,13 +521,28 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
         # storage itself stays internal-int throughout (see collaboration_service.py,
         # unchanged), only this outbound copy is rewritten to public ids.
         outbound_user_ids = {entry["user_id"] for entry in presence} | {entry["user_id"] for entry in locks.values()}
+        focus_entries = await collab.focus_snapshot(protocol_id)
+        outbound_user_ids |= {entry["user_id"] for entry in focus_entries}
         public_user_ids = await asyncio.to_thread(_public_user_id_map, outbound_user_ids, user.current_tenant_id) if outbound_user_ids else {}
         public_presence = [{**entry, "user_id": str(public_user_ids[entry["user_id"]])} for entry in presence]
         public_locks = {key: {**entry, "user_id": str(public_user_ids[entry["user_id"]])} for key, entry in locks.items()}
+        public_focus = [
+            {
+                "user_id": str(public_user_ids[entry["user_id"]]),
+                "display_name": entry.get("display_name"),
+                "connection_id": entry["connection_id"],
+                "element_id": entry.get("element_id"),
+                "block_id": entry.get("block_id"),
+                "mode": entry.get("mode"),
+            }
+            for entry in focus_entries
+            if entry["user_id"] in public_user_ids
+        ]
         await websocket.send_json({
             "type": "snapshot",
             "presence": public_presence,
             "locks": public_locks,
+            "focus": public_focus,
             "self": {"user_id": str(user.user_public_id), "connection_id": connection_id, "can_edit": can_edit},
         })
         await collab.publish(protocol_id, {
@@ -498,6 +622,12 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                         "display_name": user.display_name,
                     })
 
+            elif msg_type == "focus":
+                # Lesende dürfen zeigen, wo sie sind (viewing); kanalweit nur dieses Protokoll
+                focus = parse_focus(payload, can_edit=can_edit)
+                if focus is not None:
+                    await focus_throttle.submit(focus)
+
             elif msg_type == "status_changed" and can_edit and payload.get("status") in _PROTOCOL_STATUSES:
                 # Nur bekannte Status weiterreichen: sonst konnte jeder Editor beliebigen Text als
                 # «Status» an alle Verbundenen senden (Toast + Neuladen bei allen).
@@ -529,6 +659,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 await task
             except asyncio.CancelledError:
                 pass
+        await focus_throttle.close()
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
 
@@ -539,6 +670,16 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
 
         for field_key in released_fields:
             await collab.publish(protocol_id, {"type": "lock_released", "field_key": field_key})
+        if focus_throttle.sent_any:
+            await collab.publish(protocol_id, {
+                "type": "presence_focus",
+                "user_id": str(user.user_public_id),
+                "display_name": user.display_name,
+                "connection_id": connection_id,
+                "element_id": None,
+                "block_id": None,
+                "mode": None,
+            })
         if not still_present:
             await collab.publish(protocol_id, {
                 "type": "presence_leave",

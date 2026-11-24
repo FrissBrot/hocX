@@ -337,16 +337,15 @@ class UserService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         values = payload.model_dump(exclude_unset=True)
-        # Editor-Vorlieben liegen in external_identity_json (keine eigene Spalte)
-        preferences = {
-            key: values.pop(key)
-            for key in ("protocol_accordion_enabled", "protocol_wheel_enabled")
-            if values.get(key) is not None
-        }
+        # Veraltete Editor-Vorlieben (Akkordeon/Rad-Effekt, bis 1.5) werden ignoriert und gespeicherte
+        # Altwerte beim nächsten Speichern entfernt
         values.pop("protocol_accordion_enabled", None)
         values.pop("protocol_wheel_enabled", None)
-        if preferences:
-            values["external_identity_json"] = {**(user.external_identity_json or {}), **preferences}
+        stored = dict(user.external_identity_json or {})
+        if "protocol_accordion_enabled" in stored or "protocol_wheel_enabled" in stored:
+            stored.pop("protocol_accordion_enabled", None)
+            stored.pop("protocol_wheel_enabled", None)
+            values["external_identity_json"] = stored
         if values:
             self.repository.update(db, user, values)
             db.commit()

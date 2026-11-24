@@ -2553,6 +2553,12 @@
         "meetings.edit"
       ]
     },
+    "PATCH /api/protocol-images/{image_id}": {
+      "handler": "files.patch_image_caption",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
     "DELETE /api/protocol-todos/{todo_id}": {
       "handler": "todos.delete_todo",
       "requires": [
@@ -2787,10 +2793,22 @@
         "meetings.edit"
       ]
     },
+    "PUT /api/protocols/{protocol_id}/element-order": {
+      "handler": "protocol_elements.put_protocol_element_order",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
     "GET /api/protocols/{protocol_id}/elements": {
       "handler": "protocol_elements.list_protocol_elements",
       "requires": [
         "meetings.read"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/elements": {
+      "handler": "protocol_elements.create_protocol_element",
+      "requires": [
+        "meetings.edit"
       ]
     },
     "GET /api/protocols/{protocol_id}/fines": {
@@ -2860,6 +2878,23 @@
       "handler": "protocols.sync_protocol_with_template",
       "requires": [
         "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/template-changes": {
+      "handler": "protocols.get_protocol_template_changes",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "meetings.edit",
+        "templates.edit"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/template-changes/apply": {
+      "handler": "protocols.apply_protocol_template_changes",
+      "requires": [
+        "meetings.edit",
+        "templates.edit"
       ]
     },
     "GET /api/public-links": {
