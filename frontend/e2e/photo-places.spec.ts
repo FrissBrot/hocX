@@ -105,3 +105,39 @@ test("Ort von Hand setzen (Mehrfachauswahl) und rückgängig machen", async ({ p
     await deletePhoto(request, fileId);
   }
 });
+
+// Sichtprüfung Light/Dark bei 1440 und 390 px (Screenshots in test-results, keine Bildvergleiche)
+for (const colorScheme of ["light", "dark"] as const) {
+  for (const width of [1440, 390]) {
+    test(`Foto-Standorte: Ansicht ${colorScheme} ${width} px`, async ({ browser, request }) => {
+      test.setTimeout(180_000);
+      const name = `ort-shot-${colorScheme}-${width}-${Date.now()}.png`;
+      const fileId = await uploadPhoto(request, name, AT_HUT);
+      const context = await browser.newContext({ storageState: authFiles.admin, colorScheme, viewport: { width, height: width > 600 ? 900 : 844 } });
+      const page = await context.newPage();
+      try {
+        await expect
+          .poll(async () => (await (await request.get(`/api/stored-files/${fileId}/metadata`)).json()).place?.name ?? null, { timeout: 30_000 })
+          .toBe("Blüemlisalphütte SAC");
+        await page.goto("/photos");
+        // Schmal: der Server rendert anhand des User-Agents die Desktop-Ansicht, nach dem Mount
+        // schaltet ResponsiveView auf die Mobile-Oberfläche um. Erst danach tippen - sonst landet
+        // die Eingabe im ersetzten Desktop-Feld und keine Orts-Treffer erscheinen (Timeout im
+        // ersten Lauf).
+        if (width < 900) await expect(page.locator(".mobile-photos")).toBeVisible();
+        await page.screenshot({ path: test.info().outputPath(`places-start-${colorScheme}-${width}.png`) });
+        await page.getByPlaceholder(/^Suchen nach Name, Tag/).fill("Blüemlisalp");
+        await page.getByRole("button", { name: "Blüemlisalphütte SAC · Hütte · Kandersteg BE" }).click();
+        await expect(page.getByText("Umgebung Blüemlisalphütte SAC · 2 km")).toBeVisible();
+        await page.screenshot({ path: test.info().outputPath(`places-umkreis-${colorScheme}-${width}.png`) });
+        const select = page.getByRole("checkbox", { name: `${name} auswählen` });
+        await page.locator(".photo-tile", { has: select }).locator(".photo-tile-preview").click();
+        await expect(page.getByRole("dialog", { name }).getByText("aus GPS")).toBeVisible();
+        await page.screenshot({ path: test.info().outputPath(`places-viewer-${colorScheme}-${width}.png`), fullPage: width < 600 });
+      } finally {
+        await context.close();
+        await deletePhoto(request, fileId);
+      }
+    });
+  }
+}
