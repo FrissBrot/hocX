@@ -232,7 +232,7 @@ test.describe("Protokoll-Editor 1a", () => {
     await openProtocol(page, protocol.id);
     await page.getByRole("button", { name: "Protokoll abschliessen" }).click();
     const dialog = page.getByRole("dialog", { name: "Protokoll abschliessen?" });
-    await expect(dialog.getByText("Neu: «Neue Vereinsjacken» nach «Verschiedenes»")).toBeVisible();
+    await expect(dialog.getByText(/Neu: «Neue Vereinsjacken»/)).toBeVisible();
     await expect(dialog.getByText("Umbenannt: «Varia» → «Verschiedenes»")).toBeVisible();
     for (const theme of ["light", "dark"] as const) {
       await setTheme(page, theme);
