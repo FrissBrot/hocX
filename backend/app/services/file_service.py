@@ -86,6 +86,7 @@ from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
     GALLERY_DIRECT_IMAGE_MAX_BYTES,
     GalleryZipClip,
+    GalleryZipRejection,
     MAX_UPLOAD_BYTES,
     MAX_ZIP_TOTAL_BYTES,
     PDF_MIME_TYPE,
@@ -107,6 +108,8 @@ from app.services.upload_pipeline import (
 
 # Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
 MAX_TAG_SUGGESTIONS = 50
+# Upload-Verlauf: höchstens so viele Ablehnungs-Zeilen je ZIP (der Rest steht zusammengefasst in errors)
+MAX_ZIP_REJECTION_ITEMS = 5000
 # Hard cap on tags per file and on each tag's length - guards against a pathological client
 # sending an unbounded array/strings into a jsonb column with a GIN index.
 MAX_TAGS_PER_FILE = 30
@@ -2458,7 +2461,7 @@ class FileService:
             if staged_path.suffix.lower() == ".zip":
                 await self._ingest_gallery_zip(
                     db, job, staged_path, upload_assignment=upload_assignment,
-                    upload_cycle_config=upload_cycle_config, resume=resume,
+                    upload_cycle_config=upload_cycle_config, resume=resume, zip_name=original_filename,
                 )
             elif resume["remaining"]:
                 resume["remaining"] -= 1
@@ -2483,6 +2486,7 @@ class FileService:
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
         resume: dict[str, int] | None = None,
+        zip_name: str | None = None,
     ) -> None:
         """Streams staged_path via iter_gallery_zip_entries and ingests it in bounded
         batches - see GALLERY_INGEST_BATCH_SIZE. A queued job's total_files starts at 0 (see
@@ -2500,9 +2504,36 @@ class FileService:
         batch: list[tuple[str, bytes]] = []
         live_clips: dict[str, bytes] = {}
         saw_anything = False
+        # Upload-Verlauf: abgelehnte Einträge als Zeilen im Vorgang (gepuffert, mit den Bildern
+        # committet). Bei einem fortgesetzten Ingest nur Ablehnungen nach dem Wiederaufnahmepunkt -
+        # die davor hat der erste Lauf schon erfasst.
+        rejections: list[dict] = []
+        rejection_count = 0
+        archive = (zip_name or "")[:120]
+
+        def remember(rejection: GalleryZipRejection) -> None:
+            nonlocal rejection_count
+            if resume["remaining"] > 0 or job.upload_job_id is None or rejection_count >= MAX_ZIP_REJECTION_ITEMS:
+                return
+            rejection_count += 1
+            rejections.append({
+                "name": rejection.name or zip_name or "ZIP", "status": "failed", "code": rejection.code,
+                "params": {"archive": archive} if rejection.name else {}, "size": rejection.size,
+            })
+
+        def record_rejections() -> None:
+            nonlocal rejections
+            if not rejections:
+                return
+            from app.models.upload_history_entities import UploadJob
+            from app.services import upload_job_service
+
+            upload_job_service.record_results(db, db.get(UploadJob, job.upload_job_id), rejections)
+            rejections = []
 
         async def flush() -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
             nonlocal batch, live_clips
+            record_rejections()
             db.refresh(job)
             job.total_files += len(batch)
             db.commit()
@@ -2512,6 +2543,15 @@ class FileService:
             batch, live_clips = [], {}
 
         for item in iter_gallery_zip_entries(staged_path):
+            if isinstance(item, GalleryZipRejection):
+                remember(item)
+                if item.message is None:
+                    continue  # Nicht-Bild: nur als Zeile, der Text bleibt zusammengefasst
+                saw_anything = True
+                job.errors = list(dict.fromkeys([*job.errors, item.message]))
+                record_rejections()
+                db.commit()
+                continue
             saw_anything = True
             if isinstance(item, str):
                 job.errors = list(dict.fromkeys([*job.errors, item]))
@@ -2539,7 +2579,10 @@ class FileService:
         if not saw_anything:
             db.refresh(job)
             job.errors = [*job.errors, "ZIP enthält keine Bilddateien"]
-            db.commit()
+            if not rejection_count:
+                remember(GalleryZipRejection(name="", code="zip_no_images", message=None))
+        record_rejections()
+        db.commit()
 
     async def _ingest_gallery_batch(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,

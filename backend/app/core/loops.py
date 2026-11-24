@@ -241,6 +241,18 @@ async def thumbnail_backfill_loop() -> None:
     )
 
 
+async def camera_serial_backfill_loop() -> None:
+    """Kamera-Kürzel (HMAC der Seriennummer je Mandant) für Fotos von vor 1.6 nachtragen -
+    mandantenweise in Chargen, wiederaufnehmbar (services/camera_serial_backfill.py)."""
+    from app.services import camera_serial_backfill
+
+    await run_advisory_locked_loop(
+        name="camera_serial_backfill",
+        interval_seconds=settings.camera_serial_backfill_interval_minutes * 60,
+        task=camera_serial_backfill.run_tick,
+    )
+
+
 async def gallery_upload_ingest_loop() -> None:
     """Processes queued gallery_upload_job rows (see FileService.process_pending_gallery_upload_jobs) -
     scanning/thumbnailing/StoredFile-creation for the "Bilder hochladen" window, deferred
@@ -447,6 +459,7 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     log_cleanup_loop,
     photo_quality_backfill_loop,
     thumbnail_backfill_loop,
+    camera_serial_backfill_loop,
     photo_album_sync_loop,
     photo_similarity_refresh_loop,
     gallery_upload_ingest_loop,

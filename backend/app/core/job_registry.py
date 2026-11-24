@@ -84,6 +84,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     ),
     _loop("photo_quality_backfill", "photo_analysis", settings.photo_quality_backfill_interval_minutes, service="job-worker"),
     _loop("thumbnail_backfill", "uploads", settings.thumbnail_backfill_interval_minutes, service="job-worker"),
+    # Liest für Altfotos die Seriennummer aus der EXIF und speichert nur das Kürzel (E-13). Ist alles
+    # nachgetragen, bleibt jeder Tick kurz (nichts zu tun) - er meldet trotzdem.
+    _loop("camera_serial_backfill", "photo_analysis", settings.camera_serial_backfill_interval_minutes, service="job-worker"),
     _loop("photo_album_sync", "photo_analysis", settings.photo_album_sync_interval_minutes, service="job-worker"),
     _loop("photo_similarity_refresh", "photo_analysis", settings.photo_similarity_refresh_interval_minutes, service="job-worker"),
     _loop("domain_health_check", "maintenance", settings.domain_health_check_interval_minutes),

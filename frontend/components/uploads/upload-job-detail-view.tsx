@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { PhotoCaptureDateDialog } from "@/components/photos/photo-capture-date-dialog";
+import { CaptureCorrectionMode, PhotoCaptureDateDialog } from "@/components/photos/photo-capture-date-dialog";
 import { PhotosView } from "@/components/photos/photos-view";
 import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/contexts/toast-context";
@@ -61,7 +61,9 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
   const showPhotos = (job.image_count ?? 0) > 0;
   const [tab, setTab] = useState(showPhotos ? "photos" : "results");
   const [selectionRequest, setSelectionRequest] = useState<{ key: number; ids: string[] } | null>(null);
-  const [cameraShift, setCameraShift] = useState<{ ids: string[]; minutes: number | null } | null>(null);
+  // Datumskorrektur aus dem Vorgang: Kamera verschieben, ganze Fotos des Vorgangs oder Auswahl der
+  // Ergebnisliste auf ein festes Datum setzen («Datum setzen …», Rückgängig wie beim Verschieben)
+  const [captureDialog, setCaptureDialog] = useState<{ ids: string[]; minutes: number | null; mode: CaptureCorrectionMode } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const options = job.options ?? {};
   const tags = Array.isArray(options.tags) ? (options.tags as string[]) : [];
@@ -69,6 +71,24 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
 
   async function cameraIds(camera: UploadCameraGroup): Promise<string[]> {
     const result = await browserApiFetch<UploadJobFileIds>(`/api/upload-jobs/${job.id}/file-ids?only_images=true&camera=${encodeURIComponent(camera.key)}`);
+    return result?.file_ids ?? [];
+  }
+
+  async function openCaptureDialog(load: () => Promise<string[]>, mode: CaptureCorrectionMode, minutes: number | null = null) {
+    try {
+      const ids = await load();
+      if (ids.length === 0) {
+        showToast(t("setDate.none"), "info");
+        return;
+      }
+      setCaptureDialog({ ids, minutes, mode });
+    } catch {
+      showToast(t("loadError"), "error");
+    }
+  }
+
+  async function allImageIds(): Promise<string[]> {
+    const result = await browserApiFetch<UploadJobFileIds>(`/api/upload-jobs/${job.id}/file-ids?only_images=true`);
     return result?.file_ids ?? [];
   }
 
@@ -82,12 +102,8 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
     }
   }
 
-  async function shiftCamera(camera: UploadCameraGroup) {
-    try {
-      setCameraShift({ ids: await cameraIds(camera), minutes: camera.suggested_shift_minutes });
-    } catch {
-      showToast(t("loadError"), "error");
-    }
+  function shiftCamera(camera: UploadCameraGroup) {
+    void openCaptureDialog(() => cameraIds(camera), "shift", camera.suggested_shift_minutes);
   }
 
   const tabs = [
@@ -107,7 +123,19 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
           ),
         }]
       : []),
-    { id: "results", label: t("tabs.results"), count: job.counts.total, content: <UploadJobItems jobId={job.id} /> },
+    {
+      id: "results",
+      label: t("tabs.results"),
+      count: job.counts.total,
+      content: (
+        <UploadJobItems
+          key={reloadKey}
+          jobId={job.id}
+          selectable={canManagePhotos}
+          onSetDate={(ids) => void openCaptureDialog(async () => ids, "set")}
+        />
+      ),
+    },
     ...(showPhotos && canManagePhotos
       ? [{ id: "corrections", label: t("tabs.corrections"), content: <CaptureCorrections jobId={job.id} onUndone={() => setReloadKey((key) => key + 1)} /> }]
       : []),
@@ -121,7 +149,14 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
           <h1 className="page-title">{t("detailTitle", { date: formatDateTime(job.created_at, locale) })}</h1>
           <p className="muted">{resultSummary(job, t)}</p>
         </div>
-        <UploadStatusBadge status={job.status} />
+        <div className="table-toolbar-actions">
+          {showPhotos && canManagePhotos ? (
+            <button type="button" className="button-secondary" onClick={() => void openCaptureDialog(allImageIds, "set")}>
+              {t("setDate.all")}
+            </button>
+          ) : null}
+          <UploadStatusBadge status={job.status} />
+        </div>
       </div>
       {job.reconstructed ? <StatusBanner tone="neutral" message={t("reconstructedHint")} /> : null}
       <section className="panel upload-job-facts" aria-label={t("factsLabel")}>
@@ -160,7 +195,8 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
                 <td>{t("cameras.withTimeValue", { count: camera.with_time, gps: camera.with_gps_time })}</td>
                 <td className="upload-camera-actions">
                   <button type="button" className="button-secondary" onClick={() => void selectCamera(camera)}>{t("cameras.select")}</button>
-                  <button type="button" className="button-secondary" onClick={() => void shiftCamera(camera)}>{t("cameras.shift")}</button>
+                  <button type="button" className="button-secondary" onClick={() => shiftCamera(camera)}>{t("cameras.shift")}</button>
+                  <button type="button" className="button-secondary" onClick={() => void openCaptureDialog(() => cameraIds(camera), "set")}>{t("cameras.setDate")}</button>
                 </td>
               </tr>
             ))}
@@ -168,13 +204,14 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
         </section>
       ) : null}
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
-      {cameraShift ? (
+      {captureDialog ? (
         <PhotoCaptureDateDialog
           open
-          fileIds={cameraShift.ids}
+          fileIds={captureDialog.ids}
           uploadJobId={job.id}
-          initialShiftMinutes={cameraShift.minutes}
-          onClose={() => setCameraShift(null)}
+          initialMode={captureDialog.mode}
+          initialShiftMinutes={captureDialog.minutes}
+          onClose={() => setCaptureDialog(null)}
           onDone={() => setReloadKey((key) => key + 1)}
         />
       ) : null}
@@ -199,10 +236,16 @@ function FileState({ file }: { file: UploadJobItemFile | null }) {
   return <span className="muted">{t(`fileState.${file.state}`)}</span>;
 }
 
-function UploadJobItems({ jobId }: { jobId: string }) {
+/** Datei eines Items, die sich auswählen lässt (neu hochgeladen und noch vorhanden). */
+export function selectableFileId(item: UploadJobItem): string | null {
+  return item.status === "uploaded" && item.file?.state === "ok" && item.file.id ? item.file.id : null;
+}
+
+function UploadJobItems({ jobId, selectable, onSetDate }: { jobId: string; selectable: boolean; onSetDate: (ids: string[]) => void }) {
   const t = useTranslations("uploads");
   const showToast = useToast();
   const [items, setItems] = useState<UploadJobItem[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -224,20 +267,81 @@ function UploadJobItems({ jobId }: { jobId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
+  const selectableIds = selectable ? items.map(selectableFileId).filter((id): id is string => id !== null) : [];
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  function toggle(id: string, checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  const columns = [t("items.name"), t("items.status"), t("items.reason"), t("items.size"), t("items.file")];
   return (
     <>
+      {selected.size > 0 ? (
+        <DataToolbar
+          title={t("items.selectedCount", { count: selected.size })}
+          actions={
+            <>
+              <button type="button" className="button-secondary" onClick={() => onSetDate([...selected])}>{t("setDate.selected")}</button>
+              <button type="button" className="button-ghost" onClick={() => setSelected(new Set())}>{t("items.clearSelection")}</button>
+            </>
+          }
+        />
+      ) : null}
       <DataTable
-        columns={[t("items.name"), t("items.status"), t("items.reason"), t("items.size"), t("items.file")]}
+        columns={
+          selectableIds.length > 0
+            ? [
+                {
+                  key: "select",
+                  label: t("items.selectAll"),
+                  header: (
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      aria-label={t("items.selectAll")}
+                      onChange={(event) => setSelected(event.target.checked ? new Set(selectableIds) : new Set())}
+                    />
+                  ),
+                },
+                ...columns,
+              ]
+            : columns
+        }
         emptyMessage={loading ? t("loading") : t("items.empty")}
       >
-        {items.map((item) => (
+        {items.map((item) => {
+          const fileId = selectableFileId(item);
+          return (
           <tr key={item.id}>
+            {selectableIds.length > 0 ? (
+              <td>
+                {fileId ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(fileId)}
+                    aria-label={t("items.select", { name: item.name ?? fileId })}
+                    onChange={(event) => toggle(fileId, event.target.checked)}
+                  />
+                ) : null}
+              </td>
+            ) : null}
             <td>{item.name ?? <span className="muted">{t("items.nameRemoved")}</span>}</td>
             <td>
               <UploadItemStatusBadge status={item.status} />
               {item.source === "client" ? <span className="muted upload-history-note">{t("items.browserReported")}</span> : null}
             </td>
-            <td>{reasonLabel(item.reason_code, t) ?? "–"}</td>
+            <td>
+              {reasonLabel(item.reason_code, t) ?? "–"}
+              {typeof item.reason_params.archive === "string" && item.reason_params.archive ? (
+                <span className="muted upload-history-note">{t("items.fromArchive", { archive: item.reason_params.archive })}</span>
+              ) : null}
+            </td>
             <td>{item.size_bytes !== null ? formatFileSize(item.size_bytes) : "–"}</td>
             <td>
               {item.status === "duplicate" || item.status === "metadata_updated" ? (
@@ -247,7 +351,8 @@ function UploadJobItems({ jobId }: { jobId: string }) {
               )}
             </td>
           </tr>
-        ))}
+          );
+        })}
       </DataTable>
       {cursor !== null ? (
         <div className="load-more-row">
@@ -289,7 +394,12 @@ function CaptureCorrections({ jobId, onUndone }: { jobId: string; onUndone: () =
   }
 
   function describe(batch: CaptureChangeBatch): string {
-    if (batch.mode === "set") return t("corrections.modeSet");
+    if (batch.mode === "set") {
+      const at = typeof batch.params.corrected_at === "string" ? batch.params.corrected_at : null;
+      if (!at) return t("corrections.modeSet");
+      const day = formatDate(at.slice(0, 10));
+      return t("corrections.modeSetTo", { date: batch.params.has_time ? `${day} ${at.slice(11, 16)}` : day });
+    }
     if (batch.mode === "reset") return t("corrections.modeReset");
     const p = batch.params;
     const total = (((Number(p.shift_days ?? 0) * 24 + Number(p.shift_hours ?? 0)) * 60) + Number(p.shift_minutes ?? 0));

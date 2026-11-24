@@ -207,6 +207,8 @@ class SubmissionRepository:
         statement = (
             select(SubmissionUploadLog)
             .where(SubmissionUploadLog.assignment_id == assignment_id, SubmissionUploadLog.element_ref == element_ref)
+            # Datei-Zeilen der Abgabebox (Migration 0254) gehören nur in den Upload-Verlauf
+            .where(SubmissionUploadLog.status.not_in(("file_rejected", "file_duplicate")))
             .order_by(SubmissionUploadLog.created_at.desc())
         )
         return list(db.scalars(statement))

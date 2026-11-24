@@ -183,6 +183,10 @@ class Settings(BaseSettings):
     photo_quality_backfill_interval_minutes: int = 15
     # Vorschaubilder für Abgabebox-Uploads nachziehen (job-worker, CONC-014)
     thumbnail_backfill_interval_minutes: int = 5
+    # Kamera-Kürzel für Altfotos nachtragen (services/camera_serial_backfill.py, Migration 0253):
+    # Takt und höchstens so viele Dateien je Tick (alle Mandanten zusammen, reihum).
+    camera_serial_backfill_interval_minutes: int = 2
+    camera_serial_backfill_files_per_tick: int = 200
     # Auto-album sync (main.py's photo_album_sync_loop): folds newly-submitted (and newly
     # removed) abgabebox submission files into their Zyklus/Abgabe/Abgabe-Element albums -
     # same reason as the backfill above, this can't happen inline in the restricted

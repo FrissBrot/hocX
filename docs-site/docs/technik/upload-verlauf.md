@@ -12,7 +12,7 @@ Plan: `audit-reports/plans/2026-11-21-upload-history-plan.md` (Entscheide 21./22
 | Dienst (öffnen, aufnehmen, Items, Abschluss, Sichtbarkeit, Kameras) | `backend/app/services/upload_job_service.py` |
 | API `/api/upload-jobs*` | `backend/app/api/routes/upload_jobs.py` |
 | Datumskorrektur, Vorschau, Rückgängig | `routes/files.py` (`/files/bulk-capture-date[/preview]`, `/capture-changes*`), `services/capture_change_service.py` |
-| Kamera-Kürzel | `services/camera_serial.py` |
+| Kamera-Kürzel | `services/camera_serial.py`, Nachtrag für Altfotos `services/camera_serial_backfill.py` (Migration `0253_camera_serial_backfill`) |
 | Altbestand | `services/upload_history_backfill.py`, `python -m app.workers.upload_history_backfill` |
 | Oberfläche | `frontend/components/uploads/*`, `app/{photos,files}/uploads` |
 
@@ -43,6 +43,27 @@ Plan: `audit-reports/plans/2026-11-21-upload-history-plan.md` (Entscheide 21./22
   Einreichung ein Vorgang; Mandant der Datei muss dem Mandanten der Abgabe entsprechen.
 - **Persönlicher Link, Word-Import, Datei-Import, Mandanten-Import, Protokollbilder:** im jeweiligen
   Dienst, Items in derselben Transaktion wie die Datei.
+
+## Ablehnungs-Zeilen (1.6)
+
+Abgelehnte Dateien erscheinen als Zeile mit Grund (`reason_code`) im Vorgang:
+
+- **ZIP im Galerie-Upload:** `iter_gallery_zip_entries` liefert `GalleryZipRejection` (zu gross,
+  beschädigter Eintrag, kein Bild, ungültiges ZIP); `_ingest_gallery_zip` schreibt sie gepuffert mit den
+  Bildern (`reason_params.archive` = ZIP-Name, höchstens 5000 je ZIP, bei fortgesetztem Ingest nur nach
+  dem Wiederaufnahmepunkt). Viren, Duplikate und Format der Bilder selbst kamen schon über
+  `save_gallery_uploads`. ZIP ohne Bilder: Zeile `zip_no_images`.
+- **Protokollbilder:** eine Ablehnung (Format, Grösse, Virenfund, Duplikat 409, Speicher) rollt die
+  Anfrage zurück; danach schreibt die Route in eigener Transaktion eine Zeile in den Vorgang des
+  Protokolls und Tages (nur im Mandanten des Aufrufers, best effort, Fehler ins Fehlerprotokoll).
+- **Abgabebox (Migration `0254_upload_rejections`):** der Dienst schreibt je abgelehnter oder doppelter
+  Datei eine Zeile `file_rejected`/`file_duplicate` in `submission_upload_log` (neue Spalten
+  `request_ref`, `upload_id`, `reason_code`, `file_name`, `file_size`; höchstens 20 je Anfrage) - kein
+  neues Recht. Der Trigger `trg_submission_upload_log_history` (SECURITY DEFINER) hängt sie an den
+  Vorgang der gespeicherten Einreichung (nur gleiche Abgabe) oder an einen Vorgang je Anfrage
+  (`upload_job.request_ref`). Das Abgabe-Protokoll blendet diese Zeilen aus; Klon, Import und Export
+  übernehmen die neuen Spalten nicht (nicht im ORM-Modell). Die öffentliche Antwort verrät Duplikate
+  weiterhin nicht.
 
 ## Rechte (E-2)
 
@@ -84,8 +105,18 @@ EXIF-Felder `BodySerialNumber`/`CameraSerialNumber` gehen deshalb bei Downloads,
 Exporten des Originals mit, wie schon vor 1.6 (User-Entscheid F-7: so belassen, nur dokumentieren). Klon und Mandanten-Import
 übernehmen das Kürzel nicht.
 
-**Altbestand:** Nur Dateien, die der bestehende Metadaten-Backfill ohnehin liest, erhalten ein
-Kürzel. Ein eigener Lauf über alle Originale (S3) wurde wegen der Last bewusst nicht gebaut.
+**Altbestand:** Der Hintergrundjob `camera_serial_backfill` (job-worker, alle 2 min, Lock
+202600051, `services/camera_serial_backfill.py`, Migration `0253_camera_serial_backfill`) trägt das
+Kürzel für Fotos von vor 1.6 nach. Je Mandant hält `camera_serial_backfill` den Stand
+(`last_file_id`, `upper_file_id` = grösste Bild-ID bei der Aufnahme, Zähler `checked`/`keyed`/
+`no_serial`/`missing`/`failed`, `finished_at`). Ein Tick arbeitet höchstens
+`CAMERA_SERIAL_BACKFILL_FILES_PER_TICK` (200) Dateien in Chargen zu 50 ab, die Mandanten reihum
+(ältester Stand zuerst); jede Charge committet ihren Stand, ein Abbruch setzt dort fort. Während
+einer Charge ist die Session an den RLS-Bereich des Mandanten gebunden. Gelesen werden nur saubere
+Bilder ohne Kürzel mit Kamera-Angabe (oder ohne Metadaten-Analyse), auch im Papierkorb; bei JPEGs nur
+die ersten 512 KB, sonst höchstens 64 MB. Fehlt das Original, zählt es als `missing`. Neue Mandanten
+werden beim nächsten Tick aufgenommen (ohne Altfotos sofort fertig). Der document-worker (ohne
+`ADMIN_AUTH_SECRET`) tut nichts.
 
 ## Aufbewahrung (E-9)
 

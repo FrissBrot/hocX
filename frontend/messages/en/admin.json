@@ -637,6 +637,10 @@
       "cloud_import": {
         "title": "File import",
         "description": "Processes started file imports (ZIP, Google Takeout, folders) through the upload pipeline and cleans up expired imports and reports."
+      },
+      "camera_serial_backfill": {
+        "title": "Backfill camera keys",
+        "description": "Reads the camera serial number from the image data of photos uploaded before 1.6 and stores only an encrypted key per club, so identical camera models appear separately in the upload history. Works per tenant in batches and resumes after an interruption."
       }
     }
   },

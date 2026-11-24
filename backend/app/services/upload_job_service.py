@@ -42,7 +42,11 @@ MAX_JOBS_PER_USER_HOUR = 200
 MAX_NAME_LENGTH = 255
 
 # Ergebnis der Pipeline (UploadFileResult.status/code) -> Item-Status
-_REJECT_CODES = {"too_large", "unsupported_format", "quota_exceeded", "heic_unreadable", "rule_violation", "client_rejected"}
+_REJECT_CODES = {
+    "too_large", "unsupported_format", "quota_exceeded", "heic_unreadable", "rule_violation", "client_rejected",
+    # ZIP-Einträge (Galerie-Ingest) und ganze ZIPs
+    "not_image", "zip_entry_corrupt", "zip_invalid", "zip_no_images",
+}
 COUNTER_BY_STATUS = {
     "uploaded": "uploaded",
     "duplicate": "duplicates",

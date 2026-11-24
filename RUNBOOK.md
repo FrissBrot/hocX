@@ -1414,6 +1414,11 @@ nicht über den Verlauf als Ganzes bearbeiten. Last: liest nur Datenbankzeilen (
 
 **Kamera-Kürzel:** abgeleitet aus `ADMIN_AUTH_SECRET` (HKDF je Mandant). Wird dieses Secret gewechselt,
 erscheinen ältere und neuere Fotos derselben Kamera als zwei Geräte; sonst keine Folgen.
+Für Fotos von vor 1.6 trägt der Job `camera_serial_backfill` (job-worker) die Kürzel selbst nach;
+Fortschritt je Verein: `SELECT tenant_id, last_file_id, upper_file_id, checked, keyed, finished_at FROM
+camera_serial_backfill WHERE finished_at IS NULL;`. Neu starten für einen Verein (z. B. nach einem
+Secret-Wechsel): `UPDATE stored_file SET camera_serial_key = NULL WHERE tenant_id = <id>;` und die
+Zeile in `camera_serial_backfill` löschen - der nächste Tick nimmt den Verein neu auf.
 Die Seriennummer selbst steht in keiner Datenbankspalte, bleibt aber in den EXIF-Daten der
 unverändert gespeicherten Originaldatei (wie vor 1.6, bewusst so entschieden).
 

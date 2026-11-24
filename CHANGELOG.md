@@ -41,6 +41,23 @@ Installationen aktualisieren können.
   **Vorschau** mit Tages- und Terminwechseln und **Rückgängig** (exakt, solange die Fotos existieren).
   Grosse Auswahlen werden in Teilen zu 500 verarbeitet. Termin-Zuordnungen werden nur für Fotos
   neu berechnet, deren Tag wechselt.
+- **Datum setzen im Upload-Vorgang:** Neben dem Verschieben setzt «Datum setzen …» ein festes Datum
+  (optional mit Uhrzeit) für alle Fotos eines Uploads, für die Fotos einer Kamera oder für die in der
+  Ergebnisliste ausgewählten Dateien - mit Vorschau, Rückgängig im Reiter «Datumskorrekturen» (zeigt
+  den gesetzten Wert) und Audit-Eintrag mit Bezug zum Upload. Dokumente haben kein Aufnahmedatum,
+  bleiben unverändert und werden für Personen mit «Dateien verwalten» als solche gemeldet.
+- **Kamera-Kürzel für bestehende Fotos:** Der neue Hintergrundjob «Kamera-Kürzel nachtragen»
+  (`camera_serial_backfill`, job-worker) liest bei Fotos von vor 1.6 die Seriennummer aus der EXIF und
+  speichert wie beim Upload nur das Kürzel je Verein (nie die Seriennummer). Er arbeitet je Verein in
+  Teilen, merkt sich den Stand und setzt nach einem Neustart fort; gleiche Kameramodelle erscheinen
+  danach auch in älteren Uploads getrennt. Migration `0253_camera_serial_backfill`.
+- **Ablehnungs-Zeilen im Upload-Verlauf:** Dateien, die beim ZIP-Upload in Fotos (kein Bild, zu
+  gross, beschädigter Eintrag, ungültiges oder leeres ZIP), bei Protokollbildern (Format, Grösse,
+  Virenfund, Duplikat, Speicher voll) oder in der Abgabebox (Typ, Grösse, Inhalt, zu viele Dateien,
+  Speicher, Virenfund, Duplikat) abgelehnt werden, erscheinen als Zeile mit Grund im Vorgang - bei
+  ZIP-Einträgen mit dem Namen des Archivs. Die Abgabebox meldet dafür je Datei eine Zeile in ihr
+  Protokoll, ohne neue Rechte; Absender sehen weiterhin keine Duplikat-Meldung. Migration
+  `0254_upload_rejections`.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 - **Traktanden im Protokoll anpassen (Protokoll-Editor 1a, Backend):** Traktanden lassen sich im
@@ -117,7 +134,7 @@ Installationen aktualisieren können.
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
-  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250` → `0251` → `0252`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0270`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im

@@ -46,6 +46,8 @@ class UploadJob(Base):
     submission_upload_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_upload.id", ondelete="SET NULL"))
     # FK (tenant_id, import_job_id) -> import_job, ON DELETE SET NULL nur für diese Spalte (0250)
     import_job_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    # Abgabebox: eine Anfrage, deren Dateien abgelehnt oder doppelt waren (Migration 0254, Trigger)
+    request_ref: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
     # Protokollbilder: ein Vorgang je Protokoll und Tag (E-6)
     group_day: Mapped[date | None] = mapped_column(Date)
     # Auszug der Upload-Optionen (Tags, Schätzdatum, include_gps …) - nie GPS-Werte oder Browser-Hinweise
@@ -129,3 +131,21 @@ class CaptureChangeItem(Base):
     prev_has_time: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     new_corrected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     new_has_time: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
+
+class CameraSerialBackfill(Base):
+    """Fortschritt des Jobs camera_serial_backfill je Mandant (Migration 0253)."""
+
+    __tablename__ = "camera_serial_backfill"
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    upper_file_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
+    last_file_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
+    checked: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    keyed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    no_serial: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    missing: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

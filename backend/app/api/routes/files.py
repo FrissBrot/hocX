@@ -1127,6 +1127,54 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Image could not be uploaded") from exc
+    except HTTPException as exc:
+        # Upload-Verlauf: abgelehnte Bilder (Format, Grösse, Virenfund, Duplikat, Speicher) als
+        # Zeile im Vorgang des Protokolls und Tages - in eigener Transaktion, die Ablehnung bleibt.
+        reason = _protocol_image_rejection_reason(exc)
+        if reason is not None and protocol_id is not None:
+            db.rollback()
+            _record_protocol_image_rejection(db, user, protocol_element_block, protocol_id, file, reason)
+        raise
+
+
+def _protocol_image_rejection_reason(exc: HTTPException) -> str | None:
+    """Grund einer abgelehnten Protokollbild-Datei (UploadRejected.code bzw. Status), None bei
+    Fehlern, die nichts mit der Datei zu tun haben (Rechte, gesperrtes Protokoll)."""
+    code = getattr(exc, "code", None)
+    if code:
+        return str(code)
+    if exc.status_code == 413:
+        return "too_large"
+    if exc.status_code == 409:
+        return "duplicate_exact"
+    detail = str(exc.detail or "")
+    if exc.status_code == 400 and ("Unsupported file type" in detail or "Bildformat" in detail):
+        return "unsupported_format"
+    if exc.status_code == 400 and "Speicherlimit" in detail:
+        return "quota_exceeded"
+    return None
+
+
+def _record_protocol_image_rejection(
+    db: Session, user: CurrentUser, block: ProtocolElementBlock, protocol_id: int, file: UploadFile, reason: str
+) -> None:
+    """Best effort: der Verlauf darf die eigentliche Antwort (Ablehnung) nie verändern."""
+    try:
+        tenant_id = service._resolve_tenant_id(db, block.id)
+        if tenant_id is None or tenant_id != user.current_tenant_id:
+            return
+        job = upload_job_service.protocol_day_job(db, tenant_id=tenant_id, protocol_id=protocol_id, created_by=user.user_id)
+        upload_job_service.record_results(
+            db, job, [{"name": file.filename or "bild", "status": "skipped" if reason == "duplicate_exact" else "failed", "code": reason, "size": file.size}],
+        )
+        db.refresh(job)
+        job.status = upload_job_service.final_status(job)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - Verlauf ist Zusatz, Fehler nur protokollieren
+        db.rollback()
+        from app.core.error_log import record_system_error
+
+        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id)
 
 
 @router.delete("/protocol-images/{image_id}", response_model=dict[str, str])
@@ -1653,12 +1701,20 @@ def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptu
     # die das Konto nicht lesen darf, werden nicht angefasst und kommen wie unbekannte als not_found
     # zurück (Security-Review 1.4.1).
     unreadable: list[uuid.UUID] = []
+    documents: list[uuid.UUID] = []
     for stored in db.scalars(select(StoredFile).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(own_ids))):
         try:
             access_service.ensure_can_read_stored_file(db, user, stored.id, allow_context_grant=False)
         except HTTPException:
             unreadable.append(stored.public_id)
+            continue
+        if not (stored.mime_type or "").startswith("image/"):
+            documents.append(stored.public_id)
     writable_ids = [file_id for file_id in ids if file_id not in set(unreadable)]
+    # Dokumente haben kein Aufnahmedatum: sie bleiben immer unverändert. Als «Dokument» gemeldet
+    # werden sie nur, wer die Ablage verwalten darf (gleiche Regel wie bulk-tags) - sonst wie
+    # bisher als not_found, damit die Antwort nichts über fremde Bereiche verrät.
+    not_images = documents if user.can(P.FILES_MANAGE) else []
     corrected = (
         image_metadata_service.corrected_datetime(payload.corrected_date, payload.corrected_time)
         if payload.mode == "set" and payload.corrected_date is not None
@@ -1671,7 +1727,16 @@ def _capture_bulk_prepare(db: Session, user: CurrentUser, payload: FileBulkCaptu
         if payload.mode == "shift"
         else None
     )
-    return ids, writable_ids, unreadable, corrected, shift
+    return ids, writable_ids, unreadable, corrected, shift, not_images
+
+
+def _split_not_images(outcome, not_images: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Dokumente aus not_found_ids herausnehmen (correct_capture_dates kennt nur Bilder)."""
+    if not not_images:
+        return []
+    documents = set(not_images)
+    outcome.not_found_ids = [file_id for file_id in outcome.not_found_ids if file_id not in documents]
+    return list(not_images)
 
 
 @router.post("/files/bulk-capture-date", response_model=FileBulkCaptureDateResult)
@@ -1685,7 +1750,7 @@ def bulk_update_capture_date(
     mit, damit «Rückgängig» alles zusammen zurücknimmt (Migration 0251). Nur Bilder des eigenen
     Mandanten, alles andere (unbekannt, fremd, Partner-Foto, kein Bild) kommt einheitlich als
     not_found zurück. Ein Audit-Eintrag pro Aufruf."""
-    ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    ids, writable_ids, unreadable, corrected, shift, not_images = _capture_bulk_prepare(db, user, payload)
     upload_job = upload_job_service.get_visible_job(db, user, payload.upload_job_id) if payload.upload_job_id is not None else None
     details: dict = {}
     if corrected is not None:
@@ -1702,6 +1767,7 @@ def bulk_update_capture_date(
     outcome = service.correct_capture_dates(
         db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift, user_id=user.user_id
     )
+    skipped_not_images = _split_not_images(outcome, not_images)
     outcome.not_found_ids.extend(unreadable)
     capture_change_service.record(db, batch, outcome.changes)
     batch_id = batch.id
@@ -1711,7 +1777,10 @@ def bulk_update_capture_date(
         batch_id = None
     _capture_correction_audit(
         db, user, mode=payload.mode, outcome=outcome, requested=len(ids),
-        details={**details, "batch_id": str(batch_id) if batch_id else None},
+        details={
+            **details, "batch_id": str(batch_id) if batch_id else None,
+            "upload_job_id": str(upload_job.id) if upload_job else None, "skipped_not_image": len(skipped_not_images),
+        },
     )
     db.commit()
     service.recompute_capture_albums(db, outcome)
@@ -1723,6 +1792,7 @@ def bulk_update_capture_date(
         not_found_ids=outcome.not_found_ids,
         no_time_unchanged_ids=outcome.no_time_unchanged_ids,
         date_only_ids=outcome.date_only_ids,
+        skipped_not_image_ids=skipped_not_images,
         batch_id=batch_id,
     )
 
@@ -1734,11 +1804,12 @@ def preview_bulk_capture_date(
     """Vorschau zu POST /files/bulk-capture-date: gleiche Eingabe und Prüfungen, schreibt nichts.
     Zähler, Stichprobe vorher/nachher und Auswirkungen (Tageswechsel, Terminwechsel automatisch
     verknüpfter Fotos). POST, weil die Auswahl im Body steht; ändert nichts."""
-    _ids, writable_ids, unreadable, corrected, shift = _capture_bulk_prepare(db, user, payload)
+    _ids, writable_ids, unreadable, corrected, shift, not_images = _capture_bulk_prepare(db, user, payload)
     outcome = service.correct_capture_dates(
         db, user.current_tenant_id, writable_ids, mode=payload.mode, corrected=corrected, shift=shift,
         user_id=user.user_id, dry_run=True,
     )
+    skipped_not_images = _split_not_images(outcome, not_images)
     effect = capture_change_service.impacts(db, user.current_tenant_id, outcome.changes)
     return FileBulkCaptureDatePreview(
         will_change=len(outcome.updated_ids),
@@ -1748,6 +1819,7 @@ def preview_bulk_capture_date(
         date_only_changed=len(outcome.date_only_ids),
         invalid=len(outcome.invalid_ids),
         not_found=len(outcome.not_found_ids) + len(unreadable),
+        not_image=len(skipped_not_images),
         no_date_ids=outcome.skipped_no_date_ids[:MAX_CAPTURE_DATE_BULK],
         samples=capture_change_service.samples(service, outcome.changes),
         **effect,
@@ -1791,7 +1863,8 @@ def undo_capture_change(batch_id: uuid.UUID, db: Session = Depends(get_db), user
     audit.log(
         db, action="photo.capture_date_shift_undone", actor=user, entity_type="capture_change_batch", entity_id=None,
         details={
-            "batch_id": str(batch.id), "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
+            "batch_id": str(batch.id), "mode": batch.mode, "upload_job_id": str(batch.upload_job_id) if batch.upload_job_id else None,
+            "restored": len(outcome.restored_ids), "conflicts": len(outcome.conflict_ids),
             "file_ids": [str(public_id) for public_id in outcome.restored_ids],
         },
         commit=False,

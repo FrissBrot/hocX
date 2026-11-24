@@ -637,6 +637,10 @@
       "cloud_import": {
         "title": "Import de fichiers",
         "description": "Traite les imports de fichiers lancés (ZIP, Google Takeout, dossiers) via la chaîne de téléversement et nettoie les imports et rapports expirés."
+      },
+      "camera_serial_backfill": {
+        "title": "Compléter les codes d’appareil",
+        "description": "Lit le numéro de série de l’appareil dans les données des photos antérieures à la 1.6 et n’enregistre qu’un code chiffré par club, afin que des modèles identiques apparaissent séparément dans l’historique des téléversements. Par organisation et par lots, reprend après une interruption."
       }
     }
   },

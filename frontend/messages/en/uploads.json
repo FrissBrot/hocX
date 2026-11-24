@@ -72,7 +72,11 @@
     "rule_violation": "Submission rule violated",
     "client_rejected": "Rejected by the browser",
     "cancelled": "Discarded on cancel",
-    "other": "Other reason"
+    "other": "Other reason",
+    "not_image": "Not an image (skipped in ZIP)",
+    "zip_entry_corrupt": "ZIP entry damaged or not supported",
+    "zip_invalid": "Invalid ZIP file (damaged, encrypted or too large)",
+    "zip_no_images": "ZIP contains no images"
   },
   "ref": {
     "event": "Event",
@@ -116,7 +120,12 @@
     "file": "File in hocX",
     "empty": "No files recorded.",
     "nameRemoved": "Name removed (file deleted)",
-    "browserReported": "reported by the browser"
+    "browserReported": "reported by the browser",
+    "select": "Select “{name}”",
+    "selectAll": "Select all loaded files",
+    "selectedCount": "{count, plural, one {1 file selected} other {# files selected}}",
+    "clearSelection": "Clear selection",
+    "fromArchive": "from “{archive}”"
   },
   "fileState": {
     "open": "Open",
@@ -140,7 +149,8 @@
     "select": "Select only these",
     "shift": "Shift time …",
     "offset": "{hours, plural, =0 {} one {1 h } other {# h }}{minutes} min {direction, select, earlier {earlier} other {later}}",
-    "gpsHint": "According to GPS time ({samples, plural, one {1 photo} other {# photos}}) probably: {offset}"
+    "gpsHint": "According to GPS time ({samples, plural, one {1 photo} other {# photos}}) probably: {offset}",
+    "setDate": "Set date …"
   },
   "corrections": {
     "when": "Time",
@@ -158,12 +168,18 @@
     "conflicts": "{count, plural, one {1 photo was changed differently in the meantime and stays as it is.} other {# photos were changed differently in the meantime and stay as they are.}}",
     "undoError": "The correction could not be undone.",
     "undoneAt": "Undone on {date}",
-    "noFiles": "No photos left"
+    "noFiles": "No photos left",
+    "modeSetTo": "Set to {date}"
   },
   "hint": {
     "photos": "{count, plural, one {1 photo uploaded.} other {# photos uploaded.}}",
     "files": "{count, plural, one {1 file uploaded.} other {# files uploaded.}}",
     "edit": "Edit",
     "dismiss": "Hide notice"
+  },
+  "setDate": {
+    "all": "Set date …",
+    "selected": "Set date …",
+    "none": "No photos selected whose date can be changed."
   }
 }

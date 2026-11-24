@@ -637,6 +637,10 @@
       "cloud_import": {
         "title": "Datei-Import",
         "description": "Verarbeitet gestartete Datei-Importe (ZIP, Google Takeout, Ordner) durch die Upload-Pipeline und räumt abgelaufene Importe und Berichte auf."
+      },
+      "camera_serial_backfill": {
+        "title": "Kamera-Kürzel nachtragen",
+        "description": "Liest bei Fotos von vor 1.6 die Seriennummer der Kamera aus den Bilddaten und speichert nur ein verschlüsseltes Kürzel je Verein, damit gleiche Kameramodelle im Upload-Verlauf getrennt erscheinen. Mandantenweise in Teilen, setzt nach einem Abbruch fort."
       }
     }
   },

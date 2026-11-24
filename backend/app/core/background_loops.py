@@ -83,6 +83,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Leak-Prüfung bestehender Passwörter (1.5.2, Migration 0219, app/auth_security/breach.py).
     # 202600070: 038-069 sind teils von parallel entwickelten Jobs (1.6) belegt.
     "password_breach_recheck": 202600070,
+    # Kamera-Kürzel für Altfotos (Migration 0253, services/camera_serial_backfill.py)
+    "camera_serial_backfill": 202600051,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

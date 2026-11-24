@@ -400,6 +400,9 @@ class FileBulkCaptureDateResult(BaseModel):
     no_time_unchanged_ids: list[uuid.UUID] = Field(default_factory=list)
     # ... bzw. nur um die ganzen Tage verschoben, Stunden ignoriert (Teilmenge von updated_ids).
     date_only_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Dokumente (keine Bilder, also ohne Aufnahmedatum) der Auswahl - nur gemeldet, wer die Ablage
+    # verwalten darf (Regel wie bulk-tags); sonst stehen sie wie bisher in not_found_ids.
+    skipped_not_image_ids: list[uuid.UUID] = Field(default_factory=list)
     # Korrektur für «Rückgängig» (None, wenn nichts geändert wurde)
     batch_id: uuid.UUID | None = None
 
@@ -437,6 +440,8 @@ class FileBulkCaptureDatePreview(BaseModel):
     date_only_changed: int
     invalid: int
     not_found: int
+    # Dokumente ohne Aufnahmedatum (gleiche Regel wie skipped_not_image_ids)
+    not_image: int = 0
     # Fotos ohne Aufnahmedatum, für «Datum setzen» (höchstens 500)
     no_date_ids: list[uuid.UUID] = Field(default_factory=list)
     samples: list[CaptureChangeSample] = Field(default_factory=list)

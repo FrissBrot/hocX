@@ -668,6 +668,8 @@ export type FileBulkCaptureDateResult = {
   // Verschieben, Fotos ohne Uhrzeit (nur ganze Tage wirken): unverändert bzw. nur um Tage verschoben.
   no_time_unchanged_ids?: string[];
   date_only_ids?: string[];
+  // Dokumente der Auswahl (kein Aufnahmedatum, unverändert) - nur mit files.manage gemeldet.
+  skipped_not_image_ids?: string[];
   // Korrektur für «Rückgängig» (Migration 0251); null, wenn nichts geändert wurde.
   batch_id?: string | null;
 };
@@ -692,6 +694,7 @@ export type FileBulkCaptureDatePreview = {
   date_only_changed: number;
   invalid: number;
   not_found: number;
+  not_image?: number;
   no_date_ids: string[];
   samples: CaptureChangeSample[];
   day_changes: number;

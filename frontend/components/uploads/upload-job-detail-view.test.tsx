@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserApiFetchMock = vi.fn();
@@ -73,6 +73,79 @@ describe("UploadJobDetailView", () => {
     expect(await screen.findByText("Verschoben: 1 h 15 min früher")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Rückgängig machen" }));
     await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("2 Fotos zurückgesetzt.", "success"));
+  });
+
+  it("«Datum setzen …» im Kopf lädt die Bilder des Vorgangs und öffnet den Dialog im Modus «Datum»", async () => {
+    browserApiFetchMock.mockResolvedValue({ file_ids: ["f1", "f2"], total: 2, truncated: false });
+    render(<UploadJobDetailView area="photos" job={detail} canManagePhotos canShare={false} canManageSettings={false} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Datum setzen …" })[0]);
+    expect(await screen.findByText("Gilt für 2 ausgewählte Bilder.")).toBeInTheDocument();
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/upload-jobs/job-1/file-ids?only_images=true");
+    expect(screen.getByRole("tab", { name: "Auf Datum setzen" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Datum")).toBeInTheDocument();
+  });
+
+  it("ohne photos.manage gibt es weder «Datum setzen» noch eine Auswahl in der Ergebnisliste", async () => {
+    browserApiFetchMock.mockResolvedValue({
+      items: [{ id: 1, position: 0, name: "a.jpg", status: "uploaded", reason_code: null, reason_params: {}, source: "server", size_bytes: 1, mime_type: "image/jpeg", applied: [], file: { id: "f1", state: "ok", is_image: true, thumbnail_url: null }, existing_file: null }],
+      next_cursor: null,
+    });
+    render(<UploadJobDetailView area="photos" job={detail} canManagePhotos={false} canShare={false} canManageSettings={false} />);
+    expect(screen.queryByRole("button", { name: "Datum setzen …" })).not.toBeInTheDocument();
+    expect(await screen.findByText("a.jpg")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("wählt Dateien in der Ergebnisliste aus und setzt für die Auswahl ein Datum", async () => {
+    browserApiFetchMock.mockResolvedValue({
+      items: [
+        { id: 1, position: 0, name: "a.jpg", status: "uploaded", reason_code: null, reason_params: {}, source: "server", size_bytes: 1, mime_type: "image/jpeg", applied: [], file: { id: "f1", state: "ok", is_image: true, thumbnail_url: null }, existing_file: null },
+        { id: 2, position: 1, name: "plan.pdf", status: "uploaded", reason_code: null, reason_params: {}, source: "server", size_bytes: 1, mime_type: "application/pdf", applied: [], file: { id: "d1", state: "ok", is_image: false, thumbnail_url: null }, existing_file: null },
+        { id: 3, position: 2, name: "weg.jpg", status: "rejected", reason_code: "too_large", reason_params: {}, source: "server", size_bytes: 1, mime_type: null, applied: [], file: null, existing_file: null },
+      ],
+      next_cursor: null,
+    });
+    render(<UploadJobDetailView area="photos" job={detail} canManagePhotos canShare={false} canManageSettings={false} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Ergebnisliste/ }));
+    // Nur hochgeladene, vorhandene Dateien lassen sich auswählen (2 Zeilen + «alle»)
+    await screen.findByText("plan.pdf");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Alle geladenen Dateien auswählen" }));
+    expect(screen.getByText("2 Dateien ausgewählt")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "«plan.pdf» auswählen" }));
+    expect(screen.getByText("1 Datei ausgewählt")).toBeInTheDocument();
+    const toolbar = screen.getByText("1 Datei ausgewählt").closest(".table-toolbar") as HTMLElement;
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Datum setzen …" }));
+    expect(await screen.findByText("Gilt für 1 ausgewähltes Bild.")).toBeInTheDocument();
+  });
+
+  it("beschreibt eine Korrektur «Datum setzen» mit dem gesetzten Wert", async () => {
+    browserApiFetchMock.mockResolvedValue([
+      { id: "b2", mode: "set", params: { corrected_at: "2026-05-02T14:30:00", has_time: true }, created_at: "2026-11-21T11:00:00Z", created_by_name: "Anna", updated_count: 2, remaining: 2, undone_at: null, can_undo: true },
+    ]);
+    render(<UploadJobDetailView area="photos" job={detail} canManagePhotos canShare={false} canManageSettings={false} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Datumskorrekturen" }));
+    expect(await screen.findByText("Auf 02.05.2026 14:30 gesetzt")).toBeInTheDocument();
+  });
+
+  it("zeigt Ablehnungs-Zeilen aus ZIP, Protokollbild und Abgabebox mit Grund und Archiv", async () => {
+    browserApiFetchMock.mockResolvedValue({
+      items: [
+        { id: 1, position: 0, name: "ordner/plan.pdf", status: "rejected", reason_code: "not_image", reason_params: { archive: "lager.zip" }, source: "server", size_bytes: 10, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 2, position: 1, name: "kaputt.jpg", status: "rejected", reason_code: "zip_entry_corrupt", reason_params: { archive: "lager.zip" }, source: "server", size_bytes: null, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 3, position: 2, name: "virus.pdf", status: "infected", reason_code: "infected", reason_params: {}, source: "server", size_bytes: 68, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 4, position: 3, name: "nochmal.pdf", status: "duplicate", reason_code: "duplicate_exact", reason_params: {}, source: "server", size_bytes: 68, mime_type: null, applied: [], file: null, existing_file: null },
+      ],
+      next_cursor: null,
+    });
+    render(<UploadJobDetailView area="files" job={{ ...detail, channel: "abgabebox", image_count: 0, cameras: [] }} canManagePhotos canShare={false} canManageSettings={false} />);
+    expect(await screen.findByText("Kein Bild (im ZIP übersprungen)")).toBeInTheDocument();
+    expect(screen.getAllByText("aus «lager.zip»")).toHaveLength(2);
+    expect(screen.getByText("ZIP-Eintrag beschädigt oder nicht unterstützt")).toBeInTheDocument();
+    expect(screen.getByText("Virenfund")).toBeInTheDocument();
+    expect(screen.getByText("Schon vorhanden (gleicher Inhalt)")).toBeInTheDocument();
+    // Abgelehnte Zeilen haben keine Datei und lassen sich nicht auswählen
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("zeigt bei Dokumenten nur die Ergebnisliste", () => {

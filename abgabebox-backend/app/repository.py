@@ -371,6 +371,54 @@ def insert_upload_log(
     db.commit()
 
 
+# Upload-Verlauf: höchstens so viele Datei-Zeilen je Anfrage (öffentlicher Endpunkt, Mengenbremse)
+MAX_FILE_LOG_ROWS = 10
+# Steuer- und Bidi-Zeichen (Security-Review N-2) - wie upload_pipeline.safe_entry_name im Backend
+_UNSAFE_NAME_CHARS = re.compile("[\x00-\x1f\x7f\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
+
+def safe_log_name(name: str | None) -> str | None:
+    """Nur der Dateiname ohne Pfad und ohne Steuerzeichen, höchstens 255 Zeichen."""
+    if not name:
+        return None
+    base = _UNSAFE_NAME_CHARS.sub("", str(name)).replace("\\", "/").rsplit("/", 1)[-1].strip()
+    return base[:255] or None
+# Statuswerte der Datei-Zeilen - das Backend blendet sie im Abgabe-Protokoll aus (nur Upload-Verlauf)
+FILE_LOG_STATUSES = ("file_rejected", "file_duplicate")
+
+
+def insert_file_logs(
+    db: Session,
+    *,
+    assignment_id: int,
+    element_ref: str,
+    request_ref,
+    upload_id: int | None,
+    files: list[tuple[str, str | None, int | None]],
+) -> None:
+    """Je abgelehnter (Grund) bzw. doppelter (duplicate_exact) Datei eine Zeile in
+    submission_upload_log; der Trigger aus Backend-Migration 0254 legt daraus Zeilen im
+    Upload-Vorgang an. files: (Grund, Dateiname, Grösse). Committet."""
+    rows = [
+        {
+            "assignment_id": assignment_id,
+            "element_ref": element_ref,
+            "status": "file_duplicate" if reason == "duplicate_exact" else "file_rejected",
+            "error_message": None,
+            "request_ref": request_ref,
+            "upload_id": upload_id,
+            "reason_code": reason,
+            "file_name": safe_log_name(name),
+            "file_size": size,
+        }
+        for reason, name, size in files[:MAX_FILE_LOG_ROWS]
+    ]
+    if not rows:
+        return
+    db.execute(insert(submission_upload_log_table), rows)
+    db.commit()
+
+
 # Gemeinsam mit backend/app/services/submission_service.py (SUBMISSION_ELEMENT_LOCK_NAMESPACE)
 SUBMISSION_ELEMENT_LOCK_NAMESPACE = 909100002
 
