@@ -275,6 +275,10 @@ jobs:
           # Dokument-Engine: Golden-Diffs und Galerie als Artefakte (siehe Upload-Schritte).
           DOCUMENT_GOLDEN_DIFF_DIR: ${{ runner.temp }}/document-golden-diffs
           DOCUMENT_GALLERY_OUT: ${{ runner.temp }}/document-gallery.pdf
+          # Wie docker-compose.tests.yml: Leak-Prüfung nur gegen die lokale Liste. Online gälten die
+          # festen Testpasswörter als geleakt, und seit 1.5.2 verlangt ein geleaktes Passwort beim
+          # Login einen zweiten Faktor bzw. Mail-Code.
+          PASSWORD_LEAK_CHECK: local-only
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.

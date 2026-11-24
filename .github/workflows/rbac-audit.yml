@@ -87,6 +87,8 @@ jobs:
       UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
       THUMBNAIL_ROOT: ${{ github.workspace }}/storage-local/thumbnails
       TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ github.workspace }}/storage-local/traefik_dynamic
+      # Wie docker-compose.tests.yml: feste Testpasswörter gälten online als geleakt (1.5.2).
+      PASSWORD_LEAK_CHECK: local-only
       RBAC_TESTS: >-
         tests/test_rbac.py
         tests/test_route_permission_inventory.py
