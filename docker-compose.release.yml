@@ -345,7 +345,7 @@ services:
       # DB-IP-Länderdatenbank, nur lesend (schreibt der job-worker, Job geoip_update)
       - geoip_data:/var/lib/hocx/geoip:ro
     healthcheck:
-      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # Kein curl im python:3.15-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
       interval: 30s
@@ -1062,7 +1062,7 @@ services:
       - abgabebox_upload_tmp:/tmp
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
     healthcheck:
-      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # Kein curl im python:3.15-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
       interval: 30s

@@ -93,7 +93,7 @@ Event-Loop- und Threadpool-Zustand zusätzlich mit py-spy (eigener Container, nu
 auf den Prozessbaum des Backends):
 
 ```bash
-docker run --rm --pid=container:hocx-loadtest-backend-1 --cap-add SYS_PTRACE python:3.13-slim \
+docker run --rm --pid=container:hocx-loadtest-backend-1 --cap-add SYS_PTRACE python:3.15-slim \
   sh -c "pip install -q py-spy && py-spy dump --pid \$(pgrep -f 'uvicorn' | tail -1)"
 ```
 

@@ -30,6 +30,9 @@ Installationen aktualisieren können.
   **Rollback auf einen Deploy-Code mit Redis 7 nur mit geleertem Redis-Volume** (Redis 7 liest das RDB-Format 15
   nicht): Login-Tickets, MFA-Flows, Rate-Limit-/Sperrzähler, temporäre Anmeldesperren und Kollaborations-Sperren
   gehen dabei verloren; Sessions und Job-Warteschlange liegen in PostgreSQL und bleiben (RUNBOOK Abschnitt 5). Der automatische App-Rollback von `deploy.sh` ist nicht betroffen.
+- **Python 3.15** (3.15.2, vorher 3.13; Dokumentation vorher 3.12) für alle Python-Images: Backend inkl.
+  Worker-Dienste, Abgabebox-Backend, Foto-Analyse-Worker, Dokumentationsseite (`python:3.15-slim` per Digest),
+  CI (`setup-python`) entsprechend. PyYAML 6.0.4 (vorher 6.0.3, ohne Wheel für 3.15).
 
 ## [1.5.1] - 2026-11-22
 
