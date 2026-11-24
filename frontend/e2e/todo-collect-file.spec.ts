@@ -115,9 +115,10 @@ test("Pendenz: Datei einsammeln im Abschnitt Dateien", async ({ request, page, b
     await expect(publicPage.getByRole("button", { name: "Abgeben" })).toBeEnabled();
     // Der Sicherheitscheck (Captcha-Widget) meldet sich kurz nach dem Laden fertig; ein zu früher
     // Klick zeigt «Sicherheitscheck läuft noch» und sendet nichts - dann erneut abgeben.
+    const thanks = publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" });
     await expect(async () => {
-      await publicPage.getByRole("button", { name: "Abgeben" }).click();
-      await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible({ timeout: 10_000 });
+      if (!(await thanks.isVisible())) await publicPage.getByRole("button", { name: "Abgeben" }).click({ timeout: 5_000 });
+      await expect(thanks).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 60_000 });
   } finally {
     await publicContext.close();
