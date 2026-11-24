@@ -165,3 +165,33 @@ def test_personal_export_contains_own_upload_items_imports_and_date_corrections(
         assert book["Datei-Importe"].cell(2, 3).value == "Lager/anna/bild.png"
     finally:
         archive.path.unlink(missing_ok=True)
+
+
+def _places(db, tenant_id: int, person_id: int, *, label: str):
+    """Ortsänderung (Rückgängig-Historie) und von Hand gesetzter Ort einer Person (0260)."""
+    from app.models import StoredFile
+    from app.models.place_entities import PhotoLocation, PlaceChangeBatch, PlaceChangeItem
+
+    photo = StoredFile(tenant_id=tenant_id, original_name=f"{label}-ort.jpg", mime_type="image/jpeg", storage_path=f"uploads/{label}-ort.jpg", scan_status="clean")
+    batch = PlaceChangeBatch(tenant_id=tenant_id, created_by=person_id, mode="set")
+    db.add_all([photo, batch])
+    db.flush()
+    db.add_all([
+        PlaceChangeItem(batch_id=batch.id, tenant_id=tenant_id, stored_file_id=photo.id, prev_place_key=None, new_place_key=f"sn:{label}-huette"),
+        PhotoLocation(stored_file_id=photo.id, tenant_id=tenant_id, source="manual", latitude=46.5, longitude=7.7,
+                      place_key=f"sn:{label}-huette", place_name=f"{label} Hütte", set_by=person_id),
+    ])
+    db.flush()
+
+
+def test_personal_export_contains_only_own_place_changes(db):
+    tenant, anna, ben = _setup(db)
+    _places(db, tenant.id, anna.id, label="anna")
+    _places(db, tenant.id, ben.id, label="ben")
+
+    rows = personal.collect(db, anna)["place_changes"]
+
+    assert sorted((row["mode"], row["name"], row["after"]) for row in rows) == [
+        ("manual", "anna-ort.jpg", "anna Hütte"), ("set", "anna-ort.jpg", "sn:anna-huette"),
+    ]
+    assert "ben" not in json.dumps(rows, default=str)

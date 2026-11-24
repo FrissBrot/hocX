@@ -273,7 +273,7 @@ def get_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: Curre
     return _to_read(
         job, user, _names(db, [job]), _refs(db, [job], user.current_tenant_id, user), cls=UploadJobDetail,
         options=job.options or {}, import_job_id=job.import_job_id, file_count=int(files[0]), image_count=int(files[1]),
-        cameras=upload_job_service.camera_groups(db, job),
+        cameras=upload_job_service.camera_groups(db, job, visible=protocol_visible),
     )
 
 

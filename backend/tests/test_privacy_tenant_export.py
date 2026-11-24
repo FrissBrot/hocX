@@ -190,3 +190,26 @@ def test_tenant_export_contains_upload_items_imports_and_date_corrections(db):
     assert "Lager/anna/bild.png" in values
     assert "anna-foto.jpg" in values and "01.07.2026 12:30" in values
     assert not any("fremd" in value for value in values)
+
+
+def test_tenant_export_contains_place_changes_of_the_own_tenant_only(db):
+    """Entscheid zu F-6 (Foto-Standorte): Blatt «Ortsänderungen» mit Historie und von Hand gesetzten
+    Orten, nur des eigenen Mandanten."""
+    from tests.test_privacy_personal_export import _places
+
+    tenant, admin, anna, _user = _setup(db)
+    _places(db, tenant.id, anna.id, label="anna")
+    other = make_tenant(db, "Fremdverein Orte")
+    _places(db, other.id, make_app_user(db, email="fremd-ort@example.com", tenant_id=other.id).id, label="fremd")
+    password = secrets.token_urlsafe(16)
+    job = tenant_export.request_export(db, tenant_id=tenant.id, user_id=admin.id, password=password, include_files=False, language="de")
+    db.commit()
+
+    tenant_export.process_pending(db)
+
+    db.refresh(job)
+    sheet = load_workbook(io.BytesIO(_open(db, job, password).read("Uploads.xlsx")))["Ortsänderungen"]
+    rows = [row for row in sheet.iter_rows(min_row=2, values_only=True)]
+    assert sorted((row[2], row[3], row[5]) for row in rows) == [("manual", "anna-ort.jpg", "anna Hütte"), ("set", "anna-ort.jpg", "sn:anna-huette")]
+    assert all("Anna" in (row[1] or "") for row in rows)
+    assert not any("fremd" in str(cell) for row in rows for cell in row)

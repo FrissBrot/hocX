@@ -508,24 +508,28 @@ def _offset_minutes(offset: str | None) -> int | None:
     return minutes if offset[0] == "+" else -minutes
 
 
-def camera_groups(db: Session, job: UploadJob) -> list:
+def camera_groups(db: Session, job: UploadJob, visible=None) -> list:
     """Kameras eines Vorgangs (nur Bilder): Anzahl, Zeitraum, Anteil mit Uhrzeit bzw. GPS-Zeit und
     der Vorschlag aus der GPS-Zeit (7.6). Gleiche Modelle werden über das Kürzel der Seriennummer
-    getrennt; das Kürzel verlässt den Server nur als Teil des Gruppenschlüssels."""
+    getrennt; das Kürzel verlässt den Server nur als Teil des Gruppenschlüssels.
+    visible: zusätzliche SQL-Bedingung auf StoredFile (ProtocolReadScope der Person, 1.5.2) - nur
+    Fotos, die die Person auch in GET /files sieht, zählen in Gruppen und Zeiträumen."""
     from statistics import median
 
     from app.schemas.upload_jobs import CameraGroup
     from app.services.image_metadata_service import _stored_naive
 
-    rows = db.execute(
+    query = (
         select(
             StoredFile.camera_make, StoredFile.camera_model, StoredFile.camera_serial_key, StoredFile.exif_taken_at,
             StoredFile.exif_taken_offset, StoredFile.capture_corrected_at, StoredFile.capture_corrected_has_time,
             StoredFile.gps_timestamp,
         )
         .where(StoredFile.tenant_id == job.tenant_id, StoredFile.upload_job_id == job.id, StoredFile.mime_type.like("image/%"))
-        .limit(_CAMERA_SAMPLE_LIMIT)
-    ).all()
+    )
+    if visible is not None:
+        query = query.where(visible)
+    rows = db.execute(query.limit(_CAMERA_SAMPLE_LIMIT)).all()
     groups: dict[tuple, dict] = {}
     for row in rows:
         ident = (row.camera_make, row.camera_model, row.camera_serial_key)

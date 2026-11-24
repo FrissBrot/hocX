@@ -189,6 +189,7 @@ def _write_contents(db: Session, archive: EncryptedZip, job: TenantDataExport, l
         "uploads": [
             _uploads(db, tenant_id, lang, names), _upload_items(db, tenant_id, lang),
             _import_items(db, tenant_id, lang, names), _capture_changes(db, tenant_id, lang, names),
+            _place_changes(db, tenant_id, lang, names),
         ],
     }
     for key, sheets in books.items():
@@ -590,4 +591,47 @@ def _capture_changes(db: Session, tenant_id: int, lang: str, names: dict[int, st
          _fmt_capture(r["prev_corrected_at"], r["prev_has_time"]), _fmt_capture(r["new_corrected_at"], r["new_has_time"]),
          _fmt_date(r["undone_at"])]
         for r in rows
+    ])
+
+
+PLACE_CHANGES_SQL = """
+    SELECT b.created_at AS at, b.created_by AS person_id, b.mode, b.undone_at, f.original_name,
+           COALESCE(gp.name, i.prev_place_key) AS before, COALESCE(gn.name, i.new_place_key) AS after
+    FROM place_change_item i
+    JOIN place_change_batch b ON b.id = i.batch_id AND b.tenant_id = i.tenant_id
+    JOIN stored_file f ON f.id = i.stored_file_id AND f.tenant_id = i.tenant_id
+    LEFT JOIN geo_place gp ON gp.place_key = i.prev_place_key
+    LEFT JOIN geo_place gn ON gn.place_key = i.new_place_key
+    WHERE i.tenant_id = :t {batch_filter}
+    UNION ALL
+    -- Von Hand gesetzte Orte (photo_location.source = 'manual'): aktueller Stand je Foto
+    SELECT pl.updated_at, pl.set_by, 'manual', NULL, f.original_name, NULL,
+           COALESCE(pl.place_name, pl.locality_name, pl.place_key)
+    FROM photo_location pl
+    JOIN stored_file f ON f.id = pl.stored_file_id AND f.tenant_id = pl.tenant_id
+    WHERE pl.tenant_id = :t AND pl.source = 'manual' {manual_filter}
+    ORDER BY 1, 5
+"""
+
+
+def place_change_rows(db: Session, tenant_id: int, person_id: int | None = None) -> list:
+    """Ortsänderungen (0260): Rückgängig-Historie aus place_change_batch/_item (vorher/nachher als
+    Ortsname) und die von Hand gesetzten Orte. person_id: nur Änderungen dieser Person (Auskunft)."""
+    statement = PLACE_CHANGES_SQL.format(  # sql-ok: feste Filterbausteine, Werte gebunden
+        batch_filter="AND b.created_by = :p" if person_id is not None else "",
+        manual_filter="AND pl.set_by = :p" if person_id is not None else "",
+    )
+    params: dict[str, Any] = {"t": tenant_id}
+    if person_id is not None:
+        params["p"] = person_id
+    return _rows(db, statement, params)
+
+
+def _place_changes(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
+    """Ortsänderungen je Foto (Datenschutz-Entscheid zu F-6, 1.6): wer, wann, vorher/nachher, rückgängig."""
+    columns = ["created_at", "person", "mode", "name", "before", "after", "undone_at"]
+    return _sheet(lang, "placeChanges", columns, [
+        [_fmt_date(r["at"]), names.get(r["person_id"], "") if r["person_id"] else "", r["mode"], r["original_name"] or "",
+         r["before"] or "", r["after"] or "", _fmt_date(r["undone_at"])]
+        for r in place_change_rows(db, tenant_id)
     ])

@@ -168,6 +168,14 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         """, params)
     ]
 
+    from app.services.data_export.tenant import place_change_rows
+
+    data["place_changes"] = [
+        {"created_at": row["at"], "mode": row["mode"], "name": row["original_name"], "before": row["before"],
+         "after": row["after"], "undone_at": row["undone_at"]}
+        for row in place_change_rows(db, tenant_id, person_id=pid)
+    ]
+
     data["responsibilities"] = [dict(row) for row in _rows(db, """
         SELECT p.protocol_number AS protocol, p.protocol_date AS date, e.element_title_snapshot AS element
         FROM protocol_element e JOIN protocol p ON p.id = e.protocol_id
@@ -285,6 +293,7 @@ _SECTIONS: dict[str, list[str]] = {
     "upload_items": ["created_at", "channel", "name", "status", "reason", "size_bytes"],
     "import_items": ["created_at", "source", "path", "status", "reason", "estimated_date"],
     "capture_changes": ["created_at", "mode", "name", "before", "after", "undone_at"],
+    "place_changes": ["created_at", "mode", "name", "before", "after", "undone_at"],
     "security": ["kind", "detail", "label", "created_at", "last_used_at"],
     "activity": ["created_at", "action", "outcome"],
     "mentions": ["protocol", "date", "block", "excerpt"],

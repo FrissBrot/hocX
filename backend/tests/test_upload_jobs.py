@@ -339,4 +339,7 @@ def test_upload_history_hides_files_carried_into_an_unreadable_draft(db):
     assert theirs.file_ids == [] and theirs.total == 0
     detail = routes.get_upload_job(opened.id, db=db, user=photographer)
     assert (detail.file_count, detail.image_count) == (0, 0)
-    assert routes.get_upload_job(opened.id, db=db, user=writer).image_count == 1
+    # Kameragruppen zählen nur sichtbare Fotos
+    assert sum(camera.count for camera in detail.cameras) == 0
+    writer_detail = routes.get_upload_job(opened.id, db=db, user=writer)
+    assert writer_detail.image_count == 1 and sum(camera.count for camera in writer_detail.cameras) == 1
