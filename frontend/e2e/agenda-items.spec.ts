@@ -48,7 +48,7 @@ test("agenda item is created in the popup and listed in the next protocol", asyn
     const listed = await (await request.get(`/api/protocols/${protocolId}/agenda-items`)).json();
     expect(listed.map((item: { title: string }) => item.title)).toContain(`Neue Kasse ${suffix}`);
 
-    await openProtocol(page, protocolId);
+    await openProtocol(page, protocolId!);
     await expect(page.getByLabel("Titel des Anliegens").first()).toHaveValue(`Neue Kasse ${suffix}`, { timeout: 60_000 });
     await page.screenshot({ path: "test-results/agenda-editor-light-1440.png" });
   } finally {

@@ -1131,3 +1131,16 @@
 .search-synonyms-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .search-synonyms-builtin summary { cursor: pointer; font-weight: 600; }
 .search-synonyms-builtin-list { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0 0; padding-left: var(--space-5); font-size: var(--text-sm); color: var(--muted); }
+
+/* Zugangslinks: sechs Gruppen-Reiter passen bei 390 px nicht nebeneinander. Reiter behalten ihre
+   Breite, die Leiste scrollt quer (wie .route-tabs in globals.css und .admin-frame .tabs-list) -
+   sonst liefen die Beschriftungen samt Zählern übereinander (E2E tenant-tabs-390). */
+.public-links-overview .tabs-list {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.public-links-overview .tabs-list .tabs-trigger {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

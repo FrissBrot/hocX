@@ -61,7 +61,7 @@ test("event blocks are grouped per event, can be removed and chosen by month", a
     protocolId = protocol.id;
 
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await openProtocol(page, protocolId);
+    await openProtocol(page, protocolId!);
     const series = page.locator(".event-series");
     await expect(series).toBeVisible({ timeout: 60_000 });
     await expect(series.getByText(`Pro Termin · Tag «${tag}»`)).toBeVisible();
