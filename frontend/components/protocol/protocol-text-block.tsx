@@ -15,8 +15,11 @@ import { markdownToPlainText } from "@/lib/utils/markdown-text";
 // nur statisch (MarkdownView, ohne Tiptap). Erst die Aktivierung lädt den Editor. Der Text kommt
 // aus dem Entwurfs-Store; eine Taste rendert nur diesen Block neu.
 
-// Markdown erst nach einer kurzen Tipp-Pause erzeugen (T4); beim Verlassen sofort
-const EMIT_DELAY_MS = 150;
+// T4 (Markdown erst nach einer Tipp-Pause erzeugen) bleibt im Rich-Text-Editor verfügbar
+// (emitDelayMs), ist hier aber aus: der lokale Entwurf muss jede Taste sofort haben, sonst fehlte
+// er beim sofortigen Neuladen (E2E «Entwurf übersteht sofortiges Neuladen»). Der Gewinn von T4
+// (unter 1 ms je Taste) wiegt das nicht auf.
+const EMIT_DELAY_MS = 0;
 
 type Props = {
   blockId: string;
