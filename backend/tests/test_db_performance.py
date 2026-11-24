@@ -25,8 +25,10 @@ def test_foreign_key_indexes_exist(db):
 
 def test_role_timeouts_are_set_and_restore_sets_the_same(db):
     migration = _migration()
-    assert migration.ROLE_SETTINGS == APP_ROLE_SETTINGS
-    for role, settings in migration.ROLE_SETTINGS.items():
+    # hocx_geo kam erst mit 0260_photo_places dazu (setzt dort denselben Timeout); die übrigen
+    # Rollen stellt die Wiederherstellung wie 0135 ein
+    assert migration.ROLE_SETTINGS == {role: value for role, value in APP_ROLE_SETTINGS.items() if role != "hocx_geo"}
+    for role, settings in APP_ROLE_SETTINGS.items():
         config = db.scalar(text("SELECT rolconfig FROM pg_roles WHERE rolname = :role"), {"role": role}) or []
         for name, value in settings.items():
             assert f"{name}={value}" in config, (role, config)

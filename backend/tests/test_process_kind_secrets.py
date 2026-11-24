@@ -14,6 +14,9 @@ def _production_env(monkeypatch, **extra: str) -> None:
     monkeypatch.setenv("AUTH_SECURE_COOKIES", "true")
     monkeypatch.setenv("INITIAL_ADMIN_EMAIL", "admin@example.org")
     monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", f"Test-{secrets.token_urlsafe(16)}-1")
+    # Ortsdaten-Import (0260) hat eine eigene Pflichtprüfung im job-worker (GEO_DATABASE_URL); hier
+    # geht es nur um die Session-/Admin-Secrets
+    monkeypatch.setenv("GEO_PLACES_AUTO_UPDATE", "false")
     for name, value in extra.items():
         monkeypatch.setenv(name, value)
 
