@@ -2428,6 +2428,13 @@ class SubmissionUploadLog(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    # Ablehnungs-Zeilen der Abgabebox für den Upload-Verlauf (Migration 0254): schreibt nur die
+    # Abgabebox; der Trigger trg_submission_upload_log_history überträgt sie und leert Name/Grösse.
+    request_ref: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    upload_id: Mapped[int | None] = mapped_column(BigInteger)
+    reason_code: Mapped[str | None] = mapped_column(Text)
+    file_name: Mapped[str | None] = mapped_column(Text)
+    file_size: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class SystemErrorLog(Base):
