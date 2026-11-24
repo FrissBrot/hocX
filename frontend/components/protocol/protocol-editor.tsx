@@ -265,6 +265,9 @@ export function ProtocolEditor({
   const elementSaveTimerRef = useRef<number | null>(null);
   const isRestoringRef = useRef(true);
   const collab = useProtocolCollaboration(protocol.id);
+  // Nach der Hydration gesetzt (Tests warten darauf, bevor sie Tastenkürzel drücken)
+  const [editorReady, setEditorReady] = useState(false);
+  useEffect(() => setEditorReady(true), []);
   // Rückfrage vor dem Statuswechsel (StatusTransitionDialog)
   const [transitionDialogOpen, setTransitionDialogOpen] = useState(false);
   // Tablet (schmales Fenster): Gliederung als Überlagerung ein-/ausblenden
@@ -2414,7 +2417,7 @@ export function ProtocolEditor({
     <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
     <ParticipantDirectoryContext.Provider value={directoryWithSnapshotNames}>
     {/* data-own-find: Ctrl+F öffnet hier die Kapitelsuche des Editors, nicht die Listensuche der Shell */}
-    <div className="grid protocol-editor" data-own-find>
+    <div className="grid protocol-editor" data-own-find data-editor-ready={editorReady ? "" : undefined}>
       <ProtocolHeader
         title={protocol.title || protocol.protocol_number}
         protocolNumber={protocol.protocol_number}

@@ -9,6 +9,8 @@ import { expect, type Page } from "@playwright/test";
 export async function openProtocol(page: Page, protocolId: string) {
   await page.goto(`/protocols/${protocolId}`);
   await expect(page.locator(".protocol-doc-section").first()).toBeVisible();
+  // Kürzel erst nach der Hydration (der Editor setzt data-editor-ready)
+  await expect(page.locator("[data-editor-ready]")).toBeAttached({ timeout: 30_000 });
   await page.mouse.move(Math.round((page.viewportSize()?.width ?? 1440) / 2), 400);
   const overlay = page.locator(".sidebar-overlay");
   if (await overlay.isVisible()) await overlay.click({ position: { x: (page.viewportSize()?.width ?? 1440) - 40, y: 400 } });

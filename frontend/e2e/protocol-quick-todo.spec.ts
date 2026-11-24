@@ -66,8 +66,8 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
       const person = flyout.getByRole("combobox", { name: "Person" });
       await expect(person).toBeFocused();
       await page.keyboard.type("Mu");
-      await expect(flyout.getByRole("option").first()).toContainText("Anna Muster");
-      await expect(flyout.getByRole("option").first().locator(".participant-avatar")).toHaveText("AM");
+      await expect(flyout.getByRole("listbox", { name: "Person" }).getByRole("option").first()).toContainText("Anna Muster");
+      await expect(flyout.getByRole("listbox", { name: "Person" }).getByRole("option").first().locator(".participant-avatar")).toHaveText("AM");
       await page.screenshot({ path: `${SHOTS}/${theme}-1440-2-personen-dropdown.png` });
       await page.keyboard.press("Enter");
       await expect(person).toHaveValue(`Anna Muster ${suffix}`);
@@ -77,10 +77,10 @@ test.describe("Schnelle Pendenz mit Abgabe", () => {
       await page.keyboard.press("Tab");
       const due = flyout.getByRole("combobox", { name: "Fällig" });
       await expect(due).toBeFocused();
-      await expect(flyout.getByRole("option").first()).toContainText("Morgen");
+      await expect(flyout.getByRole("listbox", { name: "Fällig" }).getByRole("option").first()).toContainText("Morgen");
       await page.screenshot({ path: `${SHOTS}/${theme}-1440-3-faellig-dropdown.png` });
       await page.keyboard.type("ende mon");
-      await expect(flyout.getByRole("option").first()).toContainText("Ende Monat");
+      await expect(flyout.getByRole("listbox", { name: "Fällig" }).getByRole("option").first()).toContainText("Ende Monat");
       await page.keyboard.press("Enter");
       await expect(due).toHaveValue(/^Ende Monat \(/);
 

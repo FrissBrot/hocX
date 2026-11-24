@@ -1887,8 +1887,11 @@ function FocusedElementEditorImpl({
               } : undefined}
               // Escape verlässt den aktiven Block (Fokus zurück auf «Bearbeiten»); Menüs und Dialoge
               // darin behandeln Escape vorher selbst (defaultPrevented)
-              onKeyDown={isBlockActive ? (event) => {
+              // capture: vor dem Editor (Tiptap nimmt Escape sonst selbst); offene Auswahllisten
+              // im Block (aria-expanded) behalten ihr Escape
+              onKeyDownCapture={isBlockActive ? (event) => {
                 if (event.key !== "Escape" || event.defaultPrevented) return;
+                if ((event.target as HTMLElement).closest('[aria-expanded="true"]')) return;
                 event.preventDefault();
                 onActivateBlock(null);
                 window.requestAnimationFrame(() => {

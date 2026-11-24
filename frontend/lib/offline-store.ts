@@ -98,13 +98,21 @@ function onVisibilityChange() {
   if (document.visibilityState === "hidden") flushPendingOfflineWrites();
 }
 
+function bindPersistListeners() {
+  if (persistListenersBound || typeof window === "undefined") return;
+  persistListenersBound = true;
+  window.addEventListener("pagehide", onPageHidden);
+  window.addEventListener("beforeunload", onPageHidden);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+}
+
+// Schon beim Laden binden: der erste Entwurf kann erst während pagehide entstehen (entprellter
+// Rich-Text-Editor meldet dann sofort) - ein Listener, der erst in dieser Auslieferung dazukommt,
+// würde für dasselbe Ereignis nicht mehr aufgerufen.
+bindPersistListeners();
+
 function schedulePersist() {
-  if (!persistListenersBound) {
-    persistListenersBound = true;
-    window.addEventListener("pagehide", onPageHidden);
-    window.addEventListener("beforeunload", onPageHidden);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-  }
+  bindPersistListeners();
   if (persistTimer === null) persistTimer = window.setTimeout(flushPendingOfflineWrites, PERSIST_DELAY_MS);
 }
 
