@@ -55,6 +55,12 @@ Protokoll übernommen.
 - hocX erzeugt das signierte PDF (Version `v1.x`).
 - Die Verantwortlichen offener Todos erhalten ihre E-Mail-Benachrichtigung.
 
+Wurden im Protokoll Traktanden hinzugefügt, umbenannt, ausgeblendet oder umsortiert, listet der
+Dialog diese Abweichungen von der Vorlage einzeln auf (mit altem und neuem Wert). Wer Vorlagen
+bearbeiten darf, wählt aus, welche davon in die Vorlage übernommen werden; alle anderen sehen nur
+den Hinweis. Das Abschliessen selbst hängt nicht davon ab (siehe
+[Traktanden im Protokoll anpassen](#traktanden)).
+
 Vor dem Statuswechsel speichert der Editor alle noch ausstehenden Eingaben und wartet auf die
 Bestätigung des Servers. Gelingt das nicht (z. B. ohne Verbindung), bleibt der Status unverändert
 und eine Meldung erscheint. Erst nach erfolgreicher Speicherung erneut versuchen.
@@ -130,6 +136,27 @@ bestehende Markierungen bleiben sichtbar. Beim Abschliessen verschwinden alle Ma
 - Die Suche in der Protokollliste durchsucht Nummer und Titel aller Protokolle, auch solcher,
   die noch nicht nachgeladen sind.
 
+## Traktanden im Protokoll anpassen {#traktanden}
+
+Im Editor lassen sich Traktanden direkt im Protokoll anpassen, solange es nicht abgeschlossen ist
+(Recht «Sitzungen bearbeiten»):
+
+- **Hinzufügen:** ein neues Traktandum mit einem leeren Textblock, an beliebiger Stelle. Es gehört
+  nur zu diesem Protokoll.
+- **Umbenennen** und **Ausblenden/Einblenden**. Ausgeblendete Traktanden zeigt der Editor nur im
+  Vorbereitungsmodus; im PDF erscheinen sie nicht.
+- **Umsortieren:** die ganze Reihenfolge wird auf einmal gespeichert. Hat inzwischen jemand anderes
+  umsortiert oder ein Traktandum hinzugefügt, übernimmt der Editor dessen Stand und meldet das.
+
+**Die Vorlage ändert sich dadurch nie.** Das nächste Protokoll entsteht wieder aus der Vorlage,
+ein nur hier hinzugefügtes Traktandum erscheint dort also nicht. Beim **Protokoll abschliessen**
+listet ein Dialog alle Abweichungen auf; wer Vorlagen bearbeiten darf, kann einzelne davon in die
+Vorlage übernehmen (neues Traktandum mit leerem Textblock, neuer Titel, Sichtbarkeit, Reihenfolge).
+Ein Titel eines Bausteins, der auch in anderen Vorlagen oder in der Bibliothek steckt, wird dabei
+nur für diese Vorlage geändert. Die Übernahme ist auch nach dem Abschliessen noch möglich.
+
+Andere, die das Protokoll gleichzeitig offen haben, sehen die Änderungen sofort.
+
 ## Elemente aus der Vorlage neu laden {#vorlage-neu-laden}
 
 Wurde die Vorlage geändert, nachdem ein Protokoll erstellt wurde (neue Elemente, andere
@@ -143,6 +170,10 @@ werden.
   erhalten. Unveränderte Vorgabetexte werden durch die neuen ersetzt.
 - Elemente, die nicht mehr in der Vorlage sind, werden entfernt, wenn sie leer sind.
   Enthalten sie Daten, bleiben sie am Ende des Protokolls stehen.
+- Im Protokoll angepasste Traktanden bleiben, wie sie sind: hinzugefügte werden nie entfernt
+  (auch leer nicht) und bleiben an ihrem Platz, eigene Titel und eigene Sichtbarkeit bleiben, und
+  eine eigene Reihenfolge bleibt bestehen (neue Elemente der Vorlage kommen hinter ihren Vorgänger
+  aus der Vorlage).
 - Wer das Protokoll gerade offen hat, bekommt einen Hinweis und die Ansicht lädt neu.
 
 ## Mehrbenutzer-Bearbeitung {#mehrbenutzer}
@@ -152,6 +183,12 @@ Feld bzw. welche Tabellenzelle bearbeitet, wird live angezeigt (Sperre mit Zeitl
 damit sich Bearbeitungen nicht gegenseitig überschreiben. Das Panel **Status &
 Zusammenarbeit** zeigt, wer mitarbeitet, ob die Live-Verbindung steht und wie die Anwesenheit
 aussieht. Ist die Live-Verbindung unterbrochen («Offline»), wird trotzdem weiter gespeichert.
+
+Der Editor zeigt ausserdem, **wo** die anderen gerade sind: welches Traktandum bzw. welchen Block
+sie ansehen oder bearbeiten. Das sehen nur Personen, die dasselbe Protokoll offen haben.
+
+Bildunterschriften lassen sich auch nach dem Hochladen noch ändern (höchstens 500 Zeichen), solange
+das Protokoll nicht abgeschlossen ist und niemand anderes den Bildblock gerade bearbeitet.
 
 Wechselt jemand den Status, während andere mitarbeiten, weist die Rückfrage darauf hin. Die
 anderen sehen den neuen Status sofort.

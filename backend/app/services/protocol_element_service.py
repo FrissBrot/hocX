@@ -153,19 +153,46 @@ class ProtocolElementService:
                 is_visible_snapshot=element.is_visible_snapshot,
                 export_visible_snapshot=element.export_visible_snapshot,
                 show_when_empty=show_when_empty_by_id.get(element.id, False),
+                origin=element.origin,
+                template_title=element.template_title_snapshot,
+                visibility_customized=element.visibility_customized,
                 blocks=blocks_by_element.get(element.id, []),
             )
             for element in elements
         ]
 
     def update_protocol_element(self, db: Session, protocol_element_id: int, payload: ProtocolElementUpdate):
+        """Umbenennen und Aus-/Einblenden laufen über ProtocolAgendaService (merkt die Abweichung
+        von der Vorlage, Editor 1a); sort_index per PATCH ist veraltet (PUT element-order), zählt
+        aber ebenfalls als eigene Reihenfolge des Protokolls."""
+        from app.services.protocol_agenda_service import ProtocolAgendaService
+
         protocol_element = self.repository.get(db, protocol_element_id)
         if protocol_element is None:
             return None
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return protocol_element
-        return self.repository.update(db, protocol_element, values)
+        agenda = ProtocolAgendaService()
+        # Wie Hinzufügen/Sortieren: Protokollzeile sperren, Element danach frisch laden
+        lock_row(db, db.get(Protocol, protocol_element.protocol_id))
+        protocol_element = lock_row(db, protocol_element)
+        title = values.pop("section_name_snapshot", None)
+        if title is not None:
+            agenda.rename_element(protocol_element, title)
+        visible = values.pop("is_visible_snapshot", None)
+        if visible is not None:
+            agenda.set_visibility(protocol_element, visible)
+        if values.keys() & {"sort_index", "section_order_snapshot"}:
+            protocol = db.get(Protocol, protocol_element.protocol_id)
+            protocol.agenda_order_customized = True
+            db.add(protocol)
+        if values:
+            return self.repository.update(db, protocol_element, values)
+        db.add(protocol_element)
+        db.commit()
+        db.refresh(protocol_element)
+        return protocol_element
 
     def delete_protocol_element_block(self, db: Session, protocol_element_block_id: int) -> bool:
         protocol_element_block = self.block_repository.get(db, protocol_element_block_id)

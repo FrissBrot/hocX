@@ -177,6 +177,8 @@ class TemplateElementCreate(BaseModel):
 class TemplateElementUpdate(BaseModel):
     sort_index: int | None = None
     configuration_json: dict[str, Any] | None = None
+    # Traktandum in neuen Protokollen ausgeblendet (0270; übernimmt auch «Ausblenden» aus einem Protokoll)
+    is_visible: bool | None = None
 
 
 class TemplateElementRead(BaseModel):
@@ -195,6 +197,7 @@ class TemplateElementRead(BaseModel):
     # Inhalt (Elementdefinition) ist ein Bibliotheks-Baustein bzw. in mehreren Traktanden verwendet
     definition_is_library: bool = True
     definition_usage_count: int = 1
+    is_visible: bool = True
 
 
 class TemplateElementBehaviorUpdate(BaseModel):

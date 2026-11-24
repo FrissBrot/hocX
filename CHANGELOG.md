@@ -41,9 +41,29 @@ Installationen aktualisieren können.
   neu berechnet, deren Tag wechselt.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
+- **Traktanden im Protokoll anpassen (Protokoll-Editor 1a, Backend):** Traktanden lassen sich im
+  Protokoll hinzufügen (mit leerem Textblock, nur in diesem Protokoll), umbenennen, aus-/einblenden
+  und in einem Schritt umsortieren (`PUT /api/protocols/{id}/element-order`, 409 bei veralteter
+  Reihenfolge). Die Vorlage ändert sich dadurch nie; andere Teilnehmende sehen die Änderungen live.
+  «Elemente aus Vorlage neu laden» behält hinzugefügte Traktanden (auch leere), eigene Titel,
+  eigene Sichtbarkeit und eine eigene Reihenfolge. Folgeprotokolle entstehen weiter aus der Vorlage.
+- **Abweichungen von der Vorlage beim Abschliessen:** `GET /api/protocols/{id}/template-changes`
+  listet neue, umbenannte, ausgeblendete Traktanden und eine geänderte Reihenfolge mit alten und
+  neuen Werten; `POST …/template-changes/apply` übernimmt eine Auswahl in die Vorlage (Recht
+  «Vorlagen bearbeiten», eine Vorlagenversion, Audit-Eintrag; geteilte Bausteine werden nur für
+  diese Vorlage umbenannt). Das Abschliessen selbst hängt nicht davon ab.
+- **Wo ist wer:** Der Live-Kanal eines Protokolls meldet gedrosselt, welches Traktandum bzw. welchen
+  Block die anderen Teilnehmenden gerade ansehen oder bearbeiten (`presence_focus`).
+- **Bildunterschrift nachträglich ändern** (`PATCH /api/protocol-images/{id}`, höchstens 500 Zeichen,
+  Regeln wie beim Bearbeiten des Blocks).
+- Vorlagen-Traktanden haben eine Sichtbarkeit (`is_visible`), die neue Protokolle übernehmen
+  (Migration `0270_protocol_agenda_edit`).
 
 ### Geändert
 
+- Im Protokoll ausgeblendete Traktanden erscheinen nicht mehr im PDF.
+- Die Profileinstellungen «Akkordeon» und «Rad-Effekt» des Protokoll-Editors sind entfallen; ältere
+  Clients dürfen sie in 1.6 noch senden, sie werden ignoriert.
 - **Protokoll-Editor schneller (Performance-Audit 2026-11-22, Teil 1.6):**
   - Mitschreiben zu zweit: Sperren anderer Personen liegen nicht mehr im Zustand des ganzen Editors.
     Jeder Punkt abonniert nur die Sperren seiner eigenen Felder; ein Fokuswechsel einer anderen

@@ -16,6 +16,11 @@ def _presence_key(protocol_id: int) -> str:
     return f"hocx:presence:{protocol_id}"
 
 
+def _focus_key(protocol_id: int) -> str:
+    """«Wo ist wer» (Editor 1a): je Verbindung der gerade angesehene/bearbeitete Punkt bzw. Block."""
+    return f"hocx:presence-focus:{protocol_id}"
+
+
 def _lock_key(protocol_id: int, field_key: str) -> str:
     return f"hocx:lock:{protocol_id}:{field_key}"
 
@@ -146,10 +151,48 @@ class CollaborationService:
         async with self.redis.pipeline(transaction=True) as pipe:
             pipe.hset(key, connection_id, payload)
             pipe.expire(key, PRESENCE_TTL_SECONDS)
+            # Fokus-Einträge leben so lange wie die Präsenz (verwaiste fallen beim Lesen heraus)
+            pipe.expire(_focus_key(protocol_id), PRESENCE_TTL_SECONDS)
             await pipe.execute()
 
     async def leave(self, protocol_id: int, connection_id: str) -> None:
-        await self.redis.hdel(_presence_key(protocol_id), connection_id)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            pipe.hdel(_presence_key(protocol_id), connection_id)
+            pipe.hdel(_focus_key(protocol_id), connection_id)
+            await pipe.execute()
+
+    async def set_focus(self, protocol_id: int, connection_id: str, focus: dict) -> None:
+        """focus: user_id (intern), display_name, element_id, block_id, mode - bereits geprüft."""
+        key = _focus_key(protocol_id)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            pipe.hset(key, connection_id, json.dumps(focus))
+            pipe.expire(key, PRESENCE_TTL_SECONDS)
+            await pipe.execute()
+
+    async def focus_snapshot(self, protocol_id: int) -> list[dict]:
+        """Fokus aller noch anwesenden Verbindungen (Einträge ohne aktuelle Präsenz zählen nicht)."""
+        raw_focus = await self.redis.hgetall(_focus_key(protocol_id))
+        if not raw_focus:
+            return []
+        raw_presence = await self.redis.hgetall(_presence_key(protocol_id))
+        cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
+        present: set[str] = set()
+        for connection_id, value in raw_presence.items():
+            try:
+                if int(json.loads(value).get("seen", 0)) >= cutoff:
+                    present.add(connection_id)
+            except (TypeError, ValueError, AttributeError):
+                continue
+        result: list[dict] = []
+        for connection_id, value in raw_focus.items():
+            if connection_id not in present:
+                continue
+            try:
+                data = json.loads(value)
+                result.append({**data, "user_id": int(data["user_id"]), "connection_id": connection_id})
+            except (TypeError, ValueError, KeyError):
+                continue
+        return result
 
     async def presence_snapshot(self, protocol_id: int) -> list[dict]:
         key = _presence_key(protocol_id)

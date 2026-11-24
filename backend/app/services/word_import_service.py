@@ -3675,6 +3675,7 @@ class WordImportService:
                     protocol_element = ProtocolElement(
                         protocol_id=protocol_id,
                         template_element_id=None,
+                        origin="import",
                         sort_index=int(max_element_sort) + 10,
                         section_name_snapshot=text_commit.extracted_heading,
                         section_order_snapshot=int(max_element_sort) + 10,

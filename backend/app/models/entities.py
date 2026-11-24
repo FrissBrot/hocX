@@ -1305,6 +1305,8 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     # NULL solange nicht abgeschlossen bzw. nach dem Zurücksetzen.
     todos_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Reihenfolge der Traktanden im Protokoll geändert (0270): Vorlagen-Abgleich behält sie
+    agenda_order_customized: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
 
 
 class ProtocolElement(Base, TimestampMixin):
@@ -1312,6 +1314,7 @@ class ProtocolElement(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("protocol_id", "sort_index", name="uq_protocol_element_protocol_sort"),
         Index("idx_protocol_element_template_element", "template_element_id"),
+        CheckConstraint("origin IN ('template', 'protocol', 'session', 'import')", name="ck_protocol_element_origin"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1329,6 +1332,12 @@ class ProtocolElement(Base, TimestampMixin):
     element_title_snapshot: Mapped[str | None] = mapped_column(Text)
     responsible_assignments_snapshot: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     responsible_name_display_mode: Mapped[str | None] = mapped_column(Text)
+    # Herkunft (0270): template | protocol (im Editor hinzugefügt) | session (Sitzungsnotizen) | import
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'template'"), default="template")
+    # Titel laut Vorlage, sobald im Protokoll umbenannt (NULL = nicht umbenannt); der Abgleich behält den eigenen Titel
+    template_title_snapshot: Mapped[str | None] = mapped_column(Text)
+    # Sichtbarkeit im Protokoll geändert; der Vorlagen-Abgleich übernimmt dann nicht die der Vorlage
+    visibility_customized: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
 
 
 class ProtocolElementBlock(Base, TimestampMixin):

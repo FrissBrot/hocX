@@ -8,15 +8,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from app.core.cycle_utils import format_cycle_name
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import publish_best_effort
 from app.schemas.base import MAX_QUERY_OFFSET
-from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateChangesApply, ProtocolTemplateChangesApplyRead, ProtocolTemplateChangesRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service, todo_fine_service
 from app.services.access_service import AccessService
@@ -24,6 +26,7 @@ from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
 from app.services.event_service import EventService
 from app.services.protocol_service import ProtocolService
+from app.services.protocol_agenda_service import ChangesOutdated, ProtocolAgendaService
 from app.services.protocol_todo_service import ProtocolTodoService
 from app.models.entities import AttendanceFine, CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, Tenant, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
 
@@ -512,6 +515,90 @@ def sync_protocol_with_template(
                   details={key: value for key, value in summary.items() if key != "applied"})
         _broadcast_template_synced(existing.id, user)
     return summary
+
+
+# Übernahme von Traktanden-Abweichungen in die Vorlage je Konto (Editor 1a)
+TEMPLATE_CHANGES_APPLY_LIMIT_PER_MINUTE = 20
+agenda_service = ProtocolAgendaService()
+
+
+@router.get("/protocols/{protocol_id}/template-changes", response_model=ProtocolTemplateChangesRead)
+def get_protocol_template_changes(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Traktanden-Abweichungen des Protokolls gegenüber seiner Vorlage (neu, umbenannt,
+    ausgeblendet, Reihenfolge) für den Dialog beim Abschliessen. Lesbar für alle mit Leserecht
+    am Protokoll; can_apply sagt, ob die Übernahme erlaubt ist (templates.edit)."""
+    require_permission(user, P.MEETINGS_READ)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
+    template = db.get(Template, protocol.template_id)
+    if not access_service.can_read_template(db, user, protocol.template_id):
+        # Eingeschränkte Leser ohne Zuweisung der Vorlage sehen keine Vorlagendaten
+        return ProtocolTemplateChangesRead(
+            template_id=template.public_id, template_name="", template_version=template.version, can_apply=False, changes=[]
+        )
+    result = agenda_service.template_changes(db, protocol)
+    can_apply = user.can(P.TEMPLATES_EDIT) and user.can(P.MEETINGS_EDIT)
+    return ProtocolTemplateChangesRead(**result, can_apply=can_apply)
+
+
+@router.post("/protocols/{protocol_id}/template-changes/apply", response_model=ProtocolTemplateChangesApplyRead)
+def apply_protocol_template_changes(
+    protocol_id: uuid.UUID,
+    payload: ProtocolTemplateChangesApply,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Ausgewählte Traktanden-Abweichungen in die Vorlage übernehmen (Recht zur
+    Vorlagenbearbeitung). Ändert nur die Vorlage (Version steigt einmal), das Protokoll wird
+    höchstens mit dem neuen Vorlagen-Traktandum verknüpft; jeder Protokollstatus erlaubt."""
+    # meetings.edit: die Übernahme verknüpft das Protokoll-Traktandum mit dem neuen Vorlagen-
+    # Traktandum und setzt die Abweichungs-Merker zurück (Buchhaltungsspalten, kein Inhalt) - auch
+    # im abgeschlossenen Protokoll; templates.edit für die Vorlage selbst.
+    require_permission(user, P.MEETINGS_EDIT)
+    require_permission(user, P.TEMPLATES_EDIT)
+    enforce_rate_limit(
+        f"protocol-template-changes-apply:{user.user_id}", limit=TEMPLATE_CHANGES_APPLY_LIMIT_PER_MINUTE, period_seconds=60
+    )
+    protocol = _get_writable_protocol_or_404(db, protocol_id, user)
+    if not access_service.can_read_template(db, user, protocol.template_id):
+        # Protokoll ist lesbar (Vorlage also bekannt), nur die Vorlage nicht zugewiesen: 403
+        raise HTTPException(status_code=403, detail="Template not accessible")
+    try:
+        applied, remaining = agenda_service.apply_template_changes(
+            db, protocol, keys=payload.keys, expected_template_version=payload.expected_template_version
+        )
+        version = remaining["template_version"]
+        audit.log(
+            db,
+            action="template.agenda_changes_applied",
+            actor=user,
+            entity_type="template",
+            entity_id=protocol.template_id,
+            details={
+                "protocol_id": str(protocol.public_id),
+                "keys": applied,
+                "template_version": version,
+            },
+            commit=False,
+        )
+        db.commit()
+    except ChangesOutdated as exc:
+        # Vor jedem Schreiben geprüft; get_db beendet die Transaktion
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "changes_outdated",
+                "message": "Die Abweichungen haben sich inzwischen geändert",
+                "changes": jsonable_encoder(exc.changes["changes"]),
+            },
+        ) from None
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Template could not be updated") from exc
+    return ProtocolTemplateChangesApplyRead(applied=applied, template_version=version, changes=remaining["changes"])
 
 
 @router.get("/protocols/{protocol_id}/pending-todos", response_model=list[TodoListItem])

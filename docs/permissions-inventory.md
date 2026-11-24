@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 662 (Plattform-Admin: 156)
-- Mandanten-Routen mit Rechteprüfung: 417
+- Routen gesamt: 667 (Plattform-Admin: 156)
+- Mandanten-Routen mit Rechteprüfung: 422
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -420,6 +420,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PATCH /api/protocol-elements/{protocol_element_id}` | meetings.edit |
 | `POST /api/protocol-elements/{protocol_element_id}/blocks/from-event` | meetings.edit |
 | `DELETE /api/protocol-images/{image_id}` | meetings.edit |
+| `PATCH /api/protocol-images/{image_id}` | meetings.edit |
 | `DELETE /api/protocol-todos/{todo_id}` | meetings.edit |
 | `PATCH /api/protocol-todos/{todo_id}` | meetings.edit oder todos.complete_own |
 | `POST /api/protocol-todos/{todo_id}/accept-tracked-change` | meetings.edit |
@@ -450,7 +451,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/{protocol_id}/cycle-events` | meetings.read |
 | `POST /api/protocols/{protocol_id}/delete` | meetings.edit |
 | `GET /api/protocols/{protocol_id}/deletion-preview` | meetings.edit |
+| `PUT /api/protocols/{protocol_id}/element-order` | meetings.edit |
 | `GET /api/protocols/{protocol_id}/elements` | meetings.read |
+| `POST /api/protocols/{protocol_id}/elements` | meetings.edit |
 | `GET /api/protocols/{protocol_id}/fines` | reports.personal · Feature finance (lesen) |
 | `GET /api/protocols/{protocol_id}/pdf-coverage` | meetings.read |
 | `GET /api/protocols/{protocol_id}/pending-fines` | reports.personal · Feature finance (lesen) |
@@ -461,6 +464,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `PUT /api/protocols/{protocol_id}/scroll-position` | meetings.read |
 | `POST /api/protocols/{protocol_id}/sync-template` | meetings.edit |
+| `GET /api/protocols/{protocol_id}/template-changes` | meetings.read |
+| `POST /api/protocols/{protocol_id}/template-changes/apply` | meetings.edit, templates.edit |
 | `GET /api/public-links` | settings.manage |
 | `GET /api/public-links/partner-history` | settings.manage |
 | `GET /api/public/calendar/{token}.ics` | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
