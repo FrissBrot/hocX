@@ -593,6 +593,8 @@ class FileService:
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
         upload_job_id: uuid.UUID | None = None,
+        near=None,
+        near_sort: bool = True,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -625,6 +627,8 @@ class FileService:
             viewer_tenant_id=viewer_tenant_id,
             readable_assignment_ids=readable_assignment_ids,
             upload_job_id=upload_job_id,
+            near=near,
+            near_sort=near_sort,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)

@@ -633,6 +633,14 @@
       "cloud_import": {
         "title": "File import",
         "description": "Processes started file imports (ZIP, Google Takeout, folders) through the upload pipeline and cleans up expired imports and reports."
+      },
+      "geo_places_update": {
+        "title": "Update place data",
+        "description": "Loads GeoNames (CC BY 4.0) and swisstopo swissNAMES3D when a new edition is available, for photo place names."
+      },
+      "photo_places_resolve": {
+        "title": "Fill in photo places",
+        "description": "Adds place names to photos with GPS after a data update or for older photos, per organisation in chunks."
       }
     }
   },

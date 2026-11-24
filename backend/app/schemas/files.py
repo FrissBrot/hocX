@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 from app.schemas.documents import DocumentSummary
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
+from app.schemas.photo_places import PhotoPlaceRead
+
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
 PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
@@ -125,6 +127,8 @@ class FileOverviewItem(BaseModel):
     # Nur mit album_id und nur fuer den Besitzer des Albums: automatisch einsortiert, aber noch
     # nicht fuer die Partner freigegeben (siehe photo_album_share_service).
     share_pending: bool = False
+    # Foto-Standorte (0260): Ortsname für Fotos des eigenen Mandanten, nie für Partnerfotos
+    place: PhotoPlaceRead | None = None
 
 
 class SimilarityGroup(BaseModel):
@@ -516,6 +520,8 @@ class StoredFileMetadata(BaseModel):
     can_edit_capture_date: bool = False
     # Herkunftsvorgang im Upload-Verlauf (0250) - nur, wenn die Person ihn sehen darf
     upload_job: "UploadJobOfFile | None" = None
+    # Ortsname (0260) - für alle, die das Foto sehen; Koordinaten bleiben in ``gps``
+    place: PhotoPlaceRead | None = None
 
 
 class PhotoAlbumCreate(BaseModel):

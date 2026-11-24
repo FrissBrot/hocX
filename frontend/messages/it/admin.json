@@ -633,6 +633,14 @@
       "cloud_import": {
         "title": "Importazione di file",
         "description": "Elabora le importazioni di file avviate (ZIP, Google Takeout, cartelle) tramite la pipeline di caricamento e ripulisce importazioni e rapporti scaduti."
+      },
+      "geo_places_update": {
+        "title": "Aggiorna dati dei luoghi",
+        "description": "Carica GeoNames (CC BY 4.0) e swisstopo swissNAMES3D quando è disponibile una nuova edizione, per i nomi dei luoghi delle foto."
+      },
+      "photo_places_resolve": {
+        "title": "Completa luoghi delle foto",
+        "description": "Aggiunge i nomi dei luoghi alle foto con GPS dopo un aggiornamento dei dati o per foto meno recenti, per organizzazione a blocchi."
       }
     }
   },

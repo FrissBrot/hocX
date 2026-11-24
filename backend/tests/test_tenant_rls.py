@@ -43,6 +43,10 @@ from tests.factories import (
 
 # Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migrationen 0132 und 0151.
 TABLES_WITHOUT_RLS = {"audit_log", "overload_rejection", "system_error_log", "tenant_charge", "tenant_domain"}
+# Globale Referenzdaten ohne tenant_id (kein Mandantendatum, darum ohne RLS): für die Laufzeitrolle
+# nur lesbar. Foto-Standorte (0260): Ortsdaten aus GeoNames/swissNAMES3D, geschrieben nur über die
+# SECURITY-DEFINER-Funktion hocx_geo_import_apply aus der Zwischenablage geo_place_import.
+GLOBAL_READ_ONLY_TABLES = {"geo_place", "geo_dataset"}
 
 
 @contextmanager
@@ -86,6 +90,23 @@ def test_every_table_with_tenant_id_has_row_level_security(db):
     without_rls = {name for name, enabled in rows if not enabled}
     assert without_rls == TABLES_WITHOUT_RLS
     assert len(rows) > len(TABLES_WITHOUT_RLS)
+
+
+def test_global_reference_tables_are_read_only_for_the_runtime_role(db):
+    for table in GLOBAL_READ_ONLY_TABLES:
+        rights = db.execute(
+            text(
+                "SELECT has_table_privilege('hocx_app', CAST(:t AS regclass), 'SELECT'),"
+                " has_table_privilege('hocx_app', CAST(:t AS regclass), 'INSERT, UPDATE, DELETE, TRUNCATE')"
+            ),
+            {"t": f"public.{table}"},
+        ).one()
+        assert rights == (True, False), table
+        has_tenant = db.scalar(
+            text("SELECT count(*) FROM pg_attribute WHERE attrelid = CAST(:t AS regclass) AND attname = 'tenant_id'"),
+            {"t": f"public.{table}"},
+        )
+        assert has_tenant == 0, table
 
 
 def test_scope_limits_reads_to_the_bound_tenant(db):

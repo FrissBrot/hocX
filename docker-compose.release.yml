@@ -981,6 +981,8 @@ services:
       HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
       # Job geoip_update: lädt DB-IP «IP to Country Lite» (CC BY 4.0) monatlich ins Volume geoip_data
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-true}
+      # Job geo_places_update: Ortsdaten (GeoNames CC BY 4.0, swisstopo swissNAMES3D) in Postgres
+      GEO_PLACES_AUTO_UPDATE: ${GEO_PLACES_AUTO_UPDATE:-true}
     secrets:
       - app_database_url
       - admin_auth_secret

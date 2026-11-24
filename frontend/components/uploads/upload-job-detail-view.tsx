@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PhotoCaptureDateDialog } from "@/components/photos/photo-capture-date-dialog";
+import { PhotoPlaceDialog } from "@/components/photos/photo-place-dialog";
+import { UploadPlaceChanges } from "@/components/uploads/upload-place-changes";
 import { PhotosView } from "@/components/photos/photos-view";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -63,6 +65,18 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
   const [selectionRequest, setSelectionRequest] = useState<{ key: number; ids: string[] } | null>(null);
   const [cameraShift, setCameraShift] = useState<{ ids: string[]; minutes: number | null } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Foto-Standorte: Ort für alle Fotos des Vorgangs setzen (nur ohne GPS)
+  const [placeIds, setPlaceIds] = useState<string[] | null>(null);
+  const tPlaces = useTranslations("photos.places");
+
+  async function openPlaceForJob() {
+    try {
+      const result = await browserApiFetch<UploadJobFileIds>(`/api/upload-jobs/${job.id}/file-ids?only_images=true`);
+      if (result?.file_ids.length) setPlaceIds(result.file_ids);
+    } catch {
+      showToast(t("loadError"), "error");
+    }
+  }
   const options = job.options ?? {};
   const tags = Array.isArray(options.tags) ? (options.tags as string[]) : [];
   const href = refHref(job);
@@ -109,7 +123,16 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
       : []),
     { id: "results", label: t("tabs.results"), count: job.counts.total, content: <UploadJobItems jobId={job.id} /> },
     ...(showPhotos && canManagePhotos
-      ? [{ id: "corrections", label: t("tabs.corrections"), content: <CaptureCorrections jobId={job.id} onUndone={() => setReloadKey((key) => key + 1)} /> }]
+      ? [{
+          id: "corrections",
+          label: t("tabs.corrections"),
+          content: (
+            <>
+              <CaptureCorrections jobId={job.id} onUndone={() => setReloadKey((key) => key + 1)} />
+              <UploadPlaceChanges key={`places-${reloadKey}`} jobId={job.id} onUndone={() => setReloadKey((key) => key + 1)} />
+            </>
+          ),
+        }]
       : []),
   ];
 
@@ -121,7 +144,12 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
           <h1 className="page-title">{t("detailTitle", { date: formatDateTime(job.created_at, locale) })}</h1>
           <p className="muted">{resultSummary(job, t)}</p>
         </div>
-        <UploadStatusBadge status={job.status} />
+        <div className="table-toolbar-actions">
+          {showPhotos && canManagePhotos ? (
+            <button type="button" className="button-secondary" onClick={() => void openPlaceForJob()}>{tPlaces("jobAction")}</button>
+          ) : null}
+          <UploadStatusBadge status={job.status} />
+        </div>
       </div>
       {job.reconstructed ? <StatusBanner tone="neutral" message={t("reconstructedHint")} /> : null}
       <section className="panel upload-job-facts" aria-label={t("factsLabel")}>
@@ -168,6 +196,9 @@ export function UploadJobDetailView({ area, job, canManagePhotos, canShare, canM
         </section>
       ) : null}
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
+      {placeIds ? (
+        <PhotoPlaceDialog open fileIds={placeIds} uploadJobId={job.id} onClose={() => setPlaceIds(null)} onDone={() => setReloadKey((key) => key + 1)} />
+      ) : null}
       {cameraShift ? (
         <PhotoCaptureDateDialog
           open

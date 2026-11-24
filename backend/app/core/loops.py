@@ -407,6 +407,22 @@ async def geoip_update_loop() -> None:
     await run_advisory_locked_loop(name="geoip_update", interval_seconds=24 * 60 * 60, task=lambda _db: geoip.update_database())
 
 
+async def geo_places_update_loop() -> None:
+    """Ortsdaten für Foto-Standorte (GeoNames CC BY 4.0, swisstopo swissNAMES3D) laden bzw.
+    aktualisieren (app/services/geo_places.py). Netz nur zu den zwei Datenquellen, nie mit
+    Koordinaten von Fotos. GEO_PLACES_AUTO_UPDATE=false: Tick ohne Download."""
+    from app.services import geo_places
+
+    await run_advisory_locked_loop(name="geo_places_update", interval_seconds=24 * 60 * 60, task=geo_places.update_places)
+
+
+async def photo_places_resolve_loop() -> None:
+    """Ortsnamen der Fotos nachtragen (Altbestand, nach Datenupdate), je Mandant in Stücken."""
+    from app.services import photo_places
+
+    await run_advisory_locked_loop(name="photo_places_resolve", interval_seconds=10 * 60, task=photo_places.resolve_backlog)
+
+
 LoopFactory = Callable[[], Coroutine[Any, Any, None]]
 
 # Leicht: Steuerung, Überwachung, kurze Abfragen - bleiben in den uvicorn-Workern.
@@ -444,4 +460,6 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     capture_date_file_sync_loop,
     metrics_rollup_loop,
     geoip_update_loop,
+    geo_places_update_loop,
+    photo_places_resolve_loop,
 )

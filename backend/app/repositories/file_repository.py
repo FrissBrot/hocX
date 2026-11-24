@@ -430,6 +430,7 @@ class StoredFileRepository:
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
         upload_job_id: uuid.UUID | None = None,
+        near=None,
     ):
         """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
         Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen.
@@ -458,6 +459,9 @@ class StoredFileRepository:
             )
         if file_ids is not None:
             query = query.where(union_query.c.public_id.in_(file_ids))
+        if near is not None:
+            # Foto-Standorte (0260): nur Fotos im Umkreis (services/photo_places.near_subquery)
+            query = query.join(near, near.c.stored_file_id == union_query.c.id)
         if upload_job_id is not None:
             # Upload-Verlauf (0250): Dateien eines Vorgangs (Index idx_stored_file_upload_job)
             query = query.where(union_query.c.id.in_(select(StoredFile.id).where(StoredFile.upload_job_id == upload_job_id)))
@@ -587,6 +591,8 @@ class StoredFileRepository:
         viewer_tenant_id: int | None = None,
         readable_assignment_ids: set[int] | None = None,
         upload_job_id: uuid.UUID | None = None,
+        near=None,
+        near_sort: bool = True,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -621,7 +627,7 @@ class StoredFileRepository:
             tenant_id, search_plan=plan, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
             date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
-            readable_assignment_ids=readable_assignment_ids, upload_job_id=upload_job_id,
+            readable_assignment_ids=readable_assignment_ids, upload_job_id=upload_job_id, near=near,
         )
 
         sort_column = {
@@ -642,6 +648,14 @@ class StoredFileRepository:
                 func.coalesce(scores.c.matched, 1).desc(),
                 func.coalesce(scores.c.score, 0.5).desc(),
             ]
+            sort_column, sort_dir = union_query.c.group_date, "desc"
+        if sort_by == "relevance" and near is not None and near_sort:
+            # Umkreissuche: näher = weiter oben (bei Suchtext nach der Zahl getroffener Wörter)
+            if scores is not None:
+                orderings = orderings[:1]
+            orderings.append(near.c.distance_m.asc())
+            if scores is not None:
+                orderings.append(func.coalesce(scores.c.score, 0.5).desc())
             sort_column, sort_dir = union_query.c.group_date, "desc"
         orderings.append(sort_column.asc() if sort_dir == "asc" else sort_column.desc())
         if sort_by in ("group_date", "relevance"):

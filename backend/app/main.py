@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, cloud_import, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, upload_jobs, users, word_import
+from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, cloud_import, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, photo_places, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, upload_jobs, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -510,6 +510,7 @@ app.include_router(agenda_items.router, prefix="/api", tags=["agenda-items"])
 app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(cloud_import.router, prefix="/api", tags=["cloud-import"])
 app.include_router(upload_jobs.router, prefix="/api", tags=["upload-jobs"])
+app.include_router(photo_places.router, prefix="/api", tags=["photo-places"])
 app.include_router(public_links.router, prefix="/api", tags=["public-links"])
 app.include_router(search.router, prefix="/api", tags=["search"])
 # Logische Dokumente (Dateien-Tab, feature/document-management): GET /api/documents/{uuid}… -

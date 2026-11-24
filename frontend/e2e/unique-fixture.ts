@@ -139,3 +139,52 @@ export function uniqueZip(zip: Buffer): Buffer {
   );
   return writeZip(entries);
 }
+
+/** PNG mit GPS im eXIf-Chunk (direkt nach IHDR): little-endian TIFF mit IFD0 → GPS-IFD
+ * (Breite/Länge als Grad, Minuten, Hundertstelsekunden). Foto-Standorte (Migration 0260). */
+export function pngWithGps(png: Buffer, latitude: number, longitude: number): Buffer {
+  const rationals = (value: number): number[] => {
+    const absolute = Math.abs(value);
+    const degrees = Math.floor(absolute);
+    const minutes = Math.floor((absolute - degrees) * 60);
+    const seconds = Math.round(((absolute - degrees) * 60 - minutes) * 60 * 100);
+    return [degrees, 1, minutes, 1, seconds, 100];
+  };
+  const tiff = Buffer.alloc(128);
+  tiff.write("II", 0, "latin1");
+  tiff.writeUInt16LE(42, 2);
+  tiff.writeUInt32LE(8, 4);
+  // IFD0: ein Eintrag GPSInfo (0x8825, LONG) → GPS-IFD bei 26
+  tiff.writeUInt16LE(1, 8);
+  tiff.writeUInt16LE(0x8825, 10);
+  tiff.writeUInt16LE(4, 12);
+  tiff.writeUInt32LE(1, 14);
+  tiff.writeUInt32LE(26, 18);
+  tiff.writeUInt32LE(0, 22);
+  // GPS-IFD: LatRef, Lat (bei 80), LonRef, Lon (bei 104)
+  const entries: [number, number, number, number | string][] = [
+    [1, 2, 2, latitude >= 0 ? "N" : "S"],
+    [2, 5, 3, 80],
+    [3, 2, 2, longitude >= 0 ? "E" : "W"],
+    [4, 5, 3, 104],
+  ];
+  tiff.writeUInt16LE(entries.length, 26);
+  entries.forEach(([tag, type, count, value], index) => {
+    const at = 28 + index * 12;
+    tiff.writeUInt16LE(tag, at);
+    tiff.writeUInt16LE(type, at + 2);
+    tiff.writeUInt32LE(count, at + 4);
+    if (typeof value === "string") tiff.write(`${value}\0`, at + 8, "latin1");
+    else tiff.writeUInt32LE(value, at + 8);
+  });
+  tiff.writeUInt32LE(0, 76);
+  rationals(latitude).forEach((part, index) => tiff.writeUInt32LE(part, 80 + index * 4));
+  rationals(longitude).forEach((part, index) => tiff.writeUInt32LE(part, 104 + index * 4));
+  const type = Buffer.from("eXIf", "latin1");
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(tiff.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([type, tiff])));
+  const ihdrEnd = 8 + 25;
+  return Buffer.concat([png.subarray(0, ihdrEnd), header, type, tiff, crc, png.subarray(ihdrEnd)]);
+}

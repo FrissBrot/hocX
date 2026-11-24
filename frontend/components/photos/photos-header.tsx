@@ -93,6 +93,9 @@ type ToolbarProps = {
   /** Suche (aktiv getippt, nicht entprellt) für die Filter-Chips. */
   activeSearch: string;
   onReset: () => void;
+  /** Foto-Standorte: aktiver Umkreis (Chip) und Orts-Treffer zur Eingabe. */
+  placeChip?: ReactNode;
+  placeSuggestions?: ReactNode;
 };
 
 function SortIcon() {
@@ -130,6 +133,8 @@ export function PhotosToolbar({
   total,
   activeSearch,
   onReset,
+  placeChip,
+  placeSuggestions,
 }: ToolbarProps) {
   const t = useTranslations("photos.view");
   const locale = useLocale();
@@ -145,7 +150,7 @@ export function PhotosToolbar({
   ];
   const listTab = tab !== "albums";
   const query = activeSearch.trim();
-  const filtersActive = listTab && (query !== "" || tags.length > 0);
+  const filtersActive = listTab && (query !== "" || tags.length > 0 || Boolean(placeChip));
   const currentSort = sortOptions.find((option) => option.id === sortId) ?? sortOptions[0];
 
   return (
@@ -251,6 +256,7 @@ export function PhotosToolbar({
               </button>
             </span>
           ) : null}
+          {placeChip}
           {tags.map((tag) => (
             <span key={tag} className="photos-filter-chip">
               {tag}
@@ -264,6 +270,7 @@ export function PhotosToolbar({
               </button>
             </span>
           ))}
+          {placeSuggestions}
           <button type="button" className="photos-filter-reset" onClick={onReset}>
             {t("toolbar.reset")}
           </button>

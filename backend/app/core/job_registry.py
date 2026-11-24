@@ -120,6 +120,10 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     # Länder-Geolocation (Signal «neues Land»): prüft täglich, lädt die DB-IP-Datei nur, wenn eine
     # neuere Monatsausgabe da ist (also etwa monatlich). Ein paar Tage Ausfall sind harmlos.
     _loop("geoip_update", "maintenance", 24 * 60, max_silence_seconds=4 * 24 * 60 * 60, service="job-worker"),
+    # Foto-Standorte: prüft täglich, lädt GeoNames/swissNAMES3D nur bei neuer Ausgabe (etwa monatlich).
+    _loop("geo_places_update", "maintenance", 24 * 60, max_silence_seconds=4 * 24 * 60 * 60, service="job-worker"),
+    # Ortsnamen der Fotos nach einem Datenupdate bzw. für den Altbestand nachtragen (je Mandant in Stücken).
+    _loop("photo_places_resolve", "photo_analysis", 10, max_silence_seconds=2 * 60 * 60, service="job-worker"),
     # Takt kommt aus abgabebox-backend/app/config.py (ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES,
     # Default 30) - das Backend kennt die Einstellung nicht, darum hier mit Reserve.
     JobDefinition(

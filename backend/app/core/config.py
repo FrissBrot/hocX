@@ -289,6 +289,14 @@ class Settings(BaseSettings):
     # das Signal still. GEOIP_AUTO_UPDATE=false: kein Download (Datei bei Bedarf selbst ablegen).
     geoip_db_path: str = "/var/lib/hocx/geoip/dbip-country-lite.mmdb"
     geoip_auto_update: bool = True
+    # Foto-Standorte (app/services/geo_places.py): Ortsdaten aus GeoNames (CC BY 4.0) und swisstopo
+    # swissNAMES3D, vom Job geo_places_update (job-worker) monatlich in Postgres geladen. Nur dieser
+    # Job lädt herunter, nie mit Koordinaten von Fotos. GEO_PLACES_AUTO_UPDATE=false: kein Download
+    # (Import dann mit scripts/import_geo_places.py aus lokalen Dateien).
+    geo_places_auto_update: bool = True
+    # Länderdateien mit Gipfeln, Hütten, Seen und Weilern (Kürzel GeoNames); weltweit sonst cities500.
+    geo_places_countries: str = "CH,LI,AT,DE,FR,IT"
+    geo_places_max_age_days: int = 30
 
     admin_auth_secret: str = "hocx-local-dev-admin-secret"
     admin_session_cookie: str = "hocx_admin_session"

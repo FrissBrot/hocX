@@ -1771,7 +1771,9 @@
         "photos.read"
       ],
       "branches": [
+        "files.manage",
         "files.read",
+        "meetings.edit",
         "photos.read"
       ]
     },
@@ -2019,6 +2021,10 @@
       "handler": "files.files_timeline",
       "requires": [
         "photos.read"
+      ],
+      "branches": [
+        "files.manage",
+        "meetings.edit"
       ]
     },
     "GET /api/files/trash": {
@@ -2437,6 +2443,42 @@
       "handler": "participants.replace_participant_templates",
       "requires": [
         "participants.manage"
+      ]
+    },
+    "POST /api/photo-places/assign": {
+      "handler": "photo_places.assign_place",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "GET /api/place-changes": {
+      "handler": "photo_places.list_place_changes",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "POST /api/place-changes/{batch_id}/undo": {
+      "handler": "photo_places.undo_place_change",
+      "requires": [
+        "photos.manage"
+      ]
+    },
+    "GET /api/places/search": {
+      "handler": "photo_places.search_places",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
+      ]
+    },
+    "GET /api/places/sources": {
+      "handler": "photo_places.place_sources",
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ]
     },
     "GET /api/privacy-settings": {

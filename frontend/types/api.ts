@@ -1,3 +1,5 @@
+import type { PhotoPlace } from "@/lib/photos/places";
+
 export type SaveState = "saving" | "saved" | "error";
 
 export type MfaFactorType = "totp" | "webauthn";
@@ -433,6 +435,8 @@ export type FileAlbumRef = {
 
 export type FileOverviewItem = {
   id: string;
+  // Foto-Standorte (0260): Ortsname, nur für Fotos des eigenen Mandanten
+  place?: PhotoPlace | null;
   original_name: string;
   mime_type: string | null;
   file_size_bytes: number | null;
@@ -709,6 +713,28 @@ export type CaptureChangeBatch = {
 
 export type CaptureChangeUndoResult = { restored_ids: string[]; conflict_ids: string[]; not_found_ids: string[] };
 
+// Foto-Standorte (0260, /api/photo-places, /api/place-changes)
+export type { PhotoPlace, PlaceSearchHit } from "@/lib/photos/places";
+export type PlaceAssignResult = {
+  updated_ids: string[];
+  unchanged_ids: string[];
+  skipped_gps_ids: string[];
+  not_found_ids: string[];
+  batch_id: string | null;
+};
+export type PlaceChangeBatch = {
+  id: string;
+  mode: "set" | "clear";
+  params: { place_key?: string; place_name?: string | null };
+  created_at: string;
+  created_by_name: string | null;
+  updated_count: number;
+  remaining: number;
+  undone_at: string | null;
+  can_undo: boolean;
+};
+export type PlaceChangeUndoResult = { restored_ids: string[]; conflict_ids: string[]; not_found_ids: string[] };
+
 // Upload-Verlauf (Migration 0250, /api/upload-jobs)
 export type UploadChannel =
   | "gallery" | "document" | "protocol_image" | "todo" | "submission_link" | "abgabebox" | "word_import" | "tenant_import" | "cloud_import";
@@ -936,6 +962,8 @@ export type StoredFileMetadata = {
   can_edit_capture_date?: boolean;
   // Herkunftsvorgang im Upload-Verlauf - nur, wenn die Person ihn sehen darf
   upload_job?: UploadJobOfFile | null;
+  // Ortsname (0260) für alle, die das Foto sehen; Koordinaten nur in gps
+  place?: PhotoPlace | null;
 };
 
 export type SubmissionUploadLogEntry = {
