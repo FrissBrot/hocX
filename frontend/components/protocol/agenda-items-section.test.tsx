@@ -10,6 +10,11 @@ vi.mock("@/components/ui/rich-text-editor", () => ({
   RichTextEditor: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly?: boolean }) =>
     <textarea aria-label="Text-Editor" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />,
 }));
+// Seit Editor 1a lädt der Abschnitt den Editor nach (rich-text-editor-lazy)
+vi.mock("@/components/ui/rich-text-editor-lazy", () => ({
+  LazyRichTextEditor: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly?: boolean }) =>
+    <textarea aria-label="Text-Editor" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />,
+}));
 
 import { AgendaItemsSection } from "./agenda-items-section";
 

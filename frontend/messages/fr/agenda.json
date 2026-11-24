@@ -68,7 +68,6 @@
     "titleLabel": "Titre du sujet",
     "bodyPlaceholder": "Texte du sujet",
     "actions": "Actions du sujet",
-    "quickCreateTitle": "Ajouter un sujet",
     "quickCreateDescription": "Apparaît dans ce procès-verbal sous le point choisi.",
     "sectionLabel": "Point de l’ordre du jour",
     "sectionNone": "Autres sujets (sans point)"

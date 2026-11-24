@@ -19,10 +19,6 @@ type Props = {
   onClose: () => void;
   language: string;
   onLanguageChange: (lang: string) => void;
-  protocolAccordionEnabled: boolean;
-  onProtocolAccordionChange: (enabled: boolean) => void;
-  protocolWheelEnabled: boolean;
-  onProtocolWheelChange: (enabled: boolean) => void;
   onSave: () => void | Promise<void>;
   onLogout: () => void;
   /** Reiter beim Öffnen (Direktlink ?profile=notifications aus E-Mails), sonst «profil» */
@@ -34,10 +30,6 @@ export function ProfileModal({
   onClose,
   language,
   onLanguageChange,
-  protocolAccordionEnabled,
-  onProtocolAccordionChange,
-  protocolWheelEnabled,
-  onProtocolWheelChange,
   onSave,
   onLogout,
   initialTab,
@@ -80,34 +72,6 @@ export function ProfileModal({
                       ))}
                     </Select>
                   </span>
-                </label>
-                <label className="profile-toggle">
-                  <span className="profile-toggle-text">
-                    <span>{t("accordionLabel")}</span>
-                    <span className="field-help">{t("accordionHint")}</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={protocolAccordionEnabled}
-                    onChange={(event) => onProtocolAccordionChange(event.target.checked)}
-                  />
-                  <span className="album-picker-switch-track" aria-hidden="true" />
-                </label>
-                {/* Der Rad-Effekt dreht die eingeklappten Punkte und braucht deshalb das Akkordeon */}
-                <label className="profile-toggle">
-                  <span className="profile-toggle-text">
-                    <span>{t("wheelLabel")}</span>
-                    <span className="field-help">{protocolAccordionEnabled ? t("wheelHint") : t("wheelAccordionHint")}</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={protocolWheelEnabled && protocolAccordionEnabled}
-                    disabled={!protocolAccordionEnabled}
-                    onChange={(event) => onProtocolWheelChange(event.target.checked)}
-                  />
-                  <span className="album-picker-switch-track" aria-hidden="true" />
                 </label>
                 <div className="table-actions table-actions-start">
                   <button type="button" className="button-secondary" onClick={onSave}>

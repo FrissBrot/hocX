@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";

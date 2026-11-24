@@ -61,7 +61,7 @@ describe("Shortcut-Dispatcher", () => {
 
   it("ein offener Dialog sperrt Seiten-Kürzel, ausser sie gehören zum Dialog", () => {
     const page = vi.fn();
-    renderHook(() => useShortcut("protocol.nextElement", page));
+    renderHook(() => useShortcut("protocol.nextBlock", page));
     document.body.innerHTML = '<div role="dialog" aria-modal="true"><button id="inside">x</button></div>';
     press(document.getElementById("inside")!, { key: "Enter", ctrlKey: true });
     expect(page).not.toHaveBeenCalled();
@@ -73,13 +73,13 @@ describe("Shortcut-Dispatcher", () => {
     expect(viewer).toHaveBeenCalledTimes(1);
   });
 
-  it("Pfeile in einem Listen-/Menü-Widget gehören dem Widget", () => {
+  it("Tasten ohne Modifier in einem Listen-/Menü-Widget gehören dem Widget", () => {
     const page = vi.fn();
-    renderHook(() => useShortcut("protocol.elementDown", page));
+    renderHook(() => useShortcut("admin.auditNext", page));
     document.body.innerHTML = '<div role="listbox"><div role="option" tabindex="0" id="option">a</div></div><button id="plain">b</button>';
-    press(document.getElementById("option")!, { key: "ArrowDown" });
+    press(document.getElementById("option")!, { key: "j" });
     expect(page).not.toHaveBeenCalled();
-    press(document.getElementById("plain")!, { key: "ArrowDown" });
+    press(document.getElementById("plain")!, { key: "j" });
     expect(page).toHaveBeenCalledTimes(1);
   });
 

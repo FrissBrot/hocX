@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearOfflineStore, flushPendingOfflineWrites, queueMutation, readDraft, saveDraft } from "@/lib/offline-store";
@@ -14,7 +13,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
-import { SessionPanel, type SessionPanelHandle } from "./session-panel";
+import { SessionPanel } from "./session-panel";
 
 // Sitzungsnotizen nach schnellem Neuladen: lokaler Entwurf vs. Serverstand (Fix 1.6)
 
@@ -27,10 +26,9 @@ function outbox(): Array<{ key: string; body: string }> {
 }
 
 function open(sessionNotes: string) {
-  const ref = createRef<SessionPanelHandle>();
   const protocol = { id: "p-1", session_notes: sessionNotes } as unknown as ProtocolSummary;
-  render(<SessionPanel ref={ref} protocol={protocol} participants={[]} />);
-  act(() => ref.current?.openNotes(false));
+  // Editor 1a: die Schublade «Notizen» ist offen (protocol-dock.tsx steuert active)
+  render(<SessionPanel protocol={protocol} participants={[]} active="notes" onClose={vi.fn()} />);
   return screen.getByPlaceholderText(/Notizen zur Sitzung/) as HTMLTextAreaElement;
 }
 

@@ -89,10 +89,25 @@ In die Dokumentenverwaltung übernommene Fassungen bleiben dort, bis sie dort ge
 Solange ein Protokoll abgeschlossen ist, lassen sich weder Titel, Datum noch Sitzungsnotizen
 ändern, und es kann nicht gelöscht werden. Dafür zuerst zurückstufen.
 
+## Aufbau des Editors {#aufbau}
+
+- **Kopf:** Status, Titel, Speicherstatus, wer gerade mitarbeitet, **Suchen**, **Exportieren** und
+  der Knopf für den nächsten Schritt (z. B. «Vorbereitung abschliessen»). Darunter Nummer, Modus,
+  Erstelldatum, Vorlagenversion, der Schalter **Nachverfolgen** und die vier Schritte des Ablaufs.
+- **Gliederung** links: alle Punkte mit Nummer und Kurzinfo (z. B. «12/15 anwesend», «5 Pendenzen»).
+  Ein Klick springt zum Punkt, der Punkt, den du gerade liest, ist hervorgehoben. In schmalen
+  Fenstern (Tablet) blendet der Knopf **Gliederung** im Kopf sie ein und wieder aus.
+- **Dokument** in der Mitte: alle Punkte untereinander. Texte, Aufzählungen und Pendenzen werden
+  zum Lesen angezeigt; **Bearbeiten** (oder ein Klick in den Block) öffnet den Editor nur für
+  diesen Block, **Fertig** oder **Esc** schliesst ihn wieder. Tabellen, Anwesenheit, Matrix,
+  Termine, Bilder und Finanzen sind direkt bedienbar.
+- **Dock** unten mit vier Schubladen: **Notizen**, **Pendenz**, **Anliegen** und **Status**.
+
 ## Schreiben, Speichern und Entwürfe {#speichern}
 
-- Texte werden beim Tippen automatisch gespeichert (kurz nach der letzten Eingabe). Die Anzeige
-  «Gespeichert» bestätigt es.
+- Texte werden beim Tippen automatisch gespeichert (kurz nach der letzten Eingabe). Der
+  Speicherstatus im Kopf zeigt «Speichert …», «Gespeichert», «Offline» mit der Zahl wartender
+  Änderungen oder «Nicht gespeichert – zum Block»; ein Klick darauf springt zum betroffenen Block.
 - Zusätzlich hält der Browser jeden noch nicht bestätigten Text als **lokalen Entwurf** fest.
   Stürzt der Browser ab oder bricht die Verbindung ab, stellt der Editor den Entwurf beim
   nächsten Öffnen wieder her.
@@ -103,7 +118,8 @@ Solange ein Protokoll abgeschlossen ist, lassen sich weder Titel, Datum noch Sit
   Entwurf erhalten. Beim nächsten Öffnen wird ein solcher Entwurf nicht stillschweigend
   übernommen: Eine Meldung bietet **Meinen Entwurf übernehmen** an – nur dann ersetzt er die
   fremde Fassung.
-- **Sitzungsnotizen** (Schnellmenü) sind interne Notizen zum Hock. Sie werden ebenfalls
+- **Sitzungsnotizen** (Schublade **Notizen**) sind interne Notizen zum Hock. Im abgeschlossenen
+  Protokoll lassen sie sich nur noch lesen. Sie werden ebenfalls
   automatisch gespeichert und erscheinen nie im PDF.
 
 ## Änderungen nachverfolgen {#nachverfolgen}
@@ -121,18 +137,26 @@ bestehende Markierungen bleiben sichtbar. Beim Abschliessen verschwinden alle Ma
   «Übrige auf anwesend» setzt alle noch offenen Personen. Ist für unentschuldigtes Fehlen eine
   Busse hinterlegt, entsteht sie automatisch (siehe [Todos](todos.md) und
   [Finanzen](finanzen.md)).
-- **Todos:** In Todo-Bausteinen oder über das Schnellmenü **Todo erstellen** – mit
-  Verantwortlichen und Fälligkeit. Offene Todos werden beim Abschliessen gemeldet.
-- **Anliegen:** Über das Schnellmenü erfasst, landen sie beim passenden Traktandum. Details:
-  [Anliegen](anliegen.md).
+- **Todos:** In Todo-Bausteinen (abhaken geht direkt, alles andere nach **Bearbeiten**) oder über
+  die Schublade **Pendenz** – mit Punkt («Zu Punkt»), Verantwortlichen, Fälligkeit, Busse und
+  optional Abgabe. Offene Todos werden beim Abschliessen gemeldet.
+- **Anliegen:** Über die Schublade **Anliegen** erfasst, erscheinen sie direkt unter dem gewählten
+  Traktandum. Details: [Anliegen](anliegen.md).
 
 ## Suche und Tastenkürzel {#tastatur}
 
-- **Strg+F** öffnet die Suche im Protokoll und springt zum Treffer.
-- **Strg+Enter** springt zum nächsten Punkt, **Strg+Umschalt+Enter** zum vorherigen. Beides
-  wechselt nie den Status.
-- **Strg+Alt+N** öffnet die Sitzungsnotizen, **Strg+Alt+T** ein neues Todo.
-- Das Panel **Status & Zusammenarbeit** listet alle Tastenkürzel.
+Auf dem Mac gilt ⌘ statt Strg und ⌥ statt Alt.
+
+- **Strg+F** öffnet die Suche im Protokoll und springt zum Treffer; ein zweites **Strg+F** öffnet
+  die Suche des Browsers. **Strg+K** bleibt die Suche in ganz hocX.
+- **Strg+Enter** öffnet den nächsten Block zum Bearbeiten, **Strg+Umschalt+Enter** den vorherigen.
+  Nach dem letzten Block bleibt der Editor dort; der Status ändert sich nie.
+- **Esc** schliesst den aktiven Block, die Schublade oder einen Dialog.
+- **Strg+Alt+N** Notizen, **Strg+Alt+T** oder **Strg+Alt+P** Pendenz, **Strg+Alt+A** Anliegen,
+  **Strg+Alt+S** Status & Zusammenarbeit (öffnen und schliessen). Unter Ubuntu öffnet Strg+Alt+T das
+  Terminal, dort Strg+Alt+P verwenden. Die Taste AltGr (z. B. für @ oder [) löst nie ein Kürzel aus.
+- In der Gliederung verschiebt **Alt+Pfeil** den gewählten Punkt.
+- Die Schublade **Status** listet alle Tastenkürzel.
 - Die Suche in der Protokollliste durchsucht Nummer und Titel aller Protokolle, auch solcher,
   die noch nicht nachgeladen sind.
 
@@ -141,12 +165,15 @@ bestehende Markierungen bleiben sichtbar. Beim Abschliessen verschwinden alle Ma
 Im Editor lassen sich Traktanden direkt im Protokoll anpassen, solange es nicht abgeschlossen ist
 (Recht «Sitzungen bearbeiten»):
 
-- **Hinzufügen:** ein neues Traktandum mit einem leeren Textblock, an beliebiger Stelle. Es gehört
-  nur zu diesem Protokoll.
-- **Umbenennen** und **Ausblenden/Einblenden**. Ausgeblendete Traktanden zeigt der Editor nur im
-  Vorbereitungsmodus; im PDF erscheinen sie nicht.
-- **Umsortieren:** die ganze Reihenfolge wird auf einmal gespeichert. Hat inzwischen jemand anderes
-  umsortiert oder ein Traktandum hinzugefügt, übernimmt der Editor dessen Stand und meldet das.
+- **Hinzufügen:** unter der Gliederung **Traktandum hinzufügen…** eintippen und Enter drücken. Der
+  neue Punkt steht am Ende (vor den Sitzungsnotizen), hat einen leeren Textblock und gehört nur zu
+  diesem Protokoll.
+- **Umbenennen** und (im Vorbereitungsmodus) **Ausblenden/Einblenden** über das Menü «⋮» am Titel
+  eines Punkts. Ausgeblendete Traktanden zeigt der Editor nur im Vorbereitungsmodus; im PDF
+  erscheinen sie nicht.
+- **Umsortieren:** in der Gliederung ziehen oder den Punkt wählen und **Alt+Pfeil** drücken. Die ganze
+  Reihenfolge wird auf einmal gespeichert. Hat inzwischen jemand anderes umsortiert oder ein
+  Traktandum hinzugefügt, übernimmt der Editor dessen Stand.
 
 **Die Vorlage ändert sich dadurch nie.** Das nächste Protokoll entsteht wieder aus der Vorlage,
 ein nur hier hinzugefügtes Traktandum erscheint dort also nicht. Beim **Protokoll abschliessen**
@@ -180,18 +207,20 @@ werden.
 
 Mehrere Personen können gleichzeitig am selben Protokoll arbeiten. Wer gerade welches
 Feld bzw. welche Tabellenzelle bearbeitet, wird live angezeigt (Sperre mit Zeitlimit),
-damit sich Bearbeitungen nicht gegenseitig überschreiben. Das Panel **Status &
-Zusammenarbeit** zeigt, wer mitarbeitet, ob die Live-Verbindung steht und wie die Anwesenheit
-aussieht. Ist die Live-Verbindung unterbrochen («Offline»), wird trotzdem weiter gespeichert.
+damit sich Bearbeitungen nicht gegenseitig überschreiben. Die Schublade **Status &
+Zusammenarbeit** (Schublade **Status**) zeigt, wer mitarbeitet und wo, ob die Live-Verbindung
+steht und wie die Anwesenheit aussieht. Ist die Live-Verbindung unterbrochen («Offline»), wird
+trotzdem weiter gespeichert.
 
+Jeder Statuswechsel fragt nach. Arbeiten andere mit, nennt dieselbe Rückfrage ihre Namen. Die
+anderen sehen den neuen Status sofort. **Zurück auf …** in der Schublade **Status** setzt den
+Status einen Schritt zurück (ein abgeschlossenes Protokoll nur mit dem Recht zum Freigeben).
 Der Editor zeigt ausserdem, **wo** die anderen gerade sind: welches Traktandum bzw. welchen Block
 sie ansehen oder bearbeiten. Das sehen nur Personen, die dasselbe Protokoll offen haben.
 
-Bildunterschriften lassen sich auch nach dem Hochladen noch ändern (höchstens 500 Zeichen), solange
-das Protokoll nicht abgeschlossen ist und niemand anderes den Bildblock gerade bearbeitet.
-
-Wechselt jemand den Status, während andere mitarbeiten, weist die Rückfrage darauf hin. Die
-anderen sehen den neuen Status sofort.
+Bildunterschriften lassen sich auch nach dem Hochladen direkt unter dem Bild ändern (höchstens 500
+Zeichen), solange das Protokoll nicht abgeschlossen ist und niemand anderes den Bildblock gerade
+bearbeitet.
 
 ## PDF-Export {#pdf}
 

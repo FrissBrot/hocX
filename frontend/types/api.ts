@@ -15,8 +15,6 @@ export type SessionInfo = {
     display_name: string;
     email: string;
     preferred_language: string;
-    protocol_accordion_enabled: boolean;
-    protocol_wheel_enabled: boolean;
   } | null;
   current_tenant: TenantSummary | null;
   // Effektive Berechtigungen (inkl. Implikationen) und Rollen des Kontos (RBAC) - Prüfung im
@@ -2099,6 +2097,12 @@ export type ProtocolElement = {
   export_visible_snapshot: boolean;
   show_when_empty: boolean;
   blocks: ProtocolElementBlock[];
+  /** Herkunft: aus der Vorlage, im Protokoll hinzugefügt, «Sitzungsnotizen» oder Word-Import */
+  origin?: "template" | "protocol" | "session" | "import";
+  /** Titel laut Vorlage, wenn im Protokoll umbenannt (sonst null) */
+  template_title?: string | null;
+  /** Sichtbarkeit im Protokoll geändert */
+  visibility_customized?: boolean;
 };
 
 export type FinanceAccount = {

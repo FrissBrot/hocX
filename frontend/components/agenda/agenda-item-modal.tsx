@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { AgendaScheduleField } from "@/components/agenda/agenda-schedule-field";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";

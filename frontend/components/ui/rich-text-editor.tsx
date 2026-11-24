@@ -10,6 +10,7 @@ import { Autolink } from "@/components/ui/autolink-extension";
 import { richTextMarkdownExtensions, type MarkdownStorage } from "@/components/ui/rich-text-markdown";
 import { formatCombo, type KeyNameTranslator } from "@/lib/keyboard/registry";
 import { isApplePlatform, useIsApple, useShortcutLabel } from "@/lib/search/shortcuts";
+import { dispatchShortcut } from "@/lib/keyboard/use-shortcut";
 
 // Tastenkürzel der Toolbar-Knöpfe (Tiptap-StarterKit, Mod = Strg bzw. ⌘)
 const BULLET_LIST_COMBO = "Mod+Shift+8";
@@ -25,9 +26,16 @@ type RichTextEditorProps = {
   // (removed words struck through, added words underlined) instead of a
   // separate before/after view - see tracked-changes-extension.tsx.
   trackedBaseline?: string | null;
+  /** Markdown erst nach so vielen ms Tipp-Pause erzeugen und melden (T4: getMarkdown() des ganzen
+   * Dokuments nicht bei jeder Taste). Beim Verlassen des Felds und beim Aushängen sofort. */
+  emitDelayMs?: number;
+  /** Nach dem Erstellen den Cursor ans Ende setzen (Block im Protokoll aktiviert). */
+  autoFocus?: boolean;
+  /** Zugänglicher Name des Textfelds */
+  ariaLabel?: string;
 };
 
-export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline, emitDelayMs = 0, autoFocus = false, ariaLabel }: RichTextEditorProps) {
   const t = useTranslations("common.richTextEditor");
   const shortcut = useShortcutLabel();
   const tKeys = useTranslations("common.keys");
@@ -44,6 +52,26 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
   // hasn't been reflected in `value` yet (React hasn't re-rendered) would look
   // identical to an external reset and get clobbered mid-edit.
   const lastEmittedRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Markdown erzeugen und melden, falls sich der Inhalt geändert hat (sofort oder entprellt).
+  const emitNow = (current: { storage: unknown } | null) => {
+    if (emitTimerRef.current) {
+      clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = null;
+    }
+    if (!current) return;
+    const markdown = (current.storage as MarkdownStorage).markdown.getMarkdown();
+    // «update» feuert auch ohne Textänderung (z. B. setEditable, Fokus-Transaktionen).
+    // Unveränderter Inhalt löste sonst beim Öffnen ein Speichern aus, das als «Änderungen
+    // noch nicht gespeichert» aufblitzte.
+    if (markdown === lastEmittedRef.current) return;
+    lastEmittedRef.current = markdown;
+    onChangeRef.current(markdown);
+  };
+  const emitNowRef = useRef(emitNow);
+  emitNowRef.current = emitNow;
 
   const editor = useEditor({
     // Tiptap can't render server-side; without this it silently falls back to a
@@ -58,17 +86,26 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     content: value,
     editable: !readOnly,
     onUpdate({ editor }) {
-      const markdown = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
-      // «update» feuert auch ohne Textänderung (z. B. setEditable, Fokus-Transaktionen).
-      // Unveränderter Inhalt löste sonst beim Öffnen ein Speichern aus, das als «Änderungen
-      // noch nicht gespeichert» aufblitzte.
-      if (markdown === lastEmittedRef.current) return;
-      lastEmittedRef.current = markdown;
-      onChange(markdown);
+      if (emitDelayMs <= 0) {
+        emitNowRef.current(editor);
+        return;
+      }
+      if (emitTimerRef.current) clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = setTimeout(() => emitNowRef.current(editor), emitDelayMs);
+    },
+    onBlur({ editor }) {
+      if (emitTimerRef.current) emitNowRef.current(editor);
     },
     editorProps: {
+      // Strg/⌘+Enter gehört den Seiten-Kürzeln (Protokoll: nächster Block), nicht dem harten
+      // Umbruch von Tiptap. Ohne registriertes Kürzel bleibt der Umbruch wie bisher.
+      handleKeyDown(_view, event) {
+        if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || event.altKey) return false;
+        return dispatchShortcut(event);
+      },
       attributes: {
         class: "rich-text-editor-content",
+        ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
         ...(placeholder ? { "data-placeholder": placeholder } : {}),
       },
     },
@@ -92,6 +129,34 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
 
   // Keep ref in sync
   useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Entprellte Änderung beim Aushängen noch melden (Block verlassen, Strg+Enter)
+  useEffect(() => () => {
+    if (!emitTimerRef.current || !editorRef.current) return;
+    try {
+      emitNowRef.current(editorRef.current);
+    } catch {
+      // Editor schon zerstört: dann lässt sich der Inhalt nicht mehr lesen
+    }
+  }, []);
+
+  // Tab schliessen/Seite verlassen: entprellte Änderung sofort melden, damit der Entwurf im
+  // localStorage landet (pagehide kommt auch beim Neuladen)
+  useEffect(() => {
+    if (emitDelayMs <= 0) return;
+    const flush = () => {
+      if (emitTimerRef.current && editorRef.current) emitNowRef.current(editorRef.current);
+    };
+    // capture: vor dem pagehide-Handler des Offline-Speichers, der die Entwürfe dann gleich schreibt
+    window.addEventListener("pagehide", flush, { capture: true });
+    return () => window.removeEventListener("pagehide", flush, { capture: true });
+  }, [emitDelayMs]);
+
+  // Aktivierter Block: Cursor ans Ende, ohne das Dokument zu verschieben
+  useEffect(() => {
+    if (!editor || !autoFocus || readOnly) return;
+    editor.commands.focus("end", { scrollIntoView: false });
+  }, [editor, autoFocus, readOnly]);
 
   // Attach the list-exit handler as a native keydown listener on the editor DOM.
   // This is the most reliable place — it runs before Tiptap's keymaps and

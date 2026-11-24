@@ -311,12 +311,8 @@
       "standard_tabsNavigate": "Switch between tabs and filters",
       "standard_reorder": "Move the focused entry in the order",
       "protocol_find": "Chapter and full-text search in the minutes",
-      "protocol_nextElement": "Next section (at the end: close the minutes)",
-      "protocol_previousElement": "Previous section",
-      "protocol_elementDown": "Change section (outside of fields)",
-      "protocol_elementUp": "Previous section (outside of fields)",
-      "protocol_openTodo": "New task in the session panel",
-      "protocol_openNotes": "Notes in the session panel",
+      "protocol_openTodo": "Open or close quick to-do (two equivalent shortcuts)",
+      "protocol_openNotes": "Open or close session notes",
       "protocol_quickTodoCollect": "Quick to-do: turn «Collect as submission» on or off",
       "protocol_attendanceStatus": "Set attendance: present, late, excused, absent",
       "designer_save": "Save template",
@@ -332,7 +328,11 @@
       "admin_auditNext": "Next entry in the audit log",
       "admin_auditPrevious": "Previous entry in the audit log",
       "media_toggleBest": "Add photo to or remove it from the best-of",
-      "media_delete": "Move photo to the trash (with confirmation)"
+      "media_delete": "Move photo to the trash (with confirmation)",
+      "protocol_nextBlock": "Edit the next block (also in fields)",
+      "protocol_previousBlock": "Edit the previous block",
+      "protocol_openAgenda": "Open or close new agenda request",
+      "protocol_openStatus": "Open or close status & collaboration"
     }
   },
   "numberStepper": {

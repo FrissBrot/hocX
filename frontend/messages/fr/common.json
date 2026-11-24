@@ -311,12 +311,8 @@
       "standard_tabsNavigate": "Passer d’un onglet ou filtre à l’autre",
       "standard_reorder": "Déplacer l’entrée active dans l’ordre",
       "protocol_find": "Recherche par chapitre et plein texte dans le procès-verbal",
-      "protocol_nextElement": "Section suivante (à la fin : fermer le procès-verbal)",
-      "protocol_previousElement": "Section précédente",
-      "protocol_elementDown": "Changer de section (hors des champs)",
-      "protocol_elementUp": "Section précédente (hors des champs)",
-      "protocol_openTodo": "Nouvelle tâche dans le panneau de séance",
-      "protocol_openNotes": "Notes du panneau de séance",
+      "protocol_openTodo": "Ouvrir ou fermer la tâche rapide (deux raccourcis équivalents)",
+      "protocol_openNotes": "Ouvrir ou fermer les notes de séance",
       "protocol_quickTodoCollect": "Tâche rapide : activer ou désactiver « Collecter comme remise »",
       "protocol_attendanceStatus": "Présence : présent, en retard, excusé, absent",
       "designer_save": "Enregistrer le modèle",
@@ -332,7 +328,11 @@
       "admin_auditNext": "Entrée suivante du journal d'audit",
       "admin_auditPrevious": "Entrée précédente du journal d'audit",
       "media_toggleBest": "Ajouter la photo à la sélection ou l’en retirer",
-      "media_delete": "Mettre la photo à la corbeille (avec confirmation)"
+      "media_delete": "Mettre la photo à la corbeille (avec confirmation)",
+      "protocol_nextBlock": "Modifier le bloc suivant (aussi dans les champs)",
+      "protocol_previousBlock": "Modifier le bloc précédent",
+      "protocol_openAgenda": "Ouvrir ou fermer la saisie d’une demande",
+      "protocol_openStatus": "Ouvrir ou fermer statut et collaboration"
     }
   },
   "numberStepper": {

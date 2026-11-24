@@ -152,26 +152,7 @@
   "collaboration": {
     "editingLockedBy": "in modifica da {name}",
     "offline": "Offline",
-    "offlineTitle": "La collaborazione dal vivo non è al momento connessa – le tue modifiche vengono comunque salvate automaticamente.",
-    "statusPanel": {
-      "absent": "Non giustificato",
-      "activeNow": "Attivo ora",
-      "ariaLabel": "Stato e collaborazione",
-      "close": "Chiudi",
-      "editingLiveWith": "sta modificando dal vivo con",
-      "excused": "Giustificato",
-      "noOneElseActive": "Nessun altro sta modificando dal vivo in questo momento.",
-      "participants": "Partecipanti",
-      "present": "Presente",
-      "shortcutNextSection": "Sezione successiva",
-      "shortcutNotes": "Apri note della seduta",
-      "shortcutPrevSection": "Sezione precedente",
-      "shortcutSearch": "Cerca – nelle presenze prima la ricerca persona",
-      "shortcutTodo": "Apri attività rapida",
-      "shortcuts": "Scorciatoie da tastiera",
-      "title": "Stato e collaborazione",
-      "docsLink": "Guida: collaborare a un verbale"
-    }
+    "offlineTitle": "La collaborazione dal vivo non è al momento connessa – le tue modifiche vengono comunque salvate automaticamente."
   },
   "collectFine": "Riscuoti multa",
   "collectedCheckmark": "✓ Riscosso",
@@ -195,8 +176,6 @@
   "editEventTitle": "Modifica evento",
   "editListTitle": "Modifica lista",
   "editor": {
-    "attendanceEyebrow": "Presenze",
-    "autosaveNotice": "Le modifiche vengono salvate automaticamente.",
     "changeSaveFailed": "La modifica non può essere salvata",
     "configConflictReloaded": "Nel frattempo qualcun altro ha modificato questo blocco – è stata caricata la versione attuale. Ripeti la modifica.",
     "entryCreateFailed": "La voce non può essere creata",
@@ -209,7 +188,6 @@
     "eventRemoveFailed": "L'evento non può essere rimosso",
     "eventSaveFailed": "L'evento non può essere salvato",
     "eventShowFailed": "L'evento non può essere mostrato",
-    "excusedLabel": "Giustificato",
     "imageDeleteConfirm": "Eliminare definitivamente questa immagine? Questa azione non può essere annullata.",
     "imageDeleteFailed": "L'immagine non può essere eliminata",
     "imageUploadFailed": "L'immagine non può essere caricata",
@@ -220,12 +198,6 @@
     "templateVersionPill": "Versione modello {version, number}",
     "templateChangedHint": "Il modello è stato modificato",
     "orderSaveFailed": "L'ordine non può essere salvato",
-    "otherEditorWarningDescription": "Almeno un'altra persona sta modificando attivamente questo verbale in questo momento. Il cambio di stato verrà applicato immediatamente per tutti.",
-    "otherEditorWarningTitle": "Un'altra persona sta modificando",
-    "presentLabel": "Presente",
-    "quickAccessEyebrow": "Accesso rapido",
-    "savedIndicator": "✓ Salvato",
-    "switchAnywayButton": "Cambia comunque",
     "textSaveFailed": "Il testo non può essere salvato",
     "textSavedLocallyOffline": "Testo salvato localmente – verrà salvato automaticamente al ripristino della connessione.",
     "todoCreateFailed": "L'attività non può essere creata",
@@ -233,7 +205,6 @@
     "todoDeleteFailed": "L'attività non può essere eliminata",
     "todoSaveFailed": "L'attività non può essere salvata",
     "uncancelEventOption": "Annulla la cancellazione",
-    "unexcusedLabel": "Non giustificato",
     "workflowDone": "Completato",
     "workflowFinishPreparation": "Termina preparazione",
     "workflowFinishProtocol": "Finalizza verbale",
@@ -249,10 +220,9 @@
     "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale.",
     "eventHideFailed": "Non è stato possibile rimuovere l'evento",
     "finishProtocolConfirmTitle": "Finalizzare il verbale?",
-    "finishProtocolConfirmMessage": "Il verbale verrà congelato e non potrà più essere modificato. hocX genera il PDF firmato, registra lo stato dei compiti e invia le notifiche e-mail ai responsabili. Si può annullare solo dal menu nell’elenco dei verbali («Torna a …»).",
+    "finishProtocolConfirmMessage": "Il verbale verrà congelato e non potrà più essere modificato. hocX genera il PDF firmato, registra lo stato dei compiti e invia le notifiche e-mail ai responsabili. Si può annullare solo con «Ripristina stato» (in «Stato e collaborazione» o nel menu dell’elenco dei verbali).",
     "finishSessionConfirmTitle": "Concludere la seduta?",
-    "finishSessionConfirmMessage": "La seduta termina e il verbale passa alla rielaborazione. Le richieste in attesa per questa riunione vengono riprese definitivamente. Tornare indietro è possibile solo dal menu nell’elenco dei verbali.",
-    "confirmWithOtherEditors": "{consequences} Attenzione: qualcun altro sta lavorando a questo verbale in questo momento.",
+    "finishSessionConfirmMessage": "La seduta termina e il verbale passa alla rielaborazione. Le richieste in attesa per questa riunione vengono riprese definitivamente. Puoi ripristinare lo stato in «Stato e collaborazione» o dal menu nell’elenco dei verbali.",
     "statusChangeUnsavedChanges": "Stato non modificato: non tutte le modifiche sono state salvate. Controlla la connessione e riprova.",
     "statusChangeFailed": "Impossibile modificare lo stato.",
     "draftsConflictToast": "{count, plural, one {Una bozza locale non è stata applicata} other {# bozze locali non sono state applicate}} perché nel frattempo qualcun altro ha modificato questo punto. Viene mostrata la versione attuale.",
@@ -265,7 +235,6 @@
       "back": "Torna ai verbali",
       "created": "Creato il {date}",
       "templateVersion": "Modello v{version, number}",
-      "searchLabel": "Cerca nel verbale …",
       "searchAria": "Cerca nel verbale ({shortcut})",
       "exportMenu": "Esporta",
       "openPdf": "Apri PDF",
@@ -280,7 +249,107 @@
       "stepDone": "Concluso",
       "stepDoneHint": "completato",
       "templateReload": "Ricarica",
-      "trackChanges": "Traccia modifiche"
+      "trackChanges": "Traccia modifiche",
+      "backShort": "Verbali",
+      "searchShort": "Cerca",
+      "outlineToggle": "Struttura"
+    },
+    "frozenBannerTitle": "Concluso",
+    "frozenBannerText": "Questi dati sono congelati e di sola lettura. Il PDF firmato è stato generato.",
+    "outlineSummaryAttendance": "{present}/{total} presenti",
+    "outlineSummaryTodos": "{count, plural, one {# attività} other {# attività}}",
+    "outline": {
+      "label": "Struttura del verbale",
+      "title": "Struttura",
+      "hidden": "Nascosto",
+      "dropAtEnd": "Trascina qui: alla fine",
+      "peopleHere": "Qui ora: {people}",
+      "addLabel": "Aggiungere un punto",
+      "addPlaceholder": "Aggiungere un punto…",
+      "addHint": "Invio aggiunge · solo in questo verbale"
+    },
+    "saveState": {
+      "saving": "Salvataggio …",
+      "saved": "✓ Salvato",
+      "offline": "Offline · {count, plural, =0 {tutto salvato} one {# modifica in attesa} other {# modifiche in attesa}}",
+      "error": "Non salvato – vai al blocco"
+    },
+    "finishPreparationConfirmTitle": "Concludere la preparazione?",
+    "finishPreparationConfirmMessage": "Il verbale passa alla modalità seduta. Da ora non vengono aggiunte nuove marcature di modifica.",
+    "transition": {
+      "othersTitle": "{count, plural, one {Un’altra persona sta modificando} other {Altre persone stanno modificando}}",
+      "othersText": "{names} {count, plural, one {sta lavorando} other {stanno lavorando}} attivamente a questo verbale. Il cambio di stato vale subito per tutti."
+    },
+    "confirmWithOtherEditors": "{consequences} Attenzione: qualcun altro sta lavorando a questo verbale in questo momento.",
+    "lastBlockReached": "Ultimo blocco raggiunto",
+    "firstBlockReached": "Primo blocco raggiunto",
+    "drawer": {
+      "dockLabel": "Strumenti della seduta",
+      "notes": {
+        "dock": "Note",
+        "title": "Note della seduta",
+        "notInPdf": "Non nel PDF"
+      },
+      "todo": {
+        "dock": "Attività",
+        "title": "Attività rapida"
+      },
+      "agenda": {
+        "dock": "Richiesta",
+        "title": "Registrare una richiesta"
+      },
+      "status": {
+        "dock": "Stato",
+        "title": "Stato e collaborazione",
+        "activeNow": "Attivi ora",
+        "you": "Tu",
+        "offline": "La collaborazione in tempo reale non è connessa – le tue modifiche vengono comunque salvate.",
+        "alone": "Nessun altro è in questo verbale al momento.",
+        "participants": "Partecipanti",
+        "present": "Presenti",
+        "excused": "Giustificati",
+        "absent": "Non giustificati",
+        "statusTitle": "Stato",
+        "revertHint": "Riporta il verbale indietro di un passo, p. es. per correggere un verbale concluso.",
+        "revertTo": "Torna a «{status}»",
+        "shortcuts": "Scorciatoie da tastiera",
+        "escape": "Chiudere blocco, cassetto o dialogo",
+        "secondFind": "Un secondo {shortcut} apre la ricerca del browser.",
+        "docsLink": "Guida: collaborare al verbale"
+      }
+    },
+    "revertConfirmTitle": "Ripristinare lo stato?",
+    "revertConfirmMessage": "Il verbale torna a «{status}». La modifica vale subito per tutti.",
+    "orderConflict": "Qualcuno ha riordinato i punti nel frattempo. L’ordine attuale è caricato.",
+    "elementAddFailed": "Impossibile aggiungere il punto",
+    "elementRenameFailed": "Impossibile rinominare il punto",
+    "elementVisibilityFailed": "Impossibile modificare la visibilità",
+    "imageCaptionFailed": "Impossibile salvare la didascalia",
+    "presenceViewing": "su «{title}»",
+    "presenceEditing": "modifica «{title}»",
+    "section": {
+      "menu": "Azioni per «{title}»",
+      "rename": "Rinomina",
+      "renameLabel": "Titolo del punto",
+      "show": "Mostra",
+      "hide": "Nascondi",
+      "renamed": "rinominato",
+      "renamedTitle": "Nel modello: «{title}»",
+      "hiddenBadge": "Nascosto"
+    },
+    "templateChanges": {
+      "title": "Riprendere le modifiche ai punti nel modello «{template}»?",
+      "intro": "Finora queste modifiche valgono solo in questo verbale. hocX riprende quelle selezionate nel modello alla conclusione.",
+      "noPermission": "Queste modifiche valgono solo in questo verbale. Non hai il diritto di modificare il modello.",
+      "added": "Nuovo: «{title}» dopo «{after}»",
+      "addedFirst": "Nuovo: «{title}» all’inizio",
+      "renamed": "Rinominato: «{from}» → «{to}»",
+      "shown": "Mostrato: «{title}»",
+      "hidden": "Nascosto: «{title}»",
+      "order": "Ordine: {order}",
+      "applied": "{count, plural, one {# modifica ripresa} other {# modifiche riprese}} nel modello",
+      "outdated": "L’elenco non era più aggiornato ed è stato ricaricato. Controlla di nuovo.",
+      "failed": "Impossibile riprendere le modifiche nel modello"
     }
   },
   "embeddedBlock": {
@@ -409,14 +478,6 @@
   "participantFallback": "Partecipante",
   "pendingLabel": "In sospeso",
   "protocolNumbered": "Verbale {number}",
-  "quickActions": {
-    "ariaLabel": "Menu rapido",
-    "collaborationView": "Vista collaborazione",
-    "collaborationViewSoon": "Vista collaborazione (presto disponibile)",
-    "createTodo": "Crea attività",
-    "createAgendaItem": "Aggiungi argomento",
-    "sessionNotes": "Apri note della seduta"
-  },
   "refreshDataAction": "⟳ Aggiorna dati",
   "removeColumn": "Rimuovi colonna",
   "reopenTodo": "Riapri attività",
@@ -453,7 +514,6 @@
     "assignPlaceholder": "Assegna persona…",
     "createTodoButton": "Crea attività",
     "createTodoFailed": "Impossibile creare l'attività",
-    "createdBadge": "Creato",
     "defaultTag": "Note della seduta",
     "draftRestored": "È stata ripristinata una bozza locale delle note della seduta.",
     "draftConflict": "La bozza locale delle note della seduta non è stata ripresa perché nel frattempo qualcun altro ha modificato le note. Viene mostrata la versione attuale.",
@@ -463,7 +523,6 @@
     "noDueDate": "Nessuna scadenza",
     "notesPlaceholder": "Note per la seduta…",
     "notesTitle": "Note della seduta",
-    "quickTodoTitle": "Attività rapida",
     "saveError": "Errore durante il salvataggio",
     "saved": "Salvato",
     "saving": "Salvataggio…",
@@ -482,12 +541,12 @@
     "createdWithSubmission": "Creato: {title} · con consegna",
     "keyHint": "{enter} crea · {escape} crea e chiude",
     "keyHintCollect": "{enter} crea · {collect} consegna · {escape} crea e chiude",
-    "clearFields": "Svuota i campi",
     "taskLabel": "Attività",
     "assigneeLabel": "Persona",
     "dueLabel": "Scadenza",
     "tagLabel": "Categoria / tag",
-    "dueEmpty": "Nessun risultato"
+    "sectionLabel": "Per il punto",
+    "sectionCustom": "Tag personalizzato"
   },
   "settledLater": "Saldato più tardi",
   "showAction": "Mostra",
@@ -685,5 +744,12 @@
     "todoColumnDue": "Scadenza",
     "todoAdd": "Aggiungi compito",
     "todoNewPlaceholder": "Nuovo compito"
-  }
+  },
+  "blockDone": "Fatto",
+  "blockEdit": "Modifica",
+  "blockEditAria": "Modifica {block}",
+  "textEmptyStatic": "Ancora nessun testo",
+  "bulletsEmptyStatic": "Ancora nessun punto",
+  "todosEmptyStatic": "Ancora nessuna attività",
+  "imageCaptionLabel": "Didascalia"
 }

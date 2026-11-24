@@ -1,22 +1,4 @@
-/* Bereichs-CSS, geladen nur von: elements protocols submission-assignments templates. Siehe design/DESIGN.md Abschnitt 10. */
 
-.block-editor-hero {
-  padding: var(--space-5) var(--space-5);
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent 88%), transparent 40%),
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 96%, transparent 4%), color-mix(in srgb, var(--accent) 4%, transparent 96%));
-}
-
-.block-editor-hero-copy {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.block-editor-hero-action {
-  align-self: flex-start;
-}
 
 .selection-list {
   display: grid;
@@ -220,47 +202,7 @@
   gap: var(--space-2);
 }
 
-.matrix-column-config-list {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.matrix-column-config-card {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
-}
-
-.matrix-column-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.matrix-column-remove {
-  min-height: 42px;
-  padding-inline: var(--space-4);
-}
-
-.matrix-column-title {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
-}
-
-.matrix-column-title {
-  font-weight: 600;
-}
-
 @media (max-width: 900px) {
-.matrix-column-header {
-    grid-template-columns: 1fr;
-  }
 
   .block-type-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

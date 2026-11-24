@@ -154,8 +154,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [profileInitialTab, setProfileInitialTab] = useState<string | undefined>(undefined);
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
-  const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
-  const [protocolWheelEnabled, setProtocolWheelEnabled] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchListInput, setSearchListInput] = useState<HTMLInputElement | null>(null);
@@ -279,8 +277,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       }
       setSession(current);
       setLanguage(current.user?.preferred_language ?? "de");
-      setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
-      setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? false);
       setSessionStatus(t("sessionReady"));
     }
 
@@ -374,8 +370,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         method: "PATCH",
         body: JSON.stringify({
           preferred_language: language,
-          protocol_accordion_enabled: protocolAccordionEnabled,
-          protocol_wheel_enabled: protocolWheelEnabled,
         })
       });
       const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
@@ -447,10 +441,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       onClose={() => { setProfileModalOpen(false); setProfileInitialTab(undefined); }}
       language={language}
       onLanguageChange={setLanguage}
-      protocolAccordionEnabled={protocolAccordionEnabled}
-      onProtocolAccordionChange={setProtocolAccordionEnabled}
-      protocolWheelEnabled={protocolWheelEnabled}
-      onProtocolWheelChange={setProtocolWheelEnabled}
       onSave={saveProfile}
       onLogout={() => void logout()}
     />

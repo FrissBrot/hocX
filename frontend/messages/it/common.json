@@ -311,12 +311,8 @@
       "standard_tabsNavigate": "Passare tra schede e filtri",
       "standard_reorder": "Spostare la voce attiva nell’ordine",
       "protocol_find": "Ricerca per capitolo e testo nel verbale",
-      "protocol_nextElement": "Sezione successiva (alla fine: chiudere il verbale)",
-      "protocol_previousElement": "Sezione precedente",
-      "protocol_elementDown": "Cambiare sezione (fuori dai campi)",
-      "protocol_elementUp": "Sezione precedente (fuori dai campi)",
-      "protocol_openTodo": "Nuovo compito nel pannello della seduta",
-      "protocol_openNotes": "Note del pannello della seduta",
+      "protocol_openTodo": "Aprire o chiudere l’attività rapida (due scorciatoie equivalenti)",
+      "protocol_openNotes": "Aprire o chiudere le note della seduta",
       "protocol_quickTodoCollect": "Attività rapida: attivare o disattivare «Raccogli come consegna»",
       "protocol_attendanceStatus": "Presenza: presente, in ritardo, giustificato, assente",
       "designer_save": "Salvare il modello",
@@ -332,7 +328,11 @@
       "admin_auditNext": "Voce successiva del registro di audit",
       "admin_auditPrevious": "Voce precedente del registro di audit",
       "media_toggleBest": "Aggiungere o togliere la foto dalla selezione migliori",
-      "media_delete": "Spostare la foto nel cestino (con conferma)"
+      "media_delete": "Spostare la foto nel cestino (con conferma)",
+      "protocol_nextBlock": "Modificare il blocco successivo (anche nei campi)",
+      "protocol_previousBlock": "Modificare il blocco precedente",
+      "protocol_openAgenda": "Aprire o chiudere la nuova richiesta",
+      "protocol_openStatus": "Aprire o chiudere stato e collaborazione"
     }
   },
   "numberStepper": {

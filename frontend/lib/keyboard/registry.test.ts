@@ -10,6 +10,7 @@ import {
   comboParts,
   formatCombo,
   matchesCombo,
+  matchesShortcut,
   normalizeCombo,
   parseCombo,
   RESERVED_COMBOS,
@@ -100,9 +101,36 @@ describe("Shortcut-Registry: Erkennen der Tasten", () => {
     expect(matchesCombo(key({ key: "t", code: "KeyT", ctrlKey: true, altKey: true }), "Mod+Alt+T")).toBe(true);
   });
 
-  it("AltGr (Windows: Strg+Alt) erzeugt Zeichen und ist nie ein Shortcut", () => {
-    const altGr = { ...key({ key: "@", code: "Digit2", ctrlKey: true, altKey: true }), getModifierState: (name: string) => name === "AltGraph" };
-    expect(matchesCombo(altGr, "Mod+Alt+2")).toBe(false);
+  const withAltGraph = (event: KeyboardEvent) => ({ ...event, getModifierState: (name: string) => name === "AltGraph" });
+
+  it("AltGr-Zeichen (DE/CH-Layout) sind nie ein Shortcut (Fall B)", () => {
+    // AltGr+2 → @, AltGr+3 → #, AltGr+ü → [, AltGr+¨ → ], AltGr+ä → {, AltGr+$ → }, AltGr+E → €
+    const cases: Array<[string, string, string]> = [
+      ["@", "Digit2", "Mod+Alt+2"],
+      ["#", "Digit3", "Mod+Alt+3"],
+      ["[", "BracketLeft", "Mod+Alt+["],
+      ["]", "BracketRight", "Mod+Alt+]"],
+      ["{", "Quote", "Mod+Alt+A"],
+      ["}", "Backslash", "Mod+Alt+S"],
+      ["€", "KeyE", "Mod+Alt+E"],
+    ];
+    for (const [char, code, combo] of cases) {
+      expect(matchesCombo(withAltGraph(key({ key: char, code, ctrlKey: true, altKey: true })), combo), `${char} ${code}`).toBe(false);
+    }
+  });
+
+  it("echtes Strg+Alt+Buchstabe löst aus, auch wenn Windows dabei AltGraph meldet (Fall A)", () => {
+    for (const [letter, combo] of [["t", "Mod+Alt+T"], ["p", "Mod+Alt+P"], ["n", "Mod+Alt+N"], ["a", "Mod+Alt+A"], ["s", "Mod+Alt+S"]]) {
+      const event = withAltGraph(key({ key: letter, code: `Key${letter.toUpperCase()}`, ctrlKey: true, altKey: true }));
+      expect(matchesCombo(event, combo), combo).toBe(true);
+    }
+    // Umschalt ändert nur die Grossschreibung, nicht die Taste
+    expect(matchesCombo(withAltGraph(key({ key: "T", code: "KeyT", ctrlKey: true, altKey: true, shiftKey: true })), "Mod+Alt+Shift+T")).toBe(true);
+  });
+
+  it("Pendenz hat Strg+Alt+T und Strg+Alt+P (Ubuntu: Strg+Alt+T öffnet das Terminal)", () => {
+    expect(matchesShortcut(key({ key: "p", code: "KeyP", ctrlKey: true, altKey: true }), "protocol.openTodo")).toBe(true);
+    expect(matchesShortcut(key({ key: "t", code: "KeyT", ctrlKey: true, altKey: true }), "protocol.openTodo")).toBe(true);
   });
 
   it("Satzzeichen unabhängig von Umschalt und Layout (CH: / = Umschalt+7, ? = Umschalt+')", () => {
@@ -136,6 +164,6 @@ describe("Shortcut-Registry: Darstellung", () => {
 
   it("liefert aria-keyshortcuts mit Strg- und ⌘-Variante", () => {
     expect(ariaKeyShortcuts("global.search")).toBe("Control+K Meta+K");
-    expect(ariaKeyShortcuts("protocol.openTodo")).toBe("Control+Alt+T Meta+Alt+T");
+    expect(ariaKeyShortcuts("protocol.openTodo")).toBe("Control+Alt+T Meta+Alt+T Control+Alt+P Meta+Alt+P");
   });
 });

@@ -13,6 +13,11 @@ vi.mock("@/components/ui/rich-text-editor", () => ({
   RichTextEditor: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly?: boolean }) =>
     <textarea aria-label="Text-Editor" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />,
 }));
+// Der Anliegen-Dialog lädt den Editor seit 1.6 nach (rich-text-editor-lazy)
+vi.mock("@/components/ui/rich-text-editor-lazy", () => ({
+  LazyRichTextEditor: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly?: boolean }) =>
+    <textarea aria-label="Text-Editor" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />,
+}));
 
 import { AgendaListView } from "./agenda-list-view";
 import { AgendaItemModal } from "./agenda-item-modal";

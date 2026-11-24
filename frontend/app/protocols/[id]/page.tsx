@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
-import { MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor";
+import { LazyMobileProtocolEditor as MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor-lazy";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";
@@ -192,8 +192,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               }}
               canViewFines={canViewFines}
               canCollectSubmissions={can(session, "submissions.manage") && can(session, "meetings.edit")}
-              accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
-              wheelEnabled={session.user?.protocol_wheel_enabled ?? false}
+              canApprove={can(session, "meetings.approve")}
               initialAgendaItems={agendaItems}
               initialScrollPosition={scrollPosition}
               initialProtocolFines={protocolFines}

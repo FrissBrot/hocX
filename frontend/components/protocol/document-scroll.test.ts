@@ -1,35 +1,66 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { nativeSmoothScroll, scrollDuration, sectionScrollTarget, wheelVars } from "./document-scroll";
+import { jumpToSection, nativeSmoothScroll, scrollDuration, sectionScrollTarget } from "./document-scroll";
 
 describe("sectionScrollTarget", () => {
-  const base = { viewport: 800, scrollHeight: 5000, first: false };
+  const base = { viewport: 800, scrollHeight: 5000 };
 
-  it("zentriert kurze Punkte und setzt lange und den ersten oben an", () => {
-    expect(sectionScrollTarget({ ...base, top: 1000, height: 200 })).toBe(700);
-    expect(sectionScrollTarget({ ...base, top: 1000, height: 900 })).toBe(984);
-    expect(sectionScrollTarget({ ...base, top: 400, height: 200, first: true })).toBe(384);
+  it("setzt den Kopf des Punkts oben an", () => {
+    expect(sectionScrollTarget({ ...base, top: 1000 })).toBe(984);
   });
 
   it("bleibt im Scrollbereich", () => {
-    expect(sectionScrollTarget({ ...base, top: 100, height: 100 })).toBe(0);
-    expect(sectionScrollTarget({ ...base, top: 4900, height: 100 })).toBe(4200);
+    expect(sectionScrollTarget({ ...base, top: 10 })).toBe(0);
+    expect(sectionScrollTarget({ ...base, top: 4900 })).toBe(4200);
   });
 });
 
-describe("wheelVars", () => {
-  it("lässt den aktiven Punkt und weit entfernte Punkte flach", () => {
-    expect(wheelVars(0)).toBeNull();
-    expect(wheelVars(11)).toBeNull();
-    expect(wheelVars(-11)).toBeNull();
-    expect(wheelVars(Number.NaN)).toBeNull();
+describe("jumpToSection", () => {
+  function setup(sectionTop: number) {
+    const container = document.createElement("div");
+    const section = document.createElement("section");
+    container.appendChild(section);
+    let scrollTop = 0;
+    Object.defineProperties(container, {
+      clientHeight: { value: 800 },
+      scrollHeight: { value: 20000 },
+      scrollTop: { get: () => scrollTop, set: (value: number) => { scrollTop = value; } },
+    });
+    let top = sectionTop;
+    Object.defineProperty(section, "offsetTop", { get: () => top });
+    Object.defineProperty(section, "offsetParent", { get: () => container });
+    return { container, section, moveSection: (value: number) => { top = value; } };
+  }
+
+  it("springt nahe Ziele direkt an", () => {
+    const { container, section } = setup(600);
+    const onDone = vi.fn();
+    jumpToSection(container, section, { smooth: false, onDone });
+    expect(container.scrollTop).toBe(584);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it("legt Punkte darüber und darunter auf die Walze, zunehmend bis vier Punkte Abstand", () => {
-    expect(wheelVars(-1)).toEqual({ "--wheel-dir": "-1", "--wheel-depth": "0.156" });
-    expect(wheelVars(2)).toEqual({ "--wheel-dir": "1", "--wheel-depth": "0.500" });
-    expect(wheelVars(4)).toEqual({ "--wheel-dir": "1", "--wheel-depth": "1.000" });
-    expect(wheelVars(-10)).toEqual({ "--wheel-dir": "-1", "--wheel-depth": "1.000" });
+  it("springt weit entfernte Ziele in zwei Stufen an und misst dazwischen neu", () => {
+    vi.useFakeTimers();
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const { container, section, moveSection } = setup(9000);
+    const onDone = vi.fn();
+    jumpToSection(container, section, { smooth: false, onDone });
+    // Stufe 1: sofort in die Nähe (geschätzte Lage)
+    expect(container.scrollTop).toBe(8984);
+    expect(onDone).not.toHaveBeenCalled();
+    // Nach dem Rendern der Nachbarn liegt der Punkt woanders
+    moveSection(9400);
+    frames.shift()?.(0);
+    frames.shift()?.(0);
+    expect(container.scrollTop).toBe(9384);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 });
 

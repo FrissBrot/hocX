@@ -74,6 +74,12 @@ function blockSearchFragments(
 
   if (block.display_compiled_text?.trim()) fragments.push(block.display_compiled_text.trim());
 
+  // Aufzählung: die Punkte stehen in der Blockkonfiguration
+  const bulletItems = block.element_type_code === "bullet_list" ? block.configuration_snapshot_json?.bullet_items : null;
+  if (Array.isArray(bulletItems)) {
+    for (const item of bulletItems) if (typeof item === "string" && item.trim()) fragments.push(item.trim());
+  }
+
   if (block.element_type_code === "todo") {
     for (const todo of todosByBlock[block.id] ?? []) {
       if (todo.task?.trim()) fragments.push(todo.task.trim());
