@@ -311,7 +311,7 @@
       "standard_tabsNavigate": "Switch between tabs and filters",
       "standard_reorder": "Move the focused entry in the order",
       "protocol_find": "Chapter and full-text search in the minutes",
-      "protocol_openTodo": "Open or close quick to-do",
+      "protocol_openTodo": "Open or close quick to-do (two equivalent shortcuts)",
       "protocol_openNotes": "Open or close session notes",
       "protocol_quickTodoCollect": "Quick to-do: turn «Collect as submission» on or off",
       "protocol_attendanceStatus": "Set attendance: present, late, excused, absent",

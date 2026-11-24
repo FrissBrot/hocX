@@ -95,7 +95,8 @@ export const SHORTCUTS = [
   // (Strg+Alt+M Kommentar): frei in Browsern, auf Windows nie mit AltGr verwechselt (matchesCombo),
   // auf macOS über event.code statt des ⌥-Zeichens.
   { id: "protocol.openNotes", keys: ["Mod+Alt+N"], scope: "page", group: "protocol", inInputs: true },
-  { id: "protocol.openTodo", keys: ["Mod+Alt+T"], scope: "page", group: "protocol", inInputs: true },
+  // Pendenz: zusätzlich Strg+Alt+P, weil Strg+Alt+T unter Ubuntu/GNOME das Terminal öffnet
+  { id: "protocol.openTodo", keys: ["Mod+Alt+T", "Mod+Alt+P"], displayKeys: ["Mod+Alt+T", "Mod+Alt+P"], scope: "page", group: "protocol", inInputs: true },
   { id: "protocol.openAgenda", keys: ["Mod+Alt+A"], scope: "page", group: "protocol", inInputs: true },
   { id: "protocol.openStatus", keys: ["Mod+Alt+S"], scope: "page", group: "protocol", inInputs: true },
   // Schnelle Pendenz (session-panel.tsx): Abgabe ein-/ausschalten, auch im Titelfeld
@@ -166,12 +167,21 @@ type KeyLike = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "alt
   getModifierState?: (key: string) => boolean;
 };
 
+/** Liefert die Taste ihr eigenes Zeichen (Buchstabe/Ziffer der Taste laut event.code)? */
+function producesKeyOwnCharacter(event: KeyLike): boolean {
+  const match = /^(?:Key|Digit)([A-Z0-9])$/.exec(event.code ?? "");
+  return Boolean(match) && event.key.toLowerCase() === match![1].toLowerCase();
+}
+
 export function matchesCombo(event: KeyLike, combo: string | ParsedCombo): boolean {
   const parsed = typeof combo === "string" ? parseCombo(combo) : combo;
   const mod = event.ctrlKey || event.metaKey;
   if (mod !== parsed.mod || event.altKey !== parsed.alt) return false;
-  // AltGr (Windows meldet Strg+Alt) erzeugt Zeichen wie @ # | - nie als Shortcut deuten
-  if (parsed.alt && event.getModifierState?.("AltGraph")) return false;
+  // AltGr (Windows meldet Strg+Alt) erzeugt Zeichen wie @ # | € - die nie als Shortcut deuten.
+  // Windows meldet AltGraph aber auch beim echten Strg+Alt+Buchstabe; dann ist event.key das
+  // unveränderte Zeichen der Taste (Strg+Alt+T → «t»). Nur wenn AltGr ein anderes Zeichen erzeugt
+  // hat (DE/CH: AltGr+2 → «@», AltGr+E → «€», AltGr+ü → «[»), ist es Texteingabe.
+  if (parsed.alt && event.getModifierState?.("AltGraph") && !producesKeyOwnCharacter(event)) return false;
   const want = parsed.key;
   if (want.length === 1 && LAYOUT_SYMBOLS.has(want)) return event.key === want;
   if (event.shiftKey !== parsed.shift) return false;

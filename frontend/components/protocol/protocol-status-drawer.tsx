@@ -94,18 +94,20 @@ export function ProtocolStatusDrawer({ others, selfWhere, connected, attendance,
         <ul className="protocol-shortcut-list">
           {LISTED_SHORTCUTS.map((id) => {
             const definition = getShortcut(id);
-            const keys = definition.displayKeys ? definition.displayKeys.join(" ") : null;
+            // Mehrere gleichwertige Kombinationen (z. B. Pendenz: Strg+Alt+T oder Strg+Alt+P) alle zeigen
+            const combos = definition.displayKeys ?? [definition.keys[0]];
             return (
               <li key={id} className="protocol-shortcut-row">
                 <span>{tShortcuts(id.replace(/\./g, "_"))}</span>
                 <span className="protocol-shortcut-keys">
-                  {keys ? (
-                    <kbd className="protocol-header-kbd">{keys}</kbd>
-                  ) : (
-                    comboParts(definition.keys[0], apple, tKeys as unknown as KeyNameTranslator).map((part, index) => (
-                      <kbd key={index} className="protocol-header-kbd">{part}</kbd>
-                    ))
-                  )}
+                  {combos.map((combo, comboIndex) => (
+                    <span key={combo} className="protocol-shortcut-combo">
+                      {comboIndex > 0 ? <span className="protocol-shortcut-or" aria-hidden="true">/</span> : null}
+                      {comboParts(combo, apple, tKeys as unknown as KeyNameTranslator).map((part, index) => (
+                        <kbd key={index} className="protocol-header-kbd">{part}</kbd>
+                      ))}
+                    </span>
+                  ))}
                 </span>
               </li>
             );

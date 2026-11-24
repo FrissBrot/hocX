@@ -2331,7 +2331,9 @@ button.protocol-save-state-error { min-height: 0; width: auto; padding: 2px var(
 .protocol-status-dot-excused { background: var(--warning); }
 .protocol-status-dot-absent { background: var(--danger); }
 .protocol-shortcut-row > span:first-child { flex: 1; color: var(--text); font-size: var(--text-sm); }
-.protocol-shortcut-keys { display: inline-flex; gap: 2px; }
+.protocol-shortcut-keys { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-1); }
+.protocol-shortcut-combo { display: inline-flex; align-items: center; gap: 2px; }
+.protocol-shortcut-or { color: var(--muted); font-size: var(--text-xs); }
 .session-panel-notes-wrap, .session-panel-todo-wrap { display: flex; flex-direction: column; gap: var(--space-3); }
 .session-panel-notes-wrap[hidden], .session-panel-todo-wrap[hidden] { display: none; }
 

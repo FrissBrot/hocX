@@ -311,7 +311,7 @@
       "standard_tabsNavigate": "Zwischen Tabs und Filtern wechseln",
       "standard_reorder": "Markierten Eintrag in der Reihenfolge verschieben",
       "protocol_find": "Kapitel- und Volltextsuche im Protokoll",
-      "protocol_openTodo": "Schnelle Pendenz öffnen oder schliessen",
+      "protocol_openTodo": "Schnelle Pendenz öffnen oder schliessen (zwei gleichwertige Kürzel)",
       "protocol_openNotes": "Sitzungsnotizen öffnen oder schliessen",
       "protocol_quickTodoCollect": "Schnelle Pendenz: «Als Abgabe einsammeln» ein- oder ausschalten",
       "protocol_attendanceStatus": "Anwesenheit setzen: anwesend, verspätet, entschuldigt, abwesend",

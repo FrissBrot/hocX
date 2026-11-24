@@ -79,7 +79,7 @@ function decodeEntities(text: string): string {
     if (ENTITIES[name]) return ENTITIES[name];
     // Zahl-Entitäten schreibt der Editor an Auszeichnungsrändern («**B!**&#67;», rich-text-markdown.ts)
     const code = name.startsWith("#x") ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
-    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match; // i18n-ok: Zahlenvergleich, kein UI-Text
   });
 }
 

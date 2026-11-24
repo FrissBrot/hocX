@@ -311,7 +311,7 @@
       "standard_tabsNavigate": "Passer d’un onglet ou filtre à l’autre",
       "standard_reorder": "Déplacer l’entrée active dans l’ordre",
       "protocol_find": "Recherche par chapitre et plein texte dans le procès-verbal",
-      "protocol_openTodo": "Ouvrir ou fermer la tâche rapide",
+      "protocol_openTodo": "Ouvrir ou fermer la tâche rapide (deux raccourcis équivalents)",
       "protocol_openNotes": "Ouvrir ou fermer les notes de séance",
       "protocol_quickTodoCollect": "Tâche rapide : activer ou désactiver « Collecter comme remise »",
       "protocol_attendanceStatus": "Présence : présent, en retard, excusé, absent",

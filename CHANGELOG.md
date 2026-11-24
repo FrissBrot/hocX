@@ -79,7 +79,9 @@ Installationen aktualisieren können.
   Gliederung, Dock und Schublade). Jeder Statuswechsel fragt nach; arbeiten andere mit, nennt
   dieselbe Rückfrage ihre Namen. Tastenkürzel: Strg/⌘+Enter bzw. +Umschalt öffnen den nächsten bzw.
   vorherigen **Block** (nach dem letzten bleibt der Editor dort, früher schloss er das Protokoll),
-  Strg/⌘+Alt+N/T/A/S öffnen die Schubladen, Esc schliesst. Pfeil auf/ab wechseln den Punkt nicht
+  Strg/⌘+Alt+N/T/A/S öffnen die Schubladen (Pendenz auch Strg/⌘+Alt+P, weil Strg+Alt+T unter
+  Ubuntu das Terminal öffnet), Esc schliesst. Strg+Alt+Buchstabe löst unter Windows jetzt auch
+  aus, wenn der Browser dabei AltGr meldet; mit AltGr erzeugte Zeichen (@, [, €) bleiben Text. Pfeil auf/ab wechseln den Punkt nicht
   mehr (sie scrollen wie gewohnt).
 - **Protokoll-Editor schneller:** Punkte ausserhalb des Bildes rendert der Browser nicht
   (content-visibility), der aktive Punkt kommt aus einem IntersectionObserver, Tiptap lädt erst im

@@ -152,8 +152,9 @@ Auf dem Mac gilt ⌘ statt Strg und ⌥ statt Alt.
 - **Strg+Enter** öffnet den nächsten Block zum Bearbeiten, **Strg+Umschalt+Enter** den vorherigen.
   Nach dem letzten Block bleibt der Editor dort; der Status ändert sich nie.
 - **Esc** schliesst den aktiven Block, die Schublade oder einen Dialog.
-- **Strg+Alt+N** Notizen, **Strg+Alt+T** Pendenz, **Strg+Alt+A** Anliegen, **Strg+Alt+S** Status &
-  Zusammenarbeit (öffnen und schliessen).
+- **Strg+Alt+N** Notizen, **Strg+Alt+T** oder **Strg+Alt+P** Pendenz, **Strg+Alt+A** Anliegen,
+  **Strg+Alt+S** Status & Zusammenarbeit (öffnen und schliessen). Unter Ubuntu öffnet Strg+Alt+T das
+  Terminal, dort Strg+Alt+P verwenden. Die Taste AltGr (z. B. für @ oder [) löst nie ein Kürzel aus.
 - In der Gliederung verschiebt **Alt+Pfeil** den gewählten Punkt.
 - Die Schublade **Status** listet alle Tastenkürzel.
 - Die Suche in der Protokollliste durchsucht Nummer und Titel aller Protokolle, auch solcher,

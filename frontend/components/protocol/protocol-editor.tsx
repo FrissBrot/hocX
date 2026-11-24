@@ -283,7 +283,7 @@ export function ProtocolEditor({
     if (!outlineOpen) return;
     const frame = window.requestAnimationFrame(() => {
       const pane = document.getElementById("protocol-outline-pane");
-      (pane?.querySelector<HTMLElement>('[aria-current="location"]') ?? pane?.querySelector<HTMLElement>(".protocol-outline-item"))?.focus();
+      (pane?.querySelector<HTMLElement>('[aria-current="location"]') ?? pane?.querySelector<HTMLElement>(".protocol-outline-item"))?.focus(); // i18n-ok: Selektor, kein UI-Text
     });
     return () => window.cancelAnimationFrame(frame);
   }, [outlineOpen]);
