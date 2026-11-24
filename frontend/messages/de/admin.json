@@ -1,7 +1,7 @@
 {
   "accountManagement": {
     "title": "Admin-Accounts",
-    "description": "Zugang zum Platform-Admin-Panel selbst - getrennt von allen Mandanten-Benutzern.",
+    "description": "Zugang zur hocX Konsole selbst - getrennt von allen Mandanten-Benutzern.",
     "newAdmin": "Neuer Admin",
     "columns": {
       "name": "Name",
@@ -23,7 +23,7 @@
     "deactivate": "Deaktivieren",
     "activate": "Aktivieren",
     "newAdminModalTitle": "Neuer Admin-Account",
-    "newAdminModalDescription": "Legt einen weiteren Zugang zum Platform-Admin-Panel an.",
+    "newAdminModalDescription": "Legt einen weiteren Zugang zur hocX Konsole an.",
     "name": "Name",
     "email": "E-Mail",
     "password": "Passwort",
@@ -34,7 +34,7 @@
       "selfDowngradeConfirm": "Deinen eigenen Account auf Nur-Lesezugriff setzen? Du verlierst damit sofort selbst den Schreibzugriff auf dieses Panel.",
       "updated": "Admin-Account aktualisiert",
       "updateFailed": "Admin-Account konnte nicht aktualisiert werden",
-      "deactivateConfirm": "\"{name}\" deaktivieren? Der Account verliert damit sofort den Zugriff auf das Platform-Admin-Panel."
+      "deactivateConfirm": "\"{name}\" deaktivieren? Der Account verliert damit sofort den Zugriff auf die hocX Konsole."
     },
     "passkeyCount": "{count, plural, =0 {Kein Passkey} one {# Passkey} other {# Passkeys}}",
     "neverLoggedIn": "Noch nie"
@@ -621,6 +621,10 @@
       "auth_security_maintenance": {
         "title": "Anmeldeschutz aufräumen",
         "description": "Stündlich: löscht Sicherheitsereignisse nach 90 Tagen, beendete Sitzungen und lange unbenutzte Geräte und repariert Zähler ohne Ablauf."
+      },
+      "password_breach_recheck": {
+        "title": "Passwort-Leak-Prüfung vormerken",
+        "description": "Täglich: merkt Konten vor, deren Passwort seit 30 Tagen nicht mehr gegen bekannte Datenlecks geprüft wurde. Die nächste Anmeldung prüft dann ohne Zwischenspeicher."
       },
       "metrics_rollup": {
         "title": "Kennzahlen-Rollup",

@@ -82,7 +82,11 @@ def _authenticate(token: str | None) -> CurrentUser | None:
 def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     # Dieselbe Kontoprüfung wie REST (SEC-AUTH-014: früher eine eigene Kopie ohne has_left):
     # aktiv, Login erlaubt, nicht ausgetreten, Widerruf, Session-Register.
-    validated = validate_session_token(db, token)
+    # touch=False: Handshake (automatisches Neuverbinden) und Revalidierung alle 30 s sind keine
+    # Benutzeraktivität - ein offener, auch versteckter Protokoll-Tab hielt die Session sonst über
+    # die Inaktivitätsgrenze hinaus bis zur absoluten Dauer am Leben. Aktivität vermerken die
+    # REST-Aufrufe des Editors (Speichern, Laden).
+    validated = validate_session_token(db, token, touch=False)
     if validated is None:
         return None
     user = validated.user

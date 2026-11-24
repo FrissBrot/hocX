@@ -2,9 +2,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { Editor, type JSONContent } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
 import { describe, expect, it } from "vitest";
 
-import { richTextMarkdownExtensions, type MarkdownStorage } from "./rich-text-markdown";
+import { MarkdownText, richTextMarkdownExtensions, type MarkdownStorage } from "./rich-text-markdown";
 
 // PDF-Integritäts-Audit, Editor-Seite: jeder Fall wird mit dem echten Serializer des Editors in
 // Markdown verwandelt. Das Ergebnis steht im Korpus, den das Backend gegen das gerenderte PDF
@@ -13,7 +15,7 @@ import { richTextMarkdownExtensions, type MarkdownStorage } from "./rich-text-ma
 // lassen - so kann keine Editor-Änderung ungeprüft Text verlieren.
 const CORPUS = path.resolve(__dirname, "../../../backend/tests/documents/fixtures/editor_richtext_corpus.json");
 
-type Mark = "bold" | "italic";
+type Mark = "bold" | "italic" | "strike";
 const text = (value: string, ...marks: Mark[]): JSONContent => ({ type: "text", text: value, ...(marks.length ? { marks: marks.map((type) => ({ type })) } : {}) });
 const br: JSONContent = { type: "hardBreak" };
 const p = (...content: JSONContent[]): JSONContent => ({ type: "paragraph", content });
@@ -55,6 +57,7 @@ const CASES: Array<{ name: string; doc: JSONContent }> = [
   { name: "links", doc: doc(p(text("Siehe https://example.org/pfad?x=1&y=2 und www.example.net sowie kontakt@example.com."))) },
   { name: "emoji", doc: doc(p(text("Fest 🎉 mit Grill 🔥 und Häkchen ✓ sowie Pfeil →"))) },
   { name: "lang", doc: doc(p(text("Donaudampfschifffahrtsgesellschaftskapitänsmützenhalterung ist ein langes Wort ohne Trennung im Satz."))) },
+  { name: "satzzeichen_auszeichnung", doc: doc(p(text("Achtung "), text("Stopp!", "bold"), text("Weiter und "), text("wirklich?", "italic"), text("Jawohl Satzende"))) },
   { name: "leerabsatz", doc: doc(p(text("Vor dem leeren Absatz")), { type: "paragraph" }, p(text("Nach dem leeren Absatz"))) },
 ];
 
@@ -114,5 +117,72 @@ describe("PDF-Integrität: Markdown des Rich-Text-Editors", () => {
     } finally {
       editor.destroy();
     }
+  });
+});
+
+// Satzzeichen am Rand einer Auszeichnung («**B!**C»): CommonMark erkennt den Begrenzer dort nur,
+// wenn auch ausserhalb ein Satzzeichen oder Leerraum steht. Vorher verschob tiptap-markdown die
+// Begrenzer nach innen («**B**!C») - das Satzzeichen verlor die Auszeichnung.
+describe("Satzzeichen an Auszeichnungen überstehen Speichern und Laden", () => {
+  // Durchstreichen ist im Editor aus; der Serializer gilt für alle Begrenzer gleich und wird
+  // hier mit eingeschaltetem Durchstreichen geprüft.
+  function strikeEditor(content: JSONContent | string) {
+    return new Editor({
+      extensions: [
+        StarterKit.configure({ heading: false, code: false, codeBlock: false, blockquote: false, horizontalRule: false, underline: false, link: false, text: false }),
+        MarkdownText,
+        Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false }),
+      ],
+      content,
+    });
+  }
+
+  function roundtrip(content: JSONContent, create: (value: JSONContent | string) => Editor = makeEditor) {
+    const first = create(content);
+    try {
+      const markdown = (first.storage as unknown as MarkdownStorage).markdown.getMarkdown();
+      const second = create(markdown);
+      try {
+        return { markdown, json: second.getJSON() };
+      } finally {
+        second.destroy();
+      }
+    } finally {
+      first.destroy();
+    }
+  }
+
+  const marks: Mark[] = ["bold", "italic", "strike"];
+  const cases: Array<{ name: string; content: (mark: Mark) => JSONContent[] }> = [
+    { name: "Satzzeichen am Ende, Buchstabe danach", content: (mark) => [text("A "), text("B!", mark), text("C")] },
+    { name: "Satzzeichen am Ende, Absatzende", content: (mark) => [text("Hallo "), text("Welt!", mark)] },
+    { name: "Satzzeichen am Ende, Leerzeichen danach", content: (mark) => [text("A "), text("B!", mark), text(" C")] },
+    { name: "Satzzeichen am Anfang, Buchstabe davor", content: (mark) => [text("x"), text("!B", mark), text(" y")] },
+    { name: "Satzzeichen an beiden Rändern im Wort", content: (mark) => [text("a"), text("«B»", mark), text("c")] },
+    { name: "nur ein Satzzeichen", content: (mark) => [text("a"), text("?", mark), text("b")] },
+    { name: "Satzzeichen ausserhalb", content: (mark) => [text("("), text("fett", mark), text(")!")] },
+    { name: "Fragezeichen und Ziffer", content: (mark) => [text("Nr."), text("1?", mark), text("2")] },
+    { name: "Umlaut danach", content: (mark) => [text("Gut"), text("!", mark), text("ändern")] },
+  ];
+
+  for (const mark of marks) {
+    it.each(cases)(`${mark}: $name`, ({ content }) => {
+      const source = doc(p(...content(mark)));
+      const { markdown, json } = roundtrip(source, mark === "strike" ? strikeEditor : makeEditor);
+      expect(json, markdown).toEqual(source);
+    });
+  }
+
+  it("schreibt nur das angrenzende Zeichen als Entität", () => {
+    expect(roundtrip(doc(p(text("A "), text("B!", "bold"), text("C")))).markdown).toBe("A **B!**&#67;");
+    expect(roundtrip(doc(p(text("x"), text("!B", "italic"), text(" y")))).markdown).toBe("&#120;*!B* y");
+    // Ohne Satzzeichen am Rand bleibt alles wie bisher
+    expect(roundtrip(doc(p(text("a"), text("b", "bold"), text("c")))).markdown).toBe("a**b**c");
+  });
+
+  it("verschachtelte Auszeichnungen behalten ihre Satzzeichen", () => {
+    const source = doc(p(text("Achtung"), text("Stopp!", "bold", "italic"), text("Weiter")));
+    const { markdown, json } = roundtrip(source);
+    expect(json, markdown).toEqual(source);
   });
 });

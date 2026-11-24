@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.entities import AppUser, Event, Template, Tenant
-from app.schemas.base import PublicIdModel
+from app.schemas.base import PublicIdModel, reject_null
 from app.schemas.event import EventRead, check_event_date_range
 
 # Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
@@ -274,11 +274,16 @@ class ProtocolTextRead(BaseModel):
     tracked_baseline_content: str | None = None
 
 
+# todo_status.id ist SMALLINT: grössere Werte scheiterten erst in PostgreSQL («smallint out of
+# range», 400 plus Fehlerprotokoll) statt als ungültige Eingabe.
+TodoStatusId = Annotated[int, Field(ge=1, le=32767)]
+
+
 class ProtocolTodoCreate(BaseModel):
     task: str
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
-    todo_status_id: int = 1
+    todo_status_id: TodoStatusId = 1
     due_date: date | None = None
     due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
@@ -296,7 +301,7 @@ class ProtocolTodoUpdate(BaseModel):
     task: str | None = None
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
-    todo_status_id: int | None = None
+    todo_status_id: TodoStatusId | None = None
     due_date: date | None = None
     due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
@@ -306,6 +311,10 @@ class ProtocolTodoUpdate(BaseModel):
     closed_in_protocol_id: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
+    # Teil-Update: task und tags dürfen fehlen, aber nicht null sein. task=null scheiterte am
+    # NOT NULL (400 plus Fehlerprotokoll), tags=null wurde als JSON-null gespeichert und jede
+    # Antwort mit dieser Pendenz brach danach ab (ProtocolTodoRead.tags ist eine Liste).
+    _reject_null = field_validator("task", "tags")(reject_null)
 
 
 class ProtocolTodoRead(BaseModel):

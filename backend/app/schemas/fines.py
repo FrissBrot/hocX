@@ -5,7 +5,9 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, PlainSerializer, model_validator
+from pydantic import BaseModel, Field, PlainSerializer, field_validator, model_validator
+
+from app.schemas.finance import MAX_AMOUNT
 
 _CENTS = Decimal("0.01")
 
@@ -36,6 +38,23 @@ class AttendanceFineCreate(BaseModel):
     amount: PositiveFineAmount | None = None
     use_tariff: bool = False
     account_id: uuid.UUID
+
+    @field_validator("amount")
+    @classmethod
+    def _amount_fits_column(cls, value: Decimal | None) -> Decimal | None:
+        # attendance_fine.amount ist numeric(15,2) mit CHECK amount > 0. PostgreSQL rundet auf
+        # Rappen: 0.004 wurde zu 0.00 (CHECK verletzt), 10^14 sprengte die Spalte - beides
+        # erst beim INSERT, als 400 plus Eintrag im Fehlerprotokoll. Gleich runden wie die
+        # Datenbank (bisher gültige Beträge bleiben gültig) und danach prüfen.
+        if value is None:
+            return value
+        # Obergrenze zuerst: quantize() auf sehr grosse Werte wirft InvalidOperation (kein ValueError)
+        if value > MAX_AMOUNT:
+            raise ValueError(f"amount must not exceed {MAX_AMOUNT}")
+        rounded = value.quantize(_CENTS, rounding=ROUND_HALF_UP)
+        if rounded <= 0:
+            raise ValueError("amount must be at least 0.01")
+        return rounded
 
     @model_validator(mode="after")
     def _amount_or_tariff(self) -> "AttendanceFineCreate":

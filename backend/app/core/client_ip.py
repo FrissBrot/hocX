@@ -41,3 +41,12 @@ def client_ip(request: HTTPConnection) -> str:
             return hop
     # Alle Einträge im eigenen Netz (z. B. Zugriff aus dem LAN): ursprünglichster Eintrag.
     return hops[0] if hops else peer
+
+
+def rate_limit_source(request: HTTPConnection) -> str:
+    """Quelle für Ratelimit-Schlüssel: IPv4 je Adresse, IPv6 je /64 (SEC-AUTH-007, wie der Login).
+    Ein Anschluss hat ein ganzes /64 - Grenzen je /128 liessen sich mit jeder neuen Adresse aus dem
+    eigenen Netz umgehen. Für jeden IP-basierten Ratelimit-Schlüssel verwenden, nie ``client_ip``."""
+    from app.core.auth_pseudonym import source_address  # spät: auth_pseudonym → audit_context → hier
+
+    return source_address(client_ip(request)).exact

@@ -11,7 +11,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core.client_ip import client_ip
+from app.core.client_ip import rate_limit_source
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
@@ -121,7 +121,7 @@ def get_calendar_feed(token: str, request: Request, db: Session = Depends(get_db
     if resolved is None:
         # Nur Fehlversuche zaehlen pro IP: Google ruft alle Abos von wenigen gemeinsamen IPs ab,
         # ein IP-Limit fuer gueltige Abrufe wuerde dort grosse Mandanten treffen.
-        enforce_rate_limit(f"calendar-feed:miss:{client_ip(request)}", limit=20, period_seconds=60)
+        enforce_rate_limit(f"calendar-feed:miss:{rate_limit_source(request)}", limit=20, period_seconds=60)
         # Gleiche Antwort fuer unbekannt, widerrufen, deaktiviert - ein Ratender lernt nichts.
         raise HTTPException(status_code=404, detail="Kalender nicht gefunden")
     feed, user = resolved

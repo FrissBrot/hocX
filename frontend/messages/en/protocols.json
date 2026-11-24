@@ -456,6 +456,8 @@
     "createdBadge": "Created",
     "defaultTag": "Session notes",
     "draftRestored": "A local draft of the session notes was restored.",
+    "draftConflict": "The local draft of the session notes was not applied because someone else has changed the notes in the meantime. The current version is shown.",
+    "draftConflictApply": "Use my draft",
     "duePlaceholder": "Due…",
     "nextSession": "Next meeting",
     "noDueDate": "No due date",

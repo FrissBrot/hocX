@@ -397,6 +397,7 @@ function FeatureHint({ text }: { text: string | null }) {
 function UsersCard({ subscription, tenantUsers }: { subscription: TenantSubscription; tenantUsers: UserSummary[] }) {
   const t = useTranslations("tenantSettings");
   const userLimit = subscription.effective_user_limit ?? null;
+  const pendingInvites = subscription.pending_invite_count ?? 0;
   return (
     <section className="card grid">
       <div className="tenant-usage-card-head">
@@ -421,7 +422,12 @@ function UsersCard({ subscription, tenantUsers }: { subscription: TenantSubscrip
             {tenantUsers.length > 8 ? <span className="tenant-user-avatar tenant-user-avatar-overflow">+{tenantUsers.length - 8}</span> : null}
           </div>
         ) : null}
-        {userLimit !== null ? <span className="muted tenant-usage-note">{t("seatsFree", { count: Math.max(0, userLimit - subscription.user_count) })}</span> : null}
+        {userLimit !== null ? (
+          <span className="muted tenant-usage-note">
+            {t("seatsFree", { count: Math.max(0, userLimit - subscription.user_count - pendingInvites) })}
+            {pendingInvites > 0 ? ` · ${t("seatsPendingInvites", { count: pendingInvites })}` : null}
+          </span>
+        ) : null}
       </div>
     </section>
   );

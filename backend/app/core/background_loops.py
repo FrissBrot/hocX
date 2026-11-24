@@ -80,6 +80,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Datei-Import (Migration 0230_cloud_import, services/cloud_import/worker.py). 046-049 bleiben
     # für parallel entwickelte Jobs frei.
     "cloud_import": 202600050,
+    # Leak-Prüfung bestehender Passwörter (1.5.2, Migration 0219, app/auth_security/breach.py).
+    # 202600070: 038-069 sind teils von parallel entwickelten Jobs (1.6) belegt.
+    "password_breach_recheck": 202600070,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

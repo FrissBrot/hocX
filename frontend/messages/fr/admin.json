@@ -1,7 +1,7 @@
 {
   "accountManagement": {
     "title": "Comptes administrateur",
-    "description": "Accès au panneau d'administration de la plateforme lui-même - distinct de tous les utilisateurs des organisations.",
+    "description": "Accès à la Console hocX elle-même - distinct de tous les utilisateurs des organisations.",
     "newAdmin": "Nouvel admin",
     "columns": {
       "name": "Nom",
@@ -23,7 +23,7 @@
     "deactivate": "Désactiver",
     "activate": "Activer",
     "newAdminModalTitle": "Nouveau compte administrateur",
-    "newAdminModalDescription": "Crée un accès supplémentaire au panneau d'administration de la plateforme.",
+    "newAdminModalDescription": "Crée un accès supplémentaire à la Console hocX.",
     "name": "Nom",
     "email": "E-mail",
     "password": "Mot de passe",
@@ -34,7 +34,7 @@
       "selfDowngradeConfirm": "Passer votre propre compte en lecture seule ? Vous perdrez immédiatement vous-même l'accès en écriture à ce panneau.",
       "updated": "Compte administrateur mis à jour",
       "updateFailed": "Le compte administrateur n'a pas pu être mis à jour",
-      "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès au panneau d'administration de la plateforme."
+      "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès à la Console hocX."
     },
     "passkeyCount": "{count, plural, =0 {Aucune passkey} one {# passkey} other {# passkeys}}",
     "neverLoggedIn": "Jamais"
@@ -621,6 +621,10 @@
       "auth_security_maintenance": {
         "title": "Nettoyage de la protection des connexions",
         "description": "Toutes les heures : supprime les événements de sécurité après 90 jours, les sessions terminées et les appareils longtemps inutilisés, et répare les compteurs sans expiration."
+      },
+      "password_breach_recheck": {
+        "title": "Planifier la vérification des fuites de mots de passe",
+        "description": "Chaque jour : marque les comptes dont le mot de passe n'a pas été vérifié contre les fuites de données connues depuis 30 jours. La prochaine connexion vérifie alors sans cache."
       },
       "metrics_rollup": {
         "title": "Agrégation des indicateurs",

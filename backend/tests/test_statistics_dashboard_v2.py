@@ -216,3 +216,15 @@ def test_todo_period_counts_by_swiss_day_not_utc(db):
     assert {row[0].task for row in fetch_todo_insight_rows(db, tenant.id, calendar_year_bounds(2026))} == {
         "Silvester 00:30 (nächstes Jahr)",
     }
+
+
+def test_active_members_exclude_former_members(db):
+    """«Ø anwesend … von {count} Mitgliedern»: Ausgetretene (Austrittsdatum vor heute, Schweizer
+    Zeit) zählen nicht mehr als aktive Mitglieder; am Austrittstag selbst noch."""
+    tenant, reader, other, today = _setup(db, "Aktive Mitglieder")
+    other.left_at = today - timedelta(days=1)
+    leaving_today = make_app_user(db, email=f"heute-{tenant.id}@example.com", tenant_id=tenant.id)
+    leaving_today.left_at = today
+    db.flush()
+    overview = _overview(db, tenant.id, "admin", reader.id, year=today.year)
+    assert overview.participants_active == 2

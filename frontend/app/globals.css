@@ -12316,6 +12316,9 @@ a.export-step-meta {
   min-width: 220px;
 }
 
+/* Passwort aus einem Datenleck bekannt (1.5.2): Aufbau wie .mfa-grace-banner, nur in Rot */
+.password-breached-banner { border-color: var(--danger); background: var(--danger-bg); color: var(--danger-fg); }
+
 .install-app-prompt {
   display: flex;
   align-items: center;

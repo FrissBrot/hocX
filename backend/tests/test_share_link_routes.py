@@ -16,7 +16,7 @@ from app.api.routes import share_links as share_links_routes
 from app.core.config import settings
 from app.core.storage import MAIN, get_object_store
 from app.models.document_entities import Document, DocumentExtraction, DocumentFile, DocumentVersion
-from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
+from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, ShareLink, StoredFile
 from app.schemas.files import ShareLinkCreate
 from tests.factories import make_current_user, make_tenant
 from tests.image_fixtures import response_bytes
@@ -704,3 +704,169 @@ def test_expiry_date_from_the_date_field_keeps_the_link_open_through_that_swiss_
     moment = datetime(2030, 11, 30, 18, 0, tzinfo=UTC)
     created = share_links_routes.create_share_link(ShareLinkCreate(name="Y", file_ids=[a.public_id], expires_at=moment), db, user)
     assert created.expires_at == moment
+
+
+def _make_draft_protocol_image(db, tenant_id: int) -> StoredFile:
+    """Bild in einem Protokollentwurf (Status «geplant») - erscheint in der Dateiübersicht als
+    Quelle «protocol_image», lesen darf es nur, wer den Entwurf lesen darf."""
+    from datetime import date
+
+    from app.models.entities import ProtocolImage
+    from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template
+
+    template = make_template(db, tenant_id)
+    protocol = make_protocol(db, tenant_id, template.id, protocol_number="7/2026", protocol_date=date(2026, 3, 1))
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
+    stored_file = _make_file(db, tenant_id, name="entwurf-bild.png")
+    db.execute(GalleryImage.__table__.delete().where(GalleryImage.stored_file_id == stored_file.id))
+    db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored_file.id, sort_index=0))
+    db.flush()
+    return stored_file
+
+
+def test_create_share_link_rejects_images_of_protocols_the_account_cannot_read(db):
+    """Nachtlauf 2026-11-22 (dateien-fotos/rechte): der Link machte Bilder aus Protokollentwürfen
+    öffentlich, die das Konto selbst nicht öffnen darf (Einzelabruf 404) - wie beim Album
+    (add_album_items) zählt je Datei das Leserecht des Einzelabrufs."""
+    import dataclasses
+
+    from app.services.access_service import AccessService
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    # Eigene Rolle «Fotos & Links»: Fotos lesen und öffentlich teilen, Protokolle nur abgeschlossene
+    photographer = dataclasses.replace(writer, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    db.commit()
+
+    with pytest.raises(HTTPException):
+        AccessService().ensure_can_read_stored_file(db, photographer, draft_image.id)
+
+    with pytest.raises(HTTPException) as denied:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, photographer)
+    assert denied.value.status_code == 404
+    # Wer den Entwurf lesen darf, teilt ihn weiterhin
+    share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+
+
+def test_share_link_list_hides_links_to_files_the_account_cannot_read(db):
+    """Nachtlauf 2026-11-22: die Linkliste zeigte die Token-URL eines Links auf ein Entwurfsbild
+    auch Konten, die das Bild selbst nicht öffnen dürfen (nur Dateiart geprüft)."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photographer = dataclasses.replace(writer, user_id=2, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    photo = _make_file(db, tenant.id)
+    draft_link = share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+    share_links_routes.create_share_link(ShareLinkCreate(name="Foto", file_ids=[photo.public_id]), db, writer)
+
+    assert {row.name for row in share_links_routes.list_share_links(db, writer)} == {"Entwurf", "Foto"}
+    assert [row.name for row in share_links_routes.list_share_links(db, photographer)] == ["Foto"]
+    with pytest.raises(HTTPException) as hidden:
+        share_links_routes.revoke_share_link(draft_link.id, db, photographer)
+    assert hidden.value.status_code == 404
+
+
+def test_creator_can_still_revoke_a_link_after_losing_read_access(db):
+    """Security-Review 1.5.2: verliert der Ersteller das Leserecht (Rolle geändert), muss er
+    seinen öffentlichen Link trotzdem sehen und widerrufen können - der Link bleibt sonst aktiv."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    draft_link = share_links_routes.create_share_link(ShareLinkCreate(name="Entwurf", file_ids=[draft_image.public_id]), db, writer)
+    demoted = dataclasses.replace(writer, permissions=frozenset({"meetings.read", "photos.read", "sharing.public"}))
+
+    assert [row.name for row in share_links_routes.list_share_links(db, demoted)] == ["Entwurf"]
+    share_links_routes.revoke_share_link(draft_link.id, db, demoted)
+    assert db.get(ShareLink, draft_link.id).revoked_at is not None
+
+
+# ── Album-Links und nicht lesbare Fotos (1.5.2, Verdacht 1) ─────────────────────────────────
+
+
+def test_album_link_rejected_when_album_holds_draft_images_the_creator_cannot_read(db):
+    """Verdacht 1 (1.5.2): wer Entwürfe lesen darf, legt ein Entwurfsbild bewusst in ein Album.
+    Ein Album-Link eines Kontos OHNE Leserecht auf den Entwurf machte das Bild öffentlich - mehr,
+    als das Konto selbst sehen darf. Jetzt: der Link nur, wenn der Ersteller jedes Foto lesen darf."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photographer = dataclasses.replace(writer, user_id=2, permissions=frozenset({"meetings.read", "photos.read", "photos.manage", "sharing.public"}))
+    draft_image = _make_draft_protocol_image(db, tenant.id)
+    photo = _make_file(db, tenant.id)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Sommerlager", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=draft_image.public_id), PhotoAlbumItem(album_id=album.id, file_id=photo.public_id)])
+    db.commit()
+
+    with pytest.raises(HTTPException) as denied:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Album", album_id=album.id), db, photographer)
+    assert denied.value.status_code == 403
+    assert db.query(ShareLink).filter(ShareLink.album_id == album.id).count() == 0
+    # Wer alles im Album lesen darf, teilt es weiterhin
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="Album", album_id=album.id), db, writer)
+    assert created.file_count == 2
+
+
+def _make_submission_photo(db, tenant_id: int):
+    from app.models.entities import SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
+    from tests.factories import make_list_definition, make_list_entry
+
+    list_definition = make_list_definition(db, tenant_id)
+    entry = make_list_entry(db, list_definition.id)
+    assignment = SubmissionAssignment(
+        tenant_id=tenant_id, title="Fotos Sommerlager", public_slug=f"fotos-{uuid.uuid4().hex[:8]}",
+        source_type="list", list_definition_id=list_definition.id,
+    )
+    db.add(assignment)
+    db.flush()
+    upload = SubmissionUpload(assignment_id=assignment.id, event_id=None, list_entry_id=entry.id, status="submitted")
+    db.add(upload)
+    db.flush()
+    stored_file = _make_file(db, tenant_id, name=f"abgabe-{uuid.uuid4().hex[:6]}.png")
+    db.execute(GalleryImage.__table__.delete().where(GalleryImage.stored_file_id == stored_file.id))
+    db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored_file.id))
+    db.flush()
+    return assignment, stored_file
+
+
+def test_album_link_respects_the_assignment_scope_of_the_creator(db, monkeypatch):
+    """Verdacht 1 (1.5.2), Abgabe-Reichweite «nur zugewiesene»: ein Konto, das die Dateien eines
+    Abgabe-Auftrags nicht sehen darf, konnte über die Album-ID dessen Abgabe-Album (oder ein
+    Album mit solchen Fotos) öffentlich teilen."""
+    import dataclasses
+
+    from app.services import context_visibility_service
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    scoped = dataclasses.replace(writer, user_id=3, permissions=frozenset({"photos.read", "photos.manage", "sharing.public", "submissions.read"}))
+    assignment, submission_photo = _make_submission_photo(db, tenant.id)
+    submission_album = PhotoAlbum(tenant_id=tenant.id, name="Abgabe", kind="submission", submission_assignment_id=assignment.id)
+    mixed_album = PhotoAlbum(tenant_id=tenant.id, name="Gemischt", kind="manual")
+    db.add_all([submission_album, mixed_album])
+    db.flush()
+    db.add_all([
+        PhotoAlbumItem(album_id=submission_album.id, file_id=submission_photo.public_id),
+        PhotoAlbumItem(album_id=mixed_album.id, file_id=submission_photo.public_id),
+    ])
+    db.commit()
+    original = context_visibility_service.readable_assignment_ids
+    monkeypatch.setattr(
+        context_visibility_service, "readable_assignment_ids", lambda db_, user: set() if user.user_id == 3 else original(db_, user)
+    )
+
+    with pytest.raises(HTTPException) as hidden:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Abgabe", album_id=submission_album.id), db, scoped)
+    assert hidden.value.status_code == 404
+    with pytest.raises(HTTPException) as denied:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Gemischt", album_id=mixed_album.id), db, scoped)
+    assert denied.value.status_code == 403
+    assert db.query(ShareLink).filter(ShareLink.album_id.in_([submission_album.id, mixed_album.id])).count() == 0

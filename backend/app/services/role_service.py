@@ -232,9 +232,14 @@ def ensure_can_manage_account(db: Session, actor: CurrentUser | None, user_id: i
     _ensure_subset(actor, target_permissions, {key: SCOPE_ASSIGNED for key in load_role_scopes(db, user_id)})
 
 
-def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | None = None) -> int:
+def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | None = None, lasting: bool = False) -> int:
     """Aktive Konten mit Login, die access.manage haben (über die Standardrolle admin oder eine
-    eigene Rolle mit access.manage)."""
+    eigene Rolle mit access.manage). Ausgetretene (AppUser.has_left) können sich nicht anmelden
+    und zählen deshalb nicht. ``lasting=True``: nur Konten ohne Austrittsdatum - ein Austritt in
+    der Zukunft sperrt den Login ab dem Folgetag des Datums ohne weitere Änderung (Security-Review
+    1.5.2: zeitverzögertes Aussperren aller Administratoren)."""
+    from app.services.todo_fine_service import today
+
     grants_access = or_(
         TenantRole.system_key == ADMIN_ROLE_KEY,
         exists(
@@ -249,24 +254,35 @@ def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | N
         .select_from(AppUser)
         .join(UserRole, UserRole.user_id == AppUser.id)
         .join(TenantRole, TenantRole.id == UserRole.role_id)
-        .where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True), grants_access)
+        .where(
+            AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True), grants_access,
+            AppUser.left_at.is_(None) if lasting else or_(AppUser.left_at.is_(None), AppUser.left_at >= today()),
+        )
     )
     if excluding:
         statement = statement.where(AppUser.id.not_in(excluding))
     return int(db.scalar(statement) or 0)
 
 
-def ensure_admin_remains(db: Session, tenant_id: int, actor: CurrentUser | None, *, before: int, affects_actor: bool = False) -> None:
+def ensure_admin_remains(
+    db: Session, tenant_id: int, actor: CurrentUser | None, *, before: int, affects_actor: bool = False, before_lasting: int = 0,
+) -> None:
     """Nach einer Änderung (bereits geflusht, noch nicht committet): die Änderung hat den letzten
     handlungsfähigen Administrator nicht entfernt (Schutzregel 2; ``before`` aus lock_tenant) und -
     wenn sie das eigene Konto oder eine eigene Rolle betrifft - kein Selbstentzug (Schutzregel 3).
-    Bei Verstoss 409; der Aufrufer committet dann nicht (die Request-Session verwirft alles)."""
+    ``before_lasting``: Administratoren ohne Austrittsdatum vorher; gab es welche, muss auch danach
+    einer ohne Austrittsdatum bleiben (sonst sperrte ein geplanter Austritt später alle aus).
+    Bestehende Mandanten, deren Administratoren alle schon ein Austrittsdatum haben, blockiert das
+    nicht. Bei Verstoss 409; der Aufrufer committet dann nicht (die Request-Session verwirft alles)."""
     db.flush()
     if before > 0 and count_capable_admins(db, tenant_id) == 0:
         raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
+    if before_lasting > 0 and count_capable_admins(db, tenant_id, lasting=True) == 0:
+        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
     if affects_actor and actor is not None and P.ACCESS_MANAGE.value in actor.permissions:
         own, _ = load_role_permissions(db, actor.user_id)
-        still_active = db.scalar(select(AppUser.is_active).where(AppUser.id == actor.user_id))
+        account = db.get(AppUser, actor.user_id)
+        still_active = account is not None and account.is_active and not account.has_left
         if P.ACCESS_MANAGE.value not in own or not still_active:
             raise RoleConflict("Die eigene Benutzerverwaltung kann man sich nicht selbst entziehen", "own_access_management")
 
@@ -279,10 +295,11 @@ def admin_guard(db: Session, tenant_id: int, actor: CurrentUser | None, *, affec
     zurückgerollt (409) - die Session bleibt im Zustand vor der Änderung. Innerhalb des Blocks
     darf nicht committet werden."""
     before = lock_tenant(db, tenant_id)
+    before_lasting = count_capable_admins(db, tenant_id, lasting=True)
     savepoint = db.begin_nested()
     try:
         yield
-        ensure_admin_remains(db, tenant_id, actor, before=before, affects_actor=affects_actor)
+        ensure_admin_remains(db, tenant_id, actor, before=before, affects_actor=affects_actor, before_lasting=before_lasting)
     except BaseException:
         savepoint.rollback()
         raise
@@ -296,6 +313,9 @@ def ensure_not_last_admin_removed(db: Session, tenant_id: int, user_ids: Iterabl
     if lock_tenant(db, tenant_id) == 0 or not removed:
         return
     if count_capable_admins(db, tenant_id, excluding=removed) == 0:
+        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
+    # Bleiben nur Administratoren mit Austrittsdatum, wäre der Mandant nach deren Austritt verwaist
+    if count_capable_admins(db, tenant_id, lasting=True) > 0 and count_capable_admins(db, tenant_id, excluding=removed, lasting=True) == 0:
         raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
 
 

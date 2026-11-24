@@ -29,6 +29,8 @@ class CurrentAdmin:
     email: str
     display_name: str
     role: str = "owner"
+    # Passwort bei einer Anmeldung als geleakt erkannt (Migration 0219) - Hinweis im Admin-Panel
+    password_breached: bool = False
 
 
 def _sign_payload(payload: bytes) -> str:
@@ -128,7 +130,8 @@ def get_optional_current_admin(
     if not bool(session_data.get("mfa")) or session_data.get("amr") != SESSION_AMR:
         return None
     return CurrentAdmin(
-        admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role
+        admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role,
+        password_breached=admin.password_breached_at is not None,
     )
 
 

@@ -419,6 +419,7 @@
     },
     "login": {
       "action": "Sicherheit prüfen",
+      "breachedDetail": "Es taucht in öffentlich bekannten Datenlecks auf (nicht bei uns). Ändere es nach der nächsten Anmeldung. Bis dahin verlangen wir bei jeder Anmeldung zusätzlich deinen zweiten Faktor oder einen Code per E-Mail.",
       "country": "Land: {country}",
       "countrySource": "Länderangabe: «IP to Country Lite» von DB-IP.com (CC BY 4.0), lokal ermittelt.",
       "device": "Gerät: {device}",
@@ -429,6 +430,7 @@
         "afterLockout": "Anmeldung kurz nach einer Sperre wegen Fehlversuchen",
         "failedAttempts": "Viele fehlgeschlagene Anmeldeversuche ({count})",
         "newDevice": "Anmeldung von einem neuen Gerät",
+        "passwordBreached": "Dein Passwort ist aus einem Datenleck bekannt",
         "suspicious": "Anmeldung mit erhöhtem Risiko"
       },
       "reason": {

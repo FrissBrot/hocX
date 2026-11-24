@@ -94,3 +94,17 @@ describe("TenantSubscriptionView", () => {
     expect(await screen.findByRole("dialog", { name: "Rechnung Oktober 2026" })).toBeInTheDocument();
   });
 });
+
+describe("TenantSubscriptionView – Plätze", () => {
+  it("zieht offene Einladungen von den freien Plätzen ab (sie zählen zum Benutzerlimit)", async () => {
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path.endsWith("/subscription")) return { ...subscription, effective_user_limit: 5, user_count: 3, pending_invite_count: 2 };
+      if (path.endsWith("/charges")) return charges;
+      if (path === "/api/users") return [];
+      throw new Error(path);
+    });
+    render(<TenantSubscriptionView initialTenant={tenant} />);
+    expect(await screen.findByText(/0 Plätze frei/)).toBeInTheDocument();
+    expect(screen.getByText(/2 offene Einladungen belegen Plätze/)).toBeInTheDocument();
+  });
+});

@@ -147,6 +147,7 @@
   "seatsOf": "sur {limit} places",
   "seatsUnlimited": "places, illimité",
   "seatsFree": "{count, plural, one {# place libre} other {# places libres}}",
+  "seatsPendingInvites": "{count, plural, one {# invitation en attente occupe une place} other {# invitations en attente occupent des places}}",
   "noFilesYet": "aucun fichier enregistré",
   "privacy": {
     "intro": "Définit qui voit quelles données personnelles. S’applique à tous les membres de cette organisation.",
@@ -533,7 +534,7 @@
       "critical": "Critique"
     },
     "loadFailed": "Les données n’ont pas pu être chargées.",
-    "privacyHint": "Pour la sécurité des comptes, hocX enregistre pour chaque connexion l’heure, l’appareil approximatif, un pseudonyme du réseau et – si configuré – le pays (déterminé localement avec « IP to Country Lite » de DB-IP.com, CC BY 4.0), jamais l’adresse IP ; les événements sont supprimés après 90 jours. Les nouveaux mots de passe sont vérifiés anonymement contre les fuites de données connues : seuls les 5 premiers caractères d’un hachage sont envoyés à « Have I Been Pwned ». Mentionne les deux dans la déclaration de protection des données de ton association (intérêt légitime : sécurité des comptes)."
+    "privacyHint": "Pour la sécurité des comptes, hocX enregistre pour chaque connexion l’heure, l’appareil approximatif, un pseudonyme du réseau et – si configuré – le pays (déterminé localement avec « IP to Country Lite » de DB-IP.com, CC BY 4.0), jamais l’adresse IP ; les événements sont supprimés après 90 jours. Les nouveaux mots de passe et ceux utilisés à chaque connexion sont vérifiés anonymement contre les fuites de données connues (sans données personnelles ; seule l’heure de la vérification est enregistrée) : seuls les 5 premiers caractères d’un hachage sont envoyés à « Have I Been Pwned ». Mentionne les deux dans la déclaration de protection des données de ton association (intérêt légitime : sécurité des comptes)."
   },
   "searchSynonyms": {
     "eyebrow": "Recherche",

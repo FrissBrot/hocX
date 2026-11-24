@@ -47,3 +47,16 @@ it("uses the password for accounts without factor and shows errors", async () =>
   fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
   expect(done).toHaveBeenCalledWith(false);
 });
+
+it("explains when no confirmation is possible here instead of loading forever", async () => {
+  // Konto nur mit Passkey, aber hier nicht nutzbar (Vereins-Domain bzw. Browser ohne Passkeys):
+  // das Backend bzw. der Browserfilter lässt keine Methode übrig.
+  api.mockResolvedValue({ methods: ["passkey"], auth_time: null });
+  const done = vi.fn();
+  render(<StepUpDialog open onDone={done} />);
+  expect(await screen.findByText(/keine Bestätigung möglich/)).toBeInTheDocument();
+  expect(screen.queryByText("Wird geladen …")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Bestätigen" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+  expect(done).toHaveBeenCalledWith(false);
+});

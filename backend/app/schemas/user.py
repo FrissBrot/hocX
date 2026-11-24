@@ -93,6 +93,8 @@ class TenantSubscriptionRead(BaseModel):
     user_limit_override: int | None = None
     effective_user_limit: int | None = None
     user_count: int = 0
+    # Offene Einladungen belegen schon einen Platz (user_limit_service, Entscheid 18.11.2026)
+    pending_invite_count: int = 0
     storage_used_bytes: int = 0
     storage_quota_bytes: int | None = None
     # Aufschluesselung des Kontingents (0087_storage_packages): included_storage_bytes oben ist
@@ -240,6 +242,8 @@ class SessionRead(BaseModel):
     bridge_redirect_url: str | None = None
     # MFA ist Pflicht, aber das bestehende Konto hat noch Frist bis hierhin (Migration 0192)
     mfa_grace_until: datetime | None = None
+    # Passwort aus einem Datenleck bekannt (Migration 0219): Pflicht zur Änderung, nur Hinweis
+    password_breached: bool = False
 
 
 class BridgePreviewRead(BaseModel):

@@ -762,9 +762,11 @@
       "introNotice": "Il tuo account presso {tenant} è stato usato su un dispositivo che non conoscevamo ancora:",
       "hint": "Non sei stato tu? Cambia subito la password e disconnetti tutte le sessioni in «Dispositivi connessi».",
       "action": "Verifica la sicurezza",
+      "breachedDetail": "Compare in violazioni di dati pubblicamente note (non da noi). Cambiala dopo il prossimo accesso. Fino ad allora ogni accesso richiede anche il tuo secondo fattore o un codice via e-mail.",
       "device": "Dispositivo: {device}",
       "label": {
         "newDevice": "Accesso da un nuovo dispositivo",
+        "passwordBreached": "La tua password è nota da una violazione di dati",
         "suspicious": "Accesso con rischio elevato",
         "failedAttempts": "Molti tentativi di accesso falliti ({count})",
         "afterLockout": "Accesso poco dopo un blocco per tentativi falliti"

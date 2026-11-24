@@ -299,6 +299,7 @@ class TenantService:
             user_limit_override=tenant.user_limit_override,
             effective_user_limit=effective_user_limit,
             user_count=user_count,
+            pending_invite_count=user_limit_service.pending_invite_count(db, tenant_id),
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             package_storage_bytes=package_storage_bytes,

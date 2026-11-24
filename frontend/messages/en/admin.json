@@ -1,7 +1,7 @@
 {
   "accountManagement": {
     "title": "Admin accounts",
-    "description": "Access to the platform admin panel itself - separate from all organization users.",
+    "description": "Access to the hocX Console itself - separate from all organization users.",
     "newAdmin": "New admin",
     "columns": {
       "name": "Name",
@@ -23,7 +23,7 @@
     "deactivate": "Deactivate",
     "activate": "Activate",
     "newAdminModalTitle": "New admin account",
-    "newAdminModalDescription": "Creates another access to the platform admin panel.",
+    "newAdminModalDescription": "Creates another access to the hocX Console.",
     "name": "Name",
     "email": "Email",
     "password": "Password",
@@ -34,7 +34,7 @@
       "selfDowngradeConfirm": "Set your own account to read-only? You will immediately lose write access to this panel yourself.",
       "updated": "Admin account updated",
       "updateFailed": "Admin account could not be updated",
-      "deactivateConfirm": "Deactivate \"{name}\"? The account immediately loses access to the platform admin panel."
+      "deactivateConfirm": "Deactivate \"{name}\"? The account immediately loses access to the hocX Console."
     },
     "passkeyCount": "{count, plural, =0 {No passkey} one {# passkey} other {# passkeys}}",
     "neverLoggedIn": "Never"
@@ -621,6 +621,10 @@
       "auth_security_maintenance": {
         "title": "Sign-in protection cleanup",
         "description": "Hourly: deletes security events after 90 days, ended sessions and long-unused devices, and repairs counters without expiry."
+      },
+      "password_breach_recheck": {
+        "title": "Schedule password leak checks",
+        "description": "Daily: flags accounts whose password has not been checked against known data breaches for 30 days. The next sign-in then checks without the cache."
       },
       "metrics_rollup": {
         "title": "Metrics rollup",

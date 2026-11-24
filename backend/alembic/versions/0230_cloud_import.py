@@ -13,7 +13,7 @@
   ``hocx_seed_tenant_roles`` bleibt deshalb unverändert (wie 0207).
 
 Revision ID: 0230_cloud_import
-Revises: 0218_album_item_auto_source (vorläufig; bei der Integration neu verketten)
+Revises: 0219_password_breach_check
 Create Date: 2026-11-22
 """
 
@@ -22,7 +22,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "0230_cloud_import"
-down_revision = "0218_album_item_auto_source"
+down_revision = "0219_password_breach_check"
 branch_labels = None
 depends_on = None
 

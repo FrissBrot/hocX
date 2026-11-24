@@ -245,11 +245,14 @@ stored_file_table = Table(
 
 # system_error_log: nur INSERT-Grant, absichtlich KEIN SELECT - siehe Migration 0039.
 # Fehler dieses Service landen hier nur zur Sichtung im Platform-Admin-Panel, dieser
-# restricted Service kann/darf sie nie selbst wieder auslesen.
+# restricted Service kann/darf sie nie selbst wieder auslesen. Deshalb hier ohne Primärschlüssel
+# und ohne RETURNING: sonst holt SQLAlchemy die neue id per «RETURNING id» (braucht SELECT) bzw.
+# «nextval(...)» (braucht USAGE auf die Sequenz), und jeder Eintrag scheiterte still mit
+# «permission denied» (_record_error verschluckt das). Die id vergibt die Identity-Spalte selbst.
 system_error_log_table = Table(
     "system_error_log",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger),  # bewusst ohne primary_key, siehe oben
     Column("source", Text),
     Column("tenant_id", BigInteger),
     Column("actor_email", Text),
@@ -259,4 +262,5 @@ system_error_log_table = Table(
     Column("error_type", Text),
     Column("error_message", Text),
     Column("traceback", Text),
+    implicit_returning=False,
 )

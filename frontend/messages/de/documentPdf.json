@@ -762,9 +762,11 @@
       "introNotice": "Dein Konto bei {tenant} wurde auf einem Gerät verwendet, das wir noch nicht kannten:",
       "hint": "Warst du das nicht? Ändere sofort dein Passwort und melde unter «Angemeldete Geräte» alle Sitzungen ab.",
       "action": "Sicherheit prüfen",
+      "breachedDetail": "Es taucht in öffentlich bekannten Datenlecks auf (nicht bei uns). Ändere es nach der nächsten Anmeldung. Bis dahin verlangen wir bei jeder Anmeldung zusätzlich deinen zweiten Faktor oder einen Code per E-Mail.",
       "device": "Gerät: {device}",
       "label": {
         "newDevice": "Anmeldung von einem neuen Gerät",
+        "passwordBreached": "Dein Passwort ist aus einem Datenleck bekannt",
         "suspicious": "Anmeldung mit erhöhtem Risiko",
         "failedAttempts": "Viele fehlgeschlagene Anmeldeversuche ({count})",
         "afterLockout": "Anmeldung kurz nach einer Sperre wegen Fehlversuchen"

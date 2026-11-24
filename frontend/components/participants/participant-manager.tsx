@@ -22,6 +22,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
+import { swissDateToday } from "@/lib/utils/participant-membership";
 import { roleName } from "@/lib/permissions";
 import type { FineTariffGroup, ParticipantBulkResult, ParticipantSummary, RoleRead, RoleRef, TemplateSummary } from "@/types/api";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
@@ -87,7 +88,7 @@ type MembershipTone = "success" | "warning" | "info" | "neutral";
 type BulkModal = "invite" | "tariff" | "roles" | null;
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return swissDateToday();
 }
 
 /** Filter-Kategorie für die Tabs: "Ausgetreten" (Austrittsdatum vorbei) hat Vorrang vor dem

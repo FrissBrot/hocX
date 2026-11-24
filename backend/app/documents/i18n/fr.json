@@ -419,6 +419,7 @@
     },
     "login": {
       "action": "Vérifier la sécurité",
+      "breachedDetail": "Il apparaît dans des fuites de données publiques (pas chez nous). Change-le après ta prochaine connexion. D'ici là, chaque connexion exige en plus ton deuxième facteur ou un code envoyé par e-mail.",
       "country": "Pays : {country}",
       "countrySource": "Pays : « IP to Country Lite » de DB-IP.com (CC BY 4.0), déterminé localement.",
       "device": "Appareil : {device}",
@@ -429,6 +430,7 @@
         "afterLockout": "Connexion peu après un blocage dû à des tentatives échouées",
         "failedAttempts": "Nombreuses tentatives de connexion échouées ({count})",
         "newDevice": "Connexion depuis un nouvel appareil",
+        "passwordBreached": "Ton mot de passe figure dans une fuite de données",
         "suspicious": "Connexion à risque élevé"
       },
       "reason": {

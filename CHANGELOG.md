@@ -90,16 +90,148 @@ Installationen aktualisieren können.
 ### Update
 
 - Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung
-  `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision folgt auf `0218_album_item_auto_source` (letzte 1.5.1-Migration).
+  `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision folgt auf `0219_password_breach_check` (letzte 1.5.2-Migration).
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
-  `0252_upload_history_abgabebox` (Kette `0218` → `0230` → `0250` → `0251` → `0252`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250` → `0251` → `0252`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im
   backend-Container (rekonstruiert den Altbestand, idempotent, siehe RUNBOOK Abschnitt 25).
+
+## [1.5.2] - 2026-11-23
+
+Korrekturversion zu 1.5.1 mit allen Funden der Nachtläufe vom 22. und 23.11.2026: mehrere
+Sicherheitskorrekturen bei Konto- und Rechteverwaltung, Anmeldung, Freigabelinks und Dateilöschung,
+dazu Korrekturen bei gleichzeitigen Änderungen im Document Studio, bei Pendenzen und Bussen, beim
+Benutzerlimit, bei ausgetretenen Mitgliedern und im Fehlerprotokoll der Abgabebox sowie die
+überarbeitete Seitenleiste der Plattform-Konsole («hocX Konsole»). Neu prüft hocX bestehende
+Passwörter bei jeder Anmeldung gegen bekannte Datenlecks. Eine Migration (0219), keine neuen
+Secrets, zwei optionale Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.5.1**: `./scripts/deploy.sh <test|prod>` wie gewohnt. Migration **0219** (drei leere
+  Zeitstempel-Spalten auf `app_user` und `platform_admin`, schnell). Optional
+  `PASSWORD_BREACH_RECHECK_DAYS` (Standard 30) und `PASSWORD_LEAK_FETCH_PER_MINUTE` (Standard 600).
+- **Leak-Prüfung beim Login:** Nach dem Update wird jedes Passwort bei der nächsten Anmeldung
+  geprüft. Konten mit geleaktem Passwort brauchen ab dann den zweiten Faktor bzw. einen E-Mail-Code
+  und bekommen einmal eine Warn-Mail; ohne Mailversand und ohne zweiten Faktor ist die Anmeldung
+  solcher Konten nicht möglich (Passwort über «Passwort vergessen» bzw. die Verwaltung neu setzen).
+  Plattform-Admins mit geleaktem Passwort und ohne Passkey werden abgewiesen (neues Passwort über
+  eine andere Owner-Person oder `admin_cli`). Neuer Job `password_breach_recheck` (täglich).
+- **Abgabebox-Fehlerprotokoll:** Unerwartete Fehler der Abgabebox erscheinen ab jetzt unter
+  `/admin` im Fehlerprotokoll (bisher kam dort nie ein Eintrag an). Nach dem Update können also
+  erstmals Einträge mit Quelle «abgabebox-backend» auftauchen.
+- **Ausgetretene Mitglieder:** Wer ein Austrittsdatum in der Vergangenheit bekommt, wird wie bei
+  einer Deaktivierung abgemeldet; offene Einladungs- und Zurücksetzungslinks verfallen.
+- **Einmalige Empfehlung:** öffentliche Datei-Freigabelinks unter Mandant-Einstellungen ›
+  Zugangslinks sichten und Links auf Bilder oder Exporte aus noch nicht abgeschlossenen Protokollen
+  widerrufen, falls solche angelegt wurden. Dasselbe für Album-Links auf Alben mit Bildern aus
+  Protokollentwürfen (die neue Prüfung greift beim Erstellen, bestehende Links bleiben).
+
+### Sicherheit
+
+- **Leak-Prüfung bestehender Passwörter:** bei jeder erfolgreichen Passwort-Anmeldung (Konten und
+  Plattform-Admins) mit der bestehenden Prüfung (HIBP, k-Anonymität: nur 5 Hex-Zeichen des SHA-1,
+  Antwort je Präfix eine Stunde im Cache, Rückfall lokale Liste, höchstens 600 Abfragen je Minute).
+  Ausfall blockiert die Anmeldung nie. Geleakt: Konto markiert (Audit-Eintrag), Anmeldung nur mit
+  zweitem Faktor oder E-Mail-Code, einmalige Warn-Mail in allen Sprachen, roter Pflichthinweis in
+  der App «Passwort ändern»; ein neues Passwort hebt die Markierung auf. Der Nachtjob merkt Konten
+  vor, deren Prüfung älter als 30 Tage ist (nächste Anmeldung ohne Cache). Gespeichert werden nur
+  Zeitpunkte, nie Hash, SHA-1 oder Präfix.
+- Die Login-E-Mail eines Kontos (auch des eigenen) lässt sich nur noch nach einer frischen
+  Bestätigung der Identität ändern, wie Passwort, Login und Rollen.
+- Austrittsdatum bei Konten mit Login: setzen oder entfernen braucht dieselben Rechte wie
+  Deaktivieren (Benutzerverwaltung, keine Höherberechtigten); ausgetretene oder austretende
+  Administratoren zählen nicht mehr für die Regel «letzter Administrator», auch nicht über die
+  Personenseite oder den Word-Import.
+- Öffentliche Freigabelinks auf Dateien entstehen und erscheinen nur noch für Dateien, die das
+  eigene Konto selbst öffnen darf; der Ersteller kann seinen Link widerrufen, auch wenn er die
+  Datei inzwischen nicht mehr öffnen darf (die Trennung Fotos/Dokumente gilt weiter).
+- Live-Photo-Clips folgen dem Recht «Fotos lesen» wie das zugehörige Foto.
+- Offene Protokoll-Tabs halten eine Sitzung nicht mehr über die Inaktivitätsgrenze hinaus am Leben.
+- Vorgänge zum zweiten Faktor (Passkey/Authenticator einrichten, Passkey-Anmeldung, Bestätigung)
+  sind je Konto bzw. je Anmeldung begrenzt.
+- Ratelimits nach IP zählen IPv6-Adressen überall je /64 (Anmeldung, Zugangslinks, Logos,
+  Freigabelinks, Kalender-Abo, Abgabe-Zugang).
+- Fehlerhafte Passkey-Antworten führen zu einer normalen Ablehnung statt zu einem Serverfehler.
+- Gelöschte Fotos bleiben auch bei gleichzeitiger Bearbeitung des Aufnahmedatums nicht im
+  Speicher zurück (auch beim Löschen oder Aufräumen eines Vereins).
+- Organisations-Bestätigung: eine gleichzeitige oder zwischenzeitliche Umbenennung kann nicht mehr
+  als bestätigt gelten.
+- Bussen zu Protokollen folgen denselben Leserechten wie das Protokoll selbst (Entwürfe nur mit
+  dem Recht, Entwürfe zu lesen), auch in der Bussenliste und der Summe offener Bussen; nicht
+  lesbare Protokolle verhalten sich wie unbekannte.
+- Ein als geleakt markiertes Passwort bestätigt in einer Sitzung von vor der Markierung weder eine
+  Identitätsbestätigung noch einen Passwortwechsel; dafür neu anmelden oder «Passwort vergessen».
+- Wiedereintritt nach einem Austritt beendet alte Sitzungen und Einmal-Links; eine Mehrfacheinladung
+  mit Rolle verlangt die Bestätigung der Identität vor der ersten Änderung; die
+  Organisations-Bestätigung verlangt den geprüften Namen.
+- Bilder aus Protokollentwürfen: Dateiübersicht, Fotos, Zeitleiste, Zahlen, Tag-Vorschläge, Suche
+  und Ähnlichkeitsgruppen zeigen Protokollbilder und -exporte nur noch, wenn das Konto das Protokoll
+  lesen darf (bisher erschienen Name, Protokollnummer und Blocktitel von Entwürfen). Ein in einen
+  neuen Entwurf übernommenes Bild erscheint nur mit dem Kontext des lesbaren Protokolls.
+- Übernommene Protokollbilder: die Leseprüfung berücksichtigt jetzt alle Protokolle, in denen das
+  Bild steckt (lesbar, sobald eines lesbar ist), statt zufällig eines davon.
+- Öffentliche Album-Links: nur noch, wenn das eigene Konto jedes Foto des Albums öffnen darf
+  (keine Entwurfsbilder ohne Leserecht, keine Abgabe-Fotos ausserhalb der Reichweite «nur
+  zugewiesene»); Abgabe-Alben nicht lesbarer Aufträge lassen sich nicht mehr über die ID teilen.
+
+### Geändert
+
+- **Plattform-Admin heisst jetzt «hocX Konsole»** (en «hocX Console», fr/it «Console hocX»): Titel in der
+  Seitenleiste, Browser-Tab aller /admin-Seiten und Login der Konsole. Kontobezeichnungen wie
+  «Plattform-Admins» (Rollen, Audit-Akteur) bleiben.
+- **Seitenleiste der Konsole mit den Massen der App:** gleicher Innenabstand, Logo, Gruppen- und
+  Eintragsabstände, Eintragshöhe 40 px und Bereichsköpfe 32 px wie die Hauptnavigation der Vereins-App
+  (die dichteren Sonderwerte aus 1.5.1 entfallen). Grosse Bereiche scrollen jetzt innerhalb der
+  Navigation, der aktive Eintrag wird dabei sichtbar gehalten; Zähler im aktiven Eintrag mit
+  ausreichendem Kontrast. Kompaktmodus und Mobilmenü unverändert bedienbar.
+- **Eigenes Favicon für die Konsole:** dasselbe hX-Zeichen, hell auf dunklem Grund
+  (`public/icons/console`: `favicon.ico`, `icon.svg`, `apple-touch-icon.png`), damit App und Konsole
+  im Tab unterscheidbar sind. `/favicon.ico` auf der Admin-Domain liefert ebenfalls das Konsolen-Icon
+  (`proxy.ts`). Das App-Favicon liegt dafür neu unter `public/favicon.ico` (statt `app/favicon.ico`,
+  gleiche Datei, Link über die Metadaten), Manifest und App-Icons bleiben unverändert.
+
+### Behoben
+
+- **Document Studio:** Vorlage löschen während eines laufenden Exports, gleichzeitig gesetzte erste
+  Standardvorlage (Fehler 500), Asset bzw. Brand-Profil löschen während gleichzeitiger Verwendung
+  und Archivieren gleichzeitig mit einer Standardzuweisung verhalten sich jetzt korrekt.
+- **Protokoll nach schnellem Neuladen nicht mehr veraltet:** Sitzungsnotizen und Textblöcke
+  behalten einen lokalen Entwurf, der neuer ist als der Serverstand (bei Abweichung Hinweis mit
+  «Meinen Entwurf übernehmen»); schon gespeicherte Entwürfe werden beim Öffnen aufgeräumt, und kein
+  Entwurf wird ohne Speicherung verworfen.
+- **Fett/Kursiv mit Satzzeichen am Rand** (z. B. «**B!**» direkt vor einem Buchstaben) übersteht
+  das Speichern als Markdown; vorher wanderten die Begrenzer nach innen oder gingen verloren.
+- **Pendenzen und Aufgabenpakete:** `null` für Aufgabe, Tags, Name oder «aktiv» sowie zu grosse
+  Sortierwerte werden als ungültige Eingabe abgelehnt (vorher u. a. dauerhaft unlesbare Pendenz bei
+  `tags: null`); Paketnamen werden getrimmt. Unbekannte oder zu grosse Status-IDs ergeben eine
+  Validierungsmeldung statt eines Eintrags im Fehlerprotokoll.
+- **Anwesenheitsbussen:** Beträge werden wie in der Datenbank auf Rappen gerundet und begrenzt
+  (zu grosse oder auf 0 gerundete Beträge ergaben einen Fehler).
+- **Benutzerlimit:** offene Einladungen ausgetretener Personen belegen keinen Platz mehr; ein
+  Wiedereintritt (Austrittsdatum entfernt oder verschoben) prüft das Limit; «Abo & Nutzung» zieht
+  offene Einladungen von den freien Plätzen ab.
+- **MFA-Frist:** Wer seinen letzten Faktor ohne Pflicht entfernt und später wieder unter die
+  Pflicht fällt, bekommt erneut die Frist von drei Tagen.
+- **Mehrfacheinladung mit Rolle:** Die Rolle ändert sich nur noch, wenn die Einladung auch
+  verschickt wird; eine nötige Bestätigung der Identität wird abgefragt statt alle Personen zu
+  überspringen.
+- **Ausgetretene Mitglieder** zählen in Mitgliederlisten/Präsenzlisten des Document Studio und in
+  der Statistik nicht mehr als aktiv; die Mitgliederliste und Personenseite rechnen «heute» in
+  Schweizer Zeit (zwischen Mitternacht und 01:00/02:00 erschienen gestern Ausgetretene als aktiv).
+- **Vereins-Domain:** Passwort ändern, Faktor hinzufügen/entfernen und «Andere Geräte abmelden»
+  melden auf einer eigenen Vereins-Domain nicht mehr ab.
+- **Bestätigung der Identität:** Ist keine Methode nutzbar (nur Passkey auf einer Vereins-Domain),
+  zeigt der Dialog einen Hinweis statt endlos zu laden.
+- **Abgabebox:** Das Fehlerprotokoll schreibt wieder (fehlendes Leserecht beim Eintragen),
+  `%00` im Abgabe-Link ergibt «nicht gefunden» statt eines Serverfehlers, NUL-Zeichen verhindern
+  keine Protokolleinträge mehr, und eine Ablehnung wegen vollem Vereinskontingent steht im
+  Upload-Protokoll.
 
 ## [1.5.1] - 2026-11-22
 

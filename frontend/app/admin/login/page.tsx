@@ -15,6 +15,7 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 // (backend/app/services/admin_mfa_service.py).
 export default function AdminLoginPage() {
   const t = useTranslations("admin.login");
+  const tShell = useTranslations("adminShell");
   // Fehlercodes des Backends (invalid_credentials, passkey_invalid, rate_limited …) teilt sich der
   // Admin-Login mit dem Mandanten-Login
   const tSecurity = useTranslations("security");
@@ -210,7 +211,7 @@ export default function AdminLoginPage() {
   return (
     <main className="login-frame">
       <section className="login-panel">
-        <div className="eyebrow">hocX Platform-Admin</div> {/* i18n-ok: Produktname/Bereichsbezeichnung, keine Uebersetzung */}
+        <div className="eyebrow">{tShell("title")}</div>
         <h1>{t("title")}</h1>
 
         {!pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}

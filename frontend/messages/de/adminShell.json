@@ -1,5 +1,5 @@
 {
-  "title": "Platform-Admin",
+  "title": "hocX Konsole",
   "tagline": "Mandanten und Benutzer über das ganze System verwalten.",
   "groups": {
     "tenants": "Mandanten",

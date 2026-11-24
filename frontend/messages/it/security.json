@@ -108,6 +108,7 @@
     "invalid_credentials": "E-mail o password non validi.",
     "login_email_taken": "Questo indirizzo e-mail è già usato per un accesso.",
     "wrong_current_password": "La password attuale non è corretta.",
+    "password_breached_relogin": "La tua password attuale è nota da una violazione di dati. Accedi di nuovo (con il secondo fattore o un codice via e-mail) oppure usa «Password dimenticata» per cambiarla.",
     "already_has_login": "Questa persona ha già un accesso.",
     "inactive_person": "Le persone inattive non possono essere invitate.",
     "email_required": "Per un invito la persona deve avere un indirizzo e-mail salvato.",
@@ -151,13 +152,20 @@
     "rate_limiter_unavailable": "La protezione degli accessi non è disponibile per un attimo. Riprova subito.",
     "mfa_locked": "Troppi codici errati. Attendi un minuto e riprova.",
     "auth_email_unavailable": "Accesso attualmente non possibile, rivolgiti al tuo amministratore.",
-    "password_leaked": "Questa password è nota da una fuga di dati e quindi non è sicura. Scegline un’altra."
+    "password_leaked": "Questa password è nota da una fuga di dati e quindi non è sicura. Scegline un’altra.",
+    "password_breached": "Questa password è nota da una violazione di dati. Falla reimpostare da un'altra persona owner o tramite admin_cli."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",
     "message": "La tua organizzazione richiede un secondo fattore per il tuo account. Configuralo entro il {until} – poi l’accesso sarà possibile solo con esso.",
     "later": "Più tardi",
     "setup": "Configura ora"
+  },
+  "breached": {
+    "title": "La tua password è nota da una violazione di dati",
+    "message": "Compare in violazioni di dati pubblicamente note. Cambiala ora: fino ad allora ogni accesso richiede anche il tuo secondo fattore o un codice via e-mail.",
+    "adminMessage": "Compare in violazioni di dati pubblicamente note. Falla reimpostare subito da un'altra persona owner o tramite admin_cli.",
+    "change": "Cambia password"
   },
   "stepUp": {
     "title": "Conferma la tua identità",
@@ -171,6 +179,7 @@
     "passwordLabel": "La tua password",
     "passkeyHint": "Conferma con la tua passkey (impronta, volto o PIN del dispositivo).",
     "loading": "Caricamento …",
+    "noMethod": "Qui non è possibile alcuna conferma: la tua passkey funziona solo sull'indirizzo principale di hocX e nei browser che supportano le passkey. Apri hocX lì; se necessario puoi configurare lì anche un'app di autenticazione.",
     "loadFailed": "Non è stato possibile preparare la conferma.",
     "failed": "Conferma non riuscita.",
     "cancel": "Annulla",

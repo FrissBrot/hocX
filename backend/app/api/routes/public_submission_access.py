@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.client_ip import client_ip
+from app.core.client_ip import rate_limit_source
 from app.core.config import settings
 from app.core.db import get_db, release_for_stream
 from app.core.offload import run_coroutine_in_thread
@@ -86,7 +86,7 @@ class AccessViewRead(BaseModel):
 
 
 def _limit(request: Request, token: str, action: str, *, per_ip: int, per_token: int) -> None:
-    enforce_rate_limit(f"submission-access-ip:{action}:{client_ip(request)}", limit=per_ip, period_seconds=15 * 60)
+    enforce_rate_limit(f"submission-access-ip:{action}:{rate_limit_source(request)}", limit=per_ip, period_seconds=15 * 60)
     enforce_rate_limit(f"submission-access-token:{action}:{access_service.hash_token(token)[:16]}", limit=per_token, period_seconds=60 * 60)
 
 

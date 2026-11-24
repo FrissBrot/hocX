@@ -164,7 +164,9 @@ test.describe("Admin-Konsole", () => {
     await expectHealthyPage(page, "/admin/security");
     const policy = await page.request.get("/api/admin/auth-security/policy");
     expect(policy.ok()).toBeTruthy();
-    const body = JSON.stringify(await policy.json()).toLowerCase();
+    // Modus-Einstellungen der Leak-Prüfung (z. B. password_leak_check: "local-only") sind keine
+    // Geheimnisse - jeder andere Schlüssel mit secret/password/token und langem Wert schon.
+    const body = JSON.stringify(await policy.json()).toLowerCase().replace(/"password_leak_check":\s*"[a-z-]+"/, "");
     expect(body).not.toMatch(/"[^"]*(secret|password|token)[^"]*":\s*"[^"]{8,}"/);
   });
 });

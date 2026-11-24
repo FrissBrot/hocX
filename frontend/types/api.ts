@@ -6,6 +6,8 @@ export type SessionInfo = {
   authenticated: boolean;
   /** MFA ist Pflicht, das bestehende Konto hat Frist bis hierhin (Migration 0192) */
   mfa_grace_until?: string | null;
+  /** Passwort aus einem Datenleck bekannt (Migration 0219): Hinweis mit Pflicht zur Änderung */
+  password_breached?: boolean;
   user: {
     id: string;
     first_name: string | null;
@@ -184,6 +186,8 @@ export type TenantSubscription = {
   user_limit_override: number | null;
   effective_user_limit: number | null;
   user_count: number;
+  /** Offene Einladungen belegen schon einen Platz im Benutzerlimit. */
+  pending_invite_count?: number;
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   package_storage_bytes: number;
@@ -994,6 +998,8 @@ export type AdminTenantUser = {
 export type AdminSessionInfo = {
   authenticated: boolean;
   admin: { id: string; email: string; display_name: string; role: "owner" | "support" } | null;
+  /** Passwort aus einem Datenleck bekannt (Migration 0219): Hinweis mit Pflicht zur Änderung */
+  password_breached?: boolean;
 };
 
 export type AdminLoginResponse = AdminSessionInfo & {

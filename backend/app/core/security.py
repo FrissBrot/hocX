@@ -54,6 +54,9 @@ class CurrentUser:
     tenant_require_mfa: bool = False
     # Laufende Frist zum Einrichten von MFA (bestehende Konten, Migration 0192) - für den Hinweis
     mfa_grace_until: datetime | None = None
+    # Passwort bei einer Anmeldung als geleakt erkannt (Migration 0219) - Hinweis mit Pflicht zur
+    # Änderung in der App; die Anmeldung verlangt solange zweiten Faktor bzw. E-Mail-Code.
+    password_breached: bool = False
     # Feature-Gating pro Mandant (orthogonal zu den Rollen): welche Features fuer
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
@@ -379,10 +382,11 @@ def _load_session_rows(db: Session, user_id: int, session_id: uuid.UUID | None):
     return db.execute(statement).first()
 
 
-def validate_session_token(db: Session, token: str | None) -> ValidatedSession | None:
+def validate_session_token(db: Session, token: str | None, *, touch: bool = True) -> ValidatedSession | None:
     """Gemeinsame Kontoprüfung für REST und WebSocket (SEC-AUTH-014): Signatur und Ablauf, Konto
     aktiv, Login erlaubt, nicht ausgetreten, kein Widerruf seit Ausstellung, Session im Register
-    aktiv (Inaktivität, absolute Dauer, Einzel-Widerruf). Die MFA-Regeln prüfen die Aufrufer."""
+    aktiv (Inaktivität, absolute Dauer, Einzel-Widerruf). Die MFA-Regeln prüfen die Aufrufer.
+    touch=False: keine Aktivität vermerken (siehe sessions.validate)."""
     session_data = parse_session_token(token)
     if session_data is None:
         return None
@@ -408,7 +412,7 @@ def validate_session_token(db: Session, token: str | None) -> ValidatedSession |
 
         # Prüft Konto, Widerruf, Ablauf und Inaktivität der Session; die Zeile kommt aus der
         # Identity-Map (oben mitgeladen), nur die Eltern-Session einer Kind-Session wird gelesen.
-        record = sessions.validate(db, session_data["sid"], user.id)
+        record = sessions.validate(db, session_data["sid"], user.id, touch=touch)
         if record is None:
             return None
     # Faktor und Features stammen aus derselben Abfrage wie das Konto (gleicher Stand wie die
@@ -492,6 +496,7 @@ def build_current_user(
         current_tenant_profile_image_path=tenant.profile_image_path,
         current_tenant_currency=tenant.finance_currency or "CHF",
         mfa_verified=mfa_verified,
+        password_breached=user.password_breached_at is not None,
         tenant_require_mfa=tenant_requires_mfa(db, tenant.id),
         current_tenant_features=full_features,
         current_tenant_read_only_features=read_only_features,

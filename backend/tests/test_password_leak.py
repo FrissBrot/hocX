@@ -262,3 +262,41 @@ def test_admin_account_password_is_checked(hibp, db):
             db, PlatformAdminCreate(email=f"leak-{secrets.token_hex(3)}@example.com", display_name="Leak Test", password=password, role="owner"),
         )
     assert exc.value.detail["code"] == "password_leaked"
+
+
+# ── Leak-Prüfung beim Login (1.5.2): Präfix-Cache, fällige Prüfung, Abfragegrenze ─────────────
+
+
+@pytest.fixture
+def fetch_counter():
+    from app.core.redis_client import get_redis_sync
+    from app.core.rate_limit import _legacy_key
+
+    get_redis_sync().delete(_legacy_key(password_leak.FETCH_LIMIT_KEY))
+    yield
+    get_redis_sync().delete(_legacy_key(password_leak.FETCH_LIMIT_KEY))
+
+
+def test_login_checks_reuse_the_prefix_cache_and_due_checks_bypass_it(hibp, fetch_counter):
+    password = _strong_password()
+    prefix, suffix = _split(password)
+    hibp.ranges[prefix] = _range_body({suffix: 3})
+
+    assert password_leak.check_password(password).leaked is True
+    assert password_leak.check_password(password).leaked is True
+    assert len(hibp.calls) == 1  # zweite Anmeldung aus dem Cache (je Präfix, 1 h)
+    # Fällige Prüfung (Nachtjob): ohne Cache, Ergebnis wird wieder gecacht
+    assert password_leak.check_password(password, fresh=True).leaked is True
+    assert len(hibp.calls) == 2
+    assert password_leak.check_password(password).leaked is True
+    assert len(hibp.calls) == 2
+
+
+def test_fetch_limit_falls_back_to_the_local_list_instead_of_hammering_hibp(hibp, fetch_counter, monkeypatch):
+    monkeypatch.setattr(settings, "password_leak_fetch_per_minute", 1)
+    first, second = _strong_password(), _strong_password()
+    password_leak.check_password(first)
+    assert len(hibp.calls) == 1
+    result = password_leak.check_password(second)
+    assert len(hibp.calls) == 1  # Grenze erreicht: keine weitere Abfrage
+    assert result.source in ("local", "none") and result.leaked is False

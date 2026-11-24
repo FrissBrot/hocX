@@ -108,6 +108,7 @@
     "invalid_credentials": "E-Mail oder Passwort ist ungültig.",
     "login_email_taken": "Diese E-Mail-Adresse wird bereits für einen Login verwendet.",
     "wrong_current_password": "Das aktuelle Passwort ist nicht korrekt.",
+    "password_breached_relogin": "Dein bisheriges Passwort ist aus einem Datenleck bekannt. Melde dich bitte neu an (mit zweitem Faktor oder Code per E-Mail) oder nutze «Passwort vergessen», um es zu ändern.",
     "already_has_login": "Diese Person hat bereits einen Login.",
     "inactive_person": "Inaktive Personen können nicht eingeladen werden.",
     "email_required": "Für eine Einladung braucht die Person eine gespeicherte E-Mail-Adresse.",
@@ -151,13 +152,20 @@
     "rate_limiter_unavailable": "Der Anmeldeschutz ist kurz nicht verfügbar. Bitte gleich nochmals versuchen.",
     "mfa_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es erneut.",
     "auth_email_unavailable": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator.",
-    "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes."
+    "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes.",
+    "password_breached": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
     "message": "Deine Organisation verlangt für dein Konto einen zweiten Faktor. Richte ihn bis {until} ein – danach geht die Anmeldung nur noch damit.",
     "later": "Später",
     "setup": "Jetzt einrichten"
+  },
+  "breached": {
+    "title": "Dein Passwort ist aus einem Datenleck bekannt",
+    "message": "Es taucht in öffentlich bekannten Datenlecks auf. Ändere es jetzt – bis dahin verlangt jede Anmeldung zusätzlich deinen zweiten Faktor oder einen Code per E-Mail.",
+    "adminMessage": "Es taucht in öffentlich bekannten Datenlecks auf. Lass es sofort von einer anderen Owner-Person oder über admin_cli neu setzen.",
+    "change": "Passwort ändern"
   },
   "stepUp": {
     "title": "Identität bestätigen",
@@ -171,6 +179,7 @@
     "passwordLabel": "Dein Passwort",
     "passkeyHint": "Bestätige mit deinem Passkey (Fingerabdruck, Gesicht oder Geräte-PIN).",
     "loading": "Wird geladen …",
+    "noMethod": "Hier ist keine Bestätigung möglich: dein Passkey funktioniert nur auf der hocX-Hauptadresse und in Browsern mit Passkey-Unterstützung. Öffne hocX dort; dort kannst du bei Bedarf auch zusätzlich eine Authenticator-App einrichten.",
     "loadFailed": "Bestätigung konnte nicht vorbereitet werden.",
     "failed": "Bestätigung fehlgeschlagen.",
     "cancel": "Abbrechen",

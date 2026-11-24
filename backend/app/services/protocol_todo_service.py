@@ -290,6 +290,10 @@ class ProtocolTodoService:
         if status_id is None:
             return None
         code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == status_id))
+        if code is None:
+            # Wie update_todo: erwartete Validierung statt ForeignKeyViolation beim INSERT
+            # (400 plus Eintrag im Fehlerprotokoll).
+            raise ValueError("Unknown todo status")
         return datetime.now(timezone.utc) if code in _COMPLETED_STATUS_CODES else None
 
     @staticmethod

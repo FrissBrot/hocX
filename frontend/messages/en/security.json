@@ -108,6 +108,7 @@
     "invalid_credentials": "Email or password is invalid.",
     "login_email_taken": "This email address is already used for a login.",
     "wrong_current_password": "The current password is not correct.",
+    "password_breached_relogin": "Your current password is known from a data breach. Please sign in again (with your second factor or an e-mail code) or use «Forgot password» to change it.",
     "already_has_login": "This person already has a login.",
     "inactive_person": "Inactive people cannot be invited.",
     "email_required": "An invitation needs a saved email address for this person.",
@@ -151,13 +152,20 @@
     "rate_limiter_unavailable": "Sign-in protection is briefly unavailable. Please try again shortly.",
     "mfa_locked": "Too many wrong codes. Please wait a minute and try again.",
     "auth_email_unavailable": "Sign-in is currently not possible. Please contact your administrator.",
-    "password_leaked": "This password is known from a data breach and therefore unsafe. Please choose a different one."
+    "password_leaked": "This password is known from a data breach and therefore unsafe. Please choose a different one.",
+    "password_breached": "This password is known from a data breach. Have another owner or admin_cli set a new one."
   },
   "grace": {
     "title": "Second factor becomes mandatory",
     "message": "Your organisation requires a second factor for your account. Set it up by {until} – after that you can only sign in with it.",
     "later": "Later",
     "setup": "Set up now"
+  },
+  "breached": {
+    "title": "Your password is known from a data breach",
+    "message": "It appears in publicly known data breaches. Change it now – until then, every sign-in also requires your second factor or a code sent by email.",
+    "adminMessage": "It appears in publicly known data breaches. Have another owner or admin_cli set a new one right away.",
+    "change": "Change password"
   },
   "stepUp": {
     "title": "Confirm your identity",
@@ -171,6 +179,7 @@
     "passwordLabel": "Your password",
     "passkeyHint": "Confirm with your passkey (fingerprint, face or device PIN).",
     "loading": "Loading …",
+    "noMethod": "No confirmation possible here: your passkey only works on the main hocX address and in browsers that support passkeys. Open hocX there; you can also set up an additional authenticator app there if needed.",
     "loadFailed": "The confirmation could not be prepared.",
     "failed": "Confirmation failed.",
     "cancel": "Cancel",

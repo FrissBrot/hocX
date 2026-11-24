@@ -1,7 +1,7 @@
 {
   "accountManagement": {
     "title": "Account amministratore",
-    "description": "Accesso al pannello di amministrazione della piattaforma stesso - separato da tutti gli utenti delle organizzazioni.",
+    "description": "Accesso alla Console hocX stessa - separato da tutti gli utenti delle organizzazioni.",
     "newAdmin": "Nuovo admin",
     "columns": {
       "name": "Nome",
@@ -23,7 +23,7 @@
     "deactivate": "Disattiva",
     "activate": "Attiva",
     "newAdminModalTitle": "Nuovo account amministratore",
-    "newAdminModalDescription": "Crea un ulteriore accesso al pannello di amministrazione della piattaforma.",
+    "newAdminModalDescription": "Crea un ulteriore accesso alla Console hocX.",
     "name": "Nome",
     "email": "E-mail",
     "password": "Password",
@@ -34,7 +34,7 @@
       "selfDowngradeConfirm": "Impostare il tuo account su sola lettura? Perderai immediatamente l'accesso in scrittura a questo pannello.",
       "updated": "Account amministratore aggiornato",
       "updateFailed": "Impossibile aggiornare l'account amministratore",
-      "deactivateConfirm": "Disattivare \"{name}\"? L'account perde immediatamente l'accesso al pannello di amministrazione della piattaforma."
+      "deactivateConfirm": "Disattivare \"{name}\"? L'account perde immediatamente l'accesso alla Console hocX."
     },
     "passkeyCount": "{count, plural, =0 {Nessuna passkey} one {# passkey} other {# passkey}}",
     "neverLoggedIn": "Mai"
@@ -621,6 +621,10 @@
       "auth_security_maintenance": {
         "title": "Pulizia protezione accessi",
         "description": "Ogni ora: elimina gli eventi di sicurezza dopo 90 giorni, le sessioni terminate e i dispositivi inutilizzati da tempo e ripara i contatori senza scadenza."
+      },
+      "password_breach_recheck": {
+        "title": "Pianificare il controllo delle password trapelate",
+        "description": "Ogni giorno: segnala gli account la cui password non è stata verificata da 30 giorni rispetto a violazioni di dati note. Il prossimo accesso verifica senza cache."
       },
       "metrics_rollup": {
         "title": "Aggregazione indicatori",

@@ -284,6 +284,12 @@ class Settings(BaseSettings):
     # Ab so vielen Vorkommen in HIBP gilt ein Passwort als geleakt (lokale Liste: immer Treffer).
     password_leak_min_count: int = 1
     password_leak_timeout_seconds: float = 2.0
+    # Höchstens so viele Abfragen an HIBP je Minute (alle Prozesse); darüber lokale Liste.
+    password_leak_fetch_per_minute: int = 600
+    # Leak-Prüfung bestehender Passwörter beim Login (1.5.2, app/auth_security/breach.py): der
+    # Nachtjob password_breach_recheck markiert Konten, deren letzte Prüfung älter ist, damit die
+    # nächste Anmeldung ohne Präfix-Cache prüft.
+    password_breach_recheck_days: int = 30
     # Länder-Geolocation als Risikosignal (app/core/geoip.py): DB-IP «IP to Country Lite» (CC BY 4.0),
     # lokal als MMDB, vom Job geoip_update (job-worker) monatlich geladen. Fehlt die Datei, entfällt
     # das Signal still. GEOIP_AUTO_UPDATE=false: kein Download (Datei bei Bedarf selbst ablegen).

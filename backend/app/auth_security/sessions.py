@@ -59,9 +59,11 @@ def create(
     return row
 
 
-def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
+def validate(db: Session, sid: str | None, user_id: int, *, touch: bool = True) -> AuthSession | None:
     """Aktive Session dieses Kontos oder None (unbekannt, widerrufen, abgelaufen, inaktiv).
-    Eine wegen Inaktivität abgelaufene Session wird dabei als widerrufen markiert."""
+    Eine wegen Inaktivität abgelaufene Session wird dabei als widerrufen markiert.
+    touch=False prüft nur und frischt last_seen_at nicht auf: für Prüfungen, die keine
+    Benutzeraktivität sind (WebSocket-Revalidierung), sonst greift die Inaktivitätsgrenze nie."""
     try:
         session_id = uuid.UUID(str(sid))
     except (TypeError, ValueError):
@@ -81,7 +83,7 @@ def validate(db: Session, sid: str | None, user_id: int) -> AuthSession | None:
         row.revoked_at, row.revoked_reason = now, "idle"
         db.commit()
         return None
-    if row.last_seen_at < now - timedelta(seconds=settings.auth_session_touch_seconds):
+    if touch and row.last_seen_at < now - timedelta(seconds=settings.auth_session_touch_seconds):
         row.last_seen_at = now
         db.commit()
     return row
@@ -137,8 +139,23 @@ def revoke(db: Session, session_ids: list[uuid.UUID], *, reason: str) -> int:
 
 
 def revoke_all(db: Session, user_id: int, *, reason: str, except_id: uuid.UUID | None = None) -> int:
-    """Alle Sessions des Kontos ausser ``except_id`` (und dessen Kinder) widerrufen (ohne Commit)."""
-    keep = set(_with_children(db, [except_id])) if except_id else set()
+    """Alle Sessions des Kontos ausser ``except_id`` (und dessen Kinder) widerrufen (ohne Commit).
+
+    Ist ``except_id`` eine Kind-Session (Mandanten-Domain, Domain-Bridge), wird sie von ihrer
+    Eltern-Session gelöst, bevor diese mit widerrufen wird: eine Kind-Session gilt sonst nur,
+    solange die Eltern-Session lebt (``validate``), und die «behaltene» Session endete gleich mit.
+    Die Regel «lebt nie länger als die Eltern-Session» bleibt gewahrt, weil die Bridge ``expires_at``
+    der Eltern-Session übernommen hat; zusätzlich wird es hier noch einmal begrenzt."""
+    keep: set[uuid.UUID] = set()
+    if except_id:
+        keep = set(_with_children(db, [except_id]))
+        current = db.get(AuthSession, except_id)
+        if current is not None and current.user_id == user_id and current.parent_id is not None:
+            parent = db.get(AuthSession, current.parent_id)
+            if parent is not None and parent.expires_at < current.expires_at:
+                current.expires_at = parent.expires_at
+            current.parent_id = None
+            db.flush()
     statement = update(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
     if keep:
         statement = statement.where(AuthSession.id.not_in(keep))

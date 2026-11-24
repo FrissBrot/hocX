@@ -1228,7 +1228,12 @@ letzten Erfolg gilt der Versand als gestört (Ausnahme: einzelne abgelehnte Empf
 in Folge, und dann nur als Warnung). Solange er gestört ist, bekommen Anmeldungen, die einen Mailcode
 bräuchten, sofort 503 `auth_email_unavailable` («Anmeldung aktuell nicht möglich, wende dich an deinen
 Administrator»); höchstens ein Login je Minute versucht den Versand echt. Bekannte Geräte und Konten mit
-zweitem Faktor sind nicht betroffen. `/admin/system` zeigt die Prüfung «E-Mail-Versand» (kritisch, ntfy-
+zweitem Faktor sind nicht betroffen - **ausser** Konten ohne zweiten Faktor, deren Passwort seit 1.5.2 als
+geleakt markiert ist (Leak-Prüfung beim Login): sie brauchen bei jeder Anmeldung den Mailcode, auch auf
+bekannten Geräten, und sind während einer Störung ausgesperrt. Je nach Verbreitung schwacher Passwörter
+kann das viele Konten treffen; Abhilfe ist die Behebung der Störung (nicht das Abschalten der Prüfung).
+Einzelne Personen können ein neues Passwort über die Verwaltung bekommen (Zurücksetzungslink ebenfalls
+per Mail) oder einen zweiten Faktor einrichten, sobald sie wieder angemeldet sind. `/admin/system` zeigt die Prüfung «E-Mail-Versand» (kritisch, ntfy-
 Problem `email:smtp:<grund>`), das Fehlerprotokoll den ersten Fehler je Fehlerklasse (danach stündlich).
 Behebung: Adminportal → Einstellungen → Benachrichtigungen, SMTP prüfen, Test-Mail senden; der erste
 Erfolg hebt die Störung auf. Bei Verbindungs-, TLS- und Anmeldefehlern prüft zusätzlich der Loop
@@ -1253,6 +1258,8 @@ Erfolg hebt die Störung auf. Bei Verbindungs-, TLS- und Anmeldefehlern prüft z
 | `SECURITY_ALERT_ADMIN_LOGINS` | `true` (neu) | jede Plattform-Anmeldung meldet sich im Check «security» |
 | `PASSWORD_LEAK_CHECK` | `on` | Leak-Prüfung neuer Passwörter: `on` (HIBP-Range-API, Rückfall lokale Liste), `local-only`, `off` |
 | `PASSWORD_LEAK_MIN_COUNT` | 1 | ab so vielen Vorkommen in HIBP abgelehnt |
+| `PASSWORD_LEAK_FETCH_PER_MINUTE` | 600 | höchstens so viele HIBP-Abfragen je Minute (alle Prozesse), darüber lokale Liste |
+| `PASSWORD_BREACH_RECHECK_DAYS` | 30 | Leak-Prüfung beim Login (1.5.2): Nachtjob `password_breach_recheck` merkt Konten mit älterer Prüfung vor, die nächste Anmeldung prüft ohne Cache |
 | `GEOIP_AUTO_UPDATE` | `true` | Job `geoip_update` lädt DB-IP «IP to Country Lite» monatlich (`false`: kein Download) |
 
 Weitere Werte (Body-Limit 16 KiB für `/api/auth/*`, GCRA-Raten, Alarmschwellen `AUTH_ALERT_*`) stehen in

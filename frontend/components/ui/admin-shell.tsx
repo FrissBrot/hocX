@@ -35,6 +35,7 @@ import { useFocusRescue } from "@/lib/a11y/use-focus-rescue";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
+import { PasswordBreachedBanner } from "@/components/ui/password-breached-banner";
 
 const AdminCommandPalette = dynamic(() => import("@/components/admin/admin-command-palette").then((m) => m.AdminCommandPalette), { ssr: false });
 const ShortcutHelp = dynamic(() => import("@/components/ui/shortcut-help").then((m) => m.ShortcutHelp), { ssr: false });
@@ -156,6 +157,19 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
     });
   }, []);
 
+  // Seit 1.5.2 hat die Sidebar die Abstände der App und scrollt bei grossen Bereichen: aktiven Eintrag
+  // nach Navigation oder Aufklappen sichtbar halten (nur innerhalb der Navigation, nicht die Seite).
+  const sidebarNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = sidebarNavRef.current;
+    const active = nav?.querySelector<HTMLElement>(".nav-link-active");
+    if (!nav || !active) return;
+    const navBox = nav.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    if (box.top < navBox.top) nav.scrollTop -= navBox.top - box.top;
+    else if (box.bottom > navBox.bottom) nav.scrollTop += box.bottom - navBox.bottom;
+  }, [pathname, openGroup, compact]);
+
   // Zähler für Sidebar und Glocke: ein Request (GET /api/admin/nav-counts), jede Minute bei sichtbarem Tab
   const [counts, setCounts] = useState<AdminNavCounts | null>(null);
   const loadCounts = useCallback(() => {
@@ -243,7 +257,7 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
             </div>
           </div>
           {/* Suche steht in der Kopfleiste (Ctrl+K); in der Sidebar nicht doppelt, damit die Bereiche ohne Scrollen Platz haben (1.5.1) */}
-          <nav className="sidebar-nav admin-sidebar-nav" aria-label={t("mainNav")}>
+          <nav ref={sidebarNavRef} className="sidebar-nav admin-sidebar-nav" aria-label={t("mainNav")}>
             {navGroups.map((group) => {
               const count = groupCount(group, counts);
               if (!group.titleKey) {
@@ -359,7 +373,10 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
             </div>
           </header>
           {isReadOnlyAdmin && <div className="admin-readonly-banner">{t("readOnlyBanner")}</div>}
-          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">{children}</main>
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">
+            <PasswordBreachedBanner breached={session.password_breached} />
+            {children}
+          </main>
         </div>
       </div>
       {shortcutHelpOpen ? <ShortcutHelp open onClose={() => setShortcutHelpOpen(false)} /> : null}

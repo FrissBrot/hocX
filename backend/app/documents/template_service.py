@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import false, func, or_, select, update
+from sqlalchemy import delete, false, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.documents import brand_service
@@ -45,6 +45,33 @@ from app.models import (
 )
 
 _NODE_ADAPTER = TypeAdapter(Node)
+
+# Namensraum für pg_advisory_xact_lock(ns, tenant_id) in set_assignment (erste Zuweisung je
+# Mandant, #99) - eine andere Ressource als TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE unten (je Vorlage).
+ASSIGNMENT_LOCK_NAMESPACE = 909100016
+
+
+# Namensraum für pg_advisory_xact_lock(ns, document_template.id): Archivieren (exklusiv) gegen
+# Standard-Zuweisung (geteilt). Andere Namensräume: upload_lock (909100001), submission_service
+# (909100002), protocol_service (909100011), task_package_service (909100012),
+# event_cycle_service (909100013), data_export/tenant (909100014), Zuweisung je Mandant (909100016).
+TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE = 909100015
+
+
+def _lock_template_assignments(db: Session, template_id: int, *, exclusive: bool) -> None:
+    """Transaktions-Lock je Dokumentvorlage (frei bei Commit/Rollback, Issue #102).
+
+    Archivieren entfernt alle Zuweisungen der Vorlage; eine gleichzeitige Zuweisung prüfte
+    «aktiv» aber am alten Stand, und das Archivieren sah die noch nicht festgeschriebene
+    Zuweisung nicht - die archivierte Vorlage blieb Standard. Ein Advisory-Lock statt
+    ``SELECT … FOR SHARE`` auf die Vorlage: Systemvorlagen (``tenant_id IS NULL``) darf ein
+    Mandant lesen, aber nicht sperren (Zeilensperren prüfen die Schreib-Policy der RLS, die
+    Zeile wäre unsichtbar)."""
+    function = "pg_advisory_xact_lock" if exclusive else "pg_advisory_xact_lock_shared"
+    db.execute(
+        text(f"SELECT {function}(:ns, :template_id)"),  # sql-ok: Funktionsname fest aus dem Code
+        {"ns": TEMPLATE_ASSIGNMENT_LOCK_NAMESPACE, "template_id": template_id},
+    )
 
 
 class TemplateConflictError(Exception):
@@ -362,16 +389,34 @@ def restore_revision(db: Session, template: DocumentTemplate, revision: Document
     return _new_revision(db, template, content, status="draft", user_id=user_id, brand_mode=revision.brand_mode, note=f"restore:{revision.revision_no}")
 
 
+def _detach_assignments(db: Session, template_id: int) -> None:
+    """Zuweisungen von der Vorlage lösen (ohne eigenes Brand-Profil: löschen, sonst nur die Vorlage
+    entfernen). Als bedingte Massenänderung: hat eine gleichzeitige Zuweisung die Zeile inzwischen
+    auf eine andere Vorlage umgestellt, bleibt sie unberührt (das ORM hätte nur über die ID
+    gelöscht bzw. mit StaleDataError abgebrochen; Review 1.5.2, N6)."""
+    db.flush()
+    db.execute(
+        delete(DocumentTemplateAssignment)
+        .where(DocumentTemplateAssignment.document_template_id == template_id, DocumentTemplateAssignment.brand_id.is_(None))
+        .execution_options(synchronize_session="fetch")
+    )
+    db.execute(
+        update(DocumentTemplateAssignment)
+        .where(DocumentTemplateAssignment.document_template_id == template_id)
+        .values(document_template_id=None)
+        .execution_options(synchronize_session="fetch")
+    )
+
+
 def set_archived(db: Session, template: DocumentTemplate, archived: bool, *, user_id: int | None) -> DocumentTemplate:
+    # Wartet auf laufende Zuweisungen dieser Vorlage; die Abfrage der Zuweisungen unten sieht
+    # sie danach (READ COMMITTED), spätere Zuweisungen sehen «archiviert» (Issue #102).
+    _lock_template_assignments(db, template.id, exclusive=True)
     template.status = "archived" if archived else "active"
     template.updated_by = user_id
     if archived:
         # Archivierte Vorlagen sind nirgends mehr Standard
-        for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.document_template_id == template.id)):
-            if assignment.brand_id is None:
-                db.delete(assignment)
-            else:
-                assignment.document_template_id = None
+        _detach_assignments(db, template.id)
         if template.tenant_id is None:
             template.is_platform_default = False
     db.flush()
@@ -383,16 +428,17 @@ def delete_template(db: Session, template: DocumentTemplate) -> None:
     verloren - dafür gibt es «Archivieren»."""
     if template.tenant_id is None:
         raise TemplateStateError("apiError.systemTemplate")
+    # Erst sperren, dann zählen: Ein gerade entstehender Export (noch nicht festgeschrieben) hält
+    # eine Schlüsselsperre auf der Vorlage. FOR UPDATE wartet darauf, die Zählung danach sieht den
+    # Export (READ COMMITTED). Ohne Sperre sah sie ihn nicht, und das DELETE setzte die
+    # template_id des neuen Exports per ON DELETE SET NULL zurück.
+    lock_row(db, template)
     exported = db.scalar(select(func.count(DocumentExport.id)).where(DocumentExport.template_id == template.id))
     if exported:
         raise TemplateStateError("apiError.templateInUse")
     # Zuweisungen mit eigenem Brand-Profil behalten das Profil (wie beim Archivieren); sonst
     # entfernte der FK (ON DELETE CASCADE) die ganze Zuweisung samt Brand
-    for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.document_template_id == template.id)):
-        if assignment.brand_id is None:
-            db.delete(assignment)
-        else:
-            assignment.document_template_id = None
+    _detach_assignments(db, template.id)
     template.published_revision_id = None
     db.flush()
     db.delete(template)
@@ -469,9 +515,15 @@ def set_assignment(
     """Standard setzen oder (ohne Vorlage und Brand) entfernen."""
     doc_type = get_type(document_type)
     if template is not None:
+        # Status nach dem Lock frisch aus der Datenbank: das Objekt kann vor einem gleichzeitigen
+        # Archivieren geladen worden sein (Issue #102).
+        _lock_template_assignments(db, template.id, exclusive=False)
+        current = db.execute(
+            select(DocumentTemplate.status, DocumentTemplate.published_revision_id).where(DocumentTemplate.id == template.id)
+        ).one_or_none()
         if template.document_type != document_type:
             raise TemplateStateError("apiError.templateTypeMismatch")
-        if template.status != "active" or template.published_revision_id is None:
+        if current is None or current.status != "active" or current.published_revision_id is None:
             raise TemplateStateError("apiError.templateNotPublished")
         if template.tenant_id not in (None, tenant_id):
             raise TemplateStateError("apiError.notFound")
@@ -482,6 +534,10 @@ def set_assignment(
             raise TemplateStateError("apiError.notFound")
         if not doc_type.needs_protocol:
             raise TemplateStateError("apiError.assignmentScope")
+    # Zuweisungen eines Mandanten nacheinander: zwei gleichzeitige erste Zuweisungen sahen sonst
+    # beide keine Zeile, die zweite scheiterte am Unique-Index (IntegrityError, HTTP 500). Mit dem
+    # Lock wartet sie und findet danach (READ COMMITTED) die Zeile der ersten.
+    db.execute(text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": ASSIGNMENT_LOCK_NAMESPACE, "tenant_id": tenant_id})
     statement = select(DocumentTemplateAssignment).where(
         DocumentTemplateAssignment.tenant_id == tenant_id,
         DocumentTemplateAssignment.document_type == document_type,

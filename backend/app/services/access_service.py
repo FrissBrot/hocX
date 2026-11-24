@@ -1,21 +1,87 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import and_, exists, false, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.permissions import P
 from app.core.security import CurrentUser
-from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ProtocolTodo, ProtocolTodoAssignee, StoredFile
-from app.repositories.access_repository import AccessRepository
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, Protocol, ProtocolTodo, ProtocolTodoAssignee, StoredFile
+from app.repositories.access_repository import AccessRepository, stored_file_protocol_links
 from app.services import context_visibility_service
 
 
 # Status eines abgeschlossenen (eingefrorenen) Protokolls (ck_protocol_status).
 FINAL_PROTOCOL_STATUS = "abgeschlossen"
+# Quellen der Dateiübersicht, deren Zeile den Kontext eines bestimmten Protokolls trägt (ref_id =
+# Protokoll-ID): Nummer, Titel, Blocktitel - nur sichtbar, wenn genau dieses Protokoll lesbar ist.
+PROTOCOL_CONTEXT_SOURCES = ("protocol_image", "protocol_export")
+
+
+@dataclass(frozen=True)
+class ProtocolReadScope:
+    """Welche Protokolle ein Konto lesen darf, als SQL-Bedingung für Listen - dieselbe Regel wie
+    AccessService.can_read_protocol (1.5.2, Verdacht 2). ``None`` statt eines Scopes heisst: alle
+    Protokolle des Mandanten (meetings.read_drafts)."""
+
+    tenant_id: int | None
+    # "none": kein meetings.read; "assigned": eingeschränkter Leser (nur protocol_ids);
+    # "final": nur abgeschlossene Protokolle
+    mode: Literal["none", "assigned", "final"]
+    protocol_ids: frozenset[int] = frozenset()
+
+    def readable(self, protocol_id_column):
+        if self.tenant_id is None or self.mode == "none":
+            return false()
+        if self.mode == "assigned":
+            return protocol_id_column.in_(sorted(self.protocol_ids)) if self.protocol_ids else false()
+        return protocol_id_column.in_(
+            select(Protocol.id).where(Protocol.tenant_id == self.tenant_id, Protocol.status == FINAL_PROTOCOL_STATUS)
+        )
+
+
+def protocol_file_clause(file_id_column, scope: ProtocolReadScope):
+    """SQL-Bedingung für Dateilisten: die Datei hängt an keinem Protokoll oder an mindestens einem
+    lesbaren - wie die Einzelprüfung (_ensure_role_can_read_stored_file)."""
+    links = stored_file_protocol_links()
+    linked = exists(select(links.c.stored_file_id).where(links.c.stored_file_id == file_id_column))
+    readable_link = exists(
+        select(links.c.stored_file_id).where(links.c.stored_file_id == file_id_column, scope.readable(links.c.protocol_id))
+    )
+    return or_(~linked, readable_link)
+
+
+def protocol_unreadable_link_clause(file_id_column, scope: ProtocolReadScope):
+    """Die Datei hängt (auch) an einem Protokoll, das das Konto nicht lesen darf."""
+    links = stored_file_protocol_links()
+    return exists(
+        select(links.c.stored_file_id).where(links.c.stored_file_id == file_id_column, ~scope.readable(links.c.protocol_id))
+    )
+
+
+def protocol_context_clause(source_column, ref_id_column, scope: ProtocolReadScope):
+    """Zeilen mit Protokollkontext (Bild/Export) nur für lesbare Protokolle: ein übernommenes Bild
+    erscheint so nie mit Nummer/Blocktitel eines nicht lesbaren Entwurfs."""
+    return or_(source_column.notin_(PROTOCOL_CONTEXT_SOURCES), scope.readable(ref_id_column))
+
+
+def protocol_overview_clause(union_query, scope: ProtocolReadScope):
+    """Beides für eine Zeile der Dateiübersicht (StoredFileRepository._overview_query). Fotos eines
+    Partners in einem geteilten Album folgen der Album-Freigabe (wie in der Einzelprüfung) und
+    kommen ohnehin ohne Kontext des Besitzers (FileService.list_tenant_files)."""
+    if scope.tenant_id is None:
+        return false()
+    return or_(
+        union_query.c.tenant_id != scope.tenant_id,
+        and_(
+            protocol_file_clause(union_query.c.id, scope),
+            protocol_context_clause(union_query.c.source, union_query.c.ref_id, scope),
+        ),
+    )
 
 
 class AccessService:
@@ -56,6 +122,18 @@ class AccessService:
             allowed = set(self.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id))
             return lambda protocol: protocol.id in allowed
         return lambda protocol: protocol.status == FINAL_PROTOCOL_STATUS
+
+    def protocol_read_scope(self, db: Session, user: CurrentUser) -> ProtocolReadScope | None:
+        """can_read_protocol als Filter für SQL-Listen (Dateiübersicht, Suche, Zahlen): ``None`` =
+        alle Protokolle des eigenen Mandanten lesbar, sonst ein ProtocolReadScope."""
+        if not user.can(P.MEETINGS_READ) or user.current_tenant_id is None:
+            return ProtocolReadScope(tenant_id=user.current_tenant_id, mode="none")
+        if self.sees_all_protocols(user):
+            return None
+        if self._is_restricted_reader(db, user):
+            ids = self.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
+            return ProtocolReadScope(tenant_id=user.current_tenant_id, mode="assigned", protocol_ids=frozenset(ids))
+        return ProtocolReadScope(tenant_id=user.current_tenant_id, mode="final")
 
     def readable_template_ids(self, db: Session, user: CurrentUser) -> set[int] | None:
         """Sitzungsvorlagen, die ein eingeschränkter Leser sehen darf; ``None`` = alle des Mandanten."""
@@ -166,8 +244,8 @@ class AccessService:
             raise
 
     def _ensure_role_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
-        protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)
-        if protocol_id is not None:
+        protocol_ids = self.repository.protocol_ids_for_stored_file(db, stored_file_id=stored_file_id)
+        if protocol_ids:
             # Protokollbild, das der Besitzer bewusst in ein geteiltes Album gelegt hat: der Partner
             # sieht es dort wie im öffentlichen Album-Link (Audit Dateien/Fotos) - die Protokoll-
             # prüfung schlug für den fremden Mandanten sonst immer fehl (leere Kacheln).
@@ -180,8 +258,16 @@ class AccessService:
                 and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id)
             ):
                 return
-            self.ensure_can_read_protocol(db, user, protocol_id, detail="Stored file not found")
-            return
+            # Alle Protokollbezüge zählen, in fester Reihenfolge (1.5.2, Verdacht 3): lesbar, sobald
+            # EINES der Protokolle lesbar ist. Ein übernommenes Bild ist über das abgeschlossene
+            # Protokoll ohnehin offen - «alle müssen lesbar sein» liesse dessen Bilder für Leser
+            # verschwinden, sobald ein neuer Entwurf sie übernimmt. Nie lesbar bleibt ein Bild, das
+            # nur in nicht lesbaren Entwürfen hängt; den Entwurfskontext zeigen die Listen nicht
+            # (protocol_context_clause).
+            if self._any_protocol_readable(db, user, stored_file_id):
+                return
+            # 404 wie bei einer unbekannten Datei (kein Existenz-Orakel für Entwürfe)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
         # Not linked to a protocol (export/image) or an imported Word-Import document (e.g. a
         # still-queued, not-yet-imported one) - fall back to a plain same-tenant check plus
         # files.manage or meetings.read_drafts (bisher Rollen admin/writer/kassier) instead of
@@ -192,7 +278,8 @@ class AccessService:
         # Ablage mit files.read, Fotos (Galerie, Abgabe-Fotos) mit photos.read - bisher deckte
         # files.manage beides (Plan «Berechtigungen», Phase 3; Mapping gibt beide Rechte weiter).
         # Symmetrisch: files.read nur für Dokumente, photos.read nur für Bilder.
-        is_image = self.repository.stored_file_is_image(db, stored_file_id=stored_file_id)
+        # Live-Photo-Clips (video/*) zählen zum Foto (Nachtlauf 2026-11-22).
+        is_image = self.repository.stored_file_is_media(db, stored_file_id=stored_file_id)
         if not (
             user.can(P.MEETINGS_READ_DRAFTS)
             or (user.can(P.FILES_READ) and not is_image)
@@ -221,6 +308,22 @@ class AccessService:
         if user.current_tenant_id is not None and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id):
             return
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
+
+    def _any_protocol_readable(self, db: Session, user: CurrentUser, stored_file_id: int) -> bool:
+        """Eine Abfrage statt can_read_protocol je verknüpftem Protokoll (Security-Review 1.5.2: ein
+        in viele Protokolle übernommenes Bild kostete sonst je Vorschau Hunderte Abfragen) - mit
+        derselben Regel wie die Listen (ProtocolReadScope)."""
+        if not user.can(P.MEETINGS_READ) or user.current_tenant_id is None:
+            return False
+        scope = self.protocol_read_scope(db, user)
+        links = stored_file_protocol_links()
+        readable = (
+            scope.readable(links.c.protocol_id)
+            if scope is not None
+            # meetings.read_drafts: jedes Protokoll, aber nur des eigenen Mandanten
+            else links.c.protocol_id.in_(select(Protocol.id).where(Protocol.tenant_id == user.current_tenant_id))
+        )
+        return bool(db.scalar(select(exists(select(links.c.stored_file_id).where(links.c.stored_file_id == stored_file_id, readable)))))
 
     def _can_read_via_shared_album(self, db: Session, tenant_id: int, stored_file_id: int) -> bool:
         """Eine Abfrage statt einer pro Album (Audit Dateien/Fotos, N+1 bei jedem Partner-Thumbnail):

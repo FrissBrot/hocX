@@ -240,6 +240,10 @@ def _effective_upload_quota_bytes(tenant_quota_bytes: int | None, global_cap_byt
 
 
 def _get_assignment_or_404(db: Session, tenant: dict, assignment_slug: str) -> dict:
+    # NUL (%00 im Pfad) kann kein gespeicherter Slug enthalten; psycopg lehnt den Parameter sonst
+    # mit DataError ab (500 und Eintrag im Fehlerprotokoll für jeden anonymen Aufruf).
+    if "\x00" in assignment_slug:
+        raise NOT_FOUND
     assignment = repository.get_assignment_by_slug(
         db, tenant_id=tenant["id"], link_id=tenant["link_id"], public_slug=assignment_slug
     )
@@ -547,6 +551,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # the safe, contained fix for this pass.
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
+                _log("validation_failed", "Speicherkontingent der Organisation erreicht")
                 raise PublicError(400, "storage_limit", "Speicherkontingent der Organisation erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")

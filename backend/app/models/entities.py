@@ -360,6 +360,11 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     fine_tariff_group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("fine_tariff_group.id", ondelete="SET NULL"))
     # Personen ohne Login bekommen E-Mails nur, wenn ein Admin das einschaltet (Migration 0170).
     notify_without_login: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Leak-Prüfung beim Login (Migration 0219, app/auth_security/breach.py): nur Zeitpunkte, nie
+    # Hash/SHA-1/Präfix. password_breached_at gesetzt = Login nur mit zweitem Faktor/E-Mail-Code.
+    password_breached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_breach_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    breach_check_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     @property
     def has_left(self) -> bool:
@@ -445,6 +450,11 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     # 'owner' = full read/write access, 'support' = read-only across the whole admin panel
     # (no create/update/delete on tenants, users, admins, domains, ...).
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'owner'"))
+    # Leak-Prüfung beim Login (Migration 0219, app/auth_security/breach.py): nur Zeitpunkte, nie
+    # Hash/SHA-1/Präfix. password_breached_at gesetzt = Login nur mit zweitem Faktor/E-Mail-Code.
+    password_breached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_breach_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    breach_check_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GroupEntity(Base, TimestampMixin, UpdatedAtMixin):

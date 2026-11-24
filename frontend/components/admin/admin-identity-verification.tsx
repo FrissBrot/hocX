@@ -80,7 +80,9 @@ function DecisionModal({ decision, onClose, onDone }: { decision: Decision | nul
     try {
       const state = await browserApiFetch<AdminTenantVerification>(`/api/admin/tenants/${decision.tenantId}/identity-verification/${decision.kind}`, {
         method: "POST",
-        body: JSON.stringify({ note: note.trim() || null }),
+        // Beim Bestätigen den geprüften Namen mitschicken: hat der Verein inzwischen umbenannt,
+        // lehnt das Backend ab, statt den ungeprüften neuen Namen zu bestätigen.
+        body: JSON.stringify(decision.kind === "approve" ? { note: note.trim() || null, expected_name: decision.tenantName } : { note: note.trim() || null }),
       });
       toast(t(`done.${decision.kind}`, { name: decision.tenantName }), "success");
       onDone(state);

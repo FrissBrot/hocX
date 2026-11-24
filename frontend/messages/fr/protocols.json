@@ -456,6 +456,8 @@
     "createdBadge": "Créé",
     "defaultTag": "Notes de séance",
     "draftRestored": "Un brouillon local des notes de séance a été restauré.",
+    "draftConflict": "Le brouillon local des notes de séance n'a pas été repris, car quelqu'un d'autre a modifié les notes entre-temps. La version actuelle est affichée.",
+    "draftConflictApply": "Reprendre mon brouillon",
     "duePlaceholder": "Échéance…",
     "nextSession": "Prochaine rencontre",
     "noDueDate": "Pas d'échéance",

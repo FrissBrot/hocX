@@ -65,3 +65,33 @@ def test_cache_expires_and_blocked_login_closes_the_connection(world, db, monkey
     monkeypatch.setattr(ws, "REVALIDATE_CACHE_SECONDS", 0)
     current, protocol_id = ws._revalidate(token, protocol.public_id)
     assert current is None and protocol_id is None
+
+
+def test_open_socket_does_not_keep_an_idle_session_alive(world, db, monkeypatch):
+    """Die Revalidierung alle 30 s ist keine Benutzeraktivität: ein offener (auch versteckter)
+    Protokoll-Tab darf last_seen_at nicht auffrischen, sonst greift die Inaktivitätsgrenze
+    (auth_session_idle_minutes) nie und die Session lebt bis zur absoluten Dauer."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.auth_security import sessions
+    from app.core.config import settings
+    from app.models import AuthSession
+
+    _shared, protocol, account, _token = world
+    record = sessions.create(db, user_id=account.id, tenant_id=protocol.tenant_id, mfa=False, amr=["pwd"])
+    stale = datetime.now(UTC) - timedelta(seconds=settings.auth_session_touch_seconds + 60)
+    record.last_seen_at = stale
+    db.flush()
+    token = create_session_token(account.id, sid=str(record.id))
+
+    assert ws._authenticate(token) is not None
+    monkeypatch.setattr(ws, "REVALIDATE_CACHE_SECONDS", 0)
+    current, protocol_id = ws._revalidate(token, protocol.public_id)
+    assert current is not None and protocol_id == protocol.id
+    db.expire_all()
+    assert db.get(AuthSession, record.id).last_seen_at == stale
+
+    # Inaktivität greift weiterhin: abgelaufene Session beendet die Verbindung
+    db.get(AuthSession, record.id).last_seen_at = datetime.now(UTC) - timedelta(minutes=settings.auth_session_idle_minutes + 1)
+    db.flush()
+    assert ws._revalidate(token, protocol.public_id) == (None, None)

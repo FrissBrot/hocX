@@ -28,8 +28,16 @@ services:
       # test's timeout, instead of adding a synchronous "run it now" endpoint that
       # wouldn't exist in production and wouldn't prove the actual background loop works.
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
+      # Wegwerf-Stack ohne externe Dienste (wie .env.e2e.example): env_file lädt nur die echte .env,
+      # Werte aus --env-file kommen nur über ${...} an. Ohne das prüfte das Backend Passwörter
+      # online (HIBP) - seit 1.5.2 auch bei jeder Anmeldung, und die Demo-Passwörter gelten dort
+      # als geleakt (Mailcode nötig, im E2E-Stack kein Mailversand). Nur der E2E-Stack.
+      PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-local-only}
+      GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-false}
   job-worker:
     environment:
+      PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-local-only}
+      GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-false}
       # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im
       # Backend - das kurze Intervall für abgabebox-photo-album-sync.spec.ts gehört deshalb hierher.
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"

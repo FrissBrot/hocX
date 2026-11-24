@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.client_ip import client_ip
+from app.core.client_ip import client_ip, rate_limit_source
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
 from app.core.rate_limit import enforce_rate_limit, within_limit
@@ -37,7 +37,7 @@ from app.schemas.notifications import (
 )
 from app.core.permissions import P
 from app.services import context_visibility_service, domain_bridge_service
-from app.core.auth_pseudonym import normalize_email, source_address
+from app.core.auth_pseudonym import normalize_email
 from app.schemas.step_up import EmailChallengeResendRequest, StepUpOptionsRead, StepUpRead, StepUpRequest
 from app.services.auth_service import AuthService
 from app.services.step_up_service import StepUpService
@@ -46,6 +46,11 @@ from app.services.tenant_service import build_tenant_profile_image_url
 router = APIRouter()
 service = AuthService()
 step_up_service = StepUpService()
+
+
+def _source(request: Request) -> str:
+    """Quelle für Ratelimits: IPv4 je Adresse, IPv6 je /64 (core.client_ip.rate_limit_source)."""
+    return rate_limit_source(request)
 
 
 def _expected_origin(request: Request) -> str:
@@ -78,13 +83,13 @@ def verify_login_totp(payload: TotpLoginVerifyRequest, request: Request, respons
 def verify_email_challenge(payload: EmailChallengeVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Bestätigungscode per E-Mail (erhöhtes Risiko, Konto ohne zweiten Faktor). Begrenzt je
     Ticket (email_challenge.verify) und je Quelle."""
-    enforce_rate_limit(f"email-challenge-ip:{source_address(client_ip(request)).exact}", limit=60, period_seconds=15 * 60)
+    enforce_rate_limit(f"email-challenge-ip:{_source(request)}", limit=60, period_seconds=15 * 60)
     return service.verify_email_challenge(db, response, payload, request=request)
 
 
 @router.post("/challenge/email/resend", response_model=dict[str, str])
 def resend_email_challenge(payload: EmailChallengeResendRequest, request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"email-challenge-resend-ip:{source_address(client_ip(request)).exact}", limit=20, period_seconds=15 * 60)
+    enforce_rate_limit(f"email-challenge-resend-ip:{_source(request)}", limit=20, period_seconds=15 * 60)
     service.resend_email_challenge(db, payload.ticket)
     return {"status": "sent"}
 
@@ -93,7 +98,7 @@ def _limit_mfa_setup(request: Request) -> None:
     """Einrichtung des zweiten Faktors vor der Anmeldung (Login und Erstlogin über Einladung):
     zusätzlich zu den Grenzen je Ticket/Vorgang je Quell-IP begrenzt (SECURITY-RULES 3.4). Grosszügig,
     weil ein ganzer Verein hinter einer NAT-Adresse gleichzeitig einrichten kann."""
-    enforce_rate_limit(f"mfa-setup-ip:{client_ip(request)}", limit=200, period_seconds=15 * 60)
+    enforce_rate_limit(f"mfa-setup-ip:{_source(request)}", limit=200, period_seconds=15 * 60)
 
 
 @router.post("/mfa/totp/setup/start", response_model=TotpEnrollmentStartRead)
@@ -140,7 +145,7 @@ def complete_login_passkey_setup(
 @router.post("/mfa/passkeys/assertion/start", response_model=PasskeyAssertionStartRead)
 def start_login_passkey_assertion(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
     # Bisher ohne Grenze (Audit 6.1): je Quelle begrenzt, das Konto begrenzt die Prüfung (L6)
-    enforce_rate_limit(f"passkey-assertion-ip:{source_address(client_ip(request)).exact}", limit=120, period_seconds=15 * 60)
+    enforce_rate_limit(f"passkey-assertion-ip:{_source(request)}", limit=120, period_seconds=15 * 60)
     return service.start_login_passkey_assertion(
         db,
         payload,
@@ -166,7 +171,7 @@ def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db
     picking their organisation from a dropdown. Deliberately unauthenticated (used pre-login),
     but rate-limited per source IP (audit finding, 2026-08-27) - without a cap this doubled as
     a free domain-enumeration oracle."""
-    enforce_rate_limit(f"tenant-by-domain:{client_ip(request)}", limit=20, period_seconds=60, fail_open=True)
+    enforce_rate_limit(f"tenant-by-domain:{_source(request)}", limit=20, period_seconds=60, fail_open=True)
     tenant = domain_bridge_service.resolve_tenant_by_app_domain(db, domain)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")
@@ -297,7 +302,7 @@ def _email_sending_enabled(db: Session) -> bool:
 
 @router.get("/password-reset/available", response_model=PasswordResetAvailableRead)
 def password_reset_available(request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"password-reset-available:{client_ip(request)}", limit=60, period_seconds=60, fail_open=True)
+    enforce_rate_limit(f"password-reset-available:{_source(request)}", limit=60, period_seconds=60, fail_open=True)
     from app.notifications import delivery_status
 
     status_now = delivery_status.read(db)
@@ -375,7 +380,7 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, back
     Hintergrundaufgabe nach der Antwort - Antwort und Arbeit im Request sind für alle Fälle gleich
     (Signaturprüfung des Cookies immer, keine Datenbankabfrage). Ein fremdes, gefälschtes oder
     einem anderen Konto gehörendes Gerätecookie bekommt kein Zusatzkontingent."""
-    source = source_address(client_ip(request)).exact
+    source = _source(request)
     enforce_rate_limit(f"password-reset-ip:{source}", limit=10, period_seconds=15 * 60)
     email = normalize_email(payload.email)
     # Immer auswerten (gleiche Arbeit für alle Anfragen), nur die Signatur - keine DB-Abfrage
@@ -392,7 +397,7 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, back
 
 @router.post("/account-link/preview", response_model=AccountLinkPreviewRead)
 def account_link_preview(payload: AccountLinkToken, request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
+    enforce_rate_limit(f"account-link-ip:{_source(request)}", limit=30, period_seconds=15 * 60)
     preview = account_links.preview(db, payload.token)
     if preview is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "link_invalid", "message": "Der Link ist ungültig oder abgelaufen."})
@@ -405,7 +410,7 @@ def account_link_complete(payload: AccountLinkComplete, request: Request, respon
     Login der zweite Faktor - die Antwort trägt das Login-Ticket (``mfa``, nur im Body) und
     ``mfa_required`` aus ``account_requires_mfa``. Eine Session entsteht hier nie, erst nach
     bestätigtem Faktor bzw. erlaubtem Überspringen über ``/auth/mfa/...``."""
-    enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
+    enforce_rate_limit(f"account-link-ip:{_source(request)}", limit=30, period_seconds=15 * 60)
     purpose, user = account_links.complete_for_user(db, payload.token, payload.password)
     if purpose != "invite":
         # Das Gerät, auf dem das Passwort zurückgesetzt wurde, gilt als bekannt (Security-Review M3):

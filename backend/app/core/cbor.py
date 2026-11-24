@@ -5,10 +5,17 @@ class CborDecodeError(ValueError):
     pass
 
 
+# Passkey-Antworten verschachteln höchstens wenige Ebenen (Attestation -> attStmt -> x5c). Ohne
+# Grenze liess tief verschachteltes CBOR aus dem Request-Body Python mit RecursionError abbrechen
+# (500 statt Eingabefehler, Bug-Bounty 2026-11-22).
+MAX_DEPTH = 16
+
+
 class _Reader:
     def __init__(self, data: bytes) -> None:
         self.data = data
         self.pos = 0
+        self.depth = 0
 
     def _take(self, size: int) -> bytes:
         if self.pos + size > len(self.data):
@@ -31,6 +38,15 @@ class _Reader:
         raise CborDecodeError(f"Unsupported CBOR additional-info value {additional_info}")
 
     def decode(self):
+        if self.depth >= MAX_DEPTH:
+            raise CborDecodeError("CBOR payload is nested too deeply")
+        self.depth += 1
+        try:
+            return self._decode_item()
+        finally:
+            self.depth -= 1
+
+    def _decode_item(self):
         initial = self._take(1)[0]
         major = initial >> 5
         additional_info = initial & 0x1F
@@ -42,7 +58,10 @@ class _Reader:
         if major == 2:
             return self._take(self._read_uint(additional_info))
         if major == 3:
-            return self._take(self._read_uint(additional_info)).decode("utf-8")
+            try:
+                return self._take(self._read_uint(additional_info)).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise CborDecodeError("CBOR text string is not valid UTF-8") from exc
         if major == 4:
             return [self.decode() for _ in range(self._read_uint(additional_info))]
         if major == 5:

@@ -391,6 +391,19 @@ async def auth_security_maintenance_loop() -> None:
     await run_advisory_locked_loop(name="auth_security_maintenance", interval_seconds=60 * 60, task=_task)
 
 
+async def password_breach_recheck_loop() -> None:
+    """Nachtjob der Leak-Prüfung (1.5.2): merkt Konten und Plattform-Admins vor, deren letzte
+    Prüfung älter als PASSWORD_BREACH_RECHECK_DAYS ist - die nächste Anmeldung prüft dann ohne
+    Präfix-Cache. Ohne Passwort ist keine Prüfung möglich; Hashes werden nie extern verwendet."""
+    from app.auth_security import breach
+
+    await run_advisory_locked_loop(
+        name="password_breach_recheck",
+        interval_seconds=24 * 60 * 60,
+        task=lambda db: breach.mark_due_accounts(db, older_than_days=settings.password_breach_recheck_days),
+    )
+
+
 async def metrics_rollup_loop() -> None:
     """Kennzahlen-Rollup für Dashboard und Analysen (services/metrics_rollup_service.py): stündlich
     prüfen, fehlende Tage bis gestern rechnen (erster Lauf: Backfill 90 Tage). Im job-worker, weil
@@ -423,6 +436,7 @@ BACKEND_LOOPS: tuple[LoopFactory, ...] = (
     document_sync_loop,
     storage_purge_loop,
     auth_security_maintenance_loop,
+    password_breach_recheck_loop,
 )
 
 # Schwer: CPU, Speicher, ClamAV, lange Transaktionen oder grosse Löschläufe - job-worker.

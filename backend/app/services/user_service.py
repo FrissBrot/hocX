@@ -37,6 +37,14 @@ _PASSWORD_CHANGE_ATTEMPT_LIMIT = 10
 _PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60
 
 
+def login_email_changes(current_email: str | None, values: dict) -> bool:
+    """Ändert ``values`` die (normalisierte) E-Mail-Adresse? Für Konten mit Login heisst das: neue
+    Login-Adresse, an die «Passwort vergessen» künftig den Link schickt."""
+    if "email" not in values:
+        return False
+    return (values["email"] or "").strip().lower() != (current_email or "").strip().lower()
+
+
 class UserService:
     """A user belongs to exactly one tenant (app_user.tenant_id) and has one or more of that
     tenant's roles (user_role, see role_service). The tenant entry points (list_users/get_user/
@@ -228,9 +236,12 @@ class UserService:
                 payload.password
                 or (payload.login_enabled is not None and payload.login_enabled != bool(user.login_enabled))
                 or (roles is not None and {role.id for role in roles} != current_role_ids)
+                or (was_login_enabled and login_email_changes(user.email, values))
             ):
                 # Passwort setzen, Login und Rollen ändern = Konto- bzw. Rechtevergabe: frische
-                # Anmeldung nötig (SEC-AUTH-010). Gilt für /users und /participants.
+                # Anmeldung nötig (SEC-AUTH-010). Gilt für /users und /participants. Ebenso die
+                # Login-E-Mail: über «Passwort vergessen» an die neue Adresse wirkt sie wie
+                # Passwort setzen (Konto-Übernahme), auch beim eigenen Konto.
                 from app.auth_security.step_up import ADMIN, require_recent_auth
 
                 require_recent_auth(actor, kind=ADMIN, action="user.update_access")
@@ -251,20 +262,24 @@ class UserService:
             raise ValueError("left_at must not be before joined_at")
         # Benutzerlimit (Abo): nur wenn ein weiteres Konto mit Login aktiv wird; das
         # Plattform-Admin-Panel (actor None) darf darüber hinaus gehen.
-        will_count = login_enabled and values.get("is_active", user.is_active)
-        if actor is not None and will_count and not (user.login_enabled and user.is_active):
+        will_count = user_limit_service.counts_towards_limit(login_enabled, values.get("is_active", user.is_active), left_at)
+        if actor is not None and will_count and not user_limit_service.counts_towards_limit(user.login_enabled, user.is_active, user.left_at):
             user_limit_service.ensure_login_capacity(db, user.tenant_id, for_user_id=user.id)
         if payload.password:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
-        if payload.password or payload.is_active is False or payload.login_enabled is False or (
+        from app.services.participant_service import _newly_left, _newly_returned
+
+        # Austritt bzw. Wiedereintritt: alte Sitzungen und Einmal-Links enden (wie Deaktivieren)
+        newly_left = _newly_left(user, values) or _newly_returned(user, values)
+        if payload.password or payload.is_active is False or payload.login_enabled is False or newly_left or (
             "email" in values and (values["email"] or "") != (user.email or "").strip().lower()
         ):
             # Offene Einmal-Links («Passwort vergessen», Einladung) gelten nicht mehr
             account_notifications.revoke_all_links(db, user.id)
-        if payload.is_active is False:
-            # Deactivation invalidates all existing sessions
+        if payload.is_active is False or (newly_left and user.login_enabled):
+            # Deactivation (oder Austritt, has_left) invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
         if payload.login_enabled is False:
             # Disabling login invalidates all existing sessions
@@ -352,6 +367,13 @@ class UserService:
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "wrong_current_password", "message": "Aktuelles Passwort ist nicht korrekt"})
         release_attempt(lockout_key)
+        from app.services.step_up_service import password_confirms_identity
+
+        if not password_confirms_identity(user, actor.auth_time):
+            # Geleaktes Passwort als «aktuelles Passwort» belegt nichts, solange die Sitzung älter ist
+            # als die Markierung (altes Cookie + öffentlich bekanntes Passwort = Kontoübernahme).
+            # Neu anmelden (zweiter Faktor/E-Mail-Code) oder «Passwort vergessen» (Review 1.5.2).
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "password_breached_relogin", "message": "Bitte melde dich neu an, um das Passwort zu ändern"})
         # Passwortregel überall (SEC-AUTH-015), nicht nur bei Reset/Einladung
         tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == user.tenant_id))
         ensure_password_acceptable(payload.new_password, personal=(user.first_name, user.last_name, user.display_name, user.email, tenant_name))

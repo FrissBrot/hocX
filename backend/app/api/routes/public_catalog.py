@@ -15,7 +15,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core.client_ip import client_ip
+from app.core.client_ip import rate_limit_source
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanComparisonRead, PublicPlanRead
@@ -67,7 +67,7 @@ def _etag_matches(header: str | None, etag: str) -> bool:
 def get_public_customer_logo(key: str, request: Request, db: Session = Depends(get_db)):
     """Logo eines auf der Website gelisteten Mandanten als neu gerendertes PNG. Unbekannte,
     fehlerhafte und nicht (mehr) gelistete Kennungen ergeben dieselbe 404 - kein Orakel."""
-    ip = client_ip(request)
+    ip = rate_limit_source(request)
     enforce_rate_limit(f"public-customer-logo:{ip}", limit=CUSTOMER_LOGO_LIMIT_PER_MINUTE, period_seconds=60, fail_open=True)
     logo = website_customer_logo_service.find_listed_logo(db, key) if _LOGO_KEY.fullmatch(key) else None
     if logo is None:

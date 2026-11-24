@@ -26,11 +26,13 @@ from app.schemas.fines import (
     OpenFinesSummary,
 )
 from app.services import fine_tariff_service, public_id_service
+from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 
 router = APIRouter()
 repo = FinesRepository()
 audit = AuditService()
+access_service = AccessService()
 
 
 @router.get("/fines", response_model=list[AttendanceFineListItem])
@@ -51,7 +53,12 @@ def list_fines(
     require_feature(user, "finance", write=False)
     if not user.can(P.REPORTS_PERSONAL):
         return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit, status=fine_status)
-    return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit, status=fine_status)
+    # Wie die Einzelrouten (_readable_protocol_id): Bussen von Protokollen, die das Konto nicht lesen
+    # darf (Entwürfe ohne meetings.read_drafts, nicht zugeordnete), erscheinen nicht - sonst verriet
+    # die Liste Entwurfs-ID, -Nummer und -Datum (Security-Review 1.5.2).
+    return repo.list_fines_for_tenant(
+        db, user.current_tenant_id, skip=skip, limit=limit, status=fine_status, protocol_scope=access_service.protocol_read_scope(db, user),
+    )
 
 
 @router.get("/fines/open-summary", response_model=OpenFinesSummary)
@@ -63,12 +70,31 @@ def open_fines_summary(
     ohne reports.personal nur die eigenen. Reine Leseroute (auch im Nur-Lesen-Zustand)."""
     require_feature(user, "finance", write=False)
     own_only = not user.can(P.REPORTS_PERSONAL)
-    summary = repo.open_fines_summary(db, user.current_tenant_id, user_id=user.user_id if own_only else None)
+    summary = repo.open_fines_summary(
+        db, user.current_tenant_id, user_id=user.user_id if own_only else None,
+        protocol_scope=None if own_only else access_service.protocol_read_scope(db, user),
+    )
     return OpenFinesSummary(**summary, own_only=own_only)
 
 
-def _resolve_protocol_id(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> int:
+def _readable_protocol_id(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> int | None:
+    """Protokoll für Bussen-Routen: Mandant plus dieselben Ressourcenregeln wie beim Lesen des
+    Protokolls (access_service.can_read_protocol: Entwürfe nur mit meetings.read_drafts,
+    eingeschränkte Leser nur zugeordnete, ohne meetings.read keines). Vorher genügte der
+    Mandant: wer Bussen sehen (reports.personal) oder verwalten (fines.manage) darf, las und
+    schrieb so Bussen von Entwürfen bzw. nicht zugeordneten Protokollen, die er nicht öffnen darf.
+
+    Schreiben ist strenger: die Schreibrouten prüfen vorher fines.manage, das Repository nimmt
+    nur offene Protokolle an. Fremd, nicht lesbar und nicht vorhanden ergeben dieselbe 404
+    (kein Existenz-Orakel, SECURITY-RULES 1.6)."""
     internal_id = public_id_service.resolve_internal_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if internal_id is None or not access_service.can_read_protocol(db, user, internal_id):
+        return None
+    return internal_id
+
+
+def _resolve_protocol_id(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> int:
+    internal_id = _readable_protocol_id(db, protocol_id, user)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
     return internal_id
@@ -79,14 +105,16 @@ def _resolve_fine_id(db: Session, fine_id: uuid.UUID, user: CurrentUser) -> int:
     # über das Ursprungsprotokoll auf den eigenen Mandanten einschränken. Vorher lieferte eine
     # fremde Busse eine andere 404-Meldung als eine unbekannte ID (Existenz-Orakel,
     # SECURITY-RULES 1.6); die Repository-Methoden prüfen den Mandanten zusätzlich selbst.
-    internal_id = db.scalar(
-        select(AttendanceFine.id)
+    row = db.execute(
+        select(AttendanceFine.id, AttendanceFine.protocol_id)
         .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
         .where(AttendanceFine.public_id == fine_id, Protocol.tenant_id == user.current_tenant_id)
-    )
-    if internal_id is None:
+    ).one_or_none()
+    # Wie _readable_protocol_id: Bussen eines Protokolls, das der Benutzer nicht lesen darf
+    # (Entwurf ohne meetings.read_drafts, nicht zugeordnet), gelten als unbekannt
+    if row is None or not access_service.can_read_protocol(db, user, row.protocol_id):
         raise HTTPException(status_code=404, detail="Fine not found")
-    return internal_id
+    return row.id
 
 
 @router.get("/fines/tariff", response_model=FineTariffRead)
@@ -151,6 +179,9 @@ def create_fine(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.FINES_MANAGE)
+    # Gleiche 404 wie die Repository-Prüfung unten (Mandant, abgeschlossen)
+    if _readable_protocol_id(db, payload.protocol_id, user) is None:
+        raise HTTPException(status_code=404, detail="Protocol, account or participant not found")
     if payload.use_tariff:
         # Betrag nach Tarif der Person (0172); 0 = für diese Person keine Busse (204, nichts angelegt)
         protocol = public_id_service.get_by_public_id(db, Protocol, payload.protocol_id, tenant_id=user.current_tenant_id)
@@ -250,11 +281,7 @@ def collect_fine(
     internal_id = _resolve_fine_id(db, fine_id, user)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
-        collecting_protocol_internal_id = public_id_service.resolve_internal_id(
-            db, Protocol, payload.collecting_protocol_id, tenant_id=user.current_tenant_id
-        )
-        if collecting_protocol_internal_id is None:
-            raise HTTPException(status_code=404, detail="Protocol not found")
+        collecting_protocol_internal_id = _resolve_protocol_id(db, payload.collecting_protocol_id, user)
     try:
         result = repo.collect_fine(db, internal_id, user.current_tenant_id, user.user_id, collecting_protocol_internal_id)
     except SQLAlchemyError as exc:

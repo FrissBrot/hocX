@@ -6,11 +6,26 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas.base import reject_null
 from app.schemas.protocol import _validate_reference_link
 
 RecurrenceType = Literal["once", "monthly", "weekly", "events"]
 DueRuleType = Literal["none", "fixed", "offset"]
 TodoDeleteMode = Literal["all", "future", "none"]
+
+# sort_index ist INTEGER; ohne Grenze scheiterte z. B. 2**31 erst in PostgreSQL (DataError,
+# 400 plus Fehlerprotokoll). Die Oberfläche sendet keinen Wert, Umsortieren vergibt 0..n.
+SORT_INDEX_MAX = 1_000_000
+
+
+def _clean_package_name(value: str | None) -> str | None:
+    """Paketname getrimmt und nicht leer (" " wurde bisher als leerer Name gespeichert)."""
+    if value is None:
+        return value
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError("Name must not be blank")
+    return cleaned
 
 
 class TaskPackageResponsible(BaseModel):
@@ -84,11 +99,11 @@ class TaskPackageItemBase(BaseModel):
 
 
 class TaskPackageItemCreate(TaskPackageItemBase):
-    sort_index: int | None = None
+    sort_index: int | None = Field(default=None, ge=0, le=SORT_INDEX_MAX)
 
 
 class TaskPackageItemUpdate(TaskPackageItemBase):
-    sort_index: int | None = None
+    sort_index: int | None = Field(default=None, ge=0, le=SORT_INDEX_MAX)
 
 
 class TaskPackageItemRead(TaskPackageItemBase):
@@ -116,11 +131,18 @@ class TaskPackageCreate(BaseModel):
     description: str | None = None
     is_active: bool = True
 
+    _clean_name = field_validator("name")(_clean_package_name)
+
 
 class TaskPackageUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     description: str | None = None
     is_active: bool | None = None
+
+    _clean_name = field_validator("name")(_clean_package_name)
+    # Teil-Update: Weglassen ist erlaubt, null nicht (NOT NULL; die IntegrityError wurde als
+    # 409 «Name existiert bereits» gemeldet und landete im Fehlerprotokoll).
+    _reject_null = field_validator("name", "is_active")(reject_null)
 
 
 class TaskPackageRead(BaseModel):

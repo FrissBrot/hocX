@@ -108,6 +108,7 @@
     "invalid_credentials": "E-mail ou mot de passe invalide.",
     "login_email_taken": "Cette adresse e-mail est déjà utilisée pour un accès.",
     "wrong_current_password": "Le mot de passe actuel n'est pas correct.",
+    "password_breached_relogin": "Ton mot de passe actuel est connu d'une fuite de données. Reconnecte-toi (avec ton second facteur ou un code par e-mail) ou utilise « Mot de passe oublié » pour le changer.",
     "already_has_login": "Cette personne a déjà un accès.",
     "inactive_person": "Les personnes inactives ne peuvent pas être invitées.",
     "email_required": "Une invitation nécessite une adresse e-mail enregistrée pour cette personne.",
@@ -151,13 +152,20 @@
     "rate_limiter_unavailable": "La protection des connexions est brièvement indisponible. Réessaie tout de suite.",
     "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie.",
     "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur.",
-    "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre."
+    "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre.",
+    "password_breached": "Ce mot de passe figure dans une fuite de données. Fais-le redéfinir par une autre personne owner ou via admin_cli."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",
     "message": "Votre organisation exige un second facteur pour votre compte. Configurez-le d’ici le {until} – ensuite, la connexion ne sera possible qu’avec lui.",
     "later": "Plus tard",
     "setup": "Configurer maintenant"
+  },
+  "breached": {
+    "title": "Ton mot de passe figure dans une fuite de données",
+    "message": "Il apparaît dans des fuites de données publiques. Change-le maintenant – d'ici là, chaque connexion exige en plus ton deuxième facteur ou un code envoyé par e-mail.",
+    "adminMessage": "Il apparaît dans des fuites de données publiques. Fais-le redéfinir immédiatement par une autre personne owner ou via admin_cli.",
+    "change": "Changer le mot de passe"
   },
   "stepUp": {
     "title": "Confirmer ton identité",
@@ -171,6 +179,7 @@
     "passwordLabel": "Ton mot de passe",
     "passkeyHint": "Confirme avec ton passkey (empreinte, visage ou PIN de l'appareil).",
     "loading": "Chargement …",
+    "noMethod": "Aucune confirmation possible ici : ta clé d'accès ne fonctionne que sur l'adresse principale de hocX et dans les navigateurs compatibles. Ouvre hocX à cette adresse ; tu peux aussi y configurer une application d'authentification si besoin.",
     "loadFailed": "La confirmation n'a pas pu être préparée.",
     "failed": "Échec de la confirmation.",
     "cancel": "Annuler",
