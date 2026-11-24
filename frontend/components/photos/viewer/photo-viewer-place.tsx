@@ -25,7 +25,7 @@ export function PhotoViewerPlaceLink({ place, onSearchPlace }: { place: PhotoPla
   const target = searchTarget(place, locale);
   if (!onSearchPlace || !target) {
     return (
-      <span className="photo-viewer-place">
+      <span className="photo-viewer-place" title={label}>
         <PhotoActionIcon name="place" />
         {label}
       </span>
