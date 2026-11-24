@@ -174,6 +174,10 @@ Installationen aktualisieren können.
 - **Python 3.15** (3.15.2, vorher 3.13; Dokumentation vorher 3.12) für alle Python-Images: Backend inkl.
   Worker-Dienste, Abgabebox-Backend, Foto-Analyse-Worker, Dokumentationsseite (`python:3.15-slim` per Digest),
   CI (`setup-python`) entsprechend. PyYAML 6.0.4 (vorher 6.0.3, ohne Wheel für 3.15).
+  **Ausnahme Backend** (inkl. storage-init, storage-, backup-, document- und job-worker aus demselben Image):
+  **Python 3.14** (`python:3.14-slim` per Digest), ebenso die CI-Jobs, die `backend/requirements.txt`
+  installieren. `google-re2` (Regel-Engine des Datei-Imports) hat noch kein Wheel für 3.15, und das
+  schlanke Image hat keinen C++-Compiler; Wechsel auf 3.15, sobald ein cp315-Wheel erscheint.
 
 ### Update
 

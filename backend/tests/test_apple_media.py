@@ -22,7 +22,7 @@ from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, GalleryUploadJob, StoredFile
 from app.services import apple_media, file_service as file_service_module, public_id_service
 from app.services.file_service import FileService
-from app.services.upload_pipeline import GalleryZipClip, _sniff_image_mime, iter_gallery_zip_entries
+from app.services.upload_pipeline import GalleryZipClip, GalleryZipRejection, _sniff_image_mime, iter_gallery_zip_entries
 from tests.factories import make_current_user, make_tenant
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg nicht installiert")
@@ -161,11 +161,13 @@ def test_zip_yields_the_clip_right_after_its_image_and_skips_orphan_clips(tmp_pa
 
     items = list(iter_gallery_zip_entries(zip_path))
 
-    # Der verwaiste Clip ist kein Bild: er wird nicht importiert, aber zusammengefasst gemeldet.
-    assert [type(item) for item in items] == [tuple, GalleryZipClip, str]
+    # Der verwaiste Clip ist kein Bild: er wird nicht importiert, im Upload-Verlauf als eigene
+    # Ablehnungs-Zeile geführt (GalleryZipRejection, 0254) und im Text zusammengefasst gemeldet.
+    assert [type(item) for item in items] == [tuple, GalleryZipClip, GalleryZipRejection, str]
     assert items[0][0] == "IMG_1.HEIC"
     assert items[1].image_name == "IMG_1.HEIC"
-    assert "kein Bild" in items[2]
+    assert (items[2].name, items[2].code) == ("ohne-bild.MOV", "not_image")
+    assert "kein Bild" in items[3]
 
 
 # --- Speichern ----------------------------------------------------------------------------
