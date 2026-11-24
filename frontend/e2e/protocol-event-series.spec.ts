@@ -1,4 +1,5 @@
 import { test, expect, APIRequestContext, Page } from "@playwright/test";
+import { openProtocol } from "./protocol-page";
 
 // Termin-Blöcke im Protokoll-Editor: automatisch pro Termin erzeugte Blöcke laufen als eine
 // Gruppe mit Termin-Karten, lassen sich einzeln entfernen und über «Termine wählen» (nach Monat)
@@ -60,7 +61,7 @@ test("event blocks are grouped per event, can be removed and chosen by month", a
     protocolId = protocol.id;
 
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto(`/protocols/${protocolId}`);
+    await openProtocol(page, protocolId);
     const series = page.locator(".event-series");
     await expect(series).toBeVisible({ timeout: 60_000 });
     await expect(series.getByText(`Pro Termin · Tag «${tag}»`)).toBeVisible();

@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { openProtocol } from "./protocol-page";
 
 // Tastenkürzel und Markdown-Eingaberegeln im Text-Element des Protokoll-Editors
 // (rich-text-editor.tsx): Strg/⌘+B/I, Listen (Strg+Shift+8/7), «**fett**», «*kursiv*», «- »/«1. »,
@@ -39,7 +40,10 @@ test.describe("Rich-Text-Tastenkürzel im Protokoll", () => {
     });
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/protocols/${protocol.id}`);
+    await openProtocol(page, protocol.id);
+    // Editor 1a: Text-Blöcke sind statisch, der Rich-Text-Editor entsteht erst mit «Bearbeiten»;
+    // openProtocol schliesst die eingeblendete Seitenleiste, die sonst Klicks abfängt
+    await page.getByRole("button", { name: "Text bearbeiten" }).first().click();
     const editor = page.locator(".tracked-text-block .rich-text-editor-content").first();
     await expect(editor).toBeVisible();
     await expect(editor).toHaveAttribute("contenteditable", "true");

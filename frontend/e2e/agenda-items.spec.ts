@@ -1,4 +1,5 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
+import { openProtocol } from "./protocol-page";
 
 // Anliegen (agenda_item): im Popup erfassen (zuletzt gewählte Vorlage vorgewählt), erscheint
 // danach ohne eigenen Block im nächsten Protokoll der Vorlage unter dem gewählten Traktandum.
@@ -47,7 +48,7 @@ test("agenda item is created in the popup and listed in the next protocol", asyn
     const listed = await (await request.get(`/api/protocols/${protocolId}/agenda-items`)).json();
     expect(listed.map((item: { title: string }) => item.title)).toContain(`Neue Kasse ${suffix}`);
 
-    await page.goto(`/protocols/${protocolId}`);
+    await openProtocol(page, protocolId);
     await expect(page.getByLabel("Titel des Anliegens").first()).toHaveValue(`Neue Kasse ${suffix}`, { timeout: 60_000 });
     await page.screenshot({ path: "test-results/agenda-editor-light-1440.png" });
   } finally {
