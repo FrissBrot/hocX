@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
-import { MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor";
+import { LazyMobileProtocolEditor as MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor-lazy";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";

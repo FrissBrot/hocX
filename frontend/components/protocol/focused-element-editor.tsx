@@ -21,7 +21,7 @@ import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/struct
 import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
 import { TimeInput } from "@/components/ui/time-input";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { formatTimeValue } from "@/lib/utils/time";
 import { eventFieldSelectionPatch } from "@/lib/utils/event-patch";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
