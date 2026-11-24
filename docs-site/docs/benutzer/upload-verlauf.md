@@ -34,11 +34,18 @@ Im Upload findest du:
   vorhandene Datei), Metadaten ergänzt, abgelehnt (zu gross, Format …), Virenfund, verworfen
   (Abbrechen in der Pendenz). «vom Browser gemeldet» heisst: der Browser hat die Datei gar nicht erst
   gesendet. Später gelöschte Dateien erscheinen als «im Papierkorb» bzw. «Datei gelöscht».
+  Abgelehnt werden auch einzelne Einträge eines ZIP (kein Bild, zu gross, beschädigt – mit dem Namen
+  des Archivs), Protokollbilder (Format, Grösse, Virenfund, Duplikat) und Dateien der Abgabebox
+  (Typ, Grösse, Virenfund, Duplikat). Mit Checkboxen wählst du Dateien aus und setzt für sie mit
+  **Datum setzen …** ein festes Aufnahmedatum.
+- **Datum setzen …** (oben rechts): setzt für alle Fotos des Uploads ein festes Datum, optional mit
+  Uhrzeit, mit Vorschau. Dokumente haben kein Aufnahmedatum und bleiben unverändert.
 - **Datumskorrekturen:** alle Änderungen am Aufnahmedatum für diesen Upload, mit **Rückgängig**.
 - **Kameras:** jede Kamera mit Anzahl Fotos und Zeitraum. Zwei Geräte desselben Modells
   unterscheidet hocX über ein verschlüsseltes Kürzel der Seriennummer (die Seriennummer selbst wird
-  nie gespeichert). «Nur diese auswählen» wählt die Fotos einer Kamera, «Zeit verschieben …» öffnet
-  die Datumskorrektur dafür. Liefert die Kamera GPS-Zeit, schlägt hocX einen Versatz vor
+  nie gespeichert). «Nur diese auswählen» wählt die Fotos einer Kamera, «Zeit verschieben …» und
+  «Datum setzen …» öffnen die Datumskorrektur dafür. Ältere Fotos bekommen das Kürzel nach dem
+  Update im Hintergrund nachgetragen. Liefert die Kamera GPS-Zeit, schlägt hocX einen Versatz vor
   («geht vermutlich 1 h 14 min vor»).
 
 **Termin zuordnen:** In der Auswahlleiste ordnet **Termin** Fotos fest einem Termin zu oder gibt sie

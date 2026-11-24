@@ -72,7 +72,11 @@
     "rule_violation": "Regel der Abgabe verletzt",
     "client_rejected": "Vom Browser abgelehnt",
     "cancelled": "Beim Abbrechen verworfen",
-    "other": "Anderer Grund"
+    "other": "Anderer Grund",
+    "not_image": "Kein Bild (im ZIP übersprungen)",
+    "zip_entry_corrupt": "ZIP-Eintrag beschädigt oder nicht unterstützt",
+    "zip_invalid": "ZIP-Datei ungültig (beschädigt, verschlüsselt oder zu gross)",
+    "zip_no_images": "ZIP enthält keine Bilder"
   },
   "ref": {
     "event": "Termin",
@@ -120,7 +124,8 @@
     "select": "«{name}» auswählen",
     "selectAll": "Alle geladenen Dateien auswählen",
     "selectedCount": "{count, plural, one {1 Datei ausgewählt} other {# Dateien ausgewählt}}",
-    "clearSelection": "Auswahl aufheben"
+    "clearSelection": "Auswahl aufheben",
+    "fromArchive": "aus «{archive}»"
   },
   "fileState": {
     "open": "Öffnen",

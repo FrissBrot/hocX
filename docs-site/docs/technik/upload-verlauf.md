@@ -44,6 +44,27 @@ Plan: `audit-reports/plans/2026-11-21-upload-history-plan.md` (Entscheide 21./22
 - **Persönlicher Link, Word-Import, Datei-Import, Mandanten-Import, Protokollbilder:** im jeweiligen
   Dienst, Items in derselben Transaktion wie die Datei.
 
+## Ablehnungs-Zeilen (1.6)
+
+Abgelehnte Dateien erscheinen als Zeile mit Grund (`reason_code`) im Vorgang:
+
+- **ZIP im Galerie-Upload:** `iter_gallery_zip_entries` liefert `GalleryZipRejection` (zu gross,
+  beschädigter Eintrag, kein Bild, ungültiges ZIP); `_ingest_gallery_zip` schreibt sie gepuffert mit den
+  Bildern (`reason_params.archive` = ZIP-Name, höchstens 5000 je ZIP, bei fortgesetztem Ingest nur nach
+  dem Wiederaufnahmepunkt). Viren, Duplikate und Format der Bilder selbst kamen schon über
+  `save_gallery_uploads`. ZIP ohne Bilder: Zeile `zip_no_images`.
+- **Protokollbilder:** eine Ablehnung (Format, Grösse, Virenfund, Duplikat 409, Speicher) rollt die
+  Anfrage zurück; danach schreibt die Route in eigener Transaktion eine Zeile in den Vorgang des
+  Protokolls und Tages (nur im Mandanten des Aufrufers, best effort, Fehler ins Fehlerprotokoll).
+- **Abgabebox (Migration `0254_upload_rejections`):** der Dienst schreibt je abgelehnter oder doppelter
+  Datei eine Zeile `file_rejected`/`file_duplicate` in `submission_upload_log` (neue Spalten
+  `request_ref`, `upload_id`, `reason_code`, `file_name`, `file_size`; höchstens 20 je Anfrage) - kein
+  neues Recht. Der Trigger `trg_submission_upload_log_history` (SECURITY DEFINER) hängt sie an den
+  Vorgang der gespeicherten Einreichung (nur gleiche Abgabe) oder an einen Vorgang je Anfrage
+  (`upload_job.request_ref`). Das Abgabe-Protokoll blendet diese Zeilen aus; Klon, Import und Export
+  übernehmen die neuen Spalten nicht (nicht im ORM-Modell). Die öffentliche Antwort verrät Duplikate
+  weiterhin nicht.
+
 ## Rechte (E-2)
 
 Keine neue Berechtigung. Sichtbar sind Vorgänge eines Kanals mit dem Recht des Bereichs

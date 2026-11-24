@@ -49,6 +49,13 @@ Installationen aktualisieren können.
   speichert wie beim Upload nur das Kürzel je Verein (nie die Seriennummer). Er arbeitet je Verein in
   Teilen, merkt sich den Stand und setzt nach einem Neustart fort; gleiche Kameramodelle erscheinen
   danach auch in älteren Uploads getrennt. Migration `0253_camera_serial_backfill`.
+- **Ablehnungs-Zeilen im Upload-Verlauf:** Dateien, die beim ZIP-Upload in Fotos (kein Bild, zu
+  gross, beschädigter Eintrag, ungültiges oder leeres ZIP), bei Protokollbildern (Format, Grösse,
+  Virenfund, Duplikat, Speicher voll) oder in der Abgabebox (Typ, Grösse, Inhalt, zu viele Dateien,
+  Speicher, Virenfund, Duplikat) abgelehnt werden, erscheinen als Zeile mit Grund im Vorgang - bei
+  ZIP-Einträgen mit dem Namen des Archivs. Die Abgabebox meldet dafür je Datei eine Zeile in ihr
+  Protokoll, ohne neue Rechte; Absender sehen weiterhin keine Duplikat-Meldung. Migration
+  `0254_upload_rejections`.
 - Mehrfachauswahl **Termin zuordnen**: fest mit einem Termin verknüpfen oder an die automatische
   Zuordnung nach Datum zurückgeben.
 

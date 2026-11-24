@@ -128,6 +128,26 @@ describe("UploadJobDetailView", () => {
     expect(await screen.findByText("Auf 02.05.2026 14:30 gesetzt")).toBeInTheDocument();
   });
 
+  it("zeigt Ablehnungs-Zeilen aus ZIP, Protokollbild und Abgabebox mit Grund und Archiv", async () => {
+    browserApiFetchMock.mockResolvedValue({
+      items: [
+        { id: 1, position: 0, name: "ordner/plan.pdf", status: "rejected", reason_code: "not_image", reason_params: { archive: "lager.zip" }, source: "server", size_bytes: 10, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 2, position: 1, name: "kaputt.jpg", status: "rejected", reason_code: "zip_entry_corrupt", reason_params: { archive: "lager.zip" }, source: "server", size_bytes: null, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 3, position: 2, name: "virus.pdf", status: "infected", reason_code: "infected", reason_params: {}, source: "server", size_bytes: 68, mime_type: null, applied: [], file: null, existing_file: null },
+        { id: 4, position: 3, name: "nochmal.pdf", status: "duplicate", reason_code: "duplicate_exact", reason_params: {}, source: "server", size_bytes: 68, mime_type: null, applied: [], file: null, existing_file: null },
+      ],
+      next_cursor: null,
+    });
+    render(<UploadJobDetailView area="files" job={{ ...detail, channel: "abgabebox", image_count: 0, cameras: [] }} canManagePhotos canShare={false} canManageSettings={false} />);
+    expect(await screen.findByText("Kein Bild (im ZIP übersprungen)")).toBeInTheDocument();
+    expect(screen.getAllByText("aus «lager.zip»")).toHaveLength(2);
+    expect(screen.getByText("ZIP-Eintrag beschädigt oder nicht unterstützt")).toBeInTheDocument();
+    expect(screen.getByText("Virenfund")).toBeInTheDocument();
+    expect(screen.getByText("Schon vorhanden (gleicher Inhalt)")).toBeInTheDocument();
+    // Abgelehnte Zeilen haben keine Datei und lassen sich nicht auswählen
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
   it("zeigt bei Dokumenten nur die Ergebnisliste", () => {
     browserApiFetchMock.mockResolvedValue({ items: [], next_cursor: null });
     render(<UploadJobDetailView area="files" job={{ ...detail, channel: "document", image_count: 0, cameras: [] }} canManagePhotos canShare={false} canManageSettings={false} />);

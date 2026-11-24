@@ -1120,6 +1120,54 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Image could not be uploaded") from exc
+    except HTTPException as exc:
+        # Upload-Verlauf: abgelehnte Bilder (Format, Grösse, Virenfund, Duplikat, Speicher) als
+        # Zeile im Vorgang des Protokolls und Tages - in eigener Transaktion, die Ablehnung bleibt.
+        reason = _protocol_image_rejection_reason(exc)
+        if reason is not None and protocol_id is not None:
+            db.rollback()
+            _record_protocol_image_rejection(db, user, protocol_element_block, protocol_id, file, reason)
+        raise
+
+
+def _protocol_image_rejection_reason(exc: HTTPException) -> str | None:
+    """Grund einer abgelehnten Protokollbild-Datei (UploadRejected.code bzw. Status), None bei
+    Fehlern, die nichts mit der Datei zu tun haben (Rechte, gesperrtes Protokoll)."""
+    code = getattr(exc, "code", None)
+    if code:
+        return str(code)
+    if exc.status_code == 413:
+        return "too_large"
+    if exc.status_code == 409:
+        return "duplicate_exact"
+    detail = str(exc.detail or "")
+    if exc.status_code == 400 and ("Unsupported file type" in detail or "Bildformat" in detail):
+        return "unsupported_format"
+    if exc.status_code == 400 and "Speicherlimit" in detail:
+        return "quota_exceeded"
+    return None
+
+
+def _record_protocol_image_rejection(
+    db: Session, user: CurrentUser, block: ProtocolElementBlock, protocol_id: int, file: UploadFile, reason: str
+) -> None:
+    """Best effort: der Verlauf darf die eigentliche Antwort (Ablehnung) nie verändern."""
+    try:
+        tenant_id = service._resolve_tenant_id(db, block.id)
+        if tenant_id is None or tenant_id != user.current_tenant_id:
+            return
+        job = upload_job_service.protocol_day_job(db, tenant_id=tenant_id, protocol_id=protocol_id, created_by=user.user_id)
+        upload_job_service.record_results(
+            db, job, [{"name": file.filename or "bild", "status": "skipped" if reason == "duplicate_exact" else "failed", "code": reason, "size": file.size}],
+        )
+        db.refresh(job)
+        job.status = upload_job_service.final_status(job)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - Verlauf ist Zusatz, Fehler nur protokollieren
+        db.rollback()
+        from app.core.error_log import record_system_error
+
+        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id)
 
 
 @router.delete("/protocol-images/{image_id}", response_model=dict[str, str])

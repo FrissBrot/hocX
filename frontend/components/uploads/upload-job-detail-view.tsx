@@ -336,7 +336,12 @@ function UploadJobItems({ jobId, selectable, onSetDate }: { jobId: string; selec
               <UploadItemStatusBadge status={item.status} />
               {item.source === "client" ? <span className="muted upload-history-note">{t("items.browserReported")}</span> : null}
             </td>
-            <td>{reasonLabel(item.reason_code, t) ?? "–"}</td>
+            <td>
+              {reasonLabel(item.reason_code, t) ?? "–"}
+              {typeof item.reason_params.archive === "string" && item.reason_params.archive ? (
+                <span className="muted upload-history-note">{t("items.fromArchive", { archive: item.reason_params.archive })}</span>
+              ) : null}
+            </td>
             <td>{item.size_bytes !== null ? formatFileSize(item.size_bytes) : "–"}</td>
             <td>
               {item.status === "duplicate" || item.status === "metadata_updated" ? (

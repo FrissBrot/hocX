@@ -72,7 +72,11 @@
     "rule_violation": "Règle du dépôt non respectée",
     "client_rejected": "Refusé par le navigateur",
     "cancelled": "Rejeté lors de l'annulation",
-    "other": "Autre raison"
+    "other": "Autre raison",
+    "not_image": "Pas une image (ignorée dans le ZIP)",
+    "zip_entry_corrupt": "Entrée ZIP endommagée ou non prise en charge",
+    "zip_invalid": "Fichier ZIP non valide (endommagé, chiffré ou trop volumineux)",
+    "zip_no_images": "Le ZIP ne contient aucune image"
   },
   "ref": {
     "event": "Événement",
@@ -120,7 +124,8 @@
     "select": "Sélectionner « {name} »",
     "selectAll": "Sélectionner tous les fichiers chargés",
     "selectedCount": "{count, plural, one {1 fichier sélectionné} other {# fichiers sélectionnés}}",
-    "clearSelection": "Annuler la sélection"
+    "clearSelection": "Annuler la sélection",
+    "fromArchive": "de « {archive} »"
   },
   "fileState": {
     "open": "Ouvrir",

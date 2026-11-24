@@ -247,6 +247,18 @@ class GalleryZipClip:
     content: bytes
 
 
+@dataclass(frozen=True)
+class GalleryZipRejection:
+    """Abgelehnter ZIP-Eintrag bzw. ganzes ZIP (Upload-Verlauf: Ablehnungs-Zeile im Vorgang).
+    code: too_large, zip_entry_corrupt, not_image, zip_invalid. message: der bisherige Text für
+    gallery_upload_job.errors (None, wenn nur zusammengefasst gemeldet wird, z. B. Nicht-Bilder)."""
+
+    name: str
+    code: str
+    message: str | None
+    size: int | None = None
+
+
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -275,12 +287,13 @@ def inspect_gallery_zip(path: Path) -> int:
         raise HTTPException(400, "ZIP-Datei ist beschädigt oder ungültig") from exc
 
 
-def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | GalleryZipClip | str]:
-    """Entpackt einzeln und begrenzt; direkte Bilder und ZIP-Bilder haben dieselbe Grenze."""
+def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | GalleryZipClip | GalleryZipRejection | str]:
+    """Entpackt einzeln und begrenzt; direkte Bilder und ZIP-Bilder haben dieselbe Grenze.
+    Abgelehnte Einträge kommen als GalleryZipRejection (Upload-Verlauf), reine Hinweise als str."""
     try:
         inspect_gallery_zip(path)
     except HTTPException as exc:
-        yield str(exc.detail)
+        yield GalleryZipRejection(name="", code="zip_invalid", message=str(exc.detail))
         return
     with zipfile.ZipFile(path) as archive:
         entries = [info for info in archive.infolist() if not info.is_dir()]
@@ -295,19 +308,21 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
             if not name or name.startswith("."):
                 continue
             if info.file_size > GALLERY_DIRECT_IMAGE_MAX_BYTES:
-                yield f"{name}: zu gross (maximal 100 MB), übersprungen"
+                yield GalleryZipRejection(name, "too_large", f"{name}: zu gross (maximal 100 MB), übersprungen", info.file_size)
                 continue
             try:
                 with archive.open(info) as source:
                     entry_bytes = source.read(GALLERY_DIRECT_IMAGE_MAX_BYTES + 1)
                 if len(entry_bytes) > GALLERY_DIRECT_IMAGE_MAX_BYTES:
-                    yield f"{name}: zu gross, übersprungen"
+                    yield GalleryZipRejection(name, "too_large", f"{name}: zu gross, übersprungen", info.file_size)
                     continue
             except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, NotImplementedError):
-                yield f"{name}: beschädigter oder nicht unterstützter ZIP-Eintrag, übersprungen"
+                yield GalleryZipRejection(name, "zip_entry_corrupt", f"{name}: beschädigter oder nicht unterstützter ZIP-Eintrag, übersprungen", info.file_size)
                 continue
             if _sniff_image_mime(entry_bytes) is None:
                 skipped_non_images += 1
+                # Einzeln als Zeile im Vorgang, im Text weiter zusammengefasst (unten)
+                yield GalleryZipRejection(name, "not_image", None, info.file_size)
                 continue
             matched_any = True
             yield (name, entry_bytes)

@@ -72,7 +72,11 @@
     "rule_violation": "Regola della consegna violata",
     "client_rejected": "Rifiutato dal browser",
     "cancelled": "Scartato all'annullamento",
-    "other": "Altro motivo"
+    "other": "Altro motivo",
+    "not_image": "Non è un'immagine (saltata nello ZIP)",
+    "zip_entry_corrupt": "Voce ZIP danneggiata o non supportata",
+    "zip_invalid": "File ZIP non valido (danneggiato, cifrato o troppo grande)",
+    "zip_no_images": "Lo ZIP non contiene immagini"
   },
   "ref": {
     "event": "Evento",
@@ -120,7 +124,8 @@
     "select": "Seleziona «{name}»",
     "selectAll": "Seleziona tutti i file caricati",
     "selectedCount": "{count, plural, one {1 file selezionato} other {# file selezionati}}",
-    "clearSelection": "Annulla selezione"
+    "clearSelection": "Annulla selezione",
+    "fromArchive": "da «{archive}»"
   },
   "fileState": {
     "open": "Apri",

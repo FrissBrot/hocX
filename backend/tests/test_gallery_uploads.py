@@ -20,7 +20,7 @@ from app.models.entities import GalleryImage, GalleryUploadJob, PhotoAlbum, Phot
 from app.services import file_service as file_service_module
 from app.services import public_id_service
 from app.services.file_service import FileService
-from app.services.upload_pipeline import iter_gallery_zip_entries
+from app.services.upload_pipeline import GalleryZipRejection, iter_gallery_zip_entries
 from tests.factories import make_current_user, make_cycle_config, make_event, make_tenant
 
 
@@ -79,6 +79,8 @@ def _drain_zip_entries(zip_bytes: bytes, tmp_path) -> tuple[list[tuple[str, byte
     matched: list[tuple[str, bytes]] = []
     notes: list[str] = []
     for item in iter_gallery_zip_entries(zip_path):
+        if isinstance(item, GalleryZipRejection):
+            continue  # Ablehnungs-Zeilen für den Upload-Verlauf, eigene Tests in test_upload_rejections.py
         (notes if isinstance(item, str) else matched).append(item)
     return matched, notes
 

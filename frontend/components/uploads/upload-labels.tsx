@@ -64,7 +64,7 @@ export function reasonLabel(code: string | null, t: UploadsT): string | null {
   if (!code) return null;
   const known = [
     "duplicate_exact", "too_large", "unsupported_format", "scan_failed", "infected", "quota_exceeded", "heic_unreadable",
-    "rule_violation", "client_rejected", "cancelled",
+    "rule_violation", "client_rejected", "cancelled", "not_image", "zip_entry_corrupt", "zip_invalid", "zip_no_images",
   ];
   return known.includes(code) ? t(`reason.${code}`) : t("reason.other");
 }

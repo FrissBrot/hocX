@@ -208,6 +208,13 @@ submission_upload_log_table = Table(
     Column("status", Text),
     Column("error_message", Text),
     Column("created_at", DateTime(timezone=True)),
+    # Upload-Verlauf (Backend-Migration 0254): je abgelehnter oder doppelter Datei eine Zeile mit
+    # Grund; ein DB-Trigger macht daraus eine Zeile im Vorgang. Nur INSERT, kein neues Recht.
+    Column("request_ref", UUID(as_uuid=True)),
+    Column("upload_id", BigInteger),
+    Column("reason_code", Text),
+    Column("file_name", Text),
+    Column("file_size", BigInteger),
 )
 
 # stored_file: INSERT tabellenweit (Migration 0020), SELECT tabellenweit seit Migration

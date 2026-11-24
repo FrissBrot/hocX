@@ -72,7 +72,11 @@
     "rule_violation": "Submission rule violated",
     "client_rejected": "Rejected by the browser",
     "cancelled": "Discarded on cancel",
-    "other": "Other reason"
+    "other": "Other reason",
+    "not_image": "Not an image (skipped in ZIP)",
+    "zip_entry_corrupt": "ZIP entry damaged or not supported",
+    "zip_invalid": "Invalid ZIP file (damaged, encrypted or too large)",
+    "zip_no_images": "ZIP contains no images"
   },
   "ref": {
     "event": "Event",
@@ -120,7 +124,8 @@
     "select": "Select “{name}”",
     "selectAll": "Select all loaded files",
     "selectedCount": "{count, plural, one {1 file selected} other {# files selected}}",
-    "clearSelection": "Clear selection"
+    "clearSelection": "Clear selection",
+    "fromArchive": "from “{archive}”"
   },
   "fileState": {
     "open": "Open",

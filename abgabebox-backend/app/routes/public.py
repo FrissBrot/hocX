@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import logging
 import re
+import uuid
 from pathlib import Path
 
 import imagehash
@@ -31,6 +33,8 @@ def _client_ip(request: Request) -> str | None:
     if forwarded:
         return forwarded.split(",")[0].strip() or None
     return request.client.host if request.client else None
+
+_history_logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -374,6 +378,25 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         except Exception:
             pass
 
+    # Upload-Verlauf (Backend-Migration 0254): abgelehnte und doppelte Dateien dieser Anfrage als
+    # Zeilen im Vorgang der Verwaltung - die öffentliche Antwort bleibt unverändert (Duplikate
+    # werden dem Absender weiterhin nicht verraten). Best effort wie _log().
+    request_ref = uuid.uuid4()
+
+    def _log_files(rejected: list[tuple[str, str | None, int | None]], upload_id: int | None = None) -> None:
+        try:
+            repository.insert_file_logs(
+                db, assignment_id=assignment["id"], element_ref=element_ref, request_ref=request_ref,
+                upload_id=upload_id, files=rejected,
+            )
+        except Exception as exc:
+            # Best effort wie _log(); ohne Dateinamen protokollieren (Security-Review N-4)
+            _history_logger.warning("Upload-Verlauf: Datei-Zeilen nicht gespeichert (%s)", type(exc).__name__)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
     # Fenster/Deadline + "noch offen"-Status IMMER serverseitig neu pruefen, nie dem Client vertrauen.
     element = element_resolver.resolve_single_element(db, assignment, element_ref)
     if element is None:
@@ -393,6 +416,8 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     # Checked before anything about any of `files` is read or scanned - see
     # _exceeds_max_files_per_request's docstring above.
     if _exceeds_max_files_per_request(len(files)):
+        # Vor dem Lesen abgelehnt: eine Zeile für die Anfrage statt einer je Datei (Security-Review M-1)
+        _log_files([("rule_violation", files[0].filename, None)])
         _log(
             "validation_failed",
             f"Zu viele Dateien in einer Anfrage ({len(files)}, max. {settings.max_files_per_upload_request})",
@@ -412,19 +437,23 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     for upload_file in files:
         suffix = Path(upload_file.filename or "").suffix.lower().lstrip(".")
         if allowed_types and suffix not in allowed_types:
+            _log_files([("unsupported_format", upload_file.filename, upload_file.size)])
             _log("validation_failed", f"Dateityp nicht erlaubt: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateityp '.{suffix}' nicht erlaubt")
         # H11: bounded read (see _read_upload_within_limit above) instead of an unconditional
         # `await upload_file.read()` on the whole body.
         content = await _read_upload_within_limit(upload_file, max_bytes)
         if content is None:
+            _log_files([("too_large", upload_file.filename, upload_file.size)])
             _log("validation_failed", f"Datei zu gross: {upload_file.filename} (max. {assignment['max_file_size_mb']} MB)")
             raise HTTPException(status_code=400, detail=f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)")
         total_bytes_read += len(content)
         if total_bytes_read > MAX_UPLOAD_REQUEST_BYTES:
+            _log_files([("too_large", upload_file.filename, len(content))])
             _log("validation_failed", f"Upload insgesamt zu gross ({total_bytes_read // 1024 // 1024} MB)")
             raise HTTPException(status_code=400, detail="Upload insgesamt zu gross")
         if not _content_matches_extension(content, suffix):
+            _log_files([("unsupported_format", upload_file.filename, len(content))])
             _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
         # Server-derived mime type, never the client-sent Content-Type header - see comment above.
@@ -468,14 +497,18 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         )
         unique_contents = []
         checksums = []
+        duplicates: list[tuple[str, str | None, int | None]] = []
         for item in contents:
             checksum = hashlib.sha256(item[0]).hexdigest()
             if checksum not in existing_checksums:
                 unique_contents.append(item)
                 checksums.append(checksum)
                 existing_checksums.add(checksum)
+            else:
+                duplicates.append(("duplicate_exact", item[1], len(item[0])))
         contents = unique_contents
         if not contents:
+            _log_files(duplicates)
             return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
 
         # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
@@ -523,7 +556,13 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 for item, checksum, phash in zip(contents, checksums, perceptual_hashes)
                 if checksum not in existing_checksums_locked
             ]
+            duplicates += [
+                ("duplicate_exact", item[1], len(item[0]))
+                for item, checksum in zip(contents, checksums)
+                if checksum in existing_checksums_locked
+            ]
             if not remaining_files:
+                _log_files(duplicates)
                 return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
             contents = [item for item, _, _ in remaining_files]
             checksums = [checksum for _, checksum, _ in remaining_files]
@@ -544,8 +583,10 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # the safe, contained fix for this pass.
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
+                _log_files([("quota_exceeded", name, len(content)) for content, name, _mime in contents])
                 raise HTTPException(400, "Speicherkontingent der Organisation erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
+                _log_files([("quota_exceeded", name, len(content)) for content, name, _mime in contents])
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
                 raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte die Organisation kontaktieren")
 
@@ -573,6 +614,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 )
                 if already_uploaded + len(contents) > max_files:
                     remaining = max(0, max_files - already_uploaded)
+                    _log_files([("rule_violation", name, len(content)) for content, name, _mime in contents])
                     _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch möglich)")
                     raise HTTPException(
                         status_code=400,
@@ -607,6 +649,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                     "perceptual_hash": perceptual_hashes[i],
                     "image_metadata": _without_gps(image_metadata.extract(content), include_gps) if mime_type in _IMAGE_MIME_TYPES else {},
                     "_content": content,
+                    "_client_name": original_name,
                 })
 
         # _log() committet die Session (repository.insert_upload_log) - damit endet die
@@ -637,6 +680,11 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 except Exception:
                     # Rest bleibt in der Quarantäne und wird vom Cleanup-Loop entfernt.
                     db.rollback()
+            _log_files([
+                ("infected" if status == "infected" else "scan_failed", f["_client_name"], f["file_size_bytes"])
+                for f, status in zip(quarantine_files, scan_results)
+                if status in ("infected", "error")
+            ])
             if "error" in scan_results and "infected" not in scan_results:
                 _log("scan_error", "Virenprüfung konnte nicht abgeschlossen werden")
                 raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
@@ -653,7 +701,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         # stays in quarantine untouched (the rescan sweep resolves it later).
         saved_files: list[dict] = []
         for f, status in zip(quarantine_files, scan_results):
-            file_info = {k: v for k, v in f.items() if k != "_content"}
+            file_info = {k: v for k, v in f.items() if not k.startswith("_")}
             file_info["scan_status"] = status
             if status == "clean":
                 try:
@@ -672,7 +720,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         # Step 5: Single DB transaction.
         close_after = _closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files))
         try:
-            repository.insert_full_upload(
+            upload_id = repository.insert_full_upload(
                 db,
                 assignment_id=assignment["id"],
                 event_id=element["event_id"],
@@ -704,6 +752,8 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             _log("upload_error", f"Datenbankfehler: {exc}")
             raise
 
+        if duplicates:
+            _log_files(duplicates, upload_id=upload_id)
         if any_pending:
             pending_count = sum(1 for status in scan_results if status == "pending")
             _log("scan_pending", f"ClamAV nicht erreichbar – {pending_count} von {len(scan_results)} Datei(en) in Quarantäne")
