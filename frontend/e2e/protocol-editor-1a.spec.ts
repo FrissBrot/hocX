@@ -38,6 +38,8 @@ async function threePointProtocol(request: APIRequestContext, label: string) {
 
 async function setTheme(page: Page, theme: "light" | "dark") {
   await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+  // Farbübergänge (--dur-base) abwarten, sonst zeigt der Screenshot Mischfarben
+  await page.waitForTimeout(400);
 }
 
 test.describe("Protokoll-Editor 1a", () => {
