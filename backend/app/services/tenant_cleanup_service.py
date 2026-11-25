@@ -108,6 +108,14 @@ class TenantCleanupService:
         selected = set(categories)
         counts = TenantCleanupCounts()
 
+        if "list_entries" in selected or "lists_full" in selected:
+            # Einreichungen der Listen-Abgaben hängen per CASCADE am Eintrag: Dateien vorher
+            # vollständig löschen (PRIV-003) und ins Löschjournal (Security-Review 2026-11-25)
+            self._erase_submissions(
+                db, tenant, SubmissionUpload.list_entry_id,
+                select(ListEntry.id).where(ListEntry.list_definition_id.in_(select(ListDefinition.id).where(ListDefinition.tenant_id == tenant_id))),
+            )
+
         if "list_entries" in selected:
             result = db.execute(
                 delete(ListEntry).where(
@@ -139,6 +147,7 @@ class TenantCleanupService:
             counts.protocols = result.rowcount or 0
 
         if "events" in selected:
+            self._erase_submissions(db, tenant, SubmissionUpload.event_id, select(Event.id).where(Event.tenant_id == tenant_id))
             self._journal(db, "event", list(db.scalars(select(Event.public_id).where(Event.tenant_id == tenant_id))), tenant)
             result = db.execute(delete(Event).where(Event.tenant_id == tenant_id))
             counts.events = result.rowcount or 0
@@ -184,6 +193,21 @@ class TenantCleanupService:
 
         for public_id in public_ids:
             erasure_journal.record(db, kind, public_id, tenant_public_id=tenant.public_id)
+
+    def _erase_submissions(self, db: Session, tenant: Tenant, column, parent_ids) -> None:
+        """Einreichungen, die per CASCADE mit Terminen bzw. Listeneinträgen verschwinden: Dateien
+        wie deletion_service.erase_uploads_of löschen (sonst verwaist im Abgabebox-Speicher) und
+        alle Einreichungen ins Löschjournal."""
+        from app.services import deletion_service
+
+        uploads = db.execute(select(SubmissionUpload.id, SubmissionUpload.public_id, column).where(column.in_(parent_ids))).all()
+        keyword = "event_id" if column.key == "event_id" else "list_entry_id"
+        for parent_id in {row[2] for row in uploads}:
+            deletion_service.erase_uploads_of(db, **{keyword: parent_id})
+        remaining = set(db.scalars(select(SubmissionUpload.public_id).where(SubmissionUpload.id.in_([row[0] for row in uploads]))))
+        # erase_uploads_of journalisiert und löscht Einreichungen, deren Dateien alle weg sind;
+        # die übrigen (ohne Dateien) verschwinden gleich per CASCADE
+        self._journal(db, "submission_upload", sorted(remaining, key=str), tenant)
 
     def _count(self, db: Session, model, tenant_id: int) -> int:
         return int(db.scalar(select(func.count(model.id)).where(model.tenant_id == tenant_id)) or 0)

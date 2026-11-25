@@ -164,13 +164,25 @@ def _build(db: Session, job: TenantDataExport) -> None:
         archive.discard()
         raise
     archive.path.unlink(missing_ok=True)
-    now = datetime.now(UTC)
-    job.status, job.finished_at, job.expires_at = "done", now, now + EXPORT_TTL
-    job.object_key, job.size_bytes, job.password_encrypted = key, info.size, None
-    job.filename = f"{_t(lang, 'tenant.prefix')}-{safe_name(tenant_name, 'Organisation')}-{date.today():%Y%m%d}.zip"
-    job.error = f"missing:{missing}" if missing else None
-    notify_export_finished(db, job)
-    db.commit()
+    try:
+        now = datetime.now(UTC)
+        job.status, job.finished_at, job.expires_at = "done", now, now + EXPORT_TTL
+        job.object_key, job.size_bytes, job.password_encrypted = key, info.size, None
+        job.filename = f"{_t(lang, 'tenant.prefix')}-{safe_name(tenant_name, 'Organisation')}-{date.today():%Y%m%d}.zip"
+        job.error = f"missing:{missing}" if missing else None
+        notify_export_finished(db, job)
+        db.commit()
+    except Exception:
+        # Ohne gespeicherte Zeile fände der Ablauf-Job das Archiv nie mehr - z. B. wenn der Verein
+        # während des Baus gelöscht wurde (Security-Review 2026-11-25): eigenes Objekt wieder weg
+        db.rollback()
+        try:
+            get_object_store().delete(db, MAIN, key)
+            db.commit()
+        except Exception:  # noqa: BLE001 - Aufräumen best effort, der ursprüngliche Fehler zählt
+            db.rollback()
+            _logger.exception("Vereinsexport %s: Archiv nach Fehlschlag nicht gelöscht", key)
+        raise
 
 
 # ── Inhalt ───────────────────────────────────────────────────────────────
