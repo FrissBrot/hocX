@@ -246,17 +246,23 @@ Installationen aktualisieren können.
 ### Sicherheit
 
 - Kalender-Abo endet bei Austritt und entzogenem Login (auch bei einem Austrittsdatum in der Zukunft).
-- Termin mit Abgabe-Einreichungen nur mit «Abgaben verwalten» löschbar (die Einreichungen fallen mit weg).
+- Termin bzw. Listeneintrag mit Abgabe-Einreichungen nur mit «Abgaben verwalten» löschbar (die
+  Einreichungen fallen mit weg).
 - Nach einem Abo-Downgrade entstehen aus Termin- und Listenänderungen keine neuen Paket- und
   Abgabe-Pendenzen mehr.
 - Plattform-Admin: die Identitätsprüfung zeigt die E-Mail der Antragsteller nur owner-Admins.
 - Datenschutz: die Löschung eines Vereins entfernt auch fertige Vereinsexporte; «Mandant aufräumen»
   löscht Personen wie der reguläre Löschpfad (Audit-Log, Anmeldeereignisse, Löschjournal) und
-  schreibt auch Protokolle, Termine, Abgaben und Dateien ins Löschjournal; ein abgelaufener
-  Vereinsexport ist sofort nicht mehr herunterladbar.
+  schreibt auch Protokolle, Termine, Abgaben und Dateien ins Löschjournal, löscht die Dateien der
+  Einreichungen von Terminen und Listeneinträgen vollständig; ein abgelaufener Vereinsexport ist
+  sofort nicht mehr herunterladbar, und ein während der Vereinslöschung fertig gewordener Export
+  hinterlässt kein Archiv.
 - Protokoll-PDF: Bussen- und Finanzblöcke zeigen ohne «Persönliche Auswertungen» nur die eigenen
   Bussen bzw. ohne Finanzrecht keinen Kontostand; das gemeinsame PDF (alle Bussen, Kontostand) und
-  PDFs anderer Personen sind nur in der eigenen Sicht abrufbar (Liste, Download, Exportliste).
+  PDFs anderer Personen sind nur in der eigenen Sicht abrufbar (Liste, Download, Exportliste und
+  Dateien-Tab samt Vorschau und extrahiertem Text); persönliche PDFs werden nicht mehr als Version
+  des Protokoll-Dokuments übernommen.
+- Metadatenfilter: ein JPEG-Kommentar übersteht die Neukodierung nicht mehr.
 - Buchungen lassen sich nur mit einem lesbaren Protokoll verknüpfen.
 
 ### Update

@@ -15,6 +15,7 @@ begrenzt. Was der Editor speichert, erfüllt das immer.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 _MAX_BIGINT = 2**63 - 1
@@ -37,7 +38,12 @@ class BlockConfigShapeError(ValueError):
 def _check_values(value: Any, depth: int) -> None:
     if depth > _MAX_DEPTH:
         raise BlockConfigShapeError("configuration too deeply nested")
-    if isinstance(value, bool) or value is None or isinstance(value, float):
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            # NaN/Infinity: kein gültiges JSON, PostgreSQL-JSONB lehnt sie ab
+            raise BlockConfigShapeError("number out of range")
+        return
+    if isinstance(value, bool) or value is None:
         return
     if isinstance(value, int):
         if abs(value) > _MAX_BIGINT:
@@ -92,7 +98,9 @@ def check_block_config_shape(config: dict) -> None:
 def bigint_digits(value: str) -> int | None:
     """Ziffernfolge als Zahl, wenn sie eine interne id sein kann (nur ASCII-Ziffern, BIGINT).
     ``str.isdigit()`` allein nimmt auch «²» an, woran ``int()`` scheitert."""
-    if value.isascii() and value.isdigit():
+    # Längenprüfung vor int(): BIGINT hat höchstens 19 Ziffern, und int() lehnt über 4300 Ziffern
+    # mit ValueError ab (Pythons Grenze gegen Rechenlast)
+    if value.isascii() and value.isdigit() and len(value) <= 19:
         number = int(value)
         if number <= _MAX_BIGINT:
             return number

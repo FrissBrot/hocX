@@ -135,3 +135,16 @@ def test_block_integer_fields_are_bounded(field):
 def test_element_integer_fields_are_bounded(field):
     with pytest.raises(ValidationError):
         ProtocolElementUpdate(**{field: -(2**31) - 1})
+
+
+def test_shape_check_rejects_non_finite_numbers_and_long_digit_strings_are_no_ids():
+    """Security-Review 2026-11-25: NaN/Infinity lehnt JSONB ab; über 4300 Ziffern wirft int()."""
+    import pytest as _pytest
+
+    from app.services.block_config_shape import BlockConfigShapeError, bigint_digits, check_block_config_shape
+
+    for value in (float("nan"), float("inf")):
+        with _pytest.raises(BlockConfigShapeError):
+            check_block_config_shape({"bullet_items": [value]})
+    assert bigint_digits("9" * 5000) is None
+    assert bigint_digits("12345") == 12345
