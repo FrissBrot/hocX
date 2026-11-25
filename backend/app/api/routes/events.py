@@ -205,6 +205,12 @@ def delete_event(
     current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
+    if P.SUBMISSIONS_MANAGE not in user.permissions and service.delete_impact(db, current.id)["submission_count"]:
+        # Die Einreichungen (und ihre Dateien) des Termins fallen mit weg. Löschen von Abgabe-Daten
+        # verlangt sonst submissions.manage (DELETE /submission-uploads) - eine eigene Rolle mit nur
+        # meetings.edit darf sie nicht über den Termin mitlöschen. Bewusst ohne Feature-Prüfung
+        # (nicht user.can): nach einem Abgabebox-Downgrade bleibt der Termin löschbar.
+        raise HTTPException(status_code=403, detail="Permission required")
     deleted_tag = current.tag
     deleted_internal_id = current.id
     try:
