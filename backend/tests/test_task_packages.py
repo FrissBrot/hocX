@@ -585,6 +585,66 @@ def test_lead_preview_reports_create_date_and_scheduled(db, setup):
     ]
 
 
+# Zyklus 01.08.-31.07.: Termin am 05.08.2027 gehört zum Zyklus 2027, Stichtag (14 Tage) 22.07.2027
+# liegt noch im Zyklus 2026.
+EARLY_EVENT = date(2027, 8, 5)
+
+
+def test_lead_creates_todo_of_next_cycle_before_cycle_change(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    event = _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+
+    assert packages.sync_package(db, package, today=date(2027, 7, 21))[0] == 0
+    entries = packages.preview(db, package, cycle_config=setup["cycle"], cycle_year=2027, today=date(2027, 7, 21))
+    assert [(e["create_date"], e["scheduled"]) for e in entries] == [(date(2027, 7, 22), True)]
+
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 1
+    [todo] = _instances(db, item)
+    assert (todo.cycle_year, todo.occurrence_key, todo.due_date) == (2027, f"event:{event.id}", date(2027, 7, 29))
+
+    # Zykluswechsel: regulärer Abgleich des Zyklus 2027 findet die Instanz, kein Duplikat
+    assert packages.run_due_task_packages(db, today=date(2027, 8, 1))["created"] == 0
+    assert packages.sync_package(db, package, today=date(2027, 8, 2))[0] == 0
+    assert [t.id for t in _instances(db, item)] == [todo.id]
+    entries = packages.preview(db, package, cycle_config=setup["cycle"], cycle_year=2027, today=date(2027, 8, 2))
+    assert [(e["exists"], e["scheduled"]) for e in entries] == [(True, False)]
+
+
+def test_without_lead_next_cycle_events_wait_for_cycle_change(db, setup):
+    package, item, _ = _package(db, setup, recurrence={"type": "events", "event_tag": "Schar"}, due_rule=LEAD_DUE)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 0
+    assert packages.sync_package(db, package, today=date(2027, 8, 1))[0] == 1
+    assert [t.cycle_year for t in _instances(db, item)] == [2027]
+
+
+@pytest.mark.parametrize(("start_cycle_year", "expected"), [(2027, 1), (2028, 0)])
+def test_lead_next_cycle_respects_start_cycle_year(db, setup, start_cycle_year, expected):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE, start_cycle_year=start_cycle_year)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == expected
+    assert len(_instances(db, item)) == expected
+
+
+def test_lead_next_cycle_respects_inactive_package_and_downgrade(db, setup):
+    from app.models import TenantFeature
+
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    package.is_active = False
+    db.flush()
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 0
+
+    package.is_active = True
+    feature = db.scalar(
+        select(TenantFeature).where(TenantFeature.tenant_id == setup["tenant"].id, TenantFeature.feature_code == "task_packages")
+    )
+    feature.access = "read_only"
+    db.flush()
+    assert packages.run_due_task_packages(db, today=date(2027, 7, 22))["created"] == 0
+    assert _instances(db, item) == []
+
+
 @pytest.mark.parametrize("value", ["14", 1.5, True, -1, 3651])
 def test_lead_rejects_wrong_type_and_range(value):
     with pytest.raises(ValueError):

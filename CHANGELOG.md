@@ -137,8 +137,9 @@ Installationen aktualisieren können.
   sich optional festlegen, dass die Pendenz eines Termins erst X Tage vor dem Termin entsteht
   (`recurrence_json.create_days_before`, 0–3650, keine Migration). Der tägliche Lauf
   `task_package_rollover` und die Abgleiche nach Terminänderungen legen sie ab dem Stichtag an
-  (Schweizer Datum, spätestens am Folgetag); verschobene Termine zählen mit dem neuen Datum, schon
-  angelegte Pendenzen bleiben und werden wie bisher nachgeführt. Die Vorschau zeigt «Entsteht am …»,
+  (Schweizer Datum, spätestens am Folgetag), auch für Termine kurz nach dem Zykluswechsel (die
+  Pendenz gehört zum neuen Zyklus, kein Duplikat beim Wechsel); verschobene Termine zählen mit dem
+  neuen Datum, schon angelegte Pendenzen bleiben und werden wie bisher nachgeführt. Die Vorschau zeigt «Entsteht am …»,
   die Übersicht «erstellt X Tage vor dem Termin»; liegt die Fälligkeit vor dem Erstelldatum, weist
   das Formular darauf hin.
 

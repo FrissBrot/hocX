@@ -36,7 +36,8 @@ Zyklusjahr**:
 Danach wiederholt sich das Paket in jedem Zyklus automatisch. Ein Paket kann mehreren Zyklen
 zugewiesen sein.
 
-hocX erzeugt immer nur die Pendenzen des **laufenden** Zyklus. Das passiert beim Zuweisen, beim
+hocX erzeugt immer nur die Pendenzen des **laufenden** Zyklus (einzige Ausnahme: Pendenzen
+[mit Vorlauf](#vorlauf) für Termine kurz nach dem Zykluswechsel). Das passiert beim Zuweisen, beim
 Ändern des Pakets, bei Änderungen an den verknüpften Listen und Terminen und einmal täglich.
 Beim Zykluswechsel legt der tägliche Lauf die Pendenzen des neuen Zyklus an. Mit **Jetzt
 nachführen** im Aktionsmenü stösst du das von Hand an.
@@ -72,8 +73,10 @@ der Pendenzenliste nur die Aufgaben der nächsten Termine.
 - Liegt die Fälligkeit vor dem Erstelldatum (z. B. erstellt 7 Tage vorher, fällig 14 Tage vorher),
   weist das Formular darauf hin: die Pendenz wäre beim Erstellen schon überfällig. Speichern ist
   trotzdem möglich.
-- Es zählen nur Termine des laufenden Zyklus. Liegt ein Termin kurz nach dem Zykluswechsel, entsteht
-  seine Pendenz frühestens beim Zykluswechsel, auch wenn der Vorlauf früher beginnen würde.
+- Der Vorlauf gilt auch über den Zykluswechsel hinweg: Liegt ein Termin kurz nach dem Wechsel
+  (z. B. am 05.08., Zykluswechsel am 01.08., 14 Tage Vorlauf), entsteht seine Pendenz schon am
+  22.07. Sie gehört zum neuen Zyklus, der Wechsel legt sie nicht ein zweites Mal an. Gilt das
+  Paket erst ab einem späteren Zyklusjahr, entsteht vorher nichts.
 
 **Beispiel:** Aufgabe «Programm vorbereiten», Wiederholung *Pro Termin* mit Tag «Schar», Pendenz
 erstellen *14 Tage vor dem Termin*, Fälligkeit *Relativ, 7 Tage vor dem Termin*. Für die Übung

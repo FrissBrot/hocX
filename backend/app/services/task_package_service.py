@@ -27,7 +27,12 @@ Regeln:
   tägliche Job und die Abgleiche nach Terminänderungen holen sie ab dem Stichtag nach. Massgebend
   ist das aktuelle Termindatum (verschobener Termin = neuer Stichtag). Bereits angelegte Instanzen
   werden wie bisher nachgeführt, nie gelöscht - auch wenn der Termin später wieder ausserhalb des
-  Fensters liegt.
+  Fensters liegt. Ausnahme zur Regel "nur der laufende Zyklus": Aufgaben mit Vorlauf berücksichtigen
+  auch die Termine des *nächsten* Zyklus, deren Stichtag schon erreicht ist (Termin am 05.08.,
+  Zykluswechsel am 01.08., 14 Tage Vorlauf: Pendenz am 22.07.). Die Instanz gehört zum Zyklusjahr
+  ihres Termins (gleicher cycle_year/occurrence_key wie beim späteren regulären Abgleich), der
+  Zykluswechsel legt sie also nicht doppelt an. start_cycle_year, Paketstatus und Feature-Gating
+  gelten unverändert.
 """
 
 from __future__ import annotations
@@ -153,9 +158,8 @@ def occurrences_for(
     return [Occurrence("once", start)]
 
 
-def create_date_for(item: TaskPackageItem, occurrence: Occurrence) -> date | None:
-    """Ab wann die Instanz einer Wiederholung "pro Termin" mit Vorlauf entstehen darf (Termindatum
-    minus create_days_before). None = ohne Vorlauf, entsteht sofort beim Abgleich."""
+def create_lead_days(item: TaskPackageItem) -> int | None:
+    """Vorlauf einer Wiederholung "pro Termin" in Tagen, None = ohne Vorlauf."""
     recurrence = item.recurrence_json or {}
     if recurrence.get("type") != "events":
         return None
@@ -164,7 +168,14 @@ def create_date_for(item: TaskPackageItem, occurrence: Occurrence) -> date | Non
     # "kein Vorlauf" wie bisher, statt den Abgleich des ganzen Pakets scheitern zu lassen.
     if isinstance(lead, bool) or not isinstance(lead, int) or lead < 0:
         return None
-    return occurrence.anchor - timedelta(days=min(lead, 3650))
+    return min(lead, 3650)
+
+
+def create_date_for(item: TaskPackageItem, occurrence: Occurrence) -> date | None:
+    """Ab wann die Instanz einer Wiederholung "pro Termin" mit Vorlauf entstehen darf (Termindatum
+    minus create_days_before). None = ohne Vorlauf, entsteht sofort beim Abgleich."""
+    lead = create_lead_days(item)
+    return None if lead is None else occurrence.anchor - timedelta(days=lead)
 
 
 def due_date_for(item: TaskPackageItem, occurrence: Occurrence, *, cycle_config: CycleConfig, cycle_year: int) -> date | None:
@@ -324,31 +335,42 @@ def _clear_foreign_due(todo: ProtocolTodo, overridden: set[str]) -> bool:
 
 
 def sync_package_cycle(db: Session, package: TaskPackage, package_cycle: TaskPackageCycle, *, today: date | None = None) -> tuple[int, int]:
-    """Erzeugt/aktualisiert die Instanzen des laufenden Zyklus. Kein Commit."""
+    """Erzeugt/aktualisiert die Instanzen des laufenden Zyklus, bei Aufgaben mit Vorlauf auch die
+    schon fälligen Termin-Instanzen des nächsten Zyklus. Kein Commit."""
     if not package.is_active:
         return 0, 0
     cycle_config = db.get(CycleConfig, package_cycle.cycle_config_id)
     if cycle_config is None:
         return 0, 0
     today = today or _swiss_today()
-    cycle_year = current_cycle_year(cycle_config, today)
-    if cycle_year < package_cycle.start_cycle_year:
+    current = current_cycle_year(cycle_config, today)
+    items = _items(db, package.id)
+    # (Zyklusjahr, Aufgaben): der laufende Zyklus mit allen Aufgaben, der nächste nur mit den
+    # Aufgaben mit Vorlauf - deren Termine kurz nach dem Wechsel sollen schon vorher entstehen.
+    targets = []
+    if current >= package_cycle.start_cycle_year:
+        targets.append((current, items))
+    lead_items = [item for item in items if create_lead_days(item) is not None]
+    if lead_items and current + 1 >= package_cycle.start_cycle_year:
+        targets.append((current + 1, lead_items))
+    if not targets:
         return 0, 0
     open_status_id, closed_status_ids = _status_ids(db)
     created = updated = 0
-    for item in _items(db, package.id):
-        c, u = _sync_item(
-            db,
-            item,
-            tenant_id=package.tenant_id,
-            cycle_config=cycle_config,
-            cycle_year=cycle_year,
-            open_status_id=open_status_id,
-            closed_status_ids=closed_status_ids,
-            today=today,
-        )
-        created += c
-        updated += u
+    for cycle_year, cycle_items in targets:
+        for item in cycle_items:
+            c, u = _sync_item(
+                db,
+                item,
+                tenant_id=package.tenant_id,
+                cycle_config=cycle_config,
+                cycle_year=cycle_year,
+                open_status_id=open_status_id,
+                closed_status_ids=closed_status_ids,
+                today=today,
+            )
+            created += c
+            updated += u
     return created, updated
 
 
