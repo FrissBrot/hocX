@@ -1527,6 +1527,11 @@ Ordner-Import brauchen nichts davon. Dieselbe Anleitung liegt für die Planung u
   als `CLOUD_IMPORT_TOKEN_KEY_PREVIOUS`, deployen, nach 7 Tagen `_PREVIOUS` leeren (länger lebt keine
   ungenutzte Verbindung). Geht der Schlüssel verloren, melden sich laufende Importe einfach neu an.
 - `CLOUD_IMPORT_ENABLED=false` schaltet alle Cloud-Anbieter ab.
+- `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (Standard 2, höchstens 8): gleichzeitige Downloads je Import im
+  job-worker. Zusätzlich bremst ein Token-Bucket je Konto in Redis (der job-worker ist dafür im Netz
+  `cache`). Bei vielen 429 im Log den Wert senken.
+- Laufende Importe aller Mandanten, Kennzahlen und Notfall-Abbruch: Adminportal → Betrieb →
+  **Datei-Importe** (`/admin/cloud-imports`).
 - Nach jeder Änderung: `scripts/deploy.sh`; Kontrolle unter /admin/system, Prüfung **Cloud-Import**
   (aktive Importe, hängende Importe, warten auf Anmeldung, Ablauf der Client-Secrets).
 - Tokens werden gelöscht, sobald ein Import endet; unterbrochene Importe behalten sie höchstens 7 Tage

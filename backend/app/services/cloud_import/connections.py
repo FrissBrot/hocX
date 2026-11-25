@@ -154,8 +154,13 @@ def context(db: Session, connection: ImportConnection, provider: CloudProvider) 
         cache["access"] = _refresh(db, connection, provider, client)
         return cache["access"]
 
+    from app.services.cloud_import import pacing
+
+    # Eimer je Anbieter und Konto (stabile Kennung, sonst Verbindung) - Backend und Worker teilen ihn
+    account = connection.account_subject or str(connection.id)
     return ProviderContext(
-        client, token=token, refresh=force_refresh, granted_scopes=scopes_of(connection), account_kind=connection.account_kind
+        client, token=token, refresh=force_refresh, granted_scopes=scopes_of(connection), account_kind=connection.account_kind,
+        pace=pacing.pacer(provider.key, account, provider.request_rate),
     )
 
 

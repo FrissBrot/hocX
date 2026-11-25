@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, admin_analytics, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, cloud_import, cloud_import_oauth, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, photo_places, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, upload_jobs, users, word_import
+from app.api.routes import activity, admin, admin_analytics, admin_cloud_import, agenda_items, admin_auth, admin_auth_security, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_overview, admin_console, admin_storage, maintenance_public, auth, auth_security, calendar_feeds, cloud_import, cloud_import_oauth, collaboration_ws, context_visibility, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, photo_places, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, search_synonyms, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, upload_jobs, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -483,6 +483,8 @@ app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-aut
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(admin_identity_verification.router, prefix="/api/admin", tags=["admin"])
 app.include_router(admin_document_templates.router, prefix="/api/admin", tags=["admin"])
+# Datei-Importe aller Mandanten (nur Zähler) und Notfall-Abbruch
+app.include_router(admin_cloud_import.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(roles.router, prefix="/api", tags=["roles"])

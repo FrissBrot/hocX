@@ -388,9 +388,24 @@
       "resetValidity": "The link is valid for {minutes} minutes and works only once."
     },
     "cloudImport": {
+      "doneBody": "Your file import for {tenant} has finished. Imported: {imported} · already present: {duplicates} · errors: {failed}. See the report for details.",
+      "doneSubject": "{tenant}: file import finished",
+      "failedBody": "Your file import for {tenant} was interrupted. Imported so far: {imported} · already present: {duplicates} · errors: {failed}.",
+      "failedSubject": "{tenant}: file import interrupted",
       "openButton": "Open import",
+      "reason": {
+        "generic": "The report shows the reason and lets you resume the import.",
+        "provider_unavailable": "The cloud service was repeatedly unreachable. Resume the import later.",
+        "quota_exceeded": "The organisation’s storage quota is full. Free up space and resume the import in the wizard.",
+        "reauth_expired": "The cloud service asked for a new sign-in that did not happen within 7 days.",
+        "requester_unauthorized": "Your account is no longer allowed to import files.",
+        "too_many_bytes": "The selection is too large for one import.",
+        "too_many_files": "The selection contains too many files for one import.",
+        "too_many_folders": "The selection contains too many folders for one import."
+      },
       "reauthBody": "Your file import from a cloud service for {tenant} is paused: the provider requires you to sign in again (for example after a password change). Sign in again in the import wizard and the import continues where it stopped. After 7 days without signing in it is ended.",
-      "reauthSubject": "{tenant}: file import is waiting for you to sign in"
+      "reauthSubject": "{tenant}: file import is waiting for you to sign in",
+      "reportButton": "Open report"
     },
     "export": {
       "failed": "The data export could not be created. Please request it again in hocX under Organization › Privacy.",
@@ -529,6 +544,8 @@
       "subject": "hocX: Test email"
     },
     "title": {
+      "cloudImportDone": "File import finished",
+      "cloudImportFailed": "File import interrupted",
       "cloudImportReauth": "Sign in again to continue the import",
       "emailChanged": "Your login email was changed",
       "exportFailed": "Export failed",

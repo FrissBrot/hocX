@@ -38,7 +38,8 @@
     "account": "Profilo e passkey",
     "settingsSecurity": "Sicurezza e accesso",
     "settingsIntegrations": "Integrazioni",
-    "settingsSystem": "Tecnica"
+    "settingsSystem": "Tecnica",
+    "cloudImports": "Importazioni di file"
   },
   "keywords": {
     "pricing": "prezzi piani funzionalità pacchetti di archiviazione cambio",
@@ -48,7 +49,8 @@
     "theme": "aspetto tema chiaro scuro",
     "settingsSecurity": "passkey conferma sessione accesso",
     "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker backup",
-    "settingsSystem": "versione ambiente migrazione database domini catalogo"
+    "settingsSystem": "versione ambiente migrazione database domini catalogo",
+    "cloudImports": "importazione OneDrive SharePoint cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Aspetto: chiaro",

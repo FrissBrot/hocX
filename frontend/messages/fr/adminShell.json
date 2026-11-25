@@ -38,7 +38,8 @@
     "account": "Profil et passkeys",
     "settingsSecurity": "Sécurité et connexion",
     "settingsIntegrations": "Intégrations",
-    "settingsSystem": "Technique"
+    "settingsSystem": "Technique",
+    "cloudImports": "Imports de fichiers"
   },
   "keywords": {
     "pricing": "prix plans fonctionnalités paquets de stockage changement",
@@ -48,7 +49,8 @@
     "theme": "apparence thème clair sombre",
     "settingsSecurity": "passkey confirmation session connexion",
     "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker sauvegarde",
-    "settingsSystem": "version environnement migration base de données domaines catalogue"
+    "settingsSystem": "version environnement migration base de données domaines catalogue",
+    "cloudImports": "import OneDrive SharePoint cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Apparence : claire",

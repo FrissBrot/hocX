@@ -732,6 +732,8 @@ def _check_render_queue(db: Session, now: datetime) -> HealthCheckRead:
 
 CLOUD_IMPORT_STALL_AGE = timedelta(minutes=30)
 CLOUD_IMPORT_SECRET_WARNING_DAYS = 30
+# Mehr als so viel gestagte Import-Dateien = Verarbeitung kommt nicht nach (Platte)
+CLOUD_IMPORT_STAGED_WARNING_BYTES = 20 * 1024**3
 
 
 def cloud_import_secret_expiries() -> dict[str, str]:
@@ -761,6 +763,8 @@ def _check_cloud_import(db: Session, now: datetime) -> HealthCheckRead:
         ),
         {"cutoff": now - CLOUD_IMPORT_STALL_AGE, "now": now},
     ) or 0
+    # Belegung der Zwischenablage (heruntergeladen bzw. hochgeladen, noch nicht verarbeitet), Plan §12.3
+    staged_bytes = int(db.scalar(text("SELECT coalesce(sum(size_bytes), 0) FROM import_item WHERE status = 'staged'")) or 0)
     secret_days: int | None = None
     secret_invalid = False
     for value in cloud_import_secret_expiries().values():
@@ -775,7 +779,7 @@ def _check_cloud_import(db: Session, now: datetime) -> HealthCheckRead:
         days = (expires - now.date()).days
         secret_days = days if secret_days is None else min(secret_days, days)
     status: HealthStatus = "ok"
-    if stalled or secret_invalid or (secret_days is not None and secret_days <= CLOUD_IMPORT_SECRET_WARNING_DAYS):
+    if stalled or secret_invalid or staged_bytes > CLOUD_IMPORT_STAGED_WARNING_BYTES or (secret_days is not None and secret_days <= CLOUD_IMPORT_SECRET_WARNING_DAYS):
         status = "warning"
     if secret_days is not None and secret_days < 0:
         status = "critical"
@@ -787,6 +791,7 @@ def _check_cloud_import(db: Session, now: datetime) -> HealthCheckRead:
         "secretDays": int(secret_days or 0),
         "secretMissing": 1 if secret_invalid else 0,
         "providers": len(cloud_import_secret_expiries()),
+        "stagedMb": staged_bytes // 1024**2,
     })
 
 

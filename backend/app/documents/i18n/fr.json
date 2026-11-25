@@ -388,9 +388,24 @@
       "resetValidity": "Le lien est valable {minutes} minutes et ne fonctionne qu’une seule fois."
     },
     "cloudImport": {
+      "doneBody": "Ton import de fichiers pour {tenant} est terminé. Importés : {imported} · déjà présents : {duplicates} · erreurs : {failed}. Le rapport donne les détails.",
+      "doneSubject": "{tenant} : import de fichiers terminé",
+      "failedBody": "Ton import de fichiers pour {tenant} a été interrompu. Importés jusqu’ici : {imported} · déjà présents : {duplicates} · erreurs : {failed}.",
+      "failedSubject": "{tenant} : import de fichiers interrompu",
       "openButton": "Ouvrir l’import",
+      "reason": {
+        "generic": "Le rapport indique la raison et permet de reprendre l’import.",
+        "provider_unavailable": "Le service cloud était injoignable à plusieurs reprises. Reprends l’import plus tard.",
+        "quota_exceeded": "Le quota de stockage de l’organisation est plein. Libère de la place et reprends l’import dans l’assistant.",
+        "reauth_expired": "Le service cloud demandait une nouvelle connexion qui n’a pas eu lieu en 7 jours.",
+        "requester_unauthorized": "Ton compte n’a plus le droit d’importer des fichiers.",
+        "too_many_bytes": "La sélection est trop volumineuse pour un import.",
+        "too_many_files": "La sélection contient trop de fichiers pour un import.",
+        "too_many_folders": "La sélection contient trop de dossiers pour un import."
+      },
       "reauthBody": "Ton import de fichiers depuis un service cloud pour {tenant} est interrompu : le fournisseur demande une nouvelle connexion (par exemple après un changement de mot de passe). Reconnecte-toi dans l’assistant d’import et l’import reprend là où il s’était arrêté. Sans connexion pendant 7 jours, il est terminé.",
-      "reauthSubject": "{tenant} : l’import de fichiers attend ta connexion"
+      "reauthSubject": "{tenant} : l’import de fichiers attend ta connexion",
+      "reportButton": "Ouvrir le rapport"
     },
     "export": {
       "failed": "L’export de données n’a pas pu être créé. Merci de le redemander dans hocX sous Organisation › Protection des données.",
@@ -529,6 +544,8 @@
       "subject": "hocX : e-mail de test"
     },
     "title": {
+      "cloudImportDone": "Import de fichiers terminé",
+      "cloudImportFailed": "Import de fichiers interrompu",
       "cloudImportReauth": "Reconnecte-toi pour poursuivre l’import",
       "emailChanged": "Ton e-mail de connexion a été modifié",
       "exportFailed": "L'export a échoué",

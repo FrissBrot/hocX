@@ -314,6 +314,7 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         from app.services import upload_job_service
 
         upload_job_service.finish_import_job(db, job)
+        _notify_end(db, job)
         AuditService().log(
             db, action="file_import.stopped_unauthorized", actor_user_id=job.requested_by, tenant_id=job.tenant_id,
             entity_type="import_job", details={"job_id": str(job.id)}, commit=False,
@@ -398,6 +399,7 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         from app.services import upload_job_service
 
         upload_job_service.finish_import_job(db, job)
+        _notify_end(db, job)
         db.commit()
         return False
     return True
@@ -608,6 +610,7 @@ def _finish(db: Session, job: ImportJob, status: str) -> None:
     job.archives = []
     jobs.touch(job)
     _release_remote(db, job)
+    _notify_end(db, job)
     by_status, _codes, _bytes = jobs.status_counts(db, job)
     AuditService().log(
         db, action=f"file_import.{'finished' if status == 'done' else status}", actor_user_id=job.requested_by,
@@ -617,6 +620,13 @@ def _finish(db: Session, job: ImportJob, status: str) -> None:
     db.commit()
     jobs.remove_staging(job)
     _after_job_end(db, job)
+
+
+def _notify_end(db: Session, job: ImportJob) -> None:
+    """Mail «Import abgeschlossen/unterbrochen» an die auslösende Person (Plan §9, alle Quellen)."""
+    from app.notifications import cloud_import as cloud_import_notifications
+
+    cloud_import_notifications.on_job_end(db, job)
 
 
 def _release_remote(db: Session, job: ImportJob) -> None:

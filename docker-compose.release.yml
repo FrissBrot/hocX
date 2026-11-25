@@ -996,6 +996,10 @@ services:
       CLOUD_IMPORT_TOKEN_KEY_FILE: /run/secrets/cloud_import_token_key
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
       CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret
+      CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS: ${CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS:-2}
+      # Token-Bucket je Konto (services/cloud_import/pacing.py), gemeinsam mit dem Backend
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
@@ -1024,6 +1028,7 @@ services:
       - cloud_import_token_key
       - cloud_import_token_key_previous
       - cloud_import_ms_client_secret
+      - redis_password
     volumes:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
@@ -1034,6 +1039,7 @@ services:
     networks:
       - default
       - storage
+      - cache
     depends_on:
       backend:
         condition: service_healthy
@@ -1277,7 +1283,7 @@ networks:
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
     internal: true
-  # Siehe redis: internes Netz nur zwischen Backend und Redis.
+  # Siehe redis: internes Netz nur zwischen Backend, job-worker (Token-Bucket des Datei-Imports) und Redis.
   cache:
     internal: true
   storage:

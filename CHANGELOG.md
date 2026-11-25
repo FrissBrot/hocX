@@ -56,6 +56,13 @@ Installationen aktualisieren können.
 - **Fundament für weitere Cloud-Quellen:** gemeinsame Adapter-Schnittstelle, Verbindungen mit
   verschlüsselten Tokens, OAuth-Callback, Ordnerbaum, Hintergrund-Download mit Wiederaufnahme und
   Monitoring - Google Drive, Google Fotos, WebDAV und Dropbox schliessen daran an.
+- **Mails zum Datei-Import (alle Quellen, auch ZIP/Ordner):** «Import abgeschlossen» bzw. «Import
+  unterbrochen» mit Zahlen, Grund und Link zum Bericht, nur an die Person, die den Import gestartet
+  hat (Kategorie «Datei-Import», abschaltbar).
+- **Plattform-Admin › Datei-Importe:** laufende Importe aller Organisationen (nur Zahlen), Kennzahlen der
+  letzten 30 Tage je Tag und Quelle und ein Notfall-Abbruch (auditiert).
+- Cloud-Downloads laufen parallel (Standard 2 je Import) und werden je Konto über einen gemeinsamen
+  Token-Bucket gebremst, zusätzlich zu den Drosselhinweisen des Anbieters.
 - Systemstatus: neue Prüfung **Cloud-Import** (aktive und hängende Importe, wartende Anmeldungen,
   Ablauf des Client-Secrets mit Warnung 30 Tage vorher).
 - **Upload-Verlauf (1.6):** Jeder Upload ist ein Vorgang – über alle Pakete eines Dialogs, den
@@ -257,7 +264,8 @@ Installationen aktualisieren können.
   `CLOUD_IMPORT_TOKEN_KEY_PREVIOUS`. Microsoft wird erst angeboten mit `CLOUD_IMPORT_MS_CLIENT_ID`,
   **`CLOUD_IMPORT_MS_CLIENT_SECRET`** (Secret) und `CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES`; optional
   `CLOUD_IMPORT_ENABLED`, `CLOUD_IMPORT_REDIRECT_BASE_URL`, `CLOUD_IMPORT_MS_AUTHORITY`,
-  `CLOUD_IMPORT_MS_DOWNLOAD_MODE`. Schritt-für-Schritt-Anleitung (Entra-App, Redirect-URIs je Umgebung,
+  `CLOUD_IMPORT_MS_DOWNLOAD_MODE`, `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (2). Der **job-worker** hängt neu im
+  Netz `cache` und bekommt `REDIS_URL`/`redis_password` (Token-Bucket). Schritt-für-Schritt-Anleitung (Entra-App, Redirect-URIs je Umgebung,
   Scopes, Secret mit Ablaufdatum, Herausgeberverifizierung, `.env`): RUNBOOK Abschnitt 27.
   `deploy.sh` bricht ab, wenn die Client-ID ohne Secret oder Ablaufdatum gesetzt ist.
 - Ausgehende Verbindungen von backend und job-worker (nur wenn Microsoft eingerichtet ist):

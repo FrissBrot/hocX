@@ -1804,5 +1804,47 @@
     "tenant": "Tenant",
     "storage": "Storage",
     "empty": "No values yet."
+  },
+  "cloudImports": {
+    "title": "File imports",
+    "intro": "Running imports of all organisations (numbers only, no file names) and figures of the last days. An emergency stop keeps files already imported and deletes the cloud access.",
+    "loadFailed": "The overview could not be loaded.",
+    "kpis": {
+      "title": "Figures of the last {days} days",
+      "active": "Running imports",
+      "jobs": "Imports ({days} days)",
+      "failedJobs": "{count, plural, one {# interrupted} other {# interrupted}}",
+      "files": "Imported files",
+      "errorRate": "Error rate",
+      "percent": "{value} %",
+      "failedItems": "{count, plural, one {# file with an error} other {# files with errors}}"
+    },
+    "active": {
+      "title": "Running imports",
+      "empty": "No import is running at the moment."
+    },
+    "metrics": {
+      "title": "By day and source ({days} days)",
+      "empty": "No finished imports in this period."
+    },
+    "columns": {
+      "tenant": "Organisation",
+      "source": "Source",
+      "status": "Status",
+      "progress": "Progress",
+      "lastProgress": "Last progress",
+      "day": "Day",
+      "jobs": "Imports",
+      "imported": "Imported",
+      "volume": "Volume",
+      "failedItems": "Errors"
+    },
+    "progress": "{done} of {total} ({size})",
+    "jobsCell": "{jobs, number} ({failed, number} interrupted)",
+    "throttled": "throttled",
+    "cancel": "Cancel",
+    "cancelConfirm": "Cancel the import of “{tenant}”? Files already imported stay, the cloud access is deleted.",
+    "cancelled": "The import is being cancelled.",
+    "cancelFailed": "The import could not be cancelled."
   }
 }

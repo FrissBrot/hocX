@@ -379,6 +379,9 @@ class Settings(BaseSettings):
     # Nachgebaute Anbieter für E2E/Tests (services/cloud_import/fake_*.py). Wirkt nur mit
     # HOCX_ENVIRONMENT=development; in jeder anderen Umgebung bricht der Start ab. Nie in .env*/deploy.
     cloud_import_fake_providers: bool = Field(default=False, validation_alias="CLOUD_IMPORT_FAKE_PROVIDERS")
+    # Gleichzeitige Downloads je Import-Auftrag im job-worker (Plan §8.3). Konservativ: Anbieter
+    # drosseln je App und Konto; mehr bringt selten mehr Durchsatz, aber schneller 429.
+    cloud_import_max_parallel_downloads: int = Field(default=2, ge=1, le=8, validation_alias="CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS")
     # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
     # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
     # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).

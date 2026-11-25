@@ -120,22 +120,35 @@ class ProviderContext:
     def __init__(
         self, client: SafeHttpClient, *, token: Callable[[], str], refresh: Callable[[], str],
         granted_scopes: frozenset[str] = frozenset(), account_kind: str | None = None,
+        pace: Callable[[], None] | None = None,
     ) -> None:
         self.client = client
         self._token = token
         self._refresh = refresh
+        # Token-Bucket je Anbieter und Konto (cloud_import.pacing); None = ohne Bremse. Optional und
+        # nachträglich ergänzt - bestehende Aufrufer bleiben gültig.
+        self._pace = pace
         self.granted_scopes = granted_scopes
         self.account_kind = account_kind
 
     def token(self) -> str:
         return self._token()
 
+    def refresh(self) -> str:
+        """Erneuert das Access-Token sofort (nach einem 401), ReauthRequired bei invalid_grant."""
+        return self._refresh()
+
     def with_token(self, call: Callable[[str], object]):
-        """Ruft ``call(token)``; bei 401 einmal mit frisch erneuertem Token, danach ReauthRequired."""
+        """Ruft ``call(token)``; bei 401 einmal mit frisch erneuertem Token, danach ReauthRequired.
+        Vor jedem Aufruf ein Token aus dem Eimer (``pace``), falls gesetzt."""
+        if self._pace is not None:
+            self._pace()
         try:
             return call(self._token())
         except ProviderUnauthorized:
             fresh = self._refresh()
+            if self._pace is not None:
+                self._pace()
             try:
                 return call(fresh)
             except ProviderUnauthorized as exc:
@@ -147,6 +160,8 @@ class CloudProvider(ABC):
     host_policy: HostPolicy
     # Stufe für den ersten Login (weitere Stufen: inkrementell nachfordern)
     default_tier: str = "basic"
+    # Token-Bucket je Konto (Aufrufe pro Sekunde, Burst) für cloud_import.pacing; None = ohne
+    request_rate: tuple[float, int] | None = None
 
     def fake_transport(self):  # pragma: no cover - Adapter ohne Nachbau
         """Nachgebauter Transport für Test-Stacks (CLOUD_IMPORT_FAKE_PROVIDERS)."""

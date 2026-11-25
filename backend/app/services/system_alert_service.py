@@ -241,6 +241,8 @@ def _check_message(check) -> str:
                 days = int(check.params.get("secretDays") or 0)
                 when = "ist abgelaufen" if days < 0 else f"läuft in {days} Tagen ab"
                 parts.append(f"Client-Secret {when} - neues Secret in Entra erstellen (RUNBOOK «Cloud-Import einrichten»)")
+            if int(check.params.get("stagedMb") or 0) > 20 * 1024:
+                parts.append(f"{params.get('stagedMb')} MB heruntergeladene Import-Dateien warten auf die Verarbeitung - job-worker und Platte prüfen")
             if params.get("stalled") not in (None, "0"):
                 parts.append(f"{params.get('stalled')} Importe seit über 30 Minuten ohne Fortschritt - job-worker prüfen")
             return "; ".join(parts) + "." if parts else "Siehe Systemstatus."

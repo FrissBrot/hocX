@@ -583,3 +583,121 @@ def test_needs_reauth_mail_renders_without_file_names():
         recipient_name="Anna", tenant_name="Verein", base_url="https://hocx.test", can_login=True,
     )
     assert "https://hocx.test/files/import" in rendered.text and "Verein" in rendered.subject
+
+
+# --- Token-Bucket, parallele Downloads, Mails, Plattform-Admin (Plan §8.3, §9, §12.3) ----------
+
+
+def test_token_bucket_paces_per_account_and_throttles_long_waits(monkeypatch):
+    from app.services.cloud_import import pacing
+
+    account = f"konto-{uuid.uuid4().hex}"
+    rate = (1.0, 2)
+    assert pacing.take("webdav", account, rate) == 0
+    assert pacing.take("webdav", account, rate) == 0
+    assert pacing.take("webdav", account, rate) > 0  # Eimer leer
+    assert pacing.take("webdav", f"anderes-{account}", rate) == 0  # je Konto getrennt
+    assert pacing.take("webdav", account, None) == 0  # Adapter ohne Bremse
+    slow = (0.01, 1)
+    pace = pacing.pacer("webdav", f"langsam-{account}", slow)
+    pace()
+    with pytest.raises(http.ProviderThrottled) as throttled:
+        pace()
+    assert throttled.value.retry_after >= 50
+    # Redis weg: lokale Grenze statt Stillstand
+    import app.core.redis_client as redis_client
+
+    monkeypatch.setattr(redis_client, "get_redis_sync", lambda: (_ for _ in ()).throw(ConnectionError("weg")))
+    lonely = f"lokal-{account}"
+    assert pacing.take("webdav", lonely, (1.0, 1)) == 0
+    assert pacing.take("webdav", lonely, (1.0, 1)) > 0
+
+
+def test_provider_context_paces_every_call(db, cloud, monkeypatch):
+    calls = []
+    monkeypatch.setattr(TreeProvider, "request_rate", (100.0, 100), raising=False)
+    from app.services.cloud_import import pacing
+
+    monkeypatch.setattr(pacing, "take", lambda provider, account, rate: calls.append((provider, rate)) or 0.0)
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, cloud, job.id)
+    calls.clear()
+    routes.browse_cloud_folder(job.id, ref="root", cursor=None, db=db, user=user)
+    assert calls == [(KEY, (100.0, 100))]
+
+
+def test_parallel_downloads_import_everything_and_refresh_after_revoked_token(db, cloud, monkeypatch):
+    monkeypatch.setattr(settings, "cloud_import_max_parallel_downloads", 3)
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, cloud, job.id)
+    routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["root"]), db=db, user=user)
+    _run(db)
+    routes.start_import_job(job.id, db=db, user=user)
+    # Access-Token beim Anbieter ungültig (aber Refresh-Token gültig): Threads melden 401, der
+    # Haupt-Thread erneuert, der nächste Durchgang lädt weiter
+    cloud.issued_access.clear()
+    _run(db, rounds=10)
+    final = routes.get_import_job(job.id, db=db, user=user)
+    assert final.status == "done" and final.counts == {"imported": 4}
+    assert len(cloud.issued_access) >= 1
+    note = db.scalar(select(Notification).where(Notification.kind == "cloud_import.done", Notification.tenant_id == tenant.id))
+    assert note is not None and note.payload == {"job_id": str(job.id)}
+
+
+def test_failed_import_sends_a_mail_without_file_names(db, cloud):
+    from app.notifications import cloud_import as notes
+    from app.notifications.render import render
+
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, cloud, job.id)
+    row = db.get(ImportJob, job.id)
+    row.status = "needs_reauth"
+    row.started_at = datetime.now(UTC) - timedelta(days=9)
+    row.reauth_since = datetime.now(UTC) - timedelta(days=8)
+    db.commit()
+    worker.cleanup(db)
+    note = db.scalar(select(Notification).where(Notification.kind == "cloud_import.failed", Notification.tenant_id == tenant.id))
+    assert note is not None
+    items = notes.items_for(db, [note], user.user_id)
+    assert items[note.id]["error"] == "reauth_expired" and "path" not in items[note.id]
+    rendered = render(
+        group="cloud_import", lang="de", items=list(items.values()), recipient_name="Anna", tenant_name="Verein",
+        base_url="https://hocx.test", can_login=True,
+    )
+    assert "unterbrochen" in rendered.subject and f"/files/import?job={job.id}" in rendered.text
+    assert "7 Tage" in rendered.text
+    # Anderer Empfänger oder geänderter Zustand: überholt
+    assert notes.items_for(db, [note], user.user_id + 999) == {}
+
+
+def test_platform_admin_sees_running_imports_and_can_stop_one(db, cloud):
+    from app.api.routes import admin_cloud_import
+    from app.core.admin_security import CurrentAdmin
+    from app.models.entities import PlatformAdmin
+
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, cloud, job.id)
+    routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["root"]), db=db, user=user)
+    admin_row = PlatformAdmin(email=f"ci-{uuid.uuid4().hex[:8]}@example.com", password_hash="x", display_name="Owner", role="owner")
+    db.add(admin_row)
+    db.flush()
+    admin = CurrentAdmin(admin_id=admin_row.id, admin_public_id=admin_row.public_id, email=admin_row.email, display_name="Owner", role="owner")
+    overview = admin_cloud_import.get_cloud_imports(db=db, _admin=admin)
+    mine = [entry for entry in overview.active if entry.id == job.id]
+    assert mine and mine[0].status == "listing" and mine[0].tenant_name == tenant.name
+    assert "path" not in mine[0].model_dump() and "connection" not in mine[0].model_dump()
+    stopped = admin_cloud_import.cancel_cloud_import(job.id, db=db, admin=admin)
+    assert stopped.status == "cancelled"
+    assert db.scalar(select(ImportConnection).where(ImportConnection.tenant_id == tenant.id)) is None
+    audit = db.execute(text("SELECT count(*) FROM audit_log WHERE action = 'admin.cloud_import_cancelled'")).scalar()
+    assert audit >= 1
+    with pytest.raises(HTTPException):
+        admin_cloud_import.cancel_cloud_import(uuid.uuid4(), db=db, admin=admin)

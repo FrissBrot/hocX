@@ -325,6 +325,16 @@
       "platform": true,
       "admin_level": "W"
     },
+    "GET /api/admin/cloud-imports": {
+      "handler": "admin_cloud_import.get_cloud_imports",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/cloud-imports/{job_id}/cancel": {
+      "handler": "admin_cloud_import.cancel_cloud_import",
+      "platform": true,
+      "admin_level": "W"
+    },
     "GET /api/admin/document-templates": {
       "handler": "admin_document_templates.list_system_templates",
       "platform": true,

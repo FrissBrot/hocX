@@ -935,6 +935,8 @@ services:
       CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
       # Nachgebaute Anbieter nie über .env (nur docker-compose.e2e.yml setzt das, Security-Review F6)
       CLOUD_IMPORT_FAKE_PROVIDERS: "false"
+      # Token-Bucket des Datei-Imports (services/cloud_import/pacing.py), gemeinsam mit dem Backend
+      REDIS_URL: redis://redis:6379/0
     command: ["python", "-m", "app.workers.job_worker"]
     volumes:
       - ./backend:/app

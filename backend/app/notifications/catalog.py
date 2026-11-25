@@ -91,6 +91,9 @@ KINDS: dict[str, Kind] = {
     "export.failed": Kind("export.failed", "exports", "export"),
     # Datei-Import: Verbindung zum Cloud-Konto abgelaufen, Import wartet (Auftraggeber)
     "cloud_import.needs_reauth": Kind("cloud_import.needs_reauth", "imports", "cloud_import"),
+    # Datei-Import (alle Quellen) beendet bzw. unterbrochen: Zahlen und Link zum Bericht, keine Dateinamen
+    "cloud_import.done": Kind("cloud_import.done", "imports", "cloud_import"),
+    "cloud_import.failed": Kind("cloud_import.failed", "imports", "cloud_import"),
 }
 
 CONFIGURABLE_CATEGORIES = tuple(key for key, category in CATEGORIES.items() if category.configurable)

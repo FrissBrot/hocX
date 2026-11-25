@@ -92,6 +92,8 @@ def _jwt_claim(token: str | None, claim: str) -> str | None:
 
 class MicrosoftProvider(CloudProvider):
     key = "microsoft"
+    # Konservativ unter den Graph-/SharePoint-Grenzen je App und Konto [M11][M12]
+    request_rate = (8.0, 16)
     host_policy = HostPolicy(
         api_hosts=frozenset({"graph.microsoft.com"}),
         plain_hosts=frozenset({"login.microsoftonline.com"}),

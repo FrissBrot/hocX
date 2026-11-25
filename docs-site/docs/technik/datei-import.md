@@ -187,8 +187,38 @@ Muster). Migration `0281_cloud_import_connections`.
    `cloud.connectHint.<anbieter>`; Registrierungsanleitung in RUNBOOK und
    `audit-reports/plans/2026-11-25-cloud-import-registrierung.md`.
 
+### Parallelität, Drosselung, Fairness (Plan §8.3)
+
+- `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (Standard 2, 1–8) Downloads je Auftrag gleichzeitig. Die Threads
+  übertragen nur (Netz → Datei); Token-Refresh und alle DB-Änderungen bleiben im Haupt-Thread. Ein 401
+  in einem Thread führt zu einem Refresh im Haupt-Thread und einem neuen Versuch im nächsten Durchgang.
+- Token-Bucket je Anbieter und Konto in Redis (`services/cloud_import/pacing.py`, Schlüssel
+  `cloud_import_bucket:<anbieter>:<hash des kontos>`), Rate je Adapter über
+  `CloudProvider.request_rate = (pro Sekunde, Burst)`; Microsoft 8/s, Burst 16. Backend (Ordnerbaum) und
+  job-worker teilen den Eimer (job-worker deshalb im Netz `cache`). Kurze Wartezeit (≤ 2 s) wird
+  abgewartet, längere pausiert den Auftrag wie ein 429. Ohne Redis: lokaler Eimer je Prozess.
+- Fairness zwischen Mandanten: höchstens ein Import je Mandant, `claim_next` bedient immer den am
+  längsten nicht bedienten Auftrag, Zeitscheibe 60 s je Auftrag und Tick, gedrosselte Aufträge
+  (`not_before`) werden übersprungen.
+
+### Mails (Plan §9)
+
+Kategorie «Datei-Import» (`imports`, nur mit `files.import`), nur an die auslösende Person, ohne
+Dateinamen: `cloud_import.done` (abgeschlossen, Zahlen + Link `/files/import?job=…`),
+`cloud_import.failed` (unterbrochen, mit Grund: Kontingent, Rechte, Anbieter, `reauth_expired` …) für
+**alle Quellen** inkl. ZIP/Ordner, und `cloud_import.needs_reauth`. Abgebrochene und nie gestartete
+Aufträge bekommen keine Mail.
+
+### Plattform-Admin
+
+`/admin/cloud-imports` (owner): laufende Importe aller Mandanten mit Status und Fortschritt (keine
+Dateinamen, keine Konten), Kennzahlen der letzten 30 Tage je Tag und Quelle (Importe, unterbrochene,
+importierte Dateien, Volumen, Dateien mit Fehler). **Notfall-Abbruch** (`POST
+/api/admin/cloud-imports/{id}/cancel`, `require_admin_write`, Audit `admin.cloud_import_cancelled`): wie
+der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
+
 ### Monitoring
 
 Check `cloud_import` in `/admin/system`: aktive Aufträge, Aufträge ohne Fortschritt seit 30 min (nicht
 gedrosselt), Anzahl `needs_reauth`, Ablauf der Client-Secrets (Warnung ab 30 Tagen, kritisch nach Ablauf,
-Warnung ohne gültiges Ablaufdatum).
+Warnung ohne gültiges Ablaufdatum), Belegung der Zwischenablage (`stagedMb`, Warnung ab 20 GiB).

@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
@@ -34,7 +36,14 @@ from app.core.config import settings
 from app.models.import_entities import ImportConnection, ImportItem, ImportJob
 from app.services.audit_service import AuditService
 from app.services.cloud_import import connections, jobs, paths, providers
-from app.services.cloud_import.http import DOWNLOAD_DEADLINE, DownloadTooLarge, HostNotAllowed, ProviderError, ProviderThrottled
+from app.services.cloud_import.http import (
+    DOWNLOAD_DEADLINE,
+    DownloadTooLarge,
+    HostNotAllowed,
+    ProviderError,
+    ProviderThrottled,
+    ProviderUnauthorized,
+)
 from app.services.cloud_import.providers.base import CloudProvider, ItemRef, Node, ProviderContext, ReauthRequired
 
 _logger = logging.getLogger(__name__)
@@ -95,6 +104,12 @@ def needs_reauth(db: Session, job: ImportJob) -> None:
     )
     cloud_import_notifications.on_needs_reauth(db, job)
     db.commit()
+
+
+def _notify_end(db: Session, job: ImportJob) -> None:
+    from app.notifications import cloud_import as cloud_import_notifications
+
+    cloud_import_notifications.on_job_end(db, job)
 
 
 def throttle(db: Session, job: ImportJob, seconds: int) -> None:
@@ -180,6 +195,7 @@ def run_listing(db: Session, job: ImportJob, deadline_expired) -> None:
         job.error = exc.code
         job.finished_at = jobs.now()
         jobs.touch(job)
+        _notify_end(db, job)
         db.commit()
     except ProviderError as exc:
         state = dict(job.listing_state or {})
@@ -194,6 +210,7 @@ def run_listing(db: Session, job: ImportJob, deadline_expired) -> None:
             job.error = "provider_unavailable"
             job.finished_at = jobs.now()
             jobs.touch(job)
+            _notify_end(db, job)
             db.commit()
             return
         throttle(db, job, min(600, 15 * 2**errors))
@@ -300,9 +317,28 @@ def _retry_later(item: ImportItem) -> bool:
     return True
 
 
+def _parallel() -> int:
+    return max(1, min(8, int(settings.cloud_import_max_parallel_downloads)))
+
+
+@dataclass
+class _Planned:
+    item: ImportItem
+    ref: ItemRef
+    dest: Path
+    limit: int
+
+
+def _no_inline_refresh() -> str:
+    # In den Download-Threads nie erneuern (die DB-Sitzung gehört dem Haupt-Thread): 401 melden,
+    # der Haupt-Thread erneuert und versucht die Datei im nächsten Durchgang erneut.
+    raise ProviderUnauthorized(detail="refresh_in_main")
+
+
 def download_step(db: Session, job: ImportJob) -> str:
-    """Lädt bis zu DOWNLOAD_BATCH Dateien. Ergebnis: "downloaded" (mindestens eine bereit),
-    "idle" (nichts fällig) oder "paused" (Auftrag pausiert: Drosselung, neue Anmeldung nötig)."""
+    """Lädt bis zu CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS Dateien gleichzeitig (Threads nur für den
+    Transfer; alle DB-Änderungen im Haupt-Thread). Ergebnis: "downloaded" (mindestens eine
+    bereit), "idle" (nichts fällig) oder "paused" (Drosselung, neue Anmeldung nötig)."""
     staged = db.scalar(
         select(func.count()).select_from(ImportItem).where(
             ImportItem.job_id == job.id, ImportItem.tenant_id == job.tenant_id, ImportItem.status == "staged"
@@ -310,6 +346,7 @@ def download_step(db: Session, job: ImportJob) -> str:
     ) or 0
     if staged >= MAX_STAGED_ITEMS:
         return "downloaded"
+    parallel = _parallel()
     current = jobs.now()
     items = list(
         db.scalars(
@@ -319,77 +356,106 @@ def download_step(db: Session, job: ImportJob) -> str:
                 (ImportItem.next_attempt_at.is_(None)) | (ImportItem.next_attempt_at <= current),
             )
             .order_by(ImportItem.id)
-            .limit(min(DOWNLOAD_BATCH, MAX_STAGED_ITEMS - staged))
+            .limit(min(max(DOWNLOAD_BATCH, parallel), MAX_STAGED_ITEMS - staged))
         )
     )
     if not items:
         return "idle"
     try:
         provider, ctx, _connection_row = context_for(db, job)
+        token = ctx.token()  # Refresh hier, im Haupt-Thread
+        db.commit()
     except ReauthRequired:
         needs_reauth(db, job)
         return "paused"
-    downloaded = 0
+    except ProviderThrottled as exc:
+        throttle(db, job, exc.retry_after)
+        return "paused"
+    planned: list[_Planned] = []
     for item in items:
-        # Lease über die längste mögliche Downloaddauer (http.DOWNLOAD_DEADLINE) verlängern, damit kein
-        # zweiter Worker denselben Auftrag übernimmt (Security-Review F3)
-        job.lease_until = jobs.now() + timedelta(seconds=DOWNLOAD_DEADLINE + 300)
-        db.commit()
+        limit = paths.MAX_BYTES_BY_KIND.get(item.kind)
+        if limit is None or not item.provider_item_id:
+            _record_failure(db, job, item, "unsupported_format" if limit is None else "internal")
+            continue
+        planned.append(_Planned(
+            item, ItemRef(item_id=item.provider_item_id, drive_id=item.provider_drive_id, name=paths.file_name(item.path), mime=item.provider_mime),
+            jobs.staging_dir(job.id) / f"{uuid.uuid4().hex}.bin", limit,
+        ))
+    # Lease über die längste mögliche Downloaddauer (http.DOWNLOAD_DEADLINE) verlängern, damit kein
+    # zweiter Worker denselben Auftrag übernimmt (Security-Review F3)
+    job.lease_until = jobs.now() + timedelta(seconds=DOWNLOAD_DEADLINE + 300)
+    db.commit()
+    worker_ctx = ProviderContext(ctx.client, token=lambda: token, refresh=_no_inline_refresh, account_kind=ctx.account_kind, pace=ctx._pace)
+    outcomes: list[tuple[_Planned, object]] = []
+    if len(planned) == 1 or parallel == 1:
+        for plan in planned:
+            outcomes.append((plan, _transfer(provider, worker_ctx, plan)))
+    elif planned:
+        with ThreadPoolExecutor(max_workers=min(parallel, len(planned)), thread_name_prefix="cloud-import-dl") as pool:
+            futures = [(plan, pool.submit(_transfer, provider, worker_ctx, plan)) for plan in planned]
+            outcomes = [(plan, future.result()) for plan, future in futures]
+    downloaded = 0
+    throttled: int | None = None
+    unauthorized = False
+    for plan, outcome in outcomes:
+        if isinstance(outcome, ProviderThrottled):
+            throttled = max(throttled or 0, outcome.retry_after)
+            continue
+        if isinstance(outcome, (ProviderUnauthorized, ReauthRequired)):
+            unauthorized = True
+            continue
+        if _apply(db, job, plan, outcome):
+            downloaded += 1
+    job.last_progress_at = jobs.now()
+    db.commit()
+    if unauthorized:
         try:
-            if _download_one(db, job, provider, ctx, item):
-                downloaded += 1
+            ctx.refresh()
+            db.commit()
         except ReauthRequired:
             needs_reauth(db, job)
             return "paused"
-        except ProviderThrottled as exc:
-            throttle(db, job, exc.retry_after)
-            return "paused"
-        job.lease_until = jobs.now() + timedelta(minutes=5)
-        job.last_progress_at = jobs.now()
-        db.commit()
+    if throttled is not None:
+        throttle(db, job, throttled)
+        return "paused"
     return "downloaded" if downloaded else "idle"
 
 
-def _download_one(db: Session, job: ImportJob, provider: CloudProvider, ctx: ProviderContext, item: ImportItem) -> bool:
-    limit = paths.MAX_BYTES_BY_KIND.get(item.kind)
-    if limit is None or not item.provider_item_id:
-        _record_failure(db, job, item, "unsupported_format" if limit is None else "internal")
-        return False
-    target_dir = jobs.staging_dir(job.id)
-    dest = target_dir / f"{uuid.uuid4().hex}.bin"
-    ref = ItemRef(item_id=item.provider_item_id, drive_id=item.provider_drive_id, name=paths.file_name(item.path), mime=item.provider_mime)
+def _transfer(provider: CloudProvider, ctx: ProviderContext, plan: _Planned):
+    """Läuft im Download-Thread: nur Netz und Datei, keine DB. Liefert Ergebnis oder Ausnahme."""
     try:
-        result = provider.download(ctx, ref, dest, limit)
-    except DownloadTooLarge:
+        return provider.download(ctx, plan.ref, plan.dest, plan.limit)
+    except BaseException as exc:  # noqa: BLE001 - im Haupt-Thread ausgewertet (_apply)
+        plan.dest.unlink(missing_ok=True)
+        return exc
+
+
+def _apply(db: Session, job: ImportJob, plan: _Planned, outcome) -> bool:
+    item = plan.item
+    if isinstance(outcome, DownloadTooLarge):
         _record_failure(db, job, item, "too_large")
         return False
-    except HostNotAllowed as exc:
+    if isinstance(outcome, HostNotAllowed):
         # Ein Anbieter leitet auf einen nicht erlaubten Host um: nie folgen, auffällig melden
-        _logger.warning("Datei-Import: Download auf nicht erlaubtes Ziel verweigert (%s)", exc.detail)
+        _logger.warning("Datei-Import: Download auf nicht erlaubtes Ziel verweigert (%s)", outcome.detail)
         _record_failure(db, job, item, "host_not_allowed")
         return False
-    except (ReauthRequired, ProviderThrottled):
-        dest.unlink(missing_ok=True)
-        raise
-    except ProviderError as exc:
-        dest.unlink(missing_ok=True)
-        if exc.code in ("not_found", "access_denied"):
-            _record_failure(db, job, item, exc.code)
+    if isinstance(outcome, ProviderError):
+        if outcome.code in ("not_found", "access_denied"):
+            _record_failure(db, job, item, outcome.code)
         elif not _retry_later(item):
             _record_failure(db, job, item, "download_failed")
         return False
-    except Exception as exc:  # noqa: BLE001 - Hintergrundjob: selbst ins Fehlerprotokoll
+    if isinstance(outcome, BaseException):
         from app.core.error_log import record_system_error
 
-        dest.unlink(missing_ok=True)
-        db.rollback()
-        record_system_error(db, exc=exc, tenant_id=job.tenant_id)
-        db.refresh(item)
+        # Unerwartet: Fehlerprotokoll (eigene Transaktion in record_system_error), Versuch zählen
+        record_system_error(db, exc=outcome if isinstance(outcome, Exception) else RuntimeError(type(outcome).__name__), tenant_id=job.tenant_id)
         if not _retry_later(item):
             _record_failure(db, job, item, "download_failed")
         return False
-    item.staged_path = str(Path(dest).relative_to(settings.storage_root))
-    item.size_bytes = result.size
+    item.staged_path = str(Path(plan.dest).relative_to(settings.storage_root))
+    item.size_bytes = outcome.size
     item.status = "staged"
     item.next_attempt_at = None
     return True
@@ -405,4 +471,5 @@ def expire_reauth(db: Session) -> int:
         job.error = "reauth_expired"
         job.finished_at = jobs.now()
         jobs.touch(job)
+        _notify_end(db, job)
     return len(stale)

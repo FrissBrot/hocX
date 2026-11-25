@@ -1804,5 +1804,47 @@
     "tenant": "Mandant",
     "storage": "Stockage",
     "empty": "Pas encore de valeurs."
+  },
+  "cloudImports": {
+    "title": "Imports de fichiers",
+    "intro": "Imports en cours de toutes les organisations (chiffres uniquement, aucun nom de fichier) et indicateurs des derniers jours. Un arrêt d’urgence conserve les fichiers déjà importés et supprime l’accès cloud.",
+    "loadFailed": "La vue d’ensemble n’a pas pu être chargée.",
+    "kpis": {
+      "title": "Indicateurs des {days} derniers jours",
+      "active": "Imports en cours",
+      "jobs": "Imports ({days} jours)",
+      "failedJobs": "{count, plural, one {# interrompu} other {# interrompus}}",
+      "files": "Fichiers importés",
+      "errorRate": "Taux d’erreur",
+      "percent": "{value} %",
+      "failedItems": "{count, plural, one {# fichier en erreur} other {# fichiers en erreur}}"
+    },
+    "active": {
+      "title": "Imports en cours",
+      "empty": "Aucun import en cours pour le moment."
+    },
+    "metrics": {
+      "title": "Par jour et par source ({days} jours)",
+      "empty": "Aucun import terminé dans cette période."
+    },
+    "columns": {
+      "tenant": "Organisation",
+      "source": "Source",
+      "status": "Statut",
+      "progress": "Progression",
+      "lastProgress": "Dernière progression",
+      "day": "Jour",
+      "jobs": "Imports",
+      "imported": "Importés",
+      "volume": "Volume",
+      "failedItems": "Erreurs"
+    },
+    "progress": "{done} sur {total} ({size})",
+    "jobsCell": "{jobs, number} ({failed, number} interrompus)",
+    "throttled": "ralenti",
+    "cancel": "Annuler",
+    "cancelConfirm": "Annuler l’import de « {tenant} » ? Les fichiers déjà importés restent, l’accès cloud est supprimé.",
+    "cancelled": "L’import est en cours d’annulation.",
+    "cancelFailed": "L’import n’a pas pu être annulé."
   }
 }
