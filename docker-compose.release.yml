@@ -257,6 +257,17 @@ services:
       # Datei-Import: Obergrenzen je Auftrag (Standard 50 000 Dateien / 100 GiB, RUNBOOK Abschnitt 17).
       CLOUD_IMPORT_MAX_JOB_FILES: ${CLOUD_IMPORT_MAX_JOB_FILES:-50000}
       CLOUD_IMPORT_MAX_JOB_BYTES: ${CLOUD_IMPORT_MAX_JOB_BYTES:-107374182400}
+      # Datei-Import aus Cloud-Diensten (RUNBOOK «Cloud-Import einrichten»): ohne Client-ID wird der
+      # Anbieter nicht angeboten. Tokens verschlüsselt mit CLOUD_IMPORT_TOKEN_KEY (nur backend/job-worker).
+      CLOUD_IMPORT_ENABLED: ${CLOUD_IMPORT_ENABLED:-true}
+      CLOUD_IMPORT_REDIRECT_BASE_URL: ${CLOUD_IMPORT_REDIRECT_BASE_URL:-}
+      CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
+      CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES: ${CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES:-}
+      CLOUD_IMPORT_MS_AUTHORITY: ${CLOUD_IMPORT_MS_AUTHORITY:-common}
+      CLOUD_IMPORT_MS_DOWNLOAD_MODE: ${CLOUD_IMPORT_MS_DOWNLOAD_MODE:-auto}
+      CLOUD_IMPORT_TOKEN_KEY_FILE: /run/secrets/cloud_import_token_key
+      CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
+      CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret
       # Pool und Request-Annahme je Backend-Worker, Überlast-Schutz nach Abo (RUNBOOK Abschnitt 17).
       # Die Annahme ergibt sich aus Pool + Overflow minus DB_ADMISSION_RESERVE.
       DB_POOL_SIZE: ${DB_POOL_SIZE:-12}
@@ -324,6 +335,9 @@ services:
       - geo_db_password
       - storage_credentials_key
       - export_encryption_key
+      - cloud_import_token_key
+      - cloud_import_token_key_previous
+      - cloud_import_ms_client_secret
       - local_s3_secret_key
       - local_s3_abgabebox_secret_key
       - redis_password
@@ -971,6 +985,17 @@ services:
       STORAGE_WORK_ROOT: /app/storage-local/work
       CLOUD_IMPORT_MAX_JOB_FILES: ${CLOUD_IMPORT_MAX_JOB_FILES:-50000}
       CLOUD_IMPORT_MAX_JOB_BYTES: ${CLOUD_IMPORT_MAX_JOB_BYTES:-107374182400}
+      # Datei-Import aus Cloud-Diensten (RUNBOOK «Cloud-Import einrichten»): ohne Client-ID wird der
+      # Anbieter nicht angeboten. Tokens verschlüsselt mit CLOUD_IMPORT_TOKEN_KEY (nur backend/job-worker).
+      CLOUD_IMPORT_ENABLED: ${CLOUD_IMPORT_ENABLED:-true}
+      CLOUD_IMPORT_REDIRECT_BASE_URL: ${CLOUD_IMPORT_REDIRECT_BASE_URL:-}
+      CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
+      CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES: ${CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES:-}
+      CLOUD_IMPORT_MS_AUTHORITY: ${CLOUD_IMPORT_MS_AUTHORITY:-common}
+      CLOUD_IMPORT_MS_DOWNLOAD_MODE: ${CLOUD_IMPORT_MS_DOWNLOAD_MODE:-auto}
+      CLOUD_IMPORT_TOKEN_KEY_FILE: /run/secrets/cloud_import_token_key
+      CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
+      CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
@@ -996,6 +1021,9 @@ services:
       - admin_auth_secret
       - geo_database_url
       - storage_credentials_key
+      - cloud_import_token_key
+      - cloud_import_token_key_previous
+      - cloud_import_ms_client_secret
     volumes:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
@@ -1308,6 +1336,13 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/storage_credentials_key
   export_encryption_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/export_encryption_key
+  # Datei-Import aus Cloud-Diensten (nur backend und job-worker); leere Dateien = nicht konfiguriert
+  cloud_import_token_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_token_key
+  cloud_import_token_key_previous:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_token_key_previous
+  cloud_import_ms_client_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_ms_client_secret
   garage_rpc_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_rpc_secret
   garage_admin_token:

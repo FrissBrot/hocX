@@ -387,6 +387,11 @@
       "resetSubject": "hocX: Passwort zurücksetzen",
       "resetValidity": "Der Link ist {minutes} Minuten gültig und funktioniert nur einmal."
     },
+    "cloudImport": {
+      "openButton": "Import öffnen",
+      "reauthBody": "Dein Datei-Import aus einem Cloud-Dienst für {tenant} ist unterbrochen: der Anbieter verlangt eine neue Anmeldung (zum Beispiel nach einem Passwortwechsel). Melde dich im Import-Assistenten neu an, dann geht es dort weiter, wo der Import stand. Nach 7 Tagen ohne Anmeldung wird er beendet.",
+      "reauthSubject": "{tenant}: Datei-Import wartet auf deine Anmeldung"
+    },
     "export": {
       "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Organisation › Datenschutz erneut.",
       "openButton": "Export öffnen",
@@ -424,6 +429,7 @@
     "greeting": "Hallo {name}",
     "kicker": {
       "account": "Konto",
+      "cloudImport": "Datei-Import",
       "export": "Datenexport",
       "fineIssued": "Neue Busse",
       "fineUpcoming": "Busse droht",
@@ -523,6 +529,7 @@
       "subject": "hocX: Test-E-Mail"
     },
     "title": {
+      "cloudImportReauth": "Neu anmelden, damit der Import weiterläuft",
       "emailChanged": "Deine Login-E-Mail wurde geändert",
       "exportFailed": "Export fehlgeschlagen",
       "exportReady": "Dein Export ist fertig",

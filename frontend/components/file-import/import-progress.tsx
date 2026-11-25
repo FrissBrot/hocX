@@ -13,10 +13,13 @@ import {
   normalizeImportPath,
   pathedFromInput,
   uploadBatches,
+  startCloudLogin,
+  type CloudProvider,
+  type CloudProviderKey,
   type ImportJob,
   type PathedFile,
 } from "@/lib/files/file-import";
-import { formatFileSize, formatInteger } from "@/lib/utils/format";
+import { formatDateTime, formatFileSize, formatInteger } from "@/lib/utils/format";
 
 const POLL_MS = 3000;
 const BATCH_FILES = 20;
@@ -26,6 +29,7 @@ const UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
 type Props = {
   job: ImportJob;
+  provider: CloudProvider | null;
   onJob: (job: ImportJob) => void;
   folderFiles: MutableRefObject<Map<string, File>>;
   onFiles: (files: PathedFile[]) => void;
@@ -35,7 +39,7 @@ function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-export function ImportProgress({ job, onJob, folderFiles, onFiles }: Props) {
+export function ImportProgress({ job, provider, onJob, folderFiles, onFiles }: Props) {
   const t = useTranslations("fileImport");
   const locale = useLocale();
   const showToast = useToast();
@@ -134,6 +138,15 @@ export function ImportProgress({ job, onJob, folderFiles, onFiles }: Props) {
     }
   }
 
+  async function reconnect() {
+    try {
+      await startCloudLogin(browserApiFetch, job.id, job.source as CloudProviderKey, { tier: job.connection?.tier ?? provider?.default_tier });
+    } catch (error) {
+      const code = apiErrorCode(error);
+      showToast(code && t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.generic"), "error");
+    }
+  }
+
   const percent = importProgress(job);
   const counts = job.counts;
   const waitingForBrowser = needsUpload && (counts.queued ?? 0) > 0;
@@ -151,6 +164,17 @@ export function ImportProgress({ job, onJob, folderFiles, onFiles }: Props) {
         <span>{t("progress.failed", { count: counts.failed ?? 0 })}</span>
         <span>{t("progress.open", { count: (counts.queued ?? 0) + (counts.staged ?? 0) })}</span>
       </p>
+      {job.status === "needs_reauth" ? (
+        <div className="file-import-reselect">
+          <StatusBanner tone="warning" message={t(job.is_owner ? "cloud.needsReauth" : "cloud.needsReauthOther")} />
+          {job.is_owner ? (
+            <button type="button" className="button-primary" onClick={() => void reconnect()}>{t("cloud.reconnect")}</button>
+          ) : null}
+        </div>
+      ) : null}
+      {job.not_before && job.status !== "needs_reauth" && new Date(job.not_before).getTime() > Date.now() ? (
+        <StatusBanner tone="neutral" message={t("cloud.throttledUntil", { time: formatDateTime(job.not_before, locale) })} />
+      ) : null}
       {needsUpload && uploading ? (
         <StatusBanner tone="neutral" message={t("progress.uploading", { size: formatFileSize(uploadedBytes, locale) })} />
       ) : null}

@@ -719,7 +719,36 @@ def render_submission_withdrawn(
     )
 
 
-FINE_RENDERERS = {"fine.upcoming": render_fine_upcoming, "fine.issued": render_fine_issued, "submission.withdrawn": render_submission_withdrawn}
+# ── Datei-Import: neu anmelden (an die auftraggebende Person) ────────
+
+
+def render_cloud_import(
+    *, lang: str, items: list[dict], recipient_name: str, tenant_name: str, base_url: str | None, can_login: bool,
+    brand: Brand | None = None, **_,
+) -> Rendered:
+    brand = brand or Brand(tenant_name)
+    greeting = text(lang, "email.greeting", name=recipient_name)
+    body = text(lang, "email.cloudImport.reauthBody", tenant=tenant_name)
+    html_parts = [
+        _kicker(text(lang, "email.kicker.cloudImport")),
+        _title(text(lang, "email.title.cloudImportReauth")),
+        _greeting(greeting, body),
+    ]
+    plain = [greeting, "", body, ""]
+    link = f"{base_url}/files/import" if base_url and can_login else None
+    if link:
+        html_parts.append(_button(text(lang, "email.cloudImport.openButton"), link))
+        plain += [f"{text(lang, 'email.cloudImport.openButton')}: {link}", ""]
+    return _finish(
+        subject=text(lang, "email.cloudImport.reauthSubject", tenant=tenant_name), brand=brand, label=_via(lang),
+        card=_card("".join(html_parts)), footer=_footer(lang, tenant_name, base_url=base_url, can_login=can_login), plain=plain,
+    )
+
+
+FINE_RENDERERS = {
+    "fine.upcoming": render_fine_upcoming, "fine.issued": render_fine_issued, "submission.withdrawn": render_submission_withdrawn,
+    "cloud_import": render_cloud_import,
+}
 
 
 def render(*, group: str, **kwargs) -> Rendered:

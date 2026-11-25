@@ -387,6 +387,11 @@
       "resetSubject": "hocX: Reset your password",
       "resetValidity": "The link is valid for {minutes} minutes and works only once."
     },
+    "cloudImport": {
+      "openButton": "Open import",
+      "reauthBody": "Your file import from a cloud service for {tenant} is paused: the provider requires you to sign in again (for example after a password change). Sign in again in the import wizard and the import continues where it stopped. After 7 days without signing in it is ended.",
+      "reauthSubject": "{tenant}: file import is waiting for you to sign in"
+    },
     "export": {
       "failed": "The data export could not be created. Please request it again in hocX under Organization › Privacy.",
       "openButton": "Open export",
@@ -424,6 +429,7 @@
     "greeting": "Hello {name}",
     "kicker": {
       "account": "Account",
+      "cloudImport": "File import",
       "export": "Data export",
       "fineIssued": "New fine",
       "fineUpcoming": "Fine ahead",
@@ -523,6 +529,7 @@
       "subject": "hocX: Test email"
     },
     "title": {
+      "cloudImportReauth": "Sign in again to continue the import",
       "emailChanged": "Your login email was changed",
       "exportFailed": "Export failed",
       "exportReady": "Your export is ready",

@@ -14,7 +14,7 @@ load_storage_secrets() {
   local secrets_file="$REPO_DIR/storage-e2e/.storage-secrets.env" key
   if [[ ! -f "$secrets_file" ]]; then
     mkdir -p "$REPO_DIR/storage-e2e"
-    for key in STORAGE_CREDENTIALS_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN LOCAL_S3_ACCESS_KEY \
+    for key in STORAGE_CREDENTIALS_KEY CLOUD_IMPORT_TOKEN_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN LOCAL_S3_ACCESS_KEY \
       LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
       case "$key" in
         *_ACCESS_KEY) printf '%s=GK%s\n' "$key" "$(openssl rand -hex 12)" ;;

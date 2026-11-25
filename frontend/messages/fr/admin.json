@@ -273,6 +273,11 @@
         "title": "Géolocalisation par pays",
         "detail": "{state, select, ok {DB-IP « IP to Country Lite », version du {buildDate} ({ageDays, number} jours)} other {Non configurée – signal « nouveau pays » inactif}}",
         "problem": "Géolocalisation par pays perturbée"
+      },
+      "cloud_import": {
+        "title": "Import cloud",
+        "detail": "{active, number} actifs · {stalled, number} sans progression · {needsReauth, number} en attente de connexion{secretKnown, select, 1 { · secret client encore {secretDays, number} jours} other {}}",
+        "problem": "Import cloud : le secret client expire ou des imports sont bloqués"
       }
     },
     "problems": {

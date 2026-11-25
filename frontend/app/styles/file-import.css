@@ -206,3 +206,104 @@
   padding-left: var(--space-5);
   color: var(--muted);
 }
+
+/* Cloud-Quellen (Plan P1): Kontozeile, eigener Ordnerbaum, Hilfe zur Freigabe durch die IT */
+.file-import-cloud-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+
+.file-import-tree-shell {
+  max-height: 460px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.file-import-tree,
+.file-import-tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-import-tree-children {
+  padding-left: var(--space-5);
+}
+
+.file-import-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+}
+
+.file-import-tree-spacer {
+  display: inline-block;
+  width: 28px;
+  flex: none;
+}
+
+.file-import-tree-label {
+  min-width: 0;
+}
+
+.file-import-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-import-tree-group {
+  font-weight: 600;
+}
+
+.file-import-tree-meta {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.file-import-tree-status {
+  padding: var(--space-1) 0 var(--space-1) var(--space-6);
+}
+
+.file-import-consent-help {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.file-import-consent-help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.file-import-consent-steps {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+}
+
+.file-import-consent-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .file-import-tree-children {
+    padding-left: var(--space-3);
+  }
+
+  .file-import-tree-meta {
+    display: none;
+  }
+}

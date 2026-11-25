@@ -711,7 +711,8 @@
       "test": "L'envoi fonctionne",
       "fineUpcoming": "Amende en vue",
       "fineIssued": "Nouvelle amende",
-      "submissionWithdrawn": "Remise retirée"
+      "submissionWithdrawn": "Remise retirée",
+      "cloudImport": "Import de fichiers"
     },
     "title": {
       "todosNew": "Nouvelles tâches pour toi",
@@ -726,7 +727,8 @@
       "submissionWithdrawn": "Remise retirée",
       "loginAlert": "Connexion inhabituelle à ton compte",
       "loginNotice": "Nouvelle connexion à ton compte",
-      "loginCode": "Ton code de confirmation"
+      "loginCode": "Ton code de confirmation",
+      "cloudImportReauth": "Reconnecte-toi pour poursuivre l’import"
     },
     "weekday": {
       "0": "lundi",
@@ -815,6 +817,11 @@
       "ignoreLead": "Tu n'essaies pas de te connecter ?",
       "ignoreBody": "Quelqu'un connaît alors ton mot de passe – {link}. Ne transmets ce code à personne.",
       "changeLink": "change-le immédiatement"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant} : l’import de fichiers attend ta connexion",
+      "reauthBody": "Ton import de fichiers depuis un service cloud pour {tenant} est interrompu : le fournisseur demande une nouvelle connexion (par exemple après un changement de mot de passe). Reconnecte-toi dans l’assistant d’import et l’import reprend là où il s’était arrêté. Sans connexion pendant 7 jours, il est terminé.",
+      "openButton": "Ouvrir l’import"
     }
   },
   "eventField": {

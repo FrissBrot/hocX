@@ -273,6 +273,11 @@
         "title": "Country geolocation",
         "detail": "{state, select, ok {DB-IP “IP to Country Lite”, built {buildDate} ({ageDays, number} days)} other {Not set up – “new country” signal disabled}}",
         "problem": "Country geolocation impaired"
+      },
+      "cloud_import": {
+        "title": "Cloud import",
+        "detail": "{active, number} active · {stalled, number} without progress · {needsReauth, number} waiting for sign-in{secretKnown, select, 1 { · client secret {secretDays, number} days left} other {}}",
+        "problem": "Cloud import: client secret expiring or imports stuck"
       }
     },
     "problems": {

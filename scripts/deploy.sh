@@ -434,9 +434,25 @@ run_preflight() {
     echo "AUTH_SECRET_PREVIOUS muss leer oder mindestens 32 Zeichen lang sein." >&2
     return 1
   fi
+  # Datei-Import aus Cloud-Diensten (RUNBOOK «Cloud-Import einrichten»): Token-Schlüssel immer
+  # (env_migrate erzeugt ihn), Anbieter nur vollständig oder gar nicht konfiguriert.
+  if [ -n "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}" ] && [ "${#CLOUD_IMPORT_TOKEN_KEY_PREVIOUS}" -lt 32 ]; then
+    echo "CLOUD_IMPORT_TOKEN_KEY_PREVIOUS muss leer oder mindestens 32 Zeichen lang sein." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_MS_CLIENT_ID:-}" ]; then
+    if [ -z "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}" ]; then
+      echo "CLOUD_IMPORT_MS_CLIENT_ID ist gesetzt, CLOUD_IMPORT_MS_CLIENT_SECRET fehlt." >&2
+      return 1
+    fi
+    if ! [[ "${CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+      echo "CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES (Ablaufdatum des Client-Secrets, JJJJ-MM-TT) fehlt oder ist ungueltig." >&2
+      return 1
+    fi
+  fi
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" "$CLOUD_IMPORT_TOKEN_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|hocx_geo|*keep-local-only*)
@@ -524,6 +540,11 @@ write_secret_files() {
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
   write_secret_file "$secrets_dir" storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
   write_secret_file "$secrets_dir" export_encryption_key "$EXPORT_ENCRYPTION_KEY"
+  # Datei-Import (Cloud): Token-Schlüssel, bisheriger Schlüssel während einer Rotation (leer = keine)
+  # und Client-Secret der Entra-App (leer = Microsoft nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_token_key "$CLOUD_IMPORT_TOKEN_KEY"
+  write_secret_file "$secrets_dir" cloud_import_token_key_previous "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}"
+  write_secret_file "$secrets_dir" cloud_import_ms_client_secret "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}"
   write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"

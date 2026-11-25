@@ -6,9 +6,9 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 682 (Plattform-Admin: 166)
-- Mandanten-Routen mit Rechteprüfung: 427
-- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 89
+- Routen gesamt: 690 (Plattform-Admin: 166)
+- Mandanten-Routen mit Rechteprüfung: 433
+- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 91
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
 
@@ -95,6 +95,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/auth/tenant-by-domain` | Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung |
 | `GET /api/calendar-feeds` | eigene Kalender-Abos |
 | `DELETE /api/calendar-feeds/{kind}` | eigene Kalender-Abos |
+| `GET /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
+| `POST /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
 | `GET /api/fines` | eigene Bussen; alle nur mit reports.personal (im Rumpf) |
 | `GET /api/fines/open-summary` | Summe der eigenen Bussen; alle nur mit reports.personal (im Rumpf, wie list_fines) |
 | `GET /api/public/calendar/{token}.ics` | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
@@ -208,14 +210,22 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/cloud-import/jobs` | files.import |
 | `POST /api/cloud-import/jobs` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}` | files.import |
+| `GET /api/cloud-import/jobs/{job_id}/browse` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/cancel` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/disconnect` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/finish-listing` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}/items` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/manifest` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}/pending-uploads` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/preview` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/resume` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/selection` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/start` | files.import · je nach Fall: files.manage, photos.manage |
+| `POST /api/cloud-import/oauth/finish` | files.import |
+| `GET /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
+| `POST /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
+| `POST /api/cloud-import/oauth/{provider_key}/start` | files.import |
+| `GET /api/cloud-import/providers` | files.import |
 | `POST /api/cloud-import/uploads/{job_id}/archive` | files.import |
 | `POST /api/cloud-import/uploads/{job_id}/files` | files.import |
 | `GET /api/context-files/submission-photos` | meetings.read |

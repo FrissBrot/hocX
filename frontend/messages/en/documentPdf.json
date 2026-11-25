@@ -711,7 +711,8 @@
       "test": "Sending works",
       "fineUpcoming": "Fine ahead",
       "fineIssued": "New fine",
-      "submissionWithdrawn": "Submission withdrawn"
+      "submissionWithdrawn": "Submission withdrawn",
+      "cloudImport": "File import"
     },
     "title": {
       "todosNew": "New to-dos for you",
@@ -726,7 +727,8 @@
       "submissionWithdrawn": "Submission withdrawn",
       "loginAlert": "Unusual sign-in to your account",
       "loginNotice": "New sign-in to your account",
-      "loginCode": "Your confirmation code"
+      "loginCode": "Your confirmation code",
+      "cloudImportReauth": "Sign in again to continue the import"
     },
     "weekday": {
       "0": "Monday",
@@ -815,6 +817,11 @@
       "ignoreLead": "Didn't just try to sign in?",
       "ignoreBody": "Then someone knows your password – {link}. Never share this code with anyone.",
       "changeLink": "change it right away"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant}: file import is waiting for you to sign in",
+      "reauthBody": "Your file import from a cloud service for {tenant} is paused: the provider requires you to sign in again (for example after a password change). Sign in again in the import wizard and the import continues where it stopped. After 7 days without signing in it is ended.",
+      "openButton": "Open import"
     }
   },
   "eventField": {

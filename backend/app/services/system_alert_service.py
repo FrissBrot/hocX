@@ -75,6 +75,7 @@ _CHECK_TITLES_DE = {
     "runtime": "Auslastung der Dienstprozesse",
     "overload": "Überlast-Schutz",
     "render_queue": "PDF-Aufträge",
+    "cloud_import": "Cloud-Import",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
@@ -106,6 +107,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "runtime": "Dienstprozesse blockiert oder ausgelastet",
     "overload": "Überlast: neue Nutzer werden abgewiesen",
     "render_queue": "PDF-Aufträge stauen sich oder scheitern",
+    "cloud_import": "Cloud-Import: Client-Secret läuft ab oder Importe hängen",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
@@ -231,6 +233,17 @@ def _check_message(check) -> str:
                 f"{params.get('queued')} PDF-Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
                 f"{params.get('failed')} in 24 h gescheitert - job-worker prüfen (docker compose logs job-worker)."
             )
+        case "cloud_import":
+            parts = []
+            if params.get("secretMissing") not in (None, "0"):
+                parts.append("Ablaufdatum des Client-Secrets fehlt oder ist ungültig (CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES)")
+            if params.get("secretKnown") not in (None, "0"):
+                days = int(check.params.get("secretDays") or 0)
+                when = "ist abgelaufen" if days < 0 else f"läuft in {days} Tagen ab"
+                parts.append(f"Client-Secret {when} - neues Secret in Entra erstellen (RUNBOOK «Cloud-Import einrichten»)")
+            if params.get("stalled") not in (None, "0"):
+                parts.append(f"{params.get('stalled')} Importe seit über 30 Minuten ohne Fortschritt - job-worker prüfen")
+            return "; ".join(parts) + "." if parts else "Siehe Systemstatus."
         case "runtime":
             return (
                 f"Event-Loop bis {params.get('maxLagMs')} ms blockiert, DB-Pool bis {params.get('poolPeakPercent')} %, "

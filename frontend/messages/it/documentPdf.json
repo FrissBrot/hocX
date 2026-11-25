@@ -711,7 +711,8 @@
       "test": "L'invio funziona",
       "fineUpcoming": "Multa in arrivo",
       "fineIssued": "Nuova multa",
-      "submissionWithdrawn": "Consegna ritirata"
+      "submissionWithdrawn": "Consegna ritirata",
+      "cloudImport": "Importazione di file"
     },
     "title": {
       "todosNew": "Nuove attività per te",
@@ -726,7 +727,8 @@
       "submissionWithdrawn": "Consegna ritirata",
       "loginAlert": "Accesso insolito al tuo account",
       "loginNotice": "Nuovo accesso al tuo account",
-      "loginCode": "Il tuo codice di conferma"
+      "loginCode": "Il tuo codice di conferma",
+      "cloudImportReauth": "Accedi di nuovo per continuare l’importazione"
     },
     "weekday": {
       "0": "lunedì",
@@ -815,6 +817,11 @@
       "ignoreLead": "Non stai cercando di accedere?",
       "ignoreBody": "Allora qualcuno conosce la tua password – {link}. Non dare questo codice a nessuno.",
       "changeLink": "cambiala subito"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant}: l’importazione di file attende il tuo accesso",
+      "reauthBody": "La tua importazione di file da un servizio cloud per {tenant} è in pausa: il fornitore richiede un nuovo accesso (ad esempio dopo un cambio di password). Accedi di nuovo nell’assistente di importazione e l’importazione riprende da dove si era fermata. Dopo 7 giorni senza accesso viene terminata.",
+      "openButton": "Apri importazione"
     }
   },
   "eventField": {

@@ -144,8 +144,20 @@
         "admin"
       ]
     },
+    "GET /api/cloud-import/jobs/{job_id}/browse": {
+      "handler": "cloud_import.browse_cloud_folder",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/cancel": {
       "handler": "cloud_import.cancel_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/disconnect": {
+      "handler": "cloud_import.disconnect_cloud_account",
       "allowed": [
         "admin"
       ]
@@ -186,8 +198,32 @@
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/selection": {
+      "handler": "cloud_import.set_cloud_selection",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/start": {
       "handler": "cloud_import.start_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/oauth/finish": {
+      "handler": "cloud_import.finish_cloud_oauth",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/start": {
+      "handler": "cloud_import.start_cloud_oauth",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/cloud-import/providers": {
+      "handler": "cloud_import.list_import_providers",
       "allowed": [
         "admin"
       ]

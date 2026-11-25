@@ -711,7 +711,8 @@
       "test": "Versand funktioniert",
       "fineUpcoming": "Busse droht",
       "fineIssued": "Neue Busse",
-      "submissionWithdrawn": "Abgabe zurückgezogen"
+      "submissionWithdrawn": "Abgabe zurückgezogen",
+      "cloudImport": "Datei-Import"
     },
     "title": {
       "todosNew": "Neue Aufgaben für dich",
@@ -726,7 +727,8 @@
       "submissionWithdrawn": "Abgabe zurückgezogen",
       "loginAlert": "Auffällige Anmeldung an deinem Konto",
       "loginNotice": "Neue Anmeldung an deinem Konto",
-      "loginCode": "Dein Bestätigungscode"
+      "loginCode": "Dein Bestätigungscode",
+      "cloudImportReauth": "Neu anmelden, damit der Import weiterläuft"
     },
     "weekday": {
       "0": "Montag",
@@ -815,6 +817,11 @@
       "ignoreLead": "Hast du dich nicht gerade angemeldet?",
       "ignoreBody": "Dann kennt jemand dein Passwort – {link}. Gib den Code niemandem weiter.",
       "changeLink": "ändere es sofort"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant}: Datei-Import wartet auf deine Anmeldung",
+      "reauthBody": "Dein Datei-Import aus einem Cloud-Dienst für {tenant} ist unterbrochen: der Anbieter verlangt eine neue Anmeldung (zum Beispiel nach einem Passwortwechsel). Melde dich im Import-Assistenten neu an, dann geht es dort weiter, wo der Import stand. Nach 7 Tagen ohne Anmeldung wird er beendet.",
+      "openButton": "Import öffnen"
     }
   },
   "eventField": {

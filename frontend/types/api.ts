@@ -3107,7 +3107,7 @@ export type EmailSettingsWrite = {
   email_link_base_url: string | null;
 };
 
-export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "fines" | "submission_changes" | "exports" | "security_logins";
+export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "fines" | "submission_changes" | "exports" | "security_logins" | "imports";
 
 export type NotificationPreferences = {
   preferences: { category: NotificationCategory; enabled: boolean }[];

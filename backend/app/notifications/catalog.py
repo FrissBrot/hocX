@@ -47,6 +47,8 @@ CATEGORIES: dict[str, Category] = {
     # neue Browser nutzen, wäre es sonst Lärm. Verdächtige Anmeldungen, viele Fehlversuche und
     # Anmeldung nach einer Sperre gehen als Pflichtmitteilung (Kategorie account) immer raus.
     "security_logins": Category("security_logins"),
+    # Datei-Import aus Cloud-Diensten: Anbieter verlangt neue Anmeldung (nur mit files.import)
+    "imports": Category("imports", permission="files.import"),
 }
 
 KINDS: dict[str, Kind] = {
@@ -87,6 +89,8 @@ KINDS: dict[str, Kind] = {
     # Vereins-Datenexport fertig oder fehlgeschlagen (Besteller)
     "export.ready": Kind("export.ready", "exports", "export"),
     "export.failed": Kind("export.failed", "exports", "export"),
+    # Datei-Import: Verbindung zum Cloud-Konto abgelaufen, Import wartet (Auftraggeber)
+    "cloud_import.needs_reauth": Kind("cloud_import.needs_reauth", "imports", "cloud_import"),
 }
 
 CONFIGURABLE_CATEGORIES = tuple(key for key, category in CATEGORIES.items() if category.configurable)

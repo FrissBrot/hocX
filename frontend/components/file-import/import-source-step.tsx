@@ -13,6 +13,7 @@ import {
   chunk,
   pathedFromDataTransfer,
   pathedFromInput,
+  type CloudProvider,
   type ImportJob,
   type ImportSource,
   type ImportTypeFilter,
@@ -26,6 +27,7 @@ const MAX_FOLDER_FILES = 50_000;
 const ARCHIVE_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
 type Props = {
+  providers: CloudProvider[];
   job: ImportJob | null;
   blocked: boolean;
   onJob: (job: ImportJob) => void;
@@ -33,7 +35,7 @@ type Props = {
   onCancelled: () => void | Promise<void>;
 };
 
-export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: Props) {
+export function ImportSourceStep({ providers, job, blocked, onJob, onFiles, onCancelled }: Props) {
   const t = useTranslations("fileImport");
   const locale = useLocale();
   const showToast = useToast();
@@ -166,6 +168,20 @@ export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: 
         <h2 className="section-title">{t("source.title")}</h2>
         {blocked ? <StatusBanner tone="warning" message={t("errors.import_active")} /> : null}
         <div className="file-import-source-tiles" role="radiogroup" aria-label={t("source.title")}>
+          {/* Cloud-Anbieter nur, wenn konfiguriert (Backend liefert nur angebotene) */}
+          {providers.map((provider) => (
+            <button
+              key={provider.key}
+              type="button"
+              role="radio"
+              aria-checked={source === provider.key}
+              className={source === provider.key ? "file-import-tile file-import-tile-selected" : "file-import-tile"}
+              onClick={() => setSource(provider.key)}
+            >
+              <span className="file-import-tile-title">{t(`source.provider.${provider.key}`)}</span>
+              <span className="file-import-tile-text">{t(`source.providerHint.${provider.key}`)}</span>
+            </button>
+          ))}
           {(["zip", "folder"] as const).map((value) => (
             <button
               key={value}
@@ -180,7 +196,7 @@ export function ImportSourceStep({ job, blocked, onJob, onFiles, onCancelled }: 
             </button>
           ))}
         </div>
-        <p className="muted">{t("source.cloudHint")}</p>
+        <p className="muted">{t(providers.length ? "source.cloudHintConnected" : "source.cloudHint")}</p>
         <div className="grid file-import-options">
           <label className="field-stack">
             <span className="field-label">{t("options.typeFilter")}</span>

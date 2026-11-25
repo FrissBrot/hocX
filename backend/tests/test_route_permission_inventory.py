@@ -35,6 +35,8 @@ ALLOWED = {
     "public_catalog.*": "öffentlicher Preis-/Kundenkatalog der Website",
     "public_catalog.get_public_customer_logo": "Logo eines auf der Website gelisteten Mandanten: nicht erratbare Kennung, IP-Rate-Limit, sonst 404",
     "maintenance_public.*": "öffentlicher Wartungsstatus",
+    "cloud_import_oauth.oauth_callback_form": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)",
+    "cloud_import_oauth.oauth_callback_query": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)",
     "system_status.*": "Status-Token (kein Benutzer)",
     "calendar_feeds.get_calendar_feed": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve",
     "tenants.tenant_profile_image": "Vereinslogo: angemeldet eigener Mandant/vertraute Partner, ohne Anmeldung nur Login-Branding der App-Domain bzw. Prüfseite (tenant_logo_is_public), IP-Rate-Limit, sonst 404",

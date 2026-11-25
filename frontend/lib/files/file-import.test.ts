@@ -10,6 +10,8 @@ import {
   newRule,
   normalizeImportPath,
   pathedFromInput,
+  isCloudSource,
+  readCloudReturn,
   uploadBatches,
   type ImportJob,
 } from "./file-import";
@@ -69,5 +71,19 @@ describe("file-import helpers", () => {
   it("reads the error code of an api error", () => {
     expect(apiErrorCode({ detail: { code: "import_active" } })).toBe("import_active");
     expect(apiErrorCode(new Error("x"))).toBeNull();
+  });
+});
+
+describe("Rückkehr vom Cloud-Anbieter", () => {
+  it("liest Auftrag, Fehler und Abschluss-Token (nur aus dem Fragment)", () => {
+    expect(readCloudReturn("?job=j1&cloud_error=cancelled", "")).toEqual({ job: "j1", error: "cancelled", notice: null, finish: null });
+    expect(readCloudReturn("?job=j1&cloud_finish=nein", "#cloud_finish=abc")).toEqual({ job: "j1", error: null, notice: null, finish: "abc" });
+    expect(readCloudReturn("?cloud_notice=admin_consent_done", "")).toMatchObject({ notice: "admin_consent_done" });
+  });
+
+  it("erkennt API-Quellen", () => {
+    expect(isCloudSource("microsoft")).toBe(true);
+    expect(isCloudSource("zip")).toBe(false);
+    expect(isCloudSource("folder")).toBe(false);
   });
 });

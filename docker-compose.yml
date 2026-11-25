@@ -260,6 +260,11 @@ services:
       # Schlüssel der Mandanten-Exporte; leer ausserhalb der Produktion = aus AUTH_SECRET abgeleitet.
       EXPORT_ENCRYPTION_KEY: ${EXPORT_ENCRYPTION_KEY:-}
       STORAGE_WORK_ROOT: /app/storage-local/work
+      # Datei-Import aus Cloud-Diensten: explizit, damit e2e/tests ihre eigene --env-file durchreichen
+      CLOUD_IMPORT_TOKEN_KEY: ${CLOUD_IMPORT_TOKEN_KEY:-}
+      CLOUD_IMPORT_TOKEN_KEY_PREVIOUS: ${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}
+      CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
+      CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -921,6 +926,11 @@ services:
       STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
       STORAGE_WORK_ROOT: /app/storage-local/work
       CLAMAV_HOST: clamav
+      # Datei-Import aus Cloud-Diensten: explizit, damit e2e/tests ihre eigene --env-file durchreichen
+      CLOUD_IMPORT_TOKEN_KEY: ${CLOUD_IMPORT_TOKEN_KEY:-}
+      CLOUD_IMPORT_TOKEN_KEY_PREVIOUS: ${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}
+      CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
+      CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
     command: ["python", "-m", "app.workers.job_worker"]
     volumes:
       - ./backend:/app

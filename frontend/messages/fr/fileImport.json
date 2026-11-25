@@ -20,7 +20,9 @@
     "cancel_requested": "Annulation en cours",
     "cancelled": "Annulé",
     "done": "Terminé",
-    "failed": "Interrompu"
+    "failed": "Interrompu",
+    "listing": "Inventaire en cours",
+    "needs_reauth": "Connexion requise"
   },
   "history": {
     "title": "Imports précédents",
@@ -40,7 +42,7 @@
     "folder": "Téléverser un dossier",
     "folderHint": "Choisis un dossier sur cet appareil, p. ex. un dossier OneDrive ou Google Drive synchronisé. Seuls les fichiers importés sont transférés.",
     "takeout": "Google Takeout",
-    "cloudHint": "Les connexions directes à OneDrive et Google Drive suivront plus tard. D'ici là : télécharge le dossier ou crée un export Takeout et téléverse-le ici.",
+    "cloudHint": "Aucun service cloud configuré ? Télécharge le dossier ou crée un export Takeout et importe-le ici.",
     "limits": "Par import au maximum 50 000 fichiers et 100 Go ; documents jusqu'à 20 Mo, images jusqu'à 100 Mo, archives ZIP jusqu'à 10 Go chacune. Un seul import à la fois par association.",
     "next": "Suivant",
     "uploadZipTitle": "Téléverser des archives ZIP",
@@ -55,7 +57,8 @@
     "archiveAdded": "{count, plural, one {Archive ajoutée.} other {# archives ajoutées.}}",
     "listed": "{count, plural, one {# fichier trouvé} other {# fichiers trouvés}} ({size}, {archives, plural, =0 {dossier} one {# archive} other {# archives}}).",
     "takeoutDetected": "Google Takeout détecté.",
-    "toRules": "Continuer vers les règles et l'aperçu"
+    "toRules": "Continuer vers les règles et l'aperçu",
+    "cloudHintConnected": "hocX ne lit que ce que tu sélectionnes chez le service cloud et ne conserve l’accès chiffré que jusqu’à la fin de l’import."
   },
   "options": {
     "typeFilter": "Types de fichiers",
@@ -97,7 +100,13 @@
     "expired": "L'import a été abandonné après 7 jours sans démarrage.",
     "internal": "Erreur inattendue lors de l'import.",
     "requester_unauthorized": "L'import a été arrêté car la personne qui l'a lancé n'en a plus l'autorisation.",
-    "disk_full": "Le serveur manque actuellement d'espace disque. Merci de réessayer plus tard."
+    "disk_full": "Le serveur manque actuellement d'espace disque. Merci de réessayer plus tard.",
+    "provider_unavailable": "Ce service cloud n’est pas disponible pour le moment.",
+    "reconnect_required": "La connexion au service cloud a expiré. Merci de te reconnecter.",
+    "too_many_folders": "Trop de dossiers : au maximum {max} par import.",
+    "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles chez le service cloud.",
+    "reauth_expired": "L’import a été terminé faute de nouvelle connexion pendant 7 jours.",
+    "provider_error": "Le service cloud n’a pas répondu comme prévu."
   },
   "rules": {
     "title": "Règles",
@@ -210,7 +219,11 @@
     "source_gone": "Source plus disponible",
     "rule_violation": "Règle non respectée",
     "invalid_name": "Nom non valable",
-    "duplicate_enriched": "Doublon, complété"
+    "duplicate_enriched": "Doublon, complété",
+    "not_found": "N’existe plus chez le service cloud",
+    "access_denied": "Pas d’accès chez le service cloud",
+    "host_not_allowed": "Destination de téléchargement non autorisée",
+    "download_failed": "Échec du téléchargement"
   },
   "kinds": {
     "image": "Image",
@@ -270,5 +283,78 @@
     "skipped": "Ignoré",
     "failed": "Erreur",
     "cancelled": "Annulé"
+  },
+  "cloud": {
+    "title": "Se connecter à {provider}",
+    "connect": "Se connecter à {provider}",
+    "privacy": "Tu te connectes directement chez le fournisseur. hocX obtient uniquement un accès en lecture, ne lit que les dossiers que tu sélectionnes et supprime l’accès dès la fin de l’import.",
+    "connectedAs": "Connecté en tant que {account}",
+    "connectedToast": "Connecté en tant que {account}.",
+    "otherAccount": "Autre compte",
+    "disconnect": "Déconnecter",
+    "disconnectConfirm": "Déconnecter le compte cloud ? L’accès est supprimé immédiatement.",
+    "chooseHint": "Choisis les dossiers ou fichiers à reprendre. Un dossier choisi comprend tous ses sous-dossiers.",
+    "treeLabel": "Dossiers chez le service cloud",
+    "loading": "Chargement",
+    "retry": "Réessayer",
+    "loadMore": "Charger plus",
+    "emptyFolder": "Vide",
+    "expand": "Déplier {name}",
+    "collapse": "Replier {name}",
+    "childCount": "{count, plural, one {# élément} other {# éléments}}",
+    "notImported": "ne sera pas importé",
+    "grantMore": "Autoriser l’accès",
+    "selected": "{count, plural, =0 {Rien de sélectionné} one {# entrée sélectionnée} other {# entrées sélectionnées}}",
+    "analyse": "Lister les fichiers",
+    "listingTitle": "Inventaire des fichiers",
+    "listingHint": "hocX parcourt les dossiers sélectionnés chez le service cloud. Tu peux quitter la page.",
+    "listingProgress": "{count, plural, one {# fichier} other {# fichiers}} ({size}) trouvés dans {folders} dossiers.",
+    "throttled": "Le service cloud ralentit les requêtes. hocX attend puis continue automatiquement.",
+    "throttledUntil": "Le service cloud ralentit les requêtes. Reprise à {time}.",
+    "needsReauth": "Le service cloud demande une nouvelle connexion (par exemple après un changement de mot de passe). L’import reprend ensuite là où il s’était arrêté.",
+    "needsReauthOther": "L’import attend que la personne qui l’a lancé se reconnecte au service cloud.",
+    "reconnect": "Se reconnecter",
+    "notices": {
+      "admin_consent_done": "L’organisation a autorisé l’application. Tu peux maintenant te connecter.",
+      "generic": "Retour du service cloud."
+    },
+    "errors": {
+      "generic": "La connexion n’a pas fonctionné. Merci de réessayer.",
+      "state_invalid": "La connexion a expiré ou a déjà été utilisée. Merci de te reconnecter.",
+      "cancelled": "La connexion a été annulée.",
+      "authorize_failed": "Le service cloud a refusé la connexion.",
+      "token_exchange_failed": "La connexion n’a pas pu être finalisée. Merci de te reconnecter.",
+      "internal": "Erreur inattendue lors de la connexion.",
+      "admin_consent_required": "Ton organisation n’autorise cette application qu’après validation par son service informatique. Le guide ci-dessous t’aide.",
+      "admin_consent_failed": "L’organisation n’a pas autorisé l’application.",
+      "oauth_expired": "La connexion a expiré. Merci de te reconnecter.",
+      "oauth_other_account": "Cette connexion a été lancée par un autre compte hocX et a été rejetée.",
+      "oauth_account_mismatch": "Un import en cours ne peut continuer qu’avec le même compte cloud.",
+      "reconnect_required": "La connexion a expiré. Merci de te reconnecter.",
+      "provider_throttled": "Le service cloud ralentit les requêtes. Réessaie dans un instant.",
+      "provider_not_found": "Ce dossier n’existe plus chez le service cloud.",
+      "provider_access_denied": "Pas d’accès à ce dossier.",
+      "provider_server_error": "Le service cloud a signalé une erreur.",
+      "provider_network": "Le service cloud est injoignable.",
+      "provider_bad_response": "Le service cloud a répondu de manière inattendue.",
+      "provider_bad_request": "Le service cloud a refusé la requête.",
+      "provider_host_not_allowed": "Le service cloud renvoie vers une destination non autorisée.",
+      "provider_unavailable": "Ce service cloud n’est pas disponible pour le moment.",
+      "invalid_ref": "Sélection non valide.",
+      "empty_source": "Aucun fichier trouvé dans la sélection. Merci de choisir d’autres dossiers.",
+      "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles. Merci de choisir à nouveau."
+    },
+    "adminConsent": {
+      "title": "Aide : autorisation par le service informatique de l’organisation",
+      "explain": "Beaucoup de comptes professionnels ou scolaires n’autorisent une nouvelle application qu’après l’accord d’un administrateur de l’organisation. Les comptes personnels ne sont pas concernés.",
+      "step1": "Saisis ci-dessous le domaine ou l’ID de tenant de l’organisation et copie le lien d’autorisation.",
+      "step2": "Envoie le lien au service informatique. Il l’ouvre, se connecte en tant qu’administrateur et donne l’autorisation (lecture seule).",
+      "step3": "Ensuite, reconnecte-toi ici.",
+      "tenantLabel": "Domaine ou ID de tenant de l’organisation",
+      "tenantHelp": "Par exemple societe.onmicrosoft.com, le domaine e-mail de l’organisation ou l’ID de tenant.",
+      "open": "Ouvrir le lien d’autorisation",
+      "copy": "Copier le lien",
+      "copied": "Lien d’autorisation copié."
+    }
   }
 }

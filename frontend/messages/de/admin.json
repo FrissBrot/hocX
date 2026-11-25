@@ -273,6 +273,11 @@
         "title": "Länder-Geolocation",
         "detail": "{state, select, ok {DB-IP «IP to Country Lite», Stand {buildDate} ({ageDays, number} Tage)} other {Nicht eingerichtet – Signal «neues Land» entfällt}}",
         "problem": "Länder-Geolocation gestört"
+      },
+      "cloud_import": {
+        "title": "Cloud-Import",
+        "detail": "{active, number} aktiv · {stalled, number} ohne Fortschritt · {needsReauth, number} warten auf Anmeldung{secretKnown, select, 1 { · Client-Secret noch {secretDays, number} Tage} other {}}",
+        "problem": "Cloud-Import: Client-Secret läuft ab oder Importe hängen"
       }
     },
     "problems": {

@@ -51,6 +51,10 @@
         "security_logins": {
           "label": "Anmeldung von neuem Gerät",
           "hint": "Wenn sich jemand mit deinem Konto auf einem Gerät anmeldet, das wir noch nicht kennen."
+        },
+        "imports": {
+          "label": "Datei-Import",
+          "hint": "Wenn ein Import aus OneDrive, SharePoint oder einem anderen Cloud-Dienst auf eine neue Anmeldung wartet. Nur für Personen, die Dateien importieren dürfen."
         }
       },
       "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert, verdächtige Anmeldungen, viele Fehlversuche) und Links zum Zurücksetzen des Passworts bekommst du immer."
