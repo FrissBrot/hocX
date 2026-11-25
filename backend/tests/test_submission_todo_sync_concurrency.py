@@ -24,6 +24,17 @@ from tests.factories import make_event, make_participant, make_tenant
 
 service = SubmissionService()
 
+# Kein Warten ohne Ende (Nachtlauf 2026-11-25): scheiterte ein Assert, solange `first` seine Sperren
+# hielt, wartete der zweite Abgleich unbegrenzt - und mit ihm das Schliessen des ThreadPoolExecutor.
+# Mit lock_timeout bricht er ab, der Test scheitert statt den ganzen Lauf anzuhalten.
+LOCK_TIMEOUT = "30s"
+
+
+def _session() -> Session:
+    session = Session(engine)
+    session.execute(text("SELECT set_config('lock_timeout', :value, true)"), {"value": LOCK_TIMEOUT})  # nur diese Transaktion, nicht für die Verbindung im Pool
+    return session
+
 
 def _wait_until_blocked(timeout: float = 10.0) -> bool:
     deadline = time.monotonic() + timeout
@@ -39,7 +50,7 @@ def _wait_until_blocked(timeout: float = 10.0) -> bool:
 
 
 def test_parallel_submission_todo_syncs_do_not_collide():
-    with Session(engine) as setup:
+    with _session() as setup:
         tenant = make_tenant(setup, "Abgabe parallel")
         anna = make_participant(setup, tenant.id, display_name="Anna Muster")
         event = make_event(setup, tenant.id, title="Badetag")
@@ -63,11 +74,11 @@ def test_parallel_submission_todo_syncs_do_not_collide():
         setup.commit()
 
     def second_request() -> bool:
-        with Session(engine) as db:
+        with _session() as db:
             return service.sync_todos_if_tracked(db, db.get(SubmissionAssignment, assignment_id))
 
     try:
-        with Session(engine) as first, ThreadPoolExecutor(1) as pool:
+        with _session() as first, ThreadPoolExecutor(1) as pool:
             # Erster Request: Abgleich hat die Pendenz angelegt, Transaktion noch offen.
             first_assignment = first.get(SubmissionAssignment, assignment_id)
             original_commit = first.commit
@@ -79,14 +90,14 @@ def test_parallel_submission_todo_syncs_do_not_collide():
             first.commit()
             ok = future.result(timeout=30)
 
-        with Session(engine) as check:
+        with _session() as check:
             todos = check.scalar(select(func.count()).select_from(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment_id))
             errors = check.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant_id))
         assert ok is True, "zweiter gleichzeitiger Abgleich scheitert"
         assert errors == 0
         assert todos == 1
     finally:
-        with Session(engine) as cleanup:
+        with _session() as cleanup:
             cleanup.execute(delete(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant_id))
             cleanup.execute(delete(ProtocolTodo).where(ProtocolTodo.tenant_id == tenant_id))
             cleanup.execute(delete(Tenant).where(Tenant.id == tenant_id))
