@@ -27,7 +27,7 @@ export function PhotoViewerPlaceLink({ place, onSearchPlace }: { place: PhotoPla
     return (
       <span className="photo-viewer-place" title={label}>
         <PhotoActionIcon name="place" />
-        {label}
+        <span className="photo-viewer-place-label">{label}</span>
       </span>
     );
   }
@@ -39,7 +39,7 @@ export function PhotoViewerPlaceLink({ place, onSearchPlace }: { place: PhotoPla
       onClick={() => onSearchPlace(target.key, target.label, target.kind)}
     >
       <PhotoActionIcon name="place" />
-      {label}
+      <span className="photo-viewer-place-label">{label}</span>
     </button>
   );
 }
