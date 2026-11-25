@@ -90,8 +90,9 @@ export function FileImportView({ initialJobs, providers }: { initialJobs: Import
     // Frischer Stand beim Mount: AppShell tauscht beim Wechsel Desktop/Mobil den Baum aus, die
     // Ansicht wird dann neu gemountet und hätte sonst die veralteten Daten des Seitenaufrufs
     // (z. B. «nicht verbunden» nach der Anmeldung). Beim Abschluss einer Anmeldung liefert
-    // /oauth/finish den neuen Stand selbst (ein paralleles Neuladen könnte ihn überschreiben).
-    if (!result.finish) void reload().catch(() => undefined);
+    // /oauth/finish den neuen Stand selbst (ein paralleles Neuladen könnte ihn mit dem alten
+    // überschreiben) - auch beim zweiten Effektlauf im Strict Mode, wenn das Fragment schon weg ist.
+    if (!result.finish && !finishing.current) void reload().catch(() => undefined);
     if (!result.job && !result.error && !result.notice && !result.finish) return;
     // Token und Codes sofort aus Adresszeile und Verlauf entfernen
     window.history.replaceState(null, "", window.location.pathname);

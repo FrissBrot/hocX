@@ -46,6 +46,8 @@
 
 .file-import-card {
   display: grid;
+  /* wie .file-import-page: Tabellen (Vorschau, Bericht) scrollen in sich statt die Karte zu verbreitern */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 

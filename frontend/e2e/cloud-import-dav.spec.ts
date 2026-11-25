@@ -76,7 +76,7 @@ test("WebDAV: App-Passwort, gesperrte Adresse, Nextcloud-Ordner per Tastatur imp
 
   // Interne Adresse: abgelehnt, bevor eine Verbindung aufgebaut wird
   await page.getByRole("combobox", { name: "Anbieter" }).selectOption("generic");
-  await page.getByLabel("WebDAV-Adresse").fill("https://169.254.169.254/latest/");
+  await page.getByRole("textbox", { name: "WebDAV-Adresse" }).fill("https://169.254.169.254/latest/");
   await page.getByLabel("Benutzername").fill("anna");
   await page.getByLabel("App-Passwort").fill("app-passwort-e2e");
   await page.getByRole("button", { name: "Verbinden" }).click();
@@ -130,7 +130,7 @@ test("Dropbox: anmelden, Ordner mit mehreren Seiten wählen, importieren", async
   await page.getByRole("button", { name: "Bei Dropbox anmelden" }).click();
   await page.locator('button[data-scenario="anna"]').click();
   await page.waitForURL(/\/files\/import/);
-  await expect(page.getByText("Verbunden als anna@verein.test")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Verbunden als anna@verein.test", { exact: true })).toBeVisible({ timeout: 30_000 });
   expect(page.url()).not.toContain("cloud_finish");
 
   await page.getByRole("button", { name: "Dropbox aufklappen" }).click();
