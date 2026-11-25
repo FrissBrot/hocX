@@ -2,13 +2,17 @@
 
 Das Backend legt nur Aufträge an und liest den Zustand - ausgeführt wird alles vom
 backup-worker. Mutierende Aktionen: Owner (require_admin_write), Rate-Limit, Audit-Log,
-Idempotenzschlüssel. Restores zusätzlich mit Bestätigungsphrase und frischer TOTP-Bestätigung.
+Idempotenzschlüssel. Restores zusätzlich mit Bestätigungsphrase und frischer Passkey-Bestätigung
+(Step-up «backup-restore»), Einstellungen mit Step-up «backup-settings».
 Kein Endpunkt nimmt Dateipfade, Archivpfade oder Borg-Befehle entgegen - Sicherungspunkte werden
-nur über ihre ID aus der Datenbank adressiert."""
+nur über ihre ID aus der Datenbank adressiert.
+Lesen dürfen alle Admins; Support (nur lesen) bekommt die Antworten ohne Adresse/Benutzer der
+Storage Box und ohne rohe Fehlermeldungen (svc.redact_*)."""
 
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -56,6 +60,10 @@ def _audit(db: Session, admin: CurrentAdmin, action: str, **details) -> None:
               details={k: str(v) if isinstance(v, uuid.UUID) else v for k, v in details.items()})
 
 
+def _support(admin: CurrentAdmin) -> bool:
+    return admin.role != "owner"
+
+
 def _error(exc: svc.BackupAdminError) -> HTTPException:
     code = status.HTTP_409_CONFLICT if exc.code not in ("confirmation_mismatch", "rescue_reason_missing", "name_missing") else status.HTTP_422_UNPROCESSABLE_CONTENT
     return HTTPException(status_code=code, detail=str(exc))
@@ -65,13 +73,15 @@ def _error(exc: svc.BackupAdminError) -> HTTPException:
 
 
 @router.get("/backups/status", response_model=BackupStatusRead)
-def backup_status(db: Session = Depends(get_db)) -> BackupStatusRead:
-    return svc.status(db)
+def backup_status(admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db)) -> BackupStatusRead:
+    result = svc.status(db)
+    return svc.redact_status(result) if _support(admin) else result
 
 
 @router.get("/backups/settings", response_model=BackupSettingsRead)
-def backup_settings(db: Session = Depends(get_db)) -> BackupSettingsRead:
-    return svc.read_settings(db)
+def backup_settings(admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db)) -> BackupSettingsRead:
+    result = svc.read_settings(db)
+    return svc.redact_settings(result) if _support(admin) else result
 
 
 @router.put("/backups/settings", dependencies=[Depends(require_step_up("backup-settings"))], response_model=BackupSettingsRead)
@@ -88,7 +98,7 @@ def backup_sets(include_pruned: bool = False, limit: int = Query(200, ge=1, le=1
     query = select(BackupSet)
     if not include_pruned:
         query = query.where(BackupSet.state.in_(("completed", "partial")))
-    return [svc.set_read(row) for row in db.scalars(query.order_by(BackupSet.snapshot_at.desc()).limit(limit))]
+    return svc.set_reads(db, list(db.scalars(query.order_by(BackupSet.snapshot_at.desc()).limit(limit))))
 
 
 @router.get("/backups/sets/{set_id}/tenants", response_model=list[BackupTenantRead])
@@ -102,11 +112,16 @@ def backup_set_tenants(set_id: uuid.UUID, db: Session = Depends(get_db)) -> list
 @router.get("/backups", response_model=BackupJobPage)
 def backup_jobs(
     kind: str | None = Query(None), state: str | None = Query(None), trigger: str | None = Query(None),
-    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET), limit: int = Query(25, ge=1, le=200), db: Session = Depends(get_db),
+    since: datetime | None = Query(None, description="nur Aufträge ab diesem Zeitpunkt (7-Tage-Leiste)"),
+    offset: int = Query(0, ge=0, le=MAX_QUERY_OFFSET), limit: int = Query(25, ge=1, le=200),
+    admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db),
 ) -> BackupJobPage:
     if (kind and kind not in _KINDS) or (state and state not in _STATES) or (trigger and trigger not in _TRIGGERS):
         raise HTTPException(status_code=422, detail="Ungültiger Filter")
-    return svc.list_jobs(db, kind=kind, state=state, trigger=trigger, offset=offset, limit=limit)
+    if since is not None and since.tzinfo is None:
+        raise HTTPException(status_code=422, detail="Zeitpunkt mit Zeitzone angeben")
+    page = svc.list_jobs(db, kind=kind, state=state, trigger=trigger, offset=offset, limit=limit, since=since)
+    return svc.redact_page(page) if _support(admin) else page
 
 
 @router.post("/backups", response_model=BackupJobRead, status_code=status.HTTP_202_ACCEPTED)
@@ -137,11 +152,12 @@ def create_restore_test(payload: VerifyCreate, admin: CurrentAdmin = Depends(req
 
 
 @router.get("/backups/{job_id}", response_model=BackupJobDetailRead)
-def backup_job(job_id: uuid.UUID, db: Session = Depends(get_db)) -> BackupJobDetailRead:
+def backup_job(job_id: uuid.UUID, admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db)) -> BackupJobDetailRead:
     job = db.get(BackupJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Auftrag nicht gefunden")
-    return svc.job_detail(db, job)
+    detail = svc.job_detail(db, job)
+    return svc.redact_job(detail) if _support(admin) else detail
 
 
 @router.post("/backups/{job_id}/verify", response_model=BackupJobRead, status_code=status.HTTP_202_ACCEPTED)
@@ -178,9 +194,10 @@ def cancel_backup(job_id: uuid.UUID, admin: CurrentAdmin = Depends(require_admin
 
 
 @router.get("/restores", response_model=list[RestoreJobRead])
-def restore_jobs(limit: int = Query(25, ge=1, le=200), db: Session = Depends(get_db)) -> list[RestoreJobRead]:
+def restore_jobs(limit: int = Query(25, ge=1, le=200), admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db)) -> list[RestoreJobRead]:
     rows = db.scalars(select(BackupRestoreJob).order_by(BackupRestoreJob.created_at.desc()).limit(limit)).all()
-    return [svc.restore_read(db, row, with_events=False) for row in rows]
+    items = [svc.restore_read(db, row, with_events=False) for row in rows]
+    return [svc.redact_restore(item) for item in items] if _support(admin) else items
 
 
 @router.post("/restores/preview", response_model=RestorePreviewRead)
@@ -223,11 +240,12 @@ def create_restore(
 
 
 @router.get("/restores/{restore_id}", response_model=RestoreJobRead)
-def restore_job(restore_id: uuid.UUID, db: Session = Depends(get_db)) -> RestoreJobRead:
+def restore_job(restore_id: uuid.UUID, admin: CurrentAdmin = Depends(get_current_admin), db: Session = Depends(get_db)) -> RestoreJobRead:
     job = db.get(BackupRestoreJob, restore_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Wiederherstellung nicht gefunden")
-    return svc.restore_read(db, job)
+    result = svc.restore_read(db, job)
+    return svc.redact_restore(result) if _support(admin) else result
 
 
 @router.post("/restores/{restore_id}/cancel", response_model=RestoreJobRead)

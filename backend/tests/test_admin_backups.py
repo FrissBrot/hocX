@@ -274,3 +274,124 @@ def test_disabled_schedule_is_a_warning(db):
     db.flush()
     _, problems = backup_admin_service.evaluate(db)
     assert any(p.code == "schedule_disabled" and p.severity == "warning" for p in problems)
+
+
+# --- Backup-Redesign 1.6 -------------------------------------------------------------------------
+
+
+def _failed_job(db, **values) -> BackupJob:
+    job = BackupJob(kind="backup", trigger="schedule", state="failed", error_code="borg_connection_lost",
+                    error_message="ssh: connect to host u412873.your-storagebox.de port 23: Connection timed out",
+                    created_at=datetime.now(UTC) - timedelta(minutes=30), finished_at=datetime.now(UTC) - timedelta(minutes=28), **values)
+    db.add(job)
+    db.flush()
+    return job
+
+
+def test_support_gets_no_storage_box_address_and_no_raw_errors(db):
+    """User-Entscheid 2026-11-25 (Frage 2 b): Support sieht weder Adresse/Benutzer der Storage Box
+    noch rohe Fehlermeldungen - durchgesetzt in der API-Antwort, nicht nur in der Oberfläche."""
+    from app.models import BackupEvent
+
+    row = db.get(BackupSettings, 1)
+    row.worker_config = {"repository": "ssh://u412873@u412873.your-storagebox.de:23/./hocx-borg", "remote_path": "borg-1.4",
+                         "host_key_pinned": True, "repository_id_pinned": True}
+    row.repository_status = {"ok": False, "error_code": "repository_unreachable", "error": "ssh: connect to host u412873.your-storagebox.de port 23"}
+    job = _failed_job(db)
+    db.add(BackupEvent(job_id=job.id, kind="retry", level="warning", message="ssh: connect to host u412873.your-storagebox.de port 23",
+                       details={"code": "borg_connection_lost", "delay_seconds": 30, "stderr": "u412873@host"}))
+    db.flush()
+    paths = ["/api/admin/backups/status", "/api/admin/backups/settings", "/api/admin/backups?kind=backup", f"/api/admin/backups/{job.id}"]
+    support = _client(db, "support")
+    owner = _client(db, "owner")
+    for path in paths:
+        support_body = support.get(path)
+        assert support_body.status_code == 200, path
+        assert "u412873" not in support_body.text, path
+        assert "storagebox" not in support_body.text, path
+    settings = support.get("/api/admin/backups/settings").json()
+    assert "repository" not in settings["worker_config"] and "remote_path" not in settings["worker_config"]
+    assert settings["worker_config"]["host_key_pinned"] is True  # Rest bleibt
+    assert settings["repository"]["error"] is None and settings["repository"]["error_code"] == "repository_unreachable"
+    detail = support.get(f"/api/admin/backups/{job.id}").json()
+    assert detail["error_message"] is None and detail["error_code"] == "borg_connection_lost"
+    retry = next(event for event in detail["events"] if event["kind"] == "retry")
+    assert retry["message"] is None and retry["details"] == {"code": "borg_connection_lost", "delay_seconds": 30}
+    assert detail["result"] is None
+    # Owner sieht alles wie bisher.
+    assert "u412873" in owner.get("/api/admin/backups/settings").text
+    assert owner.get(f"/api/admin/backups/{job.id}").json()["error_message"].startswith("ssh:")
+
+
+def test_support_restore_list_has_no_raw_errors(db):
+    backup_set = _set(db)
+    restore = BackupRestoreJob(kind="full", state="failed", archive_name=backup_set.archive_name, backup_set_id=backup_set.id,
+                               options={}, requested_by_email="owner@example.com", error_code="cutover_inconsistent",
+                               error_message="Datenbanken hocx_live, hocx_pre_restore_x manuell prüfen",
+                               result={"pre_restore_db": "hocx_pre_restore_x", "generation": 2, "smoke": {"problems": ["x"]}})
+    db.add(restore)
+    db.flush()
+    support = _client(db, "support")
+    listed = support.get("/api/admin/restores").json()
+    assert listed[0]["error_message"] is None and listed[0]["error_code"] == "cutover_inconsistent"
+    assert support.get(f"/api/admin/restores/{restore.id}").json()["error_message"] is None
+    detail = support.get(f"/api/admin/restores/{restore.id}").json()
+    assert detail["result"] == {"generation": 2} and "hocx_pre_restore_x" not in support.get(f"/api/admin/restores/{restore.id}").text
+    assert _client(db).get(f"/api/admin/restores/{restore.id}").json()["error_message"]
+
+
+def test_history_counts_summary_job_id_and_since(db):
+    backup_set = _set(db)
+    backup = BackupJob(kind="backup", trigger="schedule", state="completed", backup_set_id=backup_set.id, created_at=datetime.now(UTC) - timedelta(hours=1))
+    verify = BackupJob(kind="verify", trigger="manual", state="completed", backup_set_id=backup_set.id, created_at=datetime.now(UTC) - timedelta(minutes=30),
+                       result={"content_sample": {"contents_checked": 200, "path": "/secret/path"}, "verify_data": "ok"})
+    retention = BackupJob(kind="retention", trigger="schedule", state="completed", created_at=datetime.now(UTC) - timedelta(minutes=20),
+                          result={"removed": 3, "kept": 42, "removed_names": ["x"]})
+    old = BackupJob(kind="backup", trigger="schedule", state="failed", created_at=datetime.now(UTC) - timedelta(days=10))
+    db.add_all([backup, verify, retention, old])
+    db.flush()
+    client = _client(db)
+    page = client.get("/api/admin/backups?limit=200").json()
+    assert page["counts"]["completed"] >= 3 and page["counts"]["failed"] >= 1
+    by_id = {item["id"]: item for item in page["items"]}
+    assert by_id[str(verify.id)]["summary"] == {"contents_checked": 200, "deep": True}
+    assert by_id[str(retention.id)]["summary"] == {"removed": 3, "kept": 42}
+    # Sicherungspunkt kennt den Backup-Auftrag, auch wenn ein Prüfauftrag darauf zeigt.
+    assert by_id[str(verify.id)]["backup_set"]["job_id"] == str(backup.id)
+    assert by_id[str(backup.id)]["backup_set"]["job_id"] == str(backup.id)
+    # Zähler gelten für den Filter ohne Zustandsfilter.
+    filtered = client.get("/api/admin/backups?state=failed&limit=200").json()
+    assert all(item["state"] == "failed" for item in filtered["items"]) and filtered["counts"]["completed"] >= 3
+    since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+    recent = client.get("/api/admin/backups", params={"since": since, "limit": 200}).json()
+    assert str(old.id) not in {item["id"] for item in recent["items"]}
+    assert client.get("/api/admin/backups", params={"since": "2026-11-01T00:00:00"}).status_code == 422  # ohne Zeitzone
+    sets = client.get("/api/admin/backups/sets").json()
+    assert next(item for item in sets if item["id"] == str(backup_set.id))["job_id"] == str(backup.id)
+
+
+def test_restore_request_event_mentions_passkey_not_totp(db):
+    from app.models import BackupEvent
+
+    admin, passkey = _owner_with_passkey(db)
+    backup_set = _set(db)
+    client = _client(db, admin_id=admin.id)
+    body = {"backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": f"Kopie {uuid.uuid4().hex[:6]}",
+            "confirmation": backup_admin_service.confirmation_phrase("tenant_copy", backup_set)}
+    response = _post(client, body, _step_up(db, admin, passkey, body))
+    assert response.status_code == 202, response.text
+    event = db.scalars(select(BackupEvent).where(BackupEvent.restore_job_id == uuid.UUID(response.json()["id"]))).first()
+    assert "Passkey" in event.message and "TOTP" not in event.message
+
+
+def test_nav_counts_report_backup_status(db, monkeypatch):
+    from app.services import admin_overview_service
+
+    monkeypatch.setattr(admin_overview_service, "_cached", lambda key, ttl, compute: compute())
+    _failed_job(db)
+    row = db.get(BackupSettings, 1)
+    row.repository_status = {"ok": False, "error_code": "repository_unreachable"}
+    db.flush()
+    assert admin_overview_service.nav_counts(db, owner=False)["backup_status"] == "critical"
+    monkeypatch.setenv("BACKUP_ENABLED", "false")
+    assert admin_overview_service.nav_counts(db, owner=False)["backup_status"] is None

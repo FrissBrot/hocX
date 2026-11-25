@@ -1,5 +1,7 @@
 """Schemas der Backup-Verwaltung im Plattform-Admin (/api/admin/backups, /api/admin/restores).
-Nie Secrets: Schlüssel, Passphrasen und Zugangsdaten existieren nur beim backup-worker."""
+Nie Secrets: Schlüssel, Passphrasen und Zugangsdaten existieren nur beim backup-worker.
+Für Support-Admins (nur lesen) entfernt backup_admin_service.redact_* zusätzlich Adresse und
+Benutzer der Storage Box sowie rohe Fehlermeldungen - die Oberfläche übersetzt dann den Code."""
 
 from __future__ import annotations
 
@@ -47,6 +49,8 @@ class BackupSetRead(BaseModel):
     warnings: list[dict[str, Any]]
     tenant_count: int
     reconstructed: bool
+    # Backup-Auftrag, der diesen Punkt geschrieben hat (Prüfen/Details aus Übersicht und Assistent).
+    job_id: uuid.UUID | None = None
 
 
 class BackupTenantRead(BaseModel):
@@ -77,6 +81,8 @@ class BackupJobRead(BaseModel):
     warning_count: int
     duration_seconds: int | None
     backup_set: BackupSetRead | None = None
+    # Kuratierte Kurzfassung des Ergebnisses (nur Zahlen/Flags, z. B. entfernte Punkte, geprüfte Inhalte).
+    summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class BackupEventRead(BaseModel):
@@ -100,6 +106,8 @@ class BackupJobPage(BaseModel):
     total: int
     offset: int
     limit: int
+    # Anzahl je Zustand für denselben Filter ohne Zustandsfilter (Zähler der Filter-Reiter).
+    counts: dict[str, int] = Field(default_factory=dict)
 
 
 class RepositoryStatusRead(BaseModel):
@@ -244,7 +252,7 @@ class RestorePreviewRead(BaseModel):
     risks: list[str]
     blockers: list[str]
     confirmation_phrase: str
-    # Frische Passkey-Bestätigung (POST /api/admin/mfa/step-up/start, purpose backup-restore)
+    # Frische Passkey-Bestätigung (Step-up, Zweck backup-restore)
     requires_passkey: bool = True
     estimated_bytes: int
 
