@@ -103,7 +103,7 @@ from app.services import apple_media
 from app.services import context_visibility_service
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.core.storage import MAIN, ObjectNotFound, _content_disposition, get_object_store, object_response, read_bytes_or_404, write_object_to_zip
-from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
+from app.services.photo_metadata_privacy import ImageSanitizeError, MetadataPolicy, sanitize_image
 from app.services.file_service import BLOCKED_SCAN_STATUSES, MAX_UPLOAD_BYTES, FileService
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref, raw_element_key
@@ -1302,6 +1302,15 @@ def patch_image_caption(
 _WITHOUT_LOCATION = MetadataPolicy(location=False, capture_date=True, camera=True)
 
 
+def _sanitized_or_422(content: bytes, mime_type: str | None) -> bytes:
+    """Bild ohne Standort (Partner ohne Standortfreigabe). Lässt sich ein beschädigtes Bild nicht
+    ohne Standort schreiben, wird es nie ungefiltert ausgeliefert: 422 ohne Fehlerprotokoll."""
+    try:
+        return sanitize_image(content, mime_type, _WITHOUT_LOCATION)
+    except ImageSanitizeError:
+        raise HTTPException(status_code=422, detail="Diese Datei ist beschädigt und kann nicht ohne Standort ausgeliefert werden") from None
+
+
 def _sees_location(user: CurrentUser) -> bool:
     """GPS nur mit Schreibrecht auf Dateien oder Sitzungen (Datenschutz-Audit Paket 9.4, bisher ab
     Rolle writer): Leser sehen weder Koordinaten in den Metadaten noch GPS im ausgelieferten
@@ -1382,7 +1391,7 @@ def get_stored_file_content(
             ))
         content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
         return Response(
-            content=sanitize_image(content, stored_file.mime_type, _WITHOUT_LOCATION),
+            content=_sanitized_or_422(content, stored_file.mime_type),
             media_type=stored_file.mime_type,
             headers={**no_store, **_content_disposition(stored_file.original_name, False)},
         )
@@ -2025,7 +2034,7 @@ def download_stored_file(
             original = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
             export_content = image_export_service.export_bytes(stored_file, original) if needs_export else None
             if strip_location:
-                export_content = sanitize_image(export_content or original, stored_file.mime_type, _WITHOUT_LOCATION)
+                export_content = _sanitized_or_422(export_content or original, stored_file.mime_type)
 
     if part == "image" or (part == "both" and live_video is None):
         if export_content is not None:

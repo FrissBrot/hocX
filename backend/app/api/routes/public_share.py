@@ -36,7 +36,7 @@ from app.services.file_service import FileService
 from app.services.stored_file_location import namespace_for_stored_file
 from app.services import image_export_service
 from app.services.capture_date import effective_capture_moment
-from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, MetadataPolicy, sanitize_image
+from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, ImageSanitizeError, MetadataPolicy, sanitize_image
 
 router = APIRouter()
 service = FileService()
@@ -191,7 +191,13 @@ def _public_file_response(
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     clean_path = work_dir / f"{uuid.uuid4().hex}{safe_suffix(stored_file.storage_path)}"
-    clean_path.write_bytes(_public_file_bytes(policy, stored_file))
+    try:
+        clean_bytes = _public_file_bytes(policy, stored_file)
+    except ImageSanitizeError:
+        # Beschädigtes Bild, das sich nicht ohne die ausgeschlossenen Metadaten schreiben lässt:
+        # nie ungefiltert ausliefern; erwarteter Datenfehler, kein Fehlerprotokoll
+        raise HTTPException(status_code=422, detail="Diese Datei ist beschädigt und kann nicht angezeigt werden") from None
+    clean_path.write_bytes(clean_bytes)
     return FileResponse(
         path=clean_path,
         media_type=stored_file.mime_type,
@@ -426,7 +432,14 @@ def _cached_share_zip(link: ShareLink, stored_files: list[StoredFile], policies:
                     used_names.add(name)
                     policy = policies[stored_file.id]
                     if _needs_sanitizing(policy, stored_file):
-                        archive.writestr(name, _public_file_bytes(policy, stored_file))
+                        try:
+                            clean_bytes = _public_file_bytes(policy, stored_file)
+                        except ImageSanitizeError:
+                            # Ein beschädigtes Bild fehlt im ZIP, statt den Download des ganzen
+                            # Albums abzubrechen (Nachtlauf 2026-11-25); nie ungefiltert
+                            used_names.discard(name)
+                            continue
+                        archive.writestr(name, clean_bytes)
                     else:
                         write_object_to_zip(archive, MAIN, stored_file.storage_path, name)
             if not used_names:

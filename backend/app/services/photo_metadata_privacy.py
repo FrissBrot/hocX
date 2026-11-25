@@ -213,8 +213,13 @@ def _sanitize_png(data: bytes, policy: MetadataPolicy) -> bytes:
     out = bytearray(_PNG_SIGNATURE)
     pos = len(_PNG_SIGNATURE)
     while pos < len(data):
+        if pos + 12 > len(data):
+            return _close_truncated_png(out, b"", b"")
         (length,) = struct.unpack(">I", data[pos : pos + 4])
         kind = data[pos + 4 : pos + 8]
+        if pos + 12 + length > len(data):
+            # Abgeschnittene Datei (wie _sanitize_jpeg): der letzte Chunk ist unvollständig
+            return _close_truncated_png(out, kind, data[pos + 8 : pos + 8 + length])
         chunk = data[pos : pos + 12 + length]
         payload = data[pos + 8 : pos + 8 + length]
         pos += 12 + length
@@ -231,6 +236,18 @@ def _sanitize_png(data: bytes, policy: MetadataPolicy) -> bytes:
         if kind == b"IEND":
             return bytes(out)
     raise ValueError("PNG ohne IEND")
+
+
+def _close_truncated_png(out: bytearray, kind: bytes, partial: bytes) -> bytes:
+    """Abgeschnittenes PNG abschliessen: nur ein angefangener Bilddaten-Chunk (IDAT) wird mit
+    seiner tatsächlichen Länge und neuer Prüfsumme übernommen - alles andere (auch ein
+    angefangener Text-/EXIF-Chunk) fällt weg -, dann IEND. Ohne IHDR ist es kein Bild."""
+    if len(out) <= len(_PNG_SIGNATURE):
+        raise ValueError("PNG ohne IHDR")
+    if kind == b"IDAT" and partial:
+        out += _png_chunk(b"IDAT", partial)
+    out += _png_chunk(b"IEND", b"")
+    return bytes(out)
 
 
 # --- WebP ---------------------------------------------------------------------------------
@@ -304,9 +321,16 @@ def _reencode_without_metadata(data: bytes, mime_type: str, policy: MetadataPoli
     return buffer.getvalue()
 
 
+class ImageSanitizeError(ValueError):
+    """Das Bild lässt sich auf keinem Weg ohne die ausgeschlossenen Metadaten schreiben (z. B.
+    abgeschnittenes HEIC). Erwartet bei beschädigten Uploads: die Aufrufer liefern die Datei dann
+    nicht aus (nie ungefiltert) bzw. lassen sie im Album-ZIP aus, ohne Fehlerprotokoll."""
+
+
 def sanitize_image(data: bytes, mime_type: str | None, policy: MetadataPolicy) -> bytes:
     """`data` ohne die per `policy` ausgeschlossenen Metadaten. Unveraendert, wenn alles geteilt
-    werden darf oder der Typ keine relevanten Metadaten traegt."""
+    werden darf oder der Typ keine relevanten Metadaten traegt. ImageSanitizeError, wenn keine
+    Stufe ein sauberes Bild liefert."""
     if policy.keeps_everything or mime_type not in SANITIZABLE_MIME_TYPES:
         return data
     try:
@@ -321,7 +345,14 @@ def sanitize_image(data: bytes, mime_type: str | None, policy: MetadataPolicy) -
     try:
         return _reencode_without_metadata(data, mime_type, policy)
     except Exception:
-        pass  # letzte Stufe unten; schlaegt auch die fehl, propagiert der Fehler zum globalen Handler
+        pass  # letzte Stufe unten; schlaegt auch die fehl, folgt ImageSanitizeError
+    try:
+        return _pixels_without_metadata(data, mime_type)
+    except Exception as exc:
+        raise ImageSanitizeError("Bild lässt sich nicht ohne Metadaten schreiben") from exc
+
+
+def _pixels_without_metadata(data: bytes, mime_type: str) -> bytes:
     # Pixel ohne jegliche Metadaten, Ausrichtung vorher angewendet.
     with Image.open(io.BytesIO(data)) as image:
         upright = ImageOps.exif_transpose(image)
