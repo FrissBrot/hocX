@@ -1,6 +1,9 @@
 /* Datei-Import (app/files/import): Schritte, Quellen-Kacheln, Regel-Karten, Vorschau. */
 
 .file-import-page {
+  /* minmax(0, 1fr): breite Inhalte (Verlauf-Tabelle, Ordnerbaum) scrollen in sich, statt die
+     Spalte und damit die ganze Seite bei 390 px zu verbreitern */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
 }
 

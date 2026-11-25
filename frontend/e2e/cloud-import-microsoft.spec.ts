@@ -76,7 +76,7 @@ test("Microsoft: anmelden, Ordner wählen, SharePoint nachfordern, importieren",
   // 2. Geschäftskonto
   await page.getByRole("button", { name: /Bei Microsoft OneDrive \/ SharePoint anmelden/ }).click();
   await signIn(page, "work");
-  await expect(page.getByText("Verbunden als anna@verein.test")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Verbunden als anna@verein.test", { exact: true })).toBeVisible({ timeout: 30_000 });
   // Abschluss-Token nicht in der Adresszeile
   expect(page.url()).not.toContain("cloud_finish");
 
@@ -97,7 +97,7 @@ test("Microsoft: anmelden, Ordner wählen, SharePoint nachfordern, importieren",
   // 4. SharePoint braucht eine zweite Zustimmung (inkrementell)
   await page.getByRole("button", { name: "Zugriff erlauben" }).first().click();
   await signIn(page, "work");
-  await expect(page.getByText("Verbunden als anna@verein.test")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Verbunden als anna@verein.test", { exact: true })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Mein OneDrive aufklappen" }).click();
   await page.getByRole("checkbox", { name: "Fotos" }).check();
   await page.getByRole("button", { name: "SharePoint-Websites aufklappen" }).click();
@@ -129,6 +129,8 @@ test("Microsoft: Abbruch beim Anbieter und fremder Abschluss werden sauber gemel
   await signIn(page, "cancel");
   await expect(page.getByText("Die Anmeldung wurde abgebrochen.")).toBeVisible();
   // Ein erfundenes Abschluss-Token verbindet nichts
+  // Erst wegnavigieren: nur ein geänderter Fragment-Teil wäre keine neue Seite (Effekt liefe nicht)
+  await page.goto("about:blank");
   await page.goto("/files/import#cloud_finish=erfunden-erfunden-erfunden");
   await expect(page.getByText(/Die Anmeldung ist abgelaufen/)).toBeVisible();
   await cancelOpenImports(request);
