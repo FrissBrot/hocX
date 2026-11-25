@@ -107,7 +107,7 @@ from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
 from app.services.file_service import BLOCKED_SCAN_STATUSES, MAX_UPLOAD_BYTES, FileService
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref, raw_element_key
-from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota, safe_entry_name
+from app.services.upload_pipeline import _CONTROL_CHARS, GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota, safe_entry_name
 from app.repositories.file_repository import StoredFileRepository
 from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
@@ -486,6 +486,22 @@ def _resolve_upload_target(
     return target
 
 
+def _form_tag_list(tags: str | None) -> list[str]:
+    """Tags aus dem Upload-Formular (kommagetrennt). Multipart-Felder prüft NulGuardMiddleware
+    nicht (nur JSON): ein NUL-Zeichen liess erst das Speichern von Upload-Verlauf bzw. Auftrag
+    scheitern (DataError, 500 plus Fehlerprotokoll; Nachtlauf 2026-11-25). Erwarteter
+    Eingabefehler, daher ohne Ursache (kein Fehlerprotokoll)."""
+    if tags and "\x00" in tags:
+        raise HTTPException(status_code=422, detail="Tags dürfen keine NUL-Zeichen enthalten")
+    return [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+
+
+def _clean_client_file_name(name: str) -> str:
+    """Client-Dateiname ohne Steuerzeichen (v. a. NUL, das PostgreSQL nicht speichert). Ein
+    Dateiname enthält nie sinnvoll Steuerzeichen - entfernen statt ablehnen (wie ingest_file)."""
+    return _CONTROL_CHARS.sub("", name or "").strip()
+
+
 def _parse_file_hints(raw: str | None) -> dict[str, dict]:
     """file_metadata-Formularfeld -> {sha256: {"metadata": {...}}}. Ungueltige Eintraege werden
     verworfen statt den Upload abzulehnen - die Hinweise sind optional, der Server analysiert
@@ -701,7 +717,7 @@ async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_th
         if problem is not None:
             raise HTTPException(status_code=400, detail=problem)
 
-    tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+    tag_list = _form_tag_list(tags)
     if estimated_taken_on is not None and image_metadata_service.valid_estimated_date(estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
     file_hints = _parse_file_hints(file_metadata)
@@ -741,7 +757,7 @@ async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_th
                     status_code=413,
                     detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_GALLERY_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
                 )
-            original_filenames.append(name)
+            original_filenames.append(_clean_client_file_name(name))
     except BaseException:
         for relative_path in staged_paths:
             (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
@@ -880,7 +896,7 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
         submission_element_ref=submission_element_ref,
         cycle_config_id=cycle_config_id,
     )
-    tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+    tag_list = _form_tag_list(tags)
 
     # An Abgabe-Element Bezug brings that Abgabe's file rules (Dateitypen, Dateigrösse, Anzahl)
     # along - rejected as a whole like the Abgabebox does, before anything is staged.
@@ -918,7 +934,7 @@ async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread 
                 status_code=413,
                 detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_DOCUMENT_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
             )
-        staged.append((name, content))
+        staged.append((_clean_client_file_name(name), content))
 
     upload_job, created_here = _upload_job_for_request(
         db, user, upload_job_id, "document", target, submission_element_ref,
