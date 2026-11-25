@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "friendly-challenge": "^0.9.20",
-    "next": "16.4.5",
+    "next": "16.4.6",
     "next-intl": "^4.14.9",
     "pdfjs-dist": "6.5.438",
     "react": "19.3.1",
