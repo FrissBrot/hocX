@@ -149,6 +149,10 @@ def test_download_is_tenant_scoped_and_expires(db):
 
     job.expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db.commit()
+    # Abgelaufen, aber noch nicht vom Job markiert: nicht mehr herunterladbar (Nachtlauf 2026-11-25)
+    with pytest.raises(HTTPException) as expired:
+        routes.download_tenant_data_export(job.id, None, db, user)
+    assert expired.value.status_code == 404
     tenant_export.process_pending(db)
     db.refresh(job)
     assert job.status == "expired" and job.object_key is None

@@ -120,6 +120,11 @@ class TenantCleanupService:
             list_definition_ids = select(ListDefinition.id).where(ListDefinition.tenant_id == tenant_id)
             # submission_assignment.list_definition_id is ondelete=RESTRICT - an Abgabebox
             # box configured against one of these lists would otherwise block the delete.
+            self._journal(
+                db, "submission_assignment",
+                list(db.scalars(select(SubmissionAssignment.public_id).where(SubmissionAssignment.list_definition_id.in_(list_definition_ids)))),
+                tenant,
+            )
             db.execute(delete(SubmissionAssignment).where(SubmissionAssignment.list_definition_id.in_(list_definition_ids)))
             result = db.execute(delete(ListDefinition).where(ListDefinition.tenant_id == tenant_id))
             counts.lists_full = result.rowcount or 0
@@ -129,10 +134,12 @@ class TenantCleanupService:
             # protocol_id FK is SET NULL rather than CASCADE, so it wouldn't otherwise follow
             # the protocols it points at, leaving dangling import-queue rows behind.
             db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
+            self._journal(db, "protocol", list(db.scalars(select(Protocol.public_id).where(Protocol.tenant_id == tenant_id))), tenant)
             result = db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
             counts.protocols = result.rowcount or 0
 
         if "events" in selected:
+            self._journal(db, "event", list(db.scalars(select(Event.public_id).where(Event.tenant_id == tenant_id))), tenant)
             result = db.execute(delete(Event).where(Event.tenant_id == tenant_id))
             counts.events = result.rowcount or 0
 
@@ -163,15 +170,26 @@ class TenantCleanupService:
             counts.participants = result.rowcount or 0
 
         if "documents" in selected:
-            counts.documents = self._cleanup_documents(db, tenant_id)
+            counts.documents = self._cleanup_documents(db, tenant)
 
         db.commit()
         return counts
 
+    @staticmethod
+    def _journal(db: Session, kind: str, public_ids, tenant: Tenant) -> None:
+        """Löschjournal wie die regulären Löschpfade (deletion_service, event_service, FileEraser):
+        ein späterer Restore aus einem Backup darf das Aufgeräumte nicht zurückbringen
+        (Nachtlauf 2026-11-25). In der Transaktion des Aufräumens."""
+        from app.services import erasure_journal
+
+        for public_id in public_ids:
+            erasure_journal.record(db, kind, public_id, tenant_public_id=tenant.public_id)
+
     def _count(self, db: Session, model, tenant_id: int) -> int:
         return int(db.scalar(select(func.count(model.id)).where(model.tenant_id == tenant_id)) or 0)
 
-    def _cleanup_documents(self, db: Session, tenant_id: int) -> int:
+    def _cleanup_documents(self, db: Session, tenant: Tenant) -> int:
+        tenant_id = tenant.id
         deleted = 0
         # Logische Dokumente zuerst: ihre erzeugten Dateien (PDF-Ansichten) sind danach
         # unreferenziert und fallen in den Orphan-Sweep unten (samt Objekt).
@@ -203,6 +221,7 @@ class TenantCleanupService:
             else set()
         )
         if upload_ids:
+            self._journal(db, "submission_upload", list(db.scalars(select(SubmissionUpload.public_id).where(SubmissionUpload.id.in_(upload_ids)))), tenant)
             result = db.execute(delete(SubmissionUpload).where(SubmissionUpload.id.in_(upload_ids)))
             deleted += result.rowcount or 0
 
@@ -231,6 +250,7 @@ class TenantCleanupService:
             .order_by(StoredFile.id)
             .with_for_update(of=StoredFile)
         ).all()
+        self._journal(db, "stored_file", [stored_file.public_id for stored_file in orphaned], tenant)
         for stored_file in orphaned:
             namespace = ABGABEBOX if stored_file.id in abgabebox_stored_file_ids else MAIN
             # Im selben Transaktionskontext wie der DB-Delete (Journal/Fence, siehe objstore_client).

@@ -396,3 +396,24 @@ def test_preview_matches_pre_cleanup_counts(db):
     preview = admin_routes.preview_tenant_cleanup(tenant.public_id, db=db)
 
     assert preview.participants == 2
+
+
+def test_cleanup_records_protocols_events_and_files_in_the_erasure_journal(db, service):
+    """Nachtlauf 2026-11-25 (Vorschlag zu Fund 4): Aufräumen schreibt wie die regulären
+    Löschpfade ins Löschjournal - ein Restore aus dem Backup brächte sonst zurück, was der
+    Plattform-Admin aufgeräumt hat."""
+    from sqlalchemy import text
+
+    tenant = make_tenant(db, "Cleanup Journal")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    event = make_event(db, tenant.id)
+    orphan = make_stored_file(db, tenant.id, "verwaist.pdf")
+    ids = {"protocol": protocol.public_id, "event": event.public_id, "stored_file": orphan.public_id}
+
+    service.cleanup(db, tenant.id, ["protocols", "events", "documents"])
+
+    for kind, public_id in ids.items():
+        assert db.scalar(
+            text("SELECT count(*) FROM erasure_journal WHERE kind = :k AND subject_public_id = :p"), {"k": kind, "p": public_id}
+        ) == 1, kind

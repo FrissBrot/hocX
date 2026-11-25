@@ -6,7 +6,7 @@ Vereins. Bestellen per POST (Passwort im Body), bauen im Job tenant_data_export,
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -96,6 +96,10 @@ def download_tenant_data_export(export_id: uuid.UUID, request: Request, db: Sess
     _require_export_admin(user)
     job = db.scalar(select(TenantDataExport).where(TenantDataExport.id == export_id, TenantDataExport.tenant_id == user.current_tenant_id))
     if job is None or job.status != "done" or not job.object_key:
+        raise HTTPException(status_code=404, detail="Export nicht gefunden")
+    if job.expires_at is not None and job.expires_at <= datetime.now(UTC):
+        # Abgelaufen, aber vom Job noch nicht auf «expired» gesetzt (Takt, langer Build im selben
+        # Tick): wie abgelaufen behandeln (Nachtlauf 2026-11-25)
         raise HTTPException(status_code=404, detail="Export nicht gefunden")
     AuditService().log(db, action="tenant.data_export_downloaded", actor=user, entity_type="tenant", entity_id=user.current_tenant_id)
     db.commit()

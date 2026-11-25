@@ -70,7 +70,7 @@ def test_tenant_cleanup_of_documents_removes_documents_and_generated_files(db, d
     db.add(DocumentFile(document_version_id=version.id, stored_file_id=generated.id, role="pdf", is_generated=True))
     db.flush()
 
-    TenantCleanupService()._cleanup_documents(db, tenant.id)
+    TenantCleanupService()._cleanup_documents(db, tenant)
     db.flush()
     assert db.scalar(select(func.count()).select_from(Document).where(Document.tenant_id == tenant.id)) == 0
     assert db.scalar(select(StoredFile.id).where(StoredFile.id == generated.id)) is None
