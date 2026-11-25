@@ -1019,6 +1019,8 @@ class SubmissionService:
     def sync_todos_for_list(self, db: Session, *, tenant_id: int, list_definition_id: int) -> None:
         """Nach Änderungen an Einträgen einer Liste: Todos der Listen-Abgaben nachführen, die
         diese Liste als Quelle haben (Verantwortliche je Eintrag)."""
+        if not self._abgabebox_booked(db, tenant_id):
+            return
         for assignment in self.repository.list_assignments(db, tenant_id=tenant_id):
             if assignment.source_type == "list" and assignment.list_definition_id == list_definition_id:
                 self.sync_todos_if_tracked(db, assignment)
@@ -1026,9 +1028,24 @@ class SubmissionService:
     def sync_todos_for_tenant(self, db: Session, *, tenant_id: int) -> None:
         """Alle Abgaben eines Mandanten abgleichen - nach Änderungen, die mehrere Abgaben treffen
         können (Termin gelöscht, Tag umbenannt, Import)."""
+        if not self._abgabebox_booked(db, tenant_id):
+            return
         for assignment in self.repository.list_assignments(db, tenant_id=tenant_id):
             if assignment.source_type != "manual":
                 self.sync_todos_if_tracked(db, assignment)
+
+    @staticmethod
+    def _abgabebox_booked(db: Session, tenant_id: int) -> bool:
+        """Wie sync_all_todos: Abgleich aus Termin-/Listenänderungen nur bei voller Buchung. Nach
+        einem Downgrade (nur lesen) nimmt die öffentliche Box nichts mehr an - neue Pendenzen
+        zeigten auf einen toten Link; bestehende bleiben unverändert stehen."""
+        return db.scalar(
+            select(TenantFeature.tenant_id).where(
+                TenantFeature.tenant_id == tenant_id,
+                TenantFeature.feature_code == F.ABGABEBOX,
+                TenantFeature.access == "full",
+            )
+        ) is not None
 
     def sync_all_todos(self, db: Session) -> dict[str, int]:
         """Job submission_todo_sync: gleicht alle Abgaben aller Mandanten mit gebuchter Abgabebox

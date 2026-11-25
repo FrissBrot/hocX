@@ -20,7 +20,7 @@ from app.schemas.event import EventUpdate
 from app.schemas.submission import SubmissionAssignmentCreate, SubmissionLinkCreate
 from app.services.submission_link_service import SubmissionLinkService
 from app.services.submission_service import SubmissionService
-from tests.factories import make_current_user, make_event, make_participant, make_tenant
+from tests.factories import grant_tenant_feature, make_current_user, make_event, make_participant, make_tenant
 
 service = SubmissionService()
 
@@ -31,6 +31,8 @@ def _status_id(db, code: str) -> int:
 
 def _setup(db, *, tag: str = "lager"):
     tenant = make_tenant(db)
+    # Abgleich aus Termin-/Listenänderungen nur bei gebuchter Abgabebox (wie der Job)
+    grant_tenant_feature(db, tenant.id, "abgabebox")
     anna = make_participant(db, tenant.id, display_name="Anna Muster")
     ben = make_participant(db, tenant.id, display_name="Ben Beispiel")
     event = make_event(db, tenant.id, title="Badetag")

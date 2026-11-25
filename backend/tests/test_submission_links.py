@@ -274,9 +274,10 @@ def test_list_assignment_creates_and_follows_todos_per_list_entry(db):
     """FAR-010: Listen-Abgaben mit Verantwortlichen bekamen nie Todos."""
     from app.api.routes import lists as list_routes
     from app.schemas.list_definition import ListEntryCreate
-    from tests.factories import make_current_user, make_list_definition, make_list_entry, make_participant
+    from tests.factories import grant_tenant_feature, make_current_user, make_list_definition, make_list_entry, make_participant
 
     tenant = make_tenant(db)
+    grant_tenant_feature(db, tenant.id, "abgabebox")
     anna = make_participant(db, tenant.id, display_name="Anna Muster")
     ben = make_participant(db, tenant.id, display_name="Ben Beispiel")
     definition = make_list_definition(db, tenant.id, second_title="Verantwortlich", second_type="participant")
@@ -559,3 +560,40 @@ def test_every_migrated_tenant_has_a_default_link(db):
         text("SELECT id FROM tenant t WHERE NOT EXISTS (SELECT 1 FROM submission_link l WHERE l.tenant_id = t.id)")
     ).all()
     assert missing == []
+
+
+def test_new_event_creates_no_submission_todos_after_downgrade(db):
+    """Abgabebox nur lesend (Downgrade): die öffentliche Box nimmt nichts mehr an
+    (abgabebox-backend repository: nur access == 'full'), der Job submission_todo_sync gleicht nur
+    gebuchte Mandanten ab. Ein neuer Termin darf dann keine Abgabe-Pendenz mit totem Link anlegen."""
+    from datetime import date
+
+    from sqlalchemy import update
+
+    from app.api.routes import events as events_route
+    from app.models.entities import TenantFeature
+    from app.schemas.event import EventCreate
+    from tests.factories import grant_tenant_feature, make_current_user, make_participant
+
+    tenant = make_tenant(db)
+    grant_tenant_feature(db, tenant.id, "abgabebox")
+    participant = make_participant(db, tenant.id, display_name="Anna Muster")
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+    created = SubmissionService().create_assignment(
+        db, _assignment_payload(link_ids=[link.id], responsible_participant_source="spezial1_ids"), tenant_id=tenant.id
+    )
+    assert _todos(db, created.id) == []
+    db.execute(
+        update(TenantFeature)
+        .where(TenantFeature.tenant_id == tenant.id, TenantFeature.feature_code == "abgabebox")
+        .values(access="read_only")
+    )
+    db.flush()
+
+    user = make_current_user(tenant.id, role="writer")
+    events_route.create_event(
+        EventCreate(title="Sommerlager", event_date=date(2027, 5, 15), tag="lager", spezial1_ids=[participant.public_id]),
+        db=db, user=user,
+    )
+
+    assert _todos(db, created.id) == []
