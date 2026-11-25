@@ -444,3 +444,36 @@ def test_events_feed_survives_an_end_date_at_the_end_of_the_calendar(db):
     assert "SUMMARY:Endlos" in ics
     assert "DTEND;VALUE=DATE:99991231" in ics
     assert "SUMMARY:Normal" in ics
+
+
+def test_feed_stops_once_a_planned_leave_date_has_passed(db):
+    # Austritt mit Datum in der Zukunft widerruft keine Sitzungen (session_revoke_at bleibt leer);
+    # ab dem Tag nach dem Austritt sperrt validate_session_token den Login über has_left. Das Abo
+    # muss ab dann ebenso enden, sonst liest das ausgetretene Mitglied Termine/Pendenzen weiter.
+    tenant = make_tenant(db)
+    make_event(db, tenant.id, title="Vorstandssitzung", event_date=TODAY)
+    app_user, user = _user(db, tenant.id)
+    token = _token(_enable(db, user))
+    assert "Vorstandssitzung" in _ics(db, token)
+
+    app_user.left_at = TODAY - timedelta(days=2)
+    db.flush()
+    assert app_user.has_left
+
+    with pytest.raises(HTTPException) as exc_info:
+        _fetch(db, token)
+    assert exc_info.value.status_code == 404
+    assert routes.list_calendar_feeds(db, user)[0].status == "invalid"
+
+
+def test_feed_stops_when_login_is_disabled(db):
+    tenant = make_tenant(db)
+    app_user, user = _user(db, tenant.id)
+    token = _token(_enable(db, user, "todos", todo_scope="all"))
+
+    app_user.login_enabled = False
+    db.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        _fetch(db, token)
+    assert exc_info.value.status_code == 404

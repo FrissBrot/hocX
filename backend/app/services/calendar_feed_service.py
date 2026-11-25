@@ -186,7 +186,11 @@ def delete(db: Session, feed: CalendarFeed) -> None:
 
 def is_token_valid_for(feed: CalendarFeed, app_user: AppUser) -> bool:
     """False, wenn der Benutzer sich nach Ausstellung der URL "ueberall abgemeldet" hat (bzw. das
-    Passwort geaendert wurde) - die Einstellungsseite zeigt den Feed dann als ungueltig an."""
+    Passwort geaendert wurde) - die Einstellungsseite zeigt den Feed dann als ungueltig an.
+    Ebenso wie validate_session_token: Login entzogen oder ausgetreten (has_left - ein Austritt mit
+    Datum in der Zukunft widerruft keine Sitzungen, greift also erst ueber diese Pruefung)."""
+    if not app_user.login_enabled or app_user.has_left:
+        return False
     revoked_at = app_user.session_revoke_at
     return revoked_at is None or feed.token_created_at >= revoked_at
 
