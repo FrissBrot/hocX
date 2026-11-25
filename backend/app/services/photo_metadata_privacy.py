@@ -301,6 +301,10 @@ def _reencode_without_metadata(data: bytes, mime_type: str, policy: MetadataPoli
         filtered = _filter_exif_or_orientation(exif_bytes, policy) if exif_bytes else None
         image.load()
         clean = image.copy()
+    # copy() übernimmt image.info - darunter einen JPEG-Kommentar (COM), den Pillow beim Speichern
+    # wieder schreibt (Security-Review 2026-11-25). Nur das Farbprofil behalten.
+    icc_profile = clean.info.get("icc_profile")
+    clean.info = {"icc_profile": icc_profile} if icc_profile else {}
     buffer = io.BytesIO()
     if mime_type in HEIF_MIME_TYPES:
         # copy() uebernimmt image.info, und pillow-heif liest XMP/EXIF beim Speichern von dort.
@@ -348,7 +352,9 @@ def sanitize_image(data: bytes, mime_type: str | None, policy: MetadataPolicy) -
         pass  # letzte Stufe unten; schlaegt auch die fehl, folgt ImageSanitizeError
     try:
         return _pixels_without_metadata(data, mime_type)
-    except Exception as exc:
+    except (OSError, ValueError, SyntaxError, EOFError, Image.DecompressionBombError) as exc:
+        # Nur erwartete Lese-/Dekodierfehler beschädigter Bilder (UnidentifiedImageError ist ein
+        # OSError); Programmierfehler laufen weiter zum globalen Handler und ins Fehlerprotokoll
         raise ImageSanitizeError("Bild lässt sich nicht ohne Metadaten schreiben") from exc
 
 

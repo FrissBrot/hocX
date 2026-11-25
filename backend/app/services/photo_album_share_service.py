@@ -262,11 +262,14 @@ def invite(
     db.add(share)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
+        db.rollback()
+        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        if constraint != "photo_album_tenant_share_pkey":
+            raise
         # Zwei gleichzeitige Einladungen an denselben Mandanten: beide sahen oben noch keine
         # Freigabe, die zweite scheitert am Primärschlüssel - dieselbe Antwort wie bei einer
-        # bestehenden Freigabe statt 500 (Nachtlauf 2026-11-25)
-        db.rollback()
+        # bestehenden Freigabe statt 500 (Nachtlauf 2026-11-25). Andere Verletzungen bleiben Fehler.
         raise AlbumShareError("Für diesen Mandanten besteht bereits eine Freigabe oder Anfrage.") from None
     db.refresh(share)
     return share

@@ -90,3 +90,17 @@ def test_album_zip_skips_an_unfilterable_photo_and_the_single_download_is_422(db
     everything = public_share_routes.download_public_share_all(token, _FakeRequest(), db)
     with zipfile.ZipFile(io.BytesIO(response_bytes(everything))) as archive:
         assert archive.namelist() == ["ganz.jpg"]
+
+
+def test_jpeg_comment_does_not_survive_the_reencode_fallback():
+    """Security-Review 2026-11-25: scheitert der Segmentfilter (Fremdbyte zwischen Segmenten),
+    schrieb die Neukodierung einen JPEG-Kommentar (COM) aus image.info wieder hinein."""
+    base = jpeg(color=(40, 80, 120))
+    comment = b"\xff\xfe" + struct.pack(">H", 2 + len(b"geheimer Standort")) + b"geheimer Standort"
+    broken = base[:2] + comment + b"\x00" + base[2:]  # Fremdbyte: «defektes JPEG-Segment»
+    with Image.open(io.BytesIO(broken)) as probe:
+        assert probe.info.get("comment") == b"geheimer Standort"
+
+    cleaned = sanitize_image(broken, "image/jpeg", WITHOUT_LOCATION)
+
+    assert b"geheimer Standort" not in cleaned
