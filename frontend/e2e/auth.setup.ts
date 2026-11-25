@@ -1,7 +1,7 @@
-import { test as setup, expect, request } from "@playwright/test";
+import { test as setup, expect, request, type APIRequestContext } from "@playwright/test";
 import fs from "node:fs/promises";
-import { authFiles, platformAdminPasskeyFile, tenantTotpFile } from "./auth";
-import { SoftPasskey } from "./soft-passkey";
+import { authFiles, platformAdminPasskeyFile, platformAdminSpecPasskeyFile, platformAdminSpecPasskeys, tenantTotpFile } from "./auth";
+import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 
 // Any user with an admin role in any tenant must have MFA before being considered
@@ -64,6 +64,7 @@ async function authenticateAdmin(email: string, file: string) {
   const response = await context.post("/api/admin/auth/login", { data: { email, password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!" } });
   expect(response.ok(), await response.text()).toBeTruthy();
   const body = await response.json();
+  let freshPasskey = false;
 
   if (body.mfa?.status === "setup_required") {
     const passkey = SoftPasskey.create();
@@ -75,6 +76,7 @@ async function authenticateAdmin(email: string, file: string) {
     });
     expect(complete.ok(), await complete.text()).toBeTruthy();
     await passkey.save(platformAdminPasskeyFile);
+    freshPasskey = true;
   } else if (body.mfa?.status === "verification_required") {
     const passkey = await SoftPasskey.load(platformAdminPasskeyFile);
     if (!passkey) throw new Error(`${email} hat schon einen Passkey, ${platformAdminPasskeyFile} fehlt (E2E-Stack neu aufsetzen)`);
@@ -90,8 +92,31 @@ async function authenticateAdmin(email: string, file: string) {
     throw new Error(`Unexpected admin MFA state for ${email}: ${body.mfa.status}`);
   }
 
+  await registerSpecPasskeys(context, origin, freshPasskey);
   await context.storageState({ path: file });
   return context;
+}
+
+// Je Spec ein eigener weiterer Passkey (auth.ts, platformAdminSpecPasskeys), bestätigt mit dem
+// Passkey aus der Anmeldung. Neu nach einem frisch eingerichteten Konto, sonst nur fehlende.
+async function registerSpecPasskeys(context: APIRequestContext, origin: string, fresh: boolean) {
+  const owner = await SoftPasskey.load(platformAdminPasskeyFile);
+  if (!owner) throw new Error(`${platformAdminPasskeyFile} fehlt`);
+  for (const spec of platformAdminSpecPasskeys) {
+    const file = platformAdminSpecPasskeyFile(spec);
+    if (!fresh && (await SoftPasskey.load(file))) continue;
+    const passkey = SoftPasskey.create();
+    const headers = await stepUpHeaders(context, owner, origin, "passkey-manage", "POST", "/api/admin/mfa/passkeys/start");
+    await owner.save(platformAdminPasskeyFile);
+    const start = await context.post("/api/admin/mfa/passkeys/start", { headers });
+    expect(start.ok(), await start.text()).toBeTruthy();
+    const { flow_token, public_key } = await start.json();
+    const complete = await context.post("/api/admin/mfa/passkeys/complete", {
+      data: { flow_token, label: `E2E-Passkey ${spec}`, credential: passkey.registration(public_key, origin) },
+    });
+    expect(complete.ok(), await complete.text()).toBeTruthy();
+    await passkey.save(file);
+  }
 }
 
 setup("creates reproducible role and tenant sessions", async () => {

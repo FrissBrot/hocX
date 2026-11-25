@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { test, expect, request, type APIRequestContext, type Page } from "@playwright/test";
-import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
+
+// Eigener Passkey dieser Spec (auth.ts, platformAdminSpecPasskeys): ein geteilter Signaturzähler
+// über parallele Worker sperrt den Passkey als möglichen Klon.
+const passkeyFile = platformAdminSpecPasskeyFile("security-admin");
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 
 // Sicherheitsbereich 1.6: Sperren-Dialog (manuell, Verlängern, Aufheben) und Ereignisfilter.
@@ -14,7 +18,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000";
 const origin = new URL(baseURL).origin;
 
 async function confirmStepUpsWithSoftPasskey(page: Page): Promise<{ api: APIRequestContext; passkey: SoftPasskey }> {
-  const passkey = await SoftPasskey.load(platformAdminPasskeyFile);
+  const passkey = await SoftPasskey.load(passkeyFile);
   expect(passkey, "Software-Passkey aus auth.setup.ts fehlt").toBeTruthy();
   const api = await request.newContext({ baseURL, storageState: authFiles.platformAdmin, extraHTTPHeaders: { Origin: origin } });
   await page.addInitScript(() => {
@@ -87,7 +91,7 @@ test.describe("Sicherheitsbereich 1.6", () => {
       await page.getByRole("button", { name: "Daten als Tabelle" }).click();
       await expect(page.getByRole("row", { name: new RegExp(`${block!.short}.*vorzeitig aufgehoben`) }).first()).toBeVisible();
     } finally {
-      await passkey.save(platformAdminPasskeyFile);
+      await passkey.save(passkeyFile);
       await api.dispose();
     }
   });

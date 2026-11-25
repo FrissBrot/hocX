@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { test, expect, request } from "@playwright/test";
-import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
+
+// Eigener Passkey dieser Spec (auth.ts, platformAdminSpecPasskeys): ein geteilter Signaturzähler
+// über parallele Worker sperrt den Passkey als möglichen Klon.
+const passkeyFile = platformAdminSpecPasskeyFile("admin-passkey");
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { addVirtualAuthenticator } from "./webauthn";
 
@@ -19,7 +23,7 @@ test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit 
   const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000";
   const origin = new URL(baseURL).origin;
   const owner = await request.newContext({ baseURL, storageState: authFiles.platformAdmin, extraHTTPHeaders: { Origin: origin } });
-  const ownerPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
+  const ownerPasskey = await SoftPasskey.load(passkeyFile);
   expect(ownerPasskey, "Software-Passkey aus auth.setup.ts fehlt").toBeTruthy();
   const email = `passkey-${Date.now()}@hocx.local`;
   const body = JSON.stringify({ email, display_name: "Passkey Test", password, role: "owner" });
@@ -28,7 +32,7 @@ test("neuer Admin: Passwort, Passkey einrichten (Pflicht), danach Login nur mit 
   const confirmHeaders = await stepUpHeaders(owner, ownerPasskey!, origin, "admin-manage", "POST", "/api/admin/admins", body);
   const created = await owner.post("/api/admin/admins", { data: body, headers: { "Content-Type": "application/json", ...confirmHeaders } });
   expect(created.ok(), await created.text()).toBeTruthy();
-  await ownerPasskey!.save(platformAdminPasskeyFile);
+  await ownerPasskey!.save(passkeyFile);
   await owner.dispose();
 
   const context = await browser.newContext({ baseURL: localhostBaseURL });

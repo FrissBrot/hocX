@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { authFiles } from "./auth";
@@ -41,8 +41,7 @@ test("Foto-Ansicht: blättern, Best-of per Taste, Vergleich anwenden und rückg�
     );
 
     await page.goto("/photos");
-    await page.getByPlaceholder(/^Suchen nach Name, Tag/).fill(stem);
-    await expect(page.locator(".photo-tile")).toHaveCount(3);
+    await searchOwnPhotos(page, stem, 3);
     await page.locator(".photo-tile", { has: page.getByRole("checkbox", { name: `${names[0]} auswählen` }) }).locator(".photo-tile-preview").click();
 
     await expect(page.getByRole("dialog", { name: names[0] })).toBeVisible();
@@ -114,6 +113,20 @@ async function uploadPng(api: APIRequestContext, name: string, gps?: { latitude:
   return detail.imported_items[0].id as string;
 }
 
+// Nur die eigenen Fotos (eindeutiger Namensstamm) zeigen. Den Suchtext erst nach der Hydrierung
+// setzen: ein zu früh getippter Wert im kontrollierten Feld wird beim Hydrieren wieder geleert, dann
+// zeigt die Seite auch die Fotos anderer Specs (CI: 7 statt 4). Tippen und Ergebnis darum zusammen
+// wiederholen.
+async function searchOwnPhotos(page: Page, stem: string, count: number) {
+  const search = page.getByPlaceholder(/^Suchen nach Name, Tag/);
+  await expect(async () => {
+    await search.fill(stem);
+    await expect(search).toHaveValue(stem);
+    await expect(page.locator(".photo-tile")).toHaveCount(count, { timeout: 10_000 });
+    await expect(search).toHaveValue(stem);
+  }).toPass({ timeout: 90_000 });
+}
+
 type HeaderSample = { t: number; height: number; detail: string };
 
 test("Foto-Ansicht: Kopfzeile behält beim Blättern mit ←/→ ihre Höhe (1440 und 390 px)", async ({ page, request }) => {
@@ -146,8 +159,7 @@ test("Foto-Ansicht: Kopfzeile behält beim Blättern mit ←/→ ihre Höhe (144
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width > 640 ? 900 : 844 });
       await page.goto("/photos");
-      await page.getByPlaceholder(/^Suchen nach Name, Tag/).fill(stem);
-      await expect(page.locator(".photo-tile")).toHaveCount(4);
+      await searchOwnPhotos(page, stem, 4);
       await page.locator(".photo-tile").first().locator(".photo-tile-preview").click();
       const header = page.locator(".photo-viewer .photo-viewer-header");
       const position = page.locator(".photo-viewer .photo-viewer-position");
@@ -208,8 +220,7 @@ test("Foto-Ansicht: Kopfzeile behält beim Blättern mit ←/→ ihre Höhe (144
         await page.emulateMedia({ colorScheme });
         await page.setViewportSize({ width, height: width > 640 ? 900 : 844 });
         await page.goto("/photos");
-        await page.getByPlaceholder(/^Suchen nach Name, Tag/).fill(stem);
-        await expect(page.locator(".photo-tile")).toHaveCount(4);
+        await searchOwnPhotos(page, stem, 4);
         await page.locator(".photo-tile", { has: page.getByRole("checkbox", { name: `${names[0]} auswählen` }) }).locator(".photo-tile-preview").click();
         await expect(page.locator(".photo-viewer .photo-viewer-place")).toBeVisible();
         await expect(page.locator(".photo-viewer .photo-viewer-subtitle")).toContainText("14:32");

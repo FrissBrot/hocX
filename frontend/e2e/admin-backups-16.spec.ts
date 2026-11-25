@@ -1,5 +1,9 @@
 import { test, expect, request, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
-import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
+
+// Eigener Passkey dieser Spec (auth.ts, platformAdminSpecPasskeys): ein geteilter Signaturzähler
+// über parallele Worker sperrt den Passkey als möglichen Klon.
+const passkeyFile = platformAdminSpecPasskeyFile("admin-backups");
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 
 // Backups im Plattform-Admin (Redesign 1.6, Design «hocX Backups»): Reiter und Filter in der URL,
@@ -14,7 +18,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:13000";
 const origin = new URL(baseURL).origin;
 
 async function softPasskeyStepUps(page: Page, purpose: string, pattern: RegExp): Promise<{ api: APIRequestContext; passkey: SoftPasskey }> {
-  const passkey = await SoftPasskey.load(platformAdminPasskeyFile);
+  const passkey = await SoftPasskey.load(passkeyFile);
   expect(passkey, "Software-Passkey aus auth.setup.ts fehlt").toBeTruthy();
   const api = await request.newContext({ baseURL, storageState: authFiles.platformAdmin, extraHTTPHeaders: { Origin: origin } });
   await page.addInitScript(() => {

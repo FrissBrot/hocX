@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
+import { confirmTenantStepUp } from "./step-up";
 
 // Rollen und Berechtigungen (RBAC, docs/RBAC_ARCHITECTURE_PROPOSAL.md): eine eigene Rolle anlegen,
 // einem neuen Konto zuweisen, mit diesem Konto prüfen - und ein Rechteentzug wirkt in der
@@ -10,6 +11,9 @@ type Role = { id: string; name: string | null; system_key: string | null; permis
 
 test("eigene Rolle anlegen, zuweisen und wieder entziehen", async () => {
   const admin = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
+  // Rollen und Benutzer ändern sind heikle Aktionen: im Gesamtlauf ist die Anmeldung aus auth.setup.ts
+  // oft älter als 15 min (step_up_required) - vorab per TOTP bestätigen.
+  await confirmTenantStepUp(admin, process.env.E2E_USER_EMAIL ?? "admin@hocx.local");
   const suffix = Date.now();
   const roles: Role[] = await (await admin.get("/api/roles")).json();
   expect(roles.filter((role) => role.system_key).map((role) => role.system_key).sort()).toEqual(["admin", "kassier", "reader", "writer"]);
@@ -53,6 +57,9 @@ test("eigene Rolle anlegen, zuweisen und wieder entziehen", async () => {
 
 test("Schutzregeln: Standardrollen bleiben, fremde Rollen-IDs und eigene Herabstufung scheitern", async () => {
   const admin = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
+  // Rollen und Benutzer ändern sind heikle Aktionen: im Gesamtlauf ist die Anmeldung aus auth.setup.ts
+  // oft älter als 15 min (step_up_required) - vorab per TOTP bestätigen.
+  await confirmTenantStepUp(admin, process.env.E2E_USER_EMAIL ?? "admin@hocx.local");
   const roles: Role[] = await (await admin.get("/api/roles")).json();
   const adminRole = roles.find((role) => role.system_key === "admin");
   const readerRole = roles.find((role) => role.system_key === "reader");

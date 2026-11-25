@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import { writeFileSync } from "node:fs";
 
 // Software-Passkey für die API-Anmeldung der Plattform-Admins in auth.setup.ts: Admins melden sich
 // nur noch mit Passwort + Passkey an (backend admin_mfa_service.py). Im Browser übernimmt das der
@@ -43,6 +44,10 @@ export class SoftPasskey {
   private readonly privateKey: crypto.KeyObject;
   readonly credentialId: Buffer;
   private signCount: number;
+  // Datei, aus der der Passkey geladen wurde: jede Bestätigung schreibt den Zähler sofort zurück, damit
+  // ein Wiederholungslauf (retries) oder der nächste Test nie einen verbrauchten Zähler verwendet -
+  // das Backend sperrte den Passkey sonst als möglichen Klon.
+  private file: string | null = null;
 
   private constructor(privateKey: crypto.KeyObject, credentialId: Buffer, signCount: number) {
     this.privateKey = privateKey;
@@ -58,19 +63,26 @@ export class SoftPasskey {
   static async load(file: string): Promise<SoftPasskey | null> {
     try {
       const stored = JSON.parse(await fs.readFile(file, "utf8")) as StoredPasskey;
-      return new SoftPasskey(crypto.createPrivateKey(stored.privateKeyPem), Buffer.from(stored.credentialId, "base64url"), stored.signCount);
+      const passkey = new SoftPasskey(crypto.createPrivateKey(stored.privateKeyPem), Buffer.from(stored.credentialId, "base64url"), stored.signCount);
+      passkey.file = file;
+      return passkey;
     } catch {
       return null;
     }
   }
 
-  async save(file: string): Promise<void> {
+  private serialize(): string {
     const stored: StoredPasskey = {
       privateKeyPem: this.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
       credentialId: b64url(this.credentialId),
       signCount: this.signCount,
     };
-    await fs.writeFile(file, JSON.stringify(stored), { mode: 0o600 });
+    return JSON.stringify(stored);
+  }
+
+  async save(file: string): Promise<void> {
+    await fs.writeFile(file, this.serialize(), { mode: 0o600 });
+    this.file = file;
   }
 
   private clientData(type: string, challenge: string, origin: string): Buffer {
@@ -110,6 +122,7 @@ export class SoftPasskey {
   assertion(publicKey: Record<string, unknown>, origin: string) {
     const options = publicKey as { challenge: string; rpId: string };
     this.signCount += 1;
+    if (this.file) writeFileSync(this.file, this.serialize(), { mode: 0o600 });
     const counter = Buffer.alloc(4);
     counter.writeUInt32BE(this.signCount);
     const authData = Buffer.concat([this.rpIdHash(options.rpId), Buffer.from([FLAGS_UP_UV]), counter]);

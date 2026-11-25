@@ -1,7 +1,11 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { authFiles, platformAdminPasskeyFile } from "./auth";
+import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
+
+// Eigener Passkey dieser Spec (auth.ts, platformAdminSpecPasskeys): ein geteilter Signaturzähler
+// über parallele Worker sperrt den Passkey als möglichen Klon.
+const passkeyFile = platformAdminSpecPasskeyFile("storage-quota");
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 import { uniquePng } from "./unique-fixture";
 
@@ -90,13 +94,13 @@ test("rejects a gallery upload once the tenant's plan storage quota is exceeded"
     // Plan löschen braucht seit der Admin-Abschottung eine Passkey-Bestätigung (Zweck
     // catalog-change, backend app/core/admin_step_up.py) - wie in auth.setup.ts mit dem
     // Software-Passkey des Plattform-Admins (Zähler danach speichern).
-    const adminPasskey = await SoftPasskey.load(platformAdminPasskeyFile);
+    const adminPasskey = await SoftPasskey.load(passkeyFile);
     if (adminPasskey) {
       const path = `/api/admin/plans/${planCode}`;
       const removed = await stepUpHeaders(adminApi, adminPasskey, adminOrigin, "catalog-change", "DELETE", path)
         .then((headers) => adminApi.delete(path, { headers }))
         .catch(() => null);
-      await adminPasskey.save(platformAdminPasskeyFile);
+      await adminPasskey.save(passkeyFile);
       expect.soft(removed?.status(), "Temporärer Plan wurde nicht gelöscht").toBe(204);
     }
     await writerApi.dispose();

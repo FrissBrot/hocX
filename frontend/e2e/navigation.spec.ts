@@ -60,7 +60,12 @@ test("Zahnrad in der Kopfzeile führt vom Bereich zur Einstellung und zurück", 
 
 test("Einstellungen: Knopf über der Benutzerkarte führt zur Übersicht mit Suche", async ({ page }) => {
   test.setTimeout(150_000); // zwei Erstkompilierungen à bis 60 s
+  // Erst klicken, wenn die Seite hydriert ist: ein Klick davor geht verloren (CI: der Klick kam
+  // 80 ms vor der Hydrierung, die Seite blieb auf /todos). Die Sitzungsabfrage der App-Shell
+  // (app-shell.tsx, loadSession) läuft erst im Effekt nach der Hydrierung.
+  const hydrated = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/session");
   await page.goto("/todos");
+  await hydrated;
   await page.locator(".sidebar-settings-link").click();
   // Erster Aufruf: der Next-Server des E2E-Stacks kompiliert /settings erst (unter Volllast und auf
   // dem GitHub-Runner > 30 s)
