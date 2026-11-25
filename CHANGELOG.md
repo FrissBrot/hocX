@@ -8,28 +8,6 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Geändert
-
-- **Backups im Plattform-Admin neu (Design «hocX Backups»):** Übersicht mit Gesamtstatus, offenen
-  Problemen samt passender Aktion, laufendem Auftrag mit Schrittleiste, den drei Nachweisen
-  (erstellt, geprüft, Restore getestet) mit Intervall und Fälligkeit, einer 7-Tage-Leiste der
-  geplanten Läufe (auch verpasste; bei mehr als 8 Läufen pro Tag als Tageszusammenfassung, mit
-  Tabellenalternative), Speicher und Infrastruktur. Verlauf mit Zählern je Status, Kurzfassung je
-  Auftrag (z. B. entfernte Punkte, geprüfte Inhalte) und Details als Seitenleiste;
-  Wiederherstellung als Assistent mit Schrittleiste, Punkt-Auswahl mit Nachweisen und Verlauf
-  inklusive Restore-Tests; Einstellungen mit Tagesleiste der Läufe in Schweizer Zeit (Sommerzeit
-  berücksichtigt) und Schätzung der Aufbewahrung. Reiter, Filter und geöffneter Auftrag stehen in
-  der URL. Am Navigationseintrag zeigt ein Punkt, ob ein Backup läuft oder ein Problem besteht.
-- Support-Admins (nur lesen) bekommen von der Backup-API weder Adresse und Benutzer der Storage Box
-  noch rohe Fehlermeldungen; die Oberfläche zeigt den übersetzten Fehlercode.
-
-### Behoben
-
-- **Vollständige Wiederherstellung behält das Audit-Log:** Der Datenbanktausch setzte das
-  Audit-Log auf den Stand des Sicherungspunkts zurück; Einträge seit dem Punkt fehlten danach im
-  laufenden System. Sie werden jetzt mitgenommen, und Ergebnis und Ende jeder Wiederherstellung
-  stehen als `backup.restore.finished` im Audit-Log.
-
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt
@@ -167,6 +145,18 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Backups im Plattform-Admin neu (Design «hocX Backups»):** Übersicht mit Gesamtstatus, offenen
+  Problemen samt passender Aktion, laufendem Auftrag mit Schrittleiste, den drei Nachweisen
+  (erstellt, geprüft, Restore getestet) mit Intervall und Fälligkeit, einer 7-Tage-Leiste der
+  geplanten Läufe (auch verpasste; bei mehr als 8 Läufen pro Tag als Tageszusammenfassung, mit
+  Tabellenalternative), Speicher und Infrastruktur. Verlauf mit Zählern je Status, Kurzfassung je
+  Auftrag (z. B. entfernte Punkte, geprüfte Inhalte) und Details als Seitenleiste;
+  Wiederherstellung als Assistent mit Schrittleiste, Punkt-Auswahl mit Nachweisen und Verlauf
+  inklusive Restore-Tests; Einstellungen mit Tagesleiste der Läufe in Schweizer Zeit (Sommerzeit
+  berücksichtigt) und Schätzung der Aufbewahrung. Reiter, Filter und geöffneter Auftrag stehen in
+  der URL. Am Navigationseintrag zeigt ein Punkt, ob ein Backup läuft oder ein Problem besteht.
+- Support-Admins (nur lesen) bekommen von der Backup-API weder Adresse und Benutzer der Storage Box
+  noch rohe Fehlermeldungen; die Oberfläche zeigt den übersetzten Fehlercode.
 - **Protokoll-Editor:** Akkordeon, Rad-Effekt und die beiden Profileinstellungen dazu sind
   entfernt, ebenso Schnellnavigation, Schnellmenü-Pille und die Hover-Flyouts (ersetzt durch
   Gliederung, Dock und Schublade). Jeder Statuswechsel fragt nach; arbeiten andere mit, nennt
@@ -255,6 +245,12 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- Foto-Ansicht: die Kopfzeile springt beim Blättern nicht mehr (feste Höhe, Dateiname, Datum und
+  Ort einzeilig; die Unterzeile hängt nicht mehr an den je Foto nachgeladenen Metadaten).
+- **Vollständige Wiederherstellung behält das Audit-Log:** Der Datenbanktausch setzte das
+  Audit-Log auf den Stand des Sicherungspunkts zurück; Einträge seit dem Punkt fehlten danach im
+  laufenden System. Sie werden jetzt mitgenommen, und Ergebnis und Ende jeder Wiederherstellung
+  stehen als `backup.restore.finished` im Audit-Log.
 - Zyklus löschen: der Löschdialog nennt vorher, was mitgelöscht wird (gespeicherte Tabellenstände,
   Zuordnungen von Aufgabenpaketen, Zyklus-Alben; die Fotos bleiben in der Galerie).
 - Protokolle: Blockkonfigurationen in falscher Form (z. B. Anwesenheit als Zahl, Zahlen über dem
