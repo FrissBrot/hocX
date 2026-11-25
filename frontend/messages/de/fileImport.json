@@ -58,7 +58,13 @@
     "listed": "{count, plural, one {# Datei} other {# Dateien}} gefunden ({size}, {archives, plural, =0 {Ordner} one {# Archiv} other {# Archive}}).",
     "takeoutDetected": "Google-Takeout erkannt.",
     "toRules": "Weiter zu Regeln und Vorschau",
-    "cloudHintConnected": "hocX liest beim Cloud-Dienst nur, was du auswählst, und speichert den Zugang verschlüsselt nur bis zum Ende des Imports."
+    "cloudHintConnected": "hocX liest beim Cloud-Dienst nur, was du auswählst, und speichert den Zugang verschlüsselt nur bis zum Ende des Imports.",
+    "provider": {
+      "microsoft": "Microsoft OneDrive / SharePoint"
+    },
+    "providerHint": {
+      "microsoft": "OneDrive privat, OneDrive for Business oder SharePoint-Bibliotheken direkt verbinden. Du wählst die Ordner in hocX aus."
+    }
   },
   "options": {
     "typeFilter": "Dateitypen",
@@ -355,6 +361,14 @@
       "open": "Freigabe-Link öffnen",
       "copy": "Link kopieren",
       "copied": "Freigabe-Link kopiert."
+    },
+    "connectHint": {
+      "microsoft": "Melde dich mit deinem Microsoft-Konto an (privat, Arbeit oder Schule). hocX fragt zuerst nur nach Lesezugriff auf deine eigenen Dateien; für «Für mich freigegeben» bei Geschäftskonten und für SharePoint folgt eine zweite Zustimmung, sobald du sie öffnest."
+    },
+    "roots": {
+      "microsoft_me": "Mein OneDrive",
+      "microsoft_shared": "Für mich freigegeben",
+      "microsoft_sites": "SharePoint-Websites"
     }
   }
 }

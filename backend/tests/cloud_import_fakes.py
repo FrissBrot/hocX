@@ -152,7 +152,7 @@ class TreeProvider(CloudProvider):
 
     def account_info(self, ctx: ProviderContext, tokens: TokenSet) -> AccountInfo:
         data = ctx.with_token(lambda token: ctx.client.get_json(f"{API}/me", bearer=token))
-        return AccountInfo(label=data.get("name"), kind="personal")
+        return AccountInfo(label=data.get("name"), kind="personal", subject=f"tree:{data.get('name')}")
 
     @staticmethod
     def _node(item: dict) -> Node:

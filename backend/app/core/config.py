@@ -526,6 +526,9 @@ class Settings(BaseSettings):
             if value and (value in _INSECURE_DEFAULTS or len(value) < 32):
                 print(f"FATAL: {name} must be empty or a random value of at least 32 characters.", file=sys.stderr)
                 sys.exit(1)
+        if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
+            print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)
+            sys.exit(1)
         if self.is_production and self.cloud_import_ms_client_id and not self.cloud_import_token_key:
             print(
                 "FATAL: CLOUD_IMPORT_TOKEN_KEY is not set although a cloud import provider is configured. "

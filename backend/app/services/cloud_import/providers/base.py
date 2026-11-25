@@ -70,6 +70,8 @@ class AccountInfo:
     label: str | None
     kind: str | None = None  # z. B. "personal"/"work"
     tenant_id: str | None = None  # z. B. Entra-Tenant (Hilfe für den Admin-Consent)
+    # Stabile Kennung des Kontos beim Anbieter (z. B. Graph-Objekt-ID + Tenant), nie der Anzeigename
+    subject: str | None = None
 
 
 @dataclass

@@ -73,7 +73,8 @@ def create(
 ) -> ImportConnection:
     connection = ImportConnection(
         tenant_id=tenant_id, user_id=user_id, provider=provider, account_label=(account.label or "")[:320] or None,
-        account_kind=account.kind, account_tenant_id=(account.tenant_id or "")[:64] or None, purge_after=now() + IDLE_PURGE,
+        account_kind=account.kind, account_tenant_id=(account.tenant_id or "")[:64] or None,
+        account_subject=(account.subject or "")[:200] or None, purge_after=now() + IDLE_PURGE,
     )
     save_tokens(connection, tokens, granted=granted)
     db.add(connection)

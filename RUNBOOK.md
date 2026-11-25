@@ -1508,3 +1508,197 @@ Rolle nicht):
    `docker compose -p <projekt> <compose-dateien> exec db psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c '\password hocx_geo'`
 2. Denselben Wert als `GEO_DB_PASSWORD` und in `GEO_DATABASE_URL` in die `.env` eintragen.
 3. `scripts/deploy.sh` ausführen (schreibt die Secret-Dateien neu, startet den job-worker neu).
+
+
+## 27. Cloud-Import einrichten (1.6)
+
+Datei-Import direkt aus Cloud-Diensten (Technik: `docs-site/docs/technik/datei-import.md`, Abschnitt
+«API-Quellen»). Ein Anbieter erscheint im Wizard nur, wenn er vollständig konfiguriert ist; ZIP- und
+Ordner-Import brauchen nichts davon. Dieselbe Anleitung liegt für die Planung unter
+`audit-reports/plans/2026-11-25-cloud-import-registrierung.md`.
+
+**Gemeinsam für alle Anbieter**
+
+- Redirect-URI je Umgebung: `https://<TRAEFIK_DOMAIN>/api/cloud-import/oauth/<anbieter>/callback`
+  (zentrale Domain; hocX springt danach selbst auf die Vereinsdomain zurück). Andere Basis nur über
+  `CLOUD_IMPORT_REDIRECT_BASE_URL`.
+- `CLOUD_IMPORT_TOKEN_KEY` (Secret) verschlüsselt die OAuth-Tokens; `deploy.sh` erzeugt ihn einmalig
+  (`scripts/lib/env_migrate.sh`). Zusammen mit `.env` sichern. Rotation: neuen Wert setzen, bisherigen
+  als `CLOUD_IMPORT_TOKEN_KEY_PREVIOUS`, deployen, nach 7 Tagen `_PREVIOUS` leeren (länger lebt keine
+  ungenutzte Verbindung). Geht der Schlüssel verloren, melden sich laufende Importe einfach neu an.
+- `CLOUD_IMPORT_ENABLED=false` schaltet alle Cloud-Anbieter ab.
+- Nach jeder Änderung: `scripts/deploy.sh`; Kontrolle unter /admin/system, Prüfung **Cloud-Import**
+  (aktive Importe, hängende Importe, warten auf Anmeldung, Ablauf der Client-Secrets).
+- Tokens werden gelöscht, sobald ein Import endet; unterbrochene Importe behalten sie höchstens 7 Tage
+  ohne Nutzung (Job `cloud_import` räumt auf).
+
+### 27.1 Microsoft (OneDrive privat, OneDrive for Business, SharePoint)
+
+
+**Ziel:** eine Entra-App-Registrierung (mehrinstanzenfähig + persönliche Konten), vertraulicher
+Client mit Client-Secret, nur delegierte Lese-Berechtigungen, verifizierter Herausgeber.
+
+**Empfehlung zu Umgebungen:** Produktion bekommt eine **eigene** App-Registrierung. Test-Host und
+hocx-dev dürfen sich eine zweite Registrierung teilen (zwei Redirect-URIs). So betrifft ein Fehler oder
+ein abgelaufenes Secret im Test nie die Vereine in Produktion, und der Consent-Dialog in Produktion
+zeigt nie Test-URLs.
+
+#### Voraussetzungen
+
+1. Ein Microsoft-Entra-Tenant des Betreibers (Entra ID Free reicht, kostenlos). Wer noch keinen hat:
+   mit dem Betreiberkonto unter <https://entra.microsoft.com> anmelden bzw. einen Microsoft-365-
+   oder Azure-Tenant anlegen.
+2. Konto mit der Rolle **Anwendungsadministrator** (oder Cloudanwendungsadministrator) in diesem Tenant,
+   mit MFA (Pflicht für die Herausgeberverifizierung).
+3. Für die Herausgeberverifizierung: die Betreiber-Domain (z. B. die Domain der Website) als
+   **verifizierte benutzerdefinierte Domain** im Tenant und ein Konto im **Microsoft AI Cloud Partner
+   Program** (Partner Center), siehe Schritt 7. Vorlauf: einige Tage bis Wochen - früh starten.
+4. Öffentlich erreichbare Seiten für **Datenschutzerklärung** und **Nutzungsbedingungen** (URLs).
+
+#### Schritt 1 - App registrieren
+
+1. <https://entra.microsoft.com> → **Identität** → **Anwendungen** → **App-Registrierungen** →
+   **Neue Registrierung**.
+2. **Name:** `hocX Datei-Import` (Test: `hocX Datei-Import (Test)`). Der Name erscheint im
+   Anmeldedialog der Vereinsmitglieder.
+3. **Unterstützte Kontotypen:** «Konten in einem beliebigen Organisationsverzeichnis (beliebiger
+   Microsoft Entra ID-Mandant – mehrinstanzenfähig) und persönliche Microsoft-Konten (z. B. Skype,
+   Xbox)».
+4. **Umleitungs-URI:** Plattform **Web**, `https://<TRAEFIK_DOMAIN>/api/cloud-import/oauth/microsoft/callback`
+   - Produktion: `https://<prod-domain>/api/cloud-import/oauth/microsoft/callback`
+   - Test-Host: `https://<test-domain>/api/cloud-import/oauth/microsoft/callback`
+   - hocx-dev: `https://<dev-domain>/api/cloud-import/oauth/microsoft/callback`
+     (Entra verlangt https; `http` nur für `localhost`).
+5. **Registrieren**.
+6. Auf der Übersichtsseite die **Anwendungs-ID (Client-ID)** kopieren → `.env`:
+   `CLOUD_IMPORT_MS_CLIENT_ID=<Anwendungs-ID>`. Die Verzeichnis-(Tenant-)ID wird **nicht** gebraucht
+   (hocX nutzt die Autorität `common`).
+
+#### Schritt 2 - Authentifizierung prüfen
+
+**Authentifizierung** (bzw. «Authentication»):
+
+- Weitere Redirect-URIs (Test/Dev) unter **Plattform Web → URI hinzufügen** ergänzen. Keine Wildcards.
+- **Implizite Genehmigung und Hybridflows:** beide Häkchen (Zugriffstoken, ID-Token) **aus**.
+- **Öffentliche Clientflows zulassen:** **Nein**.
+- URL für Front-Channel-Abmeldung: leer lassen.
+- **Manifest** → `"requestedAccessTokenVersion": 2` (bzw. `accessTokenAcceptedVersion: 2` im alten
+  Manifest). Bei «persönliche Konten» setzt Entra das automatisch; nur kontrollieren.
+
+#### Schritt 3 - Client-Secret mit Ablaufdatum
+
+1. **Zertifikate & Geheimnisse** → **Geheime Clientschlüssel** → **Neuer geheimer Clientschlüssel**.
+2. Beschreibung: `hocX <Umgebung> <JJJJ-MM>`; **Ablauf: 24 Monate** (Maximum; kürzer ist sicherer,
+   bedeutet aber häufigeres Wechseln).
+3. **Wert** (nicht «Geheimnis-ID») sofort kopieren - er ist nur jetzt sichtbar → `.env`:
+   - `CLOUD_IMPORT_MS_CLIENT_SECRET=<Wert>`
+   - `CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES=<Ablaufdatum JJJJ-MM-TT>` (aus der Spalte «Läuft ab»).
+4. Erinnerung im Kalender setzen. hocX warnt zusätzlich: Prüfung **Cloud-Import** in /admin/system
+   wird 30 Tage vor Ablauf gelb (ntfy), nach Ablauf rot. `deploy.sh` verweigert den Deploy, wenn die
+   Client-ID gesetzt ist, aber Secret oder Ablaufdatum fehlen.
+
+**Wechsel vor Ablauf:** neues Secret anlegen (altes bleibt gültig), `.env` mit neuem Wert und neuem
+Datum aktualisieren, `scripts/deploy.sh`, danach das alte Secret in Entra löschen. Laufende Importe
+behalten ihre Tokens; nur neue Anmeldungen und Refreshes nutzen das neue Secret.
+
+#### Schritt 4 - API-Berechtigungen (nur delegiert, nur lesend)
+
+**API-Berechtigungen** → **Berechtigung hinzufügen** → **Microsoft Graph** → **Delegierte
+Berechtigungen**:
+
+| Berechtigung | Wofür | Zeitpunkt der Abfrage in hocX |
+|---|---|---|
+| `openid`, `profile`, `offline_access` | Anmeldung, Refresh-Token | erste Anmeldung |
+| `User.Read` | Anzeige «Verbunden als …» | erste Anmeldung |
+| `Files.Read` | eigene Dateien (OneDrive privat/Business; privat inkl. geteilte) | erste Anmeldung |
+| `Files.Read.All` | «Für mich freigegeben» (Geschäftskonten) | erst wenn jemand das im Baum aufklappt |
+| `Sites.Read.All` | SharePoint-Bibliotheken | erst wenn jemand SharePoint aufklappt |
+
+- **Keine** Anwendungsberechtigungen, **keine** Schreibberechtigungen.
+- «Administratorzustimmung für <Betreiber-Tenant> erteilen» ist nur für Konten des Betreiber-Tenants
+  nötig; Vereine stimmen in ihrem eigenen Tenant zu.
+- Die Liste ist wichtig für den Admin-Consent in Vereins-Tenants: der Link
+  `/{tenant}/adminconsent?client_id=…` erteilt genau diese statisch eingetragenen Berechtigungen.
+
+#### Schritt 5 - Branding und Eigenschaften
+
+**Branding & Eigenschaften**:
+
+- Name, **Logo** (hocX-Logo, 215×215 px, PNG/JPG, < 100 KB).
+- **URL der Startseite:** Website von hocX.
+- **URL der Nutzungsbedingungen** und **URL der Datenschutzerklärung** (Pflicht für Verifizierung
+  und Vertrauen im Consent-Dialog; die Datenschutzerklärung beschreibt den Cloud-Import, Plan §11.3).
+- **Herausgeberdomäne:** die verifizierte Betreiber-Domain auswählen (statt `*.onmicrosoft.com`).
+  Fehlt sie: **Identität → Einstellungen → Domänennamen → Benutzerdefinierte Domäne hinzufügen**, den
+  TXT-Eintrag beim DNS-Anbieter setzen, **Überprüfen**.
+
+#### Schritt 6 - Optional: Zustimmung nur für bestimmte Konten
+
+Nicht nötig. hocX schränkt selbst ein (nur Personen mit «Dateien importieren», nur gewählte Ordner).
+«Zuweisung erforderlich» in der Unternehmensanwendung **nicht** einschalten - das erzwingt in jedem
+Tenant einen Admin-Consent.
+
+#### Schritt 7 - Herausgeberverifizierung (Partner Center)
+
+Ohne Verifizierung können Nutzer in vielen Tenants (Richtlinie «nur verifizierte Herausgeber»,
+risikobasierte Zustimmung) der App nicht zustimmen; persönliche Konten sehen eine Warnung.
+
+1. Im **Partner Center** (<https://partner.microsoft.com>) mit einem Geschäftskonto des Betreibers
+   das **Microsoft AI Cloud Partner Program** (früher MPN) beitreten: Firmenangaben, Adresse,
+   Kontakt; Microsoft prüft die Firma (E-Mail-Bestätigung, ggf. Unterlagen). Kostenlos.
+2. Die E-Mail-Domain des Partner-Center-Kontos muss zur **verifizierten Herausgeberdomäne** aus
+   Schritt 5 passen.
+3. Nach der Freigabe die **Partner One ID** (MPN-ID, Ebene «PartnerGlobal» oder «PartnerLocation»)
+   notieren.
+4. In der App-Registrierung → **Branding & Eigenschaften** → **Herausgeberverifizierung** →
+   **MPN-ID zum Überprüfen des Herausgebers hinzufügen** → ID eintragen → **Überprüfen und speichern**.
+   Die ausführende Person braucht MFA, die Rolle Anwendungsadministrator im Tenant und im Partner
+   Center «Kontoadministrator» oder «MPN-Administrator».
+5. Ergebnis: blaues Häkchen «Verifiziert» im Consent-Dialog.
+
+#### Schritt 8 - Einträge in `.env` (je Umgebung)
+
+```dotenv
+# Microsoft (Entra-App aus den Schritten 1-3)
+CLOUD_IMPORT_MS_CLIENT_ID=<Anwendungs-ID>
+CLOUD_IMPORT_MS_CLIENT_SECRET=<Wert des geheimen Clientschlüssels>
+CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES=<JJJJ-MM-TT>
+# Optional (Standardwerte):
+CLOUD_IMPORT_MS_AUTHORITY=common
+CLOUD_IMPORT_MS_DOWNLOAD_MODE=auto
+CLOUD_IMPORT_REDIRECT_BASE_URL=          # leer = https://TRAEFIK_DOMAIN
+CLOUD_IMPORT_ENABLED=true
+# CLOUD_IMPORT_TOKEN_KEY erzeugt deploy.sh selbst - nicht eintragen
+```
+
+Danach `scripts/deploy.sh`. Das Client-Secret landet als Secret-Datei nur bei backend und job-worker
+(`docker-compose.release.yml`).
+
+`CLOUD_IMPORT_MS_DOWNLOAD_MODE`: `auto` lädt bis 31.3.2027 über die vorauthentifizierte URL
+(«tempauth») und schickt das Token bei einer Ablehnung bzw. ab dem 1.4.2027 immer an SharePoint mit
+(Microsoft schafft tempauth für OneDrive for Business/SharePoint ab). `bearer` erzwingt das sofort,
+`tempauth` nie (nur zur Fehlersuche).
+
+#### Schritt 9 - Netz (ausgehend)
+
+backend und job-worker brauchen HTTPS (443) zu: `login.microsoftonline.com`, `graph.microsoft.com`,
+`*.sharepoint.com`, `*.1drv.com` (z. B. `public.dm.files.1drv.com`), `*.livefilestore.com`. hocX
+verbindet sich zu keinem anderen Host (Allowlist im Code).
+
+#### Schritt 10 - Abnahme mit echten Konten
+
+1. Privates Konto (outlook.com/hotmail.com): Import aus «OneDrive» und «Für mich freigegeben».
+2. Geschäftskonto eines Test-Tenants mit Standard-Consent-Richtlinie: erwarteter Hinweis «Freigabe
+   durch die IT nötig» → im Wizard Domain eingeben → Admin-Consent-Link als Tenant-Admin öffnen →
+   Rückkehr mit «Freigabe erteilt» → erneut anmelden.
+3. SharePoint-Bibliothek: im Baum «SharePoint» aufklappen → zweite Zustimmung (`Sites.Read.All`) →
+   Bibliothek wählen → importieren.
+4. Prüfung **Cloud-Import** in /admin/system grün, Ablaufdatum des Secrets sichtbar.
+5. Verbindung trennen bzw. Import beenden → in Entra unter **Unternehmensanwendungen** des Test-Tenants
+   bleibt die App (Zustimmung); Tokens sind in hocX gelöscht.
+
+#### Zugriff entziehen (für Vereine)
+
+- Privat: <https://account.live.com/consent/Manage> → hocX Datei-Import → Entfernen.
+- Geschäftlich: <https://myapps.microsoft.com> → App → Berechtigungen widerrufen, bzw. die IT entfernt
+  die Unternehmensanwendung.

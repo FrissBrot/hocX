@@ -53,6 +53,7 @@ def upgrade() -> None:
             account_label text,
             account_kind text,
             account_tenant_id text,
+            account_subject text,
             granted_scopes text NOT NULL DEFAULT '',
             access_token_encrypted text,
             refresh_token_encrypted text,

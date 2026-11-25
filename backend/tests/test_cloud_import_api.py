@@ -230,8 +230,9 @@ def test_bearer_download_only_where_the_provider_allows_it(tmp_path):
     client.download("https://api.cloud.test/c", bearer="TOKEN", dest=tmp_path / "f", max_bytes=10, bearer_mode="always")
     assert [r.bearer for r in transport.requests] == ["TOKEN", "TOKEN"]
     client, transport = _client(lambda r: FakeResponse(302, {"Location": "https://x.dl.cloud.test/f"}) if r.host == "api.cloud.test" else FakeResponse(401))
-    with pytest.raises(http.ProviderUnauthorized):
+    with pytest.raises(http.ProviderError) as refused:
         client.download("https://api.cloud.test/c", bearer="TOKEN", dest=tmp_path / "f", max_bytes=10, bearer_mode="always")
+    assert refused.value.code == "access_denied"
     assert transport.requests[-1].bearer is None
 
 

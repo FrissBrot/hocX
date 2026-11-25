@@ -68,12 +68,22 @@ def _no_refresh() -> str:
     raise ReauthRequired()
 
 
-def _complete(db: Session, request: Request, provider_key: str, params: dict[str, str | None]) -> RedirectResponse:
+def _rate_limit(request: Request) -> None:
     enforce_rate_limit(f"cloud-import-callback:{rate_limit_source(request)}", limit=60, period_seconds=600)
+
+
+def _complete(db: Session, request: Request, provider_key: str, params: dict[str, str | None]) -> RedirectResponse:
     provider = providers.get(provider_key)
     state = oauth.consume_state(params.get("state"))
     if provider is None or state is None or state.provider != provider_key or not providers.is_available(provider_key):
         return _redirect(_target(None, error="state_invalid"))
+    if state.return_host is not None:
+        # Rücksprung-Host erneut prüfen (Security-Review F1): eine Vereinsdomain, die seit dem Start
+        # nicht mehr gesund ist, bekommt den Abschluss-Token nicht - dann relativ (zentrale Domain).
+        from app.api.routes.cloud_import import _allowed_return_host
+
+        if _allowed_return_host(db, state.tenant_id, state.return_host) != state.return_host:
+            state.return_host = None
     error = params.get("error")
     if error:
         code = provider.map_authorize_error(error[:100], (params.get("error_description") or "")[:2000])
@@ -101,7 +111,7 @@ def _complete(db: Session, request: Request, provider_key: str, params: dict[str
             "access_token": tokens.access_token, "refresh_token": tokens.refresh_token,
             "expires_in": tokens.expires_in, "scope": tokens.scope,
         },
-        "account": {"label": account.label, "kind": account.kind, "tenant_id": account.tenant_id},
+        "account": {"label": account.label, "kind": account.kind, "tenant_id": account.tenant_id, "subject": account.subject},
         "granted": sorted(connections.granted_from(tokens, state.scopes)),
     })
     return _redirect(_target(state, finish=finish))
@@ -118,6 +128,7 @@ def oauth_callback_form(
     db: Session = Depends(get_db),
 ):
     """response_mode=form_post (Microsoft): Code im Body, nie in der URL."""
+    _rate_limit(request)
     provider = providers.get(provider_key)
     config = provider.oauth_config() if provider is not None else None
     if config is None or config.response_mode != "form_post":
@@ -138,11 +149,11 @@ def oauth_callback_query(
     db: Session = Depends(get_db),
 ):
     """Anbieter mit Code in der Query (Google) bzw. Rückkehr nach einem Admin-Consent (Microsoft)."""
+    _rate_limit(request)
     provider = providers.get(provider_key)
     config = provider.oauth_config() if provider is not None else None
     if admin_consent is not None and code is None:
         # Admin hat die App im Vereins-Tenant freigegeben: nur ein Hinweis, nichts wird gespeichert
-        enforce_rate_limit(f"cloud-import-callback:{rate_limit_source(request)}", limit=60, period_seconds=600)
         ok = admin_consent.lower() == "true" and not error
         return _redirect(_target(None, notice="admin_consent_done" if ok else None, error=None if ok else "admin_consent_failed"))
     if config is None or config.response_mode != "query":

@@ -34,7 +34,7 @@ from app.core.config import settings
 from app.models.import_entities import ImportConnection, ImportItem, ImportJob
 from app.services.audit_service import AuditService
 from app.services.cloud_import import connections, jobs, paths, providers
-from app.services.cloud_import.http import DownloadTooLarge, HostNotAllowed, ProviderError, ProviderThrottled
+from app.services.cloud_import.http import DOWNLOAD_DEADLINE, DownloadTooLarge, HostNotAllowed, ProviderError, ProviderThrottled
 from app.services.cloud_import.providers.base import CloudProvider, ItemRef, Node, ProviderContext, ReauthRequired
 
 _logger = logging.getLogger(__name__)
@@ -331,6 +331,10 @@ def download_step(db: Session, job: ImportJob) -> str:
         return "paused"
     downloaded = 0
     for item in items:
+        # Lease über die längste mögliche Downloaddauer (http.DOWNLOAD_DEADLINE) verlängern, damit kein
+        # zweiter Worker denselben Auftrag übernimmt (Security-Review F3)
+        job.lease_until = jobs.now() + timedelta(seconds=DOWNLOAD_DEADLINE + 300)
+        db.commit()
         try:
             if _download_one(db, job, provider, ctx, item):
                 downloaded += 1

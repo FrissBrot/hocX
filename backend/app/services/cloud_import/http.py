@@ -43,6 +43,8 @@ _logger = logging.getLogger(__name__)
 CONNECT_TIMEOUT = 10.0
 READ_TIMEOUT = 60.0
 MAX_REDIRECTS = 3
+# Obergrenze je Download (auch bei tröpfelnden Servern; READ_TIMEOUT gilt nur je Lesevorgang)
+DOWNLOAD_DEADLINE = 30 * 60
 MAX_JSON_BYTES = 8 * 1024**2
 CHUNK = 256 * 1024
 RETRY_AFTER_DEFAULT = 30
@@ -399,6 +401,10 @@ class SafeHttpClient:
                 ):
                     retried_with_bearer = True
                     continue
+                if raw.status == 401 and not self.policy.bearer_always(host):
+                    # 401 vom Download-Host ist kein abgelaufenes API-Token (kein Refresh, kein
+                    # needs_reauth), sondern eine abgelehnte Download-URL
+                    raise ProviderError("access_denied", status=401, detail="download")
                 if raw.status >= 400:
                     body = raw.read(64 * 1024)
                     raise_for_status(HttpResponse(raw.status, dict(raw.headers), body))
@@ -413,6 +419,7 @@ class SafeHttpClient:
     def _stream(raw: RawResponse, dest: Path, max_bytes: int) -> DownloadResult:
         digest = hashlib.sha256()
         size = 0
+        deadline = time.monotonic() + DOWNLOAD_DEADLINE
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             with dest.open("wb") as handle:
@@ -423,6 +430,8 @@ class SafeHttpClient:
                         raise ProviderError("network", detail=type(exc).__name__) from exc
                     if not chunk:
                         break
+                    if time.monotonic() > deadline:
+                        raise ProviderError("network", detail="deadline")
                     size += len(chunk)
                     if size > max_bytes:
                         raise DownloadTooLarge()

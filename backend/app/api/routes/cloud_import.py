@@ -776,10 +776,12 @@ def _allowed_return_host(db: Session, tenant_id: int, host: str | None) -> str |
         return None
     if settings.traefik_domain and host == settings.traefik_domain.lower():
         return host
+    # Wie die Domain-Bridge (Security-Review F1): nur eine gesunde Domain (DNS zeigt auf hocX) mit
+    # gebuchtem Feature - der Abschluss-Token im Fragment darf nie auf einem fremden Server landen.
     domain = db.scalar(
         select(TenantDomain.domain).where(
             TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == "app", TenantDomain.status == "active",
-            TenantDomain.domain == host,
+            TenantDomain.is_healthy.is_(True), TenantDomain.domain == host,
             TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
         )
     )
@@ -855,11 +857,18 @@ def finish_cloud_oauth(payload: OAuthFinishIn, db: Session = Depends(get_db), us
     account = AccountInfo(**(pending.get("account") or {}))
     granted = frozenset(pending.get("granted") or [])
     previous = remote._connection(db, job)
-    if previous is not None and previous.account_label == account.label and previous.provider == provider.key:
+    # Gleiches Konto nur über die stabile Kennung des Anbieters (Security-Review F5), nie über den Namen
+    same_account = previous is not None and previous.provider == provider.key and (
+        previous.account_subject == account.subject if (previous.account_subject or account.subject)
+        # Anbieter ohne stabile Kennung: Anzeigename, aber nie «leer == leer»
+        else previous.account_label is not None and previous.account_label == account.label
+    )
+    if same_account:
         # Gleiches Konto (inkrementeller Consent oder neue Anmeldung): Tokens ersetzen
         connections.save_tokens(previous, tokens, granted=granted | connections.scopes_of(previous))
         previous.account_kind = account.kind
         previous.account_tenant_id = account.tenant_id
+        previous.account_label = (account.label or "")[:320] or None
         connection = previous
     else:
         if previous is not None:

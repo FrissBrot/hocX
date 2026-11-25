@@ -58,7 +58,13 @@
     "listed": "{count, plural, one {# file trovato} other {# file trovati}} ({size}, {archives, plural, =0 {cartella} one {# archivio} other {# archivi}}).",
     "takeoutDetected": "Google Takeout riconosciuto.",
     "toRules": "Continua con regole e anteprima",
-    "cloudHintConnected": "hocX legge dal servizio cloud solo ciò che selezioni e conserva l’accesso cifrato solo fino alla fine dell’importazione."
+    "cloudHintConnected": "hocX legge dal servizio cloud solo ciò che selezioni e conserva l’accesso cifrato solo fino alla fine dell’importazione.",
+    "provider": {
+      "microsoft": "Microsoft OneDrive / SharePoint"
+    },
+    "providerHint": {
+      "microsoft": "Collega direttamente OneDrive personale, OneDrive for Business o raccolte SharePoint. Scegli le cartelle in hocX."
+    }
   },
   "options": {
     "typeFilter": "Tipi di file",
@@ -355,6 +361,14 @@
       "open": "Apri il link di approvazione",
       "copy": "Copia link",
       "copied": "Link di approvazione copiato."
+    },
+    "connectHint": {
+      "microsoft": "Accedi con il tuo account Microsoft (personale, di lavoro o scolastico). hocX chiede dapprima solo l’accesso in lettura ai tuoi file; per «Condivisi con me» negli account di lavoro e per SharePoint segue un secondo consenso appena li apri."
+    },
+    "roots": {
+      "microsoft_me": "Il mio OneDrive",
+      "microsoft_shared": "Condivisi con me",
+      "microsoft_sites": "Siti SharePoint"
     }
   }
 }

@@ -14,7 +14,9 @@ from app.services.cloud_import.providers.base import CloudProvider
 PROVIDERS: dict[str, CloudProvider] = {}
 
 # Adapter-Module (je Anbieter eines); weitere Quellen hängen sich hier an.
-_ADAPTER_MODULES: tuple[str, ...] = ()
+_ADAPTER_MODULES: tuple[str, ...] = (
+    "app.services.cloud_import.providers.microsoft",
+)
 _loaded = False
 
 

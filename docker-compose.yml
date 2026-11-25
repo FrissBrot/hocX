@@ -265,6 +265,8 @@ services:
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS: ${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}
       CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
       CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
+      # Nachgebaute Anbieter nie über .env (nur docker-compose.e2e.yml setzt das, Security-Review F6)
+      CLOUD_IMPORT_FAKE_PROVIDERS: "false"
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -931,6 +933,8 @@ services:
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS: ${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}
       CLOUD_IMPORT_MS_CLIENT_ID: ${CLOUD_IMPORT_MS_CLIENT_ID:-}
       CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
+      # Nachgebaute Anbieter nie über .env (nur docker-compose.e2e.yml setzt das, Security-Review F6)
+      CLOUD_IMPORT_FAKE_PROVIDERS: "false"
     command: ["python", "-m", "app.workers.job_worker"]
     volumes:
       - ./backend:/app

@@ -157,6 +157,16 @@ Muster). Migration `0281_cloud_import_connections`.
 - Referenzen aus dem Browser nur nach `validate_ref`, Benutzer liefern nie URLs.
 - Logs: nur Methode, Host, Pfad ohne Query, Status. `TokenSet.__repr__` ohne Tokens.
 - Callback in `EXEMPT_PUBLIC_ROUTES`, Token-Spalten in `EXEMPT_COLUMNS` begründet.
+- Rücksprung mit dem Abschluss-Token nur auf die zentrale Domain oder eine **gesunde** eigene App-Domain
+  mit gebuchtem Feature (wie die Domain-Bridge), geprüft beim Start und erneut im Callback; sonst
+  relativ auf die Callback-Domain. Microsoft zeigt immer die Kontoauswahl (`prompt=select_account`), damit
+  ein fremder Autorisierungs-Link nie still per SSO durchläuft.
+- «Gleiches Konto» beim erneuten Anmelden über die stabile Kennung des Anbieters (`account_subject`,
+  Microsoft: Tenant + Objekt-ID), nie über den Anzeigenamen.
+- Ein 401 vom Download-Host ist kein abgelaufenes Token (kein Refresh/needs_reauth), sondern
+  `access_denied`; je Download höchstens 30 min, die Lease deckt das ab.
+- `CLOUD_IMPORT_FAKE_PROVIDERS` setzt nur `docker-compose.e2e.yml`; `docker-compose.yml` erzwingt `false`
+  (nicht über `.env` aktivierbar), `config.py` bricht ausserhalb von `development` ab.
 - `User-Agent: ISV|hocX|hocX/<Version>` (Microsoft-Empfehlung gegen Drosselung).
 
 ### Neue Quelle hinzufügen

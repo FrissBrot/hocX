@@ -58,7 +58,13 @@
     "listed": "{count, plural, one {# fichier trouvé} other {# fichiers trouvés}} ({size}, {archives, plural, =0 {dossier} one {# archive} other {# archives}}).",
     "takeoutDetected": "Google Takeout détecté.",
     "toRules": "Continuer vers les règles et l'aperçu",
-    "cloudHintConnected": "hocX ne lit que ce que tu sélectionnes chez le service cloud et ne conserve l’accès chiffré que jusqu’à la fin de l’import."
+    "cloudHintConnected": "hocX ne lit que ce que tu sélectionnes chez le service cloud et ne conserve l’accès chiffré que jusqu’à la fin de l’import.",
+    "provider": {
+      "microsoft": "Microsoft OneDrive / SharePoint"
+    },
+    "providerHint": {
+      "microsoft": "Connecter directement OneDrive personnel, OneDrive Entreprise ou des bibliothèques SharePoint. Tu choisis les dossiers dans hocX."
+    }
   },
   "options": {
     "typeFilter": "Types de fichiers",
@@ -355,6 +361,14 @@
       "open": "Ouvrir le lien d’autorisation",
       "copy": "Copier le lien",
       "copied": "Lien d’autorisation copié."
+    },
+    "connectHint": {
+      "microsoft": "Connecte-toi avec ton compte Microsoft (personnel, professionnel ou scolaire). hocX demande d’abord uniquement un accès en lecture à tes propres fichiers ; pour « Partagés avec moi » sur les comptes professionnels et pour SharePoint, un second consentement suit dès que tu les ouvres."
+    },
+    "roots": {
+      "microsoft_me": "Mon OneDrive",
+      "microsoft_shared": "Partagés avec moi",
+      "microsoft_sites": "Sites SharePoint"
     }
   }
 }

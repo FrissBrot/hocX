@@ -114,6 +114,8 @@ class ImportConnection(Base):
     account_label: Mapped[str | None] = mapped_column(Text)
     account_kind: Mapped[str | None] = mapped_column(Text)
     account_tenant_id: Mapped[str | None] = mapped_column(Text)
+    # Stabile Kennung des Kontos beim Anbieter: «gleiches Konto» beim erneuten Anmelden
+    account_subject: Mapped[str | None] = mapped_column(Text)
     granted_scopes: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"), default="")
     access_token_encrypted: Mapped[str | None] = mapped_column(Text)
     refresh_token_encrypted: Mapped[str | None] = mapped_column(Text)
