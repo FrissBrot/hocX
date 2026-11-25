@@ -28,7 +28,7 @@ import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -71,6 +71,9 @@ def _backfill_group(db: Session, protocol: Protocol, export_kind: str, *, exclud
             DocumentExport.protocol_id == protocol.id,
             DocumentExport.document_type == export_kind,
             DocumentExport.created_at >= _retention_cutoff(),
+            # Nur gemeinsame Fassungen (Sicht «full» bzw. Altbestand ohne Sicht): ein persönliches PDF
+            # (eigene Bussen) wäre sonst als Version für alle Protokoll-Leser im Dateien-Tab
+            or_(DocumentExport.options_json["view"].astext.is_(None), DocumentExport.options_json["view"].astext == "full"),
         )
         .order_by(DocumentExport.created_at.asc(), DocumentExport.id.asc())
         .limit(MAX_HISTORY)

@@ -42,7 +42,7 @@ def _ensure_clean(stored_file: StoredFile) -> None:
 def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
-    return document_read_service.build_detail(db, document, can_write=user.can(P.MEETINGS_EDIT))
+    return document_read_service.build_detail(db, document, can_write=user.can(P.MEETINGS_EDIT), user=user)
 
 
 @router.get("/documents/{document_id}/versions/{version_id}/files/{role}")
@@ -58,6 +58,8 @@ def get_document_file(
     require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
     version = document_read_service.get_version(db, document, version_id)
+    if not document_read_service.version_view_allowed(db, user, document, version.id):
+        raise HTTPException(status_code=404, detail="Datei nicht vorhanden")
     stored_file = db.scalar(
         select(StoredFile)
         .join(DocumentFile, DocumentFile.stored_file_id == StoredFile.id)
@@ -97,6 +99,8 @@ def get_document_text(
     require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
     version = document_read_service.get_version(db, document, version_id)
+    if not document_read_service.version_view_allowed(db, user, document, version.id):
+        raise HTTPException(status_code=404, detail="Noch kein extrahierter Text vorhanden")
     original = document_read_service.original_of(db, version.id)
     if original is not None:
         _ensure_clean(original)

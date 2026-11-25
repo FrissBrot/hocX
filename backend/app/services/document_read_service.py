@@ -154,12 +154,25 @@ def _file_read(document: Document, version: DocumentVersion, role: str, stored_f
     )
 
 
-def build_detail(db: Session, document: Document, *, can_write: bool) -> DocumentDetail:
+def version_view_allowed(db: Session, user: CurrentUser, document: Document, version_id: int) -> bool:
+    """Protokollexport-Dokumente: eine Version (PDF, Vorschau, extrahierter Text) nur in der Sicht
+    der Person (AccessService.protocol_export_view_allows) - wie Download, Exportliste und
+    latest_pdf_url. Sonst holte sich ein Leser über den Dateien-Tab das gemeinsame PDF mit allen
+    Bussen und dem Kontostand (Security-Review Nachtlauf 2026-11-25). Andere Dokumente: True."""
+    if document.source_kind != DOCUMENT_SOURCE_PROTOCOL_EXPORT:
+        return True
+    file_ids = db.scalars(select(DocumentFile.stored_file_id).where(DocumentFile.document_version_id == version_id))
+    return all(access_service.protocol_export_view_allows(db, user, file_id) for file_id in file_ids)
+
+
+def build_detail(db: Session, document: Document, *, can_write: bool, user: CurrentUser | None = None) -> DocumentDetail:
     versions = list(
         db.scalars(
             select(DocumentVersion).where(DocumentVersion.document_id == document.id).order_by(DocumentVersion.version_number.desc())
         )
     )
+    if user is not None:
+        versions = [version for version in versions if version_view_allowed(db, user, document, version.id)]
     version_ids = [version.id for version in versions]
     files: dict[int, dict[str, StoredFile]] = defaultdict(dict)
     for row, stored_file in db.execute(

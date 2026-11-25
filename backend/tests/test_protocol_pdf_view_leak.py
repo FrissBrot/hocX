@@ -93,3 +93,32 @@ def test_unrestricted_user_still_gets_the_full_pdf(db):
     admin = make_current_user(protocol.tenant_id, role="admin", user_id=uuid.uuid4().int % 100000 + 100000)
 
     AccessService().ensure_can_read_stored_file(db, admin, full.id)
+
+
+def test_files_tab_does_not_hand_the_full_pdf_to_a_restricted_reader(db):
+    """Security-Review 2026-11-25: über den Dateien-Tab (managed documents) lieferten Detail,
+    Datei und extrahierter Text die Versionen des Protokollexport-Dokuments ohne Sichtprüfung."""
+    from app.api.routes import managed_documents as managed_routes
+    from app.models import DocumentFile
+    from app.services import document_service
+    from sqlalchemy import select
+
+    protocol, reader, full = _setup(db)
+    result = document_service.record_protocol_export(
+        db, tenant_id=protocol.tenant_id, protocol_id=protocol.id, export_kind="protocol", display_name="Sitzung",
+        stored_file=full, fingerprint="voll", label="v1.0",
+    )
+    role = db.scalar(select(DocumentFile.role).where(DocumentFile.document_version_id == result.version.id, DocumentFile.stored_file_id == full.id))
+    db.flush()
+
+    detail = managed_routes.get_document(result.document.public_id, db=db, user=reader)
+    assert detail.versions == []
+    with pytest.raises(HTTPException) as file_exc:
+        managed_routes.get_document_file(result.document.public_id, result.version.public_id, role, request=None, download=False, db=db, user=reader)
+    assert file_exc.value.status_code == 404
+    with pytest.raises(HTTPException) as text_exc:
+        managed_routes.get_document_text(result.document.public_id, result.version.public_id, format="plain", db=db, user=reader)
+    assert text_exc.value.status_code == 404
+
+    admin = make_current_user(protocol.tenant_id, role="admin", user_id=uuid.uuid4().int % 100000 + 100000)
+    assert [version.id for version in managed_routes.get_document(result.document.public_id, db=db, user=admin).versions] == [result.version.public_id]
