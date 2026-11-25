@@ -1325,6 +1325,16 @@ button:disabled {
   background: var(--button-bg);
 }
 
+/* «Entfernen»-Nebenaktion (button-secondary + button-danger): Rahmen-Variante in Gefahrfarbe wie
+   .todo-delete. Ohne diese Regel erbte der Text --text von .button-secondary auf rotem Grund
+   (axe color-contrast, v. a. im Dark Mode). */
+.button-secondary.button-danger {
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--danger-bg);
+  color: var(--danger-fg);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
 /* Plain-text row action links (e.g. table Aktionen column) - no button chrome,
    just colored text, matching the mockup's "Löschen"/"Rückgängig" links. */
 .row-text-action {
