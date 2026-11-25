@@ -11,7 +11,7 @@ from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models.entities import FinanceAccount
+from app.models.entities import FinanceAccount, Protocol
 from app.repositories.finance_repository import FinanceConflictError, FinanceRepository
 from app.schemas.finance import (
     FinanceAccountCreate,
@@ -23,6 +23,7 @@ from app.schemas.finance import (
     FinanceTransactionUpdate,
 )
 from app.services import public_id_service
+from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -171,6 +172,13 @@ def create_transaction(
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
+    if payload.protocol_id is not None:
+        # Wie die Bussen-Routen (fines.py::_readable_protocol_id): verknüpfen nur mit einem Protokoll,
+        # das die Person lesen darf (Entwürfe nur mit meetings.read_drafts, eingeschränkte Leser nur
+        # zugeordnete). Nicht lesbar = dieselbe 404 wie unbekannt (SECURITY-RULES 1.6).
+        protocol_internal_id = public_id_service.resolve_internal_id(db, Protocol, payload.protocol_id, tenant_id=user.current_tenant_id)
+        if protocol_internal_id is None or not AccessService().can_read_protocol(db, user, protocol_internal_id):
+            raise HTTPException(status_code=404, detail="Protocol not found")
     try:
         created = repo.create_transaction(db, internal_id, user.current_tenant_id, payload)
     except FinanceConflictError as exc:
