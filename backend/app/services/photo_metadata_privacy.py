@@ -203,6 +203,16 @@ def _sanitize_jpeg(data: bytes, policy: MetadataPolicy) -> bytes:
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
+# Whitelist (Fachentscheid 2026-11-25): nur Bilddaten, Farbe/Transparenz/Darstellung und
+# Animation. Alles andere - Texte, C2PA-/JUMBF-Manifeste (caBX, können Ort und Datum enthalten),
+# Herstellerdaten und unbekannte Chunks - fällt weg. eXIf und tIME werden oben eigens behandelt.
+_PNG_KEEP = frozenset({
+    b"IHDR", b"PLTE", b"IDAT", b"IEND",
+    b"tRNS", b"gAMA", b"cHRM", b"sRGB", b"iCCP", b"sBIT", b"bKGD", b"pHYs", b"cICP", b"mDCv", b"cLLi",
+    b"acTL", b"fcTL", b"fdAT",
+})
+
+
 def _png_chunk(kind: bytes, payload: bytes) -> bytes:
     return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
 
@@ -228,10 +238,12 @@ def _sanitize_png(data: bytes, policy: MetadataPolicy) -> bytes:
             if filtered is not None:
                 out += _png_chunk(b"eXIf", filtered.removeprefix(b"Exif\x00\x00"))
             continue
-        if kind in (b"tEXt", b"zTXt", b"iTXt"):
-            continue  # XMP, "Raw profile type exif", Kommentare, Erstellungszeit
-        if kind == b"tIME" and not policy.capture_date:
+        if kind == b"tIME":
+            if policy.capture_date:
+                out += chunk
             continue
+        if kind not in _PNG_KEEP:
+            continue  # Texte (XMP, «Raw profile type exif»), C2PA/JUMBF (caBX), unbekannte Chunks
         out += chunk
         if kind == b"IEND":
             return bytes(out)
@@ -256,6 +268,10 @@ _VP8X_EXIF_FLAG = 0x08
 _VP8X_XMP_FLAG = 0x04
 
 
+# Bilddaten, Alpha, Animation und Farbprofil; EXIF wird oben gefiltert, alles andere fällt weg
+_WEBP_KEEP = frozenset({b"VP8 ", b"VP8L", b"VP8X", b"ALPH", b"ANIM", b"ANMF", b"ICCP"})
+
+
 def _sanitize_webp(data: bytes, policy: MetadataPolicy) -> bytes:
     if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
         raise ValueError("kein WebP")
@@ -271,8 +287,8 @@ def _sanitize_webp(data: bytes, policy: MetadataPolicy) -> bytes:
             if filtered is not None:
                 chunks.append((kind, filtered.removeprefix(b"Exif\x00\x00")))
             continue
-        if kind == b"XMP ":
-            continue
+        if kind not in _WEBP_KEEP:
+            continue  # XMP, C2PA-Manifest, unbekannte Chunks (Whitelist, Fachentscheid 2026-11-25)
         chunks.append((kind, payload))
     has_exif = any(kind == b"EXIF" for kind, _ in chunks)
     body = bytearray(b"WEBP")

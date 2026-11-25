@@ -130,3 +130,55 @@ def test_generated_thumbnails_carry_no_metadata():
 
     assert len(Image.open(io.BytesIO(thumbnail)).getexif()) == 0
     assert b"GPSLatitude" not in thumbnail
+
+
+def _png_chunks(data: bytes) -> list[bytes]:
+    kinds, pos = [], 8
+    while pos < len(data):
+        (length,) = struct.unpack(">I", data[pos : pos + 4])
+        kinds.append(data[pos + 4 : pos + 8])
+        pos += 12 + length
+    return kinds
+
+
+def _with_png_chunks(png: bytes, extra: list[tuple[bytes, bytes]]) -> bytes:
+    import zlib
+
+    chunks = b"".join(
+        struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        for kind, payload in extra
+    )
+    return png[:33] + chunks + png[33:]  # nach IHDR
+
+
+def test_png_keeps_only_whitelisted_chunks():
+    """Fachentscheid 2026-11-25: nur Bilddaten und Farbprofil/Darstellung bleiben; C2PA/JUMBF
+    (caBX) und unbekannte Chunks fallen weg, auch wenn sie Ort oder Datum tragen könnten."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 3), "white").save(buffer, format="PNG")
+    png = _with_png_chunks(buffer.getvalue(), [
+        (b"caBX", b"jumb c2pa GPS 47.37 8.54"), (b"zzZz", b"Hersteller GPS"), (b"gAMA", struct.pack(">I", 45455)),
+        (b"tIME", bytes([7, 234, 7, 14, 10, 0, 0])),
+    ])
+
+    cleaned = sanitize_image(png, "image/png", NOTHING)
+
+    kinds = _png_chunks(cleaned)
+    assert b"caBX" not in kinds and b"zzZz" not in kinds and b"tIME" not in kinds
+    assert {b"IHDR", b"IDAT", b"IEND", b"gAMA"} <= set(kinds)
+    assert b"GPS" not in cleaned
+    Image.open(io.BytesIO(cleaned)).load()
+
+
+def test_webp_keeps_only_image_and_profile_chunks():
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 3), "white").save(buffer, format="WEBP")
+    data = buffer.getvalue()
+    extra = b"C2PA" + struct.pack("<I", 8) + b"GPS 4737" + b"zzZz" + struct.pack("<I", 4) + b"GPS!"
+    body = data[8:] + extra
+    webp = b"RIFF" + struct.pack("<I", len(body)) + body
+
+    cleaned = sanitize_image(webp, "image/webp", NOTHING)
+
+    assert b"C2PA" not in cleaned and b"zzZz" not in cleaned and b"GPS" not in cleaned
+    Image.open(io.BytesIO(cleaned)).load()
