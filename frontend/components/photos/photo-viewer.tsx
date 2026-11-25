@@ -339,11 +339,17 @@ export function PhotoViewer({
     return null;
   }
 
-  const dateSource = metadata?.date_source ?? item.date_source;
+  // Kopfzeile nur aus den Metadaten DIESES Fotos; solange sie laden, aus dem Listeneintrag. Vorher
+  // galten beim Blättern kurz die Metadaten des vorigen Fotos bzw. gar keine (Kopfzeile sprang).
+  const currentMetadata = metadata && metadata.id === item.id ? metadata : null;
+  const dateSource = currentMetadata?.date_source ?? item.date_source;
   const dateKind = dateSource === "estimated" ? "estimated" : dateSource === "corrected" ? "corrected" : null;
+  const correctedAt = currentMetadata ? currentMetadata.capture_corrected_at : item.capture_corrected_at;
+  const exifTakenAt = currentMetadata ? currentMetadata.exif_taken_at : item.exif_taken_at;
   let time: string | null = null;
-  if (metadata?.capture_corrected_at) time = metadata.capture_corrected_has_time ? metadata.capture_corrected_at.slice(11, 16) : null;
-  else if (metadata?.exif_taken_at) time = metadata.exif_taken_at.slice(11, 16);
+  // Ob eine Korrektur eine Uhrzeit hat, steht nur in den Metadaten - bis dahin ohne Uhrzeit.
+  if (correctedAt) time = currentMetadata?.capture_corrected_has_time ? correctedAt.slice(11, 16) : null;
+  else if (exifTakenAt) time = exifTakenAt.slice(11, 16);
   const subtitleDate = item.group_date
     ? time ? t("subtitleDateTime", { date: formatWeekdayDate(item.group_date, locale), time }) : formatWeekdayDate(item.group_date, locale)
     : t("dateUnknown");
@@ -363,22 +369,31 @@ export function PhotoViewer({
           </button>
           <div className="photo-viewer-heading">
             <div className="photo-viewer-title-row">
-              <span className="photo-viewer-title">{item.original_name}</span>
+              <span className="photo-viewer-title" title={item.original_name}>{item.original_name}</span>
               {item.live_video_url ? <span className="photo-viewer-badge-live">{t("liveBadge")}</span> : null}
               {item.is_best ? <span className="photo-viewer-badge-best"><PhotoActionIcon name="star" />{t("bestBadge")}</span> : null}
             </div>
+            {/* Feste Zeilen (media.css): Datum und Position immer einzeilig, der Ort hat unter
+                640 px eine eigene, immer reservierte Zeile - die Kopfzeile ändert beim Blättern
+                ihre Höhe nicht, auch wenn Ort, Uhrzeit oder Hinweise erst mit den Metadaten kommen. */}
             <div className="photo-viewer-subtitle">
-              <span>{subtitleDate}</span>
-              {dateKind ? <span className={`photo-viewer-date-badge photo-viewer-date-badge-${dateKind}`}>{t(`dateBadge.${dateKind}`)}</span> : null}
-              {item.group_date && dateSource === "upload" ? <PhotoDateMarker kind="upload" /> : null}
-              {place ? (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <PhotoViewerPlaceLink place={place} onSearchPlace={onSearchPlace} />
-                </>
-              ) : null}
-              <span aria-hidden="true">·</span>
-              <span className="photo-viewer-position">{t("position", { index: index + 1, total: items.length })}</span>
+              <span className="photo-viewer-subtitle-date">
+                <span className="photo-viewer-subtitle-date-text" title={subtitleDate}>{subtitleDate}</span>
+                {dateKind ? <span className={`photo-viewer-date-badge photo-viewer-date-badge-${dateKind}`}>{t(`dateBadge.${dateKind}`)}</span> : null}
+                {item.group_date && dateSource === "upload" ? <PhotoDateMarker kind="upload" /> : null}
+              </span>
+              <span className="photo-viewer-subtitle-place">
+                {place ? (
+                  <>
+                    <span className="photo-viewer-subtitle-sep" aria-hidden="true">·</span>
+                    <PhotoViewerPlaceLink place={place} onSearchPlace={onSearchPlace} />
+                  </>
+                ) : null}
+              </span>
+              <span className="photo-viewer-subtitle-position">
+                <span aria-hidden="true">·</span>
+                <span className="photo-viewer-position">{t("position", { index: index + 1, total: items.length })}</span>
+              </span>
             </div>
           </div>
         </div>

@@ -747,6 +747,9 @@
   place-items: center;
   width: 28px;
   height: 28px;
+  /* Sonst gilt die globale button-Mindesthöhe (48 px): in der Foto-Ansicht machte das Symbol die
+     Unterzeile 48 px hoch, die Kopfzeile sprang bei Fotos mit Upload-Datum von 60 auf 84 px. */
+  min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1208,13 +1211,14 @@
   font-size: var(--text-sm);
 }
 
-/* Kopfzeile */
+/* Kopfzeile: feste Höhe, damit sie beim Blättern nicht springt. Dateiname, Datum und Ort sind
+   einzeilig (Ellipsis, voller Text im title); die Aktionen umbrechen über 640 px nicht. */
 .photo-viewer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  min-height: 60px;
+  height: 60px;
   padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--pv-border);
   background: var(--pv-panel);
@@ -1257,6 +1261,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  height: 21px;
   min-width: 0;
 }
 
@@ -1311,10 +1316,41 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  height: 20px;
+  min-width: 0;
   color: var(--pv-muted);
   font-size: var(--text-xs);
+  line-height: 20px;
   white-space: nowrap;
 }
+
+/* Gruppen der Unterzeile: Datum (+ Badge/Hinweis), Ort, Position. Das Hinweis-Symbol (28 px
+   Trefffläche) ragt über die Zeile hinaus, statt sie höher zu machen. */
+.photo-viewer-subtitle-date,
+.photo-viewer-subtitle-place,
+.photo-viewer-subtitle-position {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 20px;
+  min-width: 0;
+}
+
+.photo-viewer-subtitle-position { flex: none; }
+
+.photo-viewer-subtitle-place:empty { display: none; }
+
+.photo-viewer-subtitle-date-text,
+.photo-viewer-place-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.photo-viewer-subtitle .photo-viewer-date-badge,
+.photo-viewer-subtitle .photo-date-marker { flex: none; }
+
+.photo-viewer-subtitle .photo-date-marker { margin-left: 0; }
 
 .photo-viewer-subtitle .photo-date-marker-button { color: var(--pv-muted); }
 
@@ -1324,12 +1360,28 @@
 /* Foto-Standorte: Orts-Treffer, Umkreis-Chip «+10 km», Ort in der Foto-Ansicht */
 .photos-place-pill { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-3); font-weight: 500; }
 .photos-place-widen { width: auto; padding-inline: var(--space-2); border-radius: var(--radius-pill); font-weight: 600; }
-.photo-viewer-place { display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.photo-viewer-place { display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-width: 0; max-width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.photo-viewer-place svg { flex: none; }
 button.photo-viewer-place:hover { color: var(--pv-text); text-decoration: underline; }
-/* Schmal: Datum, Ort und Position umbrechen statt den Ortsnamen abzuschneiden */
+/* Schmal: Datum und Position in der ersten Zeile, der Ort in einer eigenen Zeile darunter, die
+   immer reserviert ist (auch ohne Ort) - so springt die Kopfzeile beim Blättern nicht. Der
+   Ortsname bricht dort um statt abgeschnitten zu werden (vollständig lesbar). */
 @media (max-width: 640px) {
-  .photo-viewer-subtitle { flex-wrap: wrap; row-gap: 2px; white-space: normal; }
-  .photo-viewer-place { text-align: left; overflow-wrap: anywhere; }
+  .photo-viewer-subtitle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "date position" "place place";
+    row-gap: 2px;
+    height: auto;
+  }
+  .photo-viewer-subtitle-date { grid-area: date; }
+  .photo-viewer-subtitle-position { grid-area: position; }
+  .photo-viewer-subtitle-place,
+  .photo-viewer-subtitle-place:empty { grid-area: place; display: block; height: auto; min-height: 20px; white-space: normal; }
+  .photo-viewer-subtitle-sep { display: none; }
+  .photo-viewer-place { display: inline; text-align: left; overflow-wrap: anywhere; }
+  .photo-viewer-place svg { margin-right: var(--space-1); vertical-align: -2px; }
+  .photo-viewer-place-label { overflow: visible; }
 }
 
 .photo-viewer-position {
@@ -1355,7 +1407,8 @@ button.photo-viewer-place:hover { color: var(--pv-text); text-decoration: underl
 
 .photo-viewer-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -2276,6 +2329,17 @@ div.photo-viewer-card-image {
 
 /* Tablet/Smartphone: Seitenleiste unter dem Bild, die ganze Ansicht scrollt. */
 @media (max-width: 900px) {
+  /* Nur Symbole - der Text bleibt für Screenreader (Name des Knopfs). So passen die Aktionen
+     neben den Dateinamen und die Kopfzeile bleibt einzeilig (feste Höhe). */
+  .photo-viewer-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .photo-viewer-body {
     display: block;
     overflow-y: auto;
@@ -2304,6 +2368,7 @@ div.photo-viewer-card-image {
   .photo-viewer-header {
     flex-wrap: wrap;
     gap: var(--space-2);
+    height: auto;
   }
 
   .photo-viewer-header-left {
@@ -2311,18 +2376,9 @@ div.photo-viewer-card-image {
   }
 
   .photo-viewer-actions {
+    flex-wrap: wrap;
     width: 100%;
     justify-content: flex-start;
-  }
-
-  /* Nur Symbole - der Text bleibt für Screenreader (Name des Knopfs). */
-  .photo-viewer-action-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
   }
 
   .photo-viewer-actions-divider {

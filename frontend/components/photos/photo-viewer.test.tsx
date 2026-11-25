@@ -264,6 +264,34 @@ describe("PhotoViewer Live Photo", () => {
     expect(screen.getByText("Kamera B")).toBeInTheDocument();
     expect(screen.queryByText("Kamera A")).not.toBeInTheDocument();
   });
+
+  it("Kopfzeile: beim Blättern weder Metadaten des vorigen Fotos noch Lücken, bis die neuen da sind (1.6)", async () => {
+    const pending: Record<string, (value: unknown) => void> = {};
+    browserApiFetchMock.mockImplementation((url: string) => new Promise((resolve) => { pending[url] = resolve; }));
+    const a = makeItem({ id: "a", date_source: "corrected", capture_corrected_at: "2026-07-10T14:32:00" });
+    const b = makeItem({ id: "b", group_date: "2026-07-11", date_source: "exif", exif_taken_at: "2026-07-11T09:15:00" });
+    const props = { onIndexChange: vi.fn(), onClose: vi.fn(), onToggleBest: vi.fn(), onTagsSaved: vi.fn() };
+    const { container, rerender } = render(<PhotoViewer items={[a, b]} index={0} {...props} />);
+    const subtitle = () => container.ownerDocument.querySelector(".photo-viewer-subtitle") as HTMLElement;
+    await act(async () => {
+      pending[a.metadata_url]({ id: "a", date_source: "corrected", capture_corrected_at: "2026-07-10T14:32:00", capture_corrected_has_time: true });
+    });
+    expect(subtitle()).toHaveTextContent("14:32");
+    expect(subtitle()).toHaveTextContent("korrigiert");
+
+    // b lädt noch: Uhrzeit aus der Liste, kein Badge und keine Uhrzeit von a
+    rerender(<PhotoViewer items={[a, b]} index={1} {...props} />);
+    expect(subtitle()).toHaveTextContent("09:15");
+    expect(subtitle()).not.toHaveTextContent("korrigiert");
+    expect(subtitle()).not.toHaveTextContent("14:32");
+    // Datum, Ort (Zeile bleibt reserviert) und Position stehen immer in derselben Struktur
+    expect(subtitle().querySelector(".photo-viewer-subtitle-date")).not.toBeNull();
+    expect(subtitle().querySelector(".photo-viewer-subtitle-place")).not.toBeNull();
+    expect(subtitle().querySelector(".photo-viewer-subtitle-position")).toHaveTextContent("2 / 2");
+
+    await act(async () => { pending[b.metadata_url]({ id: "b", date_source: "exif", exif_taken_at: "2026-07-11T09:15:00" }); });
+    expect(subtitle()).toHaveTextContent("09:15");
+  });
 });
 
 describe("Foto-Ansicht: Tastatur, Löschen und Vergleich", () => {
