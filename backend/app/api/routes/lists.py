@@ -22,6 +22,7 @@ from app.models import (
     ProtocolElement,
     ProtocolElementBlock,
     SubmissionAssignment,
+    SubmissionUpload,
     Template,
     TemplateElement,
     TemplateElementBlock,
@@ -442,6 +443,13 @@ def delete_entry(
     require_permission(user, P.MEETINGS_EDIT)
     current = _get_entry_or_404(db, list_entry_id, user)
     list_definition_id = current.list_definition_id
+    if P.SUBMISSIONS_MANAGE not in user.permissions and db.scalar(
+        select(SubmissionUpload.id).where(SubmissionUpload.list_entry_id == current.id).limit(1)
+    ) is not None:
+        # Wie Termin löschen (Nachtlauf 2026-11-25): die Einreichungen der Listen-Abgaben samt
+        # Dateien fallen mit weg - das verlangt submissions.manage (bewusst ohne Feature-Prüfung,
+        # damit Einträge nach einem Abgabebox-Downgrade löschbar bleiben)
+        raise HTTPException(status_code=403, detail="Permission required")
     try:
         deleted = service.delete_entry(db, current.id)
     except SQLAlchemyError as exc:

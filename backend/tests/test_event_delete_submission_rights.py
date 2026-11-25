@@ -60,3 +60,31 @@ def test_events_without_submissions_need_only_meetings_edit(db):
 
     events_route.delete_event(event.public_id, db=db, user=planner)
     assert db.scalar(select(Event.id).where(Event.id == event.id)) is None
+
+
+def test_deleting_a_list_entry_with_submissions_needs_submissions_manage(db):
+    """Security-Review 2026-11-25: derselbe Weg über Listen-Abgaben - Listeneintrag löschen
+    entfernt die Einreichungen des Eintrags samt Dateien."""
+    from app.api.routes import lists as lists_route
+    from app.models import ListEntry
+    from tests.factories import make_list_definition, make_list_entry
+
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id)
+    assignment = SubmissionAssignment(
+        tenant_id=tenant.id, title="Berichte", public_slug="berichte-liste-rechte", source_type="list", list_definition_id=definition.id,
+    )
+    db.add(assignment)
+    db.flush()
+    db.add(SubmissionUpload(assignment_id=assignment.id, list_entry_id=entry.id, status="submitted", submitted_at=datetime.now(UTC)))
+    db.flush()
+    planner = make_current_user(tenant.id, role="writer", permissions=frozenset({"meetings.read", "meetings.read_drafts", "meetings.edit"}))
+
+    with pytest.raises(HTTPException) as exc_info:
+        lists_route.delete_entry(entry.public_id, db=db, user=planner)
+    assert exc_info.value.status_code == 403
+    assert db.get(ListEntry, entry.id) is not None
+
+    lists_route.delete_entry(entry.public_id, db=db, user=make_current_user(tenant.id, role="writer"))
+    assert db.scalar(select(func.count()).select_from(SubmissionUpload).where(SubmissionUpload.assignment_id == assignment.id)) == 0
