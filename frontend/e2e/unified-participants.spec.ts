@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { confirmTenantStepUp } from "./step-up";
 
 // Konzept «Personen an einem Ort»: Login und Stammdaten einer Person auf der Personenseite.
 test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", async ({ request, page }) => {
@@ -23,7 +24,9 @@ test("Personenseite: Login vergeben, Stammdaten speichern und Login entziehen", 
     await expect(page).toHaveURL(new RegExp(`/participants/${participant.id}$`), { timeout: 30_000 });
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 
-    // Login per Passwort vergeben
+    // Login per Passwort vergeben. Im vollen Lauf ist die Anmeldung oft älter als 15 min: vorab per
+    // TOTP bestätigen (das Admin-Konto hat einen Faktor, Passwort wird dann nicht angeboten).
+    await confirmTenantStepUp(page.request, process.env.E2E_USER_EMAIL ?? "admin@hocx.local");
     await page.getByRole("button", { name: "Passwort setzen", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Login für Identität" });
     // Passwortregel (backend app/core/password_policy.py): zur Laufzeit, ohne häufige Wörter

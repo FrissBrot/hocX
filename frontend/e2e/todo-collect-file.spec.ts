@@ -28,7 +28,12 @@ async function openTodo(page: Page, task: string, done = false) {
   if (done) await statusFilter.click();
   // Mobile-Liste (390 px): Suche hinter einem Knopf, die wenigen E2E-Pendenzen stehen direkt da
   if ((page.viewportSize()?.width ?? 1440) > 640) await page.getByPlaceholder("Pendenzen durchsuchen").first().fill(task);
-  await page.getByText(task, { exact: true }).first().click();
+  // Bei 390 px schaltet die Seite erst nach dem Laden auf die Mobilansicht um; ein Klick davor trifft
+  // die ersetzte Desktop-Zeile und öffnet nichts. Darum klicken, bis Dialog bzw. Sheet offen ist.
+  await expect(async () => {
+    if (!(await dialogOf(page).isVisible())) await page.getByText(task, { exact: true }).first().click({ timeout: 5_000 });
+    await expect(dialogOf(page)).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
 }
 
 function dialogOf(page: Page) {
