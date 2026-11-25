@@ -845,6 +845,7 @@
     "todos": "Nicht enthalten: Pendenzen aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
     "todosHidden": "Nicht enthalten: weitere Pendenzen ({count}) aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
     "otherFines": "Nicht enthalten: Bussen anderer Personen (fehlende Berechtigung). Beträge zeigen nur deine eigenen Bussen.",
+    "financeHidden": "Nicht enthalten: Kontostand und Buchungen (fehlende Berechtigung).",
     "finesHidden": "Nicht enthalten: Bussen anderer Personen ({count}) (fehlende Berechtigung).",
     "sessionsHidden": "Nicht enthalten: Sitzungen ({count}), die du nicht sehen darfst (fehlende Berechtigung).",
     "peopleHidden": "Nicht enthalten: Angaben zu weiteren Personen ({count}) (fehlende Berechtigung). Gezeigt wird nur deine eigene Zeile.",

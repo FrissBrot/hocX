@@ -750,6 +750,7 @@
   "restricted": {
     "banner": "Restricted version: this document is incomplete because you lack permission for part of the data. The affected places are marked. It is a draft, not an official document.",
     "fileSuffix": "restricted",
+    "financeHidden": "Not included: account balance and transactions (missing permission).",
     "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
     "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
     "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",

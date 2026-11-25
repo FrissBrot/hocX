@@ -750,6 +750,7 @@
   "restricted": {
     "banner": "Versione limitata: questo documento è incompleto perché ti manca l’autorizzazione per una parte dei dati. I punti interessati sono segnalati. È una bozza, non un documento ufficiale.",
     "fileSuffix": "limitato",
+    "financeHidden": "Non inclusi: saldo e movimenti del conto (autorizzazione mancante).",
     "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
     "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
     "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",

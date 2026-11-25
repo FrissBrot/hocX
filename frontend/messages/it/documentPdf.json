@@ -845,6 +845,7 @@
     "todos": "Non incluse: attività da verbali che non puoi vedere (autorizzazione mancante).",
     "todosHidden": "Non incluse: altre attività ({count}) da verbali che non puoi vedere (autorizzazione mancante).",
     "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
+    "financeHidden": "Non inclusi: saldo e movimenti del conto (autorizzazione mancante).",
     "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
     "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
     "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",

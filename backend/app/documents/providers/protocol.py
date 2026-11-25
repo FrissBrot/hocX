@@ -283,7 +283,21 @@ def _event_list_block(ctx: BuildContext, protocol: Protocol, config: dict, field
     return EventTableBlock(**fields, table=table)
 
 
+def _finance_hidden(ctx: BuildContext) -> str | None:
+    """Kontostand und Buchungen im Protokoll nur mit finances.read inkl. gebuchtem Modul - wie
+    /api/finance/* und die Bausteine mit access="finance". Sonst bleibt der Block leer, mit
+    sichtbarem Platzhalter (eingeschränkte Fassung). Ohne Benutzer (Auto-PDF) alles."""
+    from app.core.permissions import P
+
+    if ctx.user is None or ctx.user.can(P.FINANCES_READ):
+        return None
+    return ctx.restriction_note("financeHidden")
+
+
 def _finance_balance_block(ctx: BuildContext, protocol: Protocol, config: dict, fields: dict) -> FinanceBalanceBlock:
+    hidden = _finance_hidden(ctx)
+    if hidden is not None:
+        return FinanceBalanceBlock(**fields, balances=[], restricted=hidden)
     account = ctx.entity_by_ref(FinanceAccount, config.get("finance_account_id"))
     if account is None:
         return FinanceBalanceBlock(**fields, balances=[])
@@ -296,6 +310,9 @@ def _finance_transactions_block(ctx: BuildContext, protocol: Protocol, config: d
 
     from app.services.protocol_period_service import protocol_period, transaction_matches
 
+    hidden = _finance_hidden(ctx)
+    if hidden is not None:
+        return FinanceTransactionsBlock(**fields, table=TableData(columns=[TableColumn(key="date")]), restricted=hidden)
     account = ctx.entity_by_ref(FinanceAccount, config.get("finance_account_id"))
     if account is None:
         return FinanceTransactionsBlock(**fields, table=TableData(columns=[TableColumn(key="date")]))
@@ -370,7 +387,12 @@ def map_block(ctx: BuildContext, protocol: Protocol, block: ProtocolElementBlock
     if code == "finance_transactions":
         return _finance_transactions_block(ctx, protocol, config, fields)
     if code == "fine_list":
-        return FinesBlock(**fields, table=finance_provider.protocol_fines(ctx, protocol, config))
+        # Bussen sind Personendaten: ohne reports.personal nur die eigenen (wie GET /api/fines,
+        # /protocols/{id}/fines und der Baustein «Bussen»), die übrigen als Platzhalter
+        own_participant_id = ctx.own_fines_participant_id()
+        table = finance_provider.protocol_fines(ctx, protocol, config, only_participant_id=own_participant_id)
+        hidden = finance_provider.protocol_fines(ctx, protocol, config).row_count() - table.row_count() if own_participant_id is not None else 0
+        return FinesBlock(**fields, table=table, restricted=ctx.restriction_note("finesHidden", count=hidden) if hidden else None)
     if code == "chart":
         return _chart_block(ctx, config, spec)
     if code == "entry_exit":

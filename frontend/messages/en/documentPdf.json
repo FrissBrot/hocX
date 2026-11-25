@@ -845,6 +845,7 @@
     "todos": "Not included: to-dos from minutes you are not allowed to see (missing permission).",
     "todosHidden": "Not included: further to-dos ({count}) from minutes you are not allowed to see (missing permission).",
     "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
+    "financeHidden": "Not included: account balance and transactions (missing permission).",
     "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
     "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
     "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",

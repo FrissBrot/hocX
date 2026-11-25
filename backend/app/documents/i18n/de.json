@@ -750,6 +750,7 @@
   "restricted": {
     "banner": "Eingeschränkte Fassung: Dieses Dokument ist unvollständig, weil dir für einen Teil der Daten die Berechtigung fehlt. Die betroffenen Stellen sind markiert. Es ist ein Entwurf und kein offizielles Dokument.",
     "fileSuffix": "eingeschraenkt",
+    "financeHidden": "Nicht enthalten: Kontostand und Buchungen (fehlende Berechtigung).",
     "finesHidden": "Nicht enthalten: Bussen anderer Personen ({count}) (fehlende Berechtigung).",
     "otherFines": "Nicht enthalten: Bussen anderer Personen (fehlende Berechtigung). Beträge zeigen nur deine eigenen Bussen.",
     "peopleHidden": "Nicht enthalten: Angaben zu weiteren Personen ({count}) (fehlende Berechtigung). Gezeigt wird nur deine eigene Zeile.",

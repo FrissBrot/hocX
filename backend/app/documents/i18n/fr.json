@@ -750,6 +750,7 @@
   "restricted": {
     "banner": "Version restreinte : ce document est incomplet, car il te manque l’autorisation pour une partie des données. Les endroits concernés sont signalés. C’est un brouillon, pas un document officiel.",
     "fileSuffix": "restreint",
+    "financeHidden": "Non inclus : solde et écritures du compte (autorisation manquante).",
     "finesHidden": "Non inclus : amendes d’autres personnes ({count}) (autorisation manquante).",
     "otherFines": "Non inclus : amendes d’autres personnes (autorisation manquante). Les montants ne montrent que tes propres amendes.",
     "peopleHidden": "Non inclus : données d’autres personnes ({count}) (autorisation manquante). Seule ta propre ligne est affichée.",

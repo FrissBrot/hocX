@@ -845,6 +845,7 @@
     "todos": "Non inclus : tâches issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
     "todosHidden": "Non inclus : autres tâches ({count}) issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
     "otherFines": "Non inclus : amendes d’autres personnes (autorisation manquante). Les montants ne montrent que tes propres amendes.",
+    "financeHidden": "Non inclus : solde et écritures du compte (autorisation manquante).",
     "finesHidden": "Non inclus : amendes d’autres personnes ({count}) (autorisation manquante).",
     "sessionsHidden": "Non inclus : séances ({count}) que tu n’as pas le droit de voir (autorisation manquante).",
     "peopleHidden": "Non inclus : données d’autres personnes ({count}) (autorisation manquante). Seule ta propre ligne est affichée.",
