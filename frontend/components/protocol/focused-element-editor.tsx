@@ -157,6 +157,7 @@ function FocusedElementEditorImpl({
   financeTransactions,
   financeVersion = 0,
   canManageFinances = false,
+  canManageFines = false,
   addFinanceTransaction,
   deleteFinanceTransaction,
   protocolFines,
@@ -260,6 +261,8 @@ function FocusedElementEditorImpl({
   /** Zählt erfasste/gelöschte Transaktionen hoch: Kontostände am Protokolldatum neu laden */
   financeVersion?: number;
   canManageFinances?: boolean;
+  /** Anwesenheitsbussen anlegen/entfernen (fines.manage) */
+  canManageFines?: boolean;
   addFinanceTransaction?: (accountId: string, values: { transaction_date: string; description: string; amount: number }) => Promise<boolean>;
   deleteFinanceTransaction?: (accountId: string, transactionId: string) => Promise<void>;
   protocolFines: AttendanceFine[];
@@ -3657,7 +3660,7 @@ function FocusedElementEditorImpl({
                     await saveAttendanceStatus(block.id, participant.id, participant.display_name, newStatus);
 
                     await syncAttendanceFine({
-                      canManage: canManageFinances,
+                      canManage: canManageFines,
                       protocolId: protocol.id,
                       participant,
                       status: newStatus,

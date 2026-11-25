@@ -184,7 +184,8 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               initialFinanceTransactions={initialFinanceTransactions}
               initialPendingTodos={pendingTodos}
               forceReadOnly={isRestricted}
-              canManageFinances={can(session, "fines.manage")}
+              canManageFinances={can(session, "finances.manage")}
+              canManageFines={can(session, "fines.manage")}
               todoFines={{
                 visible: can(session, "finances.read") && featureAccess(session, "todo_fines") !== "none",
                 manage: can(session, "fines.manage") && featureAccess(session, "todo_fines") === "full",
