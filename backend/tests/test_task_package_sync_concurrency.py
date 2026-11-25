@@ -25,6 +25,17 @@ from tests.factories import make_cycle_config, make_event, make_tenant
 
 TODAY = date(2026, 10, 12)  # Zyklus 01.08.2026-31.07.2027
 
+# Kein Warten ohne Ende (wie test_submission_todo_sync_concurrency): scheitert ein Assert, solange
+# `first` seine Sperren hält, bricht der zweite Abgleich nach lock_timeout ab, statt den
+# ThreadPool und damit den ganzen Testlauf anzuhalten.
+LOCK_TIMEOUT = "30s"
+
+
+def _session() -> Session:
+    session = Session(engine)
+    session.execute(text("SELECT set_config('lock_timeout', :value, true)"), {"value": LOCK_TIMEOUT})  # nur diese Transaktion
+    return session
+
 
 def _wait_until_blocked(timeout: float = 10.0) -> bool:
     """Wartet, bis eine andere Verbindung auf eine Sperre wartet (Lock oder Unique-Index)."""
@@ -62,7 +73,7 @@ def test_parallel_event_tag_syncs_do_not_collide():
         tenant_id, package_id, item_id = tenant.id, package.id, item.id
 
     def second_request() -> str | None:
-        with Session(engine) as db:
+        with _session() as db:
             try:
                 packages.sync_packages_for_event_tag(db, tenant_id=tenant_id, tag="Lager", today=TODAY)
             except Exception as exc:  # Befund festhalten statt den Thread sterben zu lassen
@@ -71,7 +82,7 @@ def test_parallel_event_tag_syncs_do_not_collide():
         return None
 
     try:
-        with Session(engine) as first, ThreadPoolExecutor(1) as pool:
+        with _session() as first, ThreadPoolExecutor(1) as pool:
             # Erster Request: Abgleich läuft, Transaktion noch offen (wie während der Route).
             packages.sync_package(first, first.get(TaskPackage, package_id), today=TODAY, commit=False)
             first.flush()
