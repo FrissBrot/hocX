@@ -91,7 +91,7 @@ test("WebDAV: App-Passwort, gesperrte Adresse, Nextcloud-Ordner per Tastatur imp
   await shoot(page, "02-webdav-error");
   await page.getByLabel("App-Passwort").fill("app-passwort-e2e");
   await page.getByLabel("App-Passwort").press("Enter");
-  await expect(page.getByText("Verbunden als anna @ cloud.verein.example")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Verbunden als anna @ cloud.verein.example", { exact: true })).toBeVisible({ timeout: 30_000 });
   // Passwort nie im Seiteninhalt
   expect(await page.content()).not.toContain("app-passwort-e2e");
 
