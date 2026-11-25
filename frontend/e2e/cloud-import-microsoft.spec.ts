@@ -82,7 +82,9 @@ test("Microsoft: anmelden, Ordner wählen, SharePoint nachfordern, importieren",
   await page.getByRole("button", { name: "SharePoint-Websites aufklappen" }).click();
   await page.getByRole("button", { name: "Vorstand aufklappen" }).click();
   // «Dokumente» gibt es zweimal (Ordner in OneDrive, Bibliothek der Website): die Bibliothek steht unten
-  await page.getByRole("checkbox", { name: "Dokumente", exact: true }).last().check();
+  const dokumente = page.getByRole("checkbox", { name: "Dokumente", exact: true });
+  await expect(dokumente).toHaveCount(2); // erst wenn die Bibliothek nachgeladen ist
+  await dokumente.last().check();
   await expect(page.getByText("2 Einträge ausgewählt")).toBeVisible();
 
   // 5. Auflisten im Hintergrund, dann Regeln/Vorschau wie bei ZIP
