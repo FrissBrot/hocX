@@ -283,7 +283,12 @@ def inspect_gallery_zip(path: Path) -> int:
             if expanded > GALLERY_ZIP_MAX_EXPANDED_BYTES:
                 raise HTTPException(413, "ZIP ist entpackt grösser als 20 GB")
             return expanded
-    except (zipfile.BadZipFile, OSError) as exc:
+    except zipfile.BadZipFile:
+        # Erwarteter Eingabefehler (kaputte/keine ZIP): kuratierte Meldung ohne Ursache, sonst
+        # schriebe der globale HTTPException-Handler jeden solchen Upload ins Fehlerprotokoll.
+        raise HTTPException(400, "ZIP-Datei ist beschädigt oder ungültig") from None
+    except OSError as exc:
+        # Lesefehler der Staging-Datei: unerwartet, bleibt über __cause__ im Fehlerprotokoll.
         raise HTTPException(400, "ZIP-Datei ist beschädigt oder ungültig") from exc
 
 

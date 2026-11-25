@@ -482,3 +482,42 @@ def test_gallery_upload_job_failure_is_logged_and_shows_only_a_curated_code(db, 
     assert "geheimer-bucket" not in (job.error or "")
     logged = db.scalars(select(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant.id)).all()
     assert any(entry.error_type == "RuntimeError" for entry in logged)
+
+
+def test_corrupt_gallery_zip_is_a_user_error_not_an_error_log_entry(db, monkeypatch):
+    """Nachtlauf 2026-11-25 (dateien-fotos/fehlerbehandlung): eine beschädigte .zip ist ein
+    erwarteter Eingabefehler. inspect_gallery_zip warf die 400 aber mit ``from exc`` (BadZipFile),
+    sodass der globale HTTPException-Handler jeden solchen Upload als unerwarteten Fehler in
+    system_error_log schrieb (Fehlalarme im Plattform-Admin)."""
+    from starlette.requests import Request
+
+    import app.main as main_module
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            files_routes.upload_gallery_images(
+                files=[_upload_file(b"das ist keine zip-datei", "ferien.zip", "application/zip")],
+                tags=None, event_id=None, submission_assignment_id=None, submission_element_ref=None,
+                cycle_config_id=None, db=db, user=writer,
+            )
+        )
+    assert exc_info.value.status_code == 400
+
+    recorded = []
+
+    async def _capture(request, exc, status_code):
+        recorded.append((type(exc).__name__, status_code))
+
+    monkeypatch.setattr(main_module, "record_request_error", _capture)
+    request = Request({"type": "http", "method": "POST", "path": "/api/files/gallery-uploads", "headers": [], "query_string": b""})
+    response = asyncio.run(main_module.logged_http_exception_handler(request, exc_info.value))
+    assert response.status_code == 400
+    assert recorded == []
+    # Staging-Dateien des abgelehnten Uploads bleiben nicht liegen
+    from app.core.config import settings
+    from pathlib import Path
+
+    staging = Path(settings.upload_root) / "_staging" / "gallery"
+    assert not staging.exists() or not any(staging.iterdir())
