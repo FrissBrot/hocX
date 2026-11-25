@@ -234,6 +234,10 @@ class AccessService:
         additiv: die Freigabe wird erst gefragt, wenn die Rollenprüfung ablehnt.
         ``allow_context_grant=False`` für Schreib- und Weitergabewege (Tags, Aufnahmedatum,
         Einbetten in Dokumente, Live-Clip/ZIP): dort zählen nur Rollenrechte."""
+        if not self.protocol_export_view_allows(db, user, stored_file_id):
+            # Vor Rollen- und Kontext-Freigaben: ein Protokoll-PDF einer anderen Sicht enthält
+            # Daten, die diese Person nicht sehen darf (404 wie unbekannt, kein Existenz-Orakel)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
         try:
             self._ensure_role_can_read_stored_file(db, user, stored_file_id)
         except HTTPException as exc:
@@ -242,6 +246,26 @@ class AccessService:
             ):
                 return
             raise
+
+    def protocol_export_view_allows(self, db: Session, user: CurrentUser, stored_file_id: int) -> bool:
+        """PDF eines Protokolls (DocumentExport mit protocol_id) nur in der Sicht des Exportierenden
+        (documents.service.document_view_key): Wer Bussen anderer Personen oder Finanzen nicht
+        sehen darf, bekommt ein eigenes, eingeschränktes PDF - nie das gemeinsame «full» (z. B. das
+        Auto-PDF beim Abschliessen mit allen Bussen und dem Kontostand) und nie das PDF einer
+        anderen Person. Sonst genügte das Leserecht am Protokoll für den Download. Exporte ohne
+        gespeicherte Sicht (Altbestand) zählen als «full». Keine Exportdatei: keine Einschränkung."""
+        from app.documents.service import FULL_VIEW, document_view_key
+        from app.models.entities import DocumentExport
+
+        views = list(db.scalars(
+            select(DocumentExport.options_json["view"].astext).where(
+                DocumentExport.stored_file_id == stored_file_id, DocumentExport.protocol_id.is_not(None)
+            )
+        ))
+        if not views:
+            return True
+        key = document_view_key(db, user)
+        return key == FULL_VIEW or all(view == key for view in views)
 
     def _ensure_role_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_ids = self.repository.protocol_ids_for_stored_file(db, stored_file_id=stored_file_id)

@@ -554,6 +554,12 @@ def list_document_exports(
         # Prüf-ID von Entwurfsexporten (Nachtlauf 2026-11-18, dokumente/rechte).
         final_protocols = select(Protocol.id).where(Protocol.tenant_id == user.current_tenant_id, Protocol.status == FINAL_PROTOCOL_STATUS)
         statement = statement.where(or_(DocumentExport.protocol_id.is_(None), DocumentExport.protocol_id.in_(final_protocols)))
+    # Protokoll-PDFs nur in der eigenen Sicht (AccessService.protocol_export_view_allows): das
+    # gemeinsame PDF (alle Bussen, Kontostand) bzw. das PDF einer anderen Person enthielte Daten,
+    # die eine eingeschränkte Person nicht sehen darf
+    view = document_service.document_view_key(db, user)
+    if view != document_service.FULL_VIEW:
+        statement = statement.where(or_(DocumentExport.protocol_id.is_(None), DocumentExport.options_json["view"].astext == view))
     if document_type:
         statement = statement.where(DocumentExport.document_type == document_type)
     exports = db.scalars(statement.order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc()).offset(offset).limit(limit))

@@ -126,7 +126,21 @@ def _protocol_list_cycle(protocol_date: date, cfg: CycleConfig | None, *, today:
     )
 
 
-def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
+def _export_view_clause(db: Session, user: CurrentUser | None) -> list:
+    """Nur PDFs in der Sicht der Person (AccessService.protocol_export_view_allows): eine
+    eingeschränkte Person bekommt nie den Link auf das gemeinsame PDF (alle Bussen, Kontostand)
+    oder das PDF einer anderen Person. Ohne Person (interne Aufrufe) keine Einschränkung."""
+    from app.documents.service import FULL_VIEW, document_view_key
+
+    if user is None:
+        return []
+    key = document_view_key(db, user)
+    if key == FULL_VIEW:
+        return []
+    return [DocumentExport.options_json["view"].astext == key]
+
+
+def _build_protocol_reads(db: Session, protocols: list, user: CurrentUser | None = None) -> list[ProtocolRead]:
     """Converts raw Protocol ORM rows to ProtocolRead, bulk-attaching the latest PDF url
     and Word-Import source link. Side-loaded data is looked up by the ORM rows' *internal*
     ids (still available here, before conversion to ProtocolRead's public id) - keep this
@@ -143,6 +157,7 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
         .where(
             DocumentExport.protocol_id.in_(internal_ids),
             DocumentExport.document_type == "protocol",
+            *_export_view_clause(db, user),
         )
         .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
     ).all()
@@ -220,7 +235,7 @@ def list_protocols(
         skip=skip,
         limit=limit,
     )
-    return _build_protocol_reads(db, protocols)
+    return _build_protocol_reads(db, protocols, user)
 
 
 class TemplatePreferencePayload(BaseModel):
@@ -371,7 +386,7 @@ def get_protocol(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: Cu
     require_permission(user, P.MEETINGS_READ)
     protocol = _get_protocol_or_404(db, protocol_id, user)
     access_service.ensure_can_read_protocol(db, user, protocol.id)
-    return _build_protocol_reads(db, [protocol])[0]
+    return _build_protocol_reads(db, [protocol], user)[0]
 
 
 @router.get("/protocols/{protocol_id}/pdf-coverage")
