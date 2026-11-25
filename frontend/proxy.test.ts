@@ -69,6 +69,24 @@ describe("proxy", () => {
     expect(first.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
   });
 
+  it("lockert die CSP nur auf der Seite des Google Pickers (Cloud-Import §5.3)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
+    const directive = (csp: string, name: string) => csp.split("; ").find((entry) => entry.startsWith(`${name} `)) ?? "";
+
+    const picker = (await proxy(new NextRequest("https://app.example.ch/files/import/google-picker?job=1"))).headers.get("content-security-policy") ?? "";
+    expect(directive(picker, "frame-src")).toBe("frame-src https://docs.google.com https://drive.google.com");
+    expect(directive(picker, "script-src")).toContain("https://apis.google.com");
+    expect(directive(picker, "script-src")).toMatch(/'nonce-[^']+'/);
+    expect(directive(picker, "script-src")).not.toContain("'unsafe-inline'");
+    expect(directive(picker, "frame-ancestors")).toBe("frame-ancestors 'none'");
+
+    for (const path of ["/files/import", "/files/import/google-picker/x", "/files/import/google-picker-x", "/photos", "/share/abc"]) {
+      const csp = (await proxy(new NextRequest(`https://app.example.ch${path}`))).headers.get("content-security-policy") ?? "";
+      expect(directive(csp, "frame-src"), path).toBe("frame-src 'none'");
+      expect(csp, path).not.toContain("google");
+    }
+  });
+
   it("setzt die CSP auch auf Weiterleitungen", async () => {
     unauthenticatedBackend();
 

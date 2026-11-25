@@ -347,3 +347,66 @@ export async function startCloudLogin(
   });
   window.location.assign(result.authorize_url);
 }
+
+// --- Google (Drive-Picker, Fotos-Sitzung) -----------------------------------------------------
+
+/** Eigene Seite des Google Pickers (gelockerte CSP nur dort, lib/csp.ts). */
+export const GOOGLE_PICKER_PAGE = "/files/import/google-picker";
+/** Loader des Google Pickers bzw. sein Nachbau im E2E-Stack (Backend, nur CLOUD_IMPORT_FAKE_PROVIDERS). */
+export const GOOGLE_PICKER_SCRIPT = "https://apis.google.com/js/api.js";
+export const GOOGLE_PICKER_FAKE_SCRIPT = "/api/cloud-import/fake-google/picker.js";
+const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type GooglePickerConfig = {
+  access_token: string;
+  api_key: string;
+  app_id: string;
+  expires_in: number;
+  max_items: number;
+  fake: boolean;
+};
+
+export type PhotosSession = { picker_uri: string; poll_seconds: number; timeout_seconds: number | null };
+export type PhotosPoll = { done: boolean; poll_seconds: number; job: ImportJob };
+
+/** Auswahl-Art eines Anbieters ohne Ordnerbaum (Backend: provider.public_info()["selection"]). */
+export function cloudSelectionMode(provider: CloudProvider | null): "tree" | "google_picker" | "photos_picker" {
+  const mode = provider?.info.selection;
+  return mode === "google_picker" || mode === "photos_picker" ? mode : "tree";
+}
+
+/** Gültige Auftrags-ID aus der Adresszeile der Picker-Seite, sonst null. */
+export function pickerJobId(search: string): string | null {
+  const job = new URLSearchParams(search).get("job");
+  return job && JOB_ID.test(job) ? job : null;
+}
+
+/** Zurück in den Wizard - immer als voller Seitenwechsel (die Picker-Seite hat eine eigene CSP). */
+export function wizardUrl(jobId: string | null): string {
+  return jobId ? `/files/import?job=${encodeURIComponent(jobId)}` : "/files/import";
+}
+
+/** Nur IDs gewählter Dateien (Ordner gibt drive.file nicht frei), ohne Doppelte, höchstens max. */
+export function pickedFileIds(docs: { id?: unknown; mimeType?: unknown }[], max: number): string[] {
+  const ids = docs
+    .filter((doc) => typeof doc.id === "string" && /^[A-Za-z0-9_-]{1,300}$/.test(doc.id) && doc.mimeType !== "application/vnd.google-apps.folder")
+    .map((doc) => doc.id as string);
+  return Array.from(new Set(ids)).slice(0, max);
+}
+
+/** Nur Auswahlseiten von Google Fotos öffnen (Backend prüft das auch); im E2E-Stack der Nachbau
+ *  auf der eigenen Origin. */
+export function isPhotosPickerUri(uri: string, origin: string): boolean {
+  try {
+    const url = new URL(uri);
+    if (url.protocol === "https:" && url.host === "photos.google.com") return true;
+    return url.origin === origin && url.pathname.startsWith("/api/cloud-import/fake-google/photos/");
+  } catch {
+    return false;
+  }
+}
+
+/** Google Fotos schliesst das Auswahlfenster selbst, wenn die URI auf «/autoclose» endet. */
+export function photosPickerUrl(uri: string): string {
+  return uri.endsWith("/autoclose") ? uri : `${uri.replace(/\/$/, "")}/autoclose`;
+}

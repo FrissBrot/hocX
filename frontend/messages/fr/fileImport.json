@@ -60,10 +60,14 @@
     "toRules": "Continuer vers les règles et l'aperçu",
     "cloudHintConnected": "hocX ne lit que ce que tu sélectionnes chez le service cloud et ne conserve l’accès chiffré que jusqu’à la fin de l’import.",
     "provider": {
-      "microsoft": "Microsoft OneDrive / SharePoint"
+      "microsoft": "Microsoft OneDrive / SharePoint",
+      "google_drive": "Google Drive",
+      "google_photos": "Google Photos"
     },
     "providerHint": {
-      "microsoft": "Connecter directement OneDrive personnel, OneDrive Entreprise ou des bibliothèques SharePoint. Tu choisis les dossiers dans hocX."
+      "microsoft": "Connecter directement OneDrive personnel, OneDrive Entreprise ou des bibliothèques SharePoint. Tu choisis les dossiers dans hocX.",
+      "google_drive": "Choisir des fichiers individuels. Google Docs, Sheets et Slides sont importés en Word, Excel et PowerPoint. Dossiers entiers via Google Takeout.",
+      "google_photos": "Choisir les photos directement dans Google Photos. Les vidéos ne sont pas reprises."
     }
   },
   "options": {
@@ -348,7 +352,14 @@
       "provider_unavailable": "Ce service cloud n’est pas disponible pour le moment.",
       "invalid_ref": "Sélection non valide.",
       "empty_source": "Aucun fichier trouvé dans la sélection. Merci de choisir d’autres dossiers.",
-      "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles. Merci de choisir à nouveau."
+      "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles. Merci de choisir à nouveau.",
+      "missing_scope": "L’accès aux fichiers ou aux photos n’a pas été autorisé lors de la connexion. Reconnecte-toi et coche la case correspondante.",
+      "picker_unavailable": "Le sélecteur Google n’a pas pu être chargé. Réessaie plus tard.",
+      "picker_no_files": "Aucun fichier sélectionné. Les dossiers ne peuvent pas être repris, seulement les fichiers.",
+      "photos_session_expired": "La sélection dans Google Photos a expiré. Recommence.",
+      "photos_session_missing": "Commence d’abord la sélection dans Google Photos.",
+      "wrong_source": "Cette étape ne correspond pas à la source choisie.",
+      "invalid_status": "Cet import n’est plus un brouillon. Continue dans l’assistant."
     },
     "adminConsent": {
       "title": "Aide : autorisation par le service informatique de l’organisation",
@@ -363,12 +374,35 @@
       "copied": "Lien d’autorisation copié."
     },
     "connectHint": {
-      "microsoft": "Connecte-toi avec ton compte Microsoft (personnel, professionnel ou scolaire). hocX demande d’abord uniquement un accès en lecture à tes propres fichiers ; pour « Partagés avec moi » sur les comptes professionnels et pour SharePoint, un second consentement suit dès que tu les ouvres."
+      "microsoft": "Connecte-toi avec ton compte Microsoft (personnel, professionnel ou scolaire). hocX demande d’abord uniquement un accès en lecture à tes propres fichiers ; pour « Partagés avec moi » sur les comptes professionnels et pour SharePoint, un second consentement suit dès que tu les ouvres.",
+      "google_drive": "Connecte-toi à Google. hocX ne verra ensuite que les fichiers que tu sélectionnes à l’étape suivante dans le sélecteur Google, rien d’autre de ton Drive.",
+      "google_photos": "Connecte-toi à Google. Tu choisis ensuite les photos directement dans Google Photos ; hocX ne voit que cette sélection."
     },
     "roots": {
       "microsoft_me": "Mon OneDrive",
       "microsoft_shared": "Partagés avec moi",
       "microsoft_sites": "Sites SharePoint"
+    },
+    "google": {
+      "driveHint": "Ouvre le sélecteur Google et marque les fichiers à reprendre (sélection multiple possible, 200 au maximum par passage).",
+      "driveFolders": "Google ne peut pas partager des dossiers entiers de cette manière. Crée plutôt un export Takeout et importe-le comme archive ZIP.",
+      "driveChoose": "Choisir dans Google Drive",
+      "photosHint": "Google Photos s’ouvre dans une nouvelle fenêtre. Choisis-y les photos et touche « OK ». La suite se fait ensuite automatiquement ici.",
+      "photosChoose": "Choisir dans Google Photos",
+      "photosRestart": "Recommencer la sélection",
+      "photosWaiting": "En attente de ta sélection dans Google Photos …",
+      "photosPopupHint": "Aucune nouvelle fenêtre ?",
+      "photosOpen": "Ouvrir Google Photos"
     }
+  },
+  "googlePicker": {
+    "title": "Choisir des fichiers dans Google Drive",
+    "intro": "Marque dans le sélecteur Google les fichiers à importer. hocX n’obtient l’accès qu’à ces fichiers.",
+    "pickerTitle": "Choisir des fichiers pour hocX",
+    "loading": "Chargement du sélecteur Google …",
+    "applying": "Reprise de la sélection …",
+    "cancelled": "Le sélecteur a été fermé sans reprendre de fichiers.",
+    "open": "Ouvrir le sélecteur Google",
+    "back": "Retour à l’import"
   }
 }

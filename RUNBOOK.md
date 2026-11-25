@@ -1707,3 +1707,168 @@ verbindet sich zu keinem anderen Host (Allowlist im Code).
 - Privat: <https://account.live.com/consent/Manage> → hocX Datei-Import → Entfernen.
 - Geschäftlich: <https://myapps.microsoft.com> → App → Berechtigungen widerrufen, bzw. die IT entfernt
   die Unternehmensanwendung.
+
+### 27.2 Google (Drive, Google Fotos)
+
+**Ziel:** ein Google-Cloud-Projekt mit OAuth-Client vom Typ «Webanwendung», nur die Scopes
+`drive.file` (Google Drive, nur im Picker gewählte Dateien) und `photospicker.mediaitems.readonly`
+(Google Fotos über die Photos Picker API), ein Browser-API-Key für den Google Picker. **Kein**
+`drive.readonly` (Entscheid E-3 a) - damit entfällt die jährliche Sicherheitsprüfung (CASA). Ganze
+Ordner importieren Vereine über Google Takeout (ZIP).
+
+**Empfehlung zu Umgebungen:** Produktion bekommt ein **eigenes** Projekt. Test-Host und hocx-dev teilen
+sich ein zweites Projekt, das im Status «Testen» bleibt (nur eingetragene Testnutzer, keine
+Verifizierung nötig).
+
+#### Voraussetzungen
+
+1. Ein Google-Konto des Betreibers mit 2-Faktor-Anmeldung (am besten ein eigenes Betreiberkonto bzw.
+   Google Workspace des Betreibers, nicht ein privates Konto einer Person).
+2. Für Produktion: die Betreiber-Domain (Website) in der **Google Search Console** als Inhaber bestätigt
+   (<https://search.google.com/search-console>, DNS-TXT-Eintrag). Google prüft bei der Verifizierung,
+   dass Startseite und Datenschutzerklärung auf dieser Domain liegen.
+3. Die Datenschutzerklärung der Plattform enthält einen Abschnitt zu Google-Daten: welche Daten hocX
+   liest (nur gewählte Dateien/Fotos, Kontokennung), wozu (einmaliger Import), wie lange (Tokens bis
+   Importende, widerrufen) und den Satz zur Einhaltung der «Google API Services User Data Policy,
+   including the Limited Use requirements». Ohne diesen Abschnitt lehnt Google die Verifizierung ab.
+
+#### Schritt 1 - Projekt anlegen
+
+1. <https://console.cloud.google.com> → oben **Projekt auswählen** → **Neues Projekt**.
+2. Name z. B. `hocX Datei-Import Produktion` (bzw. `… Test`), Organisation/Ordner nach Bedarf → **Erstellen**.
+3. Im Dashboard unter **Projektinfo** die **Projektnummer** (nur Ziffern) notieren - das ist
+   `CLOUD_IMPORT_GOOGLE_APP_ID`. (Nicht die Projekt-ID mit Buchstaben.)
+
+#### Schritt 2 - APIs aktivieren
+
+**APIs und Dienste → Bibliothek**, jeweils suchen und **Aktivieren**:
+
+- **Google Drive API**
+- **Google Picker API**
+- **Photos Picker API** (nur für Google Fotos)
+
+Keine weiteren APIs (insbesondere nicht die «Photos Library API»).
+
+#### Schritt 3 - Zustimmungsbildschirm (Google Auth Platform)
+
+**APIs und Dienste → OAuth-Zustimmungsbildschirm** (heisst inzwischen **Google Auth Platform**):
+
+1. **Branding:** App-Name `hocX`, Support-E-Mail des Betreibers, optional Logo (ein Logo löst eine
+   zusätzliche Prüfung aus), **Startseite**, **Datenschutzerklärung** und **Nutzungsbedingungen** der
+   Plattform (alle auf der bestätigten Domain), **Autorisierte Domains**: die Betreiber-Domain und die
+   Domain von `TRAEFIK_DOMAIN` (ohne Subdomain, z. B. `hocx.ch`), Entwickler-Kontakt-E-Mail.
+2. **Zielgruppe:** Nutzertyp **Extern**. Veröffentlichungsstatus zuerst **Testen**. Unter
+   **Testnutzer** die Google-Konten eintragen, die vor der Verifizierung testen dürfen (höchstens 100).
+3. **Datenzugriff → Bereiche hinzufügen oder entfernen:** genau diese vier eintragen (unten «Bereiche
+   manuell hinzufügen», je eine Zeile):
+   ```
+   openid
+   https://www.googleapis.com/auth/userinfo.email
+   https://www.googleapis.com/auth/drive.file
+   https://www.googleapis.com/auth/photospicker.mediaitems.readonly
+   ```
+   `drive.file` und die beiden Anmelde-Scopes stuft Google als **nicht sensibel** ein. Zeigt die
+   Konsole `photospicker.mediaitems.readonly` als **sensibel** an, braucht die Veröffentlichung für
+   Google Fotos die Verifizierung sensibler Scopes (Schritt 7, ohne CASA). Nichts weiter hinzufügen.
+
+#### Schritt 4 - OAuth-Client (Webanwendung)
+
+1. **Google Auth Platform → Clients → Client erstellen**, Anwendungstyp **Webanwendung**, Name z. B.
+   `hocX Produktion`.
+2. **Autorisierte JavaScript-Quellen:** leer lassen (hocX holt die Tokens serverseitig).
+3. **Autorisierte Weiterleitungs-URIs** - je Umgebung beide (zentrale Domain, keine Vereinsdomain):
+   ```
+   https://<TRAEFIK_DOMAIN>/api/cloud-import/oauth/google_drive/callback
+   https://<TRAEFIK_DOMAIN>/api/cloud-import/oauth/google_photos/callback
+   ```
+   Beispiel Test-Host und hocx-dev im gemeinsamen Testprojekt: je zwei URIs mit der jeweiligen Domain.
+4. **Erstellen** → **Client-ID** und **Clientschlüssel** sofort kopieren (der Schlüssel wird nur jetzt
+   vollständig angezeigt). Google-Clientschlüssel laufen nicht von selbst ab; wer einen neuen anlegt
+   (Rotation), trägt ihn ein, deployt und löscht danach den alten in der Konsole.
+
+#### Schritt 5 - API-Key für den Google Picker
+
+Der Picker läuft im Browser und braucht einen öffentlichen API-Key. Er ist kein Geheimnis, muss aber
+eingeschränkt werden, damit niemand ihn auf fremden Seiten oder für andere APIs nutzt.
+
+1. **APIs und Dienste → Anmeldedaten → Anmeldedaten erstellen → API-Schlüssel**.
+2. Schlüssel bearbeiten, Name `hocX Picker`.
+3. **Anwendungseinschränkungen:** **Websites** (HTTP-Verweis-URLs), je Umgebung:
+   ```
+   https://<TRAEFIK_DOMAIN>/*
+   https://*.<TRAEFIK_DOMAIN>/*
+   ```
+   plus jede **eigene App-Domain** eines Vereins (`https://intern.verein.ch/*`), die den Import nutzt -
+   sonst lehnt Google den Picker auf dieser Domain ab.
+4. **API-Einschränkungen:** **Schlüssel einschränken** → nur **Google Picker API** → **Speichern**.
+5. Den Schlüssel als `CLOUD_IMPORT_GOOGLE_API_KEY` notieren.
+
+#### Schritt 6 - Testmodus (Dev und Test-Host)
+
+- Im Status **Testen** funktionieren nur die eingetragenen Testnutzer; Google zeigt einen Hinweis «App
+  nicht überprüft», den man mit **Weiter** bestätigt.
+- Autorisierungen im Testmodus verfallen nach **7 Tagen**. Ein Import, der länger läuft, wartet dann auf
+  eine neue Anmeldung (hocX schickt eine Mail, «Neu anmelden» im Assistenten setzt fort).
+- Das Testprojekt bleibt dauerhaft im Testmodus; nur das Produktionsprojekt wird veröffentlicht.
+
+#### Schritt 7 - Veröffentlichen und Basis-Verifizierung (Produktion)
+
+1. **Google Auth Platform → Zielgruppe → App veröffentlichen** («In Produktion»).
+2. Für die nicht sensiblen Scopes verlangt Google eine **Markenverifizierung** (Branding): Domain in der
+   Search Console bestätigt, Startseite erklärt hocX und verlinkt die Datenschutzerklärung, App-Name und
+   Logo passen zur Startseite. Unter **Branding → Überprüfungsstatus** die Prüfung anstossen; Dauer
+   meist wenige Werktage. Rückfragen kommen per E-Mail an den Entwickler-Kontakt.
+3. Falls `photospicker.mediaitems.readonly` als sensibel gilt: in **Datenzugriff** je Scope begründen
+   («Vereine übernehmen von der Person ausgewählte Fotos einmalig in ihre Vereinsablage»), ein kurzes
+   Demo-Video (nicht gelistet auf YouTube: Anmeldung, Zustimmungsdialog mit sichtbarer Client-ID,
+   Auswahl in Google Fotos, Import in hocX) verlinken. Keine Sicherheitsprüfung durch ein Labor (CASA
+   gilt nur für eingeschränkte Scopes wie `drive.readonly`).
+4. Bis die Verifizierung durch ist, sehen Nutzer den Warnhinweis und es gilt die Grenze von 100 neuen
+   Nutzern; der Import funktioniert trotzdem.
+
+#### Schritt 8 - Einträge in `.env` (je Umgebung)
+
+```
+# Google (Projekt aus den Schritten 1-5)
+CLOUD_IMPORT_GOOGLE_CLIENT_ID=<Client-ID>.apps.googleusercontent.com
+CLOUD_IMPORT_GOOGLE_CLIENT_SECRET=<Clientschlüssel>
+CLOUD_IMPORT_GOOGLE_API_KEY=<API-Schlüssel aus Schritt 5>
+CLOUD_IMPORT_GOOGLE_APP_ID=<Projektnummer aus Schritt 1>
+# Optional: nur setzen, wenn der Schlüssel ablaufen soll (Monitoring warnt 30 Tage vorher)
+# CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES=JJJJ-MM-TT
+```
+
+- Google Drive erscheint nur mit allen vier Werten (ohne API-Key/App-ID kein Picker). Google Fotos
+  braucht nur Client-ID und Clientschlüssel.
+- `scripts/deploy.sh` prüft die Werte (Client-ID nur mit Secret, API-Key und App-ID nur gemeinsam) und
+  legt das Secret als Datei für backend und job-worker ab (`cloud_import_google_client_secret`).
+- `CLOUD_IMPORT_TOKEN_KEY` erzeugt deploy.sh selbst - nicht eintragen.
+
+#### Schritt 9 - Netz (ausgehend)
+
+- backend und job-worker: `oauth2.googleapis.com`, `www.googleapis.com`, `docs.google.com` (grosse
+  Exporte), `photospicker.googleapis.com`, `lh*.googleusercontent.com` und Umleitungen auf
+  `*.googleusercontent.com`. hocX verbindet sich zu keinem anderen Host (Allowlist im Code).
+- Browser der Vereine: `accounts.google.com` (Anmeldung), `apis.google.com` und `docs.google.com` (nur
+  auf der Picker-Seite, eigene CSP), `photos.google.com` (neues Fenster).
+
+#### Schritt 10 - Abnahme mit echten Konten
+
+1. Google Drive: anmelden (Testnutzer), **In Google Drive auswählen** → je ein Google-Dokument, eine
+   Tabelle, eine Präsentation, ein JPG und ein PDF wählen → Import. Erwartet: `.docx`, `.xlsx`, `.pptx`,
+   Bild in der Galerie, PDF in den Dokumenten.
+2. Ein Google-Dokument mit vielen Bildern (Export > 10 MB) wählen: Import über die Exportlinks oder
+   «zu gross» im Bericht, kein Hängen.
+3. Bei der Anmeldung das Häkchen für die Dateien abwählen: Wizard meldet «Zugriff nicht erlaubt» und
+   bietet «Neu anmelden».
+4. Google Fotos: **In Google Fotos auswählen** → im neuen Fenster drei Fotos und ein Video wählen →
+   **Fertig** → Wizard listet von selbst auf → Import; das Video steht als «nicht unterstützt» im Bericht.
+5. Picker auf einer Vereins-Subdomain und (falls vorhanden) auf einer eigenen App-Domain öffnen
+   (Referrer-Einschränkung des API-Keys prüfen).
+6. Nach dem Import unter <https://myaccount.google.com/connections> prüfen: hocX hat keinen Zugriff mehr
+   (Token widerrufen).
+
+#### Zugriff entziehen (für Vereine)
+
+<https://myaccount.google.com/connections> → hocX → **Alle Verbindungen löschen**. In hocX löscht
+**Verbindung trennen** den Zugang sofort und widerruft ihn bei Google.

@@ -1160,6 +1160,24 @@
         "files.import"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker": {
+      "handler": "cloud_import_google.google_drive_picker",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session": {
+      "handler": "cloud_import_google.google_photos_session",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll": {
+      "handler": "cloud_import_google.google_photos_poll",
+      "requires": [
+        "files.import"
+      ]
+    },
     "GET /api/cloud-import/jobs/{job_id}/items": {
       "handler": "cloud_import.list_import_items",
       "requires": [

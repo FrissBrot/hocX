@@ -60,10 +60,14 @@
     "toRules": "Continua con regole e anteprima",
     "cloudHintConnected": "hocX legge dal servizio cloud solo ciò che selezioni e conserva l’accesso cifrato solo fino alla fine dell’importazione.",
     "provider": {
-      "microsoft": "Microsoft OneDrive / SharePoint"
+      "microsoft": "Microsoft OneDrive / SharePoint",
+      "google_drive": "Google Drive",
+      "google_photos": "Google Foto"
     },
     "providerHint": {
-      "microsoft": "Collega direttamente OneDrive personale, OneDrive for Business o raccolte SharePoint. Scegli le cartelle in hocX."
+      "microsoft": "Collega direttamente OneDrive personale, OneDrive for Business o raccolte SharePoint. Scegli le cartelle in hocX.",
+      "google_drive": "Scegli singoli file. Documenti, Fogli e Presentazioni Google arrivano come Word, Excel e PowerPoint. Cartelle intere tramite Google Takeout.",
+      "google_photos": "Scegli le foto direttamente in Google Foto. I video non vengono importati."
     }
   },
   "options": {
@@ -348,7 +352,14 @@
       "provider_unavailable": "Questo servizio cloud al momento non è disponibile.",
       "invalid_ref": "Selezione non valida.",
       "empty_source": "Nella selezione non sono stati trovati file. Scegli altre cartelle.",
-      "selection_unavailable": "Le cartelle selezionate non sono più raggiungibili. Seleziona di nuovo."
+      "selection_unavailable": "Le cartelle selezionate non sono più raggiungibili. Seleziona di nuovo.",
+      "missing_scope": "Durante l’accesso non è stato consentito l’accesso ai file o alle foto. Accedi di nuovo e spunta la casella relativa.",
+      "picker_unavailable": "Non è stato possibile caricare il selettore Google. Riprova più tardi.",
+      "picker_no_files": "Nessun file selezionato. Le cartelle non possono essere importate, solo i file.",
+      "photos_session_expired": "La selezione in Google Foto è scaduta. Ricomincia.",
+      "photos_session_missing": "Avvia prima la selezione in Google Foto.",
+      "wrong_source": "Questo passo non corrisponde alla fonte scelta.",
+      "invalid_status": "Questa importazione non è più una bozza. Prosegui nell’assistente."
     },
     "adminConsent": {
       "title": "Aiuto: approvazione da parte dell’IT dell’organizzazione",
@@ -363,12 +374,35 @@
       "copied": "Link di approvazione copiato."
     },
     "connectHint": {
-      "microsoft": "Accedi con il tuo account Microsoft (personale, di lavoro o scolastico). hocX chiede dapprima solo l’accesso in lettura ai tuoi file; per «Condivisi con me» negli account di lavoro e per SharePoint segue un secondo consenso appena li apri."
+      "microsoft": "Accedi con il tuo account Microsoft (personale, di lavoro o scolastico). hocX chiede dapprima solo l’accesso in lettura ai tuoi file; per «Condivisi con me» negli account di lavoro e per SharePoint segue un secondo consenso appena li apri.",
+      "google_drive": "Accedi con Google. hocX vedrà poi solo i file che selezioni nel passo successivo nel selettore Google, nient’altro del tuo Drive.",
+      "google_photos": "Accedi con Google. Poi scegli le foto direttamente in Google Foto; hocX vede solo questa selezione."
     },
     "roots": {
       "microsoft_me": "Il mio OneDrive",
       "microsoft_shared": "Condivisi con me",
       "microsoft_sites": "Siti SharePoint"
+    },
+    "google": {
+      "driveHint": "Apri il selettore Google e seleziona i file da importare (selezione multipla possibile, al massimo 200 per volta).",
+      "driveFolders": "Google non può condividere cartelle intere in questo modo. Crea invece un’esportazione Takeout e importala come archivio ZIP.",
+      "driveChoose": "Scegli in Google Drive",
+      "photosHint": "Google Foto si apre in una nuova finestra. Scegli lì le foto e tocca «Fine». Poi qui si prosegue automaticamente.",
+      "photosChoose": "Scegli in Google Foto",
+      "photosRestart": "Ricomincia la selezione",
+      "photosWaiting": "In attesa della tua selezione in Google Foto …",
+      "photosPopupHint": "Non è comparsa una nuova finestra?",
+      "photosOpen": "Apri Google Foto"
     }
+  },
+  "googlePicker": {
+    "title": "Scegli file da Google Drive",
+    "intro": "Seleziona nel selettore Google i file da importare. hocX ottiene accesso solo a questi file.",
+    "pickerTitle": "Scegli file per hocX",
+    "loading": "Caricamento del selettore Google …",
+    "applying": "Selezione in corso di applicazione …",
+    "cancelled": "Il selettore è stato chiuso senza importare file.",
+    "open": "Apri il selettore Google",
+    "back": "Torna all’importazione"
   }
 }

@@ -49,6 +49,8 @@ MAX_JSON_BYTES = 8 * 1024**2
 CHUNK = 256 * 1024
 RETRY_AFTER_DEFAULT = 30
 RETRY_AFTER_MAX = 3600
+# 403-Gründe, mit denen Google Drosselung meldet (wie 429 behandeln)
+GOOGLE_RATE_LIMIT_REASONS = frozenset({"userRateLimitExceeded", "rateLimitExceeded", "RESOURCE_EXHAUSTED"})
 
 
 # --- Fehler (kuratierte Codes, ohne URL/Token im Text) ---------------------------------------
@@ -137,6 +139,9 @@ def check_url(url: str, policy: HostPolicy) -> tuple[str, str]:
 
 
 def _log_target(host: str, target: str) -> str:
+    # Google-Fotos-baseUrl: der Pfad ist eine Fähigkeits-URL - nur den Host protokollieren
+    if host.endswith(".googleusercontent.com"):
+        return host
     return f"{host}{target.split('?', 1)[0]}"
 
 
@@ -287,7 +292,11 @@ def _provider_error_code(body: bytes) -> str | None:
         return None
     error = data.get("error")
     if isinstance(error, dict):
-        error = error.get("code")
+        # Graph: error.code (Text). Google: error.code ist die Zahl, der Grund steht in
+        # error.errors[0].reason (z. B. userRateLimitExceeded, exportSizeLimitExceeded) bzw. error.status.
+        details = error.get("errors")
+        reason = details[0].get("reason") if isinstance(details, list) and details and isinstance(details[0], dict) else None
+        error = error.get("code") if isinstance(error.get("code"), str) else reason or error.get("status")
     if isinstance(error, str) and len(error) <= 80 and all(ch.isalnum() or ch in "_.-" for ch in error):
         return error
     return None
@@ -302,6 +311,9 @@ def raise_for_status(response: HttpResponse) -> None:
     detail = _provider_error_code(response.body)
     if status == 401:
         raise ProviderUnauthorized(detail=detail)
+    if status == 403 and detail in GOOGLE_RATE_LIMIT_REASONS:
+        # Google meldet Drosselung teils als 403 statt 429 (Drive API Usage limits [G10])
+        raise ProviderThrottled(parse_retry_after(response.headers.get("retry-after")), status=status)
     if status == 403:
         raise ProviderError("access_denied", status=status, detail=detail)
     if status == 404:
@@ -334,7 +346,7 @@ class SafeHttpClient:
 
     def request(
         self, method: str, url: str, *, bearer: str | None = None, headers: dict[str, str] | None = None,
-        form: dict[str, str] | None = None, max_bytes: int = MAX_JSON_BYTES,
+        form: dict[str, str] | None = None, json_body: dict | None = None, max_bytes: int = MAX_JSON_BYTES,
     ) -> HttpResponse:
         """Einzelner Request ohne Redirect-Folgen. Bearer nur an API-Hosts."""
         body = None
@@ -342,6 +354,9 @@ class SafeHttpClient:
         if form is not None:
             body = urlencode(form).encode("ascii")
             extra["Content-Type"] = "application/x-www-form-urlencoded"
+        elif json_body is not None:
+            body = json.dumps(json_body).encode("utf-8")
+            extra["Content-Type"] = "application/json"
         host, _target = check_url(url, self.policy)
         raw = self._open(method, url, bearer=bearer, send_bearer=self.policy.bearer_always(host), headers=extra, body=body)
         try:

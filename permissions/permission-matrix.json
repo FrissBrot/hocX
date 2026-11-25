@@ -168,6 +168,24 @@
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker": {
+      "handler": "cloud_import_google.google_drive_picker",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session": {
+      "handler": "cloud_import_google.google_photos_session",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll": {
+      "handler": "cloud_import_google.google_photos_poll",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/cloud-import/jobs/{job_id}/items": {
       "handler": "cloud_import.list_import_items",
       "allowed": [

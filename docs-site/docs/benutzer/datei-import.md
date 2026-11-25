@@ -16,6 +16,8 @@ zum Beispiel den Vereinsordner aus OneDrive, Google Drive oder Dropbox. Zu finde
 | **ZIP-Archiv** | Download aus OneDrive/Dropbox, Google Takeout, Archiv vom PC | Mehrere ZIPs pro Import möglich (z. B. Takeout-Teilarchive), je bis 10 GB. Bei Google Takeout wird der Ordner «Takeout» automatisch erkannt. Die Metadaten-Dateien (`.json`) werden nicht importiert, ihr Aufnahmedatum aber übernommen, wenn das Foto selbst keines hat (siehe unten). |
 | **Ordner hochladen** | Synchronisierter Ordner auf dem PC (OneDrive, Google Drive, …) | Zuerst wird nur die Dateiliste übertragen. Nach dem Start lädt der Browser genau die Dateien hoch, die importiert werden - das Fenster muss dafür offen bleiben. Wird es geschlossen, denselben Ordner später erneut wählen; der Upload geht weiter. |
 | **Microsoft OneDrive / SharePoint** | OneDrive privat, OneDrive for Business, SharePoint-Bibliotheken | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
+| **Google Drive** | Einzelne Dateien aus «Meine Ablage» und geteilten Ablagen | Auswahl in der Google-Auswahl, siehe unten. Ganze Ordner über **Google Takeout** (ZIP). Erscheint nur, wenn der Betreiber Google eingerichtet hat. |
+| **Google Fotos** | Fotos aus Google Fotos | Auswahl direkt in Google Fotos, siehe unten. Videos werden nicht übernommen. |
 
 
 ### Direkt aus Microsoft OneDrive und SharePoint
@@ -46,6 +48,43 @@ geht es dort weiter, wo der Import stand. Ohne Anmeldung wird er nach 7 Tagen be
 verschlüsselt gespeichert und gelöscht, sobald der Import beendet ist; **Verbindung trennen** löscht
 ihn sofort. Die App-Berechtigung selbst entfernst du bei Microsoft: privat unter
 <https://account.live.com/consent/Manage>, geschäftlich unter <https://myapps.microsoft.com>.
+
+### Direkt aus Google Drive
+
+1. Kachel **Google Drive** wählen, Dateitypen und Optionen festlegen, **Weiter**.
+2. **Bei Google Drive anmelden** - die Anmeldung läuft direkt bei Google. Lässt Google dich einzelne
+   Berechtigungen ankreuzen, das Häkchen für die Dateien setzen; sonst meldet der Assistent «Zugriff
+   nicht erlaubt» und bietet **Neu anmelden** an.
+3. **In Google Drive auswählen** öffnet die Google-Auswahl auf einer eigenen Seite. Dort die Dateien
+   markieren (Mehrfachauswahl, höchstens 200 pro Durchgang, auch aus geteilten Ablagen) und
+   bestätigen. hocX erhält **nur auf diese Dateien** Zugriff, nicht auf den Rest des Drives.
+4. Zurück im Assistenten listet hocX die Dateien auf; danach Regeln, Vorschau und Start wie beim
+   ZIP-Import. Während des Imports lädt hocX die Dateien selbst herunter.
+
+- **Google Docs, Tabellen und Präsentationen** werden als **Word (.docx)**, **Excel (.xlsx)** und
+  **PowerPoint (.pptx)** übernommen, Zeichnungen als PDF. Formulare, Sites und Verknüpfungen lassen
+  sich nicht übernehmen und stehen im Bericht als «nicht unterstützt».
+- **Ganze Ordner** gibt Google über diese Auswahl nicht frei (Google erlaubt hocX nur den Zugriff auf
+  einzeln gewählte Dateien). Für ganze Ordner mit Unterordnern: unter <https://takeout.google.com>
+  «Drive» exportieren und die ZIP-Dateien mit der Quelle **ZIP-Archiv** importieren.
+
+### Direkt aus Google Fotos
+
+1. Kachel **Google Fotos** wählen, **Weiter**, **Bei Google Fotos anmelden**.
+2. **In Google Fotos auswählen** öffnet Google Fotos in einem neuen Fenster (bzw. Tab). Dort die
+   Fotos auswählen und **Fertig** tippen; das Fenster schliesst sich. Öffnet sich kein Fenster
+   (Popup-Blocker), den Link **Google Fotos öffnen** benutzen.
+3. Der Assistent merkt die Auswahl von selbst und listet die Fotos im Ordner «Google Fotos» auf;
+   danach Regeln, Vorschau und Start wie gewohnt.
+
+- Google liefert die Fotos mit Aufnahmedatum und Kameradaten, aber **ohne Standort** (GPS).
+- **Videos** werden nicht übernommen und stehen im Bericht.
+- Die Auswahl bei Google gilt nur begrenzte Zeit. Ist sie abgelaufen, meldet der Assistent das;
+  dann **Auswahl neu starten**.
+
+**Neu anmelden und Datenschutz bei Google:** wie bei Microsoft (oben). Nach dem Import löscht hocX den
+Zugang und widerruft ihn zusätzlich bei Google. Die App-Berechtigung siehst und entfernst du unter
+<https://myaccount.google.com/connections>.
 
 Grenzen: höchstens 50 000 Dateien und 100 GB pro Import; Dokumente bis 20 MB, Bilder bis 100 MB
 (wie beim normalen Hochladen). Grössere oder nicht unterstützte Dateien erscheinen im Bericht.
