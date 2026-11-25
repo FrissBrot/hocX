@@ -12,6 +12,10 @@ from app.schemas.event import EventRead, check_event_date_range
 
 # Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
 # ProtocolService._STATUS_ORDER - the full, ordered protocol lifecycle.
+# Spalten sort_index/section_order_snapshot/render_order sind INTEGER; ohne Grenze scheiterte z. B.
+# 2**31 erst in PostgreSQL (DataError, 400 plus Fehlerprotokoll; Nachtlauf 2026-11-25).
+PgInteger = Annotated[int, Field(ge=-(2**31), le=2**31 - 1)]
+
 ProtocolStatus = Literal["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"]
 
 
@@ -304,9 +308,9 @@ class ProtocolTemplateChangesApplyRead(BaseModel):
 
 
 class ProtocolElementUpdate(BaseModel):
-    sort_index: int | None = None
+    sort_index: PgInteger | None = None
     section_name_snapshot: str | None = None
-    section_order_snapshot: int | None = None
+    section_order_snapshot: PgInteger | None = None
     is_required_snapshot: bool | None = None
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
@@ -315,8 +319,8 @@ class ProtocolElementUpdate(BaseModel):
 class ProtocolElementBlockUpdate(BaseModel):
     block_title_snapshot: str | None = None
     description_snapshot: str | None = None
-    sort_index: int | None = None
-    render_order: int | None = None
+    sort_index: PgInteger | None = None
+    render_order: PgInteger | None = None
     is_required_snapshot: bool | None = None
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
