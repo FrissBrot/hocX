@@ -326,7 +326,10 @@ def _finance_transactions_block(ctx: BuildContext, protocol: Protocol, config: d
     if filtered:
         index = transactions.index(filtered[0])
         opening = sum(float(tx.amount) for tx in transactions[:index])
-    return FinanceTransactionsBlock(**fields, table=finance_provider.transactions_table(account, filtered, opening_balance=opening))
+    return FinanceTransactionsBlock(
+        **fields,
+        table=finance_provider.transactions_table(account, filtered, opening_balance=opening, fine_names=finance_provider.masked_fine_names(ctx, filtered)),
+    )
 
 
 def _chart_block(ctx: BuildContext, config: dict, spec: BlockSpec):

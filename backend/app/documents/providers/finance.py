@@ -24,6 +24,7 @@ from app.documents.model import (
 )
 from app.documents.providers.common import amount_cell, col, sort_key, spec_fields, status_cell, text_cell
 from app.models import AttendanceFine, FinanceAccount, FinanceTransaction, Protocol
+from app.services.fine_name_masking import fine_names_by_transaction, hides_fine_names, mask_name
 
 
 def balance_line(ctx: BuildContext, account: FinanceAccount, as_of: date | None) -> BalanceLine:
@@ -43,7 +44,16 @@ def provide_balance(ctx: BuildContext, spec: BlockSpec, params: FinanceBalancePa
     return [FinanceBalanceBlock(**spec_fields(spec), balances=[balance_line(ctx, account, params.as_of) for account in accounts])]
 
 
-def transactions_table(account: FinanceAccount, transactions: list[FinanceTransaction], *, subtotals: str = "none", strings: dict[str, str] | None = None, opening_balance: Decimal | float = Decimal(0)) -> TableData:
+def masked_fine_names(ctx: BuildContext, transactions: list[FinanceTransaction]) -> dict[int, str] | None:
+    """Namen gebüsster Personen, die in diesem Dokument maskiert werden (ohne reports.personal)."""
+    if not hides_fine_names(ctx.user):
+        return None
+    return fine_names_by_transaction(ctx.db, [tx.id for tx in transactions])
+
+
+def transactions_table(account: FinanceAccount, transactions: list[FinanceTransaction], *, subtotals: str = "none", strings: dict[str, str] | None = None, opening_balance: Decimal | float = Decimal(0), fine_names: dict[int, str] | None = None) -> TableData:
+    """``fine_names``: Buchung → Name der gebüssten Person, deren Name im Text maskiert wird
+    (fine_name_masking, Konten ohne reports.personal); None = Texte unverändert."""
     currency = account.currency_label or ""
     columns = [
         col("date", "col.date"),
@@ -83,7 +93,7 @@ def transactions_table(account: FinanceAccount, transactions: list[FinanceTransa
         groups[-1].rows.append(
             TableRow(cells=[
                 text_cell(format_date(tx.transaction_date)),
-                text_cell(tx.description),
+                text_cell(mask_name(tx.description, fine_names[tx.id]) if fine_names and tx.id in fine_names else tx.description),
                 amount_cell(f"{format_amount(amount, sign=True)} {currency}", tone="danger" if amount < 0 else "default"),
                 amount_cell(f"{format_amount(running)} {currency}"),
             ])
@@ -129,7 +139,10 @@ def _transactions_block(ctx: BuildContext, spec: BlockSpec, params: FinanceTrans
                 | ((FinanceTransaction.transaction_date == first.transaction_date) & (FinanceTransaction.id < first.id)),
             )
         ) or 0)
-    table = transactions_table(account, transactions, subtotals=params.subtotals, strings=strings_for(ctx.language), opening_balance=opening)
+    table = transactions_table(
+        account, transactions, subtotals=params.subtotals, strings=strings_for(ctx.language), opening_balance=opening,
+        fine_names=masked_fine_names(ctx, transactions),
+    )
     return FinanceTransactionsBlock(**spec_fields(spec, title=spec.title if spec.title is not None else account.name), table=table)
 
 

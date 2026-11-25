@@ -25,6 +25,7 @@ from app.schemas.finance import (
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
+from app.services.fine_name_masking import mask_transaction_reads
 
 router = APIRouter()
 repo = FinanceRepository()
@@ -127,7 +128,8 @@ def list_transactions(
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    return repo.list_transactions(db, internal_id, skip=skip, limit=limit, year=year)
+    # Namen gebüsster Personen nur mit reports.personal (Fachentscheid 2026-11-25)
+    return mask_transaction_reads(repo.list_transactions(db, internal_id, skip=skip, limit=limit, year=year), user)
 
 
 @router.get("/finance/accounts/{account_id}/summary", response_model=FinancePeriodSummary)
