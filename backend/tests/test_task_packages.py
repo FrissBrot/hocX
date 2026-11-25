@@ -532,3 +532,27 @@ def test_multiple_assignees_reject_foreign_tenant_atomically(db, setup):
     with pytest.raises(ValueError):
         todo_service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_ids=[setup["cleo"].public_id, foreign.public_id]))
     assert packages.todo_assignee_ids(db, todo.id) == [setup["anna"].id, setup["ben"].id]
+
+
+def test_new_tagged_event_creates_no_instances_after_downgrade(db, setup):
+    """Nach einem Downgrade (task_packages nur lesend) entstehen keine neuen Paket-Pendenzen -
+    weder im Tagesjob (run_due_task_packages) noch über den direkten Abgleich beim Anlegen eines
+    Termins (features.json: downgrade read_only, Bestehendes bleibt)."""
+    from sqlalchemy import update
+
+    from app.api.routes import events as events_route
+    from app.models import TenantFeature
+    from app.schemas.event import EventCreate
+
+    package, item, _ = _package(db, setup, recurrence={"type": "events", "event_tag": "Lager"}, due_rule={"type": "offset", "offset_days": -14})
+    db.execute(
+        update(TenantFeature)
+        .where(TenantFeature.tenant_id == setup["tenant"].id, TenantFeature.feature_code == "task_packages")
+        .values(access="read_only")
+    )
+    db.flush()
+    user = make_current_user(setup["tenant"].id, role="writer")
+
+    events_route.create_event(EventCreate(title="Sola", event_date=date(2027, 7, 10), tag="Lager"), db=db, user=user)
+
+    assert _instances(db, item) == []

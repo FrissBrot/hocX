@@ -385,8 +385,19 @@ def sync_packages_for_event_tag(db: Session, *, tenant_id: int, tag: str | None,
 def sync_packages_after_change(db: Session, *, tenant_id: int, list_definition_id: int | None = None, event_tag: str | None = None) -> None:
     """Best-Effort-Nachführen nach einer Listen- oder Terminänderung aus einer Route heraus.
     Die eigentliche Änderung ist dann bereits gespeichert und soll nicht scheitern, nur weil das
-    Nachführen scheitert (der tägliche Job holt es nach) - der Fehler wird aber zentral erfasst."""
+    Nachführen scheitert (der tägliche Job holt es nach) - der Fehler wird aber zentral erfasst.
+    Wie run_due_task_packages nur mit gebuchtem Feature: nach einem Downgrade (nur lesen) bleiben
+    bestehende Pendenzen, durch neue Termine/Listeneinträge entstehen aber keine neuen."""
     try:
+        booked = db.scalar(
+            select(TenantFeature.tenant_id).where(
+                TenantFeature.tenant_id == tenant_id,
+                TenantFeature.feature_code == F.TASK_PACKAGES,
+                TenantFeature.access == "full",
+            )
+        )
+        if booked is None:
+            return
         if list_definition_id is not None:
             sync_packages_for_list(db, tenant_id=tenant_id, list_definition_id=list_definition_id)
         if event_tag:
