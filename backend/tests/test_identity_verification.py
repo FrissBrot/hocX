@@ -133,3 +133,26 @@ def test_approve_requires_and_checks_the_expected_name(db, setup):
     with pytest.raises(HTTPException) as changed:
         admin_routes.approve_identity_verification(tenant.public_id, admin_routes.AdminVerificationDecision(expected_name="Anderer Name"), db=db, admin=admin)
     assert changed.value.status_code == 409
+
+
+def test_support_admin_does_not_see_requester_email(db, setup):
+    """Plattform-Admins mit Rolle «support» sehen keine Personendaten der Mandanten (Konten,
+    Fehler- und Audit-Log, Benutzersuche sind owner-only). Die Antragsliste der Identitätsprüfung
+    darf die E-Mail der antragstellenden Person deshalb nur owner-Admins zeigen."""
+    tenant, user, owner = setup
+    routes.request_identity_verification(routes.VerificationRequestWrite(message="bitte"), db=db, user=user)
+    support_row = PlatformAdmin(email="support@hocx.example", display_name="Support", password_hash="x", role="support")
+    db.add(support_row)
+    db.flush()
+    support = CurrentAdmin(
+        admin_id=support_row.id, admin_public_id=support_row.public_id, email=support_row.email, display_name="Support", role="support",
+    )
+
+    as_owner = admin_routes.list_identity_verification_requests(status="pending", db=db, _=owner)
+    assert as_owner[0].requested_by_email is not None
+
+    as_support = admin_routes.list_identity_verification_requests(status="pending", db=db, _=support)
+    assert [row.tenant_id for row in as_support] == [tenant.public_id]
+    assert as_support[0].requested_by_email is None
+    detail = admin_routes.get_tenant_identity_verification(tenant.public_id, db=db, _=support)
+    assert detail.requests[0].requested_by_email is None

@@ -64,7 +64,13 @@ def _email(db: Session, model: type, row_id: int | None) -> str | None:
     return getattr(row, "email", None) if row is not None else None
 
 
-def _request_read(db: Session, row: IdentityVerificationRequest, tenant: Tenant) -> AdminVerificationRequestRead:
+def _is_owner(admin: CurrentAdmin) -> bool:
+    return admin.role == "owner"  # rbac-ok: Plattform-Admin-Rolle (owner/support), kein Mandanten-Rollencode
+
+
+def _request_read(db: Session, row: IdentityVerificationRequest, tenant: Tenant, *, owner: bool) -> AdminVerificationRequestRead:
+    # E-Mail eines Mandanten-Kontos ist Personendaten eines fremden Mandanten: wie Benutzerliste,
+    # Suche und Fehlerprotokoll nur für owner-Admins, «support» sieht nur den Antrag selbst.
     return AdminVerificationRequestRead(
         id=row.public_id,
         tenant_id=tenant.public_id,
@@ -72,7 +78,7 @@ def _request_read(db: Session, row: IdentityVerificationRequest, tenant: Tenant)
         tenant_name=row.tenant_name,
         status=row.status,
         message=row.message,
-        requested_by_email=_email(db, AppUser, row.requested_by),
+        requested_by_email=_email(db, AppUser, row.requested_by) if owner else None,
         requested_at=row.requested_at,
         decided_at=row.decided_at,
         decided_by_email=_email(db, PlatformAdmin, row.decided_by_admin_id),
@@ -87,7 +93,7 @@ def _tenant_or_404(db: Session, tenant_id: uuid.UUID) -> Tenant:
     return tenant
 
 
-def _tenant_read(db: Session, tenant: Tenant) -> AdminTenantVerificationRead:
+def _tenant_read(db: Session, tenant: Tenant, *, owner: bool) -> AdminTenantVerificationRead:
     rows = db.scalars(
         select(IdentityVerificationRequest)
         .where(IdentityVerificationRequest.tenant_id == tenant.id)
@@ -103,7 +109,7 @@ def _tenant_read(db: Session, tenant: Tenant) -> AdminTenantVerificationRead:
         revoked_at=tenant.identity_verification_revoked_at,
         revoked_reason=tenant.identity_verification_revoked_reason,
         show_identity=tenant.verify_show_identity,
-        requests=[_request_read(db, row, tenant) for row in rows],
+        requests=[_request_read(db, row, tenant, owner=owner) for row in rows],
     )
 
 
@@ -113,16 +119,17 @@ def list_identity_verification_requests(
     db: Session = Depends(get_db),
     _: CurrentAdmin = Depends(get_current_admin),
 ):
+    owner = _is_owner(_)
     query = select(IdentityVerificationRequest, Tenant).join(Tenant, Tenant.id == IdentityVerificationRequest.tenant_id)
     if status != "all":
         query = query.where(IdentityVerificationRequest.status == status)
     rows = db.execute(query.order_by(IdentityVerificationRequest.requested_at.asc()).limit(200)).all()
-    return [_request_read(db, row, tenant) for row, tenant in rows]
+    return [_request_read(db, row, tenant, owner=owner) for row, tenant in rows]
 
 
 @router.get("/tenants/{tenant_id}/identity-verification", response_model=AdminTenantVerificationRead)
 def get_tenant_identity_verification(tenant_id: uuid.UUID, db: Session = Depends(get_db), _: CurrentAdmin = Depends(get_current_admin)):
-    return _tenant_read(db, _tenant_or_404(db, tenant_id))
+    return _tenant_read(db, _tenant_or_404(db, tenant_id), owner=_is_owner(_))
 
 
 def _decide(db: Session, tenant_id: uuid.UUID, action) -> AdminTenantVerificationRead:
@@ -133,7 +140,7 @@ def _decide(db: Session, tenant_id: uuid.UUID, action) -> AdminTenantVerificatio
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from None
     db.commit()
-    return _tenant_read(db, tenant)
+    return _tenant_read(db, tenant, owner=True)  # Entscheidungen nur mit require_admin_write (owner)
 
 
 @router.post("/tenants/{tenant_id}/identity-verification/approve", response_model=AdminTenantVerificationRead)
