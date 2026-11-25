@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
 from app.models import AccountToken, Notification, NotificationPreference, Participant, Tenant
-from app.notifications import account, delivery_status, email_transport, exports, fines, submissions, todos
+from app.notifications import account, cloud_import, delivery_status, email_transport, exports, fines, submissions, todos
 from app.notifications.catalog import CATEGORIES, GROUPS_WITHOUT_LOGIN, KINDS
 from app.notifications.render import Brand, render
 
@@ -45,6 +45,7 @@ ITEM_LOADERS = {
     "fine.upcoming": fines.upcoming_items_for,
     "fine.issued": fines.issued_items_for,
     "submission.withdrawn": submissions.items_for,
+    "cloud_import": cloud_import.items_for,
 }
 
 

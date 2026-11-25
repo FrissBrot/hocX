@@ -15,6 +15,7 @@ zur CORS-Allowlist gehört.
 
 from __future__ import annotations
 
+import re
 from urllib.parse import urlsplit
 
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -42,12 +43,18 @@ def origin_allowed(origin: str, *, host: str | None, forwarded_host: str | None,
 
 
 class OriginGuardMiddleware:
-    def __init__(self, app: ASGIApp, *, allowed_origins: set[str]) -> None:
+    def __init__(self, app: ASGIApp, *, allowed_origins: set[str], exempt_path_pattern: str | None = None) -> None:
         self.app = app
         self.allowed_origins = set(allowed_origins)
+        # Einzelne Pfade ohne Sitzung, die bewusst cross-site gePOSTet werden (OAuth form_post).
+        # Nur ein vollständig verankertes Muster; die Route schützt sich selbst (state, PKCE).
+        self.exempt_path = re.compile(exempt_path_pattern) if exempt_path_pattern else None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope.get("method", "GET").upper() not in UNSAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
+        if self.exempt_path is not None and self.exempt_path.fullmatch(scope.get("path", "")):
             await self.app(scope, receive, send)
             return
         headers = {key.decode("latin-1").lower(): value.decode("latin-1") for key, value in scope.get("headers", [])}

@@ -1,8 +1,20 @@
 // Datei-Import (Backend: routes/cloud_import.py): Typen und reine Hilfsfunktionen für den Wizard.
 
-export type ImportSource = "zip" | "folder";
+/** API-Anbieter (Backend: services/cloud_import/providers); angeboten werden nur konfigurierte. */
+export type CloudProviderKey = "microsoft" | "google_drive" | "google_photos" | "dropbox" | "webdav";
+export type ImportSource = "zip" | "folder" | CloudProviderKey;
 export type ImportTypeFilter = "all" | "images" | "documents";
-export type ImportJobStatus = "draft" | "ready" | "queued" | "running" | "cancel_requested" | "cancelled" | "done" | "failed";
+export type ImportJobStatus =
+  | "draft"
+  | "listing"
+  | "ready"
+  | "queued"
+  | "running"
+  | "needs_reauth"
+  | "cancel_requested"
+  | "cancelled"
+  | "done"
+  | "failed";
 export type ImportItemStatus = "listed" | "queued" | "staged" | "imported" | "duplicate" | "skipped" | "failed" | "cancelled";
 
 export type ImportRuleAction =
@@ -56,6 +68,41 @@ export type ImportJob = {
   codes: Record<string, number>;
   processed_bytes: number;
   albums: { name: string; reused: boolean; candidates: number }[];
+  // API-Quellen
+  connection?: CloudConnection | null;
+  selection_count?: number;
+  listing?: { folders: number; queued_folders: number; errors: number } | null;
+  not_before?: string | null;
+};
+
+export type CloudConnection = {
+  provider: CloudProviderKey;
+  status: "active" | "needs_reauth";
+  account_label: string | null;
+  account_kind: string | null;
+  tier: string | null;
+  tiers: string[];
+};
+
+export type CloudProvider = {
+  key: CloudProviderKey;
+  tiers: string[];
+  default_tier: string;
+  info: Record<string, string>;
+};
+
+export type CloudNode = {
+  ref: string;
+  name: string;
+  kind: "folder" | "file";
+  size: number | null;
+  modified_at: string | null;
+  child_count: number | null;
+  available: boolean;
+  requires_tier: string | null;
+  selectable: boolean;
+  label_key: string | null;
+  file_kind: "image" | "document" | "other" | null;
 };
 
 export type ImportRuleError = { rule_id: string; field: string; code: string };
@@ -108,7 +155,23 @@ export type ImportReportItem = {
   file_id: string | null;
 };
 
-export const ACTIVE_STATUSES: ImportJobStatus[] = ["draft", "ready", "queued", "running", "cancel_requested"];
+export const ACTIVE_STATUSES: ImportJobStatus[] = ["draft", "listing", "ready", "queued", "running", "needs_reauth", "cancel_requested"];
+
+export function isCloudSource(source: ImportSource): source is CloudProviderKey {
+  return source !== "zip" && source !== "folder";
+}
+
+/** Parameter, mit denen der OAuth-Callback in den Wizard zurückspringt (Abschluss-Token im Fragment). */
+export function readCloudReturn(search: string, hash: string): { job: string | null; error: string | null; notice: string | null; finish: string | null } {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  return {
+    job: query.get("job"),
+    error: query.get("cloud_error"),
+    notice: query.get("cloud_notice"),
+    finish: fragment.get("cloud_finish"),
+  };
+}
 export const RUNNING_STATUSES: ImportJobStatus[] = ["queued", "running", "cancel_requested"];
 
 export function isActive(job: ImportJob): boolean {
@@ -269,4 +332,18 @@ export function apiErrorCode(error: unknown): string | null {
     return (detail as { code: string }).code;
   }
   return null;
+}
+
+/** Startet die Anmeldung beim Anbieter (Navigation im selben Fenster; Rückkehr über den Callback). */
+export async function startCloudLogin(
+  fetcher: <T>(path: string, init?: RequestInit) => Promise<T>,
+  jobId: string,
+  provider: CloudProviderKey,
+  options: { tier?: string | null; selectAccount?: boolean } = {},
+): Promise<void> {
+  const result = await fetcher<{ authorize_url: string }>(`/api/cloud-import/oauth/${provider}/start`, {
+    method: "POST",
+    body: JSON.stringify({ job_id: jobId, tier: options.tier ?? null, select_account: options.selectAccount ?? false }),
+  });
+  window.location.assign(result.authorize_url);
 }

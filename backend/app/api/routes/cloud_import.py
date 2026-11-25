@@ -31,10 +31,12 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_permission
 from app.gallery_upload_route import ImportUploadRoute
 from app.models.entities import AppUser, StoredFile
-from app.models.import_entities import ImportJob
+from app.models.import_entities import ImportItem, ImportJob
 from app.services.audit_service import AuditService
-from app.services.cloud_import import jobs, paths
+from app.services.cloud_import import connections, jobs, oauth, paths, providers, remote
+from app.services.cloud_import.http import ProviderError, ProviderThrottled
 from app.services.cloud_import.jobs import ImportFailure
+from app.services.cloud_import.providers.base import ReauthRequired
 from app.services.file_service import FileService
 from app.services.upload_pipeline import GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
 
@@ -77,7 +79,8 @@ TypeFilter = Literal["all", "images", "documents"]
 class ImportJobCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    source: Literal["zip", "folder"]
+    # zip/folder (P0) oder ein API-Anbieter aus services/cloud_import/providers (nur wenn angeboten)
+    source: Literal["zip", "folder", "microsoft", "google_drive", "google_photos", "dropbox", "webdav"]
     type_filter: TypeFilter = "all"
     include_gps: bool = True
     folder_tags: bool = False
@@ -203,6 +206,22 @@ class AlbumReportRead(BaseModel):
     candidates: int
 
 
+class ConnectionRead(BaseModel):
+    provider: str
+    status: str
+    account_label: str | None
+    account_kind: str | None
+    # Höchste vollständig erteilte Stufe (inkrementeller Consent, z. B. "basic"/"extended")
+    tier: str | None
+    tiers: list[str]
+
+
+class ListingRead(BaseModel):
+    folders: int = 0
+    queued_folders: int = 0
+    errors: int = 0
+
+
 class ImportJobRead(BaseModel):
     id: uuid.UUID
     source: str
@@ -227,6 +246,11 @@ class ImportJobRead(BaseModel):
     codes: dict[str, int] = Field(default_factory=dict)
     processed_bytes: int = 0
     albums: list[AlbumReportRead] = Field(default_factory=list)
+    # API-Quellen (Migration 0281)
+    connection: ConnectionRead | None = None
+    selection_count: int = 0
+    listing: ListingRead | None = None
+    not_before: datetime | None = None
 
 
 class PendingUploadRead(BaseModel):
@@ -286,6 +310,22 @@ def _job_read(db: Session, job: ImportJob, user: CurrentUser, *, with_counts: bo
     )
     if with_counts:
         read.counts, read.codes, read.processed_bytes = jobs.status_counts(db, job)
+    if providers.is_api_source(job.source):
+        read.selection_count = len(job.selection or [])
+        read.not_before = job.not_before
+        state = job.listing_state or {}
+        read.listing = ListingRead(
+            folders=int(state.get("folders") or 0), queued_folders=len(state.get("queue") or []), errors=int(state.get("errors") or 0)
+        )
+        # Kontoangaben nur für die Person, der die Verbindung gehört
+        connection = remote._connection(db, job) if job.requested_by == user.user_id else None
+        provider = providers.get(job.source)
+        if connection is not None and provider is not None:
+            read.connection = ConnectionRead(
+                provider=connection.provider, status=connection.status, account_label=connection.account_label,
+                account_kind=connection.account_kind, tier=provider.tier_of(connections.scopes_of(connection)),
+                tiers=list(provider.tiers()),
+            )
     return read
 
 
@@ -302,6 +342,9 @@ def list_import_jobs(db: Session = Depends(get_db), user: CurrentUser = Depends(
 def create_import_job(payload: ImportJobCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     tenant_id = _require_import(user)
     enforce_rate_limit(f"cloud-import-create:{tenant_id}", limit=30, period_seconds=3600)
+    if payload.source not in ("zip", "folder") and not providers.is_available(payload.source):
+        # Ohne Konfiguration (Client-ID/Secret, Token-Schlüssel) wird der Anbieter nicht angeboten
+        raise _http(ImportFailure(400, "provider_unavailable"))
     try:
         job = jobs.create_job(
             db, tenant_id=tenant_id, user_id=user.user_id, source=payload.source, type_filter=payload.type_filter,
@@ -686,3 +729,296 @@ async def _upload_files_impl(job_id: uuid.UUID, files: list[UploadFile], paths_j
             target.unlink(missing_ok=True)
         raise
     return StageResultRead(staged=accepted, rejected=rejected)
+
+
+# --- API-Quellen: Anbieter, Anmeldung (OAuth), Ordnerbaum, Auswahl (Plan P1, Migration 0281) ---------
+
+
+class ProviderRead(BaseModel):
+    key: str
+    tiers: list[str]
+    default_tier: str
+    # Nicht geheime Angaben für den Wizard (z. B. Admin-Consent-Hilfe bei Microsoft)
+    info: dict = Field(default_factory=dict)
+
+
+@router.get("/cloud-import/providers", response_model=list[ProviderRead])
+def list_import_providers(user: CurrentUser = Depends(get_current_user)):
+    """Nur konfigurierte Anbieter (E-2: fehlende Registrierung = nicht angeboten)."""
+    _require_import(user)
+    return [
+        ProviderRead(key=provider.key, tiers=list(provider.tiers()), default_tier=provider.default_tier, info=provider.public_info())
+        for provider in providers.available()
+    ]
+
+
+class OAuthStartIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: uuid.UUID
+    tier: str | None = Field(default=None, max_length=40)
+    # «Anderes Konto»: Kontoauswahl beim Anbieter erzwingen
+    select_account: bool = False
+
+
+class OAuthStartRead(BaseModel):
+    authorize_url: str
+
+
+def _allowed_return_host(db: Session, tenant_id: int, host: str | None) -> str | None:
+    """Rücksprung nur auf die zentrale Domain oder die aktive eigene App-Domain des Mandanten
+    (kein Open Redirect, SECURITY-RULES §3.5). Sonst None = relativer Pfad auf der Callback-Domain."""
+    from app.models import TenantDomain
+    from app.services import traefik_config_service
+
+    host = (host or "").strip().lower()
+    if not host or len(host) > 253:
+        return None
+    if settings.traefik_domain and host == settings.traefik_domain.lower():
+        return host
+    # Wie die Domain-Bridge (Security-Review F1): nur eine gesunde Domain (DNS zeigt auf hocX) mit
+    # gebuchtem Feature - der Abschluss-Token im Fragment darf nie auf einem fremden Server landen.
+    domain = db.scalar(
+        select(TenantDomain.domain).where(
+            TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == "app", TenantDomain.status == "active",
+            TenantDomain.is_healthy.is_(True), TenantDomain.domain == host,
+            TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
+        )
+    )
+    return domain.lower() if domain else None
+
+
+@router.post("/cloud-import/oauth/{provider_key}/start", response_model=OAuthStartRead)
+def start_cloud_oauth(
+    provider_key: str, payload: OAuthStartIn, request: Request, db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Autorisierungs-URL für den eigenen Auftrag (state + PKCE in Redis, 10 min, einmalig)."""
+    tenant_id = _require_import(user)
+    enforce_rate_limit(f"cloud-import-oauth:{user.user_id}", limit=20, period_seconds=600)
+    provider = providers.get(provider_key)
+    if provider is None or not providers.is_available(provider_key):
+        raise _http(ImportFailure(404, "provider_unavailable"))
+    job = _load(db, user, payload.job_id, owner=True)
+    if job.source != provider.key:
+        raise _http(ImportFailure(409, "wrong_source"))
+    # Anmelden bzw. erneut anmelden nur vor der Auswahl, bei needs_reauth oder zum Fortsetzen
+    if job.status not in ("draft", "needs_reauth", "failed"):
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    tier = payload.tier or provider.default_tier
+    if tier not in provider.tiers():
+        raise _http(ImportFailure(422, "invalid_tier"))
+    try:
+        url = oauth.start(
+            provider, tier=tier, user_id=user.user_id, tenant_id=tenant_id, job_id=str(job.id),
+            return_host=_allowed_return_host(db, tenant_id, request.headers.get("host")), select_account=payload.select_account,
+        )
+    except ProviderError as exc:
+        raise _http(ImportFailure(503, "provider_unavailable")) from exc
+    return OAuthStartRead(authorize_url=url)
+
+
+class OAuthFinishIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/cloud-import/oauth/finish", response_model=ImportJobRead)
+def finish_cloud_oauth(payload: OAuthFinishIn, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Zweiter Schritt nach dem Callback, mit Sitzung: legt die Verbindung nur an, wenn die
+    angemeldete Person die ist, die die Anmeldung gestartet hat (Schutz vor Login-CSRF)."""
+    tenant_id = _require_import(user)
+    enforce_rate_limit(f"cloud-import-oauth-finish:{user.user_id}", limit=30, period_seconds=600)
+    pending = oauth.consume_pending(payload.token)
+    if pending is None:
+        raise _http(ImportFailure(400, "oauth_expired"))
+    if pending.get("user_id") != user.user_id or pending.get("tenant_id") != tenant_id:
+        AuditService().log(
+            db, action="cloud_import.connect_rejected", actor=user, entity_type="import_job",
+            details={"reason": "other_account", "provider": str(pending.get("provider") or "")[:40]}, outcome="failure",
+        )
+        raise _http(ImportFailure(403, "oauth_other_account"))
+    try:
+        job_id = uuid.UUID(str(pending.get("job_id")))
+    except ValueError:
+        raise _http(ImportFailure(400, "oauth_expired")) from None
+    job = _load(db, user, job_id, owner=True, lock=True)
+    provider = providers.get(str(pending.get("provider")))
+    if provider is None or job.source != provider.key or job.status not in ("draft", "needs_reauth", "failed"):
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    from app.services.cloud_import.providers.base import AccountInfo, TokenSet
+
+    raw_tokens = pending.get("tokens") or {}
+    tokens = TokenSet(
+        access_token=str(raw_tokens.get("access_token") or ""), refresh_token=raw_tokens.get("refresh_token"),
+        expires_in=int(raw_tokens.get("expires_in") or 3600), scope=str(raw_tokens.get("scope") or ""),
+    )
+    account = AccountInfo(**(pending.get("account") or {}))
+    granted = frozenset(pending.get("granted") or [])
+    previous = remote._connection(db, job)
+    # Gleiches Konto nur über die stabile Kennung des Anbieters (Security-Review F5), nie über den Namen
+    same_account = previous is not None and previous.provider == provider.key and (
+        previous.account_subject == account.subject if (previous.account_subject or account.subject)
+        # Anbieter ohne stabile Kennung: Anzeigename, aber nie «leer == leer»
+        else previous.account_label is not None and previous.account_label == account.label
+    )
+    if same_account:
+        # Gleiches Konto (inkrementeller Consent oder neue Anmeldung): Tokens ersetzen
+        connections.save_tokens(previous, tokens, granted=granted | connections.scopes_of(previous))
+        previous.account_kind = account.kind
+        previous.account_tenant_id = account.tenant_id
+        previous.account_label = (account.label or "")[:320] or None
+        connection = previous
+    else:
+        if previous is not None:
+            if job.status != "draft":
+                # Mitten im Import ein anderes Konto: die gelisteten Dateien stammen aus dem alten
+                raise _http(ImportFailure(409, "oauth_account_mismatch"))
+            connections.delete(db, previous)
+        connection = connections.create(
+            db, tenant_id=tenant_id, user_id=user.user_id, provider=provider.key, tokens=tokens, account=account, granted=granted,
+        )
+    job.connection_id = connection.id
+    job.error = None
+    remote.resume_after_reauth(job)
+    jobs.touch(job)
+    AuditService().log(
+        db, action="cloud_import.connected", actor=user, entity_type="import_job",
+        details={"job_id": str(job.id), "provider": provider.key, "account_kind": account.kind}, commit=False,
+    )
+    db.commit()
+    db.refresh(job)
+    return _job_read(db, job, user)
+
+
+def _remote_context(db: Session, job: ImportJob):
+    provider = providers.get(job.source)
+    connection = remote._connection(db, job)
+    if provider is None or connection is None or connection.status != "active":
+        raise _http(ImportFailure(409, "reconnect_required"))
+    return provider, connections.context(db, connection, provider), connection
+
+
+class NodeRead(BaseModel):
+    ref: str
+    name: str
+    kind: Literal["folder", "file"]
+    size: int | None = None
+    modified_at: datetime | None = None
+    child_count: int | None = None
+    available: bool = True
+    requires_tier: str | None = None
+    selectable: bool = True
+    label_key: str | None = None
+    # Dateiart wie im Import (image/document/other), nur bei Dateien
+    file_kind: str | None = None
+
+
+class BrowseRead(BaseModel):
+    nodes: list[NodeRead]
+    cursor: str | None = None
+
+
+def _provider_failure(exc: Exception) -> HTTPException:
+    if isinstance(exc, ReauthRequired):
+        return _http(ImportFailure(409, "reconnect_required"))
+    if isinstance(exc, ProviderThrottled):
+        return _http(ImportFailure(429, "provider_throttled", {"seconds": exc.retry_after}))
+    code = getattr(exc, "code", "provider_error")
+    status_code = 404 if code == "not_found" else 403 if code == "access_denied" else 502
+    return _http(ImportFailure(status_code, f"provider_{code}"))
+
+
+@router.get("/cloud-import/jobs/{job_id}/browse", response_model=BrowseRead)
+def browse_cloud_folder(
+    job_id: uuid.UUID,
+    ref: str | None = Query(default=None, max_length=600),
+    cursor: str | None = Query(default=None, max_length=4000),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Ordnerbaum (E-4: eigener Baum statt Anbieter-Picker), live beim Anbieter gelesen, nichts
+    gespeichert (Plan §11.2). Ohne ref: die Wurzeln (Mein OneDrive, Freigaben, Sites …)."""
+    job = _load(db, user, job_id, owner=True)
+    enforce_rate_limit(f"cloud-import-browse:{user.user_id}", limit=600, period_seconds=600)
+    if not providers.is_api_source(job.source) or job.status != "draft":
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    provider, ctx, _connection = _remote_context(db, job)
+    if ref is not None and not provider.validate_ref(ref):
+        raise _http(ImportFailure(422, "invalid_ref"))
+    try:
+        if ref is None:
+            page_nodes, next_cursor = provider.roots(ctx), None
+        else:
+            page = provider.list_children(ctx, ref, cursor)
+            page_nodes, next_cursor = page.nodes, page.cursor
+    except (ProviderError, ReauthRequired) as exc:
+        db.commit()  # erneuerte Tokens bzw. needs_reauth der Verbindung behalten
+        raise _provider_failure(exc) from exc
+    db.commit()  # erneuerte Tokens speichern
+    return BrowseRead(
+        nodes=[
+            NodeRead(
+                ref=node.ref, name=node.name, kind=node.kind, size=node.size, modified_at=node.modified_at,
+                child_count=node.child_count, available=node.available, requires_tier=node.requires_tier,
+                selectable=node.selectable and node.available, label_key=node.label_key,
+                file_kind=paths.kind_for_name(node.name) if node.kind == "file" else None,
+            )
+            for node in page_nodes
+        ],
+        cursor=next_cursor,
+    )
+
+
+class SelectionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refs: list[Annotated[str, Field(min_length=1, max_length=600)]] = Field(min_length=1, max_length=remote.MAX_SELECTION)
+
+
+@router.post("/cloud-import/jobs/{job_id}/selection", response_model=ImportJobRead)
+def set_cloud_selection(
+    job_id: uuid.UUID, payload: SelectionIn, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Gewählte Ordner/Dateien speichern und das Auflisten im Hintergrund starten (``listing``)."""
+    job = _load(db, user, job_id, owner=True, lock=True)
+    if not providers.is_api_source(job.source) or job.status != "draft":
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    provider, _ctx, _connection = _remote_context(db, job)
+    refs = list(dict.fromkeys(payload.refs))
+    if not all(provider.validate_ref(ref) for ref in refs):
+        raise _http(ImportFailure(422, "invalid_ref"))
+    db.execute(ImportItem.__table__.delete().where(ImportItem.job_id == job.id, ImportItem.tenant_id == job.tenant_id))
+    job.selection = [{"ref": ref} for ref in refs]
+    job.listing_state = {}
+    job.total_items = 0
+    job.total_bytes = 0
+    job.error = None
+    job.not_before = None
+    job.status = "listing"
+    jobs.touch(job)
+    db.commit()
+    return _job_read(db, job, user)
+
+
+@router.post("/cloud-import/jobs/{job_id}/disconnect", response_model=ImportJobRead)
+def disconnect_cloud_account(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Verbindung (Tokens) sofort löschen. Ein laufender Import wartet danach auf eine neue Anmeldung."""
+    job = _load(db, user, job_id, owner=True, lock=True)
+    if not providers.is_api_source(job.source):
+        raise _http(ImportFailure(409, "wrong_source"))
+    connection = remote._connection(db, job)
+    if connection is not None:
+        connections.delete(db, connection)
+    job.connection_id = None
+    if job.status in ("listing", "queued", "running"):
+        job.status = "needs_reauth"
+        job.reauth_since = jobs.now()
+    jobs.touch(job)
+    AuditService().log(
+        db, action="cloud_import.connection_deleted", actor=user, entity_type="import_job",
+        details={"job_id": str(job.id), "provider": job.source}, commit=False,
+    )
+    db.commit()
+    return _job_read(db, job, user)

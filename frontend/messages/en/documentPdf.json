@@ -711,7 +711,8 @@
       "test": "Sending works",
       "fineUpcoming": "Fine ahead",
       "fineIssued": "New fine",
-      "submissionWithdrawn": "Submission withdrawn"
+      "submissionWithdrawn": "Submission withdrawn",
+      "cloudImport": "File import"
     },
     "title": {
       "todosNew": "New to-dos for you",
@@ -726,7 +727,10 @@
       "submissionWithdrawn": "Submission withdrawn",
       "loginAlert": "Unusual sign-in to your account",
       "loginNotice": "New sign-in to your account",
-      "loginCode": "Your confirmation code"
+      "loginCode": "Your confirmation code",
+      "cloudImportReauth": "Sign in again to continue the import",
+      "cloudImportDone": "File import finished",
+      "cloudImportFailed": "File import interrupted"
     },
     "weekday": {
       "0": "Monday",
@@ -815,6 +819,26 @@
       "ignoreLead": "Didn't just try to sign in?",
       "ignoreBody": "Then someone knows your password – {link}. Never share this code with anyone.",
       "changeLink": "change it right away"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant}: file import is waiting for you to sign in",
+      "reauthBody": "Your file import from a cloud service for {tenant} is paused: the provider requires you to sign in again (for example after a password change). Sign in again in the import wizard and the import continues where it stopped. After 7 days without signing in it is ended.",
+      "openButton": "Open import",
+      "doneSubject": "{tenant}: file import finished",
+      "failedSubject": "{tenant}: file import interrupted",
+      "doneBody": "Your file import for {tenant} has finished. Imported: {imported} · already present: {duplicates} · errors: {failed}. See the report for details.",
+      "failedBody": "Your file import for {tenant} was interrupted. Imported so far: {imported} · already present: {duplicates} · errors: {failed}.",
+      "reportButton": "Open report",
+      "reason": {
+        "generic": "The report shows the reason and lets you resume the import.",
+        "quota_exceeded": "The organisation’s storage quota is full. Free up space and resume the import in the wizard.",
+        "reauth_expired": "The cloud service asked for a new sign-in that did not happen within 7 days.",
+        "requester_unauthorized": "Your account is no longer allowed to import files.",
+        "provider_unavailable": "The cloud service was repeatedly unreachable. Resume the import later.",
+        "too_many_files": "The selection contains too many files for one import.",
+        "too_many_bytes": "The selection is too large for one import.",
+        "too_many_folders": "The selection contains too many folders for one import."
+      }
     }
   },
   "eventField": {

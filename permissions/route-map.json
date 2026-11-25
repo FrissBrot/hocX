@@ -325,6 +325,16 @@
       "platform": true,
       "admin_level": "W"
     },
+    "GET /api/admin/cloud-imports": {
+      "handler": "admin_cloud_import.get_cloud_imports",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/cloud-imports/{job_id}/cancel": {
+      "handler": "admin_cloud_import.cancel_cloud_import",
+      "platform": true,
+      "admin_level": "W"
+    },
     "GET /api/admin/document-templates": {
       "handler": "admin_document_templates.list_system_templates",
       "platform": true,
@@ -1126,8 +1136,20 @@
         "files.import"
       ]
     },
+    "GET /api/cloud-import/jobs/{job_id}/browse": {
+      "handler": "cloud_import.browse_cloud_folder",
+      "requires": [
+        "files.import"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/cancel": {
       "handler": "cloud_import.cancel_import_job",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/disconnect": {
+      "handler": "cloud_import.disconnect_cloud_account",
       "requires": [
         "files.import"
       ]
@@ -1171,6 +1193,12 @@
         "files.import"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/selection": {
+      "handler": "cloud_import.set_cloud_selection",
+      "requires": [
+        "files.import"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/start": {
       "handler": "cloud_import.start_import_job",
       "requires": [
@@ -1179,6 +1207,32 @@
       "requires_if": [
         "files.manage",
         "photos.manage"
+      ]
+    },
+    "POST /api/cloud-import/oauth/finish": {
+      "handler": "cloud_import.finish_cloud_oauth",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "GET /api/cloud-import/oauth/{provider_key}/callback": {
+      "handler": "cloud_import_oauth.oauth_callback_query",
+      "note": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)"
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/callback": {
+      "handler": "cloud_import_oauth.oauth_callback_form",
+      "note": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)"
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/start": {
+      "handler": "cloud_import.start_cloud_oauth",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "GET /api/cloud-import/providers": {
+      "handler": "cloud_import.list_import_providers",
+      "requires": [
+        "files.import"
       ]
     },
     "POST /api/cloud-import/uploads/{job_id}/archive": {

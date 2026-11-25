@@ -15,8 +15,37 @@ zum Beispiel den Vereinsordner aus OneDrive, Google Drive oder Dropbox. Zu finde
 |---|---|---|
 | **ZIP-Archiv** | Download aus OneDrive/Dropbox, Google Takeout, Archiv vom PC | Mehrere ZIPs pro Import möglich (z. B. Takeout-Teilarchive), je bis 10 GB. Bei Google Takeout wird der Ordner «Takeout» automatisch erkannt. Die Metadaten-Dateien (`.json`) werden nicht importiert, ihr Aufnahmedatum aber übernommen, wenn das Foto selbst keines hat (siehe unten). |
 | **Ordner hochladen** | Synchronisierter Ordner auf dem PC (OneDrive, Google Drive, …) | Zuerst wird nur die Dateiliste übertragen. Nach dem Start lädt der Browser genau die Dateien hoch, die importiert werden - das Fenster muss dafür offen bleiben. Wird es geschlossen, denselben Ordner später erneut wählen; der Upload geht weiter. |
+| **Microsoft OneDrive / SharePoint** | OneDrive privat, OneDrive for Business, SharePoint-Bibliotheken | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
 
-Direkte Verbindungen zu OneDrive und Google Drive folgen in einer späteren Version.
+
+### Direkt aus Microsoft OneDrive und SharePoint
+
+1. Kachel **Microsoft OneDrive / SharePoint** wählen, Dateitypen und Optionen festlegen, **Weiter**.
+2. **Bei Microsoft anmelden** - die Anmeldung läuft direkt bei Microsoft (privates Konto oder Konto
+   von Arbeit/Schule). hocX bittet zuerst nur um **Lesezugriff auf die eigenen Dateien**.
+3. Im Ordnerbaum die gewünschten Ordner oder Dateien ankreuzen (Pfeiltasten nicht nötig: Tab zu
+   «aufklappen» bzw. zur Checkbox, Enter/Leertaste). Ein gewählter Ordner umfasst alle Unterordner.
+   - **Mein OneDrive**: die eigenen Dateien.
+   - **Für mich freigegeben** und **SharePoint-Websites**: bei Geschäftskonten erst nach einer zweiten
+     Zustimmung («Zugriff erlauben»); hocX fragt erst danach, wenn du es brauchst.
+4. **Dateien auflisten** - hocX geht die Ordner im Hintergrund durch (die Seite darf geschlossen
+   werden). Danach folgen Regeln, Vorschau und Start wie beim ZIP-Import.
+5. Während des Imports lädt hocX die Dateien selbst bei Microsoft herunter; der Browser muss nicht
+   offen bleiben.
+
+**«Freigabe durch die IT nötig»:** Viele Firmen- und Schulkonten erlauben neue Apps erst, wenn ein
+Administrator der Organisation zustimmt. Der Assistent zeigt dann eine Anleitung: Domain der
+Organisation (z. B. `verein.onmicrosoft.com`) eingeben, den **Freigabe-Link** kopieren und der IT
+schicken. Nach der Freigabe erneut anmelden. Private Konten sind nicht betroffen.
+
+**Neu anmelden:** Verlangt Microsoft mitten im Import eine neue Anmeldung (z. B. nach einem
+Passwortwechsel), pausiert der Import und du bekommst eine E-Mail. Mit **Neu anmelden** im Assistenten
+geht es dort weiter, wo der Import stand. Ohne Anmeldung wird er nach 7 Tagen beendet.
+
+**Datenschutz:** hocX liest nur die gewählten Ordner, nur lesend. Der Zugang (Token) wird
+verschlüsselt gespeichert und gelöscht, sobald der Import beendet ist; **Verbindung trennen** löscht
+ihn sofort. Die App-Berechtigung selbst entfernst du bei Microsoft: privat unter
+<https://account.live.com/consent/Manage>, geschäftlich unter <https://myapps.microsoft.com>.
 
 Grenzen: höchstens 50 000 Dateien und 100 GB pro Import; Dokumente bis 20 MB, Bilder bis 100 MB
 (wie beim normalen Hochladen). Grössere oder nicht unterstützte Dateien erscheinen im Bericht.

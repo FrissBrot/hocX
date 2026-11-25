@@ -91,4 +91,134 @@ mit Minuten Laufzeit (Befund aus fix/search-perf-1.5.1). Fehler werden nur gelog
 ## Variablen
 
 `CLOUD_IMPORT_MAX_JOB_FILES` (50000) und `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und
-job-worker, siehe RUNBOOK Abschnitt 17. Keine Secrets in P0.
+job-worker, siehe RUNBOOK Abschnitt 17. API-Quellen (P1): `CLOUD_IMPORT_ENABLED`,
+`CLOUD_IMPORT_TOKEN_KEY` (+ `_PREVIOUS`, Secret, von `env_migrate.sh` erzeugt),
+`CLOUD_IMPORT_REDIRECT_BASE_URL` und je Anbieter Client-ID/Secret/Ablaufdatum, siehe RUNBOOK
+«Cloud-Import einrichten».
+
+## API-Quellen (Phase P1, Fundament)
+
+Gemeinsames Fundament für alle Cloud-Anbieter (Microsoft in 1.6, weitere Adapter folgen nach demselben
+Muster). Migration `0281_cloud_import_connections`.
+
+| Teil | Ort |
+|---|---|
+| Tabelle `import_connection` (tenant_id + RLS, Tokens nur verschlüsselt) | `backend/app/models/import_entities.py` |
+| Token-Verschlüsselung (MultiFernet, `CLOUD_IMPORT_TOKEN_KEY` + `_PREVIOUS`) | `services/cloud_import/token_crypto.py` |
+| Ausgehendes HTTP (Allowlist, SSRF, Redirects, Bearer-Regeln, 429/503) | `services/cloud_import/http.py` |
+| OAuth Code + PKCE, `state`, ausstehende Verbindung | `services/cloud_import/oauth.py` |
+| Verbindungen, Refresh, Löschen | `services/cloud_import/connections.py` |
+| Adapter-Schnittstelle und Register | `services/cloud_import/providers/base.py`, `providers/__init__.py` |
+| Auflisten und Download im job-worker | `services/cloud_import/remote.py` (aus `worker.run_slice`) |
+| Zentraler Callback (ohne Sitzung) | `api/routes/cloud_import_oauth.py` |
+| Wizard: Anmelden, eigener Ordnerbaum, Auflisten | `frontend/components/file-import/import-cloud-step.tsx`, `import-cloud-tree.tsx` |
+| Nachgebauter Transport für Tests/E2E | `services/cloud_import/fake_http.py` (nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`) |
+
+### Ablauf
+
+1. Wizard: Kachel des Anbieters (nur angeboten, wenn `CLOUD_IMPORT_ENABLED`, `CLOUD_IMPORT_TOKEN_KEY` und
+   die Anbieter-Konfiguration gesetzt sind) → `POST /cloud-import/jobs` mit `source=<anbieter>` (`draft`).
+2. `POST /cloud-import/oauth/<anbieter>/start` → Autorisierungs-URL. `state` (32 Byte, Redis 10 min,
+   nur der SHA-256 als Schlüssel) bindet Person, Mandant, Auftrag, Stufe und Rücksprung-Host; PKCE S256.
+3. Anbieter → `…/api/cloud-import/oauth/<anbieter>/callback` auf der zentralen Domain
+   (`CLOUD_IMPORT_REDIRECT_BASE_URL`, sonst `https://TRAEFIK_DOMAIN`). `form_post` als POST (Origin-Guard
+   nimmt genau diesen Pfad aus), `query` nur für Anbieter ohne `form_post`. Der Callback löst den Code mit
+   dem Verifier ein, legt die Tokens verschlüsselt als «ausstehend» ab (10 min) und leitet auf
+   `/files/import?job=…#cloud_finish=<einmal-token>` (zentrale oder eigene App-Domain, sonst relativ).
+4. Der Wizard ruft mit der Sitzung `POST /cloud-import/oauth/finish`. Nur wenn die angemeldete Person
+   die aus dem `state` ist, entsteht die Verbindung (Schutz vor Login-CSRF); sonst 403 und die Tokens
+   sind verworfen.
+5. Ordnerbaum: `GET /cloud-import/jobs/{id}/browse?ref=&cursor=` liest live beim Anbieter, speichert
+   nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
+6. job-worker (`remote.run_listing`): rekursiv mit Paging, Stand in `import_job.listing_state` nach jeder
+   Seite → `ready` (bzw. zurück zu `draft` mit `empty_source`/`selection_unavailable`).
+7. Regeln, Vorschau, Start wie P0. Danach lädt `remote.download_step` je Datei als Stream nach
+   `UPLOAD_ROOT/_staging/cloud-import/<auftrag>/` (`staged`), höchstens 12 gestagte Dateien je Auftrag; die
+   bestehende Pipeline übernimmt.
+8. Ende (`done`/`cancelled`): Verbindung samt Tokens sofort gelöscht. `failed`: bis `purge_after`
+   (7 Tage ohne Nutzung) für «Fortsetzen».
+
+### Fehler und Wiederaufnahme
+
+- `429`/`503` mit `Retry-After` → `import_job.not_before`; `claim_next` bedient den Auftrag erst danach.
+- Refresh mit `invalid_grant` → Verbindung `needs_reauth` (Tokens gelöscht), Auftrag `needs_reauth`, Mail
+  `cloud_import.needs_reauth` (Kategorie «Datei-Import», nur mit `files.import`). Neue Anmeldung über
+  denselben Wizard setzt den Auftrag fort (`listing` bzw. `queued`); nach 7 Tagen `failed` (`reauth_expired`).
+- Je Datei bis 5 Versuche mit wachsender Wartezeit (`next_attempt_at`), dann `download_failed`;
+  `not_found`, `access_denied`, `too_large`, `host_not_allowed` sofort.
+- Absturz: Lease läuft ab, `listing_state` bzw. Einträge `queued`/`staged` machen ohne Doppelte weiter.
+
+### Sicherheit
+
+- Host-Allowlist je Adapter (`HostPolicy`), nur https/443, DNS-Prüfung jeder Adresse (privat, Loopback,
+  Link-Local, reserviert → abgelehnt) und Verbindung genau zur geprüften Adresse (kein DNS-Rebinding).
+- Redirects nur selbst (höchstens 3), jedes Ziel erneut geprüft. Bearer-Token nur an `api_hosts`, an
+  Download-Hosts nur bei `bearer_download_suffixes` (z. B. SharePoint nach tempauth-Ende).
+- Referenzen aus dem Browser nur nach `validate_ref`, Benutzer liefern nie URLs.
+- Logs: nur Methode, Host, Pfad ohne Query, Status. `TokenSet.__repr__` ohne Tokens.
+- Callback in `EXEMPT_PUBLIC_ROUTES`, Token-Spalten in `EXEMPT_COLUMNS` begründet.
+- Rücksprung mit dem Abschluss-Token nur auf die zentrale Domain oder eine **gesunde** eigene App-Domain
+  mit gebuchtem Feature (wie die Domain-Bridge), geprüft beim Start und erneut im Callback; sonst
+  relativ auf die Callback-Domain. Microsoft zeigt immer die Kontoauswahl (`prompt=select_account`), damit
+  ein fremder Autorisierungs-Link nie still per SSO durchläuft.
+- «Gleiches Konto» beim erneuten Anmelden über die stabile Kennung des Anbieters (`account_subject`,
+  Microsoft: Tenant + Objekt-ID), nie über den Anzeigenamen.
+- Ein 401 vom Download-Host ist kein abgelaufenes Token (kein Refresh/needs_reauth), sondern
+  `access_denied`; je Download höchstens 30 min, die Lease deckt das ab.
+- `CLOUD_IMPORT_FAKE_PROVIDERS` setzt nur `docker-compose.e2e.yml`; `docker-compose.yml` erzwingt `false`
+  (nicht über `.env` aktivierbar), `config.py` bricht ausserhalb von `development` ab.
+- `User-Agent: ISV|hocX|hocX/<Version>` (Microsoft-Empfehlung gegen Drosselung).
+
+### Neue Quelle hinzufügen
+
+1. Modul `services/cloud_import/providers/<anbieter>.py` mit einer Klasse nach `CloudProvider`
+   (`key` = Wert aus `IMPORT_PROVIDERS`, Migration 0281 kennt schon `google_drive`, `google_photos`,
+   `dropbox`, `webdav`), `host_policy`, `oauth_config()`, `account_info`, `roots`, `list_children`,
+   `get_node`, `download`, optional `revoke`, `map_authorize_error`, `public_info`; am Modulende
+   `register(<Klasse>())`.
+2. Modulname in `providers._ADAPTER_MODULES` eintragen.
+3. Nachbau für Tests/E2E: `fake_transport()` (über `fake_http.FakeTransport`) und `fake_scenarios()` für
+   die Test-Anmeldeseite `/api/cloud-import/fake-authorize/<anbieter>` (nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`
+   im E2E-Stack). Vorlage: `backend/tests/cloud_import_fakes.py`.
+4. Konfiguration nach SECURITY-RULES §5.2 (config.py inkl. `_FILE`, `.env*.example`, `env.sh`, `deploy.sh`,
+   `docker-compose.release.yml` nur backend + job-worker), Ablaufdatum des Secrets in
+   `system_health_service.cloud_import_secret_expiries`.
+5. Übersetzungen `fileImport.source.provider.<anbieter>`, `source.providerHint.<anbieter>`,
+   `cloud.connectHint.<anbieter>`; Registrierungsanleitung in RUNBOOK und
+   `audit-reports/plans/2026-11-25-cloud-import-registrierung.md`.
+
+### Parallelität, Drosselung, Fairness (Plan §8.3)
+
+- `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (Standard 2, 1–8) Downloads je Auftrag gleichzeitig. Die Threads
+  übertragen nur (Netz → Datei); Token-Refresh und alle DB-Änderungen bleiben im Haupt-Thread. Ein 401
+  in einem Thread führt zu einem Refresh im Haupt-Thread und einem neuen Versuch im nächsten Durchgang.
+- Token-Bucket je Anbieter und Konto in Redis (`services/cloud_import/pacing.py`, Schlüssel
+  `cloud_import_bucket:<anbieter>:<hash des kontos>`), Rate je Adapter über
+  `CloudProvider.request_rate = (pro Sekunde, Burst)`; Microsoft 8/s, Burst 16. Backend (Ordnerbaum) und
+  job-worker teilen den Eimer (job-worker deshalb im Netz `cache`). Kurze Wartezeit (≤ 2 s) wird
+  abgewartet, längere pausiert den Auftrag wie ein 429. Ohne Redis: lokaler Eimer je Prozess.
+- Fairness zwischen Mandanten: höchstens ein Import je Mandant, `claim_next` bedient immer den am
+  längsten nicht bedienten Auftrag, Zeitscheibe 60 s je Auftrag und Tick, gedrosselte Aufträge
+  (`not_before`) werden übersprungen.
+
+### Mails (Plan §9)
+
+Kategorie «Datei-Import» (`imports`, nur mit `files.import`), nur an die auslösende Person, ohne
+Dateinamen: `cloud_import.done` (abgeschlossen, Zahlen + Link `/files/import?job=…`),
+`cloud_import.failed` (unterbrochen, mit Grund: Kontingent, Rechte, Anbieter, `reauth_expired` …) für
+**alle Quellen** inkl. ZIP/Ordner, und `cloud_import.needs_reauth`. Abgebrochene und nie gestartete
+Aufträge bekommen keine Mail.
+
+### Plattform-Admin
+
+`/admin/cloud-imports` (owner): laufende Importe aller Mandanten mit Status und Fortschritt (keine
+Dateinamen, keine Konten), Kennzahlen der letzten 30 Tage je Tag und Quelle (Importe, unterbrochene,
+importierte Dateien, Volumen, Dateien mit Fehler). **Notfall-Abbruch** (`POST
+/api/admin/cloud-imports/{id}/cancel`, `require_admin_write`, Audit `admin.cloud_import_cancelled`): wie
+der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
+
+### Monitoring
+
+Check `cloud_import` in `/admin/system`: aktive Aufträge, Aufträge ohne Fortschritt seit 30 min (nicht
+gedrosselt), Anzahl `needs_reauth`, Ablauf der Client-Secrets (Warnung ab 30 Tagen, kritisch nach Ablauf,
+Warnung ohne gültiges Ablaufdatum), Belegung der Zwischenablage (`stagedMb`, Warnung ab 20 GiB).

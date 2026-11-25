@@ -51,6 +51,10 @@
         "security_logins": {
           "label": "Connexion depuis un nouvel appareil",
           "hint": "Quand quelqu'un se connecte à ton compte sur un appareil que nous ne connaissons pas encore."
+        },
+        "imports": {
+          "label": "Import de fichiers",
+          "hint": "Lorsqu’un import est terminé ou interrompu et lorsqu’un import depuis OneDrive, SharePoint ou un autre service cloud attend une nouvelle connexion. Uniquement pour les personnes autorisées à importer des fichiers."
         }
       },
       "securityNote": "Les avis de sécurité (mot de passe ou second facteur modifié, connexions suspectes, nombreuses tentatives échouées) et les liens de réinitialisation du mot de passe te sont toujours envoyés."

@@ -39,6 +39,32 @@ Installationen aktualisieren können.
   (Virenprüfung, Inhaltstyp, Grössen, Duplikate, Kontingent). Grenzen: 50 000 Dateien und 100 GB je
   Import, ein Import je Verein gleichzeitig.
 - Neue Berechtigung **Dateien importieren** (`files.import`), standardmässig nur für Administratoren.
+- **Datei-Import direkt aus Microsoft OneDrive und SharePoint (P1, 1.6):** Neue Quelle «Microsoft
+  OneDrive / SharePoint» im Import-Assistenten für private Microsoft-Konten, OneDrive for Business und
+  SharePoint-Bibliotheken. Anmeldung direkt bei Microsoft (OAuth mit PKCE), danach ein eigener
+  Ordnerbaum in hocX (kein Microsoft-Picker): Ordner und Dateien ankreuzen, Ebenen werden nachgeladen,
+  per Tastatur bedienbar. hocX fragt zuerst nur Lesezugriff auf die eigenen Dateien an; «Für mich
+  freigegeben» (Geschäftskonten) und SharePoint brauchen eine zweite Zustimmung, erst wenn man sie
+  öffnet. Verlangt die Organisation eine Freigabe durch ihre IT, zeigt der Assistent eine Anleitung
+  mit Freigabe-Link für die Administratoren. Das Auflisten und der Download laufen im Hintergrund
+  (job-worker); danach gelten Regeln, Vorschau, Bericht und die normale Upload-Pipeline wie beim
+  ZIP-Import. Bremst Microsoft (429/503), pausiert der Import ohne Fehler; verlangt Microsoft eine
+  neue Anmeldung (z. B. nach einem Passwortwechsel), wartet der Import bis zu 7 Tage, die Person
+  bekommt eine E-Mail (neue Kategorie «Datei-Import») und setzt mit «Neu anmelden» fort. Der Zugang
+  wird verschlüsselt gespeichert und gelöscht, sobald der Import endet; «Verbindung trennen» löscht
+  ihn sofort. Der Anbieter erscheint nur, wenn der Betreiber ihn eingerichtet hat.
+- **Fundament für weitere Cloud-Quellen:** gemeinsame Adapter-Schnittstelle, Verbindungen mit
+  verschlüsselten Tokens, OAuth-Callback, Ordnerbaum, Hintergrund-Download mit Wiederaufnahme und
+  Monitoring - Google Drive, Google Fotos, WebDAV und Dropbox schliessen daran an.
+- **Mails zum Datei-Import (alle Quellen, auch ZIP/Ordner):** «Import abgeschlossen» bzw. «Import
+  unterbrochen» mit Zahlen, Grund und Link zum Bericht, nur an die Person, die den Import gestartet
+  hat (Kategorie «Datei-Import», abschaltbar).
+- **Plattform-Admin › Datei-Importe:** laufende Importe aller Organisationen (nur Zahlen), Kennzahlen der
+  letzten 30 Tage je Tag und Quelle und ein Notfall-Abbruch (auditiert).
+- Cloud-Downloads laufen parallel (Standard 2 je Import) und werden je Konto über einen gemeinsamen
+  Token-Bucket gebremst, zusätzlich zu den Drosselhinweisen des Anbieters.
+- Systemstatus: neue Prüfung **Cloud-Import** (aktive und hängende Importe, wartende Anmeldungen,
+  Ablauf des Client-Secrets mit Warnung 30 Tage vorher).
 - **Upload-Verlauf (1.6):** Jeder Upload ist ein Vorgang – über alle Pakete eines Dialogs, den
   Vorab-Abgleich und vom Browser abgelehnte Dateien hinweg. *Fotos › Uploads* und *Ablage › Uploads*
   zeigen je Upload Person, Weg (Foto, Ablage, Pendenz, Abgabebox, persönlicher Link, Word-, Datei-
@@ -307,6 +333,24 @@ Installationen aktualisieren können.
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
+- Cloud-Import (P1): Migration `0281_cloud_import_connections` (Tabelle `import_connection` mit RLS und
+  verschlüsselten Tokens; `import_job` erhält Verbindung, Auswahl, Auflist-Stand, Drosselung und die
+  Status `listing`/`needs_reauth`, alle Quellwerte für 1.6 im CHECK; `import_item` erhält die
+  Kennungen beim Anbieter). Revision nach `0280_auth_event_subject_index`.
+- **Neues Secret `CLOUD_IMPORT_TOKEN_KEY`** (Verschlüsselung der OAuth-Tokens, nur backend und
+  job-worker): `scripts/deploy.sh` erzeugt es bei bestehenden Installationen automatisch; Rotation über
+  `CLOUD_IMPORT_TOKEN_KEY_PREVIOUS`. Microsoft wird erst angeboten mit `CLOUD_IMPORT_MS_CLIENT_ID`,
+  **`CLOUD_IMPORT_MS_CLIENT_SECRET`** (Secret) und `CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES`; optional
+  `CLOUD_IMPORT_ENABLED`, `CLOUD_IMPORT_REDIRECT_BASE_URL`, `CLOUD_IMPORT_MS_AUTHORITY`,
+  `CLOUD_IMPORT_MS_DOWNLOAD_MODE`, `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (2). Der **job-worker** hängt neu im
+  Netz `cache` und bekommt `REDIS_URL`/`redis_password` (Token-Bucket). Schritt-für-Schritt-Anleitung (Entra-App, Redirect-URIs je Umgebung,
+  Scopes, Secret mit Ablaufdatum, Herausgeberverifizierung, `.env`): RUNBOOK Abschnitt 27.
+  `deploy.sh` bricht ab, wenn die Client-ID ohne Secret oder Ablaufdatum gesetzt ist.
+- Ausgehende Verbindungen von backend und job-worker (nur wenn Microsoft eingerichtet ist):
+  `login.microsoftonline.com`, `graph.microsoft.com`, `*.sharepoint.com`, `*.1drv.com`,
+  `*.livefilestore.com` (HTTPS). Microsoft schafft die vorauthentifizierten Download-URLs für
+  OneDrive for Business/SharePoint am 1.4.2027 ab; hocX schickt dann automatisch das Token mit
+  (`CLOUD_IMPORT_MS_DOWNLOAD_MODE=auto`).
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
   `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0260` → `0270` → `0280`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte

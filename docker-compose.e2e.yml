@@ -34,8 +34,16 @@ services:
       # als geleakt (Mailcode nötig, im E2E-Stack kein Mailversand). Nur der E2E-Stack.
       PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-local-only}
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-false}
+      # Datei-Import: nachgebaute Cloud-Anbieter (services/cloud_import/fake_*.py), nur dieser
+      # Wegwerf-Stack. Token-Schlüssel erzeugt scripts/e2e.sh je Stack.
+      CLOUD_IMPORT_FAKE_PROVIDERS: "true"
+      CLOUD_IMPORT_REDIRECT_BASE_URL: http://127.0.0.1:13000
   job-worker:
     environment:
+      # Datei-Import: nachgebaute Cloud-Anbieter (services/cloud_import/fake_*.py), nur dieser
+      # Wegwerf-Stack. Token-Schlüssel erzeugt scripts/e2e.sh je Stack.
+      CLOUD_IMPORT_FAKE_PROVIDERS: "true"
+      CLOUD_IMPORT_REDIRECT_BASE_URL: http://127.0.0.1:13000
       PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-local-only}
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-false}
       # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im

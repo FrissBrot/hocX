@@ -38,7 +38,8 @@
     "account": "Profile & passkeys",
     "settingsSecurity": "Security & sign-in",
     "settingsIntegrations": "Integrations",
-    "settingsSystem": "Technical"
+    "settingsSystem": "Technical",
+    "cloudImports": "File imports"
   },
   "keywords": {
     "pricing": "prices plans features storage packages rebooking",
@@ -48,7 +49,8 @@
     "theme": "appearance theme light dark",
     "settingsSecurity": "passkey step-up confirmation session sign-in",
     "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker backup",
-    "settingsSystem": "version environment migration database domains catalogue"
+    "settingsSystem": "version environment migration database domains catalogue",
+    "cloudImports": "import OneDrive SharePoint cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Appearance: light",

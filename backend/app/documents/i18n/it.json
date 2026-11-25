@@ -387,6 +387,26 @@
       "resetSubject": "hocX: reimposta la password",
       "resetValidity": "Il link è valido per {minutes} minuti e funziona una sola volta."
     },
+    "cloudImport": {
+      "doneBody": "La tua importazione di file per {tenant} è completata. Importati: {imported} · già presenti: {duplicates} · errori: {failed}. I dettagli sono nel rapporto.",
+      "doneSubject": "{tenant}: importazione di file completata",
+      "failedBody": "La tua importazione di file per {tenant} è stata interrotta. Importati finora: {imported} · già presenti: {duplicates} · errori: {failed}.",
+      "failedSubject": "{tenant}: importazione di file interrotta",
+      "openButton": "Apri importazione",
+      "reason": {
+        "generic": "Nel rapporto trovi il motivo e puoi riprendere l’importazione.",
+        "provider_unavailable": "Il servizio cloud non era ripetutamente raggiungibile. Riprendi l’importazione più tardi.",
+        "quota_exceeded": "La quota di archiviazione dell’organizzazione è piena. Libera spazio e riprendi l’importazione nell’assistente.",
+        "reauth_expired": "Il servizio cloud richiedeva un nuovo accesso che non è avvenuto entro 7 giorni.",
+        "requester_unauthorized": "Il tuo account non può più importare file.",
+        "too_many_bytes": "La selezione è troppo grande per un’importazione.",
+        "too_many_files": "La selezione contiene troppi file per un’importazione.",
+        "too_many_folders": "La selezione contiene troppe cartelle per un’importazione."
+      },
+      "reauthBody": "La tua importazione di file da un servizio cloud per {tenant} è in pausa: il fornitore richiede un nuovo accesso (ad esempio dopo un cambio di password). Accedi di nuovo nell’assistente di importazione e l’importazione riprende da dove si era fermata. Dopo 7 giorni senza accesso viene terminata.",
+      "reauthSubject": "{tenant}: l’importazione di file attende il tuo accesso",
+      "reportButton": "Apri rapporto"
+    },
     "export": {
       "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Organizzazione › Protezione dei dati.",
       "openButton": "Apri esportazione",
@@ -424,6 +444,7 @@
     "greeting": "Ciao {name}",
     "kicker": {
       "account": "Account",
+      "cloudImport": "Importazione di file",
       "export": "Esportazione dati",
       "fineIssued": "Nuova multa",
       "fineUpcoming": "Multa in arrivo",
@@ -523,6 +544,9 @@
       "subject": "hocX: e-mail di prova"
     },
     "title": {
+      "cloudImportDone": "Importazione di file completata",
+      "cloudImportFailed": "Importazione di file interrotta",
+      "cloudImportReauth": "Accedi di nuovo per continuare l’importazione",
       "emailChanged": "L'e-mail di accesso è stata modificata",
       "exportFailed": "Esportazione non riuscita",
       "exportReady": "La tua esportazione è pronta",

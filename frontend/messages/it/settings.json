@@ -51,6 +51,10 @@
         "security_logins": {
           "label": "Accesso da un nuovo dispositivo",
           "hint": "Quando qualcuno accede al tuo account da un dispositivo che non conosciamo ancora."
+        },
+        "imports": {
+          "label": "Importazione di file",
+          "hint": "Quando un’importazione è completata o interrotta e quando un’importazione da OneDrive, SharePoint o un altro servizio cloud attende un nuovo accesso. Solo per chi può importare file."
         }
       },
       "securityNote": "Gli avvisi di sicurezza (password o secondo fattore modificati, accessi sospetti, molti tentativi falliti) e i link per reimpostare la password ti vengono sempre inviati."

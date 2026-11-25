@@ -51,6 +51,10 @@
         "security_logins": {
           "label": "Sign-in from a new device",
           "hint": "When someone signs in to your account on a device we don't know yet."
+        },
+        "imports": {
+          "label": "File import",
+          "hint": "When an import has finished or was interrupted, and when an import from OneDrive, SharePoint or another cloud service is waiting for you to sign in again. Only for people allowed to import files."
         }
       },
       "securityNote": "Security notices (password or second factor changed, suspicious sign-ins, many failed attempts) and password reset links are always sent."

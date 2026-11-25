@@ -82,6 +82,7 @@ const NAV: AdminNavGroup[] = [
       { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs", ownerOnly: true },
       { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors", ownerOnly: true },
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline", ownerOnly: true },
+      { href: "/admin/cloud-imports", labelKey: "nav.cloudImports", icon: "pipeline", ownerOnly: true, keywordsKey: "keywords.cloudImports" },
       { href: "/admin/operations/delivery", labelKey: "nav.delivery", icon: "delivery", ownerOnly: true },
       { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
       { href: "/admin/backups", labelKey: "nav.backups", icon: "backups", status: "backup_status" },

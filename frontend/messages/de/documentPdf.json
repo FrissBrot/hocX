@@ -711,7 +711,8 @@
       "test": "Versand funktioniert",
       "fineUpcoming": "Busse droht",
       "fineIssued": "Neue Busse",
-      "submissionWithdrawn": "Abgabe zurückgezogen"
+      "submissionWithdrawn": "Abgabe zurückgezogen",
+      "cloudImport": "Datei-Import"
     },
     "title": {
       "todosNew": "Neue Aufgaben für dich",
@@ -726,7 +727,10 @@
       "submissionWithdrawn": "Abgabe zurückgezogen",
       "loginAlert": "Auffällige Anmeldung an deinem Konto",
       "loginNotice": "Neue Anmeldung an deinem Konto",
-      "loginCode": "Dein Bestätigungscode"
+      "loginCode": "Dein Bestätigungscode",
+      "cloudImportReauth": "Neu anmelden, damit der Import weiterläuft",
+      "cloudImportDone": "Datei-Import abgeschlossen",
+      "cloudImportFailed": "Datei-Import unterbrochen"
     },
     "weekday": {
       "0": "Montag",
@@ -815,6 +819,26 @@
       "ignoreLead": "Hast du dich nicht gerade angemeldet?",
       "ignoreBody": "Dann kennt jemand dein Passwort – {link}. Gib den Code niemandem weiter.",
       "changeLink": "ändere es sofort"
+    },
+    "cloudImport": {
+      "reauthSubject": "{tenant}: Datei-Import wartet auf deine Anmeldung",
+      "reauthBody": "Dein Datei-Import aus einem Cloud-Dienst für {tenant} ist unterbrochen: der Anbieter verlangt eine neue Anmeldung (zum Beispiel nach einem Passwortwechsel). Melde dich im Import-Assistenten neu an, dann geht es dort weiter, wo der Import stand. Nach 7 Tagen ohne Anmeldung wird er beendet.",
+      "openButton": "Import öffnen",
+      "doneSubject": "{tenant}: Datei-Import abgeschlossen",
+      "failedSubject": "{tenant}: Datei-Import unterbrochen",
+      "doneBody": "Dein Datei-Import für {tenant} ist abgeschlossen. Importiert: {imported} · bereits vorhanden: {duplicates} · Fehler: {failed}. Details stehen im Bericht.",
+      "failedBody": "Dein Datei-Import für {tenant} wurde unterbrochen. Bisher importiert: {imported} · bereits vorhanden: {duplicates} · Fehler: {failed}.",
+      "reportButton": "Bericht öffnen",
+      "reason": {
+        "generic": "Im Bericht siehst du den Grund und kannst den Import fortsetzen.",
+        "quota_exceeded": "Das Speicherkontingent des Vereins ist voll. Schaffe Platz und setze den Import im Assistenten fort.",
+        "reauth_expired": "Der Cloud-Dienst verlangte eine neue Anmeldung, die 7 Tage lang nicht erfolgte.",
+        "requester_unauthorized": "Dein Konto hat die Berechtigung zum Importieren nicht mehr.",
+        "provider_unavailable": "Der Cloud-Dienst war wiederholt nicht erreichbar. Setze den Import später fort.",
+        "too_many_files": "Die Auswahl enthält zu viele Dateien für einen Import.",
+        "too_many_bytes": "Die Auswahl ist zu gross für einen Import.",
+        "too_many_folders": "Die Auswahl enthält zu viele Ordner für einen Import."
+      }
     }
   },
   "eventField": {

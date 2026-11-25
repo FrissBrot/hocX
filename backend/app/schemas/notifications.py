@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.mfa import MfaPendingLoginRead
 
-NotificationCategory = Literal["todo_new", "todo_reminders", "todo_submissions", "fines", "submission_changes", "exports", "security_logins"]
+NotificationCategory = Literal["todo_new", "todo_reminders", "todo_submissions", "fines", "submission_changes", "exports", "security_logins", "imports"]
 
 
 class NotificationPreferenceRead(BaseModel):
