@@ -331,6 +331,34 @@ def run_job(env: RunEnv, ctx: jobs.JobCtx) -> None:
                 _logger.warning("Lease konnte nicht freigegeben werden", exc_info=True)
 
 
+def _audit_restore_finished(db, job: Any, fresh: Any, final: str) -> None:
+    """Ergebnis und Ende jeder Wiederherstellung ins Audit-Log (Backup-Redesign W1). Läuft gegen die
+    Datenbank, die danach aktiv ist (nach einem Voll-Restore die neue). Fehler hier dürfen den
+    Abschluss nicht verhindern, landen aber im Fehlerprotokoll."""
+    from app.services.audit_service import AuditService
+
+    try:
+        result = (fresh.result if fresh is not None else None) or {}
+        details: dict[str, Any] = {
+            "restore_job_id": str(job.id), "kind": job.kind, "state": final, "archive": job.archive_name,
+            "backup_set_id": str(job.backup_set_id) if job.backup_set_id else None, "requested_by": job.requested_by_email,
+            "error_code": fresh.error_code if fresh is not None else None,
+        }
+        if job.kind == "tenant_copy":
+            details.update({k: result.get(k) for k in ("tenant_id", "tenant_public_id", "source_tenant_id", "files_imported") if k in result})
+        else:
+            details.update({k: result.get(k) for k in ("generation", "pre_restore_db") if k in result})
+        AuditService().log(db, action="backup.restore.finished", actor_email=None, entity_type="backup", details=details,
+                           outcome="success" if final == "completed" else "failure")
+    except Exception as exc:  # noqa: BLE001 - Abschluss des Auftrags hat Vorrang, Fehler sichtbar machen
+        _logger.exception("Audit-Eintrag zum Restore %s fehlgeschlagen", job.id)
+        try:
+            db.rollback()
+            record_system_error(db, exc=exc)
+        except Exception:  # noqa: BLE001 - Verbindung tot: bleibt im Log (oben), Lease/Lock gibt run_job frei
+            _logger.exception("Fehlerprotokoll für den Audit-Eintrag zum Restore %s nicht geschrieben", job.id)
+
+
 def _after_job(env: RunEnv, ctx: jobs.JobCtx, job: Any, final: str | None) -> None:
     if final is None or job is None:
         return
@@ -343,6 +371,8 @@ def _after_job(env: RunEnv, ctx: jobs.JobCtx, job: Any, final: str | None) -> No
             notify(db, f"{_instance()}: {kind} {labels.get(final, final)}",
                    f"Sicherungspunkt {job.archive_name}. {(fresh.error_message if fresh is not None and fresh.error_message else '')}".strip(),
                    priority=2 if final == "completed" else 5, tags=["white_check_mark" if final == "completed" else "rotating_light"])
+            # Nach der Meldung: ein Fehler beim Audit-Eintrag darf den Alarm nicht verhindern.
+            _audit_restore_finished(db, job, fresh, final)
             return
         if job.kind == "backup" and final in ("completed", "partial"):
             fresh = db.get(BackupJob, job.id)

@@ -58,10 +58,17 @@ ausführt:
 5. **Prüfung**: ggf. Alembic-Upgrade (erst jetzt), Speicher der wiederhergestellten DB auf die neue
    Generation setzen (das alte Profil wird nicht blind aktiviert), Referenzprüfung
    (Register ↔ wiederhergestellte Objekte, DB-Verweise), Anwendungstest (alle ORM-Tabellen).
-6. **Umschaltung**: volle Wartung, Schreib-Fence, Backup-Historie in die neue DB übernehmen,
-   Verbindungen beenden, `hocx` → `hocx_pre_restore_<zeit>`, `hocx_restore_<id>` → `hocx`.
+6. **Umschaltung**: volle Wartung, Schreib-Fence, Audit-Log-Einträge seit dem Sicherungspunkt und
+   die Backup-Historie in die neue DB übernehmen, Verbindungen beenden, `hocx` →
+   `hocx_pre_restore_<zeit>`, `hocx_restore_<id>` → `hocx`. Vom Audit-Log werden nur Einträge mit
+   einer höheren ID als im wiederhergestellten Stand angehängt (nichts geändert); Verweise auf
+   Mandanten oder Konten, die es im wiederhergestellten Stand nicht gibt, werden leer (wie beim
+   Löschen). Ereignis «Audit-Log übernommen» mit der Anzahl.
 7. **Smoke-Test** gegen die neue Live-DB und den Speicher; bei Fehlern automatischer Rücktausch
    (Status «Zurückgerollt»), sonst Freigabe der Wartung.
+
+Ergebnis und Ende jeder Wiederherstellung (auch Mandant als Kopie, Rücktausch, Abbruch) schreibt
+der Worker als `backup.restore.finished` ins Audit-Log der danach aktiven Datenbank.
 
 Danach: Anmeldung prüfen, Stichproben in Mandanten, System → Backups → «Backup jetzt starten».
 Die bisherige Datenbank bleibt als `hocx_pre_restore_<zeit>` erhalten (gesperrt für Verbindungen,
