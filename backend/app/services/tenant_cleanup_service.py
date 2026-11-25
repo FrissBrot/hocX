@@ -145,6 +145,17 @@ class TenantCleanupService:
             from app.services.participant_service import ParticipantService
             participant_ids = list(db.scalars(select(Participant.id).where(Participant.tenant_id == tenant_id, Participant.login_enabled.is_(False))))
             ParticipantService()._clear_orphaned_list_references(db, tenant_id, set(participant_ids))
+            # Wie ParticipantService.delete_participants (ohne dessen Commit, das Aufräumen bleibt
+            # eine Transaktion): Personenbezug in Audit-Log und Anmeldeereignissen entfernen
+            # (PRIV-007/013), solange actor_user_id noch gesetzt ist, und Löschjournal für Restores.
+            from app.auth_security import events as auth_events
+            from app.services import erasure_journal
+            from app.services.audit_service import AuditService
+
+            AuditService().forget_actors(db, participant_ids)
+            auth_events.forget_user(db, participant_ids)
+            for public_id in db.scalars(select(Participant.public_id).where(Participant.id.in_(participant_ids))):
+                erasure_journal.record(db, "app_user", public_id, tenant_id=tenant_id)
             result = db.execute(delete(Participant).where(Participant.id.in_(participant_ids)))
             counts.participants = result.rowcount or 0
 

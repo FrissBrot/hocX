@@ -198,6 +198,29 @@ def test_events_and_participants_and_todos(db, service):
     assert (counts.events, counts.participants, counts.todos) == (1, 1, 1)
 
 
+def test_participants_are_erased_like_a_regular_delete(db, service):
+    """Personen aufräumen löscht wie ParticipantService.delete_participants: E-Mail/IP-Hash im
+    Audit-Log und Personenbezug der Anmeldeereignisse entfernen (PRIV-007/013), Eintrag im
+    Löschjournal, damit ein Restore die Person nicht zurückbringt."""
+    from sqlalchemy import text
+
+    from app.services.audit_service import AuditService
+
+    tenant = make_tenant(db, "Cleanup Tenant")
+    person = make_participant(db, tenant.id, display_name="Ehemals Aktiv")
+    person_id, person_public_id = person.id, person.public_id
+    AuditService().log(db, action="user.login", tenant_id=tenant.id, actor_user_id=person_id, actor_email="ehemals@example.com", commit=False)
+    db.flush()
+
+    counts = service.cleanup(db, tenant.id, ["participants"])
+
+    assert counts.participants == 1
+    assert db.scalar(text("SELECT count(*) FROM audit_log WHERE actor_email = 'ehemals@example.com'")) == 0
+    assert db.scalar(
+        text("SELECT count(*) FROM erasure_journal WHERE kind = 'app_user' AND subject_public_id = :p"), {"p": person_public_id}
+    ) == 1
+
+
 def test_documents_sweeps_orphaned_files_but_spares_referenced_ones(db, service):
     tenant = make_tenant(db, "Cleanup Tenant")
     template = make_template(db, tenant.id)
