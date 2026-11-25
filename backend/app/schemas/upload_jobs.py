@@ -20,6 +20,9 @@ UploadItemFileState = Literal["ok", "trashed", "deleted", "infected_later", "sca
 MAX_JOB_FILE_IDS = 10_000
 MAX_CLIENT_RESULTS_PER_CALL = 500
 MAX_CLIENT_RESULTS_PER_JOB = 2000
+# Grösse einer vom Browser gemeldeten Datei: höchstens BIGINT (upload_job_item.size_bytes). Ohne
+# Grenze scheiterte ein grösserer Wert erst beim INSERT (DataError, 500 plus Fehlerprotokoll).
+MAX_REPORTED_SIZE_BYTES = 2**63 - 1
 
 
 class UploadJobCreate(BaseModel):
@@ -38,7 +41,7 @@ class UploadClientResult(BaseModel):
     """Eine vom Browser vor dem Senden abgelehnte Datei (E-14): nur Name, Grösse und Code."""
 
     name: str = Field(max_length=500)
-    size: int | None = Field(default=None, ge=0)
+    size: int | None = Field(default=None, ge=0, le=MAX_REPORTED_SIZE_BYTES)
     code: Literal["too_large", "unsupported_format", "rule_violation", "heic_unreadable", "client_rejected"] = "client_rejected"
 
 
