@@ -7,13 +7,16 @@ from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.models import (
     Document,
+    DocumentExport,
     Event,
+    GalleryImage,
     ListDefinition,
     ListEntry,
     Participant,
     Protocol,
     ProtocolImage,
     ProtocolTodo,
+    ProtocolTodoFile,
     StoredFile,
     SubmissionAssignment,
     SubmissionUpload,
@@ -213,6 +216,15 @@ class TenantCleanupService:
                 ~select(ProtocolImage.id).where(ProtocolImage.stored_file_id == StoredFile.id).exists(),
                 ~select(WordImportDocument.id).where(WordImportDocument.stored_file_id == StoredFile.id).exists(),
                 ~select(SubmissionUploadFile.id).where(SubmissionUploadFile.stored_file_id == StoredFile.id).exists(),
+                # Nicht verwaist sind auch Fotos/Dateien der Galerie (samt Live-Photo-Video), Anhänge
+                # von Pendenzen (CASCADE: sie verschwänden still mit) und archivierte Exporte, etwa
+                # Protokoll-PDFs. Ohne diese Prüfung scheiterte «documents» an der RESTRICT-FK von
+                # gallery_image, sobald der Verein ein Foto hatte (Nachtlauf 2026-11-25).
+                ~select(GalleryImage.id).where(
+                    or_(GalleryImage.stored_file_id == StoredFile.id, GalleryImage.live_video_stored_file_id == StoredFile.id)
+                ).exists(),
+                ~select(ProtocolTodoFile.stored_file_id).where(ProtocolTodoFile.stored_file_id == StoredFile.id).exists(),
+                ~select(DocumentExport.id).where(DocumentExport.stored_file_id == StoredFile.id).exists(),
             )
             # Sperre wie FileEraser: ein gleichzeitig neu abgelegtes Objekt (capture_date_file_sync)
             # darf nicht nach dem Löschen des alten Schlüssels zurückbleiben (Security-Review 1.5.2).

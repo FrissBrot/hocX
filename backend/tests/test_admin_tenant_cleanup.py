@@ -18,12 +18,14 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 
 from app.models.entities import (
+    GalleryImage,
     ListDefinition,
     ListEntry,
     Participant,
     Protocol,
     ProtocolImage,
     ProtocolTodo,
+    ProtocolTodoFile,
     StoredFile,
     SubmissionAssignment,
     SubmissionUpload,
@@ -241,6 +243,28 @@ def test_documents_sweeps_orphaned_files_but_spares_referenced_ones(db, service)
     assert not exists(db, StoredFile, orphan_file_id)
     # Protocol itself untouched - "documents" alone doesn't delete protocols.
     assert exists(db, Protocol, protocol_id)
+
+
+def test_documents_spares_gallery_photos_and_todo_attachments(db, service):
+    """«Hochgeladene Dokumente» räumt Importe, Abgabebox-Uploads und dadurch verwaiste Dateien auf -
+    Fotos der Galerie und Anhänge von Pendenzen sind nicht verwaist und bleiben (samt Objekt)."""
+    tenant = make_tenant(db, "Cleanup Tenant")
+    photo = make_stored_file(db, tenant.id, "foto.jpg")
+    db.add(GalleryImage(tenant_id=tenant.id, stored_file_id=photo.id))
+    attachment = make_stored_file(db, tenant.id, "anhang.pdf")
+    todo = make_standalone_todo(db, tenant.id)
+    db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=attachment.id))
+    orphan = make_stored_file(db, tenant.id, "orphan.pdf")
+    db.flush()
+    photo_id, attachment_id, orphan_id = photo.id, attachment.id, orphan.id
+
+    counts = service.cleanup(db, tenant.id, ["documents"])
+
+    assert counts.documents == 1
+    assert exists(db, StoredFile, photo_id)
+    assert exists(db, StoredFile, attachment_id)
+    assert db.scalar(select(func.count()).select_from(ProtocolTodoFile).where(ProtocolTodoFile.stored_file_id == attachment_id)) == 1
+    assert not exists(db, StoredFile, orphan_id)
 
 
 def test_documents_sweeps_orphaned_files_thumbnail_too(db, service, monkeypatch, tmp_path):
