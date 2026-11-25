@@ -3,6 +3,7 @@
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -18,8 +19,11 @@ import {
   type CloudProviderKey,
   type ImportJob,
   type PathedFile,
+  usesCredentials,
 } from "@/lib/files/file-import";
 import { formatDateTime, formatFileSize, formatInteger } from "@/lib/utils/format";
+
+import { ImportWebdavForm } from "./import-webdav-form";
 
 const POLL_MS = 3000;
 const BATCH_FILES = 20;
@@ -47,6 +51,8 @@ export function ImportProgress({ job, provider, onJob, folderFiles, onFiles }: P
   const [uploading, setUploading] = useState(false);
   const [missing, setMissing] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
+  // WebDAV: Passwort neu eingeben statt OAuth-Anmeldung
+  const [reenter, setReenter] = useState(false);
   const folderInput = useRef<HTMLInputElement>(null);
   const uploadRun = useRef(false);
 
@@ -139,6 +145,10 @@ export function ImportProgress({ job, provider, onJob, folderFiles, onFiles }: P
   }
 
   async function reconnect() {
+    if (usesCredentials(provider)) {
+      setReenter(true);
+      return;
+    }
     try {
       await startCloudLogin(browserApiFetch, job.id, job.source as CloudProviderKey, { tier: job.connection?.tier ?? provider?.default_tier });
     } catch (error) {
@@ -172,6 +182,16 @@ export function ImportProgress({ job, provider, onJob, folderFiles, onFiles }: P
           ) : null}
         </div>
       ) : null}
+      <Modal open={reenter && job.status === "needs_reauth"} title={t("cloud.webdav.reenterTitle")} onClose={() => setReenter(false)}>
+        <ImportWebdavForm
+          jobId={job.id}
+          reenter
+          onJob={(next) => {
+            setReenter(false);
+            onJob(next);
+          }}
+        />
+      </Modal>
       {job.not_before && job.status !== "needs_reauth" && new Date(job.not_before).getTime() > Date.now() ? (
         <StatusBanner tone="neutral" message={t("cloud.throttledUntil", { time: formatDateTime(job.not_before, locale) })} />
       ) : null}

@@ -273,6 +273,10 @@ services:
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
       CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/cloud_import_google_client_secret
+      # Dropbox (ohne App-Key nicht angeboten) und WebDAV-Schalter
+      CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
+      CLOUD_IMPORT_DROPBOX_APP_SECRET_FILE: /run/secrets/cloud_import_dropbox_app_secret
+      CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}
       # Pool und Request-Annahme je Backend-Worker, Überlast-Schutz nach Abo (RUNBOOK Abschnitt 17).
       # Die Annahme ergibt sich aus Pool + Overflow minus DB_ADMISSION_RESERVE.
       DB_POOL_SIZE: ${DB_POOL_SIZE:-12}
@@ -344,6 +348,7 @@ services:
       - cloud_import_token_key_previous
       - cloud_import_ms_client_secret
       - cloud_import_google_client_secret
+      - cloud_import_dropbox_app_secret
       - local_s3_secret_key
       - local_s3_abgabebox_secret_key
       - redis_password
@@ -1011,6 +1016,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/cloud_import_google_client_secret
+      # Dropbox (ohne App-Key nicht angeboten) und WebDAV-Schalter
+      CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
+      CLOUD_IMPORT_DROPBOX_APP_SECRET_FILE: /run/secrets/cloud_import_dropbox_app_secret
+      CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
@@ -1041,6 +1050,7 @@ services:
       - cloud_import_ms_client_secret
       - redis_password
       - cloud_import_google_client_secret
+      - cloud_import_dropbox_app_secret
     volumes:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
@@ -1363,6 +1373,8 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_ms_client_secret
   cloud_import_google_client_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_google_client_secret
+  cloud_import_dropbox_app_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/cloud_import_dropbox_app_secret
   garage_rpc_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_rpc_secret
   garage_admin_token:

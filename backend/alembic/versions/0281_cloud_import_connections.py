@@ -1,10 +1,10 @@
-"""Datei-Import P1: Cloud-Verbindungen (OAuth) und API-Quellen (Plan «Cloud-Datei-Importer», hocX 1.6).
+"""Datei-Import P1: Cloud-Verbindungen (OAuth) und API-Quellen (Plan «Cloud-Datei-Importer», hocX 1.7).
 
 - ``import_connection``: Verbindung einer Person zu einem Cloud-Konto (Microsoft, später Google,
   Dropbox, WebDAV). Tokens nur verschlüsselt (``CLOUD_IMPORT_TOKEN_KEY``, MultiFernet,
   services/cloud_import/token_crypto.py), nie im Klartext, nie in Logs. ``tenant_id`` NOT NULL,
   RLS ``tenant_isolation`` wie 0230. Gelöscht bei Auftragsende bzw. nach ``purge_after``.
-- ``import_job``: Quelle je Anbieter (alle in 1.6 geplanten Werte schon jetzt, damit weitere
+- ``import_job``: Quelle je Anbieter (alle in 1.7 geplanten Werte schon jetzt, damit weitere
   Adapter ohne eigene Migration dazukommen), ``connection_id`` (zusammengesetzter FK im selben
   Mandanten, SET NULL), Auswahl (``selection``), Stand des Auflistens (``listing_state``),
   Drosselung (``not_before``), neue Status ``listing`` und ``needs_reauth`` (beide zählen als

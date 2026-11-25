@@ -61,11 +61,15 @@
     "cloudHintConnected": "hocX liest beim Cloud-Dienst nur, was du auswählst, und speichert den Zugang verschlüsselt nur bis zum Ende des Imports.",
     "provider": {
       "microsoft": "Microsoft OneDrive / SharePoint",
+      "dropbox": "Dropbox",
+      "webdav": "WebDAV (kDrive, Nextcloud …)",
       "google_drive": "Google Drive",
       "google_photos": "Google Fotos"
     },
     "providerHint": {
       "microsoft": "OneDrive privat, OneDrive for Business oder SharePoint-Bibliotheken direkt verbinden. Du wählst die Ordner in hocX aus.",
+      "dropbox": "Ordner aus deiner Dropbox direkt verbinden und in hocX auswählen.",
+      "webdav": "Infomaniak kDrive, Nextcloud, SwissDisk oder einen anderen WebDAV-Speicher mit App-Passwort verbinden.",
       "google_drive": "Einzelne Dateien auswählen. Google Docs, Tabellen und Präsentationen kommen als Word, Excel und PowerPoint. Ganze Ordner über Google Takeout.",
       "google_photos": "Fotos direkt in Google Fotos auswählen. Videos werden nicht übernommen."
     }
@@ -353,6 +357,20 @@
       "invalid_ref": "Ungültige Auswahl.",
       "empty_source": "In der Auswahl wurden keine Dateien gefunden. Bitte andere Ordner wählen.",
       "selection_unavailable": "Die gewählten Ordner sind nicht mehr erreichbar. Bitte neu wählen.",
+      "webdav_auth_failed": "Benutzername oder App-Passwort stimmen nicht.",
+      "webdav_url_invalid": "Die Adresse ist ungültig. Bitte prüfen.",
+      "webdav_https_required": "Nur verschlüsselte Adressen (https://) sind erlaubt.",
+      "webdav_port": "Dieser Port ist nicht erlaubt. Erlaubt sind 443 und 8443.",
+      "webdav_host_blocked": "Diese Adresse ist nicht erlaubt (interne oder private Adressen sind gesperrt).",
+      "webdav_redirect": "Der Server leitet auf eine andere Adresse um. Bitte die Zieladresse direkt eingeben.",
+      "webdav_not_found": "Unter dieser Adresse wurde kein Ordner gefunden.",
+      "webdav_not_collection": "Diese Adresse zeigt nicht auf einen Ordner.",
+      "webdav_unreachable": "Der Server ist nicht erreichbar.",
+      "webdav_bad_response": "Der Server antwortet nicht wie ein WebDAV-Speicher.",
+      "webdav_kdrive_id": "Die kDrive-ID besteht nur aus Ziffern.",
+      "webdav_username": "Bitte einen gültigen Benutzernamen eingeben (ohne Doppelpunkt).",
+      "webdav_password": "Bitte ein gültiges App-Passwort eingeben.",
+      "webdav_preset": "Bitte einen Anbieter wählen.",
       "missing_scope": "Bei der Anmeldung wurde der Zugriff auf die Dateien bzw. Fotos nicht erlaubt. Melde dich neu an und setze das Häkchen dafür.",
       "picker_unavailable": "Die Google-Auswahl konnte nicht geladen werden. Bitte später erneut versuchen.",
       "picker_no_files": "Es wurden keine Dateien ausgewählt. Ordner lassen sich nicht übernehmen, nur Dateien.",
@@ -375,13 +393,39 @@
     },
     "connectHint": {
       "microsoft": "Melde dich mit deinem Microsoft-Konto an (privat, Arbeit oder Schule). hocX fragt zuerst nur nach Lesezugriff auf deine eigenen Dateien; für «Für mich freigegeben» bei Geschäftskonten und für SharePoint folgt eine zweite Zustimmung, sobald du sie öffnest.",
+      "dropbox": "Melde dich bei Dropbox an. hocX erhält nur Lesezugriff auf Dateien und Ordnerangaben.",
+      "webdav": "Gib die Zugangsdaten deines Speichers ein. Verwende ein App-Passwort statt deines normalen Passworts; du kannst es nach dem Import beim Anbieter löschen.",
       "google_drive": "Melde dich bei Google an. hocX sieht danach nur die Dateien, die du im nächsten Schritt in der Google-Auswahl markierst, und nichts sonst aus deinem Drive.",
       "google_photos": "Melde dich bei Google an. Danach wählst du die Fotos direkt in Google Fotos aus; hocX sieht nur diese Auswahl."
     },
     "roots": {
       "microsoft_me": "Mein OneDrive",
       "microsoft_shared": "Für mich freigegeben",
-      "microsoft_sites": "SharePoint-Websites"
+      "microsoft_sites": "SharePoint-Websites",
+      "dropbox": "Dropbox",
+      "webdav": "Alle Dateien"
+    },
+    "webdav": {
+      "preset": "Anbieter",
+      "presetKdrive": "Infomaniak kDrive",
+      "presetNextcloud": "Nextcloud",
+      "presetGeneric": "Andere WebDAV-Adresse (z. B. SwissDisk)",
+      "kdriveId": "kDrive-ID (optional)",
+      "kdriveIdHelp": "Nur nötig, wenn du mehrere kDrives hast: die Zahl in der Adresse von kDrive im Browser.",
+      "server": "Serveradresse",
+      "serverHelp": "Zum Beispiel cloud.verein.ch - ohne https:// und ohne Pfad.",
+      "url": "WebDAV-Adresse",
+      "urlHelp": "Vollständige Adresse mit https://, wie sie dein Anbieter für WebDAV angibt.",
+      "username": "Benutzername",
+      "usernameHelp": "Bei kDrive die E-Mail-Adresse deines Infomaniak-Kontos.",
+      "password": "App-Passwort",
+      "passwordHelp": "Wird verschlüsselt gespeichert und gelöscht, sobald der Import beendet ist.",
+      "connect": "Verbinden",
+      "connecting": "Verbindung wird geprüft …",
+      "help": "So erstellst du ein App-Passwort",
+      "reenterTitle": "Passwort neu eingeben",
+      "reenterHint": "Der Speicher hat die Zugangsdaten abgelehnt (zum Beispiel weil das App-Passwort gelöscht wurde). Gib ein gültiges App-Passwort ein; der Import geht danach weiter.",
+      "back": "Zurück"
     },
     "google": {
       "driveHint": "Öffne die Google-Auswahl und markiere die Dateien, die du übernehmen willst (Mehrfachauswahl möglich, höchstens 200 pro Durchgang).",

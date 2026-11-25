@@ -18,6 +18,8 @@ _ADAPTER_MODULES: tuple[str, ...] = (
     "app.services.cloud_import.providers.microsoft",
     "app.services.cloud_import.providers.google_drive",
     "app.services.cloud_import.providers.google_photos",
+    "app.services.cloud_import.providers.dropbox",
+    "app.services.cloud_import.providers.webdav",
 )
 _loaded = False
 

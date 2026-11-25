@@ -1510,7 +1510,7 @@ Rolle nicht):
 3. `scripts/deploy.sh` ausführen (schreibt die Secret-Dateien neu, startet den job-worker neu).
 
 
-## 27. Cloud-Import einrichten (1.6)
+## 27. Cloud-Import einrichten (1.7)
 
 Datei-Import direkt aus Cloud-Diensten (Technik: `docs-site/docs/technik/datei-import.md`, Abschnitt
 «API-Quellen»). Ein Anbieter erscheint im Wizard nur, wenn er vollständig konfiguriert ist; ZIP- und
@@ -1872,3 +1872,116 @@ CLOUD_IMPORT_GOOGLE_APP_ID=<Projektnummer aus Schritt 1>
 
 <https://myaccount.google.com/connections> → hocX → **Alle Verbindungen löschen**. In hocX löscht
 **Verbindung trennen** den Zugang sofort und widerruft ihn bei Google.
+### 27.3 Dropbox
+
+**Ziel:** eine Dropbox-App mit **Scoped access**, Zugriff **Full Dropbox**, nur Lese-Berechtigungen.
+Vertraulicher Client (App-Secret) plus PKCE. Dropbox-App-Secrets laufen nicht ab.
+
+**Empfehlung zu Umgebungen:** wie bei Microsoft eine eigene App für Produktion, eine zweite für
+Test-Host und hocx-dev (zwei Redirect-URIs). Der App-Name ist bei Dropbox weltweit eindeutig.
+
+#### Schritt 1 - App anlegen
+
+1. Mit dem Betreiberkonto bei Dropbox anmelden, <https://www.dropbox.com/developers/apps> →
+   **Create app**.
+2. **Choose an API:** **Scoped access**.
+3. **Choose the type of access you need:** **Full Dropbox** (nur so sieht hocX die bestehenden Ordner
+   des Vereins; «App folder» sähe nur `/Apps/<App-Name>`).
+4. **Name your app:** z. B. `hocX Datei-Import` (Test: `hocX Datei-Import Test`). Der Name erscheint
+   im Zustimmungsdialog. Ist er vergeben, einen eindeutigen Zusatz wählen.
+5. **Create app**.
+
+#### Schritt 2 - Berechtigungen (Reiter «Permissions»)
+
+| Berechtigung | Wofür |
+|---|---|
+| `account_info.read` | Anzeige «Verbunden als …» (bei Dropbox immer aktiv) |
+| `files.metadata.read` | Ordnerbaum, Dateiliste (`files/list_folder`, `files/get_metadata`) |
+| `files.content.read` | Download (`files/download`) |
+
+- Nur diese drei; **keine** `files.content.write`, `sharing.*`, `team_*`.
+- **Submit** unten auf der Seite nicht vergessen. Werden Berechtigungen später geändert, müssen sich
+  verbundene Personen neu anmelden.
+
+#### Schritt 3 - OAuth-Einstellungen (Reiter «Settings»)
+
+1. **App key** kopieren → `.env` `CLOUD_IMPORT_DROPBOX_APP_KEY`; **App secret** (**Show**) →
+   `CLOUD_IMPORT_DROPBOX_APP_SECRET` (Secret, landet als Secret-Datei nur bei backend und job-worker).
+2. **OAuth 2 → Redirect URIs**, je Umgebung genau eine Zeile (keine Wildcards, nur https):
+   - Produktion: `https://<prod-domain>/api/cloud-import/oauth/dropbox/callback`
+   - Test-Host: `https://<test-domain>/api/cloud-import/oauth/dropbox/callback`
+   - hocx-dev: `https://<dev-domain>/api/cloud-import/oauth/dropbox/callback`
+3. **Allow public clients (Implicit Grant & PKCE):** **Disallow** (hocX ist ein vertraulicher
+   Client mit App-Secret; PKCE nutzt hocX trotzdem).
+4. **Access token expiration:** «Short-lived» (Standard). hocX holt mit `token_access_type=offline`
+   ein Refresh-Token und erneuert selbst.
+5. **Webhooks:** leer lassen (kein Sync).
+
+#### Schritt 4 - Branding (Reiter «Branding»)
+
+App-Icon (64×64 und 256×256 px), Herausgeber (Betreiber), Website von hocX und die **URL der
+Datenschutzerklärung** (beschreibt den Cloud-Import, Plan §11.3). Pflicht für die Produktionsfreigabe.
+
+#### Schritt 5 - Entwicklungsmodus und Produktionsfreigabe
+
+- Eine neue App ist im Status **Development**: zuerst kann nur das Konto des Entwicklers sie
+  verbinden. Unter **Settings → Development users** mit **Enable additional users** für weitere
+  Konten freigeben (Dropbox erlaubt im Entwicklungsmodus bis zu 500 verbundene Konten).
+- **Produktionsfreigabe:** Sobald **50 Konten** die App verbunden haben, bleiben **zwei Wochen**, um
+  die Produktionsfreigabe zu beantragen und zu erhalten - sonst friert Dropbox neue Verbindungen ein
+  (bestehende laufen weiter). Deshalb früh beantragen: **Settings → Production approval → Apply for
+  production**. Dropbox verlangt Branding, Datenschutzerklärung, eine kurze Beschreibung des Zwecks
+  («einmaliger Import der Vereinsablage, nur lesend»), ggf. Screenshots/Video des Ablaufs, und prüft
+  einige Tage. Für Test-Host/hocx-dev ist keine Freigabe nötig (weniger als 50 Konten).
+- Zähler der verbundenen Konten: in der App-Konsole oben auf der Seite («Users»). hocX widerruft das
+  Token nach jedem Import (`auth/token/revoke`); verbunden bleibt das Konto in der Zählung trotzdem.
+
+#### Schritt 6 - Einträge in `.env` (je Umgebung)
+
+```dotenv
+# Dropbox (App aus den Schritten 1-3). Beide leer = Dropbox wird nicht angeboten.
+CLOUD_IMPORT_DROPBOX_APP_KEY=<App key>
+CLOUD_IMPORT_DROPBOX_APP_SECRET=<App secret>
+# gemeinsam (siehe oben): CLOUD_IMPORT_ENABLED, CLOUD_IMPORT_REDIRECT_BASE_URL, CLOUD_IMPORT_TOKEN_KEY
+```
+
+Danach `scripts/deploy.sh` (verweigert den Deploy, wenn nur Key oder nur Secret gesetzt ist).
+Kontrolle: Wizard zeigt die Kachel **Dropbox**.
+
+#### Schritt 7 - Netz (ausgehend)
+
+backend und job-worker brauchen HTTPS (443) zu `api.dropboxapi.com` und `content.dropboxapi.com`
+(Allowlist im Code). Der Browser der Person öffnet `www.dropbox.com` für die Anmeldung.
+
+#### Schritt 8 - Abnahme mit echtem Konto
+
+1. Persönliches Dropbox-Konto (Entwicklungsmodus: als Development user freigegeben) verbinden,
+   Zustimmungsdialog zeigt nur Lesen.
+2. Ordner mit mehr als 2000 Einträgen öffnen (Paging über «Weitere laden»), Unterordner wählen,
+   auflisten, importieren; Bericht prüfen.
+3. Trennen → unter <https://www.dropbox.com/account/connected_apps> ist die App noch gelistet, das
+   Token aber widerrufen (erneutes Browsen verlangt neue Anmeldung).
+4. Dropbox-Business-Konto: falls der Team-Admin Drittanbieter-Apps sperrt, erscheint bei Dropbox eine
+   Fehlermeldung; der Admin muss die App in der Admin-Konsole erlauben.
+
+#### Zugriff entziehen (für Vereine)
+
+<https://www.dropbox.com/account/connected_apps> → hocX Datei-Import → **Trennen**.
+
+### 27.4 WebDAV (kDrive, Nextcloud, SwissDisk)
+
+Keine Registrierung beim Anbieter: der Verein gibt Adresse (bzw. Vorlage kDrive/Nextcloud), Benutzer
+und App-Passwort selbst ein (Benutzerdoku «Dateien importieren», Abschnitt App-Passwort).
+
+- Schalter `CLOUD_IMPORT_WEBDAV_ENABLED` (Standard `true`, `false` = Kachel fehlt). Braucht wie alle
+  Cloud-Quellen `CLOUD_IMPORT_TOKEN_KEY`: das App-Passwort wird damit verschlüsselt gespeichert und
+  bei Auftragsende gelöscht.
+- Ausgehend: HTTPS zu beliebigen **öffentlichen** Adressen auf Port 443 oder 8443 (die Adresse kommt
+  vom Verein). Interne Netze, Metadaten-Adressen und IP-Literale sind im Code gesperrt
+  (`services/cloud_import/dav_http.py`, Technik-Doku «WebDAV»). Ein Egress-Filter ist nicht nötig,
+  schadet aber nicht, solange 443/8443 nach aussen offen bleiben.
+- Fehlerbilder: «Benutzername oder App-Passwort stimmen nicht» (401), «nicht erreichbar» (DNS/TLS/
+  Zeitlimit), «Adresse nicht erlaubt» (intern/privat). Logs enthalten nur Host und Pfad, nie das
+  Passwort.
+- Verbindungsversuche sind begrenzt (10 je Person in 10 min, 30 je Verein pro Stunde).
+

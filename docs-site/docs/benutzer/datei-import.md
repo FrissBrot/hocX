@@ -18,6 +18,8 @@ zum Beispiel den Vereinsordner aus OneDrive, Google Drive oder Dropbox. Zu finde
 | **Microsoft OneDrive / SharePoint** | OneDrive privat, OneDrive for Business, SharePoint-Bibliotheken | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
 | **Google Drive** | Einzelne Dateien aus «Meine Ablage» und geteilten Ablagen | Auswahl in der Google-Auswahl, siehe unten. Ganze Ordner über **Google Takeout** (ZIP). Erscheint nur, wenn der Betreiber Google eingerichtet hat. |
 | **Google Fotos** | Fotos aus Google Fotos | Auswahl direkt in Google Fotos, siehe unten. Videos werden nicht übernommen. |
+| **Dropbox** | Persönliche Dropbox, freigegebene Ordner in der eigenen Dropbox | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
+| **WebDAV (kDrive, Nextcloud …)** | Infomaniak kDrive, Nextcloud, SwissDisk und andere Speicher mit WebDAV | Verbindung mit Benutzername und **App-Passwort**, siehe unten. |
 
 
 ### Direkt aus Microsoft OneDrive und SharePoint
@@ -88,6 +90,81 @@ Zugang und widerruft ihn zusätzlich bei Google. Die App-Berechtigung siehst und
 
 Grenzen: höchstens 50 000 Dateien und 100 GB pro Import; Dokumente bis 20 MB, Bilder bis 100 MB
 (wie beim normalen Hochladen). Grössere oder nicht unterstützte Dateien erscheinen im Bericht.
+
+### Direkt aus Dropbox
+
+1. Kachel **Dropbox** wählen, Optionen festlegen, **Weiter**.
+2. **Bei Dropbox anmelden** - die Anmeldung läuft direkt bei Dropbox. hocX bittet nur um
+   **Lesezugriff** (Dateien und Ordnerangaben); Dropbox zeigt die Berechtigungen vor der Zustimmung.
+3. Im Ordnerbaum unter **Dropbox** die Ordner oder Dateien ankreuzen. Grosse Ordner werden
+   seitenweise geladen (**Weitere laden**). Paper-Dokumente lassen sich nicht als Datei laden und
+   erscheinen nicht.
+4. **Dateien auflisten**, danach Regeln, Vorschau und Start wie oben. Bremst Dropbox (zu viele
+   Anfragen), wartet hocX und macht automatisch weiter.
+
+**Datenschutz:** Der Zugang wird verschlüsselt gespeichert und nach dem Import bei Dropbox
+widerrufen und gelöscht (**Verbindung trennen** sofort). Unter
+<https://www.dropbox.com/account/connected_apps> siehst und entfernst du verbundene Apps.
+
+### Aus kDrive, Nextcloud oder einem anderen WebDAV-Speicher {#webdav}
+
+WebDAV ist ein offenes Verfahren, mit dem viele Schweizer und europäische Speicher Dateien
+bereitstellen. hocX meldet sich dort mit **Benutzername und App-Passwort** an.
+
+1. Kachel **WebDAV (kDrive, Nextcloud …)** wählen, Optionen festlegen, **Weiter**.
+2. **Anbieter** wählen:
+   - **Infomaniak kDrive:** nur Benutzername (die E-Mail-Adresse des Infomaniak-Kontos) und
+     App-Passwort. Wer mehrere kDrives hat, gibt zusätzlich die **kDrive-ID** an (die Zahl in der
+     Adresse, wenn kDrive im Browser offen ist).
+   - **Nextcloud:** zusätzlich die **Serveradresse** des Vereins, z. B. `cloud.verein.ch` (ohne
+     `https://`). Den Pfad ergänzt hocX selbst.
+   - **Andere WebDAV-Adresse** (z. B. SwissDisk): die vollständige WebDAV-Adresse mit `https://`,
+     wie sie der Anbieter angibt.
+3. **Verbinden** - hocX prüft Adresse und Zugangsdaten sofort. Danach wie oben Ordner wählen,
+   **Dateien auflisten**, Regeln, Vorschau, Start.
+
+Erlaubt sind nur verschlüsselte Adressen (`https://`) auf den Ports 443 oder 8443. Adressen im
+eigenen Netz (z. B. ein NAS zu Hause oder `192.168.…`) sind aus Sicherheitsgründen gesperrt - hocX
+kann sie ohnehin nicht erreichen.
+
+**Passwort abgelehnt:** Wird das App-Passwort während des Imports ungültig (gelöscht, geändert),
+pausiert der Import, du bekommst eine E-Mail und gibst mit **Neu anmelden** ein neues App-Passwort
+ein. Der Import geht dort weiter, wo er stand. Adresse und Benutzer müssen dieselben bleiben.
+
+**Datenschutz:** Das App-Passwort wird verschlüsselt gespeichert, nie angezeigt und gelöscht,
+sobald der Import beendet ist (**Verbindung trennen** sofort). Lösche das App-Passwort nach dem
+Import am besten auch beim Anbieter.
+
+#### App-Passwort erstellen {#app-passwort}
+
+Ein App-Passwort ist ein eigenes Passwort nur für hocX. Es funktioniert auch mit
+Zwei-Faktor-Anmeldung und lässt sich jederzeit einzeln löschen, ohne dein normales Passwort zu
+ändern. Die Menüs der Anbieter können sich ändern; im Zweifel in deren Hilfe nach «App-Passwort»
+bzw. «Anwendungspasswort» suchen.
+
+**Infomaniak kDrive**
+
+1. Im Infomaniak Manager anmelden, oben rechts auf das **Profilbild** → **Mein Profil**.
+2. **Sicherheit** → **Anwendungspasswörter** → **Ein Anwendungspasswort erstellen**.
+3. Name `hocX Import` eingeben, bestätigen und das angezeigte Passwort kopieren (es wird nur
+   einmal gezeigt).
+4. In hocX: Anbieter **Infomaniak kDrive**, Benutzername = E-Mail-Adresse des Infomaniak-Kontos,
+   App-Passwort einfügen.
+5. Nach dem Import: dort das Anwendungspasswort wieder löschen.
+
+**Nextcloud**
+
+1. In Nextcloud anmelden, oben rechts auf das **Profilbild** → **Persönliche Einstellungen**.
+2. **Sicherheit** → Abschnitt **Geräte & Sitzungen** → App-Name `hocX Import` eingeben →
+   **Neues App-Passwort erstellen**.
+3. Nextcloud zeigt **Benutzername** und **Passwort** - beide so übernehmen (der Benutzername kann
+   von deinem Anmeldenamen abweichen).
+4. In hocX: Anbieter **Nextcloud**, Serveradresse (wie in der Adresszeile, ohne `https://` und
+   Pfad), Benutzername und App-Passwort.
+5. Nach dem Import: in derselben Liste das App-Passwort mit **Widerrufen** löschen.
+
+**SwissDisk und andere:** In den Kontoeinstellungen des Anbieters nach «WebDAV» suchen; dort
+stehen die Adresse und, falls angeboten, ein App- oder Gerätepasswort.
 
 ## Regeln
 

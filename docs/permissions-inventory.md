@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 696 (Plattform-Admin: 168)
-- Mandanten-Routen mit Rechteprüfung: 437
+- Routen gesamt: 697 (Plattform-Admin: 168)
+- Mandanten-Routen mit Rechteprüfung: 438
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 91
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -224,6 +224,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/cloud-import/jobs/{job_id}/resume` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/selection` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/start` | files.import · je nach Fall: files.manage, photos.manage |
+| `POST /api/cloud-import/jobs/{job_id}/webdav/connect` | files.import |
 | `POST /api/cloud-import/oauth/finish` | files.import |
 | `GET /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
 | `POST /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |

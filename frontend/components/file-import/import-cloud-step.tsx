@@ -15,11 +15,13 @@ import {
   type CloudProvider,
   type CloudProviderKey,
   type ImportJob,
+  usesCredentials,
 } from "@/lib/files/file-import";
 import { formatFileSize, formatInteger } from "@/lib/utils/format";
 
 import { ImportCloudTree } from "./import-cloud-tree";
 import { GoogleDriveSelect, GooglePhotosSelect } from "./import-google-select";
+import { ImportWebdavForm } from "./import-webdav-form";
 
 const POLL_MS = 3000;
 // Microsoft Entra: Tenant-ID (GUID) oder verifizierte Domain des Vereins-Tenants
@@ -49,6 +51,9 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
   const selectionMode = cloudSelectionMode(provider);
   // Granulare Zustimmung (Google): der Zugriff auf Dateien/Fotos wurde beim Anbieter abgewählt
   const scopeMissing = connected && connection?.tier === null && (connection?.tiers.length ?? 0) > 0;
+  const credentials = usesCredentials(provider);
+  // WebDAV: «Anderes Konto» zeigt das Formular erneut (statt einer OAuth-Anmeldung)
+  const [otherAccount, setOtherAccount] = useState(false);
 
   useEffect(() => {
     if (!listing) return;
@@ -163,7 +168,21 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
       {errorCode === "admin_consent_required" || provider?.info.admin_consent_url ? (
         <AdminConsentHelp provider={provider} open={errorCode === "admin_consent_required"} />
       ) : null}
-      {!connected ? (
+      {credentials && (!connected || otherAccount) ? (
+        <>
+          <p className="muted">{t(`cloud.connectHint.${source}`)}</p>
+          <ImportWebdavForm
+            jobId={job.id}
+            onJob={(next) => {
+              setOtherAccount(false);
+              setSelected(new Map());
+              onJob(next);
+            }}
+            onCancel={otherAccount ? () => setOtherAccount(false) : () => void cancel()}
+            cancelLabel={otherAccount ? t("cloud.webdav.back") : undefined}
+          />
+        </>
+      ) : !connected ? (
         <>
           <p className="muted">{t(`cloud.connectHint.${source}`)}</p>
           <p className="field-help">{t("cloud.privacy")}</p>
@@ -178,7 +197,7 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
         <>
           <div className="file-import-cloud-account">
             <span>{t("cloud.connectedAs", { account: connection?.account_label ?? providerName })}</span>
-            <button type="button" className="button-secondary button-ghost" disabled={busy} onClick={() => void login({ tier: connection?.tier, selectAccount: true })}>
+            <button type="button" className="button-secondary button-ghost" disabled={busy} onClick={() => (credentials ? setOtherAccount(true) : void login({ tier: connection?.tier, selectAccount: true }))}>
               {t("cloud.otherAccount")}
             </button>
             <button type="button" className="button-secondary button-ghost" disabled={busy} onClick={() => void disconnect()}>
