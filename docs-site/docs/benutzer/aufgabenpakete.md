@@ -56,6 +56,29 @@ Je Aufgabe bestimmst du, wie oft sie im Zyklus entsteht:
 | **Wöchentlich** | an einem **Wochentag**, jede Woche des Zyklus. |
 | **Pro Termin** | für jeden Termin mit dem gewählten **Termin-Tag** im Zyklus – auch für später erfasste Termine. Abgesagte Termine zählen nicht. |
 
+### Pendenz erst vor dem Termin erstellen {#vorlauf}
+
+Bei **Pro Termin** entstehen die Pendenzen normalerweise für alle Termine des Zyklus auf einmal.
+Mit **Pendenz erstellen: Tage vor dem Termin** legst du fest, dass die Pendenz eines Termins erst
+so viele Tage vor dem Termin entsteht (0 = am Termintag, leer = sofort wie bisher). So stehen in
+der Pendenzenliste nur die Aufgaben der nächsten Termine.
+
+- Angelegt wird die Pendenz beim täglichen Lauf, spätestens am Tag nach dem Stichtag
+  (Schweizer Datum), oder sofort, wenn ein Termin mit dem Tag erfasst oder geändert wird.
+- Wird ein Termin **verschoben**, gilt das neue Datum. Eine schon angelegte Pendenz bleibt
+  bestehen und wird nachgeführt (z. B. die Fälligkeit), auch wenn der Termin danach wieder weiter
+  weg liegt. Abgesagte Termine verhalten sich wie oben beschrieben.
+- Die **Vorschau** zeigt bei noch nicht angelegten Pendenzen «Entsteht am …» mit dem Erstelldatum.
+- Liegt die Fälligkeit vor dem Erstelldatum (z. B. erstellt 7 Tage vorher, fällig 14 Tage vorher),
+  weist das Formular darauf hin: die Pendenz wäre beim Erstellen schon überfällig. Speichern ist
+  trotzdem möglich.
+- Es zählen nur Termine des laufenden Zyklus. Liegt ein Termin kurz nach dem Zykluswechsel, entsteht
+  seine Pendenz frühestens beim Zykluswechsel, auch wenn der Vorlauf früher beginnen würde.
+
+**Beispiel:** Aufgabe «Programm vorbereiten», Wiederholung *Pro Termin* mit Tag «Schar», Pendenz
+erstellen *14 Tage vor dem Termin*, Fälligkeit *Relativ, 7 Tage vor dem Termin*. Für die Übung
+am 30.11. entsteht die Pendenz am 16.11. und ist am 23.11. fällig.
+
 ## Fälligkeit {#faelligkeit}
 
 | Fälligkeit | Bedeutung |

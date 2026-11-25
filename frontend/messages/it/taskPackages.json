@@ -67,10 +67,11 @@
   "unassignConfirm": "Rimuovi assegnazione",
   "previewTitle": "Anteprima: {name}",
   "previewYearLabel": "Anno del ciclo",
-  "previewHelp": "Responsabili come risultano oggi nelle liste. «Esiste» significa che l’attività è già stata creata.",
+  "previewHelp": "Responsabili come risultano oggi nelle liste. «Esiste» significa che l’attività è già stata creata; «Creata il …» che verrà creata solo in quel giorno a causa del preavviso.",
   "previewEmpty": "In questo ciclo non vengono create attività.",
   "previewLoading": "Caricamento …",
   "statusExists": "Esiste",
+  "statusScheduled": "Creata il {date}",
   "statusNew": "Nuovo",
   "errorGeneric": "Azione non riuscita",
   "errors": {
@@ -132,6 +133,9 @@
   "eventTagLabel": "Tag dell’evento",
   "eventTagPlaceholder": "Scegli tag",
   "eventTagHelp": "Viene creata un’attività per ogni evento con questo tag nel ciclo – anche per quelli aggiunti in seguito.",
+  "createDaysBeforeLabel": "Crea attività: giorni prima dell’evento",
+  "createDaysBeforeHelp": "Facoltativo. Vuoto: le attività di tutti gli eventi del ciclo vengono create subito. Con un numero: l’attività di un evento viene creata solo tanti giorni prima dell’evento (0 = il giorno stesso), al più tardi il giorno dopo. Gli eventi spostati contano con la nuova data.",
+  "dueBeforeCreationHint": "La scadenza è precedente alla data di creazione: l’attività sarà già scaduta quando viene creata. Controlla il numero di giorni.",
   "dueLabel": "Scadenza",
   "dueType": {
     "none": "Nessuna",
@@ -152,7 +156,8 @@
     "once": "Una volta per ciclo",
     "monthly": "Ogni mese il {day}",
     "weekly": "Ogni {weekday}",
-    "events": "Per evento con tag «{tag}»"
+    "events": "Per evento con tag «{tag}»",
+    "eventsWithLead": "Per evento con tag «{tag}», {days, plural, =0 {creata il giorno dell’evento} one {creata # giorno prima dell’evento} other {creata # giorni prima dell’evento}}"
   },
   "dueSummary": {
     "none": "Nessuna",

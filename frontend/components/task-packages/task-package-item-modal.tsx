@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableMultiSelect } from "@/components/ui/searchable-select";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { TagInput } from "@/components/ui/tag-input";
 import { eligibleResponsibleList } from "@/lib/utils/responsible-lists";
 import {
@@ -21,7 +22,13 @@ import {
   TaskPackageRecurrenceType,
   TaskPackageResponsible,
 } from "@/types/api";
-import { ResponsibleContext, entryLabel, responsibleLabel } from "@/components/task-packages/task-package-labels";
+import {
+  CREATE_DAYS_BEFORE_MAX,
+  ResponsibleContext,
+  dueBeforeCreation,
+  entryLabel,
+  responsibleLabel,
+} from "@/components/task-packages/task-package-labels";
 import { Select } from "@/components/ui/select";
 
 export type TaskPackageItemPayload = {
@@ -42,6 +49,8 @@ type FormState = {
   dayOfMonth: string;
   weekday: string;
   eventTag: string;
+  /** Leer = Pendenz entsteht sofort, sonst Tage vor dem Termin */
+  createDaysBefore: string;
   dueType: TaskPackageDueRuleType;
   dueDay: string;
   dueMonth: string;
@@ -71,6 +80,7 @@ function formFromItem(item: TaskPackageItem | null): FormState {
     dayOfMonth: String(item?.recurrence.day_of_month ?? 1),
     weekday: String(item?.recurrence.weekday ?? 0),
     eventTag: item?.recurrence.event_tag ?? "",
+    createDaysBefore: item?.recurrence.create_days_before != null ? String(item.recurrence.create_days_before) : "",
     dueType: item?.due_rule.type ?? "none",
     dueDay: String(item?.due_rule.day ?? 1),
     dueMonth: String(item?.due_rule.month ?? 1),
@@ -79,11 +89,23 @@ function formFromItem(item: TaskPackageItem | null): FormState {
   };
 }
 
+/** "" → null (kein Vorlauf), ganze Zahl 0..CREATE_DAYS_BEFORE_MAX → Zahl, sonst undefined (ungültig). */
+function parseCreateDaysBefore(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const days = Number(trimmed);
+  return days <= CREATE_DAYS_BEFORE_MAX ? days : undefined;
+}
+
 function payloadFromForm(form: FormState): TaskPackageItemPayload {
   const recurrence: TaskPackageRecurrence = { type: form.recurrenceType };
   if (form.recurrenceType === "monthly") recurrence.day_of_month = Number(form.dayOfMonth);
   if (form.recurrenceType === "weekly") recurrence.weekday = Number(form.weekday);
-  if (form.recurrenceType === "events") recurrence.event_tag = form.eventTag.trim();
+  if (form.recurrenceType === "events") {
+    recurrence.event_tag = form.eventTag.trim();
+    recurrence.create_days_before = parseCreateDaysBefore(form.createDaysBefore);
+  }
   const dueRule: TaskPackageDueRule = { type: form.dueType };
   if (form.dueType === "fixed") {
     dueRule.day = Number(form.dueDay);
@@ -126,6 +148,7 @@ export function TaskPackageItemModal({
   const tCommon = useTranslations("common");
   const [form, setForm] = useState<FormState>(() => formFromItem(item));
   const [saving, setSaving] = useState(false);
+  const leadFieldId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -201,7 +224,13 @@ export function TaskPackageItemModal({
   }
 
   const fixedNotAllowed = form.dueType === "fixed" && form.recurrenceType !== "once";
-  const valid = form.task.trim().length > 0 && !fixedNotAllowed && (form.recurrenceType !== "events" || form.eventTag.trim().length > 0);
+  const createDaysBefore = form.recurrenceType === "events" ? parseCreateDaysBefore(form.createDaysBefore) : null;
+  const valid =
+    form.task.trim().length > 0 &&
+    !fixedNotAllowed &&
+    (form.recurrenceType !== "events" || (form.eventTag.trim().length > 0 && createDaysBefore !== undefined));
+  const payload = payloadFromForm(form);
+  const showDueBeforeCreation = createDaysBefore !== undefined && dueBeforeCreation(payload.recurrence, payload.due_rule);
 
   return (
     <Modal open={open} title={item ? t("itemEditTitle") : t("itemCreateTitle")} onClose={onClose} size="wide">
@@ -305,6 +334,26 @@ export function TaskPackageItemModal({
                 placeholder={t("eventTagPlaceholder")}
               />
               <span className="field-help">{t("eventTagHelp")}</span>
+              <div className="field-stack">
+                <label className="field-label" htmlFor={leadFieldId}>
+                  {t("createDaysBeforeLabel")}
+                </label>
+                <input
+                  id={leadFieldId}
+                  aria-describedby={`${leadFieldId}-help`}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={CREATE_DAYS_BEFORE_MAX}
+                  step={1}
+                  value={form.createDaysBefore}
+                  aria-invalid={createDaysBefore === undefined || undefined}
+                  onChange={(event) => setForm({ ...form, createDaysBefore: event.target.value })}
+                />
+                <span id={`${leadFieldId}-help`} className="field-help">
+                  {t("createDaysBeforeHelp")}
+                </span>
+              </div>
             </div>
           ) : null}
         </div>
@@ -361,6 +410,8 @@ export function TaskPackageItemModal({
             </div>
           ) : null}
         </div>
+
+        {showDueBeforeCreation ? <StatusBanner tone="warning" message={t("dueBeforeCreationHint")} /> : null}
 
         <p className="field-help">{t("propagationHelp")}</p>
 

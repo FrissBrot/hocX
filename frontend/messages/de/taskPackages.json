@@ -67,10 +67,11 @@
   "unassignConfirm": "Zuweisung entfernen",
   "previewTitle": "Vorschau: {name}",
   "previewYearLabel": "Zyklusjahr",
-  "previewHelp": "Verantwortliche so, wie sie heute in den Listen stehen. „Vorhanden“ heisst, die Aufgabe wurde schon erzeugt.",
+  "previewHelp": "Verantwortliche so, wie sie heute in den Listen stehen. „Vorhanden“ heisst, die Aufgabe wurde schon erzeugt; „Entsteht am …“, dass sie wegen des Vorlaufs erst an diesem Tag angelegt wird.",
   "previewEmpty": "In diesem Zyklus entstehen keine Aufgaben.",
   "previewLoading": "Wird geladen …",
   "statusExists": "Vorhanden",
+  "statusScheduled": "Entsteht am {date}",
   "statusNew": "Neu",
   "errorGeneric": "Aktion fehlgeschlagen",
   "errors": {
@@ -132,6 +133,9 @@
   "eventTagLabel": "Termin-Tag",
   "eventTagPlaceholder": "Tag wählen",
   "eventTagHelp": "Für jeden Termin mit diesem Tag im Zyklus entsteht eine Aufgabe – auch für später erfasste Termine.",
+  "createDaysBeforeLabel": "Pendenz erstellen: Tage vor dem Termin",
+  "createDaysBeforeHelp": "Optional. Leer: die Pendenzen aller Termine im Zyklus entstehen sofort. Mit Zahl: die Pendenz eines Termins entsteht erst so viele Tage vor dem Termin (0 = am Termintag), spätestens am Tag darauf. Verschobene Termine zählen mit dem neuen Datum.",
+  "dueBeforeCreationHint": "Die Fälligkeit liegt vor dem Erstelldatum: die Pendenz ist beim Erstellen schon überfällig. Prüfe die Anzahl Tage.",
   "dueLabel": "Fälligkeit",
   "dueType": {
     "none": "Keine",
@@ -152,7 +156,8 @@
     "once": "Einmal pro Zyklus",
     "monthly": "Monatlich am {day}.",
     "weekly": "Jeden {weekday}",
-    "events": "Pro Termin mit Tag „{tag}“"
+    "events": "Pro Termin mit Tag „{tag}“",
+    "eventsWithLead": "Pro Termin mit Tag „{tag}“, {days, plural, =0 {erstellt am Termintag} one {erstellt # Tag vor dem Termin} other {erstellt # Tage vor dem Termin}}"
   },
   "dueSummary": {
     "none": "Keine",

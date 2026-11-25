@@ -38,10 +38,22 @@ export function recurrenceLabel(recurrence: TaskPackageRecurrence, t: TFunc): st
     case "weekly":
       return t("recurrenceSummary.weekly", { weekday: weekdayLabel(recurrence.weekday ?? 0, t) });
     case "events":
+      if (recurrence.create_days_before != null) {
+        return t("recurrenceSummary.eventsWithLead", { tag: recurrence.event_tag ?? "", days: recurrence.create_days_before });
+      }
       return t("recurrenceSummary.events", { tag: recurrence.event_tag ?? "" });
     default:
       return t("recurrenceSummary.once");
   }
+}
+
+/** Höchster Vorlauf in Tagen, gleiche Grenze wie TaskPackageRecurrence.create_days_before im Backend. */
+export const CREATE_DAYS_BEFORE_MAX = 3650;
+
+/** Fälligkeit liegt vor dem Erstelldatum (Pendenz ist beim Anlegen schon überfällig) - nur ein Hinweis. */
+export function dueBeforeCreation(recurrence: TaskPackageRecurrence, dueRule: TaskPackageDueRule): boolean {
+  if (recurrence.type !== "events" || recurrence.create_days_before == null || dueRule.type !== "offset") return false;
+  return (dueRule.offset_days ?? 0) < -recurrence.create_days_before;
 }
 
 export function dueRuleLabel(dueRule: TaskPackageDueRule, recurrence: TaskPackageRecurrence, t: TFunc): string {

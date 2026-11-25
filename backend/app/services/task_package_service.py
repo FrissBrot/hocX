@@ -22,6 +22,12 @@ Regeln:
   wieder aktiviert, gehen genau diese Instanzen auf ihren vorherigen Status zurück. Ändert ein
   Mensch den Status danach von Hand, entfällt der Marker (mark_overrides) - von Hand
   abgebrochene Instanzen gehen nie automatisch wieder auf.
+- Vorlauf (nur "pro Termin", recurrence_json.create_days_before = X): die Instanz eines Termins
+  entsteht erst ab event_date - X Tagen (Schweizer Datum). Vorher legt kein Abgleich sie an; der
+  tägliche Job und die Abgleiche nach Terminänderungen holen sie ab dem Stichtag nach. Massgebend
+  ist das aktuelle Termindatum (verschobener Termin = neuer Stichtag). Bereits angelegte Instanzen
+  werden wie bisher nachgeführt, nie gelöscht - auch wenn der Termin später wieder ausserhalb des
+  Fensters liegt.
 """
 
 from __future__ import annotations
@@ -83,11 +89,15 @@ class Occurrence:
 # ---------------------------------------------------------------------------
 
 
-def current_cycle_year(cycle_config: CycleConfig, today: date | None = None) -> int:
-    # Schweizer Datum: der Zykluswechsel um 00:30 Ortszeit gehört schon zum neuen Jahr
+def _swiss_today() -> date:
     from app.services.todo_fine_service import today as swiss_today
 
-    return get_cycle_year(today or swiss_today(), cycle_config.reset_month, cycle_config.reset_day)
+    return swiss_today()
+
+
+def current_cycle_year(cycle_config: CycleConfig, today: date | None = None) -> int:
+    # Schweizer Datum: der Zykluswechsel um 00:30 Ortszeit gehört schon zum neuen Jahr
+    return get_cycle_year(today or _swiss_today(), cycle_config.reset_month, cycle_config.reset_day)
 
 
 def cycle_label(cycle_config: CycleConfig, cycle_year: int) -> str:
@@ -141,6 +151,20 @@ def occurrences_for(
         ).all()
         return [Occurrence(f"event:{row.id}", row.event_date) for row in events]
     return [Occurrence("once", start)]
+
+
+def create_date_for(item: TaskPackageItem, occurrence: Occurrence) -> date | None:
+    """Ab wann die Instanz einer Wiederholung "pro Termin" mit Vorlauf entstehen darf (Termindatum
+    minus create_days_before). None = ohne Vorlauf, entsteht sofort beim Abgleich."""
+    recurrence = item.recurrence_json or {}
+    if recurrence.get("type") != "events":
+        return None
+    lead = recurrence.get("create_days_before")
+    # Das Schema lässt nur int 0..3650 zu; alles andere (Altdaten, Handarbeit in der DB) heisst
+    # "kein Vorlauf" wie bisher, statt den Abgleich des ganzen Pakets scheitern zu lassen.
+    if isinstance(lead, bool) or not isinstance(lead, int) or lead < 0:
+        return None
+    return occurrence.anchor - timedelta(days=min(lead, 3650))
 
 
 def due_date_for(item: TaskPackageItem, occurrence: Occurrence, *, cycle_config: CycleConfig, cycle_year: int) -> date | None:
@@ -215,6 +239,7 @@ def _sync_item(
     cycle_year: int,
     open_status_id: int,
     closed_status_ids: set[int],
+    today: date,
 ) -> tuple[int, int]:
     occurrences = occurrences_for(db, item, tenant_id=tenant_id, cycle_config=cycle_config, cycle_year=cycle_year)
     existing = {
@@ -238,6 +263,9 @@ def _sync_item(
         }
         todo = existing.get(occurrence.key)
         if todo is None:
+            create_date = create_date_for(item, occurrence)
+            if create_date is not None and today < create_date:
+                continue  # Vorlauf noch nicht erreicht: entsteht später (Job/Terminänderung)
             todo = ProtocolTodo(
                 tenant_id=tenant_id,
                 protocol_element_block_id=None,
@@ -302,6 +330,7 @@ def sync_package_cycle(db: Session, package: TaskPackage, package_cycle: TaskPac
     cycle_config = db.get(CycleConfig, package_cycle.cycle_config_id)
     if cycle_config is None:
         return 0, 0
+    today = today or _swiss_today()
     cycle_year = current_cycle_year(cycle_config, today)
     if cycle_year < package_cycle.start_cycle_year:
         return 0, 0
@@ -316,6 +345,7 @@ def sync_package_cycle(db: Session, package: TaskPackage, package_cycle: TaskPac
             cycle_year=cycle_year,
             open_status_id=open_status_id,
             closed_status_ids=closed_status_ids,
+            today=today,
         )
         created += c
         updated += u
@@ -398,7 +428,10 @@ def sync_packages_after_change(db: Session, *, tenant_id: int, list_definition_i
 
 def run_due_task_packages(db: Session, *, today: date | None = None) -> dict[str, int]:
     """Täglicher Job task_package_rollover: legt beim Zykluswechsel die Instanzen des neuen
-    Zyklus an und ergänzt neue Wiederholungen (z. B. neu erfasste Termine). Idempotent."""
+    Zyklus an und ergänzt neue Wiederholungen (z. B. neu erfasste Termine) sowie Termin-Instanzen,
+    deren Vorlauf (create_days_before) heute erreicht ist. Läuft einmal pro Tag (Intervall ab
+    Start, nicht zu fester Uhrzeit): eine Instanz entsteht so spätestens am Tag nach ihrem
+    Stichtag, bei einer Terminänderung sofort. Idempotent."""
     created = updated = packages = failed = 0
     # Nur Mandanten mit gebuchtem Feature; nach einem Downgrade (nur lesen) bleiben die
     # bestehenden Pendenzen, es entstehen aber keine neuen (permissions/features.json).
@@ -543,10 +576,12 @@ def todo_counts(db: Session, package_ids: Iterable[int]) -> dict[int, tuple[int,
 
 
 def preview(
-    db: Session, package: TaskPackage, *, cycle_config: CycleConfig, cycle_year: int
+    db: Session, package: TaskPackage, *, cycle_config: CycleConfig, cycle_year: int, today: date | None = None
 ) -> list[dict[str, Any]]:
     """Was im angegebenen Zyklus entstehen würde - mit den Verantwortlichen, wie sie heute in
-    der Liste stehen."""
+    der Liste stehen. create_date: ab wann eine Instanz mit Vorlauf entsteht; scheduled: noch nicht
+    angelegt, weil der Vorlauf heute noch nicht erreicht ist."""
+    today = today or _swiss_today()
     entries: list[dict[str, Any]] = []
     for item in _items(db, package.id):
         assignee_ids = resolve_assignee_ids(db, item, tenant_id=package.tenant_id)
@@ -563,13 +598,17 @@ def preview(
             )
         )
         for occurrence in occurrences_for(db, item, tenant_id=package.tenant_id, cycle_config=cycle_config, cycle_year=cycle_year):
+            exists = occurrence.key in existing_keys
+            create_date = create_date_for(item, occurrence)
             entries.append(
                 {
                     "item": item,
                     "occurrence": occurrence,
                     "due_date": due_date_for(item, occurrence, cycle_config=cycle_config, cycle_year=cycle_year),
                     "assignee_names": [names_by_id[pid] for pid in assignee_ids if pid in names_by_id],
-                    "exists": occurrence.key in existing_keys,
+                    "exists": exists,
+                    "create_date": create_date,
+                    "scheduled": not exists and create_date is not None and today < create_date,
                 }
             )
     entries.sort(key=lambda entry: (entry["occurrence"].anchor, entry["item"].sort_index))
