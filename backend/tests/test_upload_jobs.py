@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select, text
 from starlette.datastructures import Headers
@@ -185,6 +186,22 @@ def test_client_results_are_marked_as_browser_reported(db):
     routes.report_client_results(job.id, UploadClientResults(items=[UploadClientResult(name="riesig.jpg", size=99, code="too_large")]), db=db, user=user)
     items = routes.list_upload_job_items(job.id, status=None, cursor=None, limit=100, db=db, user=user).items
     assert [(i.name, i.status, i.source, i.reason_code) for i in items] == [("riesig.jpg", "rejected", "client", "too_large")]
+
+
+def test_client_result_size_beyond_bigint_is_an_input_error(db):
+    """Nachtlauf 2026-11-25 (dateien-fotos/fehlerbehandlung): size war nach oben offen; ein Wert
+    ausserhalb von BIGINT (upload_job_item.size_bytes) scheiterte erst beim INSERT (DataError, 500
+    plus Eintrag im Fehlerprotokoll) statt als Eingabefehler (422)."""
+    with pytest.raises(ValidationError):
+        UploadClientResult(name="x.jpg", size=2**63, code="too_large")
+    tenant = make_tenant(db)
+    user = _user(db, tenant.id)
+    job = _open(db, user)
+    routes.report_client_results(
+        job.id, UploadClientResults(items=[UploadClientResult(name="gross.jpg", size=2**63 - 1, code="too_large")]), db=db, user=user
+    )
+    items = routes.list_upload_job_items(job.id, status=None, cursor=None, limit=100, db=db, user=user).items
+    assert [(i.name, i.size_bytes) for i in items] == [("gross.jpg", 2**63 - 1)]
 
 
 def test_job_disappears_with_its_last_file_and_names_of_erased_files_are_cleared(db):
