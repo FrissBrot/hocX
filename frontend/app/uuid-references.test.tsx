@@ -55,6 +55,26 @@ it("loads snapshot references using public UUIDs and retains snapshot cache keys
   expect(props.initialFinanceTransactions[accountId]).toEqual(transactions);
 });
 
+// Buchungen im Block «Transaktionen» verlangt das Backend finances.manage, Anwesenheitsbussen
+// fines.manage - die Seite gab bisher fines.manage als canManageFinances weiter (Formular für
+// Bussenverwaltende ohne Finanzrecht → 403; Kasse ohne Bussenrecht ohne Formular).
+it.each([
+  [["meetings.read", "meetings.edit", "finances.read", "fines.manage"], { canManageFinances: false, canManageFines: true }],
+  [["meetings.read", "meetings.edit", "finances.read", "finances.manage"], { canManageFinances: true, canManageFines: false }],
+])("passes finance and fine rights separately to the protocol editor (%j)", async (permissions, expected) => {
+  const server = await import("@/lib/api/server");
+  vi.spyOn(server, "requireSession").mockResolvedValueOnce(
+    { permissions, roles: [], current_tenant: { id: "t", enabled_features: ["finance"] } } as never,
+  );
+  fetchMock.mockImplementation(async (url: string) => {
+    if (url === "/api/protocols/protocol") return { id: "protocol", template_id: "template", status: "geplant" };
+    return [];
+  });
+  render(await ProtocolDetailPage({ params: Promise.resolve({ id: "protocol" }) }));
+  const props = editorMock.mock.calls[0][0] as unknown as Record<string, unknown>;
+  expect({ canManageFinances: props.canManageFinances, canManageFines: props.canManageFines }).toEqual(expected);
+});
+
 it("selects the requested tenant UUID instead of falling back to the first tenant", async () => {
   const selected = { id: "01a067ae-27a5-7e49-986a-5606a4cdda10", name: "Selected" };
   fetchMock.mockResolvedValue([{ id: "first-tenant" }, selected]);

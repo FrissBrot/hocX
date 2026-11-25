@@ -105,6 +105,8 @@ type ProtocolEditorProps = {
   canViewFines?: boolean;
   /** Transaktionen direkt im Block «Transaktionen» erfassen (finances.manage) */
   canManageFinances?: boolean;
+  /** Anwesenheitsbussen beim Setzen der Anwesenheit anlegen/entfernen (fines.manage) */
+  canManageFines?: boolean;
   /** Pendenzen-Bussen in «Schnelle Pendenz» (Sitzungsmenü) */
   todoFines?: QuickTodoFineAccess;
   /** «Als Abgabe einsammeln» im Menü einer Pendenz (submissions.manage inkl. Modul Abgabebox, meetings.edit) */
@@ -148,6 +150,7 @@ export function ProtocolEditor({
   forceReadOnly = false,
   canViewFines = true,
   canManageFinances = false,
+  canManageFines = false,
   todoFines,
   canCollectSubmissions = false,
   canApprove = false,
@@ -2543,6 +2546,7 @@ export function ProtocolEditor({
                   financeTransactions={financeTransactions}
                   financeVersion={financeVersion}
                   canManageFinances={canManageFinances}
+                  canManageFines={canManageFines}
                   addFinanceTransaction={elementHandlers.addFinanceTransaction}
                   deleteFinanceTransaction={elementHandlers.deleteFinanceTransaction}
                   protocolFines={protocolFines}
