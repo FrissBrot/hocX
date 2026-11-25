@@ -213,3 +213,25 @@ def test_tenant_export_contains_place_changes_of_the_own_tenant_only(db):
     assert sorted((row[2], row[3], row[5]) for row in rows) == [("manual", "anna-ort.jpg", "anna Hütte"), ("set", "anna-ort.jpg", "sn:anna-huette")]
     assert all("Anna" in (row[1] or "") for row in rows)
     assert not any("fremd" in str(cell) for row in rows for cell in row)
+
+
+def test_deleting_the_tenant_removes_its_finished_export_archive(db):
+    """Das Archiv enthält alle Personendaten des Vereins. Die Exportzeile verschwindet mit dem
+    Mandanten (CASCADE); danach findet der Ablauf-Job das Objekt nie mehr - es muss deshalb beim
+    Löschen des Mandanten selbst weg (Offboarding, Löschversprechen)."""
+    from app.services.admin_tenant_service import AdminTenantService
+
+    tenant, admin, _anna, _user = _setup(db)
+    job = tenant_export.request_export(db, tenant_id=tenant.id, user_id=admin.id, password=secrets.token_urlsafe(16), include_files=False, language="de")
+    db.commit()
+    tenant_export.process_pending(db)
+    db.refresh(job)
+    key = job.object_key
+    store = get_object_store()
+    assert key and store.exists(MAIN, key)
+
+    assert AdminTenantService().delete_tenant(db, tenant.id) is not None
+    store.purge_deleted(db)
+    db.commit()
+
+    assert not store.exists(MAIN, key)

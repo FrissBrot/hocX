@@ -869,6 +869,13 @@ class AdminTenantService:
         # Studio-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration 0115,
         # von 0118 als document_asset weitergeführt) liegen weiter unter document_template_parts/.
         style_asset_paths = list(db.scalars(select(DocumentAsset.storage_path).where(DocumentAsset.tenant_id == tenant_id)))
+        # Fertige Vereinsexporte (AES-ZIP mit allen Personendaten): die Zeile verschwindet per
+        # CASCADE, danach fände der Ablauf-Job (data_export/tenant.py::_expire) das Objekt nie mehr.
+        from app.models import TenantDataExport
+
+        export_object_keys = [
+            key for key in db.scalars(select(TenantDataExport.object_key).where(TenantDataExport.tenant_id == tenant_id)) if key
+        ]
 
         # Album-Einträge in Alben ANDERER Mandanten (geteilte Alben) haben keinen Fremdschlüssel auf
         # die Datei (photo_album_item.file_id = public_id) und überlebten die Kaskade - ein später
@@ -914,6 +921,9 @@ class AdminTenantService:
             self._unlink_quietly(settings.thumbnail_root, thumbnail_path)
         for storage_path in style_asset_paths:
             self._delete_object_quietly(db, MAIN, storage_path)
+        for object_key in export_object_keys:
+            if not self._delete_object_quietly(db, MAIN, object_key):
+                report["object_delete_errors"] += 1
         self._remove_tenant_directories(db, tenant_id)
         return report
 
