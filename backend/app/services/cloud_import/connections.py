@@ -14,9 +14,10 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.entities import AppUser
 from app.models.import_entities import ImportConnection
 from app.services.cloud_import import oauth, providers, token_crypto
 from app.services.cloud_import.http import ProviderError
@@ -210,9 +211,25 @@ def delete(db: Session, connection: ImportConnection) -> None:
     db.flush()
 
 
+def revoke_and_clear(connection: ImportConnection) -> None:
+    """Tokens widerrufen (best effort) und löschen, die Zeile mit der Kontokennung aber behalten:
+    ein laufender Import darf danach nur mit demselben Konto weitermachen (Security-Review 1.7, N1)."""
+    provider = providers.get(connection.provider)
+    if provider is not None and connection.access_token_encrypted:
+        try:
+            provider.revoke(providers.client_for(provider), _tokens(connection))
+        except (ProviderError, token_crypto.TokenDecryptError, token_crypto.TokenKeyMissing) as exc:
+            _logger.info("Widerruf beim Anbieter nicht möglich: %s", type(exc).__name__)
+    mark_needs_reauth(connection)
+
+
 def purge_expired(db: Session) -> int:
     """Verbindungen nach purge_after löschen (läuft im Loop, mandantenübergreifend)."""
-    expired = list(db.scalars(select(ImportConnection).where(ImportConnection.purge_after < now()).limit(200)))
+    # Abgelaufen oder Konto gesperrt/deaktiviert (Security-Review 1.7, N2)
+    inactive = select(AppUser.id).where(
+        AppUser.id == ImportConnection.user_id, or_(AppUser.is_active.is_(False), AppUser.login_enabled.is_(False))
+    ).exists()
+    expired = list(db.scalars(select(ImportConnection).where(or_(ImportConnection.purge_after < now(), inactive)).limit(200)))
     for connection in expired:
         delete(db, connection)
     return len(expired)

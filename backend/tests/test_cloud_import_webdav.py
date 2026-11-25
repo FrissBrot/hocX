@@ -19,9 +19,9 @@ from sqlalchemy import select, text
 
 from app.api.routes import cloud_import as routes
 from app.core.config import settings
-from app.models.entities import StoredFile
+from app.models.entities import AppUser, StoredFile
 from app.models.import_entities import ImportConnection, ImportItem, ImportJob
-from app.services.cloud_import import dav_http, providers, worker
+from app.services.cloud_import import connections, dav_http, providers, worker
 from app.services.cloud_import.dav_http import (
     DavClient,
     DavCredentials,
@@ -642,6 +642,42 @@ def test_rejected_password_leads_to_needs_reauth_and_reentering_resumes(db, dav)
     assert resumed.status == "listing" and resumed.connection.status == "active"
     _run(db)
     assert routes.get_import_job(job.id, db=db, user=user).status == "ready"
+
+
+def test_disconnect_mid_import_keeps_the_account_binding(db, dav):
+    """Security-Review 1.7, N1: «Trennen» mitten im Import löscht die Zugangsdaten, aber nicht die
+    Kontokennung - ein anderes Konto/eine andere Adresse kann den Auftrag nicht übernehmen."""
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id, password=_password())
+    routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["p"]), db=db, user=user)
+    _run(db)
+    assert routes.get_import_job(job.id, db=db, user=user).status == "ready"
+    # Import gestartet (wartet auf den Worker), dann «Trennen»
+    db.get(ImportJob, job.id).status = "queued"
+    db.flush()
+    assert routes.disconnect_cloud_account(job.id, db=db, user=user).status == "needs_reauth"
+    row = db.scalar(select(ImportConnection).where(ImportConnection.tenant_id == tenant.id))
+    assert row is not None and row.status == "needs_reauth" and row.access_token_encrypted is None
+    with pytest.raises(HTTPException) as error:
+        routes.connect_webdav(job.id, routes.WebDavConnectIn(preset="nextcloud", server=SERVER, username="beat", password=_password()), db=db, user=user)
+    assert _code(error) == "oauth_account_mismatch"
+    again = _connect(db, user, job.id, password=_password())
+    assert again.connection.status == "active"
+
+
+def test_cleanup_deletes_connections_of_deactivated_accounts(db, dav):
+    """Security-Review 1.7, N2: Zugangsdaten gesperrter Konten nicht bis purge_after behalten."""
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id, password=_password())
+    account = db.get(AppUser, user.user_id)
+    account.is_active = False
+    db.flush()
+    connections.purge_expired(db)
+    assert db.scalar(select(ImportConnection).where(ImportConnection.tenant_id == tenant.id)) is None
 
 
 def test_listing_with_stale_selection_goes_back_to_draft(db, dav):

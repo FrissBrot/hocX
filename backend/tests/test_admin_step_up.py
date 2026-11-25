@@ -176,6 +176,8 @@ EXEMPT = {
     ("POST", "/api/admin/backups/restore-test"): "Probe-Wiederherstellung in isolierter Umgebung",
     ("POST", "/api/admin/backups/{job_id}/verify"): _OPERATIONAL,
     ("POST", "/api/admin/backups/{job_id}/cancel"): _OPERATIONAL,
+    ("POST", "/api/admin/cloud-imports/{job_id}/cancel"): "Notfall-Abbruch eines Datei-Imports (wie der Abbruch im Verein): "
+                                                           "nichts wird gelöscht, kein Datenzugang; Audit-Log",
     ("POST", "/api/admin/tenants"): "legt einen leeren Mandanten an (Konten darin brauchen user-manage)",
     ("POST", "/api/admin/tenants/import"): "verlangt ein Import-Ticket aus tenants/import/authorize (dort Passkey-Bestätigung, "
                                            "an Admin und Namen gebunden, einmalig)",

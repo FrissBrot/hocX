@@ -311,6 +311,8 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         job.status = "failed"
         job.error = "requester_unauthorized"
         job.finished_at = jobs.now()
+        # Tokens bzw. App-Passwort nicht bis purge_after liegen lassen (Security-Review 1.7, N2)
+        _release_remote(db, job)
         from app.services import upload_job_service
 
         upload_job_service.finish_import_job(db, job)

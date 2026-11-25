@@ -966,7 +966,7 @@ def connect_webdav(job_id: uuid.UUID, payload: WebDavConnectIn, db: Session = De
         candidates = build_base_url(payload.preset, username=username, server=payload.server, kdrive_id=payload.kdrive_id, url=payload.url)
     except ValueError as exc:
         code = str(exc) if str(exc).startswith("webdav_") else f"webdav_{exc}"
-        raise _http(ImportFailure(422, code)) from None
+        raise _http(ImportFailure(422, code)) from exc
     # Keine offene Transaktion während der ausgehenden Verbindung (bis 30 s je Kandidat; der
     # RLS-Kontext wird beim nächsten Transaktionsbeginn neu gesetzt)
     db.commit()
@@ -1143,9 +1143,14 @@ def disconnect_cloud_account(job_id: uuid.UUID, db: Session = Depends(get_db), u
     if not providers.is_api_source(job.source):
         raise _http(ImportFailure(409, "wrong_source"))
     connection = remote._connection(db, job)
-    if connection is not None:
-        connections.delete(db, connection)
-    job.connection_id = None
+    if connection is not None and job.status != "draft":
+        # Mitten im Import: Tokens weg, Kontokennung bleibt - eine neue Anmeldung muss dasselbe
+        # Konto bzw. dieselbe WebDAV-Adresse sein (sonst passen gelistete Dateien nicht mehr)
+        connections.revoke_and_clear(connection)
+    else:
+        if connection is not None:
+            connections.delete(db, connection)
+        job.connection_id = None
     if job.status in ("listing", "queued", "running"):
         job.status = "needs_reauth"
         job.reauth_since = jobs.now()

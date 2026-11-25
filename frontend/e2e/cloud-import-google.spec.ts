@@ -27,6 +27,19 @@ async function shoot(page: Page, name: string) {
       await page.setViewportSize({ width, height: width > 600 ? 900 : 844 });
       await page.waitForTimeout(150);
       await page.screenshot({ path: `test-results/cloud-google/${name}-${theme}-${width}.png`, fullPage: true });
+      // Smartphone: die Seite wird nie breiter als der Viewport (Vorbild admin-console.spec.ts)
+      if (width === 390) {
+        const overflow = await page.evaluate(() => ({
+          width: document.documentElement.scrollWidth,
+          // die äussersten Elemente, die über den Viewport ragen (für die Fehlermeldung)
+          wide: Array.from(document.querySelectorAll<HTMLElement>("body *"))
+            .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+            .filter((el) => !el.parentElement || el.parentElement.getBoundingClientRect().right <= window.innerWidth + 1)
+            .slice(0, 5)
+            .map((el) => `${el.tagName.toLowerCase()}.${el.className}`),
+        }));
+        expect.soft(overflow.width, `${name} ${theme}: Seitenbreite bei 390 px (${overflow.wide.join(", ")})`).toBeLessThanOrEqual(390);
+      }
     }
   }
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
