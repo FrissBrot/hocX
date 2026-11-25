@@ -222,8 +222,46 @@ Installationen aktualisieren können.
   installieren. `google-re2` (Regel-Engine des Datei-Imports) hat noch kein Wheel für 3.15, und das
   schlanke Image hat keinen C++-Compiler; Wechsel auf 3.15, sobald ein cp315-Wheel erscheint.
 
+### Behoben
+
+- Protokolle: Blockkonfigurationen in falscher Form (z. B. Anwesenheit als Zahl, Zahlen über dem
+  Datenbankbereich) werden beim Speichern mit 400 abgelehnt, statt das Protokoll dauerhaft unladbar
+  zu machen; NUL-Zeichen in Bildtitel, Legende und Dateinamen beim Protokollbild-Upload ergeben
+  einen Eingabefehler statt eines Serverfehlers. Ein sehr langer Protokolltitel verhindert die
+  PDF-Ablage nicht mehr (Dateiname gekürzt, der volle Titel bleibt im PDF).
+- Protokoll-Editor: das Buchungsformular richtet sich nach «Finanzen verwalten», die
+  Anwesenheitsbussen nach «Bussen verwalten» (vorher beide nach dem Bussenrecht).
+- Dateien und Fotos: NUL-Zeichen in Tags und Dateinamen des Upload-Formulars und zu grosse
+  Grössenangaben im Upload-Verlauf ergeben Eingabefehler statt 500; eine beschädigte Galerie-ZIP
+  landet nicht mehr als Systemfehler im Fehlerprotokoll; abgebrochene Downloads hinterlassen keine
+  Kopien mehr (Aufräumen nach 24 h).
+- Öffentliche Links und Partner-Downloads: abgeschnittene JPEG- und PNG-Fotos werden ohne die
+  ausgeschlossenen Metadaten ausgeliefert statt mit 500 abzubrechen; ein Bild, das sich gar nicht
+  filtern lässt (z. B. beschädigtes HEIC), wird nie ungefiltert ausgeliefert (422) und fehlt im
+  «Alle herunterladen»-ZIP, statt den ganzen Download abzubrechen.
+- Zwei gleichzeitige Album-Einladungen an denselben Verein ergeben die normale Meldung statt 500.
+- Mandant aufräumen: «Hochgeladene Dokumente» trifft keine Galeriefotos, Pendenz-Anhänge und
+  archivierten Exporte mehr.
+
+### Sicherheit
+
+- Kalender-Abo endet bei Austritt und entzogenem Login (auch bei einem Austrittsdatum in der Zukunft).
+- Termin mit Abgabe-Einreichungen nur mit «Abgaben verwalten» löschbar (die Einreichungen fallen mit weg).
+- Nach einem Abo-Downgrade entstehen aus Termin- und Listenänderungen keine neuen Paket- und
+  Abgabe-Pendenzen mehr.
+- Plattform-Admin: die Identitätsprüfung zeigt die E-Mail der Antragsteller nur owner-Admins.
+- Datenschutz: die Löschung eines Vereins entfernt auch fertige Vereinsexporte; «Mandant aufräumen»
+  löscht Personen wie der reguläre Löschpfad (Audit-Log, Anmeldeereignisse, Löschjournal) und
+  schreibt auch Protokolle, Termine, Abgaben und Dateien ins Löschjournal; ein abgelaufener
+  Vereinsexport ist sofort nicht mehr herunterladbar.
+- Protokoll-PDF: Bussen- und Finanzblöcke zeigen ohne «Persönliche Auswertungen» nur die eigenen
+  Bussen bzw. ohne Finanzrecht keinen Kontostand; das gemeinsame PDF (alle Bussen, Kontostand) und
+  PDFs anderer Personen sind nur in der eigenen Sicht abrufbar (Liste, Download, Exportliste).
+- Buchungen lassen sich nur mit einem lesbaren Protokoll verknüpfen.
+
 ### Update
 
+- Abhängigkeiten: next 16.4.6 (beide Frontends), neuer Digest des ClamAV-Images.
 - Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung
   `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision folgt auf `0219_password_breach_check` (letzte 1.5.2-Migration).
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
