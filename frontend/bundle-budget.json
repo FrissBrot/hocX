@@ -56,6 +56,11 @@
       "css_gzip_kb": 59,
       "css_raw_kb": 378
     },
+    "/admin/(console)/cloud-imports": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 56,
+      "css_raw_kb": 348
+    },
     "/admin/(console)/document-templates": {
       "js_gzip_kb": 233,
       "css_gzip_kb": 59,
@@ -325,6 +330,11 @@
       "js_gzip_kb": 266,
       "css_gzip_kb": 64,
       "css_raw_kb": 395
+    },
+    "/files/import/google-picker": {
+      "js_gzip_kb": 212,
+      "css_gzip_kb": 60,
+      "css_raw_kb": 364
     },
     "/files/uploads": {
       "js_gzip_kb": 326,

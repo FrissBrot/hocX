@@ -64,6 +64,22 @@ export const AREA_NAMESPACES = {
     "files",
     "storage",
   ],
+  // Unterbereich von admin: Plattform-Übersicht der Datei-Importe nutzt Quellen-/Statusnamen des Wizards.
+  adminCloudImports: [
+    "admin",
+    "adminAnalytics",
+    "adminBackups",
+    "adminCashflow",
+    "adminMaintenance",
+    "adminOverview",
+    "adminSecurity",
+    "adminShell",
+    "adminStorage",
+    "adminTenantDetail",
+    "fileImport",
+    "files",
+    "storage",
+  ],
   agenda: ["agenda", "protocols"],
   connections: ["connections"],
   // Startseite (app/page.tsx): Dashboard-Kacheln und Mobile-Dashboard.
