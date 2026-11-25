@@ -144,7 +144,15 @@ def _sanitize_jpeg(data: bytes, policy: MetadataPolicy) -> bytes:
             # nicht RSTn) durchkopieren.
             start = pos
             while True:
-                pos = data.index(b"\xff", pos)
+                pos = data.find(b"\xff", pos)
+                if pos == -1 or pos + 1 >= size:
+                    # Abgeschnittene Datei (abgebrochene Übertragung): endet mitten in den
+                    # Bilddaten. Der Rest enthält keine Marke, also kein Metadaten-Segment - wie
+                    # der Browser zeigen wir das Teilbild und schliessen mit EOI ab (sonst
+                    # scheiterte auch die Neukodierung, Nachtlauf 2026-11-25).
+                    out += data[start : size if pos == -1 else pos]
+                    out += b"\xff\xd9"
+                    return bytes(out)
                 following = data[pos + 1]
                 if following == 0x00 or 0xD0 <= following <= 0xD7 or following == 0xFF:
                     pos += 1 if following == 0xFF else 2
