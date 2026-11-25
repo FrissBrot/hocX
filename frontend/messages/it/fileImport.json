@@ -60,10 +60,14 @@
     "toRules": "Continua con regole e anteprima",
     "cloudHintConnected": "hocX legge dal servizio cloud solo ciò che selezioni e conserva l’accesso cifrato solo fino alla fine dell’importazione.",
     "provider": {
-      "microsoft": "Microsoft OneDrive / SharePoint"
+      "microsoft": "Microsoft OneDrive / SharePoint",
+      "dropbox": "Dropbox",
+      "webdav": "WebDAV (kDrive, Nextcloud …)"
     },
     "providerHint": {
-      "microsoft": "Collega direttamente OneDrive personale, OneDrive for Business o raccolte SharePoint. Scegli le cartelle in hocX."
+      "microsoft": "Collega direttamente OneDrive personale, OneDrive for Business o raccolte SharePoint. Scegli le cartelle in hocX.",
+      "dropbox": "Collega direttamente il tuo Dropbox e scegli le cartelle in hocX.",
+      "webdav": "Collega Infomaniak kDrive, Nextcloud, SwissDisk o un altro spazio WebDAV con una password per app."
     }
   },
   "options": {
@@ -348,7 +352,21 @@
       "provider_unavailable": "Questo servizio cloud al momento non è disponibile.",
       "invalid_ref": "Selezione non valida.",
       "empty_source": "Nella selezione non sono stati trovati file. Scegli altre cartelle.",
-      "selection_unavailable": "Le cartelle selezionate non sono più raggiungibili. Seleziona di nuovo."
+      "selection_unavailable": "Le cartelle selezionate non sono più raggiungibili. Seleziona di nuovo.",
+      "webdav_auth_failed": "Nome utente o password per app errati.",
+      "webdav_url_invalid": "L’indirizzo non è valido. Controllalo.",
+      "webdav_https_required": "Sono ammessi solo indirizzi cifrati (https://).",
+      "webdav_port": "Questa porta non è ammessa. Sono ammesse 443 e 8443.",
+      "webdav_host_blocked": "Questo indirizzo non è ammesso (gli indirizzi interni o privati sono bloccati).",
+      "webdav_redirect": "Il server reindirizza a un altro indirizzo. Inserisci direttamente l’indirizzo di destinazione.",
+      "webdav_not_found": "A questo indirizzo non è stata trovata nessuna cartella.",
+      "webdav_not_collection": "Questo indirizzo non porta a una cartella.",
+      "webdav_unreachable": "Il server non è raggiungibile.",
+      "webdav_bad_response": "Il server non risponde come uno spazio WebDAV.",
+      "webdav_kdrive_id": "L’ID kDrive è composto solo da cifre.",
+      "webdav_username": "Inserisci un nome utente valido (senza due punti).",
+      "webdav_password": "Inserisci una password per app valida.",
+      "webdav_preset": "Scegli un fornitore."
     },
     "adminConsent": {
       "title": "Aiuto: approvazione da parte dell’IT dell’organizzazione",
@@ -363,12 +381,38 @@
       "copied": "Link di approvazione copiato."
     },
     "connectHint": {
-      "microsoft": "Accedi con il tuo account Microsoft (personale, di lavoro o scolastico). hocX chiede dapprima solo l’accesso in lettura ai tuoi file; per «Condivisi con me» negli account di lavoro e per SharePoint segue un secondo consenso appena li apri."
+      "microsoft": "Accedi con il tuo account Microsoft (personale, di lavoro o scolastico). hocX chiede dapprima solo l’accesso in lettura ai tuoi file; per «Condivisi con me» negli account di lavoro e per SharePoint segue un secondo consenso appena li apri.",
+      "dropbox": "Accedi a Dropbox. hocX ottiene solo l’accesso in lettura ai file e ai dati delle cartelle.",
+      "webdav": "Inserisci le credenziali del tuo spazio. Usa una password per app invece della tua password abituale; potrai eliminarla presso il fornitore dopo l’importazione."
     },
     "roots": {
       "microsoft_me": "Il mio OneDrive",
       "microsoft_shared": "Condivisi con me",
-      "microsoft_sites": "Siti SharePoint"
+      "microsoft_sites": "Siti SharePoint",
+      "dropbox": "Dropbox",
+      "webdav": "Tutti i file"
+    },
+    "webdav": {
+      "preset": "Fornitore",
+      "presetKdrive": "Infomaniak kDrive",
+      "presetNextcloud": "Nextcloud",
+      "presetGeneric": "Altro indirizzo WebDAV (p. es. SwissDisk)",
+      "kdriveId": "ID kDrive (facoltativo)",
+      "kdriveIdHelp": "Serve solo se hai più kDrive: il numero nell’indirizzo di kDrive nel browser.",
+      "server": "Indirizzo del server",
+      "serverHelp": "Per esempio cloud.societa.ch - senza https:// e senza percorso.",
+      "url": "Indirizzo WebDAV",
+      "urlHelp": "Indirizzo completo con https://, come indicato dal tuo fornitore per WebDAV.",
+      "username": "Nome utente",
+      "usernameHelp": "Per kDrive, l’indirizzo e-mail del tuo account Infomaniak.",
+      "password": "Password per app",
+      "passwordHelp": "Salvata in forma cifrata ed eliminata appena l’importazione è terminata.",
+      "connect": "Collega",
+      "connecting": "Verifica della connessione …",
+      "help": "Come creare una password per app",
+      "reenterTitle": "Inserisci di nuovo la password",
+      "reenterHint": "Lo spazio ha rifiutato le credenziali (per esempio perché la password per app è stata eliminata). Inserisci una password per app valida; l’importazione poi riprende.",
+      "back": "Indietro"
     }
   }
 }

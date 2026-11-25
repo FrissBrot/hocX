@@ -450,6 +450,18 @@ run_preflight() {
       return 1
     fi
   fi
+  if [ -n "${CLOUD_IMPORT_DROPBOX_APP_KEY:-}" ] && [ -z "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}" ]; then
+    echo "CLOUD_IMPORT_DROPBOX_APP_KEY ist gesetzt, CLOUD_IMPORT_DROPBOX_APP_SECRET fehlt." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}" ] && [ -z "${CLOUD_IMPORT_DROPBOX_APP_KEY:-}" ]; then
+    echo "CLOUD_IMPORT_DROPBOX_APP_SECRET ist gesetzt, CLOUD_IMPORT_DROPBOX_APP_KEY fehlt." >&2
+    return 1
+  fi
+  case "${CLOUD_IMPORT_WEBDAV_ENABLED:-true}" in
+    true|false) ;;
+    *) echo "CLOUD_IMPORT_WEBDAV_ENABLED muss true oder false sein." >&2; return 1 ;;
+  esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" "$CLOUD_IMPORT_TOKEN_KEY" \
@@ -545,6 +557,8 @@ write_secret_files() {
   write_secret_file "$secrets_dir" cloud_import_token_key "$CLOUD_IMPORT_TOKEN_KEY"
   write_secret_file "$secrets_dir" cloud_import_token_key_previous "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}"
   write_secret_file "$secrets_dir" cloud_import_ms_client_secret "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}"
+  # App-Secret der Dropbox-App (leer = Dropbox nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_dropbox_app_secret "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}"
   write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"

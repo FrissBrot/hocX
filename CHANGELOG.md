@@ -8,6 +8,30 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- **Datei-Import aus WebDAV (kDrive, Nextcloud, SwissDisk …):** neue Quelle im Assistenten unter
+  *Dateien › Importieren*. Der Verein wählt eine Vorlage (Infomaniak kDrive: nur Benutzer und
+  App-Passwort; Nextcloud: zusätzlich die Serveradresse) oder gibt eine WebDAV-Adresse ein. hocX
+  prüft Adresse und Zugangsdaten sofort, speichert das App-Passwort nur verschlüsselt
+  (`CLOUD_IMPORT_TOKEN_KEY`) und löscht es mit dem Ende des Imports. Lehnt der Speicher das
+  Passwort später ab, pausiert der Import und läuft nach erneuter Eingabe weiter. Strenger
+  SSRF-Schutz: nur `https` auf Port 443/8443, keine internen oder privaten Adressen (DNS-Prüfung
+  mit gepinnter Adresse gegen DNS-Rebinding, auch IPv6/NAT64/6to4), jeder Redirect neu geprüft,
+  Grössen- und Zeitgrenzen, PROPFIND-XML ohne DTD (kein XXE). Neuer Schalter
+  `CLOUD_IMPORT_WEBDAV_ENABLED` (Standard `true`). Anleitung für App-Passwörter bei kDrive und
+  Nextcloud in der Benutzerdoku.
+- **Datei-Import aus Dropbox:** Anmeldung mit OAuth + PKCE (nur Lesen: `files.metadata.read`,
+  `files.content.read`), eigener Ordnerbaum mit seitenweisem Laden, Download im Hintergrund,
+  Drosselung von Dropbox wird abgewartet, Token-Widerruf nach dem Import. Erscheint nur mit
+  `CLOUD_IMPORT_DROPBOX_APP_KEY` und `CLOUD_IMPORT_DROPBOX_APP_SECRET` (Secret, nur backend und
+  job-worker). Einrichtung inkl. Produktionsfreigabe ab 50 Konten: RUNBOOK 27.2.
+
+### Sicherheit
+
+- Cloud-Import: die Prüfung öffentlicher Adressen sperrt zusätzlich CGNAT (100.64/10), das
+  Benchmark-Netz (198.18/15) und IPv6-Formen mit eingebetteter IPv4 (NAT64, 6to4, Teredo).
+
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt

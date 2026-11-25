@@ -25,6 +25,7 @@ def _load_file_secrets() -> None:
         "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET", "GEO_DATABASE_URL",
         # Datei-Import aus der Cloud (services/cloud_import, Plan 2026-11-21 §12.1)
         "CLOUD_IMPORT_TOKEN_KEY", "CLOUD_IMPORT_TOKEN_KEY_PREVIOUS", "CLOUD_IMPORT_MS_CLIENT_SECRET",
+        "CLOUD_IMPORT_DROPBOX_APP_SECRET",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -376,6 +377,13 @@ class Settings(BaseSettings):
     # Download aus OneDrive for Business/SharePoint: "auto" (vorauthentifizierte URL, bei 401 bzw. ab
     # 1.4.2027 Bearer-Token), "tempauth" oder "bearer" (nur noch Bearer).
     cloud_import_ms_download_mode: str = Field(default="auto", pattern="^(auto|tempauth|bearer)$", validation_alias="CLOUD_IMPORT_MS_DOWNLOAD_MODE")
+    # Dropbox-App (Scoped access, files.metadata.read + files.content.read). Ohne App-Key/Secret wird
+    # Dropbox nicht angeboten. Produktionsfreigabe bei Dropbox ab 50 verknüpften Konten (RUNBOOK).
+    cloud_import_dropbox_app_key: str = Field(default="", validation_alias="CLOUD_IMPORT_DROPBOX_APP_KEY")
+    cloud_import_dropbox_app_secret: str = Field(default="", validation_alias="CLOUD_IMPORT_DROPBOX_APP_SECRET")
+    # WebDAV (kDrive, Nextcloud, SwissDisk …): braucht keine Registrierung beim Anbieter, nur diesen
+    # Schalter. Adresse, Benutzer und App-Passwort gibt der Verein ein (SSRF-Schutz in dav_http.py).
+    cloud_import_webdav_enabled: bool = Field(default=True, validation_alias="CLOUD_IMPORT_WEBDAV_ENABLED")
     # Nachgebaute Anbieter für E2E/Tests (services/cloud_import/fake_*.py). Wirkt nur mit
     # HOCX_ENVIRONMENT=development; in jeder anderen Umgebung bricht der Start ab. Nie in .env*/deploy.
     cloud_import_fake_providers: bool = Field(default=False, validation_alias="CLOUD_IMPORT_FAKE_PROVIDERS")
@@ -532,7 +540,7 @@ class Settings(BaseSettings):
         if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
             print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)
             sys.exit(1)
-        if self.is_production and self.cloud_import_ms_client_id and not self.cloud_import_token_key:
+        if self.is_production and (self.cloud_import_ms_client_id or self.cloud_import_dropbox_app_key) and not self.cloud_import_token_key:
             print(
                 "FATAL: CLOUD_IMPORT_TOKEN_KEY is not set although a cloud import provider is configured. "
                 "Run scripts/deploy.sh (scripts/lib/env_migrate.sh creates it).",

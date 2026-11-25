@@ -131,6 +131,8 @@ def context(db: Session, connection: ImportConnection, provider: CloudProvider) 
     """Kontext für einen Adapter. Tokens werden erst bei Bedarf entschlüsselt bzw. erneuert."""
     client = providers.client_for(provider)
     cache: dict[str, str] = {}
+    if provider.oauth_config() is None:
+        return _credential_context(connection, provider, client)
 
     def token() -> str:
         if connection.status != "active":
@@ -160,6 +162,36 @@ def context(db: Session, connection: ImportConnection, provider: CloudProvider) 
     account = connection.account_subject or str(connection.id)
     return ProviderContext(
         client, token=token, refresh=force_refresh, granted_scopes=scopes_of(connection), account_kind=connection.account_kind,
+        pace=pacing.pacer(provider.key, account, provider.request_rate),
+    )
+
+
+def _credential_context(connection: ImportConnection, provider: CloudProvider, client) -> ProviderContext:
+    """Anbieter ohne OAuth (WebDAV): ``token()`` liefert die entschlüsselten Zugangsdaten (JSON,
+    nur im Speicher). Es gibt nichts zu erneuern - ein 401 heisst «Passwort neu eingeben»: die
+    Verbindung verliert ihre Zugangsdaten und steht auf needs_reauth."""
+    from app.services.cloud_import import pacing
+
+    def token() -> str:
+        if connection.status != "active":
+            raise ReauthRequired()
+        try:
+            value = token_crypto.decrypt(connection.access_token_encrypted)
+        except token_crypto.TokenDecryptError as exc:
+            mark_needs_reauth(connection)
+            raise ReauthRequired() from exc
+        if not value:
+            mark_needs_reauth(connection)
+            raise ReauthRequired()
+        return value
+
+    def no_refresh() -> str:
+        mark_needs_reauth(connection)
+        raise ReauthRequired()
+
+    account = connection.account_subject or str(connection.id)
+    return ProviderContext(
+        client, token=token, refresh=no_refresh, granted_scopes=frozenset(), account_kind=connection.account_kind,
         pace=pacing.pacer(provider.key, account, provider.request_rate),
     )
 

@@ -28,6 +28,7 @@ export const DOCS_PAGES = {
   finanzen: "benutzer/finanzen/",
   einstellungen: "benutzer/einstellungen/",
   echtheit: "benutzer/echtheit/",
+  dateiImport: "benutzer/datei-import/",
 } as const;
 
 export type DocsPage = keyof typeof DOCS_PAGES;

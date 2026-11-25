@@ -156,11 +156,38 @@ class Transport(Protocol):
     def open(self, method: str, host: str, target: str, headers: dict[str, str], body: bytes | None) -> RawResponse: ...
 
 
-def _ip_is_public(address: str) -> bool:
-    ip = ipaddress.ip_address(address)
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    return ip.is_global and not ip.is_multicast and not ip.is_reserved
+# IPv6-Bereiche, die eine IPv4-Adresse einbetten (NAT64, 6to4, Teredo): massgebend ist die
+# eingebettete Adresse - sonst erreicht 64:ff9b::a9fe:a9fe über ein NAT64-Gateway 169.254.169.254.
+_NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+# Gemeinsamer Adressraum (CGNAT) und Benchmark-Netz: in älteren Python-Versionen teils «global»
+_EXTRA_BLOCKED = (ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("198.18.0.0/15"))
+
+
+def ip_is_public(address: str) -> bool:
+    """True nur für Adressen im öffentlichen Internet. Gesperrt: privat, Loopback, Link-Local
+    (inkl. Metadaten 169.254.169.254, fe80::/10), CGNAT, Multicast, reserviert, unspezifiziert,
+    Site-Local, ULA (fc00::/7) und IPv6-Formen mit eingebetteter IPv4 (mapped, NAT64, 6to4, Teredo)."""
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            return ip_is_public(str(ip.ipv4_mapped))
+        if any(ip in network for network in _NAT64):
+            return ip_is_public(str(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)))
+        if ip.sixtofour is not None:
+            return ip_is_public(str(ip.sixtofour))
+        if ip.teredo is not None:
+            return False
+        if ip.is_site_local:
+            return False
+    if any(ip in network for network in _EXTRA_BLOCKED if ip.version == network.version):
+        return False
+    return (
+        ip.is_global and not ip.is_multicast and not ip.is_reserved and not ip.is_loopback
+        and not ip.is_link_local and not ip.is_private and not ip.is_unspecified
+    )
+
+
+_ip_is_public = ip_is_public
 
 
 def resolve_public(host: str) -> str:
@@ -369,7 +396,39 @@ class SafeHttpClient:
     def post_form(self, url: str, form: dict[str, str]) -> HttpResponse:
         return self.request("POST", url, form=form)
 
-    def download(self, url: str, *, bearer: str | None, dest: Path, max_bytes: int, bearer_mode: str = "never") -> DownloadResult:
+    def post_json(self, url: str, data: object | None, *, bearer: str | None = None) -> dict:
+        """RPC im JSON-Stil (Dropbox): POST mit JSON-Körper (``None`` = ohne Körper), Antwort als
+        JSON-Objekt. Fehlerstatus wie ``get_json``; Bearer nur an API-Hosts."""
+        host, _target = check_url(url, self.policy)
+        headers = {"Accept": "application/json"}
+        body = None
+        if data is not None:
+            body = json.dumps(data, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+            headers["Content-Type"] = "application/json"
+        raw = self._open("POST", url, bearer=bearer, send_bearer=self.policy.bearer_always(host), headers=headers, body=body)
+        try:
+            payload = bytearray()
+            while True:
+                chunk = raw.read(CHUNK)
+                if not chunk:
+                    break
+                payload += chunk
+                if len(payload) > MAX_JSON_BYTES:
+                    raise ProviderError("bad_response", status=raw.status, detail="too_large")
+            response = HttpResponse(raw.status, dict(raw.headers), bytes(payload))
+        except (OSError, http.client.HTTPException) as exc:
+            raise ProviderError("network", detail=type(exc).__name__) from exc
+        finally:
+            raw.close()
+        if 300 <= response.status < 400:
+            raise ProviderError("bad_response", status=response.status, detail="redirect")
+        raise_for_status(response)
+        return response.json()
+
+    def download(
+        self, url: str, *, bearer: str | None, dest: Path, max_bytes: int, bearer_mode: str = "never",
+        headers: dict[str, str] | None = None,
+    ) -> DownloadResult:
         """Streamt nach ``dest`` (nie in den Speicher), höchstens ``max_bytes`` (gemessen am Strom),
         und berechnet SHA-256 nebenbei. Redirects selbst, je Hop Allowlist-Prüfung.
 
@@ -383,7 +442,9 @@ class SafeHttpClient:
             send = self.policy.bearer_always(host) or (
                 self.policy.bearer_on_request(host) and (bearer_mode == "always" or retried_with_bearer)
             )
-            raw = self._open("GET", current, bearer=bearer, send_bearer=send, headers={"Accept": "*/*"}, body=None)
+            # Zusatzheader (z. B. Dropbox-API-Arg) nur an den ersten Host, nie an Redirect-Ziele
+            extra = {"Accept": "*/*", **(headers or {})} if hops == 0 else {"Accept": "*/*"}
+            raw = self._open("GET", current, bearer=bearer, send_bearer=send, headers=extra, body=None)
             try:
                 if 300 <= raw.status < 400 and raw.status != 304:
                     location = raw.headers.get("location")

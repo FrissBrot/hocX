@@ -51,6 +51,8 @@ class OAuthConfig:
     select_account_params: dict[str, str] = field(default_factory=lambda: {"prompt": "select_account"})
     # Scopes beim Refresh mitsenden (Microsoft v2 verlangt sie)
     send_scope_on_refresh: bool = True
+    # Scopes beim Einlösen des Codes mitsenden (Microsoft ja; Dropbox kennt den Parameter dort nicht)
+    send_scope_on_exchange: bool = True
 
 
 @dataclass

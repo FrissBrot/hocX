@@ -146,7 +146,7 @@ def exchange_code(provider: CloudProvider, client: SafeHttpClient, *, code: str,
         "redirect_uri": redirect_uri(provider.key),
         "code_verifier": verifier,
     }
-    if scopes:
+    if scopes and config.send_scope_on_exchange:
         form["scope"] = " ".join(scopes)
     response = client.post_form(config.token_url, form)
     raise_for_status(response)

@@ -267,6 +267,9 @@ services:
       CLOUD_IMPORT_MS_CLIENT_SECRET: ${CLOUD_IMPORT_MS_CLIENT_SECRET:-}
       # Nachgebaute Anbieter nie über .env (nur docker-compose.e2e.yml setzt das, Security-Review F6)
       CLOUD_IMPORT_FAKE_PROVIDERS: "false"
+      CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
+      CLOUD_IMPORT_DROPBOX_APP_SECRET: ${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}
+      CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -937,6 +940,9 @@ services:
       CLOUD_IMPORT_FAKE_PROVIDERS: "false"
       # Token-Bucket des Datei-Imports (services/cloud_import/pacing.py), gemeinsam mit dem Backend
       REDIS_URL: redis://redis:6379/0
+      CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
+      CLOUD_IMPORT_DROPBOX_APP_SECRET: ${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}
+      CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}
     command: ["python", "-m", "app.workers.job_worker"]
     volumes:
       - ./backend:/app

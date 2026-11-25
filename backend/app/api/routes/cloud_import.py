@@ -11,6 +11,7 @@ auf den Upload-Datenträger (ImportUploadRoute, UploadAdmissionMiddleware in mai
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import date, datetime
@@ -886,6 +887,139 @@ def finish_cloud_oauth(payload: OAuthFinishIn, db: Session = Depends(get_db), us
     AuditService().log(
         db, action="cloud_import.connected", actor=user, entity_type="import_job",
         details={"job_id": str(job.id), "provider": provider.key, "account_kind": account.kind}, commit=False,
+    )
+    db.commit()
+    db.refresh(job)
+    return _job_read(db, job, user)
+
+
+class WebDavConnectIn(BaseModel):
+    """Zugangsdaten für WebDAV. Länge/Zeichen prüft der Dienst selbst (kuratierte Codes), damit eine
+    Validierungsantwort das Passwort nie zurückspiegelt."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    preset: Literal["kdrive", "nextcloud", "generic"]
+    username: str = Field(max_length=1000)
+    password: str = Field(max_length=4000, repr=False)
+    server: str | None = Field(default=None, max_length=1000)
+    kdrive_id: str | None = Field(default=None, max_length=100)
+    url: str | None = Field(default=None, max_length=4000)
+
+
+# Fehler beim Verbinden → kuratierte Codes (fileImport.cloud.errors.webdav_*). Bewusst grob: die
+# Antwort soll keine Netzwerkdetails (offen/zu, intern/extern) verraten, nur was die Person ändern kann.
+_DAV_HOST_REASONS = {
+    "scheme": "webdav_https_required", "port": "webdav_port", "userinfo": "webdav_url_invalid", "invalid_url": "webdav_url_invalid",
+    "path": "webdav_url_invalid", "host": "webdav_url_invalid", "ip_literal": "webdav_host_blocked",
+    "internal_name": "webdav_host_blocked",
+    # Name löst intern auf: wie ein DNS-Fehler melden (kein Orakel für interne Namen, Security-Review N4)
+    "private_address": "webdav_unreachable", "redirect_origin": "webdav_redirect",
+}
+
+
+def _webdav_failure(exc: Exception) -> HTTPException:
+    from app.services.cloud_import.http import HostNotAllowed, ProviderUnauthorized
+
+    if isinstance(exc, HostNotAllowed):
+        return _http(ImportFailure(422, _DAV_HOST_REASONS.get(exc.detail or "", "webdav_host_blocked")))
+    if isinstance(exc, ProviderUnauthorized):
+        return _http(ImportFailure(400, "webdav_auth_failed"))
+    if isinstance(exc, ProviderThrottled):
+        return _http(ImportFailure(429, "provider_throttled", {"seconds": exc.retry_after}))
+    code = getattr(exc, "code", "")
+    if code == "not_collection":
+        return _http(ImportFailure(400, "webdav_not_collection"))
+    if code in ("not_found", "access_denied"):
+        return _http(ImportFailure(400, "webdav_not_found"))
+    if code == "network":
+        return _http(ImportFailure(502, "webdav_unreachable"))
+    return _http(ImportFailure(502, "webdav_bad_response"))
+
+
+@router.post("/cloud-import/jobs/{job_id}/webdav/connect", response_model=ImportJobRead)
+def connect_webdav(job_id: uuid.UUID, payload: WebDavConnectIn, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """WebDAV verbinden (kDrive, Nextcloud, SwissDisk …): Adresse prüfen (SSRF-Schutz, dav_http),
+    Zugangsdaten mit einem PROPFIND testen und nur dann verschlüsselt speichern. Auch zum erneuten
+    Eingeben des Passworts bei needs_reauth."""
+    from app.services.cloud_import import dav_http
+    from app.services.cloud_import.providers.base import AccountInfo, TokenSet
+    from app.services.cloud_import.providers.webdav import build_base_url
+
+    tenant_id = _require_import(user)
+    # Eng begrenzt: jeder Versuch ist eine ausgehende Verbindung zu einer fremden Adresse (kein
+    # Scanner, kein Passwort-Raten bei Dritten über hocX)
+    enforce_rate_limit(f"cloud-import-webdav:{user.user_id}", limit=10, period_seconds=600)
+    enforce_rate_limit(f"cloud-import-webdav-tenant:{tenant_id}", limit=30, period_seconds=3600)
+    provider = providers.get("webdav")
+    if provider is None or not providers.is_available("webdav"):
+        raise _http(ImportFailure(404, "provider_unavailable"))
+    # Ohne Zeilensperre prüfen: der Verbindungstest dauert bis zu 30 s pro Kandidat
+    job = _load(db, user, job_id, owner=True)
+    if job.source != "webdav":
+        raise _http(ImportFailure(409, "wrong_source"))
+    if job.status not in ("draft", "needs_reauth", "failed"):
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    try:
+        username = dav_http.validate_username(payload.username)
+        password = dav_http.validate_password(payload.password)
+        candidates = build_base_url(payload.preset, username=username, server=payload.server, kdrive_id=payload.kdrive_id, url=payload.url)
+    except ValueError as exc:
+        code = str(exc) if str(exc).startswith("webdav_") else f"webdav_{exc}"
+        raise _http(ImportFailure(422, code)) from None
+    # Keine offene Transaktion während der ausgehenden Verbindung (bis 30 s je Kandidat; der
+    # RLS-Kontext wird beim nächsten Transaktionsbeginn neu gesetzt)
+    db.commit()
+    credentials = None
+    last_error: Exception | None = None
+    for candidate in candidates:
+        try:
+            origin, base_path = dav_http.parse_base_url(candidate, allow_http=provider.allow_http())
+            attempt = dav_http.DavCredentials(dav_http.canonical_url(origin, base_path), username, password)
+            provider.check_credentials(attempt)
+        except ProviderError as exc:
+            last_error = exc
+            # Nextcloud: zweiter Kandidat (/remote.php/webdav/) nur, wenn der erste nicht existiert
+            if getattr(exc, "code", "") not in ("not_found", "not_collection"):
+                break
+            continue
+        credentials = attempt
+        break
+    if credentials is None:
+        AuditService().log(
+            db, action="cloud_import.connect_rejected", actor=user, entity_type="import_job",
+            details={"job_id": str(job.id), "provider": "webdav", "reason": getattr(last_error, "code", "invalid")}, outcome="failure",
+        )
+        raise _webdav_failure(last_error or ProviderError("bad_response")) from last_error
+    origin, _base = dav_http.parse_base_url(credentials.base_url, allow_http=provider.allow_http())
+    # Stabile Kennung ohne Klartext: gleiche Adresse + gleicher Benutzer = gleiches Konto
+    subject = "webdav:" + hashlib.sha256(f"{credentials.base_url}\n{username}".encode()).hexdigest()[:40]
+    account = AccountInfo(label=provider.account_label(credentials), kind="webdav", subject=subject)
+    tokens = TokenSet(access_token=credentials.to_json(), refresh_token=None, expires_in=24 * 3600)
+    db.refresh(job, with_for_update=True)
+    if job.source != "webdav" or job.status not in ("draft", "needs_reauth", "failed"):
+        raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
+    previous = remote._connection(db, job)
+    if previous is not None and previous.provider == "webdav" and previous.account_subject == subject:
+        connections.save_tokens(previous, tokens, granted=frozenset())
+        previous.account_label = account.label
+        connection = previous
+    else:
+        if previous is not None:
+            if job.status != "draft":
+                # Mitten im Import andere Adresse/anderer Benutzer: die gelisteten Pfade stammen aus dem alten
+                raise _http(ImportFailure(409, "oauth_account_mismatch"))
+            connections.delete(db, previous)
+        connection = connections.create(
+            db, tenant_id=tenant_id, user_id=user.user_id, provider="webdav", tokens=tokens, account=account, granted=frozenset(),
+        )
+    job.connection_id = connection.id
+    job.error = None
+    remote.resume_after_reauth(job)
+    jobs.touch(job)
+    AuditService().log(
+        db, action="cloud_import.connected", actor=user, entity_type="import_job",
+        details={"job_id": str(job.id), "provider": "webdav", "preset": payload.preset, "host": origin.host}, commit=False,
     )
     db.commit()
     db.refresh(job)

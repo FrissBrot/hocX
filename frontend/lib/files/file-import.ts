@@ -347,3 +347,26 @@ export async function startCloudLogin(
   });
   window.location.assign(result.authorize_url);
 }
+
+export type WebdavPreset = "kdrive" | "nextcloud" | "generic";
+
+/** Body für POST /api/cloud-import/jobs/{id}/webdav/connect: nur die Felder der gewählten Vorlage. */
+export function webdavConnectBody(input: {
+  preset: WebdavPreset;
+  server: string;
+  kdriveId: string;
+  url: string;
+  username: string;
+  password: string;
+}): Record<string, string> {
+  const body: Record<string, string> = { preset: input.preset, username: input.username.trim(), password: input.password };
+  if (input.preset === "kdrive" && input.kdriveId.trim()) body.kdrive_id = input.kdriveId.trim();
+  if (input.preset === "nextcloud") body.server = input.server.trim();
+  if (input.preset === "generic") body.url = input.url.trim();
+  return body;
+}
+
+/** Anbieter mit Zugangsdaten statt OAuth (WebDAV). */
+export function usesCredentials(provider: { info: Record<string, string> } | null | undefined): boolean {
+  return provider?.info.auth === "credentials";
+}

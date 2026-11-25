@@ -210,6 +210,12 @@
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/webdav/connect": {
+      "handler": "cloud_import.connect_webdav",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/oauth/finish": {
       "handler": "cloud_import.finish_cloud_oauth",
       "allowed": [

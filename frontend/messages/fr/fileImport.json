@@ -60,10 +60,14 @@
     "toRules": "Continuer vers les règles et l'aperçu",
     "cloudHintConnected": "hocX ne lit que ce que tu sélectionnes chez le service cloud et ne conserve l’accès chiffré que jusqu’à la fin de l’import.",
     "provider": {
-      "microsoft": "Microsoft OneDrive / SharePoint"
+      "microsoft": "Microsoft OneDrive / SharePoint",
+      "dropbox": "Dropbox",
+      "webdav": "WebDAV (kDrive, Nextcloud …)"
     },
     "providerHint": {
-      "microsoft": "Connecter directement OneDrive personnel, OneDrive Entreprise ou des bibliothèques SharePoint. Tu choisis les dossiers dans hocX."
+      "microsoft": "Connecter directement OneDrive personnel, OneDrive Entreprise ou des bibliothèques SharePoint. Tu choisis les dossiers dans hocX.",
+      "dropbox": "Connecter directement ton Dropbox et choisir les dossiers dans hocX.",
+      "webdav": "Connecter Infomaniak kDrive, Nextcloud, SwissDisk ou un autre stockage WebDAV avec un mot de passe d’application."
     }
   },
   "options": {
@@ -348,7 +352,21 @@
       "provider_unavailable": "Ce service cloud n’est pas disponible pour le moment.",
       "invalid_ref": "Sélection non valide.",
       "empty_source": "Aucun fichier trouvé dans la sélection. Merci de choisir d’autres dossiers.",
-      "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles. Merci de choisir à nouveau."
+      "selection_unavailable": "Les dossiers sélectionnés ne sont plus accessibles. Merci de choisir à nouveau.",
+      "webdav_auth_failed": "Le nom d’utilisateur ou le mot de passe d’application est incorrect.",
+      "webdav_url_invalid": "L’adresse n’est pas valable. Merci de la vérifier.",
+      "webdav_https_required": "Seules les adresses chiffrées (https://) sont autorisées.",
+      "webdav_port": "Ce port n’est pas autorisé. Sont autorisés 443 et 8443.",
+      "webdav_host_blocked": "Cette adresse n’est pas autorisée (les adresses internes ou privées sont bloquées).",
+      "webdav_redirect": "Le serveur redirige vers une autre adresse. Merci de saisir directement l’adresse cible.",
+      "webdav_not_found": "Aucun dossier n’a été trouvé à cette adresse.",
+      "webdav_not_collection": "Cette adresse ne mène pas à un dossier.",
+      "webdav_unreachable": "Le serveur n’est pas joignable.",
+      "webdav_bad_response": "Le serveur ne répond pas comme un stockage WebDAV.",
+      "webdav_kdrive_id": "L’ID kDrive ne contient que des chiffres.",
+      "webdav_username": "Merci de saisir un nom d’utilisateur valable (sans deux-points).",
+      "webdav_password": "Merci de saisir un mot de passe d’application valable.",
+      "webdav_preset": "Merci de choisir un fournisseur."
     },
     "adminConsent": {
       "title": "Aide : autorisation par le service informatique de l’organisation",
@@ -363,12 +381,38 @@
       "copied": "Lien d’autorisation copié."
     },
     "connectHint": {
-      "microsoft": "Connecte-toi avec ton compte Microsoft (personnel, professionnel ou scolaire). hocX demande d’abord uniquement un accès en lecture à tes propres fichiers ; pour « Partagés avec moi » sur les comptes professionnels et pour SharePoint, un second consentement suit dès que tu les ouvres."
+      "microsoft": "Connecte-toi avec ton compte Microsoft (personnel, professionnel ou scolaire). hocX demande d’abord uniquement un accès en lecture à tes propres fichiers ; pour « Partagés avec moi » sur les comptes professionnels et pour SharePoint, un second consentement suit dès que tu les ouvres.",
+      "dropbox": "Connecte-toi à Dropbox. hocX obtient uniquement un accès en lecture aux fichiers et aux informations des dossiers.",
+      "webdav": "Saisis les identifiants de ton stockage. Utilise un mot de passe d’application plutôt que ton mot de passe habituel ; tu pourras le supprimer chez le fournisseur après l’import."
     },
     "roots": {
       "microsoft_me": "Mon OneDrive",
       "microsoft_shared": "Partagés avec moi",
-      "microsoft_sites": "Sites SharePoint"
+      "microsoft_sites": "Sites SharePoint",
+      "dropbox": "Dropbox",
+      "webdav": "Tous les fichiers"
+    },
+    "webdav": {
+      "preset": "Fournisseur",
+      "presetKdrive": "Infomaniak kDrive",
+      "presetNextcloud": "Nextcloud",
+      "presetGeneric": "Autre adresse WebDAV (p. ex. SwissDisk)",
+      "kdriveId": "ID kDrive (facultatif)",
+      "kdriveIdHelp": "Nécessaire seulement si tu as plusieurs kDrive : le nombre dans l’adresse de kDrive dans le navigateur.",
+      "server": "Adresse du serveur",
+      "serverHelp": "Par exemple cloud.societe.ch - sans https:// et sans chemin.",
+      "url": "Adresse WebDAV",
+      "urlHelp": "Adresse complète avec https://, telle que l’indique ton fournisseur pour WebDAV.",
+      "username": "Nom d’utilisateur",
+      "usernameHelp": "Pour kDrive, l’adresse e-mail de ton compte Infomaniak.",
+      "password": "Mot de passe d’application",
+      "passwordHelp": "Enregistré chiffré et supprimé dès que l’import est terminé.",
+      "connect": "Connecter",
+      "connecting": "Vérification de la connexion …",
+      "help": "Comment créer un mot de passe d’application",
+      "reenterTitle": "Saisir à nouveau le mot de passe",
+      "reenterHint": "Le stockage a refusé les identifiants (par exemple parce que le mot de passe d’application a été supprimé). Saisis un mot de passe d’application valable ; l’import reprend ensuite.",
+      "back": "Retour"
     }
   }
 }

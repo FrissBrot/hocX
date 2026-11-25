@@ -16,6 +16,8 @@ PROVIDERS: dict[str, CloudProvider] = {}
 # Adapter-Module (je Anbieter eines); weitere Quellen hängen sich hier an.
 _ADAPTER_MODULES: tuple[str, ...] = (
     "app.services.cloud_import.providers.microsoft",
+    "app.services.cloud_import.providers.dropbox",
+    "app.services.cloud_import.providers.webdav",
 )
 _loaded = False
 

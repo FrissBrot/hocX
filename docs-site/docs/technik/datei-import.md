@@ -94,7 +94,8 @@ mit Minuten Laufzeit (Befund aus fix/search-perf-1.5.1). Fehler werden nur gelog
 job-worker, siehe RUNBOOK Abschnitt 17. API-Quellen (P1): `CLOUD_IMPORT_ENABLED`,
 `CLOUD_IMPORT_TOKEN_KEY` (+ `_PREVIOUS`, Secret, von `env_migrate.sh` erzeugt),
 `CLOUD_IMPORT_REDIRECT_BASE_URL` und je Anbieter Client-ID/Secret/Ablaufdatum, siehe RUNBOOK
-«Cloud-Import einrichten».
+«Cloud-Import einrichten». Dropbox: `CLOUD_IMPORT_DROPBOX_APP_KEY`, `CLOUD_IMPORT_DROPBOX_APP_SECRET`
+(Secret, `_FILE`); WebDAV: nur der Schalter `CLOUD_IMPORT_WEBDAV_ENABLED`.
 
 ## API-Quellen (Phase P1, Fundament)
 
@@ -168,6 +169,64 @@ Muster). Migration `0281_cloud_import_connections`.
 - `CLOUD_IMPORT_FAKE_PROVIDERS` setzt nur `docker-compose.e2e.yml`; `docker-compose.yml` erzwingt `false`
   (nicht über `.env` aktivierbar), `config.py` bricht ausserhalb von `development` ab.
 - `User-Agent: ISV|hocX|hocX/<Version>` (Microsoft-Empfehlung gegen Drosselung).
+
+### Dropbox (P3)
+
+`services/cloud_import/providers/dropbox.py`, Nachbau `fake_dropbox.py`.
+
+- App mit **Scoped access**, Scopes `account_info.read` (immer dabei), `files.metadata.read`,
+  `files.content.read`; nur lesend. Code + PKCE, `token_access_type=offline` (Refresh-Token),
+  `force_reapprove=true` (Zustimmungsseite immer sichtbar). Dropbox liefert den Code nur in der Query
+  → GET-Callback. Beim Code-Einlösen und beim Refresh **kein** `scope`-Parameter
+  (`OAuthConfig.send_scope_on_exchange`/`send_scope_on_refresh = False`).
+- Allowlist: `api.dropboxapi.com`, `content.dropboxapi.com` (Bearer nur dort). RPC über
+  `SafeHttpClient.post_json`; der `cursor` von `files/list_folder` geht nur im JSON-Körper an Dropbox.
+- Referenzen: `root` oder Datei-/Ordner-ID `id:…` (streng geprüft). Download `GET files/download` mit
+  `Dropbox-API-Arg`-Header (`SafeHttpClient.download(headers=…)`, nie an Redirect-Ziele).
+- Fachliche Fehler (409, z. B. `path/not_found`) → `not_found`. 429 mit `Retry-After` → Auftrag
+  pausiert; zusätzlich Token-Bucket je Konto `request_rate = (5/s, Burst 10)`.
+- Nicht ladbare Dateien (Paper, `is_downloadable=false`) erscheinen nicht. Team-Spaces
+  (`Dropbox-API-Path-Root`) werden nicht gesondert behandelt: sichtbar ist der persönliche Bereich
+  inkl. eingebundener freigegebener Ordner.
+- Widerruf bei Trennen/Auftragsende: `auth/token/revoke`.
+- `account_subject = dropbox:<account_id>`.
+
+### WebDAV (P3: kDrive, Nextcloud, SwissDisk)
+
+`services/cloud_import/providers/webdav.py`, Client `dav_http.py`, Nachbau `fake_webdav.py`.
+
+- Kein OAuth: `POST /cloud-import/jobs/{id}/webdav/connect` (`files.import`, nur Ersteller, Status
+  `draft`/`needs_reauth`/`failed`, Rate-Limit 10/10 min je Person und 30/h je Mandant) mit `preset`
+  (`kdrive`, `nextcloud`, `generic`), Benutzer, App-Passwort und je nach Vorlage Server, kDrive-ID oder
+  URL. Vorlagen: kDrive `https://connect.drive.infomaniak.com/` bzw.
+  `https://<id>.connect.kdrive.infomaniak.com/`; Nextcloud `https://<server>/remote.php/dav/files/<user>/`,
+  Rückfall `…/remote.php/webdav/`. Erst ein erfolgreicher `PROPFIND` (Depth 0, Ordner) speichert etwas.
+- Zugangsdaten `{"url","user","password"}` als JSON, verschlüsselt mit `CLOUD_IMPORT_TOKEN_KEY` in
+  `import_connection.access_token_encrypted` (kein Refresh-Token, keine eigene Migration).
+  `connections.context` gibt sie Adaptern ohne `oauth_config()` über `token()`; ein 401 setzt die
+  Verbindung auf `needs_reauth` (Zugangsdaten gelöscht) → Passwort neu eingeben, gleiche Adresse und
+  gleicher Benutzer (`account_subject` = Hash aus Adresse und Benutzer) setzen den Auftrag fort.
+- Referenzen: `p` + base64url des Pfads relativ zur Basisadresse (`dav_http.encode_ref`), dekodiert
+  ohne `..`, Steuerzeichen, Backslash. Auflisten mit `PROPFIND` Depth 1 (nie `infinity`), kein Paging.
+- Schalter `CLOUD_IMPORT_WEBDAV_ENABLED` (Standard `true`); keine Registrierung nötig.
+
+**SSRF-Schutz (`dav_http.py`, gilt für jede Verbindung inkl. Redirects):**
+
+| Regel | Umsetzung |
+|---|---|
+| Schema | nur `https`; `http` nur im Fake-Testmodus über den nachgebauten Transport, `RealDavTransport` verbindet nie unverschlüsselt |
+| Port | 443, 8443 (`ALLOWED_PORTS`) |
+| Adresse | keine Zugangsdaten, Query oder Fragment; keine IP-Literale (auch nicht `2130706433`, `0x7f.1`, `127.1`), keine internen Namen (`localhost`, `*.local`, `*.internal`, `*.home.arpa`, `*.arpa` …), IDN als Punycode |
+| DNS | alle Adressen müssen öffentlich sein; die Meldung an die Person unterscheidet «privat aufgelöst» nicht von «nicht auflösbar» (kein Orakel für interne Namen) (`http.ip_is_public`: privat, Loopback, Link-Local/Metadaten, CGNAT 100.64/10, Multicast, reserviert, ULA, Site-Local, IPv4-mapped, NAT64, 6to4, Teredo gesperrt) |
+| Rebinding | eine Auflösung je Verbindung, verbunden wird mit genau dieser Adresse; TLS mit SNI und Zertifikatsprüfung auf den Namen |
+| Redirects | höchstens 3, jedes Ziel neu geprüft und aufgelöst, Nicht-ASCII prozentkodiert; `PROPFIND` nur auf denselben Ursprung, Downloads auch auf fremde öffentliche Hosts, aber ohne Zugangsdaten (ein 401 dort ist `access_denied`, kein abgelehntes Passwort) |
+| Grössen | `PROPFIND` 16 MiB, 20 000 Einträge; Downloads am Strom gemessen (Typ-Limit) |
+| Zeit | Aufbau 10 s, Lese-Inaktivität 60 s, Gesamtzeit je Anfrage per Watchdog (schliesst den Socket auch mitten im TLS-Handshake oder Header-Empfang): `PROPFIND` 120 s (Verbindungstest 30 s, ohne offene DB-Transaktion), Download 60 s + 256 KiB/s |
+| XML | expat ohne DTD: jede `<!DOCTYPE>`/Entität bricht ab (XXE, Billion Laughs), Tiefe ≤ 32, ≤ 400 000 Elemente; `href` auf fremde Hosts oder ausserhalb der Basis werden ignoriert |
+| Geheimnis | Basic-Auth nur an den eingegebenen Ursprung; `DavCredentials.__repr__` ohne Passwort; Logs nur Methode, Host, Pfad, Status; Validierungsfehler spiegeln das Passwort nicht (`hide_input_in_errors`) |
+
+Grenzen: Ein Server im öffentlichen Internet, dessen Name auf die eigene öffentliche Adresse von hocX
+zeigt, ist erreichbar (nur die öffentlich gerouteten Dienste, wie für jeden Besucher).
 
 ### Neue Quelle hinzufügen
 
