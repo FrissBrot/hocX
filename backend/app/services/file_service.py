@@ -2290,7 +2290,15 @@ class FileService:
             )) for path in paths
         }
         cutoff = time.time() - 24 * 60 * 60  # deutlich länger als der 3-h-Empfang
-        for directory in (Path(settings.upload_root) / "_multipart", Path(settings.upload_root) / "_staging" / "gallery"):
+        # _staging/download: temporäre Download-Kopien (gefilterte Fotos öffentlicher Links, Live-
+        # Photo-ZIPs, Clips ohne Metadaten). Ihr BackgroundTask-unlink läuft nur nach vollständigem
+        # Senden - bei einem Abbruch durch den Client blieben sie sonst für immer liegen (Nachtlauf
+        # 2026-11-25). Nur Dateien direkt darin; der Album-ZIP-Cache (share-zip/) hat eigene Fristen.
+        for directory in (
+            Path(settings.upload_root) / "_multipart",
+            Path(settings.upload_root) / "_staging" / "gallery",
+            Path(settings.upload_root) / "_staging" / "download",
+        ):
             if not directory.exists():
                 continue
             for path in directory.iterdir():
