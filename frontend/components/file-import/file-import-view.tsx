@@ -87,6 +87,11 @@ export function FileImportView({ initialJobs, providers }: { initialJobs: Import
 
   useEffect(() => {
     const result = readCloudReturn(window.location.search, window.location.hash);
+    // Frischer Stand beim Mount: AppShell tauscht beim Wechsel Desktop/Mobil den Baum aus, die
+    // Ansicht wird dann neu gemountet und hätte sonst die veralteten Daten des Seitenaufrufs
+    // (z. B. «nicht verbunden» nach der Anmeldung). Beim Abschluss einer Anmeldung liefert
+    // /oauth/finish den neuen Stand selbst (ein paralleles Neuladen könnte ihn überschreiben).
+    if (!result.finish) void reload().catch(() => undefined);
     if (!result.job && !result.error && !result.notice && !result.finish) return;
     // Token und Codes sofort aus Adresszeile und Verlauf entfernen
     window.history.replaceState(null, "", window.location.pathname);
@@ -102,7 +107,7 @@ export function FileImportView({ initialJobs, providers }: { initialJobs: Import
         showToast(t("cloud.connectedToast", { account: job.connection?.account_label ?? "" }), "success");
       })
       .catch((error) => setCloudError(apiErrorCode(error) ?? "generic"));
-  }, [replaceJob, showToast, t]);
+  }, [reload, replaceJob, showToast, t]);
 
   function rememberFiles(files: PathedFile[]) {
     folderFiles.current = new Map(files.map((entry) => [entry.path, entry.file]));
