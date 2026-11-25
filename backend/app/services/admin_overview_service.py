@@ -17,7 +17,7 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Callable, Literal
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.job_registry import JOB_DEFINITIONS
@@ -329,6 +329,22 @@ def series(db: Session, *, kind: Literal["logins", "errors"], range_: str) -> di
     return {"kind": kind, "range": range_, "bucket_hours": bucket_hours, "points": points, "top_types": top_types}
 
 
+def _backup_status(db: Session) -> str | None:
+    """Status-Punkt am Navigationseintrag Backups (für alle Admins, die Seite lesen dürfen):
+    kritisch/Warnung aus derselben Bewertung wie /admin/backups, sonst «läuft» bei offenem Auftrag."""
+    from app.models import BackupJob, BackupRestoreJob
+    from app.services import backup_admin_service
+
+    if not backup_admin_service.backup_enabled():
+        return None
+    overall, _ = backup_admin_service.evaluate(db)
+    if overall in ("critical", "warning"):
+        return overall
+    running = db.scalar(select(BackupJob.id).where(BackupJob.state.in_(backup_admin_service.OPEN_JOB_STATES)).limit(1)) or \
+        db.scalar(select(BackupRestoreJob.id).where(BackupRestoreJob.state.in_(backup_admin_service.OPEN_RESTORE_STATES)).limit(1))
+    return "running" if running is not None else None
+
+
 def nav_counts(db: Session, *, owner: bool) -> dict:
     def compute() -> dict:
         result: dict[str, int | None] = {
@@ -336,6 +352,7 @@ def nav_counts(db: Session, *, owner: bool) -> dict:
             "verifications_open": _scalar(db, "SELECT count(*) FROM identity_verification_request WHERE status = 'pending'"),
             "security_alerts": None,
             "operations_problems": None,
+            "backup_status": _backup_status(db),
         }
         if owner:
             from app.services import system_alert_service, system_health_service
@@ -353,13 +370,13 @@ def nav_counts(db: Session, *, owner: bool) -> dict:
             result["operations_problems"] = sum(1 for problem in problems if problem.source != "auth")
         return result
 
-    return _cached(f"admin-nav-counts:v1:{'owner' if owner else 'support'}", NAV_COUNTS_TTL_SECONDS, compute)
+    return _cached(f"admin-nav-counts:v2:{'owner' if owner else 'support'}", NAV_COUNTS_TTL_SECONDS, compute)
 
 
 def invalidate_nav_counts() -> None:
     """Nach dem Quittieren einer Warnung: Zähler sofort neu rechnen statt bis zu 60 s alt zeigen."""
     try:
-        get_redis_sync().delete("admin-nav-counts:v1:owner", "admin-nav-counts:v1:support")
+        get_redis_sync().delete("admin-nav-counts:v2:owner", "admin-nav-counts:v2:support")
     except Exception:  # noqa: BLE001 - Cache ist optional
         _logger.warning("Admin-Übersicht: Zähler-Cache nicht löschbar", exc_info=True)
 

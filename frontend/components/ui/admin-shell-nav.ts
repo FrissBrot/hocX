@@ -16,13 +16,17 @@ export type AdminIconKey =
 
 /** Zähler aus GET /api/admin/nav-counts */
 export type AdminNavCountKey = "tenants" | "verifications_open" | "security_alerts" | "operations_problems";
-export type AdminNavCounts = Record<AdminNavCountKey, number | null>;
+/** Status-Punkt eines Eintrags (Backups: läuft/Warnung/kritisch, sonst kein Punkt). */
+export type AdminNavStatus = "running" | "warning" | "critical";
+export type AdminNavCounts = Record<AdminNavCountKey, number | null> & { backup_status?: AdminNavStatus | null };
 
 export type AdminNavLink = {
   href: string;
   labelKey: string;
   icon: AdminIconKey;
   badge?: AdminNavCountKey;
+  /** Status-Punkt aus GET /api/admin/nav-counts (Feld backup_status) */
+  status?: "backup_status";
   ownerOnly?: boolean;
   /** zusätzliche Suchbegriffe für Ctrl+K (Schlüssel in adminShell.keywords.*) */
   keywordsKey?: string;
@@ -80,7 +84,7 @@ const NAV: AdminNavGroup[] = [
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline", ownerOnly: true },
       { href: "/admin/operations/delivery", labelKey: "nav.delivery", icon: "delivery", ownerOnly: true },
       { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
-      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
+      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups", status: "backup_status" },
       { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
     ],
   },
@@ -153,6 +157,13 @@ export function linkCount(link: AdminNavLink, counts: AdminNavCounts | null): nu
   if (!link.badge || !counts) return null;
   const value = counts[link.badge];
   return typeof value === "number" && value > 0 ? value : null;
+}
+
+/** Status-Punkt eines Eintrags (null = kein Punkt, auch bei unbekanntem Wert). */
+export function linkStatus(link: AdminNavLink, counts: AdminNavCounts | null): AdminNavStatus | null {
+  if (!link.status || !counts) return null;
+  const value = counts[link.status];
+  return value === "running" || value === "warning" || value === "critical" ? value : null;
 }
 
 /** Zähler, die Aufmerksamkeit verlangen (Glocke in der Kopfleiste). */

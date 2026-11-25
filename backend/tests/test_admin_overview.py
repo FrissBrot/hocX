@@ -116,7 +116,9 @@ def test_series_only_for_owner(db):
 
 def test_nav_counts_contract(db):
     owner = _client(db, _admin(db, "owner")).get("/api/admin/nav-counts").json()
-    assert set(owner) == {"tenants", "verifications_open", "security_alerts", "operations_problems"}
+    assert set(owner) == {"tenants", "verifications_open", "security_alerts", "operations_problems", "backup_status"}
+    # Backup-Status-Punkt (Backup-Redesign 1.6): nur Codes, auch für Support
+    assert owner["backup_status"] in (None, "running", "warning", "critical")
     assert isinstance(owner["tenants"], int) and isinstance(owner["security_alerts"], int)
     support = _client(db, _admin(db, "support")).get("/api/admin/nav-counts").json()
     assert support["security_alerts"] is None and support["operations_problems"] is None

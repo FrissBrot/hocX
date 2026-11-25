@@ -1,6 +1,6 @@
 {
   "title": "Backup",
-  "description": "Backup esterno cifrato di database e archivio file con BorgBackup sulla Hetzner Storage Box.",
+  "description": "Backup esterno cifrato del database e dell’archivio file con BorgBackup.",
   "loadFailed": "Impossibile caricare lo stato dei backup.",
   "tabs": {
     "overview": "Panoramica",
@@ -18,11 +18,16 @@
     "save": "Salva",
     "startRestore": "Avvia ripristino",
     "startFullRestore": "Avvia ripristino completo",
-    "startTenantRestore": "Ripristina il mandante come copia"
+    "startTenantRestore": "Ripristina il mandante come copia",
+    "previewRefresh": "Aggiorna anteprima",
+    "saveWithPasskey": "Salva con passkey",
+    "startTest": "Avvia test",
+    "verifyNow": "Verifica ora"
   },
   "banner": {
     "disabled": "Il sistema di backup non è ancora configurato (BACKUP_ENABLED). Istruzioni: RUNBOOK, sezione backup.",
-    "workerDown": "Il worker di backup non risponde - al momento i backup non vengono eseguiti."
+    "workerDown": "Il worker di backup non risponde - al momento i backup non vengono eseguiti.",
+    "readOnly": "Solo gli amministratori owner possono avviare backup, avviare ripristini e modificare le impostazioni. Vedi lo stato, ma non puoi modificare nulla."
   },
   "overall": {
     "ok": "In ordine",
@@ -58,7 +63,9 @@
     "workerAlive": "attivo",
     "workerDown": "nessun segnale",
     "lastFailure": "Ultimo backup non riuscito",
-    "failureLine": "{time}: {error}"
+    "failureLine": "{time}: {error}",
+    "lastFailureLine": "Ultimo errore: {time} – {error}",
+    "problemsLabel": "Problemi aperti"
   },
   "level": {
     "created": "creato",
@@ -178,7 +185,9 @@
     "objectsProgress": "{done, number} di {total, number} oggetti verificati",
     "progressAria": "Avanzamento",
     "newData": "{count, plural, one {# nuovo file} other {# nuovi file}} ({size}) trasferiti",
-    "workerIdle": "Il worker non sta elaborando questa attività (attesa o riavvio) - riprenderà automaticamente."
+    "workerIdle": "Il worker non sta elaborando questa attività (attesa o riavvio) - riprenderà automaticamente.",
+    "percent": "{percent, number} %",
+    "stepsLabel": "Fasi dell’incarico"
   },
   "history": {
     "title": "Cronologia",
@@ -189,7 +198,20 @@
     "empty": "Nessuna attività finora.",
     "protected": "protetto",
     "newData": "{count, number} · {size}",
-    "partialDetail": "{count, plural, one {# file mancante} other {# file mancanti}}"
+    "partialDetail": "{count, plural, one {# file mancante} other {# file mancanti}}",
+    "applicationFailed": "Test dell’applicazione fallito",
+    "applicationOk": "Test dell’applicazione superato",
+    "contentsChecked": "{count, number} contenuti verificati",
+    "database": "DB {size}",
+    "deep": "tutti i dati letti",
+    "detailsFor": "Dettagli: {kind}, {time}",
+    "emptyFilter": "Nessun incarico per questo filtro.",
+    "loadFailed": "Non è stato possibile caricare la cronologia.",
+    "objects": "{count, number} oggetti",
+    "retentionKept": "{count, number} conservati",
+    "retentionRemoved": "{count, plural, one {# punto rimosso} other {# punti rimossi}}",
+    "stored": "{size} occupati",
+    "verifying": "Verifica in corso"
   },
   "columns": {
     "time": "Data",
@@ -209,7 +231,10 @@
     "archive": "Punto di ripristino",
     "tenant": "Mandante",
     "users": "Utenti",
-    "size": "Dimensione"
+    "size": "Dimensione",
+    "content": "Contenuto",
+    "job": "Incarico",
+    "result": "Risultato"
   },
   "events": {
     "title": "{count, plural, one {# evento} other {# eventi}}",
@@ -244,7 +269,8 @@
     "verified": "Verificato",
     "cutover_done": "Commutato",
     "rolled_back": "Stato precedente ripristinato",
-    "collected": "Raccolto"
+    "collected": "Raccolto",
+    "audit_carried": "Registro di audit ripreso"
   },
   "detail": {
     "title": "{kind}: dettagli",
@@ -259,7 +285,11 @@
     "storageValue": "{profile}, generazione {generation, number}",
     "objects": "Oggetti",
     "objectsValue": "{count, number} ({size})",
-    "verification": "Prova"
+    "verification": "Prova",
+    "events": "Eventi",
+    "loadFailed": "Non è stato possibile caricare i dettagli.",
+    "loadingTitle": "Dettagli dell’incarico",
+    "tenants": "Clienti nel punto di backup"
   },
   "warning": {
     "missing_objects": "{count, plural, one {# file non è stato salvato} other {# file non sono stati salvati}} (assenti nello storage).",
@@ -307,7 +337,8 @@
     },
     "kindShort": {
       "full": "Completo",
-      "tenant_copy": "Mandante (copia)"
+      "tenant_copy": "Mandante (copia)",
+      "restore_test": "Test di ripristino (isolato)"
     },
     "panelDescription": "{archive} · richiesto {time}",
     "cutoverHint": "L'applicazione è in manutenzione e i database vengono scambiati. Questa pagina può essere brevemente non disponibile.",
@@ -321,7 +352,33 @@
     "replayErasures": "Riapplicare le eliminazioni successive al punto di ripristino",
     "replayErasuresHint": "Persone, file, verbali o mandanti eliminati dopo questo punto di ripristino vengono eliminati di nuovo dopo il ripristino. Disattivare solo in eccezioni motivate.",
     "replayErasuresReason": "Motivo per cui i dati eliminati devono tornare",
-    "passkeyHelp": "All’avvio confermi inoltre il ripristino con la tua passkey."
+    "passkeyHelp": "All’avvio confermi inoltre il ripristino con la tua passkey.",
+    "fullWarning": "Sostituisce database e file dell’intera installazione. Prima viene creato automaticamente un punto di salvataggio dello stato attuale.",
+    "kindLabel": "Tipo di ripristino",
+    "phraseExplain": "Il testo di conferma contiene l’ID breve del punto di backup scelto. La tua conferma vale quindi solo per questo punto – con un altro punto il testo cambia.",
+    "pickPointFirst": "Scegli prima un punto di backup.",
+    "pointHint": "I punti verificati sono più sicuri – un ripristino testato è la prova più forte.",
+    "rail": {
+      "kind": "Tipo e punto",
+      "kindValue": "{kind} · {time}",
+      "target": "Destinazione",
+      "preview": "Anteprima",
+      "previewHint": "Versione, schema, rischi",
+      "checked": "verificato, nessun blocco",
+      "blocked": "bloccato",
+      "confirm": "Conferma",
+      "confirmHint": "Testo e passkey"
+    },
+    "resultFull": "Installazione ripristinata (generazione {generation, number})",
+    "resultRolledBack": "Smoke test fallito – stato precedente di nuovo attivo",
+    "resultTenant": "«{name}» creato, {files, number} file",
+    "resultTestPassed": "Database, {count, number} contenuti e test dell’applicazione superati",
+    "resultTestPassedShort": "Database e test dell’applicazione superati",
+    "showAll": "Mostra tutti i {count, number} punti",
+    "showFewer": "Mostra meno",
+    "tagLowRisk": "a basso rischio",
+    "tagMaintenance": "modalità manutenzione",
+    "tenantMeta": "{users, plural, one {# utente} other {# utenti}} · {size}"
   },
   "preview": {
     "schema": "Schema del database",
@@ -421,7 +478,49 @@
     "notifyOff": "Nessuna (solo problemi)",
     "notifyDaily": "Riepilogo giornaliero",
     "notifyEach": "Dopo ogni backup",
-    "updated": "Ultima modifica di {email}, {time}"
+    "updated": "Ultima modifica di {email}, {time}",
+    "connOk": "Connessione riuscita",
+    "connBad": "Storage Box non raggiungibile",
+    "connUnknown": "Non ancora verificata",
+    "connOkSub": "verificata {time} · raggiungibile, identità del repository corretta",
+    "heavyWindow": "Controllo di integrità e test di ripristino vengono eseguiti solo nella finestra di manutenzione notturna (01–05 ora svizzera), anche se sono dovuti prima.",
+    "intervalShort": "Intervallo",
+    "offsetShort": "Scostamento",
+    "invalid": "Compila tutti i campi nell’intervallo valido; almeno una regola di conservazione deve mantenere dei backup.",
+    "maintenanceKeyAbsentShort": "non sul server",
+    "neverChanged": "Mai modificato",
+    "problemsAlways": "I problemi vengono sempre segnalati.",
+    "recommended": "consigliato",
+    "restoreTestIntervalShort": "Test di ripristino ogni",
+    "retentionSummary": "Retrospettiva di circa {months, number} {months, plural, one {mese} other {mesi}} · circa {points, number} punti a regime",
+    "runsToday": "Esecuzioni oggi (ora svizzera): {times}",
+    "savedNow": "Salvato – vale dalla prossima esecuzione pianificata.",
+    "scheduleOffHint": "I backup automatici sono disattivati. Viene segnalato come problema.",
+    "scheduleText": "Orari in ora svizzera. È salvato lo scostamento dalla mezzanotte UTC ({offset, number} min) – in estate i backup avvengono quindi un’ora più tardi.",
+    "scheduleTitle": "Pianificazione",
+    "segment": {
+      "within": "tutti",
+      "daily": "giornalieri",
+      "weekly": "settimanali",
+      "monthly": "mensili"
+    },
+    "notify": {
+      "off": "Nessuna",
+      "daily": "Giornaliera",
+      "each": "Ogni backup"
+    },
+    "notifyHelp": {
+      "off": "solo problemi",
+      "daily": "un riepilogo",
+      "each": "dopo ogni esecuzione"
+    },
+    "unitDays": "giorni",
+    "unitFiles": "file",
+    "unitHours": "ore",
+    "unitHoursShort": "h",
+    "unitOffset": "min da 00:00 UTC",
+    "unitPoints": "punti",
+    "verifyIntervalShort": "Controllo di integrità ogni"
   },
   "toast": {
     "backupQueued": "Backup avviato, viene eseguito in background.",
@@ -478,5 +577,180 @@
     "borg_disabled": "Il sistema di backup non è configurato.",
     "borg_configuration": "La configurazione di backup non è valida.",
     "backup_pre_s3": "Il backup risale a prima della migrazione S3 – ripristinarlo con hocX 1.2.2."
+  },
+  "age": {
+    "minutes": "{minutes, number} min fa",
+    "hours": "{hours, number} h {minutes, number} min fa",
+    "days": "{days, plural, one {# giorno} other {# giorni}} fa"
+  },
+  "until": {
+    "minutes": "tra {minutes, number} min",
+    "hours": "tra {hours, number} h {minutes, number} min",
+    "days": "tra {days, plural, one {# giorno} other {# giorni}}"
+  },
+  "hero": {
+    "kicker": "Stato generale",
+    "state": {
+      "ok": "In ordine",
+      "running": "Backup in corso",
+      "warning": "Avviso",
+      "critical": "Critico",
+      "disabled": "Non configurato"
+    },
+    "title": {
+      "ok": "Tutti i dati sono salvati esternamente.",
+      "running": "È in corso un backup.",
+      "warning": "Salvato – ma con un avviso.",
+      "critical": "I backup al momento non funzionano in modo affidabile.",
+      "disabled": "Il backup esterno non è configurato."
+    },
+    "text": {
+      "ok": "L’ultimo backup è terminato con successo {age}. Controllo di integrità e test di ripristino sono nei rispettivi intervalli.",
+      "okNever": "Non esiste ancora un backup completato.",
+      "running": "Il servizio continua normalmente. I nuovi caricamenti durante il backup finiscono nel prossimo punto.",
+      "warning": "I dati sono salvati, ma non tutto è come previsto – vedi gli avvisi qui sotto.",
+      "critical": "L’ultimo backup riuscito risale a {age}. I problemi qui sotto impediscono nuovi backup o verifiche.",
+      "criticalNever": "Non esiste ancora un backup riuscito e i problemi qui sotto lo impediscono.",
+      "disabled": "Senza un sistema di backup configurato non vengono creati punti di backup. Istruzioni: RUNBOOK, sezione Backup."
+    },
+    "lastBackup": "Ultimo backup",
+    "lastSuccess": "Ultimo riuscito",
+    "lastSub": "{age} · {duration}",
+    "running": "in corso",
+    "runningSub": "{trigger} avviato {time}",
+    "nextSub": "{in} · pianificazione",
+    "noSchedule": "nessuna pianificazione",
+    "points": "Punti di backup",
+    "protected": "{count, plural, =0 {nessuno protetto} one {di cui # protetto} other {di cui # protetti}}",
+    "pointsLine": "{count, plural, one {# punto di backup} other {# punti di backup}} · {protected, number} protetti"
+  },
+  "infra": {
+    "title": "Infrastruttura",
+    "showConnection": "Vedi connessione",
+    "box": "Storage Box",
+    "lastSignal": "ultimo segnale {time}",
+    "working": "al lavoro",
+    "encryptionSub": "{mode} · lato client",
+    "active": "attiva",
+    "pinned": "ID del repository e chiave host",
+    "pinnedSub": "Identità della Storage Box fissata",
+    "onServer": "sul server",
+    "offline": "offline",
+    "configured": "configurato",
+    "missing": "mancante",
+    "notify": {
+      "off": "ntfy · solo problemi",
+      "daily": "ntfy · riepilogo giornaliero",
+      "each": "ntfy · dopo ogni backup"
+    }
+  },
+  "levels": {
+    "title": "Tre prove",
+    "description": "Creato, verificato e ripristinato con successo sono tre prove diverse – ognuna ha il proprio intervallo.",
+    "created": "Backup creato",
+    "verified": "Integrità verificata",
+    "restoreTested": "Ripristino testato",
+    "never": "mai",
+    "badge": {
+      "current": "aggiornato",
+      "due": "da fare",
+      "soon": "presto da fare",
+      "never": "mancante",
+      "overdue": "in ritardo",
+      "incomplete": "incompleto"
+    },
+    "intervalHours": "Intervallo {hours, number} h",
+    "intervalDays": "Intervallo {days, number} {days, plural, one {giorno} other {giorni}}",
+    "whenDuration": "{time} · {duration}",
+    "next": "prossimo {time}",
+    "dueNow": "da fare",
+    "dueAt": "da fare il {date}",
+    "dueWindow": "da fare – nella prossima finestra di manutenzione notturna",
+    "dueWindowFrom": "dal {date}, nella finestra di manutenzione notturna",
+    "meterLabel": "Parte trascorsa dell’intervallo: {title}",
+    "meterText": "{percent, number} % dell’intervallo trascorso"
+  },
+  "problemTitle": {
+    "disabled": "Backup non configurato",
+    "configuration": "Configurazione non valida",
+    "repository_unreachable": "La Storage Box non è raggiungibile",
+    "repository_id_mismatch": "Repository errato",
+    "repository_not_encrypted": "Repository non cifrato",
+    "passphrase_wrong": "Passphrase errata",
+    "host_key_mismatch": "Chiave host diversa",
+    "capacity_low": "Spazio quasi esaurito",
+    "staging_low": "Poco spazio locale",
+    "never_succeeded": "Nessun backup riuscito",
+    "overdue": "L’ultimo backup riuscito è troppo vecchio",
+    "schedule_disabled": "Pianificazione disattivata",
+    "partial": "L’ultimo backup è incompleto",
+    "last_failed": "Ultimo backup fallito",
+    "verify_failed": "Controllo di integrità fallito",
+    "restore_test_failed": "Test di ripristino fallito",
+    "verify_overdue": "Controllo di integrità in ritardo",
+    "restore_test_overdue": "Test di ripristino in ritardo"
+  },
+  "problemAction": {
+    "settings": "Verifica connessione",
+    "history": "Vedi nella cronologia",
+    "failed": "Apri cronologia"
+  },
+  "severity": {
+    "warning": "Avviso",
+    "critical": "Critico"
+  },
+  "eventLevel": {
+    "warning": "Avviso",
+    "error": "Errore"
+  },
+  "slot": {
+    "ok": "Riuscito",
+    "partial": "Parziale",
+    "failed": "Fallito",
+    "running": "In corso",
+    "missed": "Mancato",
+    "planned": "Pianificato"
+  },
+  "storage": {
+    "title": "Spazio",
+    "used": "Storage Box occupata",
+    "ofQuota": "di {quota}",
+    "usedPercent": "{percent, number} % occupato",
+    "dedupTitle": "Deduplicazione su tutti i punti",
+    "allPoints": "Somma di tutti i punti (senza deduplicazione)",
+    "actual": "Effettivamente occupato",
+    "savings": "−{percent, number} %",
+    "dedupHelp": "Ogni punto contiene lo stato completo – viene salvato solo ciò che è cambiato. Lo spazio dei punti rimossi si libera solo con il compact trimestrale.",
+    "lastPoint": "Ultimo punto di backup",
+    "files": "File",
+    "database": "Dump del database",
+    "objects": "{count, number} oggetti"
+  },
+  "timeline": {
+    "title": "Ultimi 7 giorni",
+    "legend": "Legenda",
+    "markLegend": "Verifica / test di ripristino / manuale",
+    "loading": "Caricamento …",
+    "summary": "Ultimi 7 giorni: {total, number} esecuzioni pianificate, di cui {bad, number} fallite o mancate e {partial, number} parziali.",
+    "daySummary": "{ok, number} riuscite, {failed, number} fallite o mancate, {partial, number} parziali",
+    "dayCount": "{ok, number}/{total, number}",
+    "slotLabel": "{time}: {state}",
+    "noSlots": "nessuna esecuzione",
+    "markLabel": "{kind} {time}: {state}",
+    "mark": {
+      "verify": "Controllo di integrità",
+      "restore_test": "Test di ripristino",
+      "manual": "Backup (manuale)"
+    },
+    "markShort": {
+      "verify": "Verifica",
+      "restore_test": "Test",
+      "manual": "Manuale"
+    },
+    "schedule": "Pianificazione ogni {interval, number} ore, orari in ora svizzera.",
+    "scheduleOff": "La pianificazione automatica è disattivata.",
+    "asTable": "Dati come tabella",
+    "colDay": "Giorno",
+    "colMarks": "Verifiche ed esecuzioni manuali"
   }
 }

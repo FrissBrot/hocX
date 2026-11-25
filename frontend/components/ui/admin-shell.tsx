@@ -21,6 +21,7 @@ import {
   buildAdminNav,
   groupCount,
   linkCount,
+  linkStatus,
   resolveOpenAdminGroup,
   toggleAdminGroup,
   type AdminNavCounts,
@@ -213,20 +214,23 @@ function AdminShellInner({ children, session, environment }: { children: ReactNo
   const renderLink = (link: AdminNavLink) => {
     const active = breadcrumb.link?.href === link.href || (link.href === "/admin" && pathname === "/admin");
     const count = linkCount(link, counts);
+    const navStatus = linkStatus(link, counts);
     const label = t(link.labelKey);
+    const statusText = navStatus ? t(`navStatus.${navStatus}`) : null;
     return (
       <Link
         href={link.href as Route}
         key={link.href}
         className={active ? "nav-link nav-link-active" : "nav-link"}
         aria-current={active ? "page" : undefined}
-        aria-label={compact ? (count !== null ? t("navWithCount", { label, count }) : label) : undefined}
+        aria-label={compact ? (count !== null ? t("navWithCount", { label, count }) : statusText ? t("navWithStatus", { label, status: statusText }) : label) : undefined}
         title={compact ? label : undefined}
         onClick={() => setMobileNavOpen(false)}
       >
         <AdminNavIcon name={link.icon} />
         <span className="nav-link-label">{label}</span>
         {count !== null ? <span className="admin-nav-count">{count}</span> : null}
+        {navStatus ? <span className={`admin-nav-status admin-nav-status-${navStatus}`} title={statusText ?? undefined}><span className="visually-hidden">{statusText}</span></span> : null}
       </Link>
     );
   };

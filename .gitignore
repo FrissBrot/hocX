@@ -57,10 +57,12 @@ infra/traefik/dynamic/tenant-domains.yml
 # Von scripts/deploy.sh erzeugt, enthält ADMIN_GATE_SECRET (SEC-AUTH-001)
 infra/traefik/dynamic/admin-gate.yml
 
-# DB backups and abgabebox uploads — real user data, never committed
-backups/
-# ... aber nicht die gleichnamige Admin-Route
-!frontend/app/admin/backups/
+# DB backups and abgabebox uploads — real user data, never committed.
+# Nur die echten Ablageorte (Repo-Wurzel; backend/backups entsteht im Dev-Stack über den Mount
+# ./backups/storage -> /app/backups/storage), nicht jeder Ordner namens «backups»: sonst fehlte
+# z. B. die Admin-Route frontend/app/admin/(console)/backups/ im Repo.
+/backups/
+/backend/backups/
 storage/abgabebox-uploads/*
 
 # Generated thumbnails (FileService.ensure_thumbnail) — real tenant images, never committed.

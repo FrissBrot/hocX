@@ -81,7 +81,25 @@ def backup_enabled() -> bool:
 # --- Darstellung ------------------------------------------------------------------------------
 
 
-def set_read(row: BackupSet) -> BackupSetRead:
+def backup_job_ids(db: Session, set_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+    """Backup-Auftrag je Sicherungspunkt (aus dem Repository rekonstruierte Punkte haben keinen)."""
+    if not set_ids:
+        return {}
+    rows = db.execute(select(BackupJob.backup_set_id, BackupJob.id).where(BackupJob.kind == "backup", BackupJob.backup_set_id.in_(set_ids))
+                      .order_by(BackupJob.created_at)).all()
+    return {set_id: job_id for set_id, job_id in rows}
+
+
+def set_reads(db: Session, rows: list[BackupSet]) -> list[BackupSetRead]:
+    job_ids = backup_job_ids(db, [row.id for row in rows])
+    return [set_read(row, job_id=job_ids.get(row.id)) for row in rows]
+
+
+def set_read_with_job(db: Session, row: BackupSet) -> BackupSetRead:
+    return set_reads(db, [row])[0]
+
+
+def set_read(row: BackupSet, *, job_id: uuid.UUID | None = None) -> BackupSetRead:
     return BackupSetRead(
         id=row.id, archive_name=row.archive_name, state=row.state, trigger=row.trigger, protected=row.protected,
         protected_reason=row.protected_reason, snapshot_at=row.snapshot_at, finished_at=row.finished_at, app_version=row.app_version,
@@ -91,7 +109,7 @@ def set_read(row: BackupSet) -> BackupSetRead:
         deduplicated_bytes=row.deduplicated_bytes, duration_seconds=row.duration_seconds, verify_state=row.verify_state,
         verified_at=row.verified_at, restore_test_state=row.restore_test_state, restore_tested_at=row.restore_tested_at,
         warnings=[{"code": w.get("code"), "count": w.get("count"), "items": (w.get("items") or [])[:20]} for w in (row.warnings or [])],
-        tenant_count=len(row.tenants or []), reconstructed=row.reconstructed,
+        tenant_count=len(row.tenants or []), reconstructed=row.reconstructed, job_id=job_id,
     )
 
 
@@ -105,8 +123,38 @@ def _duration(started: datetime | None, finished: datetime | None) -> int | None
     return int(((finished or datetime.now(UTC)) - started).total_seconds())
 
 
-def job_read(db: Session, job: BackupJob) -> BackupJobRead:
+def _int(value: Any) -> int | None:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def job_summary(job: BackupJob) -> dict[str, Any]:
+    """Nur Zahlen und Flags aus dem Ergebnis - nie Texte, Pfade oder Meldungen (auch für Support)."""
+    result = job.result or {}
+    if job.kind == "retention":
+        return {k: v for k, v in {"removed": _int(result.get("removed")), "kept": _int(result.get("kept"))}.items() if v is not None}
+    if job.kind == "verify":
+        sample = result.get("content_sample") or {}
+        summary: dict[str, Any] = {"contents_checked": _int(sample.get("contents_checked")), "deep": result.get("verify_data") == "ok"}
+        return {k: v for k, v in summary.items() if v is not None}
+    if job.kind == "restore_test":
+        objects = result.get("objects") or {}
+        application = result.get("application") or {}
+        summary = {"ok": result.get("ok") if isinstance(result.get("ok"), bool) else None,
+                   "contents_checked": _int(objects.get("contents_checked")),
+                   "application_ok": application.get("ok") if isinstance(application.get("ok"), bool) else None,
+                   "mode": objects.get("mode") if objects.get("mode") in ("all", "sample") else None}
+        return {k: v for k, v in summary.items() if v is not None}
+    return {}
+
+
+def job_read(db: Session, job: BackupJob, *, job_ids: dict[uuid.UUID, uuid.UUID] | None = None) -> BackupJobRead:
     backup_set = db.get(BackupSet, job.backup_set_id) if job.backup_set_id else None
+    set_job_id = None
+    if backup_set is not None:
+        if job.kind == "backup":
+            set_job_id = job.id
+        else:
+            set_job_id = (job_ids if job_ids is not None else backup_job_ids(db, [backup_set.id])).get(backup_set.id)
     return BackupJobRead(
         id=job.id, kind=job.kind, trigger=job.trigger, state=job.state, requested_by_email=job.requested_by_email,
         created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at, heartbeat_at=job.heartbeat_at,
@@ -114,7 +162,7 @@ def job_read(db: Session, job: BackupJob) -> BackupJobRead:
         cancel_requested=job.cancel_requested, progress=job.progress or {}, error_code=job.error_code,
         error_message=(job.error_message or "")[:_MESSAGE_LIMIT] or None, warning_count=job.warning_count,
         duration_seconds=_duration(job.started_at, job.finished_at) if job.state not in ("queued",) else None,
-        backup_set=set_read(backup_set) if backup_set else None,
+        backup_set=set_read(backup_set, job_id=set_job_id) if backup_set else None, summary=job_summary(job),
     )
 
 
@@ -247,7 +295,7 @@ def status(db: Session) -> BackupStatusRead:
         heartbeat = max((v for v in (getattr(worker, "last_heartbeat_at", None), getattr(worker, "last_finished_at", None)) if v), default=None)
     return BackupStatusRead(
         enabled=backup_enabled(), overall=overall, problems=problems,
-        last_success=set_read(last_success) if last_success else None,
+        last_success=set_read_with_job(db, last_success) if last_success else None,
         last_failure=job_read(db, last_failure) if last_failure else None,
         next_backup_at=next_backup_at(row, now) if backup_enabled() else None,
         restore_point_count=int(db.scalar(select(func.count()).select_from(sets.subquery())) or 0),
@@ -264,17 +312,23 @@ def status(db: Session) -> BackupStatusRead:
 # --- Aufträge ---------------------------------------------------------------------------------
 
 
-def list_jobs(db: Session, *, kind: str | None, state: str | None, trigger: str | None, offset: int, limit: int) -> BackupJobPage:
-    query = select(BackupJob)
+def list_jobs(db: Session, *, kind: str | None, state: str | None, trigger: str | None, offset: int, limit: int,
+              since: datetime | None = None) -> BackupJobPage:
+    base = select(BackupJob)
     if kind:
-        query = query.where(BackupJob.kind == kind)
-    if state:
-        query = query.where(BackupJob.state == state)
+        base = base.where(BackupJob.kind == kind)
     if trigger:
-        query = query.where(BackupJob.trigger == trigger)
+        base = base.where(BackupJob.trigger == trigger)
+    if since is not None:
+        base = base.where(BackupJob.created_at >= since)
+    scoped = base.subquery()
+    counts = {row_state: int(count) for row_state, count in db.execute(select(scoped.c.state, func.count()).group_by(scoped.c.state)).all()}
+    query = base.where(BackupJob.state == state) if state else base
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     rows = db.scalars(query.order_by(BackupJob.created_at.desc()).offset(offset).limit(limit)).all()
-    return BackupJobPage(items=[job_read(db, job) for job in rows], total=total, offset=offset, limit=limit)
+    set_ids = list({job.backup_set_id for job in rows if job.backup_set_id})
+    job_ids = backup_job_ids(db, set_ids)
+    return BackupJobPage(items=[job_read(db, job, job_ids=job_ids) for job in rows], total=total, offset=offset, limit=limit, counts=counts)
 
 
 def _require_enabled() -> None:
@@ -419,7 +473,7 @@ def preview(db: Session, request: RestorePreviewRequest) -> RestorePreviewRead:
         steps = ["restore_temp_database", "collect_tenant", "restore_files", "import_new_tenant", "verify"]
         estimated = int(tenant.bytes) + int(backup_set.db_dump_bytes or 0)
     return RestorePreviewRead(
-        kind=request.kind, backup_set=set_read(backup_set), schema_state=compat["state"], schema_revision=compat.get("revision"),
+        kind=request.kind, backup_set=set_read_with_job(db, backup_set), schema_state=compat["state"], schema_revision=compat.get("revision"),
         schema_head=compat.get("head"), target_profile_name=profile.name if profile else None,
         target_profile_provider=profile.provider if profile else None, tenant=tenant, new_name=(request.new_name or "").strip() or None,
         name_conflict=name_conflict, steps=steps, risks=risks, blockers=blockers,
@@ -456,7 +510,7 @@ def validate_restore(db: Session, request: Any) -> RestorePreviewRead:
 
 
 def create_restore(db: Session, *, request: Any, actor_email: str, plan: RestorePreviewRead | None = None) -> tuple[BackupRestoreJob, bool]:
-    """request: RestoreCreate (TOTP wurde von der Route bereits geprüft). plan: Ergebnis von
+    """request: RestoreCreate (Passkey-Step-up wurde von der Route bereits geprüft). plan: Ergebnis von
     validate_restore, sonst wird hier geprüft."""
     key = _restore_idempotency_key(request, actor_email)
     existing = find_existing_restore(db, request=request, actor_email=actor_email)
@@ -483,7 +537,7 @@ def create_restore(db: Session, *, request: Any, actor_email: str, plan: Restore
         db.rollback()
         raise BackupAdminError("restore_running", "Es läuft bereits eine Wiederherstellung") from exc
     db.add(BackupEvent(restore_job_id=job.id, kind="requested", actor_email=actor_email,
-                       message="Wiederherstellung bestätigt (frische TOTP-Bestätigung)", details={"kind": request.kind}))
+                       message="Wiederherstellung bestätigt (Phrase und frische Passkey-Bestätigung)", details={"kind": request.kind}))
     db.commit()
     return job, True
 
@@ -498,3 +552,62 @@ def cancel_restore(db: Session, job: BackupRestoreJob, *, actor_email: str) -> B
     db.add(BackupEvent(restore_job_id=job.id, kind="cancel_requested", actor_email=actor_email, message="Abbruch angefordert", level="warning"))
     db.commit()
     return job
+
+
+# --- Nur-Lese-Ansicht (Support-Admins) ----------------------------------------------------------
+# Support sieht Status, Verlauf und Punkte wie Owner, aber weder Adresse/Benutzer der Storage Box
+# noch rohe Fehlermeldungen von Borg, SSH oder PostgreSQL (können Hostnamen, Benutzer und Pfade
+# enthalten). Die Oberfläche zeigt stattdessen den übersetzten Fehlercode (User-Entscheid 2026-11-25).
+
+_SUPPORT_HIDDEN_CONFIG = ("repository", "remote_path")
+
+
+def _redact_repository(repo: RepositoryStatusRead) -> RepositoryStatusRead:
+    return repo.model_copy(update={"error": None})
+
+
+_SUPPORT_EVENT_DETAILS = ("code", "state", "delay_seconds")
+# Ergebnis einer Wiederherstellung für Support: nur, was die Oberfläche anzeigt (keine DB-Namen,
+# Speicherschlüssel, Importhinweise oder Freitext-Begründungen).
+_SUPPORT_RESTORE_RESULT = ("tenant_name", "tenant_public_id", "files_imported", "files_expected", "generation")
+
+
+def _redact_events(events: list[BackupEventRead]) -> list[BackupEventRead]:
+    # Warnungen/Fehler tragen die Rohmeldung (z. B. Retry mit SSH-Fehler) - nur Art und Codes bleiben.
+    return [event if event.level not in ("warning", "error") else
+            event.model_copy(update={"message": None, "details": {k: v for k, v in (event.details or {}).items() if k in _SUPPORT_EVENT_DETAILS}})
+            for event in events]
+
+
+def redact_job(job: BackupJobRead) -> BackupJobRead:
+    update: dict[str, Any] = {"error_message": None}
+    if isinstance(job, BackupJobDetailRead):
+        # Rohes Ergebnis (Schlüssel fehlender/beschädigter Objekte, Prüfdetails) nur für Owner;
+        # Support bekommt die kuratierte Kurzfassung (summary).
+        update["events"] = _redact_events(job.events)
+        update["result"] = None
+    return job.model_copy(update=update)
+
+
+def redact_page(page: BackupJobPage) -> BackupJobPage:
+    return page.model_copy(update={"items": [redact_job(item) for item in page.items]})
+
+
+def redact_restore(job: RestoreJobRead) -> RestoreJobRead:
+    result = {k: v for k, v in (job.result or {}).items() if k in _SUPPORT_RESTORE_RESULT} if job.result is not None else None
+    options = {k: v for k, v in (job.options or {}).items() if isinstance(v, bool)}
+    return job.model_copy(update={"error_message": None, "events": _redact_events(job.events), "result": result, "options": options})
+
+
+def redact_status(value: BackupStatusRead) -> BackupStatusRead:
+    return value.model_copy(update={
+        "repository": _redact_repository(value.repository),
+        "last_failure": redact_job(value.last_failure) if value.last_failure else None,
+        "current_job": redact_job(value.current_job) if value.current_job else None,
+        "current_restore": redact_restore(value.current_restore) if value.current_restore else None,
+    })
+
+
+def redact_settings(value: BackupSettingsRead) -> BackupSettingsRead:
+    config = {k: v for k, v in (value.worker_config or {}).items() if k not in _SUPPORT_HIDDEN_CONFIG}
+    return value.model_copy(update={"worker_config": config, "repository": _redact_repository(value.repository)})

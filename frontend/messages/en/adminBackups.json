@@ -1,6 +1,6 @@
 {
   "title": "Backups",
-  "description": "Encrypted offsite backup of the database and file storage with BorgBackup on the Hetzner Storage Box.",
+  "description": "Encrypted off-site backup of the database and file storage with BorgBackup.",
   "loadFailed": "The backup status could not be loaded.",
   "tabs": {
     "overview": "Overview",
@@ -18,11 +18,16 @@
     "save": "Save",
     "startRestore": "Start restore",
     "startFullRestore": "Start full restore",
-    "startTenantRestore": "Restore tenant as a copy"
+    "startTenantRestore": "Restore tenant as a copy",
+    "previewRefresh": "Refresh preview",
+    "saveWithPasskey": "Save with passkey",
+    "startTest": "Start test",
+    "verifyNow": "Check now"
   },
   "banner": {
     "disabled": "The backup system has not been set up yet (BACKUP_ENABLED). Instructions: RUNBOOK, backup section.",
-    "workerDown": "The backup worker is not reporting - backups are currently not running."
+    "workerDown": "The backup worker is not reporting - backups are currently not running.",
+    "readOnly": "Only owner administrators can start backups, trigger restores and change settings. You can see the status but cannot change anything."
   },
   "overall": {
     "ok": "OK",
@@ -58,7 +63,9 @@
     "workerAlive": "active",
     "workerDown": "not reporting",
     "lastFailure": "Last failed backup",
-    "failureLine": "{time}: {error}"
+    "failureLine": "{time}: {error}",
+    "lastFailureLine": "Last failure: {time} – {error}",
+    "problemsLabel": "Open problems"
   },
   "level": {
     "created": "created",
@@ -178,7 +185,9 @@
     "objectsProgress": "{done, number} of {total, number} objects checked",
     "progressAria": "Progress",
     "newData": "{count, plural, one {# new file} other {# new files}} ({size}) transferred",
-    "workerIdle": "The worker is not processing this job right now (waiting or restarting) - it will continue automatically."
+    "workerIdle": "The worker is not processing this job right now (waiting or restarting) - it will continue automatically.",
+    "percent": "{percent, number} %",
+    "stepsLabel": "Job steps"
   },
   "history": {
     "title": "History",
@@ -189,7 +198,20 @@
     "empty": "No jobs yet.",
     "protected": "protected",
     "newData": "{count, number} · {size}",
-    "partialDetail": "{count, plural, one {# file was missing} other {# files were missing}}"
+    "partialDetail": "{count, plural, one {# file was missing} other {# files were missing}}",
+    "applicationFailed": "Application test failed",
+    "applicationOk": "Application test passed",
+    "contentsChecked": "{count, number} contents checked",
+    "database": "DB {size}",
+    "deep": "all data read",
+    "detailsFor": "Details: {kind}, {time}",
+    "emptyFilter": "No jobs for this filter.",
+    "loadFailed": "The history could not be loaded.",
+    "objects": "{count, number} objects",
+    "retentionKept": "{count, number} kept",
+    "retentionRemoved": "{count, plural, one {# point removed} other {# points removed}}",
+    "stored": "{size} stored",
+    "verifying": "Check running"
   },
   "columns": {
     "time": "Time",
@@ -209,7 +231,10 @@
     "archive": "Restore point",
     "tenant": "Tenant",
     "users": "Users",
-    "size": "Size"
+    "size": "Size",
+    "content": "Content",
+    "job": "Job",
+    "result": "Result"
   },
   "events": {
     "title": "{count, plural, one {# event} other {# events}}",
@@ -244,7 +269,8 @@
     "verified": "Verified",
     "cutover_done": "Switched over",
     "rolled_back": "Rolled back",
-    "collected": "Collected"
+    "collected": "Collected",
+    "audit_carried": "Audit log carried over"
   },
   "detail": {
     "title": "{kind}: details",
@@ -259,7 +285,11 @@
     "storageValue": "{profile}, generation {generation, number}",
     "objects": "Objects",
     "objectsValue": "{count, number} ({size})",
-    "verification": "Evidence"
+    "verification": "Evidence",
+    "events": "Events",
+    "loadFailed": "The details could not be loaded.",
+    "loadingTitle": "Job details",
+    "tenants": "Tenants in the restore point"
   },
   "warning": {
     "missing_objects": "{count, plural, one {# file could} other {# files could}} not be backed up (not present in storage).",
@@ -307,7 +337,8 @@
     },
     "kindShort": {
       "full": "Full",
-      "tenant_copy": "Tenant (copy)"
+      "tenant_copy": "Tenant (copy)",
+      "restore_test": "Restore test (isolated)"
     },
     "panelDescription": "{archive} · requested {time}",
     "cutoverHint": "The application is in maintenance mode and the databases are being swapped. This page may be briefly unavailable.",
@@ -321,7 +352,33 @@
     "replayErasures": "Re-apply deletions made after the restore point",
     "replayErasuresHint": "People, files, protocols or tenants deleted after this restore point are deleted again after the restore. Only switch off in justified exceptions.",
     "replayErasuresReason": "Reason why deleted data should come back",
-    "passkeyHelp": "When you start, you additionally confirm the restore with your passkey."
+    "passkeyHelp": "When you start, you additionally confirm the restore with your passkey.",
+    "fullWarning": "Replaces the database and files of the entire installation. A rescue point of the current state is created automatically first.",
+    "kindLabel": "Type of restore",
+    "phraseExplain": "The confirmation text contains the short ID of the selected restore point. Your confirmation therefore only applies to exactly this point – for another point the text changes.",
+    "pickPointFirst": "Select a restore point first.",
+    "pointHint": "Checked points are safer – a tested restore is the strongest proof.",
+    "rail": {
+      "kind": "Type and point",
+      "kindValue": "{kind} · {time}",
+      "target": "Target",
+      "preview": "Preview",
+      "previewHint": "Version, schema, risks",
+      "checked": "checked, no blockers",
+      "blocked": "blocked",
+      "confirm": "Confirmation",
+      "confirmHint": "Text and passkey"
+    },
+    "resultFull": "Installation restored (generation {generation, number})",
+    "resultRolledBack": "Smoke test failed – previous state active again",
+    "resultTenant": "“{name}” created, {files, number} files",
+    "resultTestPassed": "Database, {count, number} contents and application test passed",
+    "resultTestPassedShort": "Database and application test passed",
+    "showAll": "Show all {count, number} points",
+    "showFewer": "Show fewer",
+    "tagLowRisk": "low risk",
+    "tagMaintenance": "maintenance mode",
+    "tenantMeta": "{users, plural, one {# user} other {# users}} · {size}"
   },
   "preview": {
     "schema": "Database schema",
@@ -421,7 +478,49 @@
     "notifyOff": "None (problems only)",
     "notifyDaily": "Daily summary",
     "notifyEach": "After every backup",
-    "updated": "Last changed by {email}, {time}"
+    "updated": "Last changed by {email}, {time}",
+    "connOk": "Connection successful",
+    "connBad": "Storage Box unreachable",
+    "connUnknown": "Not checked yet",
+    "connOkSub": "checked {time} · reachable, repository identity matches",
+    "heavyWindow": "Integrity check and restore test only run in the nightly maintenance window (01–05 Swiss time), even if they are due earlier.",
+    "intervalShort": "Interval",
+    "offsetShort": "Offset",
+    "invalid": "Please fill in all fields within the valid range; at least one retention rule must keep backups.",
+    "maintenanceKeyAbsentShort": "not on the server",
+    "neverChanged": "Never changed",
+    "problemsAlways": "Problems are always reported.",
+    "recommended": "recommended",
+    "restoreTestIntervalShort": "Restore test every",
+    "retentionSummary": "Look-back of about {months, number} {months, plural, one {month} other {months}} · around {points, number} points when fully built up",
+    "runsToday": "Runs today (Swiss time): {times}",
+    "savedNow": "Saved – applies from the next scheduled run.",
+    "scheduleOffHint": "Automatic backups are switched off. This is reported as a problem.",
+    "scheduleText": "Times in Swiss time. The offset from midnight UTC is stored ({offset, number} min) – in summer the backups therefore run one hour later.",
+    "scheduleTitle": "Schedule",
+    "segment": {
+      "within": "all",
+      "daily": "daily",
+      "weekly": "weekly",
+      "monthly": "monthly"
+    },
+    "notify": {
+      "off": "None",
+      "daily": "Daily",
+      "each": "Every backup"
+    },
+    "notifyHelp": {
+      "off": "problems only",
+      "daily": "one summary",
+      "each": "after every run"
+    },
+    "unitDays": "days",
+    "unitFiles": "files",
+    "unitHours": "hours",
+    "unitHoursShort": "h",
+    "unitOffset": "min from 00:00 UTC",
+    "unitPoints": "points",
+    "verifyIntervalShort": "Integrity check every"
   },
   "toast": {
     "backupQueued": "Backup started and running in the background.",
@@ -478,5 +577,180 @@
     "borg_disabled": "The backup system is not set up.",
     "borg_configuration": "The backup configuration is invalid.",
     "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.2."
+  },
+  "age": {
+    "minutes": "{minutes, number} min ago",
+    "hours": "{hours, number} h {minutes, number} min ago",
+    "days": "{days, plural, one {# day} other {# days}} ago"
+  },
+  "until": {
+    "minutes": "in {minutes, number} min",
+    "hours": "in {hours, number} h {minutes, number} min",
+    "days": "in {days, plural, one {# day} other {# days}}"
+  },
+  "hero": {
+    "kicker": "Overall status",
+    "state": {
+      "ok": "OK",
+      "running": "Backup running",
+      "warning": "Warning",
+      "critical": "Critical",
+      "disabled": "Not set up"
+    },
+    "title": {
+      "ok": "All data is backed up off-site.",
+      "running": "A backup is running.",
+      "warning": "Backed up – with a notice.",
+      "critical": "Backups are currently not running reliably.",
+      "disabled": "Off-site backup is not set up."
+    },
+    "text": {
+      "ok": "The last backup completed successfully {age}. Integrity check and restore test are within their intervals.",
+      "okNever": "There is no completed backup yet.",
+      "running": "Operation continues normally. New uploads during the backup go into the next restore point.",
+      "warning": "The data is backed up, but not everything is as expected – see the notices below.",
+      "critical": "The last successful backup ran {age}. The problems below prevent new backups or checks.",
+      "criticalNever": "There is no successful backup yet, and the problems below prevent one.",
+      "disabled": "Without a configured backup system no restore points are created. Instructions: RUNBOOK, backup section."
+    },
+    "lastBackup": "Last backup",
+    "lastSuccess": "Last successful",
+    "lastSub": "{age} · {duration}",
+    "running": "running",
+    "runningSub": "{trigger} started {time}",
+    "nextSub": "{in} · schedule",
+    "noSchedule": "no schedule",
+    "points": "Restore points",
+    "protected": "{count, plural, =0 {none protected} one {# protected} other {# protected}}",
+    "pointsLine": "{count, plural, one {# restore point} other {# restore points}} · {protected, number} protected"
+  },
+  "infra": {
+    "title": "Infrastructure",
+    "showConnection": "View connection",
+    "box": "Storage Box",
+    "lastSignal": "last signal {time}",
+    "working": "working",
+    "encryptionSub": "{mode} · client-side",
+    "active": "active",
+    "pinned": "Repository ID and host key",
+    "pinnedSub": "Storage Box identity pinned",
+    "onServer": "on the server",
+    "offline": "offline",
+    "configured": "configured",
+    "missing": "missing",
+    "notify": {
+      "off": "ntfy · problems only",
+      "daily": "ntfy · daily summary",
+      "each": "ntfy · after every backup"
+    }
+  },
+  "levels": {
+    "title": "Three proofs",
+    "description": "Created, checked and successfully restored are three different proofs – each has its own interval.",
+    "created": "Backup created",
+    "verified": "Integrity checked",
+    "restoreTested": "Restore tested",
+    "never": "never",
+    "badge": {
+      "current": "current",
+      "due": "due",
+      "soon": "due soon",
+      "never": "missing",
+      "overdue": "overdue",
+      "incomplete": "incomplete"
+    },
+    "intervalHours": "Interval {hours, number} h",
+    "intervalDays": "Interval {days, number} {days, plural, one {day} other {days}}",
+    "whenDuration": "{time} · {duration}",
+    "next": "next {time}",
+    "dueNow": "due",
+    "dueAt": "due {date}",
+    "dueWindow": "due – runs in the next nightly maintenance window",
+    "dueWindowFrom": "from {date}, in the nightly maintenance window",
+    "meterLabel": "Elapsed share of the interval: {title}",
+    "meterText": "{percent, number} % of the interval elapsed"
+  },
+  "problemTitle": {
+    "disabled": "Backup not set up",
+    "configuration": "Invalid configuration",
+    "repository_unreachable": "The Storage Box is unreachable",
+    "repository_id_mismatch": "Wrong repository",
+    "repository_not_encrypted": "Repository not encrypted",
+    "passphrase_wrong": "Wrong passphrase",
+    "host_key_mismatch": "Host key mismatch",
+    "capacity_low": "Storage almost full",
+    "staging_low": "Little local space",
+    "never_succeeded": "No successful backup yet",
+    "overdue": "The last successful backup is too old",
+    "schedule_disabled": "Schedule switched off",
+    "partial": "The last backup is incomplete",
+    "last_failed": "Last backup failed",
+    "verify_failed": "Integrity check failed",
+    "restore_test_failed": "Restore test failed",
+    "verify_overdue": "Integrity check overdue",
+    "restore_test_overdue": "Restore test overdue"
+  },
+  "problemAction": {
+    "settings": "Check connection",
+    "history": "View in history",
+    "failed": "Open history"
+  },
+  "severity": {
+    "warning": "Warning",
+    "critical": "Critical"
+  },
+  "eventLevel": {
+    "warning": "Warning",
+    "error": "Error"
+  },
+  "slot": {
+    "ok": "Successful",
+    "partial": "Partial",
+    "failed": "Failed",
+    "running": "Running",
+    "missed": "Missed",
+    "planned": "Planned"
+  },
+  "storage": {
+    "title": "Storage",
+    "used": "Storage Box used",
+    "ofQuota": "of {quota}",
+    "usedPercent": "{percent, number} % used",
+    "dedupTitle": "Deduplication across all points",
+    "allPoints": "Sum of all points (without deduplication)",
+    "actual": "Actually used",
+    "savings": "−{percent, number} %",
+    "dedupHelp": "Each point contains the full state – only what changed is stored. Space from removed points is only freed by the quarterly compact.",
+    "lastPoint": "Latest restore point",
+    "files": "Files",
+    "database": "Database dump",
+    "objects": "{count, number} objects"
+  },
+  "timeline": {
+    "title": "Last 7 days",
+    "legend": "Legend",
+    "markLegend": "Check / restore test / manual",
+    "loading": "Loading …",
+    "summary": "Last 7 days: {total, number} scheduled runs, {bad, number} of them failed or missed and {partial, number} partial.",
+    "daySummary": "{ok, number} successful, {failed, number} failed or missed, {partial, number} partial",
+    "dayCount": "{ok, number}/{total, number}",
+    "slotLabel": "{time}: {state}",
+    "noSlots": "no run",
+    "markLabel": "{kind} {time}: {state}",
+    "mark": {
+      "verify": "Integrity check",
+      "restore_test": "Restore test",
+      "manual": "Backup (manual)"
+    },
+    "markShort": {
+      "verify": "Check",
+      "restore_test": "Test",
+      "manual": "Manual"
+    },
+    "schedule": "Schedule every {interval, number} hours, times in Swiss time.",
+    "scheduleOff": "The automatic schedule is switched off.",
+    "asTable": "Data as table",
+    "colDay": "Day",
+    "colMarks": "Checks and manual runs"
   }
 }

@@ -87,6 +87,12 @@
   "accountSettings": "Profile & passkeys",
   "accountSettingsLoadFailed": "The account settings could not be loaded.",
   "navWithCount": "{label} ({count})",
+  "navWithStatus": "{label} ({status})",
+  "navStatus": {
+    "running": "Backup running",
+    "warning": "Warning",
+    "critical": "Critical"
+  },
   "compactSidebar": "Compact",
   "expandSidebar": "Expand sidebar",
   "detail": "Detail",

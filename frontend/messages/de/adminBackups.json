@@ -1,6 +1,6 @@
 {
   "title": "Backups",
-  "description": "Verschlüsselte Offsite-Sicherung von Datenbank und Dateispeicher mit BorgBackup auf der Hetzner Storage Box.",
+  "description": "Verschlüsselte Offsite-Sicherung von Datenbank und Dateispeicher mit BorgBackup.",
   "loadFailed": "Der Backup-Status konnte nicht geladen werden.",
   "tabs": {
     "overview": "Übersicht",
@@ -18,11 +18,16 @@
     "save": "Speichern",
     "startRestore": "Wiederherstellung starten",
     "startFullRestore": "Vollständige Wiederherstellung starten",
-    "startTenantRestore": "Mandant als Kopie wiederherstellen"
+    "startTenantRestore": "Mandant als Kopie wiederherstellen",
+    "previewRefresh": "Vorschau aktualisieren",
+    "saveWithPasskey": "Mit Passkey speichern",
+    "startTest": "Test starten",
+    "verifyNow": "Jetzt prüfen"
   },
   "banner": {
     "disabled": "Das Backup-System ist noch nicht eingerichtet (BACKUP_ENABLED). Anleitung: RUNBOOK, Abschnitt Backup.",
-    "workerDown": "Der Backup-Worker meldet sich nicht - Sicherungen laufen derzeit nicht."
+    "workerDown": "Der Backup-Worker meldet sich nicht - Sicherungen laufen derzeit nicht.",
+    "readOnly": "Nur Owner-Administratoren können Backups starten, Wiederherstellungen auslösen und Einstellungen ändern. Du siehst den Zustand, kannst aber nichts verändern."
   },
   "overall": {
     "ok": "In Ordnung",
@@ -58,7 +63,9 @@
     "workerAlive": "aktiv",
     "workerDown": "keine Meldung",
     "lastFailure": "Letztes fehlgeschlagenes Backup",
-    "failureLine": "{time}: {error}"
+    "failureLine": "{time}: {error}",
+    "lastFailureLine": "Letzter Fehlschlag: {time} – {error}",
+    "problemsLabel": "Offene Probleme"
   },
   "level": {
     "created": "erstellt",
@@ -178,7 +185,9 @@
     "objectsProgress": "{done, number} von {total, number} Objekten geprüft",
     "progressAria": "Fortschritt",
     "newData": "{count, plural, one {# neue Datei} other {# neue Dateien}} ({size}) übertragen",
-    "workerIdle": "Der Worker bearbeitet diesen Auftrag gerade nicht (Wartezeit oder Neustart) - er setzt automatisch fort."
+    "workerIdle": "Der Worker bearbeitet diesen Auftrag gerade nicht (Wartezeit oder Neustart) - er setzt automatisch fort.",
+    "percent": "{percent, number} %",
+    "stepsLabel": "Schritte des Auftrags"
   },
   "history": {
     "title": "Verlauf",
@@ -189,7 +198,20 @@
     "empty": "Noch keine Aufträge.",
     "protected": "geschützt",
     "newData": "{count, number} · {size}",
-    "partialDetail": "{count, plural, one {# Datei fehlte} other {# Dateien fehlten}}"
+    "partialDetail": "{count, plural, one {# Datei fehlte} other {# Dateien fehlten}}",
+    "applicationFailed": "Anwendungstest fehlgeschlagen",
+    "applicationOk": "Anwendungstest bestanden",
+    "contentsChecked": "{count, number} Inhalte geprüft",
+    "database": "DB {size}",
+    "deep": "alle Daten gelesen",
+    "detailsFor": "Details: {kind}, {time}",
+    "emptyFilter": "Keine Aufträge für diesen Filter.",
+    "loadFailed": "Der Verlauf konnte nicht geladen werden.",
+    "objects": "{count, number} Objekte",
+    "retentionKept": "{count, number} behalten",
+    "retentionRemoved": "{count, plural, one {# Punkt entfernt} other {# Punkte entfernt}}",
+    "stored": "{size} belegt",
+    "verifying": "Prüfung läuft"
   },
   "columns": {
     "time": "Zeitpunkt",
@@ -209,7 +231,10 @@
     "archive": "Sicherungspunkt",
     "tenant": "Mandant",
     "users": "Benutzer",
-    "size": "Grösse"
+    "size": "Grösse",
+    "content": "Inhalt",
+    "job": "Auftrag",
+    "result": "Ergebnis"
   },
   "events": {
     "title": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
@@ -244,7 +269,8 @@
     "verified": "Geprüft",
     "cutover_done": "Umgeschaltet",
     "rolled_back": "Zurückgerollt",
-    "collected": "Gesammelt"
+    "collected": "Gesammelt",
+    "audit_carried": "Audit-Log übernommen"
   },
   "detail": {
     "title": "{kind}: Details",
@@ -259,7 +285,11 @@
     "storageValue": "{profile}, Generation {generation, number}",
     "objects": "Objekte",
     "objectsValue": "{count, number} ({size})",
-    "verification": "Nachweis"
+    "verification": "Nachweis",
+    "events": "Ereignisse",
+    "loadFailed": "Die Details konnten nicht geladen werden.",
+    "loadingTitle": "Auftragsdetails",
+    "tenants": "Mandanten im Sicherungspunkt"
   },
   "warning": {
     "missing_objects": "{count, plural, one {# Datei konnte} other {# Dateien konnten}} nicht gesichert werden (im Speicher nicht vorhanden).",
@@ -307,7 +337,8 @@
     },
     "kindShort": {
       "full": "Vollständig",
-      "tenant_copy": "Mandant (Kopie)"
+      "tenant_copy": "Mandant (Kopie)",
+      "restore_test": "Restore-Test (isoliert)"
     },
     "panelDescription": "{archive} · angefordert {time}",
     "cutoverHint": "Die Anwendung ist im Wartungsmodus, die Datenbanken werden getauscht. Diese Ansicht kann kurz nicht erreichbar sein.",
@@ -321,7 +352,33 @@
     "replayErasures": "Löschungen nach dem Sicherungspunkt erneut anwenden",
     "replayErasuresHint": "Personen, Dateien, Protokolle oder Mandanten, die nach diesem Sicherungspunkt gelöscht wurden, werden nach dem Restore wieder gelöscht. Nur in begründeten Ausnahmen abschalten.",
     "replayErasuresReason": "Begründung, warum gelöschte Daten zurückkommen sollen",
-    "passkeyHelp": "Beim Start bestätigst du die Wiederherstellung zusätzlich mit deinem Passkey."
+    "passkeyHelp": "Beim Start bestätigst du die Wiederherstellung zusätzlich mit deinem Passkey.",
+    "fullWarning": "Ersetzt Datenbank und Dateien der gesamten Installation. Vorher wird automatisch ein Rettungspunkt des aktuellen Zustands erstellt.",
+    "kindLabel": "Art der Wiederherstellung",
+    "phraseExplain": "Der Bestätigungstext enthält die Kurz-ID des gewählten Sicherungspunkts. So gilt deine Bestätigung nur für genau diesen Punkt – bei einem anderen Punkt ändert sich der Text.",
+    "pickPointFirst": "Zuerst einen Sicherungspunkt wählen.",
+    "pointHint": "Geprüfte Punkte sind sicherer – ein getesteter Restore ist der stärkste Nachweis.",
+    "rail": {
+      "kind": "Art und Punkt",
+      "kindValue": "{kind} · {time}",
+      "target": "Ziel",
+      "preview": "Vorschau",
+      "previewHint": "Version, Schema, Risiken",
+      "checked": "geprüft, keine Blocker",
+      "blocked": "blockiert",
+      "confirm": "Bestätigung",
+      "confirmHint": "Text und Passkey"
+    },
+    "resultFull": "Installation wiederhergestellt (Generation {generation, number})",
+    "resultRolledBack": "Smoke-Test fehlgeschlagen – bisheriger Stand wieder aktiv",
+    "resultTenant": "„{name}“ angelegt, {files, number} Dateien",
+    "resultTestPassed": "Datenbank, {count, number} Inhalte und Anwendungstest bestanden",
+    "resultTestPassedShort": "Datenbank und Anwendungstest bestanden",
+    "showAll": "Alle {count, number} Punkte anzeigen",
+    "showFewer": "Weniger anzeigen",
+    "tagLowRisk": "risikoarm",
+    "tagMaintenance": "Wartungsmodus",
+    "tenantMeta": "{users, plural, one {# Benutzer} other {# Benutzer}} · {size}"
   },
   "preview": {
     "schema": "Datenbankschema",
@@ -421,7 +478,49 @@
     "notifyOff": "Keine (nur Probleme)",
     "notifyDaily": "Tägliche Zusammenfassung",
     "notifyEach": "Nach jedem Backup",
-    "updated": "Zuletzt geändert von {email}, {time}"
+    "updated": "Zuletzt geändert von {email}, {time}",
+    "connOk": "Verbindung erfolgreich",
+    "connBad": "Storage Box nicht erreichbar",
+    "connUnknown": "Noch nicht geprüft",
+    "connOkSub": "geprüft {time} · erreichbar, Repository-Identität stimmt",
+    "heavyWindow": "Integritätsprüfung und Restore-Test laufen nur im nächtlichen Wartungsfenster (01–05 Uhr Schweizer Zeit), auch wenn sie früher fällig sind.",
+    "intervalShort": "Intervall",
+    "offsetShort": "Versatz",
+    "invalid": "Bitte alle Felder im gültigen Bereich ausfüllen; mindestens eine Aufbewahrungsregel muss Sicherungen behalten.",
+    "maintenanceKeyAbsentShort": "nicht auf dem Server",
+    "neverChanged": "Noch nie geändert",
+    "problemsAlways": "Probleme werden immer gemeldet.",
+    "recommended": "empfohlen",
+    "restoreTestIntervalShort": "Restore-Test alle",
+    "retentionSummary": "Rückblick bis ca. {months, number} {months, plural, one {Monat} other {Monate}} · bei vollem Ausbau rund {points, number} Punkte",
+    "runsToday": "Läufe heute (Schweizer Zeit): {times}",
+    "savedNow": "Gespeichert – gilt ab dem nächsten Planlauf.",
+    "scheduleOffHint": "Automatische Backups sind abgeschaltet. Das wird als Problem gemeldet.",
+    "scheduleText": "Uhrzeiten in Schweizer Zeit. Gespeichert ist der Versatz ab Mitternacht UTC ({offset, number} Min.) – im Sommer laufen die Backups darum eine Stunde später.",
+    "scheduleTitle": "Zeitplan",
+    "segment": {
+      "within": "alle",
+      "daily": "täglich",
+      "weekly": "wöchentlich",
+      "monthly": "monatlich"
+    },
+    "notify": {
+      "off": "Keine",
+      "daily": "Täglich",
+      "each": "Jedes Backup"
+    },
+    "notifyHelp": {
+      "off": "nur Probleme",
+      "daily": "eine Zusammenfassung",
+      "each": "nach jedem Lauf"
+    },
+    "unitDays": "Tage",
+    "unitFiles": "Dateien",
+    "unitHours": "Stunden",
+    "unitHoursShort": "h",
+    "unitOffset": "Min. ab 00:00 UTC",
+    "unitPoints": "Punkte",
+    "verifyIntervalShort": "Integritätsprüfung alle"
   },
   "toast": {
     "backupQueued": "Backup wurde gestartet und läuft im Hintergrund.",
@@ -478,5 +577,180 @@
     "borg_disabled": "Das Backup-System ist nicht eingerichtet.",
     "borg_configuration": "Die Backup-Konfiguration ist ungültig.",
     "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.2 wiederherstellen."
+  },
+  "age": {
+    "minutes": "vor {minutes, number} min",
+    "hours": "vor {hours, number} h {minutes, number} min",
+    "days": "vor {days, plural, one {# Tag} other {# Tagen}}"
+  },
+  "until": {
+    "minutes": "in {minutes, number} min",
+    "hours": "in {hours, number} h {minutes, number} min",
+    "days": "in {days, plural, one {# Tag} other {# Tagen}}"
+  },
+  "hero": {
+    "kicker": "Gesamtstatus",
+    "state": {
+      "ok": "In Ordnung",
+      "running": "Backup läuft",
+      "warning": "Warnung",
+      "critical": "Kritisch",
+      "disabled": "Nicht eingerichtet"
+    },
+    "title": {
+      "ok": "Alle Daten sind offsite gesichert.",
+      "running": "Ein Backup läuft gerade.",
+      "warning": "Gesichert – aber mit einem Hinweis.",
+      "critical": "Backups laufen derzeit nicht zuverlässig.",
+      "disabled": "Das Offsite-Backup ist nicht eingerichtet."
+    },
+    "text": {
+      "ok": "Das letzte Backup lief {age} erfolgreich durch. Integritätsprüfung und Restore-Test liegen innerhalb ihrer Intervalle.",
+      "okNever": "Es gibt noch keine abgeschlossene Sicherung.",
+      "running": "Der Betrieb läuft normal weiter. Neue Uploads während des Backups landen im nächsten Sicherungspunkt.",
+      "warning": "Die Daten sind gesichert, aber nicht alles ist wie erwartet – siehe Hinweise unten.",
+      "critical": "Das letzte erfolgreiche Backup lief {age}. Die Probleme unten verhindern neue Sicherungen oder Nachweise.",
+      "criticalNever": "Es gibt noch keine erfolgreiche Sicherung, und die Probleme unten verhindern sie.",
+      "disabled": "Ohne eingerichtetes Backup-System entstehen keine Sicherungspunkte. Anleitung: RUNBOOK, Abschnitt Backup."
+    },
+    "lastBackup": "Letztes Backup",
+    "lastSuccess": "Letztes erfolgreiches",
+    "lastSub": "{age} · {duration}",
+    "running": "läuft",
+    "runningSub": "{trigger} gestartet {time}",
+    "nextSub": "{in} · Zeitplan",
+    "noSchedule": "kein Zeitplan",
+    "points": "Sicherungspunkte",
+    "protected": "{count, plural, =0 {keiner geschützt} one {davon # geschützt} other {davon # geschützt}}",
+    "pointsLine": "{count, plural, one {# Sicherungspunkt} other {# Sicherungspunkte}} · {protected, number} geschützt"
+  },
+  "infra": {
+    "title": "Infrastruktur",
+    "showConnection": "Verbindung ansehen",
+    "box": "Storage Box",
+    "lastSignal": "letzte Meldung {time}",
+    "working": "arbeitet",
+    "encryptionSub": "{mode} · clientseitig",
+    "active": "aktiv",
+    "pinned": "Repository-ID und Host-Key",
+    "pinnedSub": "Identität der Storage Box gepinnt",
+    "onServer": "auf dem Server",
+    "offline": "offline",
+    "configured": "eingerichtet",
+    "missing": "fehlt",
+    "notify": {
+      "off": "ntfy · nur Probleme",
+      "daily": "ntfy · tägliche Zusammenfassung",
+      "each": "ntfy · nach jedem Backup"
+    }
+  },
+  "levels": {
+    "title": "Drei Nachweise",
+    "description": "Erstellt, geprüft und erfolgreich wiederhergestellt sind drei verschiedene Nachweise – jeder hat sein eigenes Intervall.",
+    "created": "Backup erstellt",
+    "verified": "Integrität geprüft",
+    "restoreTested": "Restore getestet",
+    "never": "noch nie",
+    "badge": {
+      "current": "aktuell",
+      "due": "fällig",
+      "soon": "bald fällig",
+      "never": "fehlt",
+      "overdue": "überfällig",
+      "incomplete": "unvollständig"
+    },
+    "intervalHours": "Intervall {hours, number} h",
+    "intervalDays": "Intervall {days, number} {days, plural, one {Tag} other {Tage}}",
+    "whenDuration": "{time} · {duration}",
+    "next": "nächstes {time}",
+    "dueNow": "fällig",
+    "dueAt": "fällig {date}",
+    "dueWindow": "fällig – läuft im nächsten nächtlichen Wartungsfenster",
+    "dueWindowFrom": "ab {date}, im nächtlichen Wartungsfenster",
+    "meterLabel": "Verstrichener Anteil des Intervalls: {title}",
+    "meterText": "{percent, number} % des Intervalls verstrichen"
+  },
+  "problemTitle": {
+    "disabled": "Backup nicht eingerichtet",
+    "configuration": "Konfiguration ungültig",
+    "repository_unreachable": "Die Storage Box ist nicht erreichbar",
+    "repository_id_mismatch": "Falsches Repository",
+    "repository_not_encrypted": "Repository nicht verschlüsselt",
+    "passphrase_wrong": "Passphrase falsch",
+    "host_key_mismatch": "Host-Key stimmt nicht",
+    "capacity_low": "Speicher fast voll",
+    "staging_low": "Lokaler Platz knapp",
+    "never_succeeded": "Noch keine erfolgreiche Sicherung",
+    "overdue": "Das letzte erfolgreiche Backup ist zu alt",
+    "schedule_disabled": "Zeitplan abgeschaltet",
+    "partial": "Das letzte Backup ist unvollständig",
+    "last_failed": "Letztes Backup fehlgeschlagen",
+    "verify_failed": "Integritätsprüfung fehlgeschlagen",
+    "restore_test_failed": "Restore-Test fehlgeschlagen",
+    "verify_overdue": "Integritätsprüfung überfällig",
+    "restore_test_overdue": "Restore-Test überfällig"
+  },
+  "problemAction": {
+    "settings": "Verbindung prüfen",
+    "history": "Im Verlauf ansehen",
+    "failed": "Verlauf öffnen"
+  },
+  "severity": {
+    "warning": "Warnung",
+    "critical": "Kritisch"
+  },
+  "eventLevel": {
+    "warning": "Warnung",
+    "error": "Fehler"
+  },
+  "slot": {
+    "ok": "Erfolgreich",
+    "partial": "Teilweise",
+    "failed": "Fehlgeschlagen",
+    "running": "Läuft",
+    "missed": "Verpasst",
+    "planned": "Geplant"
+  },
+  "storage": {
+    "title": "Speicher",
+    "used": "Storage Box belegt",
+    "ofQuota": "von {quota}",
+    "usedPercent": "{percent, number} % belegt",
+    "dedupTitle": "Deduplizierung über alle Punkte",
+    "allPoints": "Summe aller Punkte (ohne Deduplizierung)",
+    "actual": "Tatsächlich belegt",
+    "savings": "−{percent, number} %",
+    "dedupHelp": "Jeder Punkt enthält den ganzen Stand – gespeichert wird nur, was sich geändert hat. Platz von entfernten Punkten wird erst beim quartalsweisen Compact frei.",
+    "lastPoint": "Letzter Sicherungspunkt",
+    "files": "Dateien",
+    "database": "Datenbank-Dump",
+    "objects": "{count, number} Objekte"
+  },
+  "timeline": {
+    "title": "Letzte 7 Tage",
+    "legend": "Legende",
+    "markLegend": "Prüfung / Restore-Test / manuell",
+    "loading": "Wird geladen …",
+    "summary": "Letzte 7 Tage: {total, number} geplante Läufe, davon {bad, number} fehlgeschlagen oder verpasst und {partial, number} teilweise.",
+    "daySummary": "{ok, number} erfolgreich, {failed, number} fehlgeschlagen oder verpasst, {partial, number} teilweise",
+    "dayCount": "{ok, number}/{total, number}",
+    "slotLabel": "{time}: {state}",
+    "noSlots": "kein Lauf",
+    "markLabel": "{kind} {time}: {state}",
+    "mark": {
+      "verify": "Integritätsprüfung",
+      "restore_test": "Restore-Test",
+      "manual": "Backup (manuell)"
+    },
+    "markShort": {
+      "verify": "Prüfung",
+      "restore_test": "Test",
+      "manual": "Manuell"
+    },
+    "schedule": "Zeitplan alle {interval, number} Stunden, Uhrzeiten in Schweizer Zeit.",
+    "scheduleOff": "Der automatische Zeitplan ist abgeschaltet.",
+    "asTable": "Daten als Tabelle",
+    "colDay": "Tag",
+    "colMarks": "Prüfungen und manuelle Läufe"
   }
 }

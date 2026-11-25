@@ -80,6 +80,8 @@ def test_full_restore_with_rollback_when_smoke_test_fails(backup_env, monkeypatc
     job = _drive(env, _create_restore(archive))
     assert job.state == "rolled_back", (job.error_code, job.error_message)
     with SessionLocal() as s:
+        finished = _audit_rows(s, "backup.restore.finished")
+        assert finished and finished[-1].outcome == "failure" and finished[-1].details_json.get("state") == "rolled_back"
         # Live-Zustand unverändert: der Mandant nach dem Backup existiert, nichts ist gesperrt.
         assert s.get(Tenant, later.id) is not None
         assert not s.get(StorageState, 1).write_fenced
@@ -124,6 +126,84 @@ def test_full_restore_swaps_database_and_storage_generation(backup_env, monkeypa
             assert pg.database_exists(pre)  # bisheriger Stand bleibt für einen Rückweg erhalten
     finally:
         _drop(pre)
+
+
+def _audit_rows(session, action: str):
+    from sqlalchemy import text
+
+    return session.execute(text("SELECT id, tenant_id, actor_email, outcome, details_json FROM audit_log WHERE action = :a ORDER BY id"),
+                           {"a": action}).all()
+
+
+def test_full_restore_keeps_audit_entries_since_the_restore_point(backup_env, monkeypatch):  # noqa: F811
+    """W1 (Backup-Redesign 2026-11-25): Der Tausch setzte audit_log auf den Stand des
+    Sicherungspunkts zurück - Admin-Aktionen zwischen Punkt und Restore fehlten danach. Jetzt
+    werden sie mitgenommen (Verweise auf danach angelegte Mandanten werden NULL), und Ergebnis
+    und Ende des Restores stehen im Audit-Log."""
+    from app.services.audit_service import AuditService
+
+    db, env, _ = backup_env
+    monkeypatch.setattr(settings, "maintenance_cache_seconds", 0.05)
+    AuditService().log(db, action="test.audit.before_backup", actor_email="owner@example.com", details={"n": 1})
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    later = make_committed_tenant(db, "Audit nach dem Backup")
+    AuditService().log(db, action="test.audit.after_backup", actor_email="owner@example.com", tenant_id=later.id, details={"n": 2})
+    from tests.factories import make_app_user
+
+    person = make_app_user(db, email=f"spaeter-{uuid.uuid4().hex[:6]}@example.com", tenant_id=later.id)
+    db.commit()
+    AuditService().log(db, action="test.audit.person_after_backup", actor_email=person.email, actor_user_id=person.id, tenant_id=later.id)
+    db.close()
+    restore_id = _create_restore(archive)
+    job = _drive(env, restore_id)
+    pre = (job.result or {}).get("pre_restore_db")
+    try:
+        assert job.state == "completed", (job.error_code, job.error_message)
+        with SessionLocal() as s:
+            assert len(_audit_rows(s, "test.audit.before_backup")) == 1  # weder verloren noch doppelt
+            after = _audit_rows(s, "test.audit.after_backup")
+            assert len(after) == 1, "Audit-Eintrag nach dem Sicherungspunkt ging beim Tausch verloren"
+            assert after[0].tenant_id is None  # Mandant existiert im wiederhergestellten Stand nicht
+            assert after[0].actor_email == "owner@example.com"  # Admin-Einträge (ohne Konto) behalten die E-Mail
+            assert after[0].details_json.get("carried_from_restore") == str(restore_id)
+            # Konto existiert im wiederhergestellten Stand nicht: E-Mail und IP-Hash wie bei forget_actors weg.
+            person = _audit_rows(s, "test.audit.person_after_backup")
+            assert len(person) == 1 and person[0].actor_email is None
+            finished = _audit_rows(s, "backup.restore.finished")
+            assert finished and finished[-1].outcome == "success"
+            assert finished[-1].details_json.get("state") == "completed"
+            assert finished[-1].details_json.get("restore_job_id") == str(restore_id)
+            # Neue Einträge kollidieren nicht mit übernommenen IDs (Sequenz nachgezogen).
+            AuditService().log(s, action="test.audit.after_restore", actor_email="owner@example.com")
+            assert len(_audit_rows(s, "test.audit.after_restore")) == 1
+    finally:
+        _drop(pre)
+
+
+def test_failed_audit_carry_releases_maintenance_and_fence(backup_env, monkeypatch):  # noqa: F811
+    """Scheitert die Übernahme vor dem Tausch, ist die Live-DB unberührt: Wartung und Schreib-Fence
+    werden gelöst statt die Plattform gesperrt zu lassen (Security-Review 2026-11-25)."""
+    db, env, _ = backup_env
+    monkeypatch.setattr(settings, "maintenance_cache_seconds", 0.05)
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    db.close()
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("simulierter Fehler bei der Audit-Übernahme")
+
+    monkeypatch.setattr(run_restore, "carry_audit_log", broken)
+    job = _drive(env, _create_restore(archive))
+    assert job.state == "failed"
+    with SessionLocal() as s:
+        assert not s.get(StorageState, 1).write_fenced
+        blocking = s.scalars(select(MaintenanceWindow).where(MaintenanceWindow.reason_code == "backup_restore",
+                                                             MaintenanceWindow.state.in_(("preparing", "active")))).all()
+        assert blocking == []
+        finished = _audit_rows(s, "backup.restore.finished")
+        assert finished and finished[-1].outcome == "failure"
+    _drop(f"hocx_restore_{job.id.hex[:12]}")
 
 
 def _expire_lease(restore_id) -> None:

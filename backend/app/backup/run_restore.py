@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import time
 import uuid
@@ -74,6 +75,10 @@ from app.models import BackupJob, BackupRestoreJob, StorageGeneration, StorageMi
 _logger = logging.getLogger("hocx.backup.restore_job")
 
 BACKUP_TABLES = ("backup_settings", "backup_set", "backup_job", "backup_pool_archive", "backup_content", "backup_restore_job", "backup_event")
+# Audit-Log: Einträge seit dem Sicherungspunkt werden beim Voll-Restore angehängt (Backup-Redesign
+# 2026-11-25, W1) - sonst fehlten Admin-Aktionen zwischen Punkt und Restore im laufenden System.
+AUDIT_CARRY_TABLE = "_restore_audit_carry"
+_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 APP_ROLES = ("hocx_app", "hocx_abgabebox", "hocx_photo_worker", "hocx_geo")
 CUTOVER_LOCK_TIMEOUT = "20s"
 
@@ -292,6 +297,64 @@ FORWARD_STEPS = ("copied", "renaming_live", "renamed_live", "renaming_restored",
 ROLLBACK_STEPS = ("rolling_back", "rolled_back")
 
 
+def _audit_columns(pg: PgTools, database: str) -> list[str]:
+    out = pg.psql("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'audit_log' "
+                  "ORDER BY ordinal_position;", database=database)
+    columns = [line.strip() for line in out.splitlines() if line.strip()]
+    if not all(_IDENTIFIER.match(column) for column in columns):
+        raise jobs.JobFailure("cutover_inconsistent", "Unerwarteter Spaltenname in audit_log - Audit-Übernahme abgebrochen, nichts getauscht")
+    return columns
+
+
+def carry_audit_log(pg: PgTools, *, live: str, restored: str, restore_job_id: uuid.UUID) -> int:
+    """Hängt die Audit-Einträge der Live-DB, die nach dem Sicherungspunkt entstanden sind (ID grösser
+    als die grösste ID der wiederhergestellten DB), an die wiederhergestellte DB an. Nur anhängen,
+    nie ändern; Verweise auf Mandanten/Konten, die es im wiederhergestellten Stand nicht gibt,
+    werden NULL (wie ON DELETE SET NULL); fällt ein Konto weg, auch E-Mail und IP-Hash (wie
+    audit_log_forget_actors - sonst erreichte kein Löschpfad diese Einträge mehr). Übernommene Einträge
+    tragen ``carried_from_restore`` in details_json (ihre entity_id kann im wiederhergestellten Stand
+    neu vergeben sein). Idempotent: ein fortgesetzter Tausch übernimmt nichts doppelt."""
+    marker = str(uuid.UUID(str(restore_job_id)))
+    # Rest eines abgebrochenen Laufs nie liegen lassen (stünde ausserhalb von Frist und Anonymisierung).
+    pg.psql(f"DROP TABLE IF EXISTS public.{AUDIT_CARRY_TABLE};", database=restored)  # sql-ok: feste Bezeichner
+    max_id = int(pg.psql("SELECT coalesce(max(id), 0) FROM public.audit_log;", database=restored) or 0)
+    live_columns = set(_audit_columns(pg, live))
+    columns = [column for column in _audit_columns(pg, restored) if column in live_columns]
+    if "id" not in columns:
+        raise jobs.JobFailure("cutover_inconsistent", "audit_log ohne id-Spalte - Audit-Übernahme abgebrochen, nichts getauscht")
+    column_list = ", ".join(f'"{column}"' for column in columns)
+    # Feste Bezeichner aus information_schema (geprüft), max_id ist eine Zahl aus der DB.
+    copy_out = f"COPY (SELECT {column_list} FROM public.audit_log WHERE id > {max_id} ORDER BY id) TO STDOUT WITH (FORMAT csv, ENCODING 'UTF8')"  # sql-ok: geprüfte Spaltennamen, Zahl
+    data = pg._run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", f"--dbname={live}", "-c", copy_out], timeout=3600).stdout
+    if not data.strip():
+        return 0
+    pg.psql(f"CREATE TABLE public.{AUDIT_CARRY_TABLE} (LIKE public.audit_log INCLUDING DEFAULTS);", database=restored)
+    pg._run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", f"--dbname={restored}", "-c",
+             f"COPY public.{AUDIT_CARRY_TABLE} ({column_list}) FROM STDIN WITH (FORMAT csv, ENCODING 'UTF8')"], timeout=3600, input_bytes=data)  # sql-ok: feste Bezeichner
+    references = {"tenant_id": "public.tenant", "actor_user_id": "public.app_user"}
+    actor_gone = "(c.actor_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.app_user u WHERE u.id = c.actor_user_id))"
+
+    def expression(column: str) -> str:
+        if column in references:
+            return f"CASE WHEN c.{column} IS NOT NULL AND EXISTS (SELECT 1 FROM {references[column]} r WHERE r.id = c.{column}) THEN c.{column} END"
+        if column in ("actor_email", "ip_hash") and "actor_user_id" in columns:
+            return f'CASE WHEN {actor_gone} THEN NULL ELSE c."{column}" END'
+        if column == "details_json":
+            return f"coalesce(c.details_json, '{{}}'::jsonb) || jsonb_build_object('carried_from_restore', '{marker}')"
+        return f'c."{column}"'
+
+    select_list = ", ".join(expression(column) for column in columns)
+    inserted = pg.psql(
+        "BEGIN;\n"
+        f"WITH moved AS (INSERT INTO public.audit_log ({column_list}) SELECT {select_list} FROM public.{AUDIT_CARRY_TABLE} c ORDER BY c.id "  # sql-ok: feste Bezeichner
+        "ON CONFLICT (id) DO NOTHING RETURNING 1) SELECT count(*) FROM moved;\n"
+        "SELECT setval(pg_get_serial_sequence('public.audit_log', 'id'), GREATEST((SELECT coalesce(max(id), 0) FROM public.audit_log), 1));\n"
+        f"DROP TABLE public.{AUDIT_CARRY_TABLE};\n"  # sql-ok: feste Bezeichner
+        "COMMIT;", database=restored)
+    numbers = [line for line in inserted.splitlines() if line.strip().isdigit()]
+    return int(numbers[0]) if numbers else 0
+
+
 def _rename_db(pg: PgTools, source: str, target: str) -> None:
     pg.psql(f'ALTER DATABASE "{validate_db_name(source)}" RENAME TO "{validate_db_name(target)}";', database="postgres")
 
@@ -436,14 +499,30 @@ def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
     work.mkdir(parents=True, exist_ok=True)
     tables_dump = work / "backup-tables.pgdump"
     with PgTools(target) as pg:
-        pg._run(["pg_dump", "--format=custom", "--data-only", *[f"--table=public.{t}" for t in BACKUP_TABLES],
-                 f"--file={tables_dump}", f"--dbname={live}"], timeout=3600)
-        pg.psql("SET session_replication_role = replica;\nTRUNCATE " + ", ".join(BACKUP_TABLES) + " CASCADE;", database=restored)
-        pg._run(["pg_restore", "--data-only", "--disable-triggers", "--exit-on-error", f"--dbname={restored}", str(tables_dump)], timeout=3600)
-        tables_dump.unlink(missing_ok=True)
         base = {"job_id": str(ctx.job_id), "live": live, "restored": restored, "pre": pre}
-        if pg.database_exists(pre):
-            raise jobs.JobFailure("cutover_inconsistent", f"Zielname {pre} für die bisherige Datenbank ist bereits belegt - nichts umbenannt")
+        try:
+            # Audit-Log zuerst übernehmen, damit das Ereignis darüber mit den Backup-Tabellen umzieht.
+            # Ab hier keine ORM-Attribute mehr laden (job.* nach dem Commit): eine dabei geöffnete
+            # Transaktion auf der Live-DB würde beim Umbenennen beendet (AdminShutdown beim Schliessen).
+            carried = carry_audit_log(pg, live=live, restored=restored, restore_job_id=ctx.job_id)
+            jobs.event(db, ctx, "audit_carried", f"{carried} Audit-Einträge seit dem Sicherungspunkt übernommen", count=carried)
+            db.commit()
+            pg._run(["pg_dump", "--format=custom", "--data-only", *[f"--table=public.{t}" for t in BACKUP_TABLES],
+                     f"--file={tables_dump}", f"--dbname={live}"], timeout=3600)
+            pg.psql("SET session_replication_role = replica;\nTRUNCATE " + ", ".join(BACKUP_TABLES) + " CASCADE;", database=restored)
+            pg._run(["pg_restore", "--data-only", "--disable-triggers", "--exit-on-error", f"--dbname={restored}", str(tables_dump)], timeout=3600)
+            tables_dump.unlink(missing_ok=True)
+            # Nachzügler zwischen erster Übernahme und Tausch (idempotent, nur neuere IDs).
+            carry_audit_log(pg, live=live, restored=restored, restore_job_id=ctx.job_id)
+            if pg.database_exists(pre):
+                raise jobs.JobFailure("cutover_inconsistent", f"Zielname {pre} für die bisherige Datenbank ist bereits belegt - nichts umbenannt")
+        except (jobs.LeaseLost, jobs.JobWait, jobs.JobCancelled):
+            raise  # ein anderer Worker setzt fort - Wartung und Fence bleiben bewusst stehen
+        except BaseException:
+            # Vor dem Journal-Schritt «copied» ist die Live-DB nie berührt: Wartung und Fence lösen,
+            # statt die Plattform bis zu einem manuellen Eingriff gesperrt zu lassen (Review 2026-11-25).
+            _release_live_after_failed_copy(db, job, cp)
+            raise
         _write_journal(journal_path, {**base, "step": "copied"})
         # 3. Tausch per Umbenennen - vorher alle Verbindungen sperren und beenden. Jeder Schritt
         # steht VOR der Umbenennung im Journal (write-ahead, siehe reconcile_swap).
@@ -479,6 +558,23 @@ def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
             raise
     env.engine.dispose()
     return _after_swap(env, ctx, job, cp, {**base, "step": "renamed_restored"}, journal_path)
+
+
+def _release_live_after_failed_copy(db: Session, job: BackupRestoreJob, cp: dict[str, Any]) -> None:
+    """Fence und Wartung der (unberührten) Live-DB lösen, wenn die Übernahme vor dem Tausch scheitert."""
+    from app.services import maintenance_service
+
+    try:
+        db.rollback()
+        db.execute(text("UPDATE storage_state SET write_fenced = false, fence_reason = NULL, fenced_at = NULL WHERE id = 1 AND fence_reason = :r"),
+                   {"r": f"restore:{job.id}"})
+        db.commit()
+        if cp.get("window_live"):
+            maintenance_service.release(db, uuid.UUID(cp["window_live"]), actor_email=None, source="job")
+            db.commit()
+    except Exception:  # noqa: BLE001 - der ursprüngliche Fehler bleibt der gemeldete; Rest im Log
+        db.rollback()
+        _logger.exception("Restore %s: Wartung/Fence nach fehlgeschlagener Übernahme nicht gelöst - manuell freigeben", job.id)
 
 
 def _after_swap(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[str, Any], journal: dict[str, Any], journal_path: Path) -> str:
