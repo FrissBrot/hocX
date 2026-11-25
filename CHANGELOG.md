@@ -224,6 +224,8 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- Zyklus löschen: der Löschdialog nennt vorher, was mitgelöscht wird (gespeicherte Tabellenstände,
+  Zuordnungen von Aufgabenpaketen, Zyklus-Alben; die Fotos bleiben in der Galerie).
 - Protokolle: Blockkonfigurationen in falscher Form (z. B. Anwesenheit als Zahl, Zahlen über dem
   Datenbankbereich) werden beim Speichern mit 400 abgelehnt, statt das Protokoll dauerhaft unladbar
   zu machen; NUL-Zeichen in Bildtitel, Legende und Dateinamen beim Protokollbild-Upload ergeben
@@ -245,6 +247,11 @@ Installationen aktualisieren können.
 
 ### Sicherheit
 
+- Kassenbuch: Namen gebüsster Personen in Buchungstexten und Sperrhinweisen nur mit «Persönliche
+  Auswertungen» (Kasse, Administration); sonst «Busse …: ·····» - in der Ansicht, in PDFs und
+  Tabellen-Exporten, ohne Datenänderung.
+- Metadatenfilter für öffentliche Links und Partner: PNG und WebP behalten nur Bilddaten,
+  Farbprofil und Darstellung; C2PA-/JUMBF-Manifeste und unbekannte Chunks fallen weg.
 - Kalender-Abo endet bei Austritt und entzogenem Login (auch bei einem Austrittsdatum in der Zukunft).
 - Termin bzw. Listeneintrag mit Abgabe-Einreichungen nur mit «Abgaben verwalten» löschbar (die
   Einreichungen fallen mit weg).
