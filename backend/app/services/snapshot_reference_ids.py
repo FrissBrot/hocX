@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import select
 
 from app.services.list_legacy_adapter import legacy_value_fields, legacy_value_types
+from app.services.block_config_shape import bigint_digits
 from app.models import Event, FinanceAccount, ListDefinition, ListEntry, Participant
 
 
@@ -453,7 +454,8 @@ def _display_name_refs(config: dict) -> tuple[set[int], set[uuid.UUID]]:
         for key in _PARTICIPANT_LIST_KEYS:
             if isinstance(holder.get(key), list):
                 raw.update(str(value) for value in holder[key] if value not in (None, "") and not isinstance(value, bool))
-    internal_ids = {int(value) for value in raw if value.isdigit()}
+    # Nur ASCII-Ziffern im BIGINT-Bereich: «²» liess int() scheitern, zu grosse Zahlen die Abfrage
+    internal_ids = {number for value in raw if (number := bigint_digits(value)) is not None}
     public_ids = set()
     for value in raw:
         try:
@@ -501,8 +503,8 @@ def _snapshot_reference_internal_ids(config: dict) -> dict[type, set[int]]:
     # Editor ordnet sie über die öffentliche ID der Liste zu (Reihenfolge, Auswahl)
     for column in config.get("columns") or []:
         column_id = str(column.get("id") or "") if isinstance(column, dict) else ""
-        if column_id.startswith("gen-l-") and column_id[6:].isdigit():
-            entry_ids.add(int(column_id[6:]))
+        if column_id.startswith("gen-l-") and (entry_id := bigint_digits(column_id[6:])) is not None:
+            entry_ids.add(entry_id)
 
     def ints(values) -> set[int]:
         return {value for value in values if isinstance(value, int) and not isinstance(value, bool)}

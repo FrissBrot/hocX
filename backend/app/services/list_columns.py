@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.models import ListColumn, ListDefinition, ListEntry
+from app.services.block_config_shape import bigint_digits
 
 VALUE_TYPES = ("text", "participant", "participants", "event")
 PARTICIPANT_TYPES = ("participant", "participants")
@@ -144,7 +145,9 @@ def _definition(db, list_id: Any, tenant_id: int | None, cache: dict) -> ListDef
         return cache[cache_key]
     definition = None
     if isinstance(list_id, int) or (isinstance(list_id, str) and list_id.isdigit()):
-        definition = db.get(ListDefinition, int(list_id))
+        # Ziffern ausserhalb von ASCII/BIGINT können keine id sein (int() bzw. die Abfrage scheiterte)
+        internal_id = list_id if isinstance(list_id, int) else bigint_digits(list_id)
+        definition = db.get(ListDefinition, internal_id) if internal_id is not None and 0 < internal_id < 2**63 else None
     else:
         import uuid
 

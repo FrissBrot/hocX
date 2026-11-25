@@ -39,6 +39,7 @@ from app.services.snapshot_reference_ids import (
     translate_list_snapshot_refs,
     translate_participant_refs,
 )
+from app.services.block_config_shape import BlockConfigShapeError, check_block_config_shape
 from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
@@ -392,6 +393,11 @@ def patch_protocol_element_block(
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, existing.public_id, user)
     if payload.configuration_snapshot_json is not None:
+        try:
+            check_block_config_shape(payload.configuration_snapshot_json)
+        except BlockConfigShapeError as exc:
+            # Erwartet (Eingabe in falscher Form): 400 ohne Fehlerprotokoll, nichts gespeichert
+            raise HTTPException(status_code=400, detail={"code": "invalid_block_config", "message": str(exc)}) from exc
         payload.configuration_snapshot_json = normalize_attendance_entries(
             db, payload.configuration_snapshot_json, protocol.tenant_id, stored_config=existing.configuration_snapshot_json
         )
