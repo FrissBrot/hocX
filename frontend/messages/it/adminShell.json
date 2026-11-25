@@ -87,6 +87,12 @@
   "accountSettings": "Profilo e passkey",
   "accountSettingsLoadFailed": "Non è stato possibile caricare le impostazioni dell’account.",
   "navWithCount": "{label} ({count})",
+  "navWithStatus": "{label} ({status})",
+  "navStatus": {
+    "running": "Backup in corso",
+    "warning": "Avviso",
+    "critical": "Critico"
+  },
   "compactSidebar": "Compatta",
   "expandSidebar": "Espandi barra laterale",
   "detail": "Dettaglio",

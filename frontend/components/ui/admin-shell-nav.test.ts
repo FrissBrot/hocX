@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activeAdminGroupId, adminBreadcrumb, attentionItems, buildAdminNav, findActiveAdminLink, groupCount, linkCount, resolveOpenAdminGroup, toggleAdminGroup } from "./admin-shell-nav";
+import { activeAdminGroupId, adminBreadcrumb, attentionItems, buildAdminNav, findActiveAdminLink, groupCount, linkCount, linkStatus, resolveOpenAdminGroup, toggleAdminGroup } from "./admin-shell-nav";
 
 const hrefs = (role: "owner" | "support") => buildAdminNav(role).flatMap((group) => group.links.map((link) => link.href));
 
@@ -56,6 +56,17 @@ describe("admin-shell-nav", () => {
     expect(attentionItems(counts, "owner")).toEqual([{ key: "security_alerts", count: 2, href: "/admin/security/alerts" }]);
     expect(attentionItems(counts, "support")[0].href).toBe("/admin/security");
     expect(attentionItems(null, "owner")).toEqual([]);
+  });
+
+  it("zeigt den Backup-Status als Punkt am Eintrag Backups (nur bekannte Werte)", () => {
+    const nav = buildAdminNav("support");
+    const backups = nav.flatMap((group) => group.links).find((link) => link.href === "/admin/backups")!;
+    const base = { tenants: 1, verifications_open: 0, security_alerts: null, operations_problems: null };
+    expect(linkStatus(backups, { ...base, backup_status: "critical" })).toBe("critical");
+    expect(linkStatus(backups, { ...base, backup_status: null })).toBeNull();
+    expect(linkStatus(backups, null)).toBeNull();
+    const jobs = nav.flatMap((group) => group.links).find((link) => link.href === "/admin/jobs");
+    if (jobs) expect(linkStatus(jobs, { ...base, backup_status: "warning" })).toBeNull();
   });
 
   describe("einklappbare Bereiche (1.5.1)", () => {

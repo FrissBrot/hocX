@@ -1,6 +1,6 @@
 {
   "title": "Sauvegardes",
-  "description": "Sauvegarde externe chiffrée de la base de données et du stockage de fichiers avec BorgBackup sur la Hetzner Storage Box.",
+  "description": "Sauvegarde externe chiffrée de la base de données et du stockage de fichiers avec BorgBackup.",
   "loadFailed": "Impossible de charger l'état des sauvegardes.",
   "tabs": {
     "overview": "Aperçu",
@@ -18,11 +18,16 @@
     "save": "Enregistrer",
     "startRestore": "Lancer la restauration",
     "startFullRestore": "Lancer la restauration complète",
-    "startTenantRestore": "Restaurer le mandant en copie"
+    "startTenantRestore": "Restaurer le mandant en copie",
+    "previewRefresh": "Actualiser l’aperçu",
+    "saveWithPasskey": "Enregistrer avec la clé d’accès",
+    "startTest": "Lancer le test",
+    "verifyNow": "Vérifier maintenant"
   },
   "banner": {
     "disabled": "Le système de sauvegarde n'est pas encore configuré (BACKUP_ENABLED). Instructions : RUNBOOK, section sauvegarde.",
-    "workerDown": "Le worker de sauvegarde ne répond pas - aucune sauvegarde n'est effectuée actuellement."
+    "workerDown": "Le worker de sauvegarde ne répond pas - aucune sauvegarde n'est effectuée actuellement.",
+    "readOnly": "Seuls les administrateurs propriétaires peuvent lancer des sauvegardes, déclencher des restaurations et modifier les paramètres. Tu vois l’état, mais tu ne peux rien modifier."
   },
   "overall": {
     "ok": "En ordre",
@@ -58,7 +63,9 @@
     "workerAlive": "actif",
     "workerDown": "aucun signal",
     "lastFailure": "Dernière sauvegarde échouée",
-    "failureLine": "{time} : {error}"
+    "failureLine": "{time} : {error}",
+    "lastFailureLine": "Dernier échec : {time} – {error}",
+    "problemsLabel": "Problèmes ouverts"
   },
   "level": {
     "created": "créée",
@@ -178,7 +185,9 @@
     "objectsProgress": "{done, number} objets sur {total, number} vérifiés",
     "progressAria": "Progression",
     "newData": "{count, plural, one {# nouveau fichier} other {# nouveaux fichiers}} ({size}) transférés",
-    "workerIdle": "Le worker ne traite pas cette tâche en ce moment (attente ou redémarrage) - il reprendra automatiquement."
+    "workerIdle": "Le worker ne traite pas cette tâche en ce moment (attente ou redémarrage) - il reprendra automatiquement.",
+    "percent": "{percent, number} %",
+    "stepsLabel": "Étapes de la tâche"
   },
   "history": {
     "title": "Historique",
@@ -189,7 +198,20 @@
     "empty": "Aucune tâche pour l'instant.",
     "protected": "protégée",
     "newData": "{count, number} · {size}",
-    "partialDetail": "{count, plural, one {# fichier manquant} other {# fichiers manquants}}"
+    "partialDetail": "{count, plural, one {# fichier manquant} other {# fichiers manquants}}",
+    "applicationFailed": "Test applicatif échoué",
+    "applicationOk": "Test applicatif réussi",
+    "contentsChecked": "{count, number} contenus vérifiés",
+    "database": "BD {size}",
+    "deep": "toutes les données lues",
+    "detailsFor": "Détails : {kind}, {time}",
+    "emptyFilter": "Aucune tâche pour ce filtre.",
+    "loadFailed": "L’historique n’a pas pu être chargé.",
+    "objects": "{count, number} objets",
+    "retentionKept": "{count, number} conservés",
+    "retentionRemoved": "{count, plural, one {# point supprimé} other {# points supprimés}}",
+    "stored": "{size} occupés",
+    "verifying": "Vérification en cours"
   },
   "columns": {
     "time": "Date",
@@ -209,7 +231,10 @@
     "archive": "Point de restauration",
     "tenant": "Mandant",
     "users": "Utilisateurs",
-    "size": "Taille"
+    "size": "Taille",
+    "content": "Contenu",
+    "job": "Tâche",
+    "result": "Résultat"
   },
   "events": {
     "title": "{count, plural, one {# événement} other {# événements}}",
@@ -244,7 +269,8 @@
     "verified": "Vérifiée",
     "cutover_done": "Basculée",
     "rolled_back": "Retour arrière",
-    "collected": "Collectée"
+    "collected": "Collectée",
+    "audit_carried": "Journal d’audit repris"
   },
   "detail": {
     "title": "{kind} : détails",
@@ -259,7 +285,11 @@
     "storageValue": "{profile}, génération {generation, number}",
     "objects": "Objets",
     "objectsValue": "{count, number} ({size})",
-    "verification": "Preuve"
+    "verification": "Preuve",
+    "events": "Événements",
+    "loadFailed": "Les détails n’ont pas pu être chargés.",
+    "loadingTitle": "Détails de la tâche",
+    "tenants": "Clients dans le point de sauvegarde"
   },
   "warning": {
     "missing_objects": "{count, plural, one {# fichier n'a pas pu} other {# fichiers n'ont pas pu}} être sauvegardé(s) (absent(s) du stockage).",
@@ -307,7 +337,8 @@
     },
     "kindShort": {
       "full": "Complète",
-      "tenant_copy": "Mandant (copie)"
+      "tenant_copy": "Mandant (copie)",
+      "restore_test": "Test de restauration (isolé)"
     },
     "panelDescription": "{archive} · demandée {time}",
     "cutoverHint": "L'application est en maintenance et les bases de données sont échangées. Cette page peut être brièvement indisponible.",
@@ -321,7 +352,33 @@
     "replayErasures": "Réappliquer les suppressions faites après le point de sauvegarde",
     "replayErasuresHint": "Les personnes, fichiers, procès-verbaux ou mandants supprimés après ce point de sauvegarde sont supprimés à nouveau après la restauration. À désactiver uniquement dans des exceptions justifiées.",
     "replayErasuresReason": "Raison pour laquelle des données supprimées doivent revenir",
-    "passkeyHelp": "Au démarrage, vous confirmez en plus la restauration avec votre clé d’accès."
+    "passkeyHelp": "Au démarrage, vous confirmez en plus la restauration avec votre clé d’accès.",
+    "fullWarning": "Remplace la base de données et les fichiers de toute l’installation. Un point de secours de l’état actuel est d’abord créé automatiquement.",
+    "kindLabel": "Type de restauration",
+    "phraseExplain": "Le texte de confirmation contient l’ID court du point de sauvegarde choisi. Ta confirmation ne vaut donc que pour ce point – pour un autre point, le texte change.",
+    "pickPointFirst": "Choisis d’abord un point de sauvegarde.",
+    "pointHint": "Les points vérifiés sont plus sûrs – une restauration testée est la preuve la plus forte.",
+    "rail": {
+      "kind": "Type et point",
+      "kindValue": "{kind} · {time}",
+      "target": "Cible",
+      "preview": "Aperçu",
+      "previewHint": "Version, schéma, risques",
+      "checked": "vérifié, aucun blocage",
+      "blocked": "bloqué",
+      "confirm": "Confirmation",
+      "confirmHint": "Texte et clé d’accès"
+    },
+    "resultFull": "Installation restaurée (génération {generation, number})",
+    "resultRolledBack": "Test de fumée échoué – état précédent de nouveau actif",
+    "resultTenant": "« {name} » créé, {files, number} fichiers",
+    "resultTestPassed": "Base de données, {count, number} contenus et test applicatif réussis",
+    "resultTestPassedShort": "Base de données et test applicatif réussis",
+    "showAll": "Afficher les {count, number} points",
+    "showFewer": "Afficher moins",
+    "tagLowRisk": "peu risqué",
+    "tagMaintenance": "mode maintenance",
+    "tenantMeta": "{users, plural, one {# utilisateur} other {# utilisateurs}} · {size}"
   },
   "preview": {
     "schema": "Schéma de base de données",
@@ -421,7 +478,49 @@
     "notifyOff": "Aucune (problèmes uniquement)",
     "notifyDaily": "Résumé quotidien",
     "notifyEach": "Après chaque sauvegarde",
-    "updated": "Dernière modification par {email}, {time}"
+    "updated": "Dernière modification par {email}, {time}",
+    "connOk": "Connexion réussie",
+    "connBad": "Storage Box injoignable",
+    "connUnknown": "Pas encore vérifiée",
+    "connOkSub": "vérifiée {time} · joignable, identité du dépôt correcte",
+    "heavyWindow": "Le contrôle d’intégrité et le test de restauration ne s’exécutent que pendant la fenêtre de maintenance nocturne (01–05 h, heure suisse), même s’ils sont dus plus tôt.",
+    "intervalShort": "Intervalle",
+    "offsetShort": "Décalage",
+    "invalid": "Remplis tous les champs dans la plage valide ; au moins une règle de conservation doit garder des sauvegardes.",
+    "maintenanceKeyAbsentShort": "pas sur le serveur",
+    "neverChanged": "Jamais modifié",
+    "problemsAlways": "Les problèmes sont toujours signalés.",
+    "recommended": "recommandé",
+    "restoreTestIntervalShort": "Test de restauration tous les",
+    "retentionSummary": "Recul d’environ {months, number} {months, plural, one {mois} other {mois}} · environ {points, number} points une fois complet",
+    "runsToday": "Exécutions aujourd’hui (heure suisse) : {times}",
+    "savedNow": "Enregistré – s’applique dès la prochaine exécution planifiée.",
+    "scheduleOffHint": "Les sauvegardes automatiques sont désactivées. C’est signalé comme problème.",
+    "scheduleText": "Heures en heure suisse. Le décalage depuis minuit UTC est enregistré ({offset, number} min) – en été, les sauvegardes ont donc lieu une heure plus tard.",
+    "scheduleTitle": "Planification",
+    "segment": {
+      "within": "toutes",
+      "daily": "quotidien",
+      "weekly": "hebdomadaire",
+      "monthly": "mensuel"
+    },
+    "notify": {
+      "off": "Aucune",
+      "daily": "Quotidien",
+      "each": "Chaque sauvegarde"
+    },
+    "notifyHelp": {
+      "off": "problèmes seulement",
+      "daily": "un résumé",
+      "each": "après chaque exécution"
+    },
+    "unitDays": "jours",
+    "unitFiles": "fichiers",
+    "unitHours": "heures",
+    "unitHoursShort": "h",
+    "unitOffset": "min dès 00:00 UTC",
+    "unitPoints": "points",
+    "verifyIntervalShort": "Contrôle d’intégrité toutes les"
   },
   "toast": {
     "backupQueued": "Sauvegarde lancée, elle s'exécute en arrière-plan.",
@@ -478,5 +577,180 @@
     "borg_disabled": "Le système de sauvegarde n'est pas configuré.",
     "borg_configuration": "La configuration de sauvegarde est invalide.",
     "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.2."
+  },
+  "age": {
+    "minutes": "il y a {minutes, number} min",
+    "hours": "il y a {hours, number} h {minutes, number} min",
+    "days": "il y a {days, plural, one {# jour} other {# jours}}"
+  },
+  "until": {
+    "minutes": "dans {minutes, number} min",
+    "hours": "dans {hours, number} h {minutes, number} min",
+    "days": "dans {days, plural, one {# jour} other {# jours}}"
+  },
+  "hero": {
+    "kicker": "État général",
+    "state": {
+      "ok": "En ordre",
+      "running": "Sauvegarde en cours",
+      "warning": "Avertissement",
+      "critical": "Critique",
+      "disabled": "Non configuré"
+    },
+    "title": {
+      "ok": "Toutes les données sont sauvegardées hors site.",
+      "running": "Une sauvegarde est en cours.",
+      "warning": "Sauvegardé – avec une remarque.",
+      "critical": "Les sauvegardes ne fonctionnent pas de manière fiable.",
+      "disabled": "La sauvegarde externe n’est pas configurée."
+    },
+    "text": {
+      "ok": "La dernière sauvegarde s’est terminée avec succès {age}. Le contrôle d’intégrité et le test de restauration sont dans leurs intervalles.",
+      "okNever": "Il n’y a encore aucune sauvegarde terminée.",
+      "running": "L’exploitation continue normalement. Les nouveaux téléversements pendant la sauvegarde seront dans le prochain point.",
+      "warning": "Les données sont sauvegardées, mais tout n’est pas comme prévu – voir les remarques ci-dessous.",
+      "critical": "La dernière sauvegarde réussie date de {age}. Les problèmes ci-dessous empêchent de nouvelles sauvegardes ou vérifications.",
+      "criticalNever": "Il n’y a encore aucune sauvegarde réussie, et les problèmes ci-dessous l’empêchent.",
+      "disabled": "Sans système de sauvegarde configuré, aucun point de sauvegarde n’est créé. Instructions : RUNBOOK, section Sauvegarde."
+    },
+    "lastBackup": "Dernière sauvegarde",
+    "lastSuccess": "Dernière réussie",
+    "lastSub": "{age} · {duration}",
+    "running": "en cours",
+    "runningSub": "{trigger} lancé {time}",
+    "nextSub": "{in} · planification",
+    "noSchedule": "aucune planification",
+    "points": "Points de sauvegarde",
+    "protected": "{count, plural, =0 {aucun protégé} one {dont # protégé} other {dont # protégés}}",
+    "pointsLine": "{count, plural, one {# point de sauvegarde} other {# points de sauvegarde}} · {protected, number} protégés"
+  },
+  "infra": {
+    "title": "Infrastructure",
+    "showConnection": "Voir la connexion",
+    "box": "Storage Box",
+    "lastSignal": "dernier signal {time}",
+    "working": "en travail",
+    "encryptionSub": "{mode} · côté client",
+    "active": "actif",
+    "pinned": "ID du dépôt et clé d’hôte",
+    "pinnedSub": "Identité de la Storage Box épinglée",
+    "onServer": "sur le serveur",
+    "offline": "hors ligne",
+    "configured": "configuré",
+    "missing": "manquant",
+    "notify": {
+      "off": "ntfy · problèmes seulement",
+      "daily": "ntfy · résumé quotidien",
+      "each": "ntfy · après chaque sauvegarde"
+    }
+  },
+  "levels": {
+    "title": "Trois preuves",
+    "description": "Créée, vérifiée et restaurée avec succès sont trois preuves différentes – chacune a son propre intervalle.",
+    "created": "Sauvegarde créée",
+    "verified": "Intégrité vérifiée",
+    "restoreTested": "Restauration testée",
+    "never": "jamais",
+    "badge": {
+      "current": "à jour",
+      "due": "à faire",
+      "soon": "bientôt à faire",
+      "never": "manquant",
+      "overdue": "en retard",
+      "incomplete": "incomplète"
+    },
+    "intervalHours": "Intervalle {hours, number} h",
+    "intervalDays": "Intervalle {days, number} {days, plural, one {jour} other {jours}}",
+    "whenDuration": "{time} · {duration}",
+    "next": "prochaine {time}",
+    "dueNow": "à faire",
+    "dueAt": "à faire le {date}",
+    "dueWindow": "à faire – lors de la prochaine fenêtre de maintenance nocturne",
+    "dueWindowFrom": "dès le {date}, dans la fenêtre de maintenance nocturne",
+    "meterLabel": "Part écoulée de l’intervalle : {title}",
+    "meterText": "{percent, number} % de l’intervalle écoulé"
+  },
+  "problemTitle": {
+    "disabled": "Sauvegarde non configurée",
+    "configuration": "Configuration invalide",
+    "repository_unreachable": "La Storage Box est injoignable",
+    "repository_id_mismatch": "Mauvais dépôt",
+    "repository_not_encrypted": "Dépôt non chiffré",
+    "passphrase_wrong": "Phrase secrète incorrecte",
+    "host_key_mismatch": "Clé d’hôte différente",
+    "capacity_low": "Stockage presque plein",
+    "staging_low": "Peu d’espace local",
+    "never_succeeded": "Aucune sauvegarde réussie",
+    "overdue": "La dernière sauvegarde réussie est trop ancienne",
+    "schedule_disabled": "Planification désactivée",
+    "partial": "La dernière sauvegarde est incomplète",
+    "last_failed": "Dernière sauvegarde échouée",
+    "verify_failed": "Contrôle d’intégrité échoué",
+    "restore_test_failed": "Test de restauration échoué",
+    "verify_overdue": "Contrôle d’intégrité en retard",
+    "restore_test_overdue": "Test de restauration en retard"
+  },
+  "problemAction": {
+    "settings": "Vérifier la connexion",
+    "history": "Voir dans l’historique",
+    "failed": "Ouvrir l’historique"
+  },
+  "severity": {
+    "warning": "Avertissement",
+    "critical": "Critique"
+  },
+  "eventLevel": {
+    "warning": "Avertissement",
+    "error": "Erreur"
+  },
+  "slot": {
+    "ok": "Réussie",
+    "partial": "Partielle",
+    "failed": "Échouée",
+    "running": "En cours",
+    "missed": "Manquée",
+    "planned": "Planifiée"
+  },
+  "storage": {
+    "title": "Stockage",
+    "used": "Storage Box occupée",
+    "ofQuota": "sur {quota}",
+    "usedPercent": "{percent, number} % occupés",
+    "dedupTitle": "Déduplication sur tous les points",
+    "allPoints": "Somme de tous les points (sans déduplication)",
+    "actual": "Réellement occupé",
+    "savings": "−{percent, number} %",
+    "dedupHelp": "Chaque point contient l’état complet – seul ce qui a changé est stocké. L’espace des points supprimés n’est libéré qu’au compactage trimestriel.",
+    "lastPoint": "Dernier point de sauvegarde",
+    "files": "Fichiers",
+    "database": "Dump de la base",
+    "objects": "{count, number} objets"
+  },
+  "timeline": {
+    "title": "7 derniers jours",
+    "legend": "Légende",
+    "markLegend": "Vérification / test de restauration / manuel",
+    "loading": "Chargement …",
+    "summary": "7 derniers jours : {total, number} exécutions planifiées, dont {bad, number} échouées ou manquées et {partial, number} partielles.",
+    "daySummary": "{ok, number} réussies, {failed, number} échouées ou manquées, {partial, number} partielles",
+    "dayCount": "{ok, number}/{total, number}",
+    "slotLabel": "{time} : {state}",
+    "noSlots": "aucune exécution",
+    "markLabel": "{kind} {time} : {state}",
+    "mark": {
+      "verify": "Contrôle d’intégrité",
+      "restore_test": "Test de restauration",
+      "manual": "Sauvegarde (manuelle)"
+    },
+    "markShort": {
+      "verify": "Contrôle",
+      "restore_test": "Test",
+      "manual": "Manuel"
+    },
+    "schedule": "Planification toutes les {interval, number} heures, heures en heure suisse.",
+    "scheduleOff": "La planification automatique est désactivée.",
+    "asTable": "Données sous forme de tableau",
+    "colDay": "Jour",
+    "colMarks": "Contrôles et exécutions manuelles"
   }
 }

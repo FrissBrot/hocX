@@ -2618,6 +2618,8 @@ export type BackupSet = {
   warnings: BackupSetWarning[];
   tenant_count: number;
   reconstructed: boolean;
+  /** Backup-Auftrag, der den Punkt geschrieben hat (null bei rekonstruierten Punkten) */
+  job_id?: string | null;
 };
 
 export type BackupTenant = { id: number; public_id: string | null; name: string; users: number; objects: number; bytes: number };
@@ -2641,6 +2643,8 @@ export type BackupJob = {
   warning_count: number;
   duration_seconds: number | null;
   backup_set: BackupSet | null;
+  /** Kurzfassung des Ergebnisses (nur Zahlen/Flags) */
+  summary?: Record<string, number | boolean | string>;
 };
 
 export type BackupEvent = {
@@ -2655,7 +2659,7 @@ export type BackupEvent = {
 
 export type BackupJobDetail = BackupJob & { result: Record<string, unknown> | null; events: BackupEvent[]; tenants: BackupTenant[] };
 
-export type BackupJobPage = { items: BackupJob[]; total: number; offset: number; limit: number };
+export type BackupJobPage = { items: BackupJob[]; total: number; offset: number; limit: number; counts?: Partial<Record<BackupJobState, number>> };
 
 export type BackupRepositoryStatus = {
   ok: boolean | null;

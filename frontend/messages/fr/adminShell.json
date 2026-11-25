@@ -87,6 +87,12 @@
   "accountSettings": "Profil et passkeys",
   "accountSettingsLoadFailed": "Les paramètres du compte n’ont pas pu être chargés.",
   "navWithCount": "{label} ({count})",
+  "navWithStatus": "{label} ({status})",
+  "navStatus": {
+    "running": "Sauvegarde en cours",
+    "warning": "Avertissement",
+    "critical": "Critique"
+  },
   "compactSidebar": "Compact",
   "expandSidebar": "Déplier la barre latérale",
   "detail": "Détail",

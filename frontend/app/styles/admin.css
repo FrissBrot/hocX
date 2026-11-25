@@ -562,18 +562,6 @@
   .storage-route-arrow { transform: rotate(90deg); justify-self: center; }
 }
 
-/* ── Adminportal: Backups ── */
-.backup-kpi-text { font-size: var(--text-lg); }
-
-.backup-kind-select { max-width: 240px; }
-
-.backup-id { font-family: var(--font-mono); font-size: var(--text-xs); word-break: break-all; }
-
-.backup-error-cell { max-width: 320px; font-size: var(--text-sm); color: var(--danger-fg); }
-
-.backup-list { margin: 0; padding-left: var(--space-5); display: grid; gap: var(--space-1); }
-
-.backup-step { margin: var(--space-2) 0 0; font-size: var(--text-md); font-weight: 600; }
 
 @media (max-width: 640px) {
   .storage-facts { grid-template-columns: 1fr; }
@@ -822,6 +810,19 @@
   font-weight: 600;
 }
 
+/* Status-Punkt am Navigationseintrag (Backups: läuft/Warnung/kritisch); Text steht versteckt daneben */
+.admin-nav-status {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.admin-nav-count + .admin-nav-status { margin-left: var(--space-1); }
+.admin-nav-status-warning { background: var(--warning); }
+.admin-nav-status-critical { background: var(--danger); }
+
 .admin-compact-toggle {
   flex-shrink: 0;
 }
@@ -859,6 +860,13 @@
     right: 0;
     margin: 0;
     font-size: var(--text-xs);
+  }
+
+  .admin-frame-compact .admin-sidebar .admin-nav-status {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin: 0;
   }
 
   .admin-frame-compact .admin-nav-group-title {
