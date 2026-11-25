@@ -694,6 +694,10 @@ def ingest_file(
         raise UploadRejected(400, infected_message, code="infected")
 
     _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
+    # Steuerzeichen (v. a. NUL) im Client-Dateinamen: PostgreSQL speichert NUL nicht, das INSERT
+    # scheiterte mit DataError (400 plus Fehlerprotokoll; Nachtlauf 2026-11-25, Protokollbilder).
+    # Ein Dateiname enthält nie sinnvoll Steuerzeichen - entfernen statt ablehnen.
+    original_filename = _CONTROL_CHARS.sub("", original_filename or "").strip() or "datei"
 
     # Key relativ zu STORAGE_ROOT (Namespace "main"), wie bisher storage_path - die Endung wird
     # nur übernommen, wenn sie harmlos ist (safe_suffix), nie roh aus dem Client-Dateinamen.

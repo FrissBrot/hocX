@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from app.schemas.base import MAX_QUERY_OFFSET
+from app.schemas.base import MAX_QUERY_OFFSET, reject_nul_characters
 from app.models.entities import AppUser, CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
 from sqlalchemy.orm import Session
@@ -1113,6 +1113,14 @@ async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
+    # Multipart-Felder prüft NulGuardMiddleware nicht (nur JSON): NUL in Titel/Legende liess erst
+    # das INSERT scheitern (400 plus Fehlerprotokoll; Nachtlauf 2026-11-25). Erwarteter
+    # Eingabefehler, deshalb ValueError als Ursache (kein Fehlerprotokoll).
+    for value in (title, caption):
+        try:
+            reject_nul_characters(value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Title and caption must not contain NUL characters") from exc
     protocol_element_block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
