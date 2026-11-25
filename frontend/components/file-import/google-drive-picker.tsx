@@ -33,22 +33,30 @@ type GoogleWindow = Window & { gapi?: { load: (name: string, callback: () => voi
 
 type Phase = "loading" | "ready" | "applying" | "cancelled" | "error";
 
+// Ein Ladevorgang je Skript: ein zweiter Aufruf (Strict Mode führt Effekte doppelt aus, erneutes
+// Öffnen der Seite) wartet auf denselben Ladevorgang, statt vor dem Laden schon «fertig» zu melden.
+const scriptLoads = new Map<string, Promise<void>>();
+
 function loadScript(src: string, nonce: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[data-google-picker="${src}"]`);
-    if (existing) {
-      resolve();
-      return;
-    }
+  const pending = scriptLoads.get(src);
+  if (pending) return pending;
+  const loading = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
     script.nonce = nonce;
     script.dataset.googlePicker = src;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("script")); // i18n-ok: technischer Fehler, angezeigt wird picker_unavailable
+    script.onerror = () => {
+      // Nächster Versuch lädt neu (z. B. nach einem Netzfehler)
+      scriptLoads.delete(src);
+      script.remove();
+      reject(new Error("script")); // i18n-ok: technischer Fehler, angezeigt wird picker_unavailable
+    };
     document.head.appendChild(script);
   });
+  scriptLoads.set(src, loading);
+  return loading;
 }
 
 /** Google Picker: Person wählt Dateien in ihrem Google Drive, hocX erhält damit Zugriff (drive.file). */

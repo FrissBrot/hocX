@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
 import { authFiles } from "./auth";
+import { shootCloud } from "./cloud-shots";
 
 // Datei-Import aus Google Drive (drive.file + Google Picker) und Google Fotos (Photos Picker API) mit
 // dem nachgebauten Google des E2E-Stacks (CLOUD_IMPORT_FAKE_PROVIDERS, Backend
@@ -21,29 +22,7 @@ async function cancelOpenImports(api: APIRequestContext) {
 }
 
 async function shoot(page: Page, name: string) {
-  for (const theme of ["light", "dark"] as const) {
-    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: width > 600 ? 900 : 844 });
-      await page.waitForTimeout(150);
-      await page.screenshot({ path: `test-results/cloud-google/${name}-${theme}-${width}.png`, fullPage: true });
-      // Smartphone: die Seite wird nie breiter als der Viewport (Vorbild admin-console.spec.ts)
-      if (width === 390) {
-        const overflow = await page.evaluate(() => ({
-          width: document.documentElement.scrollWidth,
-          // die äussersten Elemente, die über den Viewport ragen (für die Fehlermeldung)
-          wide: Array.from(document.querySelectorAll<HTMLElement>("body *"))
-            .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
-            .filter((el) => !el.parentElement || el.parentElement.getBoundingClientRect().right <= window.innerWidth + 1)
-            .slice(0, 5)
-            .map((el) => `${el.tagName.toLowerCase()}.${el.className}`),
-        }));
-        expect.soft(overflow.width, `${name} ${theme}: Seitenbreite bei 390 px (${overflow.wide.join(", ")})`).toBeLessThanOrEqual(390);
-      }
-    }
-  }
-  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await shootCloud(page, "cloud-google", name);
 }
 
 async function signIn(page: Page, scenario: "anna" | "work" | "noscope" | "cancel") {
