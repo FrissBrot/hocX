@@ -67,10 +67,11 @@
   "unassignConfirm": "Retirer l’attribution",
   "previewTitle": "Aperçu : {name}",
   "previewYearLabel": "Année du cycle",
-  "previewHelp": "Responsables tels qu’ils figurent aujourd’hui dans les listes. « Existe » signifie que la tâche a déjà été créée.",
+  "previewHelp": "Responsables tels qu’ils figurent aujourd’hui dans les listes. « Existe » signifie que la tâche a déjà été créée ; « Créée le … » qu’elle ne sera créée qu’à cette date en raison du délai.",
   "previewEmpty": "Aucune tâche n’est créée dans ce cycle.",
   "previewLoading": "Chargement …",
   "statusExists": "Existe",
+  "statusScheduled": "Créée le {date}",
   "statusNew": "Nouveau",
   "errorGeneric": "L’action a échoué",
   "errors": {
@@ -132,6 +133,9 @@
   "eventTagLabel": "Tag d’événement",
   "eventTagPlaceholder": "Choisir un tag",
   "eventTagHelp": "Une tâche est créée pour chaque événement portant ce tag dans le cycle – y compris ceux ajoutés plus tard.",
+  "createDaysBeforeLabel": "Créer la tâche : jours avant l’événement",
+  "createDaysBeforeHelp": "Facultatif. Vide : les tâches de tous les événements du cycle sont créées immédiatement. Avec un nombre : la tâche d’un événement n’est créée que ce nombre de jours avant l’événement (0 = le jour même), au plus tard le lendemain. Les événements déplacés comptent avec leur nouvelle date.",
+  "dueBeforeCreationHint": "L’échéance est antérieure à la date de création : la tâche sera déjà en retard lors de sa création. Vérifiez le nombre de jours.",
   "dueLabel": "Échéance",
   "dueType": {
     "none": "Aucune",
@@ -152,7 +156,8 @@
     "once": "Une fois par cycle",
     "monthly": "Chaque mois le {day}",
     "weekly": "Chaque {weekday}",
-    "events": "Par événement avec le tag « {tag} »"
+    "events": "Par événement avec le tag « {tag} »",
+    "eventsWithLead": "Par événement avec le tag « {tag} », {days, plural, =0 {créée le jour de l’événement} one {créée # jour avant l’événement} other {créée # jours avant l’événement}}"
   },
   "dueSummary": {
     "none": "Aucune",

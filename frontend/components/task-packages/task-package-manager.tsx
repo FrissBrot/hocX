@@ -568,7 +568,13 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
                   <td>{previewDate(entry.due_date)}</td>
                   <td>{entry.assignee_names.length ? entry.assignee_names.join(", ") : <span className="muted">{t("responsibleNone")}</span>}</td>
                   <td>
-                    <Badge variant={entry.exists ? "success" : "neutral"}>{entry.exists ? t("statusExists") : t("statusNew")}</Badge>
+                    {entry.exists ? (
+                      <Badge variant="success">{t("statusExists")}</Badge>
+                    ) : entry.scheduled && entry.create_date ? (
+                      <Badge variant="info">{t("statusScheduled", { date: previewDate(entry.create_date) })}</Badge>
+                    ) : (
+                      <Badge variant="neutral">{t("statusNew")}</Badge>
+                    )}
                   </td>
                 </tr>
               ))}

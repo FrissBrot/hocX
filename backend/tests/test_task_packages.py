@@ -61,8 +61,10 @@ def setup(db):
     return {"tenant": tenant, "cycle": cycle, "anna": anna, "ben": ben, "cleo": cleo, "list": aemtli, "entry": lagerleitung}
 
 
-def _package(db, s, *, recurrence=None, due_rule=None, start_cycle_year=2026) -> tuple[TaskPackage, TaskPackageItem, TaskPackageCycle]:
-    package = TaskPackage(tenant_id=s["tenant"].id, name="Sommerlager")
+def _package(
+    db, s, *, recurrence=None, due_rule=None, start_cycle_year=2026, name="Sommerlager"
+) -> tuple[TaskPackage, TaskPackageItem, TaskPackageCycle]:
+    package = TaskPackage(tenant_id=s["tenant"].id, name=name)
     db.add(package)
     db.flush()
     item = TaskPackageItem(
@@ -462,6 +464,206 @@ def test_routes_reject_foreign_tenant_references_and_non_admins(db, setup):
 def test_fixed_due_date_requires_once_recurrence():
     with pytest.raises(ValueError):
         TaskPackageItemCreate(task="X", recurrence={"type": "weekly", "weekday": 1}, due_rule={"type": "fixed", "month": 1, "day": 1})
+
+
+# ---------------------------------------------------------------------------
+# Vorlauf "Pendenz erstellen: X Tage vor dem Termin" (recurrence_json.create_days_before)
+# ---------------------------------------------------------------------------
+
+LEAD = {"type": "events", "event_tag": "Schar", "create_days_before": 14}
+LEAD_DUE = {"type": "offset", "offset_days": -7}
+
+
+def _schar_event(db, tenant_id: int, day: date, title: str = "Scharübung"):
+    event = make_event(db, tenant_id, title=title, event_date=day)
+    event.tag = "Schar"
+    db.flush()
+    return event
+
+
+def test_lead_creates_todo_only_from_event_date_minus_lead(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    event = _schar_event(db, setup["tenant"].id, date(2026, 10, 26))  # Stichtag 12.10.
+    later = _schar_event(db, setup["tenant"].id, date(2026, 10, 27))  # Stichtag 13.10.
+
+    assert packages.sync_package(db, package, today=date(2026, 10, 11)) == (0, 0)  # ein Tag davor
+    assert _instances(db, item) == []
+
+    assert packages.sync_package(db, package, today=date(2026, 10, 12))[0] == 1  # am Stichtag
+    [todo] = _instances(db, item)
+    assert todo.occurrence_key == f"event:{event.id}" and todo.due_date == date(2026, 10, 19)
+
+    assert packages.sync_package(db, package, today=date(2026, 10, 13))[0] == 1  # danach: nur der zweite
+    assert {t.occurrence_key for t in _instances(db, item)} == {f"event:{event.id}", f"event:{later.id}"}
+    assert packages.sync_package(db, package, today=date(2026, 10, 14))[0] == 0  # idempotent
+
+
+def test_lead_zero_and_none_and_other_recurrences_keep_old_behaviour(db, setup):
+    package, item, _ = _package(db, setup, recurrence={**LEAD, "create_days_before": 0}, due_rule=LEAD_DUE)
+    _schar_event(db, setup["tenant"].id, date(2026, 10, 13))
+    assert packages.sync_package(db, package, today=TODAY)[0] == 0  # 0 = erst am Termintag
+    assert packages.sync_package(db, package, today=date(2026, 10, 13))[0] == 1
+
+    _, no_lead, _ = _package(db, setup, recurrence={"type": "events", "event_tag": "Schar"}, due_rule=LEAD_DUE, name="Ohne")
+    assert packages.create_date_for(no_lead, packages.Occurrence("event:1", date(2027, 5, 1))) is None
+    # Ein Wert bei anderer Wiederholung (nur per Handarbeit in der DB möglich) wird ignoriert
+    _, weekly, _ = _package(db, setup, recurrence={"type": "weekly", "weekday": 0, "create_days_before": 3}, name="Woche")
+    assert packages.create_date_for(weekly, packages.Occurrence("2026-10-19", date(2026, 10, 19))) is None
+
+
+def test_lead_moved_event_uses_new_date_and_never_deletes(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    event = _schar_event(db, setup["tenant"].id, date(2026, 11, 30))  # Stichtag 16.11.
+    assert packages.sync_package(db, package, today=TODAY)[0] == 0
+
+    event.event_date = date(2026, 10, 20)  # vorverschoben: Stichtag 06.10. ist vorbei
+    db.flush()
+    packages.sync_packages_for_event_tag(db, tenant_id=setup["tenant"].id, tag="Schar", today=TODAY)
+    [todo] = _instances(db, item)
+    assert todo.due_date == date(2026, 10, 13)
+
+    event.event_date = date(2027, 3, 1)  # wieder weit weg: Pendenz bleibt, Fälligkeit folgt
+    db.flush()
+    packages.sync_packages_for_event_tag(db, tenant_id=setup["tenant"].id, tag="Schar", today=TODAY)
+    [kept] = _instances(db, item)
+    db.refresh(kept)
+    assert kept.id == todo.id and kept.due_date == date(2027, 2, 22)
+
+
+def test_lead_later_event_is_created_by_event_sync_or_daily_job(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    packages.sync_package(db, package, today=TODAY)
+    near = _schar_event(db, setup["tenant"].id, date(2026, 10, 20), title="Nah")  # im Fenster
+    far = _schar_event(db, setup["tenant"].id, date(2026, 11, 2), title="Fern")  # Stichtag 19.10.
+    cancelled = _schar_event(db, setup["tenant"].id, date(2026, 10, 21), title="Abgesagt")
+    cancelled.is_cancelled = True
+    db.flush()
+
+    packages.sync_packages_for_event_tag(db, tenant_id=setup["tenant"].id, tag="Schar", today=TODAY)
+    assert [t.occurrence_key for t in _instances(db, item)] == [f"event:{near.id}"]
+
+    assert packages.run_due_task_packages(db, today=date(2026, 10, 18))["created"] == 0
+    assert packages.run_due_task_packages(db, today=date(2026, 10, 19))["created"] == 1
+    assert {t.occurrence_key for t in _instances(db, item)} == {f"event:{near.id}", f"event:{far.id}"}
+
+
+def test_lead_ignores_events_of_other_tenants(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    other = make_tenant(db, "Andere Abteilung")
+    other_setup = {**setup, "tenant": other, "cycle": make_cycle_config(db, other.id, name="Jahr", reset_month=7, reset_day=31)}
+    other_package, other_item, _ = _package(db, other_setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    foreign = _schar_event(db, other.id, date(2026, 10, 20), title="Fremd")
+
+    packages.run_due_task_packages(db, today=TODAY)
+
+    assert _instances(db, item) == []  # fremder Termin erzeugt bei uns nichts
+    [other_todo] = _instances(db, other_item)
+    assert other_todo.tenant_id == other.id and other_todo.occurrence_key == f"event:{foreign.id}"
+    assert packages.preview(db, package, cycle_config=setup["cycle"], cycle_year=2026, today=TODAY) == []
+
+
+def test_lead_preview_reports_create_date_and_scheduled(db, setup):
+    tenant = setup["tenant"]
+    admin = make_current_user(tenant.id, role="admin")
+    package = routes.create_task_package(TaskPackageCreate(name="Schar"), db=db, user=admin)
+    package = routes.create_task_package_item(
+        package.id, TaskPackageItemCreate(task="Programm vorbereiten", recurrence=LEAD, due_rule=LEAD_DUE), db=db, user=admin
+    )
+    assert package.items[0].recurrence.create_days_before == 14
+    stored = db.scalar(select(TaskPackageItem).where(TaskPackageItem.public_id == package.items[0].id))
+    assert stored.recurrence_json == LEAD
+    package_row = db.scalar(select(TaskPackage).where(TaskPackage.public_id == package.id))
+    db.add(TaskPackageCycle(task_package_id=package_row.id, cycle_config_id=setup["cycle"].id, start_cycle_year=2026))
+    near = _schar_event(db, tenant.id, date(2026, 10, 20))
+    far = _schar_event(db, tenant.id, date(2026, 12, 1))
+    packages.sync_package(db, package_row, today=TODAY)
+
+    entries = packages.preview(db, package_row, cycle_config=setup["cycle"], cycle_year=2026, today=TODAY)
+    assert [(e["occurrence"].key, e["create_date"], e["exists"], e["scheduled"]) for e in entries] == [
+        (f"event:{near.id}", date(2026, 10, 6), True, False),
+        (f"event:{far.id}", date(2026, 11, 17), False, True),
+    ]
+
+
+# Zyklus 01.08.-31.07.: Termin am 05.08.2027 gehört zum Zyklus 2027, Stichtag (14 Tage) 22.07.2027
+# liegt noch im Zyklus 2026.
+EARLY_EVENT = date(2027, 8, 5)
+
+
+def test_lead_creates_todo_of_next_cycle_before_cycle_change(db, setup):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    event = _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+
+    assert packages.sync_package(db, package, today=date(2027, 7, 21))[0] == 0
+    entries = packages.preview(db, package, cycle_config=setup["cycle"], cycle_year=2027, today=date(2027, 7, 21))
+    assert [(e["create_date"], e["scheduled"]) for e in entries] == [(date(2027, 7, 22), True)]
+
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 1
+    [todo] = _instances(db, item)
+    assert (todo.cycle_year, todo.occurrence_key, todo.due_date) == (2027, f"event:{event.id}", date(2027, 7, 29))
+
+    # Zykluswechsel: regulärer Abgleich des Zyklus 2027 findet die Instanz, kein Duplikat
+    assert packages.run_due_task_packages(db, today=date(2027, 8, 1))["created"] == 0
+    assert packages.sync_package(db, package, today=date(2027, 8, 2))[0] == 0
+    assert [t.id for t in _instances(db, item)] == [todo.id]
+    entries = packages.preview(db, package, cycle_config=setup["cycle"], cycle_year=2027, today=date(2027, 8, 2))
+    assert [(e["exists"], e["scheduled"]) for e in entries] == [(True, False)]
+
+
+def test_without_lead_next_cycle_events_wait_for_cycle_change(db, setup):
+    package, item, _ = _package(db, setup, recurrence={"type": "events", "event_tag": "Schar"}, due_rule=LEAD_DUE)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 0
+    assert packages.sync_package(db, package, today=date(2027, 8, 1))[0] == 1
+    assert [t.cycle_year for t in _instances(db, item)] == [2027]
+
+
+@pytest.mark.parametrize(("start_cycle_year", "expected"), [(2027, 1), (2028, 0)])
+def test_lead_next_cycle_respects_start_cycle_year(db, setup, start_cycle_year, expected):
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE, start_cycle_year=start_cycle_year)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == expected
+    assert len(_instances(db, item)) == expected
+
+
+def test_lead_next_cycle_respects_inactive_package_and_downgrade(db, setup):
+    from app.models import TenantFeature
+
+    package, item, _ = _package(db, setup, recurrence=LEAD, due_rule=LEAD_DUE)
+    _schar_event(db, setup["tenant"].id, EARLY_EVENT)
+    package.is_active = False
+    db.flush()
+    assert packages.sync_package(db, package, today=date(2027, 7, 22))[0] == 0
+
+    package.is_active = True
+    feature = db.scalar(
+        select(TenantFeature).where(TenantFeature.tenant_id == setup["tenant"].id, TenantFeature.feature_code == "task_packages")
+    )
+    feature.access = "read_only"
+    db.flush()
+    assert packages.run_due_task_packages(db, today=date(2027, 7, 22))["created"] == 0
+    assert _instances(db, item) == []
+
+
+@pytest.mark.parametrize("value", ["14", 1.5, True, -1, 3651])
+def test_lead_rejects_wrong_type_and_range(value):
+    with pytest.raises(ValueError):
+        TaskPackageItemCreate(task="X", recurrence={"type": "events", "event_tag": "Schar", "create_days_before": value})
+
+
+@pytest.mark.parametrize("recurrence", [{"type": "once"}, {"type": "weekly", "weekday": 1}, {"type": "monthly", "day_of_month": 3}])
+def test_lead_only_allowed_for_events(recurrence):
+    with pytest.raises(ValueError):
+        TaskPackageItemCreate(task="X", recurrence={**recurrence, "create_days_before": 3})
+
+
+def test_lead_accepts_bounds_and_null():
+    for value in (0, 3650, None):
+        item = TaskPackageItemCreate(task="X", recurrence={"type": "events", "event_tag": "Schar", "create_days_before": value})
+        assert item.recurrence.create_days_before == value
+    # JSON aus dem Request (FastAPI) - ganze Zahl bleibt gültig
+    parsed = TaskPackageItemCreate.model_validate_json('{"task": "X", "recurrence": {"type": "events", "event_tag": "S", "create_days_before": 14}}')
+    assert parsed.recurrence.create_days_before == 14
 
 
 # ---------------------------------------------------------------------------

@@ -52,6 +52,9 @@ class TaskPackageRecurrence(BaseModel):
     weekday: int | None = Field(default=None, ge=0, le=6)
     # events: Termine mit diesem Tag im Zyklus
     event_tag: str | None = None
+    # events: Pendenz eines Termins erst X Tage vor dem Termindatum anlegen (None = sofort).
+    # strict: "14", 14.0 oder true sind kein gültiger Vorlauf.
+    create_days_before: int | None = Field(default=None, ge=0, le=3650, strict=True)
 
     @model_validator(mode="after")
     def _required_fields(self) -> TaskPackageRecurrence:
@@ -61,6 +64,8 @@ class TaskPackageRecurrence(BaseModel):
             raise ValueError("Wöchentliche Wiederholung braucht einen Wochentag")
         if self.type == "events" and not (self.event_tag or "").strip():
             raise ValueError("Wiederholung pro Termin braucht einen Termin-Tag")
+        if self.type != "events" and self.create_days_before is not None:
+            raise ValueError("Ein Vorlauf zum Erstellen ist nur bei Wiederholung pro Termin möglich")
         return self
 
 
@@ -166,6 +171,10 @@ class TaskPackagePreviewEntry(BaseModel):
     due_date: date | None = None
     assignee_names: list[str] = []
     exists: bool = False
+    # Nur bei "pro Termin" mit Vorlauf: ab diesem Tag entsteht die Pendenz
+    create_date: date | None = None
+    # Noch nicht angelegt, weil create_date in der Zukunft liegt
+    scheduled: bool = False
 
 
 class TaskPackagePreview(BaseModel):

@@ -2288,6 +2288,8 @@ export type TaskPackageRecurrence = {
   /** 0 = Montag ... 6 = Sonntag */
   weekday?: number | null;
   event_tag?: string | null;
+  /** events: Pendenz erst so viele Tage vor dem Termin anlegen (null = sofort) */
+  create_days_before?: number | null;
 };
 
 export type TaskPackageDueRuleType = "none" | "fixed" | "offset";
@@ -2340,6 +2342,10 @@ export type TaskPackagePreviewEntry = {
   due_date: string | null;
   assignee_names: string[];
   exists: boolean;
+  /** Nur bei «Pro Termin» mit Vorlauf: ab diesem Tag entsteht die Pendenz */
+  create_date?: string | null;
+  /** Noch nicht angelegt, weil create_date in der Zukunft liegt */
+  scheduled?: boolean;
 };
 
 export type TaskPackagePreview = {

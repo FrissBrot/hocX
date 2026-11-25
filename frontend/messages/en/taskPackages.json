@@ -67,10 +67,11 @@
   "unassignConfirm": "Remove assignment",
   "previewTitle": "Preview: {name}",
   "previewYearLabel": "Cycle year",
-  "previewHelp": "Responsible people as they are listed today. “Exists” means the task has already been created.",
+  "previewHelp": "Responsible people as they are listed today. “Exists” means the task has already been created; “Created on …” means it will only be created on that day because of the lead time.",
   "previewEmpty": "No tasks are created in this cycle.",
   "previewLoading": "Loading …",
   "statusExists": "Exists",
+  "statusScheduled": "Created on {date}",
   "statusNew": "New",
   "errorGeneric": "Action failed",
   "errors": {
@@ -132,6 +133,9 @@
   "eventTagLabel": "Event tag",
   "eventTagPlaceholder": "Choose tag",
   "eventTagHelp": "A task is created for every event with this tag in the cycle – including events added later.",
+  "createDaysBeforeLabel": "Create task: days before the event",
+  "createDaysBeforeHelp": "Optional. Empty: the tasks for all events in the cycle are created right away. With a number: the task for an event is only created that many days before the event (0 = on the event day), at the latest the day after. Moved events count with their new date.",
+  "dueBeforeCreationHint": "The due date is before the creation date: the task will already be overdue when it is created. Check the number of days.",
   "dueLabel": "Due",
   "dueType": {
     "none": "None",
@@ -152,7 +156,8 @@
     "once": "Once per cycle",
     "monthly": "Monthly on day {day}",
     "weekly": "Every {weekday}",
-    "events": "Per event tagged “{tag}”"
+    "events": "Per event tagged “{tag}”",
+    "eventsWithLead": "Per event tagged “{tag}”, {days, plural, =0 {created on the event day} one {created # day before the event} other {created # days before the event}}"
   },
   "dueSummary": {
     "none": "None",

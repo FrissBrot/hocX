@@ -550,6 +550,8 @@ def preview_task_package(
                 due_date=entry["due_date"],
                 assignee_names=entry["assignee_names"],
                 exists=entry["exists"],
+                create_date=entry["create_date"],
+                scheduled=entry["scheduled"],
             )
             for entry in entries
         ],
