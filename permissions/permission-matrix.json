@@ -270,6 +270,12 @@
         "reader"
       ]
     },
+    "GET /api/cycle-configs/{cycle_config_id}/delete-impact": {
+      "handler": "cycle_configs.cycle_config_delete_impact",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/document-assets": {
       "handler": "document_studio.list_document_assets",
       "allowed": [

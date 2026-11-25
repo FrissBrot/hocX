@@ -27,5 +27,7 @@
   "editButton": "Modifier",
   "resetLabelHelpTopic": "Date de réinitialisation",
   "resetReassignHelp": "Par défaut, chaque rendez-vous appartient au cycle dans lequel tombe sa date. Un nouveau cycle reprend ainsi tous les rendez-vous existants ; si la date de réinitialisation change, ces attributions par défaut suivent. Les attributions définies manuellement restent inchangées.",
-  "deleteInUse": "Ce cycle est encore utilisé par un modèle ou un dépôt et ne peut pas être supprimé."
+  "deleteInUse": "Ce cycle est encore utilisé par un modèle ou un dépôt et ne peut pas être supprimé.",
+  "deleteImpact": "Sont également supprimés : {snapshots, plural, one {# état de tableau enregistré} other {# états de tableau enregistrés}}, {packages, plural, one {# attribution de paquet de tâches} other {# attributions de paquets de tâches}} et {albums, plural, one {# album de cycle} other {# albums de cycle}}. {photos, plural, one {La # photo qu’ils contiennent reste} other {Les # photos qu’ils contiennent restent}} dans la galerie.",
+  "deleteImpactUnknown": "Les états de tableau enregistrés, les attributions de paquets de tâches et les albums de ce cycle sont également supprimés (les photos restent dans la galerie)."
 }

@@ -1,7 +1,8 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,7 @@ from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
+from app.models.entities import CycleConfig, PhotoAlbum, PhotoAlbumItem, Protocol, SubmissionAssignment, TableSnapshot, TaskPackageCycle, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
 from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN
 from app.services import public_id_service
@@ -105,6 +106,33 @@ def update_cycle_config(
         db.rollback()
         raise HTTPException(status_code=400, detail="Could not update cycle config") from exc
     return obj
+
+
+class CycleDeleteImpact(BaseModel):
+    table_snapshot_count: int
+    task_package_count: int
+    album_count: int
+    album_photo_count: int
+
+
+@router.get("/cycle-configs/{cycle_config_id}/delete-impact", response_model=CycleDeleteImpact)
+def cycle_config_delete_impact(
+    cycle_config_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Für den Löschdialog (Fachentscheid 2026-11-25): was mit dem Zyklus per Kaskade wegfällt -
+    Tabellen-Verlauf (table_snapshot), Zuordnungen von Aufgabenpaketen und Zyklus-Alben (die Fotos
+    selbst bleiben in der Galerie)."""
+    require_permission(user, P.TEMPLATES_MANAGE)
+    obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
+    album_ids = select(PhotoAlbum.id).where(PhotoAlbum.cycle_config_id == obj.id, PhotoAlbum.tenant_id == obj.tenant_id)
+    return CycleDeleteImpact(
+        table_snapshot_count=db.scalar(select(func.count()).select_from(TableSnapshot).where(TableSnapshot.cycle_config_id == obj.id)) or 0,
+        task_package_count=db.scalar(select(func.count()).select_from(TaskPackageCycle).where(TaskPackageCycle.cycle_config_id == obj.id)) or 0,
+        album_count=db.scalar(select(func.count()).select_from(album_ids.subquery())) or 0,
+        album_photo_count=db.scalar(select(func.count()).select_from(PhotoAlbumItem).where(PhotoAlbumItem.album_id.in_(album_ids))) or 0,
+    )
 
 
 @router.delete("/cycle-configs/{cycle_config_id}", status_code=status.HTTP_204_NO_CONTENT)

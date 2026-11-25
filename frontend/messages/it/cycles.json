@@ -27,5 +27,7 @@
   "editButton": "Modifica",
   "resetLabelHelpTopic": "Data di reset",
   "resetReassignHelp": "Di norma ogni appuntamento appartiene al ciclo in cui cade la sua data. Un nuovo ciclo riprende così tutti gli appuntamenti esistenti; se la data di reset cambia, queste assegnazioni predefinite si spostano di conseguenza. Le assegnazioni impostate manualmente restano invariate.",
-  "deleteInUse": "Questo ciclo è ancora usato da un modello o da una consegna e non può essere eliminato."
+  "deleteInUse": "Questo ciclo è ancora usato da un modello o da una consegna e non può essere eliminato.",
+  "deleteImpact": "Vengono eliminati anche: {snapshots, plural, one {# stato di tabella salvato} other {# stati di tabella salvati}}, {packages, plural, one {# assegnazione di pacchetto di compiti} other {# assegnazioni di pacchetti di compiti}} e {albums, plural, one {# album del ciclo} other {# album del ciclo}}. {photos, plural, one {La # foto contenuta resta} other {Le # foto contenute restano}} nella galleria.",
+  "deleteImpactUnknown": "Vengono eliminati anche gli stati di tabella salvati, le assegnazioni di pacchetti di compiti e gli album di questo ciclo (le foto restano nella galleria)."
 }

@@ -27,5 +27,7 @@
   "editButton": "Edit",
   "resetLabelHelpTopic": "Reset date",
   "resetReassignHelp": "By default every event belongs to the cycle its date falls into. A new cycle picks up all existing events this way; if the reset date changes, these default assignments move along. Manually set assignments stay unchanged.",
-  "deleteInUse": "This cycle is still used by a template or a submission and cannot be deleted."
+  "deleteInUse": "This cycle is still used by a template or a submission and cannot be deleted.",
+  "deleteImpact": "This also deletes {snapshots, plural, one {# saved table state} other {# saved table states}}, {packages, plural, one {# task package assignment} other {# task package assignments}} and {albums, plural, one {# cycle album} other {# cycle albums}}. The {photos, plural, one {# photo in them stays} other {# photos in them stay}} in the gallery.",
+  "deleteImpactUnknown": "Saved table states, task package assignments and cycle albums of this cycle are deleted too (the photos stay in the gallery)."
 }

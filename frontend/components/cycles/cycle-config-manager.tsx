@@ -142,6 +142,34 @@ function CycleForm({
   );
 }
 
+
+export type CycleDeleteImpact = {
+  table_snapshot_count: number;
+  task_package_count: number;
+  album_count: number;
+  album_photo_count: number;
+};
+
+type CycleTFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+/** Text der Löschrückfrage: Grundsatz plus, was mit dem Zyklus wegfällt (Fotos bleiben). */
+export function cycleDeleteMessage(t: CycleTFunc, impact: CycleDeleteImpact | null): string {
+  const parts = [t("deleteConfirm")];
+  if (impact === null) {
+    parts.push(t("deleteImpactUnknown"));
+  } else if (impact.table_snapshot_count + impact.task_package_count + impact.album_count > 0) {
+    parts.push(
+      t("deleteImpact", {
+        snapshots: impact.table_snapshot_count,
+        packages: impact.task_package_count,
+        albums: impact.album_count,
+        photos: impact.album_photo_count,
+      })
+    );
+  }
+  return parts.join(" ");
+}
+
 export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleConfigSummary[] }) {
   const t = useTranslations("cycles");
   const tCommon = useTranslations("common");
@@ -225,9 +253,16 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
   }
 
   async function handleDelete(id: string) {
+    // Was per Kaskade mitgeht, vorher nennen (Fachentscheid 2026-11-25, wie beim Termin)
+    let impact: CycleDeleteImpact | null = null;
+    try {
+      impact = await browserApiFetch<CycleDeleteImpact>(`/api/cycle-configs/${id}/delete-impact`);
+    } catch {
+      impact = null;
+    }
     if (
       !(await confirm({
-        message: t("deleteConfirm"),
+        message: cycleDeleteMessage(t, impact),
         tone: "danger",
         confirmLabel: tCommon("delete")
       }))
