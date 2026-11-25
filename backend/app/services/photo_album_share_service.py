@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.trash_scope import not_trashed_public_id
@@ -259,7 +260,14 @@ def invite(
         album_id=album.id, tenant_id=target_tenant_id, status="pending", invited_by=invited_by, share_location=share_location
     )
     db.add(share)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Zwei gleichzeitige Einladungen an denselben Mandanten: beide sahen oben noch keine
+        # Freigabe, die zweite scheitert am Primärschlüssel - dieselbe Antwort wie bei einer
+        # bestehenden Freigabe statt 500 (Nachtlauf 2026-11-25)
+        db.rollback()
+        raise AlbumShareError("Für diesen Mandanten besteht bereits eine Freigabe oder Anfrage.") from None
     db.refresh(share)
     return share
 

@@ -161,3 +161,20 @@ def test_live_photo_video_loses_its_location_for_partners_without_the_location(d
     served = tmp_path / "served.mp4"
     served.write_bytes(response_bytes(downloaded))
     assert "location" not in _ffprobe_tags(served)
+
+
+def test_concurrent_second_invite_is_the_same_error_as_an_existing_share(db, monkeypatch):
+    """Nachtlauf 2026-11-25 (Verdacht): zwei gleichzeitige Einladungen an denselben Mandanten -
+    beide sehen noch keine Freigabe, die zweite scheiterte am Primärschlüssel mit 500."""
+    owner, partner = make_tenant(db, "Besitzer"), make_tenant(db, "Partner")
+    album = PhotoAlbum(tenant_id=owner.id, name="Lager", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_share_service.invite(db, album, target_tenant_id=partner.id, invited_by=None)
+    # Zweiter Aufruf, der die bestehende Freigabe (wie im Rennen) noch nicht gesehen hat
+    original_get = db.get
+    monkeypatch.setattr(db, "get", lambda model, key, **kw: None if model is PhotoAlbumTenantShare else original_get(model, key, **kw))
+    with pytest.raises(photo_album_share_service.AlbumShareError):
+        photo_album_share_service.invite(db, album, target_tenant_id=partner.id, invited_by=None)
+    monkeypatch.undo()
+    assert db.get(PhotoAlbumTenantShare, {"album_id": album.id, "tenant_id": partner.id}).status == "pending"
