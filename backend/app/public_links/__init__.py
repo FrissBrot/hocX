@@ -87,7 +87,7 @@ EXEMPT_COLUMNS: dict[str, str] = {
     "storage_migration.fencing_token": "Sperrzähler gegen parallele Speicher-Migrationen, kein Zugang",
     "backup_job.fencing_token": "Sperrzähler gegen parallele Backups, kein Zugang",
     "backup_restore_job.fencing_token": "Sperrzähler gegen parallele Wiederherstellungen, kein Zugang",
-    "import_connection.access_token_encrypted": "OAuth-Token zum Cloud-Konto einer Person (Datei-Import), verschlüsselt, verlässt den Server nie, kein Link",
+    "import_connection.access_token_encrypted": "OAuth-Token zum Cloud-Konto einer Person (Datei-Import), verschlüsselt; nur bei Google Drive geht es kurzlebig (drive.file) an den Picker derselben angemeldeten Person, kein Link",
     "import_connection.refresh_token_encrypted": "OAuth-Token zum Cloud-Konto einer Person (Datei-Import), verschlüsselt, verlässt den Server nie, kein Link",
 }
 

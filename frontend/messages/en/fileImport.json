@@ -60,10 +60,14 @@
     "toRules": "Continue to rules and preview",
     "cloudHintConnected": "hocX only reads what you select from the cloud service and keeps the encrypted access only until the import ends.",
     "provider": {
-      "microsoft": "Microsoft OneDrive / SharePoint"
+      "microsoft": "Microsoft OneDrive / SharePoint",
+      "google_drive": "Google Drive",
+      "google_photos": "Google Photos"
     },
     "providerHint": {
-      "microsoft": "Connect OneDrive personal, OneDrive for Business or SharePoint libraries directly. You choose the folders in hocX."
+      "microsoft": "Connect OneDrive personal, OneDrive for Business or SharePoint libraries directly. You choose the folders in hocX.",
+      "google_drive": "Pick individual files. Google Docs, Sheets and Slides are imported as Word, Excel and PowerPoint. Whole folders via Google Takeout.",
+      "google_photos": "Pick photos directly in Google Photos. Videos are not imported."
     }
   },
   "options": {
@@ -348,7 +352,14 @@
       "provider_unavailable": "This cloud service is not available right now.",
       "invalid_ref": "Invalid selection.",
       "empty_source": "No files were found in the selection. Please choose other folders.",
-      "selection_unavailable": "The selected folders can no longer be reached. Please choose again."
+      "selection_unavailable": "The selected folders can no longer be reached. Please choose again.",
+      "missing_scope": "Access to the files or photos was not allowed during sign-in. Sign in again and tick the box for it.",
+      "picker_unavailable": "The Google picker could not be loaded. Please try again later.",
+      "picker_no_files": "No files were selected. Folders cannot be imported, only files.",
+      "photos_session_expired": "The selection in Google Photos has expired. Please start again.",
+      "photos_session_missing": "Please start the selection in Google Photos first.",
+      "wrong_source": "This step does not match the selected source.",
+      "invalid_status": "This import is no longer a draft. Please continue in the wizard."
     },
     "adminConsent": {
       "title": "Help: approval by the organisation’s IT",
@@ -363,12 +374,35 @@
       "copied": "Approval link copied."
     },
     "connectHint": {
-      "microsoft": "Sign in with your Microsoft account (personal, work or school). hocX first only asks for read access to your own files; for “Shared with me” on work accounts and for SharePoint a second consent follows as soon as you open them."
+      "microsoft": "Sign in with your Microsoft account (personal, work or school). hocX first only asks for read access to your own files; for “Shared with me” on work accounts and for SharePoint a second consent follows as soon as you open them.",
+      "google_drive": "Sign in with Google. hocX will then only see the files you select in the Google picker in the next step, nothing else from your Drive.",
+      "google_photos": "Sign in with Google. You then pick the photos directly in Google Photos; hocX only sees that selection."
     },
     "roots": {
       "microsoft_me": "My OneDrive",
       "microsoft_shared": "Shared with me",
       "microsoft_sites": "SharePoint sites"
+    },
+    "google": {
+      "driveHint": "Open the Google picker and select the files you want to import (multiple selection possible, up to 200 per round).",
+      "driveFolders": "Google cannot share whole folders this way. Create a Takeout export instead and import it as a ZIP archive.",
+      "driveChoose": "Select in Google Drive",
+      "photosHint": "Google Photos opens in a new window. Select the photos there and tap “Done”. This page then continues automatically.",
+      "photosChoose": "Select in Google Photos",
+      "photosRestart": "Restart selection",
+      "photosWaiting": "Waiting for your selection in Google Photos …",
+      "photosPopupHint": "No new window appeared?",
+      "photosOpen": "Open Google Photos"
     }
+  },
+  "googlePicker": {
+    "title": "Select files from Google Drive",
+    "intro": "Select the files to import in the Google picker. hocX only gets access to these files.",
+    "pickerTitle": "Select files for hocX",
+    "loading": "Loading the Google picker …",
+    "applying": "Applying your selection …",
+    "cancelled": "The picker was closed without selecting files.",
+    "open": "Open Google picker",
+    "back": "Back to the import"
   }
 }

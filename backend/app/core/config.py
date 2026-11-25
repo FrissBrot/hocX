@@ -25,6 +25,7 @@ def _load_file_secrets() -> None:
         "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET", "GEO_DATABASE_URL",
         # Datei-Import aus der Cloud (services/cloud_import, Plan 2026-11-21 §12.1)
         "CLOUD_IMPORT_TOKEN_KEY", "CLOUD_IMPORT_TOKEN_KEY_PREVIOUS", "CLOUD_IMPORT_MS_CLIENT_SECRET",
+        "CLOUD_IMPORT_GOOGLE_CLIENT_SECRET",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -376,6 +377,18 @@ class Settings(BaseSettings):
     # Download aus OneDrive for Business/SharePoint: "auto" (vorauthentifizierte URL, bei 401 bzw. ab
     # 1.4.2027 Bearer-Token), "tempauth" oder "bearer" (nur noch Bearer).
     cloud_import_ms_download_mode: str = Field(default="auto", pattern="^(auto|tempauth|bearer)$", validation_alias="CLOUD_IMPORT_MS_DOWNLOAD_MODE")
+    # Google-Cloud-Projekt (Google Drive mit drive.file + Picker, Google Fotos über die Photos
+    # Picker API; Plan §3, E-3 a). Ohne Client-ID/Secret werden beide nicht angeboten, Google Drive
+    # zusätzlich nicht ohne API-Key und App-ID (der Picker braucht beides).
+    cloud_import_google_client_id: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_ID")
+    cloud_import_google_client_secret: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_SECRET")
+    # Optional: Ablaufdatum (JJJJ-MM-TT), falls das Secret ablaufen soll (Google: unbegrenzt, sonst leer)
+    cloud_import_google_client_secret_expires: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES")
+    # Browser-Schlüssel für den Google Picker - öffentlich, in der Google-Cloud-Konsole auf die
+    # HTTP-Referrer der hocX-Domains und die Picker API beschränken (kein Secret).
+    cloud_import_google_api_key: str = Field(default="", max_length=200, pattern=r"^[A-Za-z0-9_-]*$", validation_alias="CLOUD_IMPORT_GOOGLE_API_KEY")
+    # Projektnummer des Google-Cloud-Projekts (PickerBuilder.setAppId; ohne sie gibt drive.file keinen Zugriff)
+    cloud_import_google_app_id: str = Field(default="", max_length=30, pattern=r"^[0-9]*$", validation_alias="CLOUD_IMPORT_GOOGLE_APP_ID")
     # Nachgebaute Anbieter für E2E/Tests (services/cloud_import/fake_*.py). Wirkt nur mit
     # HOCX_ENVIRONMENT=development; in jeder anderen Umgebung bricht der Start ab. Nie in .env*/deploy.
     cloud_import_fake_providers: bool = Field(default=False, validation_alias="CLOUD_IMPORT_FAKE_PROVIDERS")
@@ -532,7 +545,7 @@ class Settings(BaseSettings):
         if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
             print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)
             sys.exit(1)
-        if self.is_production and self.cloud_import_ms_client_id and not self.cloud_import_token_key:
+        if self.is_production and (self.cloud_import_ms_client_id or self.cloud_import_google_client_id) and not self.cloud_import_token_key:
             print(
                 "FATAL: CLOUD_IMPORT_TOKEN_KEY is not set although a cloud import provider is configured. "
                 "Run scripts/deploy.sh (scripts/lib/env_migrate.sh creates it).",

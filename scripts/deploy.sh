@@ -450,6 +450,22 @@ run_preflight() {
       return 1
     fi
   fi
+  # Google (Drive + Fotos): Client-ID nur mit Secret; API-Key und App-ID (Picker, nur Google Drive)
+  # gemeinsam oder gar nicht. Ablaufdatum optional (Google-Secrets laufen standardmaessig nicht ab).
+  if [ -n "${CLOUD_IMPORT_GOOGLE_CLIENT_ID:-}" ] && [ -z "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}" ]; then
+    echo "CLOUD_IMPORT_GOOGLE_CLIENT_ID ist gesetzt, CLOUD_IMPORT_GOOGLE_CLIENT_SECRET fehlt." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_GOOGLE_API_KEY:-}${CLOUD_IMPORT_GOOGLE_APP_ID:-}" ]; then
+    if ! [[ "${CLOUD_IMPORT_GOOGLE_API_KEY:-}" =~ ^[A-Za-z0-9_-]{20,200}$ ]] || ! [[ "${CLOUD_IMPORT_GOOGLE_APP_ID:-}" =~ ^[0-9]{6,30}$ ]]; then
+      echo "CLOUD_IMPORT_GOOGLE_API_KEY und CLOUD_IMPORT_GOOGLE_APP_ID (Projektnummer) nur gemeinsam und gueltig setzen." >&2
+      return 1
+    fi
+  fi
+  if [ -n "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES:-}" ] && ! [[ "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    echo "CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES muss leer oder ein Datum (JJJJ-MM-TT) sein." >&2
+    return 1
+  fi
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" "$CLOUD_IMPORT_TOKEN_KEY" \
@@ -545,6 +561,8 @@ write_secret_files() {
   write_secret_file "$secrets_dir" cloud_import_token_key "$CLOUD_IMPORT_TOKEN_KEY"
   write_secret_file "$secrets_dir" cloud_import_token_key_previous "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}"
   write_secret_file "$secrets_dir" cloud_import_ms_client_secret "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}"
+  # Client-Secret des Google-Cloud-Projekts (leer = Google Drive/Fotos nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_google_client_secret "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}"
   write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"

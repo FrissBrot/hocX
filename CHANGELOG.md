@@ -8,6 +8,33 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- **Datei-Import aus Google Drive:** Nach der Anmeldung bei Google wählt man die Dateien in der
+  Google-Auswahl (Picker) aus, auch aus geteilten Ablagen, bis 200 pro Durchgang. hocX bekommt nur auf
+  diese Dateien Zugriff (`drive.file`, kein Lesezugriff aufs ganze Drive). Google Docs, Tabellen und
+  Präsentationen kommen als Word, Excel und PowerPoint, Zeichnungen als PDF; Exporte über 10 MB laufen
+  über die Exportlinks von Google, sonst stehen sie als «zu gross» im Bericht. Formulare, Sites und
+  Verknüpfungen erscheinen als «nicht unterstützt». Ganze Ordner weiterhin über Google Takeout (ZIP).
+- **Datei-Import aus Google Fotos:** Fotos werden direkt in Google Fotos ausgewählt (Photos Picker API,
+  neues Fenster); der Assistent merkt das Ende der Auswahl von selbst und listet die Fotos im Ordner
+  «Google Fotos» auf. Videos werden nicht übernommen.
+- Beide Google-Quellen erscheinen nur, wenn der Betreiber das Google-Projekt eingerichtet hat (neue
+  Variablen `CLOUD_IMPORT_GOOGLE_CLIENT_ID`, `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET` (Secret),
+  `CLOUD_IMPORT_GOOGLE_API_KEY`, `CLOUD_IMPORT_GOOGLE_APP_ID`, optional
+  `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES`; RUNBOOK 27.2). Wurde bei der Anmeldung der Zugriff auf
+  Dateien bzw. Fotos abgewählt, bietet der Assistent «Neu anmelden» an. Nach dem Import löscht hocX den
+  Zugang und widerruft ihn zusätzlich bei Google.
+
+### Sicherheit
+
+- Die Content-Security-Policy wird nur für die Seite des Google Pickers (`/files/import/google-picker`)
+  gelockert (Skripte von `apis.google.com`, iframe von `docs.google.com`, Nonce bleibt, kein
+  `unsafe-inline`); die Seite hat keine App-Navigation und wechselt mit vollem Seitenaufruf zurück.
+- Google meldet Drosselung teils als 403 (`userRateLimitExceeded`): wird jetzt wie 429 behandelt
+  (Pause statt «kein Zugriff»). Das Bearer-Token für Google-Fotos-Downloads geht nur an
+  `lhN.googleusercontent.com`, nie an andere Hosts unter `googleusercontent.com`.
+
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt

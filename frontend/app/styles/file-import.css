@@ -307,3 +307,23 @@
     display: none;
   }
 }
+
+/* Google Picker (eigene Seite ohne App-Shell, gelockerte CSP nur dort) */
+.file-import-picker-page {
+  min-height: 100dvh;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--bg);
+}
+
+.file-import-picker {
+  width: min(640px, 100%);
+}
+
+/* Google Fotos: Warten auf die Auswahl im anderen Fenster */
+.file-import-photos-waiting {
+  display: grid;
+  gap: var(--space-2);
+}

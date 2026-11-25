@@ -222,3 +222,73 @@ der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
 Check `cloud_import` in `/admin/system`: aktive Aufträge, Aufträge ohne Fortschritt seit 30 min (nicht
 gedrosselt), Anzahl `needs_reauth`, Ablauf der Client-Secrets (Warnung ab 30 Tagen, kritisch nach Ablauf,
 Warnung ohne gültiges Ablaufdatum), Belegung der Zwischenablage (`stagedMb`, Warnung ab 20 GiB).
+
+## Google Drive und Google Fotos (P2/P3)
+
+Entscheid E-3 (a): nur `drive.file` + Google Picker, **kein** `drive.readonly` (keine CASA). Ganze Ordner
+über das Takeout-ZIP (P0). Google Fotos über die Photos Picker API (seit 31.3.2025 einziger Weg).
+
+| Teil | Ort |
+|---|---|
+| Gemeinsam (OAuth `query`, `access_type=offline`, `prompt=consent`, ID-Token → `sub`/E-Mail/`hd`, Widerruf) | `services/cloud_import/providers/google_common.py` |
+| Google Drive (Metadaten, Export, Download) | `providers/google_drive.py` |
+| Google Fotos (Picker-Sitzung, `mediaItems`, `baseUrl`) | `providers/google_photos.py` |
+| Picker-Token, Fotos-Sitzung (Routen) | `api/routes/cloud_import_google.py` |
+| Picker-Seite mit eigener CSP | `frontend/app/files/import/google-picker/page.tsx`, `components/file-import/google-drive-picker.tsx`, `lib/csp.ts` |
+| Auswahl im Wizard | `components/file-import/import-google-select.tsx` |
+| Nachbau (Tests/E2E) | `services/cloud_import/fake_google.py` (+ `/api/cloud-import/fake-google/*` nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`) |
+
+### Google Drive
+
+- Scopes (volle URLs, so liefert Google sie in der Token-Antwort zurück): `openid`,
+  `…/auth/userinfo.email`, `…/auth/drive.file`. Bei der granularen Zustimmung abgewählt →
+  `tier = null` → Wizard zeigt `missing_scope` und «Neu anmelden».
+- Kein Ordnerbaum (`roots()` leer, `public_info = {"selection": "google_picker"}`). Der Wizard verlinkt
+  auf `/files/import/google-picker?job=<id>` (voller Seitenwechsel). Die Seite holt
+  `POST /cloud-import/jobs/{id}/google-drive/picker` (Access-Token der eigenen Verbindung, API-Key,
+  App-ID; `no-store`, auditiert `cloud_import.picker_token`), lädt `https://apis.google.com/js/api.js`
+  mit Nonce, zeigt den Picker (Liste, Mehrfachauswahl, geteilte Ablagen, keine Ordnerauswahl, höchstens
+  200) und schickt die IDs an `/selection`. Danach wieder voller Seitenwechsel in den Wizard.
+- **CSP (Plan §5.3):** nur für genau `/files/import/google-picker` (`lib/csp.ts::cspVariantForPath`,
+  `proxy.ts`, nie auf der Admin-Domain): `script-src` + `https://apis.google.com` (Nonce und
+  `'strict-dynamic'` bleiben, kein `'unsafe-inline'`), `frame-src https://docs.google.com
+  https://drive.google.com` (sonst `'none'`), `connect-src` + `apis.google.com`, `www.googleapis.com`,
+  `content.googleapis.com`, `img-src` + `lh3`–`lh6.googleusercontent.com`, `drive-thirdparty.googleusercontent.com`,
+  `ssl.gstatic.com`, `www.gstatic.com`. Nicht auf Admin- und Website-Domain.
+  `frame-ancestors 'none'` bleibt. Die Seite hat keine App-Shell und keine App-Links, damit die
+  Lockerung nicht über Client-Navigation in andere Ansichten «mitgenommen» wird. Test: `proxy.test.ts`
+  und E2E `cloud-import-google.spec.ts`.
+- Google-Formate: `files.export` → DOCX/XLSX/PPTX (Zeichnungen PDF); Name bekommt die Endung,
+  `provider_mime` bleibt der Google-Typ (der Download entscheidet daran). `exportSizeLimitExceeded`
+  (> 10 MB) → `exportLinks` auf `docs.google.com` (Bearer), sonst `too_large`. Nicht exportierbare Typen
+  (Formular, Site, Verknüpfung …) haben keine Endung → `unsupported_format` im Bericht.
+- Hashes: `sha256:`/`md5:` aus `sha256Checksum`/`md5Checksum` (nur Binärdateien).
+- Allowlist: API `www.googleapis.com`, `docs.google.com` (Bearer), Token `oauth2.googleapis.com` (ohne
+  Bearer), Umleitungsziele `*.googleusercontent.com` ohne Bearer.
+- Drosselung: 429 und 403 `userRateLimitExceeded`/`rateLimitExceeded` → `ProviderThrottled`
+  (`http.GOOGLE_RATE_LIMIT_REASONS`), Token-Bucket 8/s, Burst 20.
+
+### Google Fotos
+
+- Scope `…/auth/photospicker.mediaitems.readonly`. `POST /cloud-import/jobs/{id}/google-photos/session`
+  legt bei Google eine Sitzung an (ID in `import_job.listing_state.picker_session`), Antwort nur die
+  `pickerUri` (muss mit `https://photos.google.com/` beginnen). Der Wizard öffnet sie mit `/autoclose` in
+  einem neuen Fenster (Google Fotos lässt sich nicht einbetten → keine CSP-Änderung) und ruft
+  `…/session/poll` im Takt von `pollingConfig` auf. Bei `mediaItemsSet` wird die Auswahl
+  `session:<id>` gesetzt und das Auflisten beginnt (Ordner «Google Fotos»).
+- Download: `baseUrl=d` mit Bearer (Pflicht laut Google), Bearer nur an `lhN.googleusercontent.com`
+  (`PhotosHostPolicy`, nie an andere `*.googleusercontent.com`). `baseUrl` gilt 60 min: Zwischenspeicher
+  je Prozess (45 min), sonst liest der Adapter die Sitzung frisch.
+- Videos (`VIDEO`) → `unsupported_format`. Google liefert die Bilder ohne Standort.
+- Ende/Trennen: Token wird bei Google widerrufen (damit ist auch die Sitzung wertlos), eine ersetzte
+  Sitzung wird sofort gelöscht.
+- Grenze: Die Sitzung läuft bei Google ab (`expireTime`); sehr grosse Auswahlen müssen bis dahin
+  heruntergeladen sein, sonst `not_found` im Bericht.
+
+### Variablen (Google)
+
+`CLOUD_IMPORT_GOOGLE_CLIENT_ID`, `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET` (Secret, `_FILE`),
+`CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES` (optional, nur dann im Monitoring),
+`CLOUD_IMPORT_GOOGLE_API_KEY` (öffentlich, Referrer-beschränkt) und `CLOUD_IMPORT_GOOGLE_APP_ID`
+(Projektnummer). Google Drive braucht alle vier Pflichtwerte, Google Fotos nur Client-ID und Secret.
+Einrichtung: RUNBOOK «Cloud-Import einrichten», Abschnitt Google.

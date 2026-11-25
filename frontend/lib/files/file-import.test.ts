@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   apiErrorCode,
   chunk,
+  cloudSelectionMode,
+  isPhotosPickerUri,
+  photosPickerUrl,
+  pickedFileIds,
+  pickerJobId,
+  wizardUrl,
   cleanRule,
   importProgress,
   isHiddenPath,
@@ -85,5 +91,50 @@ describe("Rückkehr vom Cloud-Anbieter", () => {
     expect(isCloudSource("microsoft")).toBe(true);
     expect(isCloudSource("zip")).toBe(false);
     expect(isCloudSource("folder")).toBe(false);
+  });
+});
+
+describe("Google-Auswahl", () => {
+  it("erkennt die Auswahl-Art eines Anbieters", () => {
+    expect(cloudSelectionMode(null)).toBe("tree");
+    expect(cloudSelectionMode({ key: "google_drive", tiers: [], default_tier: "basic", info: { selection: "google_picker" } })).toBe("google_picker");
+    expect(cloudSelectionMode({ key: "google_photos", tiers: [], default_tier: "basic", info: { selection: "photos_picker" } })).toBe("photos_picker");
+    expect(cloudSelectionMode({ key: "microsoft", tiers: [], default_tier: "basic", info: { selection: "other" } })).toBe("tree");
+  });
+
+  it("nimmt nur gültige Datei-IDs aus der Picker-Antwort", () => {
+    const docs = [
+      { id: "abc_DEF-1", mimeType: "image/jpeg" },
+      { id: "abc_DEF-1", mimeType: "image/jpeg" },
+      { id: "folder1", mimeType: "application/vnd.google-apps.folder" },
+      { id: "../x?y", mimeType: "text/plain" },
+      { id: 5 },
+      { id: "doc2", mimeType: "application/vnd.google-apps.document" },
+    ];
+    expect(pickedFileIds(docs, 200)).toEqual(["abc_DEF-1", "doc2"]);
+    expect(pickedFileIds(docs, 1)).toEqual(["abc_DEF-1"]);
+  });
+
+  it("liest nur eine gültige Auftrags-ID und springt relativ zurück", () => {
+    const id = "0194f1c2-1111-7aaa-8bbb-123456789abc";
+    expect(pickerJobId(`?job=${id}`)).toBe(id);
+    expect(pickerJobId("?job=https://evil.example")).toBeNull();
+    expect(wizardUrl(id)).toBe(`/files/import?job=${id}`);
+    expect(wizardUrl(null)).toBe("/files/import");
+  });
+
+  it("öffnet nur Auswahlseiten von Google Fotos", () => {
+    const origin = "https://verein.hocx.test";
+    expect(isPhotosPickerUri("https://photos.google.com/picker/abc", origin)).toBe(true);
+    expect(isPhotosPickerUri("http://photos.google.com/picker/abc", origin)).toBe(false);
+    expect(isPhotosPickerUri("https://photos.google.com.evil.example/x", origin)).toBe(false);
+    expect(isPhotosPickerUri("javascript:alert(1)", origin)).toBe(false);
+    expect(isPhotosPickerUri(`${origin}/api/cloud-import/fake-google/photos/s1`, origin)).toBe(true);
+    expect(isPhotosPickerUri(`${origin}/files`, origin)).toBe(false);
+  });
+
+  it("hängt /autoclose genau einmal an", () => {
+    expect(photosPickerUrl("https://photos.google.com/picker/abc")).toBe("https://photos.google.com/picker/abc/autoclose");
+    expect(photosPickerUrl("https://photos.google.com/picker/abc/autoclose")).toBe("https://photos.google.com/picker/abc/autoclose");
   });
 });

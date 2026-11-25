@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 693 (Plattform-Admin: 168)
-- Mandanten-Routen mit Rechteprüfung: 434
+- Routen gesamt: 696 (Plattform-Admin: 168)
+- Mandanten-Routen mit Rechteprüfung: 437
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 91
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -214,6 +214,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/cloud-import/jobs/{job_id}/cancel` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/disconnect` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/finish-listing` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/google-drive/picker` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/google-photos/session` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}/items` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/manifest` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}/pending-uploads` | files.import |

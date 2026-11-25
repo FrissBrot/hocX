@@ -742,6 +742,9 @@ def cloud_import_secret_expiries() -> dict[str, str]:
     expiries: dict[str, str] = {}
     if settings.cloud_import_ms_client_id:
         expiries["microsoft"] = settings.cloud_import_ms_client_secret_expires
+    # Google-Client-Secrets laufen standardmässig nicht ab: nur überwachen, wenn ein Datum gesetzt ist
+    if settings.cloud_import_google_client_id and settings.cloud_import_google_client_secret_expires.strip():
+        expiries["google"] = settings.cloud_import_google_client_secret_expires
     return expiries
 
 

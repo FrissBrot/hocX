@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminAllowedOnHost, adminGateForwardHeaders, frontendRole, isAdminPagePath } from "@/lib/admin-gate";
-import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
+import { contentSecurityPolicy, createNonce, cspVariantForPath, NONCE_HEADER } from "@/lib/csp";
 
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
 // requireAdminSession(), siehe lib/api/server.ts + admin-server.ts) über redirect(). Next.js
@@ -98,7 +98,14 @@ async function isOverloadedResponse(res: Response): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   // Nonce-CSP (MAIN-FE-013): auf Request (für Next und layout.tsx) und Antwort.
   const nonce = createNonce();
-  const csp = contentSecurityPolicy(nonce);
+  // Gelockerte CSP nur für die Seite des Google Pickers (lib/csp.ts), nie auf der Admin-Domain
+  // (und nicht auf der Website-Domain, dort wird jeder Pfad nach /website umgeschrieben)
+  const cspHost = request.headers.get("host")?.split(":")[0];
+  const variant =
+    processKind === "admin" || (!!adminDomain && cspHost === adminDomain) || (!!websiteDomain && cspHost === websiteDomain)
+      ? "default"
+      : cspVariantForPath(request.nextUrl.pathname);
+  const csp = contentSecurityPolicy(nonce, undefined, variant);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(NONCE_HEADER, nonce);
   requestHeaders.set("Content-Security-Policy", csp);

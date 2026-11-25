@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import {
   apiErrorCode,
+  cloudSelectionMode,
   startCloudLogin,
   type CloudNode,
   type CloudProvider,
@@ -18,6 +19,7 @@ import {
 import { formatFileSize, formatInteger } from "@/lib/utils/format";
 
 import { ImportCloudTree } from "./import-cloud-tree";
+import { GoogleDriveSelect, GooglePhotosSelect } from "./import-google-select";
 
 const POLL_MS = 3000;
 // Microsoft Entra: Tenant-ID (GUID) oder verifizierte Domain des Vereins-Tenants
@@ -43,6 +45,10 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
   const connection = job.connection ?? null;
   const connected = connection?.status === "active";
   const listing = job.status === "listing";
+  // Google Drive/Fotos haben keinen Ordnerbaum, sondern eine Auswahl beim Anbieter
+  const selectionMode = cloudSelectionMode(provider);
+  // Granulare Zustimmung (Google): der Zugriff auf Dateien/Fotos wurde beim Anbieter abgewählt
+  const scopeMissing = connected && connection?.tier === null && (connection?.tiers.length ?? 0) > 0;
 
   useEffect(() => {
     if (!listing) return;
@@ -179,15 +185,33 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
               {t("cloud.disconnect")}
             </button>
           </div>
-          <p className="muted">{t("cloud.chooseHint")}</p>
-          <ImportCloudTree jobId={job.id} selected={selected} onToggle={toggle} onRequestTier={(tier) => void login({ tier })} />
-          <p className="file-import-listing-summary">{t("cloud.selected", { count: selected.size })}</p>
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" disabled={busy} onClick={() => void cancel()}>{t("cancel.label")}</button>
-            <button type="button" className="button-primary" disabled={busy || selected.size === 0} onClick={() => void analyse()}>
-              {t("cloud.analyse")}
-            </button>
-          </div>
+          {scopeMissing ? (
+            <>
+              <StatusBanner tone="warning" message={t("cloud.errors.missing_scope")} />
+              <div className="modal-actions">
+                <button type="button" className="button-ghost" disabled={busy} onClick={() => void cancel()}>{t("cancel.label")}</button>
+                <button type="button" className="button-primary" disabled={busy} onClick={() => void login({ tier: provider?.default_tier })}>
+                  {t("cloud.reconnect")}
+                </button>
+              </div>
+            </>
+          ) : selectionMode === "google_picker" ? (
+            <GoogleDriveSelect job={job} busy={busy} onCancel={() => void cancel()} />
+          ) : selectionMode === "photos_picker" ? (
+            <GooglePhotosSelect job={job} onJob={onJob} onCancel={() => void cancel()} errorText={errorText} />
+          ) : (
+            <>
+              <p className="muted">{t("cloud.chooseHint")}</p>
+              <ImportCloudTree jobId={job.id} selected={selected} onToggle={toggle} onRequestTier={(tier) => void login({ tier })} />
+              <p className="file-import-listing-summary">{t("cloud.selected", { count: selected.size })}</p>
+              <div className="modal-actions">
+                <button type="button" className="button-ghost" disabled={busy} onClick={() => void cancel()}>{t("cancel.label")}</button>
+                <button type="button" className="button-primary" disabled={busy || selected.size === 0} onClick={() => void analyse()}>
+                  {t("cloud.analyse")}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </section>
