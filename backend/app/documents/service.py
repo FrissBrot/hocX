@@ -682,8 +682,16 @@ async def canvas(db: Session, user: CurrentUser | None, tenant_id: int, request:
     )
 
 
+# Länge des Titelteils im Dateinamen: der Name wird Teil des Objekt-Keys (validate_key, höchstens
+# 1024 Zeichen; manche S3-Backends begrenzen ein Pfadsegment auf 255 Bytes). Ein Protokolltitel
+# über ~980 Zeichen verhinderte sonst die PDF-Ablage (Nachtlauf 2026-11-25). Der volle Titel steht
+# weiter in DocumentExport.title und im PDF.
+_FILENAME_BASE_MAX = 120
+
+
 def _filename(title: str, version: str | None) -> str:
     base = re.sub(r"[^A-Za-z0-9._ -]+", "-", (title or "").strip()).strip(" .-_") or "dokument"
+    base = base[:_FILENAME_BASE_MAX].rstrip(" .-_") or "dokument"
     return f"{base}-{version}.pdf" if version else f"{base}.pdf"
 
 
