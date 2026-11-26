@@ -493,7 +493,7 @@ def _ensure_invitable(db: Session, user: CurrentUser, participant: Participant) 
 
 
 # Gründe für übersprungene Personen in Mehrfachaktionen (Codes aus den Einzelprüfungen)
-_SKIP_REASONS = {"already_has_login": "has_login", "inactive_person": "inactive", "former_person": "former", "email_required": "no_email"}
+_SKIP_REASONS = {"already_has_login": "has_login", "inactive_person": "inactive", "former_person": "former", "email_required": "no_email", "user_limit_reached": "user_limit"}
 
 
 def _bulk_participants(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> tuple[list[Participant], list[ParticipantBulkSkipped]]:

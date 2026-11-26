@@ -369,7 +369,7 @@ function UserSheet({
       showToast(user ? t("toasts.userSaved") : t("toasts.userCreated"), "success");
       onSaved(saved, !user);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.userSaveFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.userSaveFailed")), "error");
     } finally {
       setSaving(false);
     }
@@ -388,7 +388,7 @@ function UserSheet({
       showToast(t("revokeLogin.done", { name: user.display_name }), "success");
       onSaved(saved, false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("revokeLogin.failed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("revokeLogin.failed")), "error");
     }
   }
 
