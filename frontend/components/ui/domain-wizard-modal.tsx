@@ -165,10 +165,16 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
         ))}
       </div>
 
-      {errorMsg && <div className="form-error-banner">{errorMsg}</div>}
+      {errorMsg && <div className="form-error-banner" role="alert">{errorMsg}</div>}
 
       {step === "purpose" && (
-        <>
+        // Formular, damit Enter im Domainfeld wie «Weiter» anlegt
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!busy) void createDomain();
+          }}
+        >
           <div className="wizard-purpose-grid">
             {PURPOSE_CARDS.filter((card) => purposes.includes(card.purpose)).map((card) => (
               <button
@@ -201,12 +207,12 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
             <span />
             <div className="wizard-footer-actions">
               <button type="button" className="button-ghost" onClick={onClose}>{tCommon("cancel")}</button>
-              <button type="button" className="button-primary" disabled={busy || !domainInput.trim()} onClick={createDomain}>
+              <button type="submit" className="button-primary" disabled={busy || !domainInput.trim()}>
                 {busy ? "…" : t("continueLabel")}
               </button>
             </div>
           </div>
-        </>
+        </form>
       )}
 
       {step === "dns" && activeDomain && (
