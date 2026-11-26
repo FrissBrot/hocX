@@ -518,7 +518,10 @@
       "reset_complete": "Password reimpostata",
       "password_change": "Password modificata",
       "stepup_success": "Conferma",
-      "stepup_failure": "Conferma fallita"
+      "stepup_failure": "Conferma fallita",
+      "stepup_required": "Conferma richiesta",
+      "device_revoke": "Dispositivo dimenticato",
+      "mfa_setup_skipped": "Configurazione MFA saltata"
     },
     "outcomes": {
       "success": "Riuscito",
