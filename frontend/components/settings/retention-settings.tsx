@@ -32,6 +32,22 @@ const RULES: { key: keyof Omit<RetentionPolicy, "auto_apply">; unit: "months" | 
 ];
 const KINDS: ProposalKind[] = ["submission_upload", "gallery_image"];
 
+type RuleKey = (typeof RULES)[number]["key"];
+
+/** Ganze Zahl von 1 bis max (wie das Backend, ge=1/le=max), sonst null. */
+function parseRuleValue(raw: string, max: number): number | null {
+  if (!/^\d+$/.test(raw.trim())) return null;
+  const value = Number(raw.trim());
+  return Math.min(Math.max(value, 1), max) === value ? value : null;
+}
+
+function draftsFrom(policy: RetentionPolicy): Record<RuleKey, string> {
+  return {
+    submissions_months: policy.submissions_months === null ? "" : String(policy.submissions_months),
+    unlinked_gallery_years: policy.unlinked_gallery_years === null ? "" : String(policy.unlinked_gallery_years),
+  };
+}
+
 // Mandanten-Einstellungen → Aufbewahrung (Datenschutz-Audit Paket 8). Alle Regeln sind
 // standardmässig aus. Ausgetretene sind ab dem Austritt gesperrt (keine eigene Regel mehr).
 export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionPolicy }) {
@@ -39,6 +55,9 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
   const toast = useToast();
   const confirm = useConfirm();
   const [policy, setPolicy] = useState(initialPolicy);
+  // Eingabe als Text: ein geleertes Feld bleibt leer (statt sofort 1), sonst wird aus «24» beim Tippen «124»
+  const [drafts, setDrafts] = useState(() => draftsFrom(initialPolicy));
+  const draftsValid = RULES.every((rule) => policy[rule.key] === null || parseRuleValue(drafts[rule.key], rule.max) !== null);
   const [proposals, setProposals] = useState<RetentionProposal[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -56,9 +75,12 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
   }, [load]);
 
   async function save() {
+    if (!draftsValid) return;
     setBusy(true);
     try {
-      setPolicy(await browserApiFetch<RetentionPolicy>("/api/retention/policy", { method: "PUT", body: JSON.stringify(policy) }));
+      const saved = await browserApiFetch<RetentionPolicy>("/api/retention/policy", { method: "PUT", body: JSON.stringify(policy) });
+      setPolicy(saved);
+      setDrafts(draftsFrom(saved));
       toast(t("saved"), "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : t("saveFailed"), "error");
@@ -118,13 +140,18 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
           </div>
           {RULES.map((rule) => {
             const value = policy[rule.key];
+            const invalid = value !== null && parseRuleValue(drafts[rule.key], rule.max) === null;
             return (
               <div key={rule.key} className="retention-rule">
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
                     checked={value !== null}
-                    onChange={(event) => setPolicy((current) => ({ ...current, [rule.key]: event.target.checked ? (rule.unit === "months" ? 12 : 5) : null }))}
+                    onChange={(event) => {
+                      const next = event.target.checked ? (rule.unit === "months" ? 12 : 5) : null;
+                      setPolicy((current) => ({ ...current, [rule.key]: next }));
+                      setDrafts((current) => ({ ...current, [rule.key]: next === null ? "" : String(next) }));
+                    }}
                   />
                   <span>{t(`rules.${rule.key}.label`)}</span>
                 </label>
@@ -135,9 +162,17 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
                       type="number"
                       min={1}
                       max={rule.max}
-                      value={value}
-                      onChange={(event) => setPolicy((current) => ({ ...current, [rule.key]: Math.min(rule.max, Math.max(1, Math.round(Number(event.target.value) || 1))) }))}
+                      step={1}
+                      value={drafts[rule.key]}
+                      aria-invalid={invalid || undefined}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        setDrafts((current) => ({ ...current, [rule.key]: raw }));
+                        const parsed = parseRuleValue(raw, rule.max);
+                        if (parsed !== null) setPolicy((current) => ({ ...current, [rule.key]: parsed }));
+                      }}
                     />
+                    {invalid ? <span className="field-help">{t("valueRange", { max: rule.max })}</span> : null}
                   </label>
                 ) : null}
                 <p className="field-help">{t(`rules.${rule.key}.hint`)}</p>
@@ -150,7 +185,7 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
           </label>
           <p className="field-help">{t("autoApplyHint")}</p>
           <div className="table-actions table-actions-start">
-            <button type="button" className="button-primary" disabled={busy} onClick={() => void save()}>
+            <button type="button" className="button-primary" disabled={busy || !draftsValid} onClick={() => void save()}>
               {t("save")}
             </button>
           </div>

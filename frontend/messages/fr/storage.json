@@ -1,4 +1,11 @@
 {
+  "categoryLabels": {
+    "photos": "Photos",
+    "files": "Fichiers",
+    "protocols": "Procès-verbaux",
+    "trash": "Corbeille",
+    "other": "Autres"
+  },
   "categoryHints": {
     "photos": "Galerie, images de procès-verbaux et images de la boîte de dépôt",
     "files": "Imports Word, documents de la boîte de dépôt et autres téléversements",

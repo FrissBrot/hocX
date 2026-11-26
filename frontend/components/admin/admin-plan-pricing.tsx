@@ -512,12 +512,12 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                     {hasPlanPrice(plan) ? (
                       <div className="admin-plan-card-price">
                         <div>
-                          <span className="admin-plan-card-amount">{formatChfShort(plan.price_monthly_rp ?? plan.price_yearly_rp)}</span>
+                          <span className="admin-plan-card-amount">{formatChfShort(plan.price_monthly_rp ?? plan.price_yearly_rp, locale)}</span>
                           <span className="muted"> / {plan.price_monthly_rp !== null ? t("month") : t("year")}</span>
                         </div>
                         <div className="muted">
                           {plan.price_monthly_rp !== null && plan.price_yearly_rp !== null
-                            ? t("orPerYear", { price: formatChfShort(plan.price_yearly_rp) })
+                            ? t("orPerYear", { price: formatChfShort(plan.price_yearly_rp, locale) })
                             : "\u00a0"}
                         </div>
                       </div>
@@ -593,7 +593,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   </td>
                   <td>
                     <strong>
-                      {feature.standalone_price_monthly_rp === null ? "–" : t("perMonth", { price: formatChfShort(feature.standalone_price_monthly_rp) })}
+                      {feature.standalone_price_monthly_rp === null ? "–" : t("perMonth", { price: formatChfShort(feature.standalone_price_monthly_rp, locale) })}
                     </strong>
                   </td>
                   <td>
@@ -847,7 +847,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                 <dl className="admin-plan-preview-stats">
                   <div>
                     <dt>{t("monthlyPrice")}</dt>
-                    <dd>{previewMonthlyRp === null ? t("notSetYet") : t("perMonth", { price: formatChfShort(previewMonthlyRp) })}</dd>
+                    <dd>{previewMonthlyRp === null ? t("notSetYet") : t("perMonth", { price: formatChfShort(previewMonthlyRp, locale) })}</dd>
                   </div>
                   <div>
                     <dt>{t("usersShort")}</dt>

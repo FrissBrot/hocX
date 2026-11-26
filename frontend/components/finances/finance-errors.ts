@@ -3,22 +3,28 @@ import type { FinanceTransaction } from "@/types/api";
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
 const CONFLICT_CODES = new Set(["fine_transaction", "todo_fine_transaction", "protocol_finalized", "account_not_empty"]);
+/** Codes der Bussen-Aktionen (FineDeleteError, TodoFineError), unabhängig vom HTTP-Status übersetzt. */
+const FINE_CODES = new Set(["no_account", "protocol_closed", "no_open_protocol", "reason_required"]);
+
+function detailCodeOf(detail: unknown): string {
+  return detail && typeof detail === "object" && "code" in detail ? String((detail as { code: unknown }).code) : "";
+}
 
 /**
- * Backend-Fehler im Finanzbereich als übersetzte Meldung statt rohem (englischem) Backend-Text:
- * 409 mit Code (finance_repository.FinanceConflictError), 403 im Nur-Lesen-Zustand bzw. ohne
+ * Backend-Fehler im Finanzbereich als übersetzte Meldung statt rohem (deutschem/englischem) Backend-Text:
+ * Bussen-Codes (FINE_CODES), 409 mit Code (finance_repository.FinanceConflictError), 403 im Nur-Lesen-Zustand bzw. ohne
  * Recht, 422 bei ungültiger Eingabe, sonst der Bereichs-Fallback. `t` ist useTranslations("finances").
  */
 export function financeErrorMessage(error: unknown, t: TFunc, fallbackKey: string): string {
   // Duck-Typing statt instanceof ApiError: so greift es auch für Fehlerobjekte aus Tests/Mocks
   const { status, detail } = (error ?? {}) as { status?: number; detail?: unknown };
+  const code = detailCodeOf(detail);
+  if (FINE_CODES.has(code)) return t(`errors.${code}`);
   if (status === 409) {
-    const code = detail && typeof detail === "object" && "code" in detail ? String((detail as { code: unknown }).code) : "";
     return CONFLICT_CODES.has(code) ? t(`errors.${code}`) : t("errors.conflict");
   }
   if (status === 403) {
-    const text = error instanceof Error ? error.message : "";
-    return text.includes("nur noch lesend") ? t("errors.readOnly") : t("errors.forbidden");
+    return code === "feature_read_only" ? t("errors.readOnly") : t("errors.forbidden");
   }
   if (status === 422) return t("errors.invalid");
   return t(fallbackKey);

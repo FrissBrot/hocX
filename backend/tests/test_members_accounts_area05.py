@@ -231,3 +231,22 @@ def test_create_participant_unaffected(db):
     tenant = make_tenant(db)
     created = ParticipantService().create_participant(db, ParticipantCreate(display_name="Neu"), tenant_id=tenant.id)
     assert created.session_revoke_at is None
+
+
+# ── Eigenes Konto löschen: Meldung ohne Code (englischer Rohtext im Toast) ──
+
+
+def test_delete_own_account_has_stable_code(db):
+    tenant = make_tenant(db)
+    me = make_participant(db, tenant.id, "Ich")
+    other = make_participant(db, tenant.id, "Andere")
+    actor = _admin(tenant, user_id=me.id)
+    with pytest.raises(HTTPException) as bulk:
+        participant_routes.bulk_delete_participants(
+            participant_routes.ParticipantBulkDelete(participant_ids=[me.public_id, other.public_id]), db=db, user=actor
+        )
+    with pytest.raises(HTTPException) as single:
+        participant_routes.delete_participant(me.public_id, db=db, user=actor)
+    for exc in (bulk.value, single.value):
+        assert exc.status_code == 400
+        assert isinstance(exc.detail, dict) and exc.detail["code"] == "own_account_delete"

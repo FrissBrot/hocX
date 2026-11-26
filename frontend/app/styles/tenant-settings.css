@@ -97,6 +97,9 @@
 
 .tenant-user-avatars {
   display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .tenant-user-avatar {

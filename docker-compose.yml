@@ -348,6 +348,7 @@ services:
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.auth-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Dedicated router for the platform-admin login, same rationale/pattern as hocx-auth
       # above - was previously falling through to the generic hocx-backend router with no
       # rate limiting at all, leaving the highest-privilege account unprotected from bruteforce.
@@ -374,6 +375,7 @@ services:
       - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # tenant-by-domain: public, unauthenticated lookup polled on every page load
       # pre-login - looser than login so normal login-page usage never trips it.
       - "traefik.http.routers.hocx-tenant-by-domain.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)"
@@ -386,6 +388,7 @@ services:
       - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.burst=15"
       - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Mandantenimporte koennen bis zu 2 GiB gross sein (siehe
       # MAX_TENANT_IMPORT_UPLOAD_BYTES in backend/app/api/routes/admin.py). Ein eigener
       # Router begrenzt nur diesen privilegierten Upload; 2050 MiB enthalten etwas Reserve
@@ -415,6 +418,7 @@ services:
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.word-import-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # 150 MB - matches MAX_WORD_IMPORT_BATCH_BYTES in routes/word_import.py
       - "traefik.http.middlewares.word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
@@ -632,6 +636,7 @@ services:
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Lowered from 2000 MB (audit finding, 2026-08-25) - that figure was the worst-case
       # legitimate total per the assignment's own max_file_size_mb/max_files_per_element
       # settings, but routes/public.py's upload() holds every file's full content in memory
@@ -656,6 +661,7 @@ services:
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router (der
       # matcht sonst jeden POST unter /api/public mit 151-MiB-Body und In-Flight 2). Der Body ist
       # nur ein Hash plus optionaler Dokument-ID - 4 KiB reichen weit.
@@ -668,6 +674,7 @@ services:
       - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       - "traefik.http.middlewares.abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   # Lokales S3 (Garage, docs-site/docs/technik/storage/lokales-s3.md). Beim ersten Deployment automatisch

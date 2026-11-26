@@ -13,7 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
-import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
+import { formatDateTime, formatFileSize, formatTimestampDate } from "@/lib/utils/format";
 import {
   StorageConnectionTest,
   StorageGeneration,
@@ -215,10 +215,10 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
               </>
             ) : lastCompleted ? (
               <>
-                <Badge variant="success">{t("hero.switched", { date: formatDate(lastCompleted.finished_at ?? lastCompleted.created_at) })}</Badge>
+                <Badge variant="success">{t("hero.switched", { date: formatTimestampDate(lastCompleted.finished_at ?? lastCompleted.created_at) })}</Badge>
                 <div className="storage-hero-title">{t("hero.switchedObjects", { count: lastCompleted.verified_objects })}</div>
                 {retained ? (
-                  <p className="muted">{t("hero.retained", { generation: `g${retained.generation}`, date: formatDate(retained.retain_until) })}</p>
+                  <p className="muted">{t("hero.retained", { generation: `g${retained.generation}`, date: formatTimestampDate(retained.retain_until) })}</p>
                 ) : null}
               </>
             ) : (
@@ -291,8 +291,8 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
                   <span className="muted storage-small">
                     {[
                       generation.object_count !== null ? t("generations.size", { count: generation.object_count, size: formatFileSize(generation.total_bytes ?? 0) }) : null,
-                      generation.status === "active" && generation.activated_at ? t("generations.since", { date: formatDate(generation.activated_at) }) : null,
-                      generation.retain_until && generation.status === "retained" ? t("generations.retainUntil", { date: formatDate(generation.retain_until) }) : null,
+                      generation.status === "active" && generation.activated_at ? t("generations.since", { date: formatTimestampDate(generation.activated_at) }) : null,
+                      generation.retain_until && generation.status === "retained" ? t("generations.retainUntil", { date: formatTimestampDate(generation.retain_until) }) : null,
                     ].filter(Boolean).join(" · ")}
                   </span>
                   {generation.purge_error ? <span className="storage-small storage-error">{generation.purge_error}</span> : null}

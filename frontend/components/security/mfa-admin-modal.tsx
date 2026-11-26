@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/modal";
 import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
@@ -22,6 +23,7 @@ type Props = {
 
 export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }: Props) {
   const t = useTranslations("security.mfaAdminModal");
+  const tSecurity = useTranslations("security");
   const locale = useLocale() as Locale;
   const confirm = useConfirm();
   const showToast = useToast();
@@ -36,10 +38,10 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
     browserApiFetch<UserMfaOverview>(loadPath)
       .then((result) => setOverview(result))
       .catch((error) => {
-        showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
+        showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("loadFailed")), "error");
       })
       .finally(() => setLoading(false));
-  }, [loadPath, open, showToast, t]);
+  }, [loadPath, open, showToast, t, tSecurity]);
 
   async function deleteFactor(factorId: string, label: string) {
     if (!deletePathBase) return;
@@ -58,7 +60,7 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
       setOverview(next);
       showToast(t("factorDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("factorDeleteFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("factorDeleteFailed")), "error");
     }
   }
 

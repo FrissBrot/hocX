@@ -9307,9 +9307,16 @@ body:has(.mobile-shell) {
   padding-bottom: var(--mobile-bottom-inset);
 }
 
-/* Desktop-Seiten ohne Mobile-Variante (per Link erreicht) bekommen etwas Rand. */
-.mobile-shell-content > .panel,
-.mobile-shell-content > section:not([class*="mobile-"]) {
+/* Unsichtbare Hüllen der App-Shell (app-shell.tsx, settings-frame.tsx): halten den Seiteninhalt in
+   beiden Ansichten an derselben Stelle im React-Baum, ohne das Layout zu beeinflussen. */
+.shell-slot {
+  display: contents;
+}
+
+/* Desktop-Seiten ohne Mobile-Variante (per Link erreicht) bekommen etwas Rand.
+   :where() hält die Spezifität wie vor den Hüllen (direktes Kind des Inhalts). */
+.mobile-shell-content :where(.shell-page) > .panel,
+.mobile-shell-content :where(.shell-page) > section:not([class*="mobile-"]) {
   margin: var(--space-3);
 }
 

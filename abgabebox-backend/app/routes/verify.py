@@ -2,8 +2,9 @@
 
 Der Browser berechnet den SHA-256 der Datei selbst (Web Crypto API) und schickt nur den Hash und
 optional die Dokument-ID aus dem QR-Code. Hier wird nichts gespeichert: kein Cookie, keine
-Session, weder Hash noch IP (das Rate-Limit hält Traefik im Speicher). Eigener Traefik-Router mit
-kleinem Body-Limit und eigenem Rate-Limit (docker-compose.yml, traefik_config_service).
+Session, weder Hash noch IP in der Datenbank (das Rate-Limit hält Traefik im Speicher; die Grenze
+des Seitenvergleichs zählt je Dokument-ID und Besucher-Netz nur in einer begrenzten Liste im
+Prozessspeicher). Eigener Traefik-Router mit kleinem Body-Limit und eigenem Rate-Limit (docker-compose.yml, traefik_config_service).
 
 Prüf-Domains der Mandanten (z. B. verify.verein.ch, Feature verify_domain) zeigen dieselbe Seite.
 GET /public/verify/site liefert deren Kopf (Name, Logo, Bestätigung); die Seite ruft das
@@ -15,11 +16,12 @@ import threading
 import time
 from collections import OrderedDict, deque
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import repository
+from app.client_source import rate_limit_source
 from app.config import settings
 from app.db import get_db
 from app.schemas import VerifyRequest, VerifyResult, VerifySiteRead
@@ -27,32 +29,43 @@ from app.schemas import VerifyRequest, VerifyResult, VerifySiteRead
 router = APIRouter()
 
 # Seitenvergleich über die Dokument-ID (Migration 0185): höchstens so viele Vergleiche je Dokument
-# in diesem Zeitfenster und Prozess - zusätzlich zum Rate-Limit je IP in Traefik. Wer die ID
-# kennt, kann damit vermutete Seiteninhalte nicht in grosser Zahl durchprobieren (Review 2026-11-18).
-_PAGE_CHECKS_PER_DOCUMENT = 20
+# und Besucher (IPv6 je /64) in diesem Zeitfenster und Prozess, dazu eine Obergrenze je Dokument für
+# alle zusammen - zusätzlich zum Rate-Limit in Traefik. Wer die ID kennt, kann damit vermutete
+# Seiteninhalte nicht in grosser Zahl durchprobieren (Review 2026-11-18), sperrt den Vergleich aber
+# auch nicht mehr allein für alle anderen (Nachtlauf 2026-11-26, Entscheid 1.6.1).
+_PAGE_CHECKS_PER_SOURCE = 20
+_PAGE_CHECKS_PER_DOCUMENT = 200
 _PAGE_CHECK_WINDOW_SECONDS = 600
-_PAGE_CHECK_MAX_DOCUMENTS = 10_000
+_PAGE_CHECK_MAX_KEYS = 50_000
 _page_checks: "OrderedDict[str, deque[float]]" = OrderedDict()
 _page_checks_lock = threading.Lock()
 
 
-def _allow_page_check(document_id: str) -> bool:
+def _window(key: str, now: float) -> "deque[float]":
+    hits = _page_checks.pop(key, None) or deque()
+    while hits and now - hits[0] > _PAGE_CHECK_WINDOW_SECONDS:
+        hits.popleft()
+    return hits
+
+
+def _allow_page_check(document_id: str, source: str) -> bool:
     now = time.monotonic()
     with _page_checks_lock:
-        hits = _page_checks.pop(document_id, None) or deque()
-        while hits and now - hits[0] > _PAGE_CHECK_WINDOW_SECONDS:
-            hits.popleft()
-        allowed = len(hits) < _PAGE_CHECKS_PER_DOCUMENT
+        source_key, document_key = f"{document_id}|{source}", f"{document_id}|*"
+        per_source, per_document = _window(source_key, now), _window(document_key, now)
+        allowed = len(per_source) < _PAGE_CHECKS_PER_SOURCE and len(per_document) < _PAGE_CHECKS_PER_DOCUMENT
         if allowed:
-            hits.append(now)
-        _page_checks[document_id] = hits
-        while len(_page_checks) > _PAGE_CHECK_MAX_DOCUMENTS:
+            per_source.append(now)
+            per_document.append(now)
+        _page_checks[source_key] = per_source
+        _page_checks[document_key] = per_document
+        while len(_page_checks) > _PAGE_CHECK_MAX_KEYS:
             _page_checks.popitem(last=False)
         return allowed
 
 
 @router.post("/public/verify", response_model=VerifyResult, response_model_exclude_none=True)
-def verify(body: VerifyRequest, response: Response, db: Session = Depends(get_db)) -> VerifyResult:
+def verify(body: VerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> VerifyResult:
     response.headers["Cache-Control"] = "no-store"
     try:
         row = repository.verify_document(db, sha256=body.sha256)
@@ -62,7 +75,7 @@ def verify(body: VerifyRequest, response: Response, db: Session = Depends(get_db
         raise HTTPException(status_code=503, detail="Die Prüfung ist gerade nicht verfügbar.") from exc
     if row is None:
         if body.document_id is not None and body.page_fingerprints is not None:
-            return _verify_by_id(db, body)
+            return _verify_by_id(db, body, rate_limit_source(request))
         return VerifyResult(found=False)
     return VerifyResult(
         found=True,
@@ -71,7 +84,7 @@ def verify(body: VerifyRequest, response: Response, db: Session = Depends(get_db
     )
 
 
-def _verify_by_id(db: Session, body: VerifyRequest) -> VerifyResult:
+def _verify_by_id(db: Session, body: VerifyRequest, source: str) -> VerifyResult:
     """Zweiter Schritt der Prüfseite: Hash unbekannt, aber die Datei trägt eine Dokument-ID. Dann
     heisst es nie «Original», sondern «gehört zu Dokument X, wurde verändert», mit Seitenvergleich,
     falls das Register Fingerabdrücke hat. Unbekannte IDs ergeben dasselbe wie ein unbekannter Hash
@@ -79,7 +92,7 @@ def _verify_by_id(db: Session, body: VerifyRequest) -> VerifyResult:
 
     Ohne freigegebene Anzeige der Organisation nur Zuordnung und Seitenvergleich: kein Titel,
     Status, Datum oder Version (die Funktion liefert sie dann nicht)."""
-    if not _allow_page_check(str(body.document_id)):
+    if not _allow_page_check(str(body.document_id), source):
         raise HTTPException(status_code=429, detail="Zu viele Prüfungen für dieses Dokument. Bitte später erneut versuchen.")
     try:
         row = repository.verify_document_pages(db, document_id=str(body.document_id), fingerprints=list(body.page_fingerprints or []))

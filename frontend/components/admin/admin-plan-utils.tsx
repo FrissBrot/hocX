@@ -1,9 +1,9 @@
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { NavIconKey } from "@/components/ui/nav-icons";
-import { formatFileSize } from "@/lib/utils/format";
+import { formatFileSize, formatInteger, formatMoney } from "@/lib/utils/format";
 import { AdminFeature, AdminPlan } from "@/types/api";
 
 /** Farbton eines Plans (Badge, Kartenrand). Pläne ohne Preis sind neutral, die übrigen bekommen
@@ -32,20 +32,22 @@ export function PlanBadge({ name, tone }: { name: string; tone: PlanTone }) {
 }
 
 /** Kurzform für Preise im Katalog: "CHF 9.–" bei ganzen Franken, sonst "CHF 14.50". */
-export function formatChfShort(rp: number | null | undefined): string {
+/** «CHF 1’200.–» bzw. «CHF 12.50», Tausendertrennung in der UI-Sprache (Nachtlauf 2026-11-26:
+ * vorher ohne Locale und ohne Trennung, «CHF 1200.–»). */
+export function formatChfShort(rp: number | null | undefined, locale?: string): string {
   if (rp === null || rp === undefined || Number.isNaN(rp)) return "–";
   const francs = rp / 100;
-  return Number.isInteger(francs) ? `CHF ${francs}.–` : `CHF ${francs.toFixed(2)}`;
+  return Number.isInteger(francs) ? `CHF ${formatInteger(francs, locale)}.–` : formatMoney(francs, "CHF", locale, { currencyFirst: true });
 }
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
 /** "CHF 190.00 / Jahr" bzw. "Kein Preis festgelegt" für eine Tabellenzelle. */
-export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly", t: TFunc): string {
+export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly", t: TFunc, locale?: string): string {
   if (!plan) return t("noPlanAssigned");
   const rp = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
   if (rp === null) return t("noPriceSet");
-  return t("pricePerCycle", { price: `CHF ${(rp / 100).toFixed(2)}`, cycle: cycle === "monthly" ? t("month") : t("year") });
+  return t("pricePerCycle", { price: formatMoney(rp / 100, "CHF", locale, { currencyFirst: true }), cycle: cycle === "monthly" ? t("month") : t("year") });
 }
 
 const FEATURE_ICON_HINTS: [RegExp, NavIconKey][] = [
@@ -142,6 +144,7 @@ export function PlanOption({
   onSelect: () => void;
 }) {
   const t = useTranslations("admin.plans");
+  const locale = useLocale();
   const price = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
   return (
     <label className={checked ? "admin-plan-option admin-plan-option-active" : "admin-plan-option"}>
@@ -157,7 +160,7 @@ export function PlanOption({
           {plan.included_storage_bytes === null ? t("noStorageLimit") : formatFileSize(plan.included_storage_bytes)}
         </span>
       </span>
-      <span className="admin-plan-option-price">{price === null ? "–" : t("pricePerCycle", { price: formatChfShort(price), cycle: cycle === "monthly" ? t("month") : t("year") })}</span>
+      <span className="admin-plan-option-price">{price === null ? "–" : t("pricePerCycle", { price: formatChfShort(price, locale), cycle: cycle === "monthly" ? t("month") : t("year") })}</span>
     </label>
   );
 }

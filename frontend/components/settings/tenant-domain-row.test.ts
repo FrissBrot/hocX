@@ -21,6 +21,13 @@ describe("domainErrorMessage", () => {
     expect(domainErrorMessage(new ApiError("Too many requests", "validation", 429), t, "verifyFailed")).toBe("errors.rateLimited");
   });
 
+  it("übersetzt «Domain nicht gefunden» und fehlende Server-Domain über den Code", () => {
+    const missing = new ApiError("Domain nicht gefunden", "validation", 404, { code: "domain_not_found", message: "Domain nicht gefunden" });
+    expect(domainErrorMessage(missing, t, "verifyFailed")).toContain("errors.domain_not_found");
+    const server = new ApiError("Server-Domain nicht konfiguriert", "backend", 500, { code: "domain_server_not_configured", message: "x" });
+    expect(domainErrorMessage(server, t, "verifyFailed")).toContain("errors.domain_server_not_configured");
+  });
+
   it("behält unbekannte Fehlertexte", () => {
     expect(domainErrorMessage(new Error("Netzwerk weg"), t, "verifyFailed")).toBe("Netzwerk weg");
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clampDiscountPercent, discountedRp, discountPercentForPrice } from "./admin-plan-utils";
+import { clampDiscountPercent, discountedRp, discountPercentForPrice, formatChfShort } from "./admin-plan-utils";
 
 describe("Rabatt über Prozent oder Preis", () => {
   it("rechnet einen Wunschpreis rappengenau in Prozent um", () => {
@@ -23,5 +23,15 @@ describe("Rabatt über Prozent oder Preis", () => {
     expect(discountPercentForPrice(0, 100)).toBe(0);
     expect(clampDiscountPercent(12.345678)).toBe(12.3457);
     expect(clampDiscountPercent(Number.NaN)).toBe(0);
+  });
+});
+
+describe("formatChfShort", () => {
+  it("trennt Tausender in der UI-Sprache (vorher «CHF 1200.–» in jeder Sprache)", () => {
+    expect(formatChfShort(120000, "de")).toMatch(/^CHF 1['’]200\.–$/); // Trennzeichen je nach ICU-Version
+    expect(formatChfShort(120000, "fr")).toMatch(/^CHF 1\D200\.–$/); // Trenner der UI-Sprache (ICU-abhängig)
+    expect(formatChfShort(1250, "de")).toBe("CHF 12.50");
+    expect(formatChfShort(1250, "fr")).toBe("CHF 12,50");
+    expect(formatChfShort(null, "de")).toBe("–");
   });
 });

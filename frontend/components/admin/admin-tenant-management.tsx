@@ -384,7 +384,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 ) : (
                   <span className="muted">–</span>
                 )}
-                <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle, tPlans)}</div>
+                <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle, tPlans, locale)}</div>
                 {tenant.discount_percent > 0 ? (
                   <div className="admin-tenant-discount">
                     <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(tenant.discount_percent, locale) })}</Badge>

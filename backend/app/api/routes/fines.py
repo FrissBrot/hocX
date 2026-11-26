@@ -199,7 +199,8 @@ def create_fine(
         result = repo.create_fine(db, payload, user.current_tenant_id)
     except DuplicateFineError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # Code mitsenden: das Frontend zeigt eine übersetzte Meldung statt des deutschen Texts
+        raise HTTPException(status_code=409, detail={"code": "duplicate_fine", "message": str(exc)}) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be created") from exc
@@ -236,7 +237,8 @@ def delete_fine(
     except FineDeleteError as exc:
         db.rollback()
         status_code = 422 if exc.code == "reason_required" else 409
-        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        # Code mitsenden: das Frontend übersetzt ihn (finance-errors.ts), statt den deutschen Text zu zeigen
+        raise HTTPException(status_code=status_code, detail={"code": exc.code, "message": str(exc)}) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc

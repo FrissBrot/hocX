@@ -87,9 +87,13 @@ def _name_taken(db: Session, tenant_id: int, name: str, exclude_id: int | None =
     return db.scalar(query.limit(1)) is not None
 
 
+class TariffNameTakenError(ValueError):
+    """Tarifname im Mandanten schon vergeben (Route: 409 mit Code, das Frontend übersetzt)."""
+
+
 def create_group(db: Session, tenant_id: int, payload: FineTariffGroupWrite) -> FineTariffGroup:
     if _name_taken(db, tenant_id, payload.name):
-        raise ValueError("Tariff name already exists")
+        raise TariffNameTakenError("Tariff name already exists")
     count = db.scalar(select(func.count()).select_from(FineTariffGroup).where(FineTariffGroup.tenant_id == tenant_id)) or 0
     group = FineTariffGroup(
         tenant_id=tenant_id, name=payload.name, sort_index=count, is_default=False,
@@ -106,7 +110,7 @@ def create_group(db: Session, tenant_id: int, payload: FineTariffGroupWrite) -> 
 
 def update_group(db: Session, tenant_id: int, group: FineTariffGroup, payload: FineTariffGroupWrite) -> FineTariffGroup:
     if _name_taken(db, tenant_id, payload.name, exclude_id=group.id):
-        raise ValueError("Tariff name already exists")
+        raise TariffNameTakenError("Tariff name already exists")
     group.name = payload.name
     group.amount_late, group.amount_absent = payload.amount_late, payload.amount_absent
     if payload.is_default and not group.is_default:

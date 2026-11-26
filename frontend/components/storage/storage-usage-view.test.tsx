@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { StorageUsageRead } from "@/types/api";
@@ -60,5 +60,25 @@ describe("StorageBreakdown", () => {
     const { getByText } = render(<StorageBreakdown {...usage({ categories: [{ key: "other", label: "Sonstiges", bytes: 0 }] })} />);
 
     expect(getByText("Noch keine Dateien vorhanden.")).toBeInTheDocument();
+  });
+
+  it("übersetzt die Kategorienamen statt das deutsche Backend-Label zu zeigen", () => {
+    // Das Backend liefert `label` fest deutsch (storage_service.CATEGORY_LABELS); die UI muss den
+    // Namen aus dem Katalog der UI-Sprache nehmen, sonst steht in en/fr/it «Fotos»/«Dateien».
+    render(
+      <StorageBreakdown
+        {...usage({
+          categories: [
+            { key: "photos", label: "BACKEND-FOTOS", bytes: 500 },
+            { key: "trash", label: "BACKEND-PAPIERKORB", bytes: 300 },
+          ],
+        })}
+      />
+    );
+
+    expect(screen.queryByText("BACKEND-FOTOS")).toBeNull();
+    expect(screen.queryByText("BACKEND-PAPIERKORB")).toBeNull();
+    expect(screen.getByText("Fotos")).toBeInTheDocument();
+    expect(screen.getByText("Papierkorb")).toBeInTheDocument();
   });
 });

@@ -25,10 +25,19 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 def _origin_netloc(origin: str) -> str | None:
     if not origin or origin == "null":
         return None
-    parts = urlsplit(origin)
+    try:
+        parts = urlsplit(origin)
+    except ValueError:
+        # z. B. «http://[» (Invalid IPv6 URL): kein Browser sendet das, also fremde Herkunft
+        return None
     if parts.scheme not in {"http", "https"} or not parts.netloc:
         return None
     return parts.netloc.lower()
+
+
+def origin_hostname(origin: str) -> str | None:
+    """Hostname aus einem Origin-Header; ValueError bei nicht lesbarem Wert (z. B. «http://[»)."""
+    return urlsplit(origin).hostname
 
 
 def origin_allowed(origin: str, *, host: str | None, forwarded_host: str | None, allowed_origins: set[str]) -> bool:

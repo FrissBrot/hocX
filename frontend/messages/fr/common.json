@@ -109,11 +109,15 @@
     "pdfExportFailed": "Échec de l'export PDF",
     "tagColorTransferFailed": "Étiquette renommée, mais sa couleur n'a pas pu être transférée",
     "noHistoricalCycleSelected": "Aucun cycle historique sélectionné",
-    "noDraftToConfirm": "Aucun brouillon à confirmer"
+    "noDraftToConfirm": "Aucun brouillon à confirmer",
+    "permissionRequired": "Vous n'avez pas l'autorisation nécessaire. Rechargez la page si votre rôle a changé.",
+    "featureNotBooked": "Cette fonction n'est pas incluse dans l'abonnement de votre organisation.",
+    "featureReadOnly": "Cette fonction n'est plus disponible qu'en lecture, car elle ne fait plus partie de l'abonnement de votre organisation."
   },
   "profileImage": {
     "invalidType": "Veuillez choisir une image PNG, JPG, GIF ou WebP (le SVG n'est pas pris en charge).",
-    "tooLarge": "L'image est trop volumineuse (5 Mo max.)."
+    "tooLarge": "L'image est trop volumineuse (5 Mo max.).",
+    "tooManyPixels": "L'image comporte trop de pixels (au maximum {max, number} mégapixels). Merci de la réduire."
   },
   "deleteWithFiles": {
     "selectedCount": "{selected, number} sur {total, number} sélectionnés pour suppression",
@@ -165,7 +169,17 @@
       "public_link": "Lien public",
       "context_visibility": "Visibilité des fichiers",
       "activity": "Historique",
-      "todo_fine": "Amende de tâche"
+      "todo_fine": "Amende de tâche",
+      "agenda_item": "Sujet",
+      "file": "Fichier",
+      "file_import": "Import de fichiers",
+      "finance_settings": "Paramètres financiers",
+      "mfa": "Connexion à deux facteurs",
+      "password": "Mot de passe",
+      "photo": "Photo",
+      "sessions": "Appareils connectés",
+      "submission": "Envoi",
+      "template_element": "Élément de modèle"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",

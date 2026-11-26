@@ -1,13 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { financeErrorMessage } from "@/components/finances/finance-errors";
+import { MAX_FINE_TARIFF_AMOUNT, parseTariffAmount, tariffAmountValid } from "@/components/finances/fines-model";
+import { formatMoney } from "@/lib/utils/format";
 import { FinanceAccount, FineTariff } from "@/types/api";
 
 type Props = {
@@ -23,6 +26,7 @@ type Props = {
 export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const showToast = useToast();
   const [accountId, setAccountId] = useState<string | null>(tariff.account_id);
   const [amountLate, setAmountLate] = useState(String(tariff.amount_late || ""));
@@ -37,8 +41,11 @@ export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Pr
   }, [open, tariff]);
 
   const currency = accounts.find((account) => account.id === accountId)?.currency_label ?? "";
-  const parse = (value: string) => Number(value.replace(",", ".") || "0");
-  const valid = [amountLate, amountAbsent].every((value) => Number.isFinite(parse(value)) && parse(value) >= 0);
+  const parse = parseTariffAmount;
+  const lateValid = tariffAmountValid(amountLate);
+  const absentValid = tariffAmountValid(amountAbsent);
+  const valid = lateValid && absentValid;
+  const rangeHint = t("tariffAmountRange", { max: formatMoney(MAX_FINE_TARIFF_AMOUNT, "", locale) });
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,7 +60,7 @@ export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Pr
       showToast(t("tariffSaved"), "success");
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("tariffSaveFailed"), "error");
+      showToast(financeErrorMessage(error, t, "tariffSaveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -80,15 +87,17 @@ export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Pr
             <span className="field-label">{t("tariffLateLabel")}</span>
             <span className="fine-amount-input">
               {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
-              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate} onChange={(event) => setAmountLate(event.target.value)} />
+              <input type="number" min="0" max={MAX_FINE_TARIFF_AMOUNT} step="0.50" inputMode="decimal" value={amountLate} aria-invalid={!lateValid || undefined} onChange={(event) => setAmountLate(event.target.value)} />
             </span>
+            {lateValid ? null : <span className="field-help">{rangeHint}</span>}
           </label>
           <label className="field-stack">
             <span className="field-label">{t("tariffAbsentLabel")}</span>
             <span className="fine-amount-input">
               {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
-              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent} onChange={(event) => setAmountAbsent(event.target.value)} />
+              <input type="number" min="0" max={MAX_FINE_TARIFF_AMOUNT} step="0.50" inputMode="decimal" value={amountAbsent} aria-invalid={!absentValid || undefined} onChange={(event) => setAmountAbsent(event.target.value)} />
             </span>
+            {absentValid ? null : <span className="field-help">{rangeHint}</span>}
           </label>
         </div>
         <div className="modal-actions">

@@ -29,7 +29,7 @@ describe("Bereiche und Code-Anzeige (Audit-Log 1.5.1)", () => {
     expect(auditArea("personal_data.viewed")).toBe("privacy");
     expect(auditArea("mystery.x")).toBeNull();
     expect(countByArea({ user: 3, protocol: 2, todo: 1, mystery: 9 })).toEqual({ auth: 3, content: 3, finance: 0, admin: 0, privacy: 0 });
-    expect(auditAreaCategories("auth")).toEqual(["user"]);
+    expect(auditAreaCategories("auth")).toEqual(["user", "mfa", "password", "sessions"]);
   });
 
   it("unbekannte Aktionen erscheinen als Code, bekannte als «Bereich · Verb»", async () => {
@@ -41,5 +41,30 @@ describe("Bereiche und Code-Anzeige (Audit-Log 1.5.1)", () => {
     expect(auditInitials("Timo Weber")).toBe("TW");
     expect(auditInitials("admin@example.com")).toBe("A");
     expect(auditInitials(null)).toBe("·");
+  });
+});
+
+describe("Verlauf der Organisation: geloggte Aktionen ohne Rohcode", () => {
+  it("kennt die Kategorien, die das Backend tatsächlich loggt", async () => {
+    const { AUDIT_CATEGORIES } = await import("./audit-labels");
+    for (const category of ["agenda_item", "file", "file_import", "finance_settings", "mfa", "password", "photo", "sessions", "submission", "template_element"]) {
+      expect(AUDIT_CATEGORIES).toContain(category);
+    }
+  });
+
+  it("leitet den Vorgang auch aus Endungen wie _create, trashed, enroll, change, revoke_user ab", () => {
+    expect(auditVerb("tenant.domain_create")).toBe("created");
+    expect(auditVerb("tenant.domain_delete")).toBe("deleted");
+    expect(auditVerb("file.trashed")).toBe("deleted");
+    expect(auditVerb("file.trash_emptied")).toBe("deleted");
+    expect(auditVerb("mfa.remove")).toBe("deleted");
+    expect(auditVerb("mfa.enroll")).toBe("created");
+    expect(auditVerb("user.invited")).toBe("created");
+    expect(auditVerb("file.renamed")).toBe("updated");
+    expect(auditVerb("password.change")).toBe("updated");
+    expect(auditVerb("user.update_access")).toBe("updated");
+    expect(auditVerb("sessions.revoke_user")).toBe("revoked");
+    expect(auditVerb("personal_data.export")).toBe("exported");
+    expect(auditVerb("tenant.data_export_downloaded")).toBe("exported");
   });
 });

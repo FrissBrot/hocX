@@ -130,7 +130,9 @@ def _nonce(prefix: bytes, counter: int, final: bool) -> bytes:
 def validate_password(password: str | None) -> str | None:
     if password is None or password == "":
         return None
-    if len(password) < MIN_PASSWORD_LENGTH:
+    # Mindestlänge ohne Leerzeichen am Rand, das Passwort selbst unverändert (wie
+    # data_export/archive.validate_password und documents/exports.encrypt_xlsx, Nachtlauf 2026-11-26)
+    if len(password.strip()) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"Das Export-Passwort muss mindestens {MIN_PASSWORD_LENGTH} Zeichen lang sein")
     return password
 

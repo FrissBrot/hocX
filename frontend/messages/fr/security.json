@@ -153,7 +153,11 @@
     "mfa_locked": "Trop de codes erronés. Attends une minute et réessaie.",
     "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur.",
     "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre.",
-    "password_breached": "Ce mot de passe figure dans une fuite de données. Fais-le redéfinir par une autre personne owner ou via admin_cli."
+    "password_breached": "Ce mot de passe figure dans une fuite de données. Fais-le redéfinir par une autre personne owner ou via admin_cli.",
+    "own_account_delete": "Vous ne pouvez pas supprimer votre propre compte. Retirez-le de la sélection.",
+    "user_limit_reached": "La limite d'utilisateurs de l'abonnement est atteinte ({limit, number} comptes avec connexion, invitations ouvertes comprises). Retirez une invitation, désactivez un compte ou étendez l'abonnement.",
+    "mfa_last_factor_required": "Votre compte doit conserver au moins un second facteur. Configurez-en un autre avant de supprimer celui-ci.",
+    "mfa_method_not_configured": "Cette méthode n'est pas encore configurée pour votre compte."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",

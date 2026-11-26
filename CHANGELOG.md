@@ -8,6 +8,79 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.6.1] - 2026-11-26
+
+Korrekturversion zu 1.6.0 mit den Funden des Nachtlaufs vom 26.11.2026. Nur Fehlerbehebungen,
+keine neuen Funktionen, keine Migration.
+
+### Behoben
+
+- **Wechsel zwischen Desktop- und Mobilansicht verliert keine Eingaben mehr:** Beim Drehen eines
+  Tablets, beim Schmalziehen des Fensters oder sonst über die 900-px-Grenze tauschte die App-Shell
+  den ganzen Baum aus und baute die Seite neu auf. Halb ausgefüllte Formulare (z. B. Personenseite),
+  offene Dialoge (Pendenz, Termin), der Fokus und der Stand im Datei-Import gingen dabei verloren;
+  der Import zeigte danach wieder die beim Laden geholten, veralteten Daten. Jetzt wechseln nur
+  Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
+  Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
+  getippt wird.
+- **Protokoll-Editor, Sitzungsnotizen, Foto- und Dateidetails speichern beim Verschwinden sofort:**
+  Verschwand der Editor innerhalb der Entprellzeit (Ansichtswechsel, Seitenwechsel), wurde die
+  wartende Speicherung verworfen. Im Protokoll-Editor holte die Outbox sie erst nach rund 1,5 s nach;
+  im Foto-Viewer und in den Dateidetails konnte sie verloren gehen. Jetzt wird sie sofort gesendet.
+- Fehlermeldungen in der UI-Sprache statt roher Backend-Texte: fehlende Berechtigung und nicht
+  gebuchte bzw. nur noch lesbare Abo-Funktionen («Permission required», «Feature 'x' nicht
+  gebucht») werden jetzt in jeder Ansicht übersetzt (zentral über Fehlercodes); ebenso MFA
+  einrichten/entfernen (z. B. falscher Code, letzter zweiter Faktor, Standardmethode), «eigenes
+  Konto löschen», Benutzerlimit des Abos (auch als eigener Grund in der Mehrfach-Einladung, ebenso
+  eine schon vergebene Login-E-Mail), Bussen kassieren/erlassen/löschen, doppelte Busse
+  («… vom Typ 'absent'»), doppelter Tarifname und Bussentarif über 100 000.
+- Mitglieder: «Erfassen und einladen» legt die Person nicht mehr doppelt an, wenn die Einladung
+  scheitert (Dialog schliesst, Hinweis nennt den Grund). Ausgetretene mit Login erscheinen in
+  «Wer hat Zugriff», in der Mitgliederliste und auf der Personenseite als gesperrt statt aktiv.
+  Datum der Einladung in der UI-Sprache. Sicherheitsaktivität zeigt «Bestätigung verlangt»,
+  «Gerät vergessen» und «MFA-Einrichtung übersprungen» übersetzt.
+- Kasse: mobile Beträge im Zahlenformat der UI-Sprache, Kassier- und Löschdatum von Bussen als
+  Schweizer Kalendertag (nach Mitternacht nicht mehr der Vortag), Filter ohne Treffer mit eigenem
+  Leerzustand, Buchungsliste mit Tabellensemantik für Screenreader, Vorschau im Regel-Dialog im
+  Zahlenformat der UI-Sprache und ohne Konto in der Vereinswährung statt fest «CHF».
+- Einstellungen: Speicherkategorien übersetzt; Zeitstempel in Echtheitsprüfung, Zugangslinks und
+  Plattform-Admin als Schweizer Kalendertag; der Link zu den Datenschutzhinweisen wird wie im
+  Backend geprüft (Hinweis statt rohem 422); das Fristfeld der Aufbewahrung lässt sich leeren,
+  ohne auf 1 zu springen («24» wurde zu «124»); Domain-Assistent mit Enter bedienbar,
+  Prüffehler werden angesagt; Verlauf zeigt die bisher englischen Vorgänge («File · Trashed»,
+  «Mfa · Enroll») übersetzt. Plattform-Admin: Preise mit Tausendertrennung der UI-Sprache.
+- Verschlüsselte Exporte (Excel mit Passwort, AES-ZIP, Vereinsexport, Datenauskunft): das Passwort
+  wird nicht mehr still um Leerzeichen am Rand gekürzt - die Datei öffnet mit genau der Eingabe.
+- Plattform-Admin-Login: Gross-/Kleinschreibung der E-Mail spielt keine Rolle mehr.
+- Mandanten-Profilbild: ein Bild über 40 Megapixel meldet das übersetzt, statt «muss ein JPEG-,
+  PNG-… sein»; «Domain nicht gefunden» erscheint in der UI-Sprache; die Avatarreihe der Abo-Seite
+  nennt die Konten auch für Screenreader; Plattform-Admin › Speicher zeigt Datumsangaben als
+  Schweizer Kalendertag. Export-Passwörter zählen für die Mindestlänge überall ohne Leerzeichen am
+  Rand (das Passwort selbst bleibt unverändert).
+
+### Sicherheit
+
+- Anfragen ohne Anmeldung mit kaputten Eingaben ergeben Eingabefehler statt Serverfehler samt
+  Eintrag im Fehlerprotokoll: nicht lesbarer `Origin`-Header (403/400), einzelne UTF-16-Surrogate
+  in JSON (422, die NUL-/Surrogat-Prüfung gilt jetzt auch für `application/*+json`; Pufferung auf
+  16 MiB begrenzt), Nicht-ASCII-Zeichen im Gerätecookie und TOTP-Codes mit Ziffern anderer
+  Schriften.
+- Traefik-Ratelimits (Login, TOTP, Domain-Erkennung, Word-Import, Abgabebox, Prüfseite) zählen
+  IPv6-Adressen je /64 statt je Adresse, wie die Grenzen im Backend.
+- Prüfseite: der Seitenvergleich über die Dokument-ID ist je Besucher begrenzt (20 je 10 Minuten,
+  IPv6 je /64) plus 200 je Dokument insgesamt. Vorher galt die Grenze für alle zusammen, und wer
+  eine Dokument-ID kannte, konnte den Vergleich für alle anderen sperren.
+- ICS- und Markdown-Exporte des Document Studio sind als begründete Ausnahme in den
+  Sicherheitsregeln (§4.4) festgehalten; jeder solche Export steht ohne Inhalt im Audit-Log.
+
+### Update
+
+- Abhängigkeiten: pypdfium2 5.15.2 (Backend).
+- Keine Migration, kein neues Secret. Die Traefik-Labels der Ratelimits ändern sich
+  (`docker-compose.release.yml`), `deploy.sh` übernimmt sie wie gewohnt.
+- Neue optionale Einstellung der Abgabebox `TRUSTED_PROXY_CIDRS` (Standard wie im Backend: private
+  Netze), für die Grenze des Seitenvergleichs.
+
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt

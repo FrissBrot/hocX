@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { useMfaEnrollment, formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
 import { browserSupportsPasskeys } from "@/lib/webauthn";
 import type { Locale } from "@/i18n/locale-config.generated";
@@ -17,6 +18,7 @@ type Props = {
 
 export function MfaProfilePanel({ open }: Props) {
   const t = useTranslations("security.mfaProfile");
+  const tSecurity = useTranslations("security");
   const locale = useLocale() as Locale;
   const showToast = useToast();
   const [overview, setOverview] = useState<UserMfaOverview | null>(null);
@@ -48,10 +50,10 @@ export function MfaProfilePanel({ open }: Props) {
     browserApiFetch<UserMfaOverview>("/api/users/me/mfa")
       .then((result) => setOverview(result))
       .catch((error) => {
-        showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
+        showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("loadFailed")), "error");
       })
       .finally(() => setLoading(false));
-  }, [open, showToast, t]);
+  }, [open, showToast, t, tSecurity]);
 
   async function setPreferredMethod(factorType: "totp" | "webauthn") {
     setBusy(true);
@@ -63,7 +65,7 @@ export function MfaProfilePanel({ open }: Props) {
       setOverview(next);
       showToast(t("setDefaultSuccess", { method: mfaFactorTypeLabel(factorType) }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("setDefaultFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("setDefaultFailed")), "error");
     } finally {
       setBusy(false);
     }
@@ -88,8 +90,9 @@ export function MfaProfilePanel({ open }: Props) {
               ? t("requiredHint")
               : t("optionalHint")}
           </div>
-          {overview?.preferred_factor_label ? (
-            <div className="muted">{t("defaultMethod", { method: overview.preferred_factor_label })}</div>
+          {/* Typ statt preferred_factor_label: das Backend liefert dort fertigen deutschen Text */}
+          {overview?.preferred_factor_type ? (
+            <div className="muted">{t("defaultMethod", { method: mfaFactorTypeLabel(overview.preferred_factor_type) })}</div>
           ) : null}
         </div>
         <div className="status-row">

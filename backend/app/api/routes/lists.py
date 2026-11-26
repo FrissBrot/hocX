@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 from app.core.db import get_db
 from app.core.error_log import record_system_error
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.security import CurrentUser, get_current_user, permission_denied, require_permission
 from app.models import (
     DocumentTemplate,
     DocumentTemplateRevision,
@@ -449,7 +449,7 @@ def delete_entry(
         # Wie Termin löschen (Nachtlauf 2026-11-25): die Einreichungen der Listen-Abgaben samt
         # Dateien fallen mit weg - das verlangt submissions.manage (bewusst ohne Feature-Prüfung,
         # damit Einträge nach einem Abgabebox-Downgrade löschbar bleiben)
-        raise HTTPException(status_code=403, detail="Permission required")
+        raise permission_denied()
     try:
         deleted = service.delete_entry(db, current.id)
     except SQLAlchemyError as exc:

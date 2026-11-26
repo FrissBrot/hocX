@@ -25,9 +25,9 @@ import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatDate, formatFileSize, formatPercentNumber } from "@/lib/utils/format";
-import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
-import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
+import { formatFileSize, formatPercentNumber, formatTimestampDate } from "@/lib/utils/format";
+import { CATEGORY_COLORS, categoryHints, categoryLabels, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { PROFILE_IMAGE_ACCEPT, profileImageErrorMessage, profileImageProblem } from "@/lib/utils/profile-image";
 import { primarySystemRole } from "@/components/users/user-form-shared";
 import { rolesLabel } from "@/lib/permissions";
 import {
@@ -97,7 +97,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
   const locale = useLocale();
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
-  const storageHints = categoryHints(useTranslations("storage"));
+  const tStorage = useTranslations("storage");
+  const storageHints = categoryHints(tStorage);
+  const storageLabels = categoryLabels(tStorage);
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
   const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
   const showToast = useToast();
@@ -436,7 +438,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
       showToast(t("tenantModal.toasts.tenantSaved"), "success");
       onSaved(updated);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.tenantSaveFailed"), "error");
+      showToast(profileImageErrorMessage(error, tCommon) ?? (error instanceof Error ? error.message : t("tenantModal.toasts.tenantSaveFailed")), "error");
     } finally {
       setTenantBusy(false);
     }
@@ -515,7 +517,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
     ) : activeTab === "abo" ? (
       <>
         <span className="muted">
-          {cost.totalRp === null ? t("tenantModal.planWithoutPrice") : t("tenantModal.total", { amount: formatChfShort(cost.totalRp), unit: cycleUnit })}
+          {cost.totalRp === null ? t("tenantModal.planWithoutPrice") : t("tenantModal.total", { amount: formatChfShort(cost.totalRp, locale), unit: cycleUnit })}
         </span>
         <div className="modal-footer-actions">
           {closeButton}
@@ -592,7 +594,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                 </div>
                 <div className="admin-tenant-meta">
                   <span>
-                    {t("tenantModal.meta.createdAt")} <strong>{formatDate(tenant.created_at)}</strong>
+                    {t("tenantModal.meta.createdAt")} <strong>{formatTimestampDate(tenant.created_at)}</strong>
                   </span>
                   <span>
                     {t("tenantModal.meta.participants")} <strong>{tenant.participant_count}</strong>
@@ -657,7 +659,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                                     : inPlan
                                     ? t("tenantModal.modules.includedInPlan")
                                     : feature.standalone_price_monthly_rp !== null
-                                      ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp) })
+                                      ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp, locale) })
                                       : planOnly
                                         ? t("tenantModal.modules.planOnly")
                                         : t("tenantModal.modules.individuallyBooked")}
@@ -723,7 +725,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                       </span>
                       <span className="field-help">
                         {cost.subtotalRp
-                          ? t("tenantModal.fields.discountPriceHelp", { price: formatChfShort(cost.subtotalRp), unit: cycleUnit })
+                          ? t("tenantModal.fields.discountPriceHelp", { price: formatChfShort(cost.subtotalRp, locale), unit: cycleUnit })
                           : t("tenantModal.fields.discountPriceUnavailable")}
                       </span>
                     </label>
@@ -743,7 +745,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                       onChange={(value) => setSubscriptionForm((current) => ({ ...current, billing_start_date: value || null }))}
                     />
                     <span className="field-help">
-                      {t("tenantModal.fields.billingStartHelp", { date: formatDate(tenant.created_at) })}
+                      {t("tenantModal.fields.billingStartHelp", { date: formatTimestampDate(tenant.created_at) })}
                     </span>
                   </label>
                   <label className="field-stack">
@@ -782,14 +784,15 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                   <div className="card admin-cost-card">
                     <div className="admin-cost-row">
                       <span>{t("tenantModal.cost.plan", { name: selectedPlan?.name ?? "–" })}</span>
-                      <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp)}</span>
+                      <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp, locale)}</span>
                     </div>
                     {addOnFeatures.map((feature) => (
                       <div className="admin-cost-row" key={feature.code}>
                         <span>+ {feature.name}</span>
                         <span>
                           {formatChfShort(
-                            (feature.standalone_price_monthly_rp ?? 0) * (subscriptionForm.billing_cycle === "monthly" ? 1 : 12)
+                            (feature.standalone_price_monthly_rp ?? 0) * (subscriptionForm.billing_cycle === "monthly" ? 1 : 12),
+                            locale
                           )}
                         </span>
                       </div>
@@ -797,12 +800,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                     {subscriptionForm.discount_percent > 0 && cost.subtotalRp !== null && cost.totalRp !== null ? (
                       <div className="admin-cost-row admin-cost-row-discount">
                         <span>{t("tenantModal.cost.discountPercent", { percent: formatPercentNumber(subscriptionForm.discount_percent, locale) })}</span>
-                        <span>– {formatChfShort(cost.subtotalRp - cost.totalRp)}</span>
+                        <span>– {formatChfShort(cost.subtotalRp - cost.totalRp, locale)}</span>
                       </div>
                     ) : null}
                     <div className="admin-cost-total">
                       <span>{t("tenantModal.cost.total")}</span>
-                      <strong>{cost.totalRp === null ? t("tenantModal.cost.totalUndetermined") : `${formatChfShort(cost.totalRp)}`}</strong>
+                      <strong>{cost.totalRp === null ? t("tenantModal.cost.totalUndetermined") : `${formatChfShort(cost.totalRp, locale)}`}</strong>
                     </div>
                     <div className="muted admin-cost-hint">
                       {cost.totalRp === null
@@ -980,7 +983,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                               key={category.key}
                               className="storage-usage-segment"
                               style={{ width: `${(category.bytes / storageBarTotal) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                              title={`${category.label}: ${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
+                              title={`${storageLabels[category.key]}: ${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
                             />
                           ))
                         : null}
@@ -993,7 +996,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                           <div key={category.key} className="admin-storage-legend-item" title={storageHints[category.key]}>
                             <span>
                               <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
-                              {category.label}
+                              {storageLabels[category.key]}
                             </span>
                             <strong>{formatFileSize(category.bytes)}</strong>
                           </div>

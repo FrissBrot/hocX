@@ -14,7 +14,7 @@ import { CopyField } from "@/components/ui/copy-field";
 import { useConfirm } from "@/contexts/confirm-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
+import { PROFILE_IMAGE_ACCEPT, profileImageErrorMessage, profileImageProblem } from "@/lib/utils/profile-image";
 import { TenantSummary } from "@/types/api";
 
 type Props = {
@@ -30,6 +30,7 @@ type TenantFormState = {
 /** Formularzustand und Speichern der Stammdaten - geteilt zwischen Desktop und Mobile. */
 export function useTenantGeneralForm(initialTenant: TenantSummary) {
   const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
@@ -70,7 +71,7 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
       // Namensänderung hebt eine Verifizierung durch hocX auf (Prüfseite) - darauf hinweisen
       showToast(updated.identity_verification_revoked ? t("saveSuccessVerificationRevoked") : t("saveSuccess"), updated.identity_verification_revoked ? "info" : "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
+      showToast(profileImageErrorMessage(error, tCommon) ?? (error instanceof Error ? error.message : t("saveFailed")), "error");
     } finally {
       setSaving(false);
     }

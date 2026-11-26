@@ -109,11 +109,15 @@
     "pdfExportFailed": "PDF export failed",
     "tagColorTransferFailed": "Tag renamed, but its colour could not be transferred",
     "noHistoricalCycleSelected": "No historical cycle selected",
-    "noDraftToConfirm": "No draft to confirm"
+    "noDraftToConfirm": "No draft to confirm",
+    "permissionRequired": "You don't have permission to do this. Reload the page if your role has changed.",
+    "featureNotBooked": "This feature is not included in your organisation's subscription.",
+    "featureReadOnly": "This feature is now read-only because it is no longer part of your organisation's subscription."
   },
   "profileImage": {
     "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
-    "tooLarge": "The image is too large (max. 5 MB)."
+    "tooLarge": "The image is too large (max. 5 MB).",
+    "tooManyPixels": "The image has too many pixels (at most {max, number} megapixels). Please make it smaller."
   },
   "deleteWithFiles": {
     "selectedCount": "{selected, number} of {total, number} selected for deletion",
@@ -165,7 +169,17 @@
       "public_link": "Public link",
       "context_visibility": "File visibility",
       "activity": "Activity log",
-      "todo_fine": "Task fine"
+      "todo_fine": "Task fine",
+      "agenda_item": "Topic",
+      "file": "File",
+      "file_import": "File import",
+      "finance_settings": "Finance settings",
+      "mfa": "Two-factor sign-in",
+      "password": "Password",
+      "photo": "Photo",
+      "sessions": "Signed-in devices",
+      "submission": "Upload",
+      "template_element": "Template element"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

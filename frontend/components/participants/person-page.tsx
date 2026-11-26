@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { mfaState, rolesNeedMfa } from "@/components/users/access-helpers";
@@ -110,6 +110,7 @@ export function PersonPage({
   permissions, actorPermissions, enabledFeatures, ownUserId, tenantRequiresMfa,
 }: Props) {
   const t = useTranslations("participants");
+  const locale = useLocale();
   const tUsers = useTranslations("users");
   const tNav = useTranslations("nav");
   const tSecurity = useTranslations("security");
@@ -562,9 +563,14 @@ export function PersonPage({
         <div className="person-card-body">
           <div className="person-field-head">
             <span className="field-label">{t("person.loginLabel")}</span>
-            <Badge variant={loginStatus === "active" ? "success" : loginStatus === "invited" ? "info" : "neutral"}>
-              {t(`person.loginStatus.${loginStatus}`)}
-            </Badge>
+            {/* Ausgetretene: Login ist gesperrt (Backend AppUser.has_left), nicht «Login aktiv» */}
+            {loginStatus === "active" && hasLeft ? (
+              <Badge variant="warning">{t("membership.loginBlocked")}</Badge>
+            ) : (
+              <Badge variant={loginStatus === "active" ? "success" : loginStatus === "invited" ? "info" : "neutral"}>
+                {t(`person.loginStatus.${loginStatus}`)}
+              </Badge>
+            )}
           </div>
 
           {loginStatus === "none" ? (
@@ -592,7 +598,7 @@ export function PersonPage({
             <>
               <p className="muted">
                 {invite?.sent_at
-                  ? t("invite.pendingSent", { sent: formatDateTime(invite.sent_at), expires: formatDateTime(invite.expires_at ?? "") })
+                  ? t("invite.pendingSent", { sent: formatDateTime(invite.sent_at, locale), expires: formatDateTime(invite.expires_at ?? "", locale) })
                   : t("invite.pendingQueued")}
               </p>
               {permissions.access ? (

@@ -150,7 +150,7 @@ def test_a_permission_without_its_booked_module_has_no_effect():
     assert user.can(P.FINANCES_MANAGE) is False
     with pytest.raises(HTTPException) as exc_info:
         require_permission(user, P.FINANCES_MANAGE)
-    assert "nicht gebucht" in exc_info.value.detail
+    assert exc_info.value.detail["code"] == "feature_not_booked"
 
 
 def test_account_without_roles_has_no_permissions(db):

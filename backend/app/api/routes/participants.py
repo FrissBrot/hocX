@@ -61,6 +61,9 @@ def _ensure_can_manage_login(db: Session, user: CurrentUser, participant: Partic
         role_service.ensure_can_manage_account(db, user, participant.id)
 
 
+# Stabiler Code, damit das Frontend die Meldung übersetzt (security.apiErrors.own_account_delete)
+_OWN_ACCOUNT_DELETE = {"code": "own_account_delete", "message": "Das eigene Konto kann nicht gelöscht werden."}
+
 def _get_participant_or_404(db: Session, participant_id: uuid.UUID, user: CurrentUser) -> Participant:
     participant = public_id_service.get_by_public_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
     if participant is None:
@@ -234,7 +237,7 @@ def delete_participant(
         require_permission(user, P.ACCESS_MANAGE)
         _ensure_can_manage_login(db, user, participant)
     if participant.id == user.user_id:
-        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+        raise HTTPException(status_code=400, detail=_OWN_ACCOUNT_DELETE)
     try:
         deleted = participant_service.delete_participant(db, participant.id, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -310,7 +313,7 @@ def bulk_delete_participants(
             require_permission(user, P.ACCESS_MANAGE)
             _ensure_can_manage_login(db, user, participant)
     if user.user_id in id_map.values():
-        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+        raise HTTPException(status_code=400, detail=_OWN_ACCOUNT_DELETE)
     try:
         deleted_count = participant_service.delete_participants(db, list(id_map.values()), tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -493,7 +496,7 @@ def _ensure_invitable(db: Session, user: CurrentUser, participant: Participant) 
 
 
 # Gründe für übersprungene Personen in Mehrfachaktionen (Codes aus den Einzelprüfungen)
-_SKIP_REASONS = {"already_has_login": "has_login", "inactive_person": "inactive", "former_person": "former", "email_required": "no_email"}
+_SKIP_REASONS = {"already_has_login": "has_login", "inactive_person": "inactive", "former_person": "former", "email_required": "no_email", "user_limit_reached": "user_limit", "login_email_taken": "email_taken"}
 
 
 def _bulk_participants(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> tuple[list[Participant], list[ParticipantBulkSkipped]]:

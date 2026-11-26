@@ -48,4 +48,17 @@ describe("SecurityActivity (Mandant)", () => {
     expect(browserApiFetchMock.mock.calls[0][0]).toBe("/api/auth-security/accounts/u-1/revoke-sessions");
     expect(browserApiFetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
   });
+
+  it("übersetzt auch Bestätigung verlangt, Gerät vergessen und übersprungene MFA-Einrichtung", () => {
+    // Diese Ereignisse schreibt das Backend mit tenant_id (step_up.py, users.py, mfa_service.py);
+    // sie standen als roher Typ («stepup.required») in der Liste.
+    const events = ["stepup.required", "device.revoke", "mfa.setup_skipped"].map((event_type) => ({ ...DATA.events[0], event_type, risk_level: null }));
+    render(<SecurityActivity initial={{ ...DATA, events }} canRevoke={false} />);
+    for (const raw of ["stepup.required", "device.revoke", "mfa.setup_skipped"]) {
+      expect(screen.queryByText(raw)).toBeNull();
+    }
+    expect(screen.getByText("Bestätigung verlangt")).toBeInTheDocument();
+    expect(screen.getByText("Gerät vergessen")).toBeInTheDocument();
+    expect(screen.getByText("MFA-Einrichtung übersprungen")).toBeInTheDocument();
+  });
 });

@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
+import { financeErrorMessage } from "@/components/finances/finance-errors";
 import { AttendanceFine, FinanceAccount, ParticipantSummary, ProtocolSummary } from "@/types/api";
 import { Select } from "@/components/ui/select";
 
@@ -53,7 +54,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
         setParticipants((loadedParticipants ?? []).filter((participant) => participant.is_active));
       } catch (error) {
         if (!cancelled) {
-          showToast(error instanceof Error ? error.message : t("loadOptionsFailed"), "error");
+          showToast(financeErrorMessage(error, t, "loadOptionsFailed"), "error");
         }
       }
     }
@@ -67,6 +68,15 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
   const participant = participants.find((entry) => entry.id === participantId) ?? null;
   const parsedAmount = Number(amount.replace(",", "."));
   const canSave = !!protocolId && !!participant && isParticipantSelectable(participant) && !!accountId && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving;
+
+  /** Übersetzte Meldung statt Backend-Text (dieser war nur deutsch und nannte den Typ roh, z. B. 'absent'). */
+  function createErrorMessage(error: unknown, name: string, type: string): string {
+    const detail = (error as { detail?: unknown } | null)?.detail;
+    if (detail && typeof detail === "object" && (detail as { code?: unknown }).code === "duplicate_fine") {
+      return t("createFineDuplicate", { name, type });
+    }
+    return financeErrorMessage(error, t, "createFineFailed");
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,7 +102,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
       onCreated();
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("createFineFailed"), "error");
+      showToast(createErrorMessage(error, participant.display_name, fineTypeLabel[fineType] ?? fineType), "error");
     } finally {
       setSaving(false);
     }

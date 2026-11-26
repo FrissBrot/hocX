@@ -61,6 +61,8 @@ const DOMAIN_ERROR_CODES = new Set([
   "domain_already_active",
   "domain_txt_missing",
   "domain_not_routed",
+  "domain_not_found",
+  "domain_server_not_configured",
 ]);
 
 /** Übersetzte Meldung zu einem Fehler der Domain-Routen; unbekannte Fehler behalten ihren Text. */

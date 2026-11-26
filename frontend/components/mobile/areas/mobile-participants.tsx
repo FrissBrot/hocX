@@ -50,6 +50,7 @@ function membershipNote(participant: ParticipantSummary, t: (key: string, values
 
 export function MobileParticipants({ initialParticipants, templates, tenantId }: { initialParticipants: ParticipantSummary[]; templates: TemplateSummary[]; tenantId: string | null }) {
   const t = useTranslations("participants");
+  const tSecurity = useTranslations("security");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
   const openMore = useOpenMore();
@@ -94,7 +95,7 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
       setSelecting(false);
       showToast(t("toasts.bulkDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.bulkDeleteFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.bulkDeleteFailed")), "error");
     }
   }
 
@@ -234,6 +235,7 @@ function ParticipantSheet({
 }) {
   const t = useTranslations("participants");
   const tUsers = useTranslations("users");
+  const tSecurity = useTranslations("security");
   const canAdmin = can(useMobileSession(), "access.manage");
   const tMobile = useTranslations("mobile");
   const confirm = useConfirm();
@@ -321,7 +323,7 @@ function ParticipantSheet({
       showToast(t("toasts.deletedSingle", { name: participant.display_name }), "success");
       onDeleted(participant.id);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.deleteFailed")), "error");
     }
   }
 

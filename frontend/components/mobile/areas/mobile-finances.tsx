@@ -25,7 +25,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { financeErrorMessage, lockedReasonText } from "@/components/finances/finance-errors";
 import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
-import { formatMoney } from "@/lib/utils/format";
+import { appCalendarDate, formatMoney } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
@@ -33,8 +33,9 @@ import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction, TodoFineListItem } from "@/types/api";
 
-function money(amount: number, currency?: string | null) {
-  return formatMoney(amount, currency ?? "", undefined, { currencyFirst: true });
+// Immer mit der UI-Sprache formatieren (fr-CH «1 234,50», de-CH «1’234.50»), wie die Desktop-Kasse.
+function money(amount: number, currency: string | null | undefined, locale: string) {
+  return formatMoney(amount, currency ?? "", locale, { currencyFirst: true });
 }
 
 // ── Finanzen ────────────────────────────────────────────────────────────
@@ -170,10 +171,10 @@ export function MobileFinances({ initialAccounts, currency, canWrite, readOnly =
                   onClick={() => (account.id === selectedId && canWrite ? setAccountSheet(account) : setSelectedId(account.id))}
                 >
                   <span className="mobile-eyebrow">{account.name}</span>
-                  <span className={`mobile-stat-value${account.balance < 0 ? " mobile-amount-neg" : ""}`}>{money(account.balance, account.currency_label)}</span>
+                  <span className={`mobile-stat-value${account.balance < 0 ? " mobile-amount-neg" : ""}`}>{money(account.balance, account.currency_label, locale)}</span>
                   <span className="mobile-muted-sm">
                     {Math.sign(account.provisional_balance) === 1
-                      ? `+ ${money(account.provisional_balance, account.currency_label)} ${t("provisional")}`
+                      ? t("kasse.accountOpen", { amount: money(account.provisional_balance, account.currency_label, locale) })
                       : t("transactionCount", { count: account.transaction_count })}
                   </span>
                 </button>
@@ -212,7 +213,7 @@ export function MobileFinances({ initialAccounts, currency, canWrite, readOnly =
                     trailing={
                       <span className={`mobile-amount ${tx.amount < 0 ? "mobile-amount-neg" : "mobile-amount-pos"}`}>
                         {tx.amount > 0 ? "+ " : "− "}
-                        {money(Math.abs(tx.amount))}
+                        {money(Math.abs(tx.amount), null, locale)}
                       </span>
                     }
                   />
@@ -221,7 +222,18 @@ export function MobileFinances({ initialAccounts, currency, canWrite, readOnly =
               </div>
             </section>
           ))}
-          {groups.length === 0 ? <MobileEmpty title={canWrite ? t("noTransactions") : t("noTransactionsReadOnly")} /> : null}
+          {groups.length === 0 ? (
+            <MobileEmpty
+              title={
+                // Konto hat Buchungen, nur der Filter trifft keine: nicht «Noch keine Buchungen» melden
+                transactions.length > 0
+                  ? filter === "year"
+                    ? t("noTransactionsYear", { year: String(new Date().getFullYear()) })
+                    : t("noTransactionsFilter")
+                  : canWrite ? t("noTransactions") : t("noTransactionsReadOnly")
+              }
+            />
+          ) : null}
         </>
       )}
 
@@ -494,7 +506,7 @@ export function MobileFines({
       setTodoFines((list) => list.map((item) => (item.id === updated.id ? updated : item)));
       setOpenTodoKey(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
+      showToast(financeErrorMessage(error, t, "todoFines.actionFailed"), "error");
     }
   }
 
@@ -605,7 +617,7 @@ export function MobileFines({
                     ) : null}
                   </span>
                 }
-                trailing={<span className="mobile-amount">{money(fine.amount)}</span>}
+                trailing={<span className="mobile-amount">{money(fine.amount, null, locale)}</span>}
               />
             ))}
             {visibleTodo.map(({ fine, key }) => (
@@ -624,7 +636,7 @@ export function MobileFines({
                     ) : null}
                   </span>
                 }
-                trailing={<span className="mobile-amount">{fine.status === "conflict" ? "—" : money(fine.amount)}</span>}
+                trailing={<span className="mobile-amount">{fine.status === "conflict" ? "—" : money(fine.amount, null, locale)}</span>}
               />
             ))}
           </div>
@@ -673,14 +685,14 @@ export function MobileFines({
             <MobileListRow label={t("colReason")} value={fineTypeLabel[openFine.fine_type] ?? openFine.fine_type} />
             <MobileListRow label={t("colProtocol")} value={openFine.protocol_number ?? "—"} />
             <MobileListRow label={t("colAccount")} value={accountName(openFine.account_id)} />
-            <MobileListRow label={t("amountLabel")} value={<strong>{money(openFine.amount, openFine.currency_label)}</strong>} />
+            <MobileListRow label={t("amountLabel")} value={<strong>{money(openFine.amount, openFine.currency_label, locale)}</strong>} />
             <MobileListRow
               label={t("colStatus")}
               value={
                 openFine.status === "collected"
-                  ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(openFine.collected_at.slice(0, 10), locale)}` : ""}`
+                  ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(appCalendarDate(openFine.collected_at), locale)}` : ""}`
                   : openFine.status === "deleted"
-                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(openFine.deleted_at.slice(0, 10), locale)}` : ""}`
+                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(appCalendarDate(openFine.deleted_at), locale)}` : ""}`
                     : t("statusPending")
               }
             />
@@ -713,7 +725,7 @@ export function MobileFines({
           <div className="mobile-card mobile-group-card">
             <MobileListRow label={t("colReason")} value={`${t("todoFineReason")} · ${t("todoFines.daysLate", { count: openTodo.days_late })}`} />
             <MobileListRow label={t("todoFines.colRule")} value={openTodo.rule_name ?? (openTodo.status === "conflict" ? openTodo.matching_rules.map((rule) => rule.name).join(", ") : t("todoFines.fixedAmount"))} />
-            <MobileListRow label={t("amountLabel")} value={<strong>{openTodo.status === "conflict" ? "—" : money(openTodo.amount, openTodo.currency_label ?? undefined)}</strong>} />
+            <MobileListRow label={t("amountLabel")} value={<strong>{openTodo.status === "conflict" ? "—" : money(openTodo.amount, openTodo.currency_label, locale)}</strong>} />
             <MobileListRow label={t("colStatus")} value={t(`todoFines.status.${openTodo.status}`)} />
             {openTodo.status === "deleted" && openTodo.delete_comment ? <MobileListRow label={t("deleteReasonLabel")} value={openTodo.delete_comment} /> : null}
           </div>

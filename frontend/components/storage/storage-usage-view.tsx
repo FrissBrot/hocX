@@ -13,6 +13,18 @@ export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
   other: "#9ca3af",
 };
 
+// Kategorienamen in der UI-Sprache. Das Backend liefert `label` fest deutsch
+// (storage_service.CATEGORY_LABELS), angezeigt wird deshalb immer dieser Name.
+export function categoryLabels(t: (key: string) => string): Record<StorageCategoryKey, string> {
+  return {
+    photos: t("categoryLabels.photos"),
+    files: t("categoryLabels.files"),
+    protocols: t("categoryLabels.protocols"),
+    trash: t("categoryLabels.trash"),
+    other: t("categoryLabels.other"),
+  };
+}
+
 // Reine Hilfsfunktion (kein JSX) statt eines modulweiten Konstanten-Records: braucht `t`, siehe
 // section-tabs.ts (dashboardTabs(t) etc.) fuer dasselbe Muster. Auch von admin-tenant-settings-
 // modal.tsx und tenant-subscription-view.tsx importiert.
@@ -64,7 +76,9 @@ export function StorageQuotaComposition({
  * than to the tenant themselves for the exact same numbers. */
 export function StorageBreakdown({ total_bytes, quota_bytes, categories }: StorageUsageRead) {
   const t = useTranslations("storage.breakdown");
-  const hints = categoryHints(useTranslations("storage"));
+  const tStorage = useTranslations("storage");
+  const hints = categoryHints(tStorage);
+  const labels = categoryLabels(tStorage);
   const visibleCategories = categories.filter((c) => c.bytes > 0);
   const barTotal = quota_bytes && quota_bytes > total_bytes ? quota_bytes : total_bytes;
   const freeBytes = quota_bytes !== null ? Math.max(quota_bytes - total_bytes, 0) : null;
@@ -81,7 +95,7 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
                   width: `${(category.bytes / barTotal) * 100}%`,
                   background: CATEGORY_COLORS[category.key],
                 }}
-                title={`${category.label}: ${formatFileSize(category.bytes)}`}
+                title={`${labels[category.key]}: ${formatFileSize(category.bytes)}`}
               />
             ))
           : null}
@@ -111,7 +125,7 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
                 <tr key={category.key}>
                   <td>
                     <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
-                    {category.label}
+                    {labels[category.key]}
                     <div className="muted storage-legend-hint">{hints[category.key]}</div>
                   </td>
                   <td>{formatFileSize(category.bytes)}</td>

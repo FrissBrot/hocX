@@ -153,7 +153,11 @@
     "mfa_locked": "Too many wrong codes. Please wait a minute and try again.",
     "auth_email_unavailable": "Sign-in is currently not possible. Please contact your administrator.",
     "password_leaked": "This password is known from a data breach and therefore unsafe. Please choose a different one.",
-    "password_breached": "This password is known from a data breach. Have another owner or admin_cli set a new one."
+    "password_breached": "This password is known from a data breach. Have another owner or admin_cli set a new one.",
+    "own_account_delete": "You cannot delete your own account. Remove it from the selection.",
+    "user_limit_reached": "The subscription's user limit has been reached ({limit, number} accounts with login, including open invitations). Withdraw an invitation, deactivate an account or upgrade the subscription.",
+    "mfa_last_factor_required": "Your account needs at least one second factor. Set up another one before removing this one.",
+    "mfa_method_not_configured": "This method is not set up for your account yet."
   },
   "grace": {
     "title": "Second factor becomes mandatory",

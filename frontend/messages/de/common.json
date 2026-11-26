@@ -109,11 +109,15 @@
     "pdfExportFailed": "PDF-Export fehlgeschlagen",
     "tagColorTransferFailed": "Tag umbenannt, Farbe konnte aber nicht übertragen werden",
     "noHistoricalCycleSelected": "Kein historischer Zyklus ausgewählt",
-    "noDraftToConfirm": "Kein Entwurf zum Bestätigen"
+    "noDraftToConfirm": "Kein Entwurf zum Bestätigen",
+    "permissionRequired": "Dafür fehlt dir die Berechtigung. Lade die Seite neu, falls sich deine Rolle geändert hat.",
+    "featureNotBooked": "Diese Funktion ist im Abo eurer Organisation nicht enthalten.",
+    "featureReadOnly": "Diese Funktion ist nur noch lesend verfügbar, weil sie nicht mehr im Abo eurer Organisation ist."
   },
   "profileImage": {
     "invalidType": "Bitte ein PNG-, JPG-, GIF- oder WebP-Bild wählen (SVG wird nicht unterstützt).",
-    "tooLarge": "Das Bild ist zu gross (maximal 5 MB)."
+    "tooLarge": "Das Bild ist zu gross (maximal 5 MB).",
+    "tooManyPixels": "Das Bild hat zu viele Bildpunkte (höchstens {max, number} Megapixel). Bitte verkleinern."
   },
   "deleteWithFiles": {
     "selectedCount": "{selected, number} von {total, number} zum Löschen ausgewählt",
@@ -165,7 +169,17 @@
       "public_link": "Öffentlicher Link",
       "context_visibility": "Sichtbarkeit von Dateien",
       "activity": "Verlauf",
-      "todo_fine": "Pendenzen-Busse"
+      "todo_fine": "Pendenzen-Busse",
+      "agenda_item": "Anliegen",
+      "file": "Datei",
+      "file_import": "Dateiimport",
+      "finance_settings": "Finanz-Einstellungen",
+      "mfa": "Zwei-Faktor-Anmeldung",
+      "password": "Passwort",
+      "photo": "Foto",
+      "sessions": "Angemeldete Geräte",
+      "submission": "Einreichung",
+      "template_element": "Vorlagenelement"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",

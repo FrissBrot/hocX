@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { focusIsLost, restoreFocus, stableFocusTarget } from "@/lib/a11y/focus";
 import { useFocusTrap } from "@/lib/a11y/use-focus-trap";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { useHoldViewportSwitch } from "@/lib/hooks/use-is-mobile";
 import { ActionIcon } from "@/components/ui/action-icons";
 
 const ModalDepth = createContext(0);
@@ -91,6 +92,9 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
   // Tab bei verlorenem Fokus (<body>) landet wieder im Dialog.
   useFocusTrap(open && mounted, shellRef);
   usePopupScrollLock(open && mounted);
+  // Offener Dialog = mögliche ungespeicherte Eingabe: der Wechsel zwischen Mobil- und
+  // Desktop-Variante einer Seite (ResponsiveView) wartet, bis er geschlossen ist.
+  useHoldViewportSwitch(open && mounted);
   usePopupEscape(open && mounted, () => {
     if (onEscape) return onEscape();
     // Explizite Speicheraktion, keine Suche nach Buttontext oder beliebigen Submits.

@@ -73,8 +73,12 @@ def _request_hostname(request: Request) -> str | None:
     arrived through the frontend's own /api/* rewrite proxy, which overwrites Host with its
     own upstream target instead of preserving the browser's original one - reuses
     _browser_origin's own header-derived value (the Origin header, unaffected by that
-    proxy hop) instead (audit fix, 2026-09-17)."""
-    return urlparse(_browser_origin(request)).hostname
+    proxy hop) instead (audit fix, 2026-09-17). Ein nicht lesbarer Origin (z. B. «http://[») gilt
+    als unbekannter Host statt 500 (Nachtlauf 2026-11-26)."""
+    try:
+        return urlparse(_browser_origin(request)).hostname
+    except ValueError:
+        return None
 
 
 @router.get("", response_model=list[UserRead])

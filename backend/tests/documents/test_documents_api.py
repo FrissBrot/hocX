@@ -411,3 +411,20 @@ def test_export_preview_matches_export_without_audit(db, setup, monkeypatch):
     with pytest.raises(HTTPException) as excinfo:
         routes.export_document_preview(routes.FormatExportRequest(document_type="events", format="ics"), db=db, user=setup["reader"])
     assert excinfo.value.status_code == 422
+
+
+
+def test_markdown_and_ics_exports_are_audited_without_content(db, setup):
+    """SECURITY-RULES §4.4 (Ausnahme, Entscheid 1.6.1): ICS und Markdown gehen unverschlüsselt raus
+    (Kalender-Import bzw. Zwischenablage), jeder Export steht aber im Audit-Log - ohne Inhalt."""
+    from sqlalchemy import text as sql
+
+    routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="markdown"), db=db, user=setup["reader"])
+    routes.export_document_format(routes.FormatExportRequest(document_type="events", format="ics"), db=db, user=setup["reader"])
+    rows = db.execute(sql(
+        "SELECT action, details_json::text FROM audit_log WHERE action IN ('document.export_markdown', 'document.export_ics') ORDER BY id"
+    )).all()
+    assert [row[0] for row in rows][-2:] == ["document.export_markdown", "document.export_ics"]
+    for _, details in rows[-2:]:
+        assert '"encrypted": false' in details
+        assert "Getränke besorgen" not in details and "Sommerfest" not in details

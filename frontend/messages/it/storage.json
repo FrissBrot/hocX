@@ -1,4 +1,11 @@
 {
+  "categoryLabels": {
+    "photos": "Foto",
+    "files": "File",
+    "protocols": "Verbali",
+    "trash": "Cestino",
+    "other": "Altro"
+  },
   "categoryHints": {
     "photos": "Galleria, immagini dei verbali e immagini della cassetta di consegna",
     "files": "Import Word, documenti della cassetta di consegna e altri caricamenti",

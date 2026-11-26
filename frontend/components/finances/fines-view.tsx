@@ -39,7 +39,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
-import { formatDate, formatMoney, swissYear } from "@/lib/utils/format";
+import { appCalendarDate, formatDate, formatMoney, swissYear } from "@/lib/utils/format";
 import { financeErrorMessage } from "@/components/finances/finance-errors";
 import { AttendanceFineListItem, FinanceAccount, TodoFineListItem } from "@/types/api";
 
@@ -210,7 +210,7 @@ export function FinesView({
   }
 
   function actionError(error: unknown, action: "collect" | "reopen" | "restore", row: FineRow): string {
-    if (row.kind === "todo") return error instanceof Error && error.message ? error.message : t("todoFines.actionFailed");
+    if (row.kind === "todo") return financeErrorMessage(error, t, "todoFines.actionFailed");
     const fallback = action === "collect" ? "collectFailed" : action === "reopen" ? "reopenFailed" : "restoreFineFailed";
     return financeErrorMessage(error, t, fallback);
   }
@@ -312,7 +312,7 @@ export function FinesView({
         action: { label: undoLabel, onClick: () => void undo([row], "restore", name) },
       });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
+      showToast(financeErrorMessage(error, t, "todoFines.actionFailed"), "error");
     } finally {
       setBusyFor([id], false);
     }
@@ -419,12 +419,13 @@ export function FinesView({
     if (fine.status === "running") return t("kasse.hint.running");
     if (fine.status === "conflict" && row.kind === "todo") return t("todoFines.todo.v2.rulesMatch", { count: row.fine.matching_rules.length });
     if (fine.status === "collected" && fine.collected_at) {
-      const date = formatDate(fine.collected_at).slice(0, 6);
+      // Zeitstempel (UTC) als Schweizer Kalendertag: Kassieren um 00:30 gehört zum neuen Tag
+      const date = formatDate(appCalendarDate(fine.collected_at)).slice(0, 6);
       return fine.collected_by_display_name ? t("kasse.hint.collectedBy", { date, user: fine.collected_by_display_name }) : date;
     }
     if (fine.status === "deleted") {
       if (fine.delete_comment) return fine.delete_comment;
-      return fine.deleted_at ? formatDate(fine.deleted_at).slice(0, 6) : null;
+      return fine.deleted_at ? formatDate(appCalendarDate(fine.deleted_at)).slice(0, 6) : null;
     }
     return null;
   }

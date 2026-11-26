@@ -165,3 +165,37 @@ describe("Überlast", () => {
     expect(safeReturnPath("/%5cevil.example")).toBe("/%5cevil.example");
   });
 });
+
+describe("403 der zentralen Prüfungen (require_permission/require_feature)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function errorFor(detail: unknown) {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ detail }), { status: 403 }));
+    return browserApiFetch("/api/x").catch((err: unknown) => err as ApiError);
+  }
+
+  it("zeigt statt «Permission required» bzw. «Feature 'x' …» eine übersetzte Meldung (über den Code)", async () => {
+    const missing = await errorFor({ code: "permission_required", message: "Permission required" });
+    expect(missing).toBeInstanceOf(ApiError);
+    expect(missing.message).not.toBe("Permission required");
+    expect(missing.message).toMatch(/Berechtigung/);
+    expect(missing.kind).toBe("auth");
+
+    const unbooked = await errorFor({ code: "feature_not_booked", message: "Feature 'custom_domain' nicht gebucht", params: { feature: "custom_domain" } });
+    expect(unbooked.message).not.toContain("custom_domain");
+    expect(unbooked.message).toMatch(/Abo/);
+    // Der Code bleibt für Bereichsübersetzungen lesbar
+    expect((unbooked.detail as { code: string }).code).toBe("feature_not_booked");
+
+    const readOnly = await errorFor({ code: "feature_read_only", message: "Feature 'finance' nur noch lesend (nicht mehr im Abo)" });
+    expect(readOnly.message).not.toContain("'finance'");
+    expect(readOnly.message).toMatch(/nur noch lesend/i);
+  });
+
+  it("lässt andere 403-Meldungen und unbekannte Codes unverändert", async () => {
+    const other = await errorFor("Tenant not accessible");
+    expect(other.message).toBe("Tenant not accessible");
+    const unknown = await errorFor({ code: "constructor", message: "Andere Prüfung" });
+    expect(unknown.message).toBe("Andere Prüfung");
+  });
+});

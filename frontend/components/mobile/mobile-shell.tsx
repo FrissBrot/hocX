@@ -11,19 +11,16 @@ import { isTodoOverdue } from "@/components/mobile/mobile-utils";
 import { MobileAvatar, MobileListRow } from "@/components/mobile/mobile-ui";
 import { buildNav, buildSettingsNav, formatRoleLabel, isNavLinkActive, type NavGroup, SETTINGS_GROUP, SETTINGS_HREF } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
-import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
 import { can } from "@/lib/permissions";
-import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
-import { MAIN_CONTENT_ID } from "@/lib/a11y/focus";
 
 type ThemePreference = "light" | "dark" | "auto";
 
 // Badge am Todos-Tab: Anzahl eigener ueberfaelliger Todos. Modulweit zwischengespeichert, weil die
-// Shell bei jedem Seitenwechsel neu gemountet wird - frisch gezaehlt wird nach OVERDUE_REFRESH_MS,
+// Tableiste bei jedem Seitenwechsel neu gemountet wird - frisch gezaehlt wird nach OVERDUE_REFRESH_MS,
 // beim Zurueckkehren in den Tab (useVisibleInterval) und beim Betreten/Verlassen der Todos.
 const OVERDUE_REFRESH_MS = 5 * 60_000;
 let overdueCache: { userId: string | null; count: number; at: number } | null = null;
@@ -86,38 +83,37 @@ function activeTabFor(pathname: string): TabKey | null {
   return "more";
 }
 
-export function MobileShell({
+/** Kontexte der Mobile-Ansichten (Session, «Mehr» öffnen). Die App-Shell rendert sie in beiden
+ * Ansichten, damit der Seiteninhalt beim Wechsel Desktop/Mobil an derselben Stelle im Baum bleibt. */
+export function MobileShellProviders({ session, onOpenMore, children }: { session: SessionInfo | null; onOpenMore: () => void; children: ReactNode }) {
+  return (
+    <MobileSessionContext.Provider value={session}>
+      <MobileMoreContext.Provider value={onOpenMore}>{children}</MobileMoreContext.Provider>
+    </MobileSessionContext.Provider>
+  );
+}
+
+/**
+ * Tableiste der Mobile-Shell (bis 900 px). Rahmen, Inhalt und «Mehr»-Panel setzt die App-Shell
+ * zusammen (app-shell.tsx); hier nur die Tabs samt Badge der überfälligen Todos.
+ */
+export function MobileTabBar({
   session,
-  children,
-  themePreference,
-  themeReady,
-  onSelectTheme,
-  onOpenProfile,
-  onOpenSearch,
-  onLogout,
+  moreOpen,
+  onMoreOpenChange,
 }: {
   session: SessionInfo | null;
-  children: ReactNode;
-  themePreference: ThemePreference;
-  themeReady: boolean;
-  onSelectTheme: (theme: ThemePreference) => void;
-  onOpenProfile: () => void;
-  onOpenSearch: () => void;
-  onLogout: () => void;
+  moreOpen: boolean;
+  onMoreOpenChange: (open: boolean | ((open: boolean) => boolean)) => void;
 }) {
   const t = useTranslations("mobile");
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
   const userId = session?.user?.id != null ? String(session.user.id) : null;
   const [overdueCount, setOverdueCount] = useState(() =>
     overdueCache && overdueCache.userId === userId ? overdueCache.count : 0
   );
   const tabs = buildTabs(session);
   const activeTab: TabKey | null = moreOpen ? "more" : activeTabFor(pathname);
-
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [pathname]);
 
   // Badge am Todos-Tab: eigene ueberfaellige Todos. Best effort - ohne Antwort bleibt der
   // Tab einfach ohne Zahl, ein Fehler hier darf die Navigation nie blockieren.
@@ -152,68 +148,45 @@ export function MobileShell({
   useVisibleInterval(loadOverdue, OVERDUE_REFRESH_MS);
 
   return (
-    <MobileSessionContext.Provider value={session}>
-      <MobileMoreContext.Provider value={() => setMoreOpen(true)}>
-      <div className="mobile-shell">
-        <ConnectivityStatus userId={session?.user?.id ?? null} />
-        {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
-        <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mobile-shell-content" hidden={moreOpen}>
-          <InstallAppPrompt />
-          {children}
-        </main>
-        {moreOpen ? (
-          <MobileMorePanel
-            session={session}
-            themePreference={themePreference}
-            themeReady={themeReady}
-            onSelectTheme={onSelectTheme}
-            onOpenProfile={onOpenProfile}
-            onOpenSearch={() => { setMoreOpen(false); onOpenSearch(); }}
-            onLogout={onLogout}
-          />
-        ) : null}
-        <nav className="mobile-tabbar" aria-label={t("tabs.ariaLabel")} style={{ "--mobile-tabs": tabs.length } as CSSProperties}>
-          {tabs.map((tab) => {
-            const active = activeTab === tab.key;
-            const badge = tab.key === "todos" && overdueCount > 0 ? overdueCount : null;
-            const inner = (
-              <>
-                <span className="mobile-tab-icon">
-                  <MobileIcon name={tab.icon} size={24} strokeWidth={1.9} />
-                  {badge ? (
-                    <span className="mobile-tab-badge" aria-label={t("tabs.overdueBadge", { count: badge })}>
-                      {badge}
-                    </span>
-                  ) : null}
+    <nav className="mobile-tabbar" aria-label={t("tabs.ariaLabel")} style={{ "--mobile-tabs": tabs.length } as CSSProperties}>
+      {tabs.map((tab) => {
+        const active = activeTab === tab.key;
+        const badge = tab.key === "todos" && overdueCount > 0 ? overdueCount : null;
+        const inner = (
+          <>
+            <span className="mobile-tab-icon">
+              <MobileIcon name={tab.icon} size={24} strokeWidth={1.9} />
+              {badge ? (
+                <span className="mobile-tab-badge" aria-label={t("tabs.overdueBadge", { count: badge })}>
+                  {badge}
                 </span>
-                <span className="mobile-tab-label">{t(tab.labelKey)}</span>
-              </>
-            );
-            const className = `mobile-tab${active ? " mobile-tab-active" : ""}`;
-            return tab.href ? (
-              <Link
-                key={tab.key}
-                href={tab.href as Route}
-                className={className}
-                aria-current={active ? "page" : undefined}
-                onClick={() => setMoreOpen(false)}
-              >
-                {inner}
-              </Link>
-            ) : (
-              <button key={tab.key} type="button" className={className} aria-pressed={active} onClick={() => setMoreOpen((open) => !open)}>
-                {inner}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-      </MobileMoreContext.Provider>
-    </MobileSessionContext.Provider>
+              ) : null}
+            </span>
+            <span className="mobile-tab-label">{t(tab.labelKey)}</span>
+          </>
+        );
+        const className = `mobile-tab${active ? " mobile-tab-active" : ""}`;
+        return tab.href ? (
+          <Link
+            key={tab.key}
+            href={tab.href as Route}
+            className={className}
+            aria-current={active ? "page" : undefined}
+            onClick={() => onMoreOpenChange(false)}
+          >
+            {inner}
+          </Link>
+        ) : (
+          <button key={tab.key} type="button" className={className} aria-pressed={active} onClick={() => onMoreOpenChange((open) => !open)}>
+            {inner}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
-function MobileMorePanel({
+export function MobileMorePanel({
   session,
   themePreference,
   themeReady,

@@ -1,4 +1,4 @@
-import { clientMessage } from "@/lib/i18n/client-messages";
+import { clientMessage, type ClientMessageKey } from "@/lib/i18n/client-messages";
 
 export const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // Browser-seitige Aufrufe laufen immer same-origin (relative Pfade), damit sie auf jeder
@@ -177,6 +177,15 @@ export function safeReturnPath(from: string | null | undefined): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+// Codes der zentralen 403-Prüfungen (backend app/core/security.py: permission_denied,
+// require_feature). Ihre Texte («Permission required», «Feature 'custom_domain' nicht gebucht»)
+// landeten roh im Toast; hier für jede Seite zentral in die UI-Sprache übersetzt.
+const CENTRAL_FORBIDDEN = new Map<string, ClientMessageKey>([
+  ["permission_required", "permissionRequired"],
+  ["feature_not_booked", "featureNotBooked"],
+  ["feature_read_only", "featureReadOnly"],
+]);
+
 function errorFromResponse(status: number, text: string): ApiError {
   let message = text || `Request failed with status ${status}`;
   let detail: unknown;
@@ -187,7 +196,8 @@ function errorFromResponse(status: number, text: string): ApiError {
       if (typeof json.detail === "string") {
         message = json.detail;
       } else if (!Array.isArray(json.detail) && typeof json.detail.message === "string") {
-        message = json.detail.message;
+        const central = status === 403 && typeof json.detail.code === "string" ? CENTRAL_FORBIDDEN.get(json.detail.code) : undefined;
+        message = central ? clientMessage(central) : json.detail.message;
       } else if (Array.isArray(json.detail)) {
         message = json.detail
           .map((e: { msg?: string; loc?: string[] }) => {

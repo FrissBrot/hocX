@@ -22,6 +22,8 @@ type Props = {
   todoFinesAccess: "none" | "read_only" | "full";
   /** Reiter aus der Adresse (?tab=, z. B. aus der Suche) */
   initialTab?: string;
+  /** Vereinswährung (tenant.finance_currency), wenn noch kein Konto existiert */
+  tenantCurrency?: string;
 };
 
 const noop = async () => undefined;
@@ -31,7 +33,7 @@ const noop = async () => undefined;
  * eigenen Beträgen je Person (Verspätung, Abwesenheit, Pendenzen-Regeln) und die Regeln der
  * Pendenzen-Bussen. Die Bussen selbst stehen gemeinsam in einer Liste unter Finanzen > Bussen.
  */
-export function FineSettingsView({ initialTariff, initialTariffs, initialRules, accounts, canManage, todoFinesAccess, initialTab }: Props) {
+export function FineSettingsView({ initialTariff, initialTariffs, initialRules, accounts, canManage, todoFinesAccess, initialTab, tenantCurrency }: Props) {
   const t = useTranslations("finances");
   const locale = useLocale();
   const [tariff, setTariff] = useState<FineTariff | null>(initialTariff);
@@ -96,7 +98,7 @@ export function FineSettingsView({ initialTariff, initialTariffs, initialRules, 
                 id: "rules",
                 label: t("fineSettings.tabTodoRules"),
                 count: rules.length,
-                content: <TodoFineRules rules={rules} setRules={setRules} tariffs={tariffs} accounts={accounts} canManage={canManage && todoFinesAccess === "full"} onChanged={noop} />,
+                content: <TodoFineRules rules={rules} setRules={setRules} tariffs={tariffs} accounts={accounts} tenantCurrency={tenantCurrency} canManage={canManage && todoFinesAccess === "full"} onChanged={noop} />,
               }]
             : []),
         ]}

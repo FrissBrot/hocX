@@ -318,7 +318,7 @@ export function AdminUserManagement({ initialPage }: { initialPage: AdminUserPag
             </label>
           </div>
 
-          {formError && <div className="form-error-banner">{formError}</div>}
+          {formError && <div className="form-error-banner" role="alert">{formError}</div>}
 
           <div className="table-actions table-actions-start">
             <button data-modal-save type="submit" className="button-secondary" disabled={!formValid}>

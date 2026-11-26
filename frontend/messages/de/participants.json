@@ -242,7 +242,8 @@
     "inviteHelp": "Die Person legt ihr Passwort selbst fest.",
     "role": "Rolle",
     "createAndInvite": "Erfassen und einladen",
-    "createdInvited": "{name} erfasst und eingeladen"
+    "createdInvited": "{name} erfasst und eingeladen",
+    "createdPartial": "{name} wurde erfasst, aber nicht alles hat geklappt: {reason} Ergänze den Rest auf der Personenseite."
   },
   "bulk": {
     "label": "Mehrfachaktionen",
@@ -280,7 +281,9 @@
       "rate_limited": "zu viele Einladungen",
       "not_found": "nicht gefunden",
       "failed": "fehlgeschlagen",
-      "protected": "Schutzregel, z. B. letzter Admin"
+      "protected": "Schutzregel, z. B. letzter Admin",
+      "user_limit": "Benutzerlimit erreicht",
+      "email_taken": "E-Mail wird schon für einen Login verwendet"
     }
   }
 }

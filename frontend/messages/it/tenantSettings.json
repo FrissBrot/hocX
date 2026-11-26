@@ -68,6 +68,8 @@
   "discountBadge": "{percent} % di sconto",
   "costNotSet": "Non ancora definito",
   "usersEyebrow": "Utenti",
+  "usersAvatarsLabel": "Account",
+  "usersAvatarsMore": "{count, plural, one {# altro account} other {# altri account}}",
   "ofLimit": "di {limit}",
   "unlimited": "illimitato",
   "manageUsersLink": "Gestisci utenti →",
@@ -182,6 +184,7 @@
     "noticeTitle": "Informativa sulla privacy",
     "noticeUrl": "Link alla vostra informativa sulla privacy",
     "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra organizzazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
+    "noticeUrlInvalid": "Inserisci un indirizzo completo che inizi con https://, senza spazi.",
     "noticeSave": "Salva link",
     "fileVisibility": {
       "title": "Visibilità dei file",
@@ -259,6 +262,7 @@
       "months": "Mesi",
       "years": "Anni"
     },
+    "valueRange": "Numero intero da 1 a {max}",
     "autoApply": "Applicare automaticamente le proposte per consegne ed ex membri",
     "autoApplyHint": "Le immagini della galleria restano sempre una proposta. Ogni azione compare nella cronologia.",
     "save": "Salva",
@@ -323,7 +327,9 @@
     "domain_domain_taken": "Questo dominio è già attivo per un'altra organizzazione.",
     "domain_already_active": "Questo dominio è già attivo per questo scopo.",
     "domain_txt_missing": "Il record TXT {record} con il valore di verifica non è ancora stato trovato. Controlla nome e valore presso il provider o attendi che la modifica si propaghi.",
-    "domain_not_routed": "{domain} non punta ancora a {target}. Controlla il record CNAME o A o attendi che la modifica si propaghi."
+    "domain_not_routed": "{domain} non punta ancora a {target}. Controlla il record CNAME o A o attendi che la modifica si propaghi.",
+    "domain_not_found": "Questo dominio non esiste più. Ricarica la pagina.",
+    "domain_server_not_configured": "Il dominio del server non è configurato. Contatta il gestore della piattaforma."
   },
   "renameRevokesVerificationConfirm": "La vostra organizzazione è verificata da hocX. Se modifichi il nome, questa verifica viene revocata e i nuovi PDF non risulteranno più verificati. Potrai richiederla di nuovo in Impostazioni › Domini e autenticità. Salvare comunque?",
   "renameConfirmLabel": "Modifica nome",
@@ -518,7 +524,10 @@
       "reset_complete": "Password reimpostata",
       "password_change": "Password modificata",
       "stepup_success": "Conferma",
-      "stepup_failure": "Conferma fallita"
+      "stepup_failure": "Conferma fallita",
+      "stepup_required": "Conferma richiesta",
+      "device_revoke": "Dispositivo dimenticato",
+      "mfa_setup_skipped": "Configurazione MFA saltata"
     },
     "outcomes": {
       "success": "Riuscito",

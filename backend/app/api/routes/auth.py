@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.client_ip import client_ip, rate_limit_source
 from app.core.db import SessionLocal, get_db
 from app.core.error_log import record_system_error
+from app.core.origin_guard import origin_hostname
 from app.core.rate_limit import enforce_rate_limit, within_limit
 from app.auth_security import devices
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
@@ -209,7 +210,13 @@ def logout_all(
 def _browser_host(request: Request) -> str | None:
     """Host aus dem Origin-Header (die /api-Weiterleitung des Frontends überschreibt Host)."""
     origin = request.headers.get("origin")
-    return urlparse(origin).hostname if origin else request.url.hostname
+    if not origin:
+        return request.url.hostname
+    try:
+        return origin_hostname(origin)
+    except ValueError as exc:
+        # Nicht lesbarer Origin (z. B. «http://[»): Eingabefehler statt 500 (Nachtlauf 2026-11-26)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ungültige Herkunft") from exc
 
 
 @router.get("/step-up", response_model=StepUpOptionsRead)

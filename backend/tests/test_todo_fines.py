@@ -7,10 +7,10 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.routes import todo_fines as route
-from app.models import FinanceTransaction, ProtocolTodo, TodoFine, TodoStatus
+from app.models import FinanceTransaction, ProtocolTodo, TodoFine, TodoFineRule, TodoStatus
 from app.schemas.protocol import ProtocolTodoUpdate
 from app.schemas.todo_fines import (
     FineTariffAssignment,
@@ -238,6 +238,23 @@ def test_collect_books_text_in_document_language_of_tenant(db, setup, language, 
     route.collect_todo_fine(fine.public_id, db=db, user=s["manager"])
     tx = db.scalar(select(FinanceTransaction).where(FinanceTransaction.account_id == s["account"].id))
     assert tx.description == expected
+
+
+def test_collect_without_account_returns_translatable_code(db, setup):
+    """Ohne Konto (Busse, Regel, Tarif) 409 mit Code no_account statt nur deutschem Text: das
+    Frontend übersetzt den Code (finance-errors.ts, Nachtlauf 2026-11-26)."""
+    s = setup
+    rule = _rule(db, s)
+    todo = _todo(db, s, days_late=3, people=("ben",))
+    _complete(db, todo)
+    fine = db.scalar(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id))
+    fine.account_id = None
+    db.execute(update(TodoFineRule).where(TodoFineRule.public_id == rule.id).values(account_id=None))
+    db.flush()
+    with pytest.raises(HTTPException) as exc:
+        route.collect_todo_fine(fine.public_id, db=db, user=s["manager"])
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "no_account"
 
 
 def test_no_fine_warning_for_person_who_already_has_a_fine_on_this_todo(db, setup):
@@ -695,3 +712,23 @@ def test_todo_routes_answer_404_for_foreign_tenant(db, setup):
         with pytest.raises(HTTPException) as exc:
             call()
         assert exc.value.status_code == 404
+
+
+def test_duplicate_tariff_name_returns_translatable_conflict(db, setup):
+    """Doppelter Tarifname beim Anlegen: 409 mit Code tariff_name_taken statt 400 mit englischem
+    Text, den das Frontend roh anzeigte (Nachtlauf 2026-11-26)."""
+    s = setup
+    with pytest.raises(HTTPException) as exc:
+        route.create_tariff(FineTariffGroupWrite(name="Lernende"), db=db, user=s["manager"])
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "tariff_name_taken"
+
+
+def test_rename_to_taken_tariff_name_returns_translatable_conflict(db, setup):
+    """Dasselbe beim Umbenennen (eigener Test: die Route rollt die Sitzung zurück, danach fehlen
+    die Tarife aus dem Fixture)."""
+    s = setup
+    with pytest.raises(HTTPException) as exc:
+        route.update_tariff(s["earners"].id, FineTariffGroupWrite(name="Lernende"), db=db, user=s["manager"])
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "tariff_name_taken"

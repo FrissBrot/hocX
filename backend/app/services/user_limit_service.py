@@ -80,5 +80,10 @@ def ensure_login_capacity(db: Session, tenant_id: int, *, for_user_id: int | Non
     if limit is not None and login_account_count(db, tenant_id) + pending_invite_count(db, tenant_id, excluding_user_id=for_user_id) >= limit:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Das Benutzerlimit Ihres Abos ist erreicht ({limit} Konten mit Login inkl. offener Einladungen). Ziehen Sie eine Einladung zurück, deaktivieren Sie ein Konto oder erweitern Sie das Abo.",
+            # Code + params: das Frontend übersetzt (security.apiErrors.user_limit_reached)
+            detail={
+                "code": "user_limit_reached",
+                "message": f"Das Benutzerlimit Ihres Abos ist erreicht ({limit} Konten mit Login inkl. offener Einladungen). Ziehen Sie eine Einladung zurück, deaktivieren Sie ein Konto oder erweitern Sie das Abo.",
+                "params": {"limit": limit},
+            },
         )

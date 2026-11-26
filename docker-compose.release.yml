@@ -398,6 +398,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencryptdns"
@@ -421,6 +422,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # tenant-by-domain: public, unauthenticated lookup polled on every page load
       # pre-login - looser than login so normal login-page usage never trips it.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)"
@@ -433,6 +435,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.burst=15"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Dedicated live router for tenant ZIP imports. The 2050 MiB request limit covers the
       # backend's 2 GiB ZIP limit plus multipart/form-data overhead without raising the limit
       # for any other admin/API endpoint.
@@ -454,6 +457,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.average=20"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
       # Galerie streamt direkt zum Backend (10 GiB + 1 MiB, dort begrenzt).
@@ -1107,6 +1111,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       # Audit A2, 2026-08-16: was missing here (present in docker-compose.yml, which is
       # what the regression test in abgabebox-backend/tests/test_upload_size_limits.py
       # actually checked, not this file - the file `deploy.sh` really uses). Without it,
@@ -1121,6 +1126,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`GET`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
@@ -1138,6 +1144,7 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   abgabebox-frontend:

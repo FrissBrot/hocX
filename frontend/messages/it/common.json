@@ -109,11 +109,15 @@
     "pdfExportFailed": "Esportazione PDF non riuscita",
     "tagColorTransferFailed": "Tag rinominato, ma non è stato possibile trasferirne il colore",
     "noHistoricalCycleSelected": "Nessun ciclo storico selezionato",
-    "noDraftToConfirm": "Nessuna bozza da confermare"
+    "noDraftToConfirm": "Nessuna bozza da confermare",
+    "permissionRequired": "Non hai l'autorizzazione necessaria. Ricarica la pagina se il tuo ruolo è cambiato.",
+    "featureNotBooked": "Questa funzione non è inclusa nell'abbonamento della tua organizzazione.",
+    "featureReadOnly": "Questa funzione è disponibile solo in lettura perché non fa più parte dell'abbonamento della tua organizzazione."
   },
   "profileImage": {
     "invalidType": "Scegli un'immagine PNG, JPG, GIF o WebP (SVG non è supportato).",
-    "tooLarge": "L'immagine è troppo grande (max. 5 MB)."
+    "tooLarge": "L'immagine è troppo grande (max. 5 MB).",
+    "tooManyPixels": "L'immagine ha troppi pixel (al massimo {max, number} megapixel). Riducila."
   },
   "deleteWithFiles": {
     "selectedCount": "{selected, number} di {total, number} selezionati per l'eliminazione",
@@ -165,7 +169,17 @@
       "public_link": "Link pubblico",
       "context_visibility": "Visibilità dei file",
       "activity": "Cronologia",
-      "todo_fine": "Multa per attività"
+      "todo_fine": "Multa per attività",
+      "agenda_item": "Argomento",
+      "file": "File",
+      "file_import": "Importazione file",
+      "finance_settings": "Impostazioni finanziarie",
+      "mfa": "Accesso a due fattori",
+      "password": "Password",
+      "photo": "Foto",
+      "sessions": "Dispositivi connessi",
+      "submission": "Invio",
+      "template_element": "Elemento del modello"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",

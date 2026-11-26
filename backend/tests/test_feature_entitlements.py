@@ -80,7 +80,8 @@ def test_read_only_allows_reading_but_blocks_writing():
     assert require_permission(user, P.FINANCES_READ) is user
     with pytest.raises(HTTPException) as blocked:
         require_permission(user, P.FINANCES_MANAGE)
-    assert "nur noch lesend" in blocked.value.detail
+    assert blocked.value.detail["code"] == "feature_read_only"  # Frontend übersetzt den Code zentral
+    assert "nur noch lesend" in blocked.value.detail["message"]
     assert require_feature(user, F.TASK_PACKAGES, write=False) is user
     with pytest.raises(HTTPException):
         require_feature(user, F.TASK_PACKAGES)
@@ -91,7 +92,8 @@ def test_unbooked_feature_blocks_reading_too():
     user = make_current_user(1, role="admin", features=frozenset())
     with pytest.raises(HTTPException) as blocked:
         require_feature(user, F.TASK_PACKAGES, write=False)
-    assert "nicht gebucht" in blocked.value.detail
+    assert blocked.value.detail["code"] == "feature_not_booked"
+    assert blocked.value.detail["params"] == {"feature": F.TASK_PACKAGES}
 
 
 def test_admin_can_set_read_only_but_not_for_blocked_features(db):

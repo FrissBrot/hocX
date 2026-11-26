@@ -68,6 +68,8 @@
   "discountBadge": "{percent} % de remise",
   "costNotSet": "Pas encore défini",
   "usersEyebrow": "Utilisateurs",
+  "usersAvatarsLabel": "Comptes",
+  "usersAvatarsMore": "{count, plural, one {# autre compte} other {# autres comptes}}",
   "ofLimit": "sur {limit}",
   "unlimited": "illimité",
   "manageUsersLink": "Gérer les utilisateurs →",
@@ -182,6 +184,7 @@
     "noticeTitle": "Protection des données",
     "noticeUrl": "Lien vers votre déclaration de protection des données",
     "noticeUrlHint": "Avant le dépôt, la boîte de dépôt indique que votre organisation est responsable et renvoie vers cette page. Vide = déclaration par défaut de la plateforme.",
+    "noticeUrlInvalid": "Veuillez saisir une adresse complète commençant par https://, sans espaces.",
     "noticeSave": "Enregistrer le lien",
     "fileVisibility": {
       "title": "Visibilité des fichiers",
@@ -259,6 +262,7 @@
       "months": "Mois",
       "years": "Ans"
     },
+    "valueRange": "Nombre entier de 1 à {max}",
     "autoApply": "Appliquer automatiquement les propositions pour les dépôts et les anciens membres",
     "autoApplyHint": "Les images de la galerie restent toujours une proposition. Chaque action figure dans l’historique.",
     "save": "Enregistrer",
@@ -323,7 +327,9 @@
     "domain_domain_taken": "Ce domaine est déjà actif pour une autre organisation.",
     "domain_already_active": "Ce domaine est déjà actif pour cet usage.",
     "domain_txt_missing": "L'enregistrement TXT {record} avec la valeur de vérification n'a pas encore été trouvé. Vérifie le nom et la valeur chez ton fournisseur ou attends que la modification soit propagée.",
-    "domain_not_routed": "{domain} ne pointe pas encore vers {target}. Vérifie l'enregistrement CNAME ou A ou attends que la modification soit propagée."
+    "domain_not_routed": "{domain} ne pointe pas encore vers {target}. Vérifie l'enregistrement CNAME ou A ou attends que la modification soit propagée.",
+    "domain_not_found": "Ce domaine n'existe plus. Recharge la page.",
+    "domain_server_not_configured": "Le domaine du serveur n'est pas configuré. Contacte l'exploitant de la plateforme."
   },
   "renameRevokesVerificationConfirm": "Votre organisation est vérifiée par hocX. Si tu modifies le nom, cette vérification est retirée et les nouveaux PDF ne seront plus indiqués comme vérifiés. Tu pourras la redemander sous Paramètres › Domaines et authenticité. Enregistrer quand même ?",
   "renameConfirmLabel": "Modifier le nom",
@@ -518,7 +524,10 @@
       "reset_complete": "Mot de passe réinitialisé",
       "password_change": "Mot de passe modifié",
       "stepup_success": "Confirmation",
-      "stepup_failure": "Confirmation échouée"
+      "stepup_failure": "Confirmation échouée",
+      "stepup_required": "Confirmation demandée",
+      "device_revoke": "Appareil oublié",
+      "mfa_setup_skipped": "Configuration MFA ignorée"
     },
     "outcomes": {
       "success": "Réussite",

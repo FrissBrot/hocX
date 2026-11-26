@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDebouncedSaveQueue } from "./debounced-save-queue";
+import { act, renderHook } from "@testing-library/react";
+
+import { createDebouncedSaveQueue, useDebouncedSaveQueue } from "./debounced-save-queue";
 
 describe("createDebouncedSaveQueue", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -89,5 +91,30 @@ describe("createDebouncedSaveQueue", () => {
     releaseFirst?.();
     expect(await flushing).toBe(true);
     expect(calls).toEqual(["1", "2"]);
+  });
+});
+
+describe("useDebouncedSaveQueue", () => {
+  it("sendet beim Unmount wartende Speicherungen sofort statt sie zu verwerfen (1.6.1)", async () => {
+    const send = vi.fn(async () => true);
+    const { result, unmount } = renderHook(() => useDebouncedSaveQueue<string>(700, send));
+    act(() => result.current.schedule("block-1", "letzter Satz"));
+    expect(send).not.toHaveBeenCalled();
+    // Editor verschwindet vor Ablauf der 700 ms (z. B. Wechsel auf den Mobil-Editor)
+    unmount();
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith("block-1", "letzter Satz"), { timeout: 300 });
+  });
+
+  it("nutzt beim Senden die jüngste Sendefunktion", async () => {
+    const first = vi.fn(async () => true);
+    const second = vi.fn(async () => true);
+    const { result, rerender } = renderHook(({ send }) => useDebouncedSaveQueue<string>(700, send), { initialProps: { send: first } });
+    rerender({ send: second });
+    act(() => result.current.schedule("block-1", "Text"));
+    await act(async () => {
+      await result.current.flushAll();
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith("block-1", "Text");
   });
 });

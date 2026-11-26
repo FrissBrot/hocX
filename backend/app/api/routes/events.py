@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.security import CurrentUser, get_current_user, permission_denied, require_permission
 from app.schemas.base import MAX_QUERY_OFFSET, reject_nul_characters
 from app.schemas.event import EVENT_TAG_MAX_LENGTH, EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
@@ -210,7 +210,7 @@ def delete_event(
         # verlangt sonst submissions.manage (DELETE /submission-uploads) - eine eigene Rolle mit nur
         # meetings.edit darf sie nicht über den Termin mitlöschen. Bewusst ohne Feature-Prüfung
         # (nicht user.can): nach einem Abgabebox-Downgrade bleibt der Termin löschbar.
-        raise HTTPException(status_code=403, detail="Permission required")
+        raise permission_denied()
     deleted_tag = current.tag
     deleted_internal_id = current.id
     try:

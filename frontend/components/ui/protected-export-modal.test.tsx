@@ -29,4 +29,21 @@ describe("ProtectedExportForm", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(postAndDownload).toHaveBeenCalledWith("/api/users/me/personal-data", { password: secret }, "x.zip");
   });
+
+  it("zählt Leerzeichen am Rand nicht zur Mindestlänge, sendet das Passwort aber unverändert", async () => {
+    postAndDownload.mockClear();
+    const { container } = render(<ProtectedExportForm path="/api/x" fallbackFilename="x.zip" onDone={vi.fn()} />);
+    const [first, second] = Array.from(container.querySelectorAll<HTMLInputElement>("input[type=password]"));
+    const submit = screen.getByRole("button", { name: "Herunterladen" });
+    const padded = `      kurz      `;
+    fireEvent.change(first, { target: { value: padded } });
+    fireEvent.change(second, { target: { value: padded } });
+    expect(submit).toBeDisabled();
+
+    const withSpaces = ` ${crypto.randomUUID()} `;
+    fireEvent.change(first, { target: { value: withSpaces } });
+    fireEvent.change(second, { target: { value: withSpaces } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(postAndDownload).toHaveBeenCalledWith("/api/x", { password: withSpaces }, "x.zip"));
+  });
 });

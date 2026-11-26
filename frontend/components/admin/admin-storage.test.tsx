@@ -141,4 +141,11 @@ describe("AdminStorage", () => {
     expect(migrationStep(migration({ state: "ready_for_cutover" }))).toBe(3);
     expect(migrationStep(migration({ state: "completed" }))).toBe(4);
   });
+
+  it("zeigt «seit» der aktiven Generation als Schweizer Kalendertag statt UTC-Tag", () => {
+    // 13.10. 22:30 UTC = 14.10. 00:30 in Zürich
+    render(<AdminStorage initialOverview={overview({ generations: [generation({ activated_at: "2026-10-13T22:30:00Z" })] })} />);
+    expect(screen.getByText(/seit 14\.10\.2026/)).toBeTruthy();
+    expect(screen.queryByText(/seit 13\.10\.2026/)).toBeNull();
+  });
 });
