@@ -23,7 +23,6 @@
   "saveAccountFailed": "Le compte n'a pas pu être enregistré",
   "deleteAccountConfirm": "Supprimer le compte « {name} » ? Ce n’est possible que tant qu’il n’a ni écritures ni amendes.",
   "deleteAccountFailed": "Le compte n'a pas pu être supprimé",
-  "provisional": "provisoire",
   "provisionalPending": "provisoire (amendes ouvertes)",
   "transactionCount": "{count, plural, one {# transaction} other {# transactions}}",
   "selectAccountHint": "Choisissez un compte dans la liste pour afficher ses transactions.",
