@@ -25,7 +25,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { financeErrorMessage, lockedReasonText } from "@/components/finances/finance-errors";
 import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
-import { formatMoney } from "@/lib/utils/format";
+import { appCalendarDate, formatMoney } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
@@ -678,9 +678,9 @@ export function MobileFines({
               label={t("colStatus")}
               value={
                 openFine.status === "collected"
-                  ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(openFine.collected_at.slice(0, 10), locale)}` : ""}`
+                  ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(appCalendarDate(openFine.collected_at), locale)}` : ""}`
                   : openFine.status === "deleted"
-                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(openFine.deleted_at.slice(0, 10), locale)}` : ""}`
+                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(appCalendarDate(openFine.deleted_at), locale)}` : ""}`
                     : t("statusPending")
               }
             />
