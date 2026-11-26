@@ -40,9 +40,9 @@ SCOPE_OPENID = "openid"
 SCOPE_EMAIL = "https://www.googleapis.com/auth/userinfo.email"
 
 # Seitengrössen/IDs von Google: Buchstaben, Ziffern, «-», «_» (Drive-IDs, Picker-Sitzungen, Medien)
-GOOGLE_ID = re.compile(r"^[A-Za-z0-9_-]{1,300}$")
+GOOGLE_ID = re.compile(r"^[A-Za-z0-9_-]{1,300}\Z")  # \Z: kein angehängtes «\n» (re.match + $)
 # Seiten-Cursor (pageToken) von Google: undurchsichtig, aber nur aus diesen Zeichen
-PAGE_TOKEN = re.compile(r"^[A-Za-z0-9_.~=+/-]{1,2000}$")
+PAGE_TOKEN = re.compile(r"^[A-Za-z0-9_.~=+/-]{1,2000}\Z")
 
 
 def jwt_claims(token: str | None) -> dict:

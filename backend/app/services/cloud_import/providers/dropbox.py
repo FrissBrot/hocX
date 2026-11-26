@@ -50,7 +50,7 @@ SCOPES = ("account_info.read", "files.metadata.read", "files.content.read")
 ROOT = "root"
 PAGE_LIMIT = 2000
 MAX_CURSOR = 4000
-_REF = re.compile(r"^(root|id:[A-Za-z0-9_-]{1,200})$")
+_REF = re.compile(r"^(root|id:[A-Za-z0-9_-]{1,200})\Z")
 
 
 def _parse_time(value) -> datetime | None:

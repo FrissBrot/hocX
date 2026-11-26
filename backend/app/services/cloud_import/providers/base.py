@@ -31,7 +31,7 @@ from app.services.cloud_import.http import DownloadResult, HostPolicy, ProviderU
 NodeKind = Literal["folder", "file"]
 
 # Grundsätzlich erlaubte Zeichen einer Referenz (Graph-IDs: «b!…», «…!123», Site-IDs mit «,» und «.»)
-SAFE_REF = re.compile(r"^[A-Za-z0-9!_.,:=@+-]{1,600}$")
+SAFE_REF = re.compile(r"^[A-Za-z0-9!_.,:=@+-]{1,600}\Z")
 
 
 class ReauthRequired(Exception):

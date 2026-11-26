@@ -352,4 +352,6 @@ def test_cloud_import_emergency_cancel_requires_step_up(db):
     assert client.post(path, headers=wrong).status_code == 401
     headers = step_up_header(db, admin.id, passkey, purpose="cloud-import-cancel", method="POST", path=path, body=b"", rp_id=RP_ID, origin=ORIGIN)
     # Bestätigung gültig: danach greift erst die Fachprüfung (unbekannter Auftrag)
-    assert client.post(path, headers=headers).status_code == 404
+    unknown = client.post(path, headers=headers)
+    # Fachfehler mit Code wie die übrigen Cloud-Import-Routen (Review 1.6.0)
+    assert unknown.status_code == 404 and unknown.json()["detail"]["code"] == "not_found"

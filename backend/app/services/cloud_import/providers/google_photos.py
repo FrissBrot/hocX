@@ -47,7 +47,7 @@ MAX_CACHED_SESSIONS = 64
 MAX_REFRESH_PAGES = 600  # 60 000 Medien je Sitzung (Grenze pro Auftrag: 50 000 Dateien)
 
 # Bild-Hosts von Google Fotos (baseUrl): lh3.googleusercontent.com usw.
-_IMAGE_HOST = re.compile(r"^lh[0-9]{1,2}\.googleusercontent\.com$")
+_IMAGE_HOST = re.compile(r"^lh[0-9]{1,2}\.googleusercontent\.com\Z")
 _DURATION = re.compile(r"^([0-9]{1,6})(\.[0-9]+)?s$")
 _MIME_SUFFIX = {"image/jpeg": ".jpg", "image/png": ".png", "image/heic": ".heic", "image/heif": ".heif", "image/gif": ".gif", "image/webp": ".webp"}
 

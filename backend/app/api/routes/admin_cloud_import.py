@@ -105,12 +105,12 @@ def cancel_cloud_import(job_id: uuid.UUID, db: Session = Depends(get_db), admin:
         select(ImportJob, Tenant.name).join(Tenant, Tenant.id == ImportJob.tenant_id).where(ImportJob.id == job_id).with_for_update(of=ImportJob)
     ).first()
     if row is None:
-        raise HTTPException(status_code=404, detail="not_found")
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "not_found", "params": {}})
     job, tenant_name = row
     try:
         jobs.cancel(db, job)
     except jobs.ImportFailure as exc:
-        raise HTTPException(status_code=exc.status, detail=exc.code) from None
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": exc.code, "params": exc.params}) from None
     AuditService().log(
         db, action="admin.cloud_import_cancelled", actor_email=admin.email, tenant_id=job.tenant_id, entity_type="import_job",
         details={"job_id": str(job.id), "source": job.source, "status": job.status}, commit=False,

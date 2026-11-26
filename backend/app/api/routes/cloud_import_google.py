@@ -22,6 +22,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from html import escape
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse
@@ -134,7 +135,8 @@ class PickerTokenRead(DrivePickerRead):
 
 
 class PickerApplyIn(PickerTicketIn):
-    file_ids: list[str] = Field(min_length=1, max_length=PICKER_MAX_ITEMS)
+    # Einzelne ID begrenzt (Route ohne Sitzung; Google-IDs höchstens 300 Zeichen, google_common.GOOGLE_ID)
+    file_ids: list[Annotated[str, Field(max_length=300)]] = Field(min_length=1, max_length=PICKER_MAX_ITEMS)
 
 
 class PickerApplyRead(BaseModel):

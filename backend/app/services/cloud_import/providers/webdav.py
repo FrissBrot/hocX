@@ -41,7 +41,7 @@ KDRIVE_ID_URL = "https://{id}.connect.kdrive.infomaniak.com/"
 NEXTCLOUD_PATH = "/remote.php/dav/files/{user}/"
 NEXTCLOUD_LEGACY_PATH = "/remote.php/webdav/"
 PRESETS = ("kdrive", "nextcloud", "generic")
-_KDRIVE_ID = re.compile(r"^[0-9]{1,12}$")
+_KDRIVE_ID = re.compile(r"^[0-9]{1,12}\Z")
 _SERVER = re.compile(r"^[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(/[^?#\s]{0,500})?$")
 
 

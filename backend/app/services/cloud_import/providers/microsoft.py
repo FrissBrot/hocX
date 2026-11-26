@@ -52,7 +52,7 @@ _SELECT = "id,name,size,folder,file,package,parentReference,lastModifiedDateTime
 # Fehlercodes von Entra, bei denen die Organisation die App zuerst freigeben muss (§2.3)
 _ADMIN_CONSENT_CODES = ("AADSTS65001", "AADSTS90094", "AADSTS90095", "AADSTS900941")
 # Kein «.»/«..» allein (Pfad-Traversal in der Graph-URL, Security-Review F2)
-_ID = re.compile(r"^(?!\.{1,2}$)[A-Za-z0-9!_.,=-]{1,400}$")
+_ID = re.compile(r"^(?!\.{1,2}\Z)[A-Za-z0-9!_.,=-]{1,400}\Z")  # \Z: kein angehängtes «\n»
 
 BASIC = ("openid", "profile", "offline_access", "User.Read", "Files.Read")
 EXTENDED = ("Files.Read.All", "Sites.Read.All")

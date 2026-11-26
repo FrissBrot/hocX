@@ -50,7 +50,7 @@ KINDS = ("all", "images", "documents")
 ACTIONS = ("add_tags", "set_date", "skip", "add_to_album", "folder_to_album")
 FOLDER_LEVELS = ("parent", "top")
 _IMAGE_ONLY_ACTIONS = frozenset({"set_date", "add_to_album", "folder_to_album"})
-_RULE_ID = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+_RULE_ID = re.compile(r"^[A-Za-z0-9_-]{1,40}\Z")
 
 # Ordnernamen, die als automatische Tags/Albumnamen nichts aussagen (Plan 7.2)
 FOLDER_TAG_BLOCKLIST = frozenset(

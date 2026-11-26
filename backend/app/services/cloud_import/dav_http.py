@@ -82,8 +82,8 @@ CONNECT_CHECK_DEADLINE = 30.0
 DOWNLOAD_BASE_SECONDS = 60.0
 DOWNLOAD_MIN_RATE = 256 * 1024
 
-_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
-_TLD = re.compile(r"^(?:[a-z][a-z0-9-]*|xn--[a-z0-9-]+)$")
+_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)\Z")
+_TLD = re.compile(r"^(?:[a-z][a-z0-9-]*|xn--[a-z0-9-]+)\Z")
 _BLOCKED_SUFFIXES = (
     ".localhost", ".local", ".internal", ".home.arpa", ".arpa", ".lan", ".intranet", ".corp", ".private",
     ".localdomain", ".home",
@@ -745,7 +745,7 @@ def _stream(raw: RawResponse, dest: Path, max_bytes: int, deadline: float) -> Do
 # --- Referenzen ------------------------------------------------------------------------------
 
 ROOT_REF = "p"
-_REF = re.compile(r"^p[A-Za-z0-9_-]{0,599}$")
+_REF = re.compile(r"^p[A-Za-z0-9_-]{0,599}\Z")
 
 
 def encode_ref(rel: str) -> str:
