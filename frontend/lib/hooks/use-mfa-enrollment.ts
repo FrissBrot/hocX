@@ -7,6 +7,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
 import type { Locale } from "@/i18n/locale-config.generated";
 import { PasskeyRegistrationStart, TotpEnrollmentStart, UserMfaOverview } from "@/types/api";
@@ -54,6 +55,7 @@ export function useMfaEnrollment(
   setOverview: (next: UserMfaOverview) => void
 ) {
   const t = useTranslations("security.mfaEnrollment");
+  const tSecurity = useTranslations("security");
   const showToast = useToast();
   const confirm = useConfirm();
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
@@ -71,7 +73,7 @@ export function useMfaEnrollment(
       setTotpCode("");
       setTotpLabel("");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("totpStartFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("totpStartFailed")), "error");
     } finally {
       setBusy(false);
     }
@@ -95,7 +97,7 @@ export function useMfaEnrollment(
       setTotpLabel("");
       showToast(t("totpSetUp"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("totpConfirmFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("totpConfirmFailed")), "error");
     } finally {
       setBusy(false);
     }
@@ -126,7 +128,7 @@ export function useMfaEnrollment(
       setPasskeyLabel("");
       showToast(t("passkeySetUp"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("passkeySetupFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("passkeySetupFailed")), "error");
     } finally {
       setBusy(false);
     }
@@ -146,7 +148,7 @@ export function useMfaEnrollment(
       setOverview(next);
       showToast(t("factorRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("factorRemoveFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("factorRemoveFailed")), "error");
     }
   }
 
