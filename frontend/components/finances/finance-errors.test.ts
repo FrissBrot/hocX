@@ -15,8 +15,9 @@ describe("financeErrorMessage", () => {
   });
 
   it("erkennt den Nur-Lesen-Zustand und sonstige Fehler", () => {
-    expect(financeErrorMessage(new ApiError("Feature 'finance' nur noch lesend (nicht mehr im Abo)", "backend", 403), t, "saveTxFailed")).toBe("errors.readOnly");
-    expect(financeErrorMessage(new ApiError("Permission required", "backend", 403), t, "saveTxFailed")).toBe("errors.forbidden");
+    // Zentrale 403 mit Code (backend core/security.py), der Text ist schon übersetzt
+    expect(financeErrorMessage(new ApiError("übersetzt", "auth", 403, { code: "feature_read_only", message: "Feature 'finance' nur noch lesend (nicht mehr im Abo)" }), t, "saveTxFailed")).toBe("errors.readOnly");
+    expect(financeErrorMessage(new ApiError("übersetzt", "auth", 403, { code: "permission_required", message: "Permission required" }), t, "saveTxFailed")).toBe("errors.forbidden");
     expect(financeErrorMessage(new ApiError("Transaction could not be created", "backend", 400), t, "saveTxFailed")).toBe("saveTxFailed");
   });
 });

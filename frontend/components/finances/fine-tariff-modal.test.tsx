@@ -28,12 +28,12 @@ describe("FineTariffModal", () => {
     renderModal();
     const [late] = screen.getAllByRole("spinbutton");
     fireEvent.change(late, { target: { value: "150000" } });
-    expect(screen.getByText("Betrag von 0 bis 100’000.00")).toBeInTheDocument();
+    expect(screen.getByText(/^Betrag von 0 bis 100['’]000\.00$/)).toBeInTheDocument();
     expect(late).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("button", { name: "Speichern" })).toBeDisabled();
 
     fireEvent.change(late, { target: { value: "100000" } });
-    expect(screen.queryByText("Betrag von 0 bis 100’000.00")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Betrag von 0 bis 100['’]000\.00$/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Speichern" })).toBeEnabled();
   });
 

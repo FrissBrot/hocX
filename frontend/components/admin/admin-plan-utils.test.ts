@@ -28,7 +28,7 @@ describe("Rabatt über Prozent oder Preis", () => {
 
 describe("formatChfShort", () => {
   it("trennt Tausender in der UI-Sprache (vorher «CHF 1200.–» in jeder Sprache)", () => {
-    expect(formatChfShort(120000, "de")).toBe("CHF 1’200.–");
+    expect(formatChfShort(120000, "de")).toMatch(/^CHF 1['’]200\.–$/); // Trennzeichen je nach ICU-Version
     expect(formatChfShort(120000, "fr")).toMatch(/^CHF 1\s200\.–$/);
     expect(formatChfShort(1250, "de")).toBe("CHF 12.50");
     expect(formatChfShort(1250, "fr")).toBe("CHF 12,50");
