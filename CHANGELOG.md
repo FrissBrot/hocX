@@ -8,6 +8,55 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.6.1] - 2026-11-26
+
+Korrekturversion zu 1.6.0 mit den Funden des Nachtlaufs vom 26.11.2026. Nur Fehlerbehebungen,
+keine neuen Funktionen, keine Migration.
+
+### Behoben
+
+- Fehlermeldungen in der UI-Sprache statt roher Backend-Texte: fehlende Berechtigung und nicht
+  gebuchte bzw. nur noch lesbare Abo-Funktionen («Permission required», «Feature 'x' nicht
+  gebucht») werden jetzt in jeder Ansicht übersetzt (zentral über Fehlercodes); ebenso MFA
+  einrichten/entfernen (z. B. falscher Code, letzter zweiter Faktor, Standardmethode), «eigenes
+  Konto löschen», Benutzerlimit des Abos (auch als eigener Grund in der Mehrfach-Einladung, ebenso
+  eine schon vergebene Login-E-Mail), Bussen kassieren/erlassen/löschen, doppelte Busse
+  («… vom Typ 'absent'»), doppelter Tarifname und Bussentarif über 100 000.
+- Mitglieder: «Erfassen und einladen» legt die Person nicht mehr doppelt an, wenn die Einladung
+  scheitert (Dialog schliesst, Hinweis nennt den Grund). Ausgetretene mit Login erscheinen in
+  «Wer hat Zugriff», in der Mitgliederliste und auf der Personenseite als gesperrt statt aktiv.
+  Datum der Einladung in der UI-Sprache. Sicherheitsaktivität zeigt «Bestätigung verlangt»,
+  «Gerät vergessen» und «MFA-Einrichtung übersprungen» übersetzt.
+- Kasse: mobile Beträge im Zahlenformat der UI-Sprache, Kassier- und Löschdatum von Bussen als
+  Schweizer Kalendertag (nach Mitternacht nicht mehr der Vortag), Filter ohne Treffer mit eigenem
+  Leerzustand, Buchungsliste mit Tabellensemantik für Screenreader, Vorschau im Regel-Dialog im
+  Zahlenformat der UI-Sprache und ohne Konto in der Vereinswährung statt fest «CHF».
+- Einstellungen: Speicherkategorien übersetzt; Zeitstempel in Echtheitsprüfung, Zugangslinks und
+  Plattform-Admin als Schweizer Kalendertag; der Link zu den Datenschutzhinweisen wird wie im
+  Backend geprüft (Hinweis statt rohem 422); das Fristfeld der Aufbewahrung lässt sich leeren,
+  ohne auf 1 zu springen («24» wurde zu «124»); Domain-Assistent mit Enter bedienbar,
+  Prüffehler werden angesagt; Verlauf zeigt die bisher englischen Vorgänge («File · Trashed»,
+  «Mfa · Enroll») übersetzt. Plattform-Admin: Preise mit Tausendertrennung der UI-Sprache.
+- Verschlüsselte Exporte (Excel mit Passwort, AES-ZIP, Vereinsexport, Datenauskunft): das Passwort
+  wird nicht mehr still um Leerzeichen am Rand gekürzt - die Datei öffnet mit genau der Eingabe.
+- Plattform-Admin-Login: Gross-/Kleinschreibung der E-Mail spielt keine Rolle mehr.
+
+### Sicherheit
+
+- Anfragen ohne Anmeldung mit kaputten Eingaben ergeben Eingabefehler statt Serverfehler samt
+  Eintrag im Fehlerprotokoll: nicht lesbarer `Origin`-Header (403/400), einzelne UTF-16-Surrogate
+  in JSON (422, die NUL-/Surrogat-Prüfung gilt jetzt auch für `application/*+json`; Pufferung auf
+  16 MiB begrenzt), Nicht-ASCII-Zeichen im Gerätecookie und TOTP-Codes mit Ziffern anderer
+  Schriften.
+- Traefik-Ratelimits (Login, TOTP, Domain-Erkennung, Word-Import, Abgabebox, Prüfseite) zählen
+  IPv6-Adressen je /64 statt je Adresse, wie die Grenzen im Backend.
+
+### Update
+
+- Abhängigkeiten: pypdfium2 5.15.2 (Backend).
+- Keine Migration, kein neues Secret, keine neue Einstellung. Die Traefik-Labels der Ratelimits
+  ändern sich (`docker-compose.release.yml`), `deploy.sh` übernimmt sie wie gewohnt.
+
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt
