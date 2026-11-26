@@ -382,7 +382,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
       setSelectedParticipantIds([]);
       showToast(t("toasts.bulkDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.bulkDeleteFailed"), "error");
+      showToast(errorText(error, t("toasts.bulkDeleteFailed")), "error");
     }
   }
 
