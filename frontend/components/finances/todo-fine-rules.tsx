@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -14,7 +14,7 @@ import { useToast } from "@/contexts/toast-context";
 import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
-import { formatDate } from "@/lib/utils/format";
+import { formatDate, formatMoney } from "@/lib/utils/format";
 import type { FinanceAccount, FineSplitMode, FineTariffGroup, TodoFineRule } from "@/types/api";
 
 type Option = { id: string; name: string | null; system_key?: string | null };
@@ -104,6 +104,7 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const tNav = useTranslations("nav");
+  const locale = useLocale();
   const confirm = useConfirm();
   const showToast = useToast();
   const [editing, setEditing] = useState<TodoFineRule | "new" | null>(null);
@@ -355,7 +356,7 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
                       {PREVIEW_DAYS.map((days) => (
                         <div key={days}>
                           <span>{t("todoFines.previewDays", { count: days })}</span>
-                          <strong>{empty ? "–" : ruleAmount(amountOf(rate.base), amountOf(rate.interval), intervalDays, days).toFixed(2)}</strong>
+                          <strong>{empty ? "–" : formatMoney(ruleAmount(amountOf(rate.base), amountOf(rate.interval), intervalDays, days), "", locale)}</strong>
                         </div>
                       ))}
                     </div>
