@@ -39,6 +39,7 @@
   "colDescription": "Beschreibung",
   "colAmount": "Betrag",
   "colBalance": "Saldo",
+  "txTableLabel": "Buchungen: {account}",
   "saveTxFailed": "Buchung konnte nicht gespeichert werden",
   "deleteTxConfirm": "Buchung endgültig löschen?",
   "deleteTxFailed": "Buchung konnte nicht gelöscht werden",

@@ -500,13 +500,14 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
             ) : transactions.length === 0 ? (
               <p className="muted finance-empty">{year ? t("noTransactionsYear", { year }) : canWrite ? t("noTransactions") : t("noTransactionsReadOnly")}</p>
             ) : (
-              <div className="finance-tx-table">
-                <div className="finance-tx-header">
-                  <span>{t("colDate")}</span>
-                  <span>{t("colDescription")}</span>
-                  <span className="finance-tx-cell-right">{t("colAmount")}</span>
-                  <span className="finance-tx-cell-right">{t("colBalance")}</span>
-                  <span className="finance-tx-actions">
+              // Raster mit Tabellenrollen: Screenreader lesen Spaltenköpfe zu jedem Betrag/Saldo vor
+              <div className="finance-tx-table" role="table" aria-label={t("txTableLabel", { account: selected.name })}>
+                <div className="finance-tx-header" role="row">
+                  <span role="columnheader">{t("colDate")}</span>
+                  <span role="columnheader">{t("colDescription")}</span>
+                  <span role="columnheader" className="finance-tx-cell-right">{t("colAmount")}</span>
+                  <span role="columnheader" className="finance-tx-cell-right">{t("colBalance")}</span>
+                  <span role="columnheader" className="finance-tx-actions" aria-label={tCommon("actions")}>
                     {transactions.some((tx) => tx.locked_reason) ? (
                       <HelpPopover topic={t("lockedHelpTopic")} docs={{ page: "finanzen", anchor: "buchungen-korrigieren" }}>{t("lockedHelp")}</HelpPopover>
                     ) : null}
@@ -516,21 +517,21 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
                   const running = tx.running_balance ?? tx.amount;
                   const lockedText = lockedReasonText(tx, t);
                   return (
-                    <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}${tx.id === highlightTxId ? " finance-tx-row-new" : ""}`}>
-                      <span className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
-                      <span className="finance-tx-desc">
+                    <div key={tx.id} role="row" className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}${tx.id === highlightTxId ? " finance-tx-row-new" : ""}`}>
+                      <span role="cell" className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
+                      <span role="cell" className="finance-tx-desc">
                         {tx.description}
                         {tx.locked_reason === "fine_transaction" || tx.locked_reason === "todo_fine_transaction" ? (
                           <span className="finance-tx-origin">{t("kasse.fromFine")}</span>
                         ) : null}
                       </span>
-                      <span className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
+                      <span role="cell" className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
                         {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency, locale)}
                       </span>
-                      <span className={`finance-tx-running finance-tx-cell-right${running < 0 ? " finance-balance-negative" : ""}`}>
+                      <span role="cell" className={`finance-tx-running finance-tx-cell-right${running < 0 ? " finance-balance-negative" : ""}`}>
                         {formatAmount(running, currency, locale)}
                       </span>
-                      <span className="finance-tx-actions">
+                      <span role="cell" className="finance-tx-actions">
                         {lockedText ? (
                           // Gesperrt (Busse/abgeschlossenes Protokoll): Grund als Tooltip, per Klick/Tippen als Hinweis
                           <button
