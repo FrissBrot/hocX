@@ -95,7 +95,7 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
                   width: `${(category.bytes / barTotal) * 100}%`,
                   background: CATEGORY_COLORS[category.key],
                 }}
-                title={`${labels[category.key]}:${formatFileSize(category.bytes)}`}
+                title={`${labels[category.key]}: ${formatFileSize(category.bytes)}`}
               />
             ))
           : null}

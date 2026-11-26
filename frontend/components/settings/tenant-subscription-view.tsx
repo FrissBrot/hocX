@@ -464,7 +464,7 @@ function StorageCard({ subscription, storageUsage }: { subscription: TenantSubsc
                   key={category.key}
                   className="storage-usage-segment"
                   style={{ width: `${(category.bytes / Math.max(storageUsage.total_bytes, quotaBytes ?? 0)) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                  title={`${storageLabels[category.key]}:${formatFileSize(category.bytes)}`}
+                  title={`${storageLabels[category.key]}: ${formatFileSize(category.bytes)}`}
                 />
               ))}
           </div>

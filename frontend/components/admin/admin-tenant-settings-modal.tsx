@@ -517,7 +517,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
     ) : activeTab === "abo" ? (
       <>
         <span className="muted">
-          {cost.totalRp === null ? t("tenantModal.planWithoutPrice") : t("tenantModal.total", { amount: formatChfShort(cost.totalRp), unit: cycleUnit })}
+          {cost.totalRp === null ? t("tenantModal.planWithoutPrice") : t("tenantModal.total", { amount: formatChfShort(cost.totalRp, locale), unit: cycleUnit })}
         </span>
         <div className="modal-footer-actions">
           {closeButton}
@@ -659,7 +659,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                                     : inPlan
                                     ? t("tenantModal.modules.includedInPlan")
                                     : feature.standalone_price_monthly_rp !== null
-                                      ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp) })
+                                      ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp, locale) })
                                       : planOnly
                                         ? t("tenantModal.modules.planOnly")
                                         : t("tenantModal.modules.individuallyBooked")}
@@ -725,7 +725,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                       </span>
                       <span className="field-help">
                         {cost.subtotalRp
-                          ? t("tenantModal.fields.discountPriceHelp", { price: formatChfShort(cost.subtotalRp), unit: cycleUnit })
+                          ? t("tenantModal.fields.discountPriceHelp", { price: formatChfShort(cost.subtotalRp, locale), unit: cycleUnit })
                           : t("tenantModal.fields.discountPriceUnavailable")}
                       </span>
                     </label>
@@ -784,14 +784,15 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                   <div className="card admin-cost-card">
                     <div className="admin-cost-row">
                       <span>{t("tenantModal.cost.plan", { name: selectedPlan?.name ?? "–" })}</span>
-                      <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp)}</span>
+                      <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp, locale)}</span>
                     </div>
                     {addOnFeatures.map((feature) => (
                       <div className="admin-cost-row" key={feature.code}>
                         <span>+ {feature.name}</span>
                         <span>
                           {formatChfShort(
-                            (feature.standalone_price_monthly_rp ?? 0) * (subscriptionForm.billing_cycle === "monthly" ? 1 : 12)
+                            (feature.standalone_price_monthly_rp ?? 0) * (subscriptionForm.billing_cycle === "monthly" ? 1 : 12),
+                            locale
                           )}
                         </span>
                       </div>
@@ -799,12 +800,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                     {subscriptionForm.discount_percent > 0 && cost.subtotalRp !== null && cost.totalRp !== null ? (
                       <div className="admin-cost-row admin-cost-row-discount">
                         <span>{t("tenantModal.cost.discountPercent", { percent: formatPercentNumber(subscriptionForm.discount_percent, locale) })}</span>
-                        <span>– {formatChfShort(cost.subtotalRp - cost.totalRp)}</span>
+                        <span>– {formatChfShort(cost.subtotalRp - cost.totalRp, locale)}</span>
                       </div>
                     ) : null}
                     <div className="admin-cost-total">
                       <span>{t("tenantModal.cost.total")}</span>
-                      <strong>{cost.totalRp === null ? t("tenantModal.cost.totalUndetermined") : `${formatChfShort(cost.totalRp)}`}</strong>
+                      <strong>{cost.totalRp === null ? t("tenantModal.cost.totalUndetermined") : `${formatChfShort(cost.totalRp, locale)}`}</strong>
                     </div>
                     <div className="muted admin-cost-hint">
                       {cost.totalRp === null
@@ -982,7 +983,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                               key={category.key}
                               className="storage-usage-segment"
                               style={{ width: `${(category.bytes / storageBarTotal) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                              title={`${storageLabels[category.key]}:${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
+                              title={`${storageLabels[category.key]}: ${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
                             />
                           ))
                         : null}
