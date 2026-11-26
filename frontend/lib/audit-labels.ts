@@ -19,11 +19,12 @@ export type AuditVerb =
   | "other";
 
 export const AUDIT_CATEGORIES = [
-  "activity", "admin", "backup", "calendar_feed", "context_visibility", "document", "document_asset", "document_brand", "document_settings",
-  "document_template", "document_verification", "event", "finance_account", "finance_transaction", "fine",
-  "fine_tariff", "identity_verification", "participant", "personal_data", "privacy_settings", "protocol", "public_link",
-  "retention", "role", "submission_assignment", "submission_file", "submission_upload", "table_snapshot",
-  "task_package", "template", "tenant", "todo", "todo_fine", "user",
+  "activity", "admin", "agenda_item", "backup", "calendar_feed", "context_visibility", "document", "document_asset", "document_brand", "document_settings",
+  "document_template", "document_verification", "event", "file", "file_import", "finance_account", "finance_settings",
+  "finance_transaction", "fine", "fine_tariff", "identity_verification", "mfa", "participant", "password", "personal_data",
+  "photo", "privacy_settings", "protocol", "public_link", "retention", "role", "sessions", "submission", "submission_assignment",
+  "submission_file", "submission_upload", "table_snapshot", "task_package", "template", "template_element", "tenant", "todo",
+  "todo_fine", "user",
 ] as const;
 
 export function auditVerb(action: string): AuditVerb {
@@ -33,15 +34,15 @@ export function auditVerb(action: string): AuditVerb {
   if (suffix.includes("mfa_failed")) return "mfaFailed";
   if (suffix === "login") return "login";
   if (suffix.includes("viewed")) return "viewed";
-  if (suffix.includes("exported")) return "exported";
+  if (suffix.includes("export")) return "exported";
   if (suffix.includes("imported")) return "imported";
-  if (/(deleted|^delete$|purge|cleanup)/.test(suffix)) return "deleted";
-  if (/(created|^create$|upserted|added|requested|^upload$|duplicate)/.test(suffix)) return "created";
+  if (/(deleted|delete$|purge|cleanup|trash|^remove$|removed)/.test(suffix)) return "deleted";
+  if (/(created|create$|upserted|added|requested|^upload$|duplicate|enroll|invited)/.test(suffix)) return "created";
   if (/(restored|^restore$)/.test(suffix)) return "restored";
   if (suffix.includes("collected")) return "collected";
-  if (/(revoked|withdrawn|cancel|rejected|reopened)/.test(suffix)) return "revoked";
+  if (/(revoke|withdrawn|cancel|rejected|reopened)/.test(suffix)) return "revoked";
   if (/(publish|approved)/.test(suffix)) return "published";
-  if (/(updated|^update$|changed|synced|reordered|assigned|edit|reverted|regenerated|rotated|render)/.test(suffix)) return "updated";
+  if (/(updated|^update|change|synced|reordered|assigned|edit|reverted|regenerated|rotated|render|renamed|postponed)/.test(suffix)) return "updated";
   return "other";
 }
 
@@ -69,12 +70,13 @@ export const AUDIT_AREAS = ["auth", "content", "finance", "admin", "privacy"] as
 export type AuditArea = (typeof AUDIT_AREAS)[number];
 
 const AREA_BY_CATEGORY: Record<string, AuditArea> = {
-  user: "auth",
+  user: "auth", mfa: "auth", password: "auth", sessions: "auth",
   calendar_feed: "content", context_visibility: "content", document: "content", document_asset: "content", document_brand: "content",
   document_settings: "content", document_template: "content", document_verification: "content", event: "content", participant: "content",
   protocol: "content", submission_assignment: "content", submission_file: "content", submission_upload: "content", table_snapshot: "content",
   task_package: "content", template: "content", todo: "content",
-  finance_account: "finance", finance_transaction: "finance", fine: "finance", fine_tariff: "finance", todo_fine: "finance",
+  agenda_item: "content", file: "content", file_import: "content", photo: "content", submission: "content", template_element: "content",
+  finance_account: "finance", finance_settings: "finance", finance_transaction: "finance", fine: "finance", fine_tariff: "finance", todo_fine: "finance",
   admin: "admin", backup: "admin", identity_verification: "admin", role: "admin", tenant: "admin",
   personal_data: "privacy", privacy_settings: "privacy", public_link: "privacy", retention: "privacy", activity: "privacy",
 };
