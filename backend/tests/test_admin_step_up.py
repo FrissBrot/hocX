@@ -132,7 +132,7 @@ STEP_UP = {
     ("POST", "/api/admin/auth-security/events/{event_id}/resolve-subject"): "security-resolve",
     ("POST", "/api/admin/cloud-imports/{job_id}/cancel"): "cloud-import-cancel",
     ("POST", "/api/admin/auth-security/events/{event_id}/block"): "security-block",
-    # 1.7: Vorfälle (Status, Zuständig, Notizen) und Netzsperre aus dem Vorfall
+    # 1.6: Vorfälle (Status, Zuständig, Notizen) und Netzsperre aus dem Vorfall
     ("POST", "/api/admin/auth-security/incidents/{incident_id}/status"): "security-incident",
     ("POST", "/api/admin/auth-security/incidents/{incident_id}/assign"): "security-incident",
     ("POST", "/api/admin/auth-security/incidents/{incident_id}/notes"): "security-incident",
@@ -334,7 +334,7 @@ def test_tenant_import_needs_single_use_ticket(db):
 
 
 def test_cloud_import_emergency_cancel_requires_step_up(db):
-    """Security-Review 1.7, I4: Notfall-Abbruch eines Datei-Imports nur mit frischer Passkey-Bestätigung
+    """Security-Review 1.6, I4: Notfall-Abbruch eines Datei-Imports nur mit frischer Passkey-Bestätigung
     (eigener Zweck, gebunden an Methode und Pfad)."""
     from app.api.routes import admin_cloud_import
 

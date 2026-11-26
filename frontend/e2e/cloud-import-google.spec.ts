@@ -58,7 +58,7 @@ test("Google Drive: anmelden, im Picker wählen, Google-Formate importieren", as
   expect(page.url()).not.toContain("cloud_finish");
   await shoot(page, "01-drive-connected");
 
-  // Per Tastatur zur Picker-Seite: eigene Origin ohne hocX-Sitzung (Security-Review 1.7), Ticket im Fragment
+  // Per Tastatur zur Picker-Seite: eigene Origin ohne hocX-Sitzung (Security-Review 1.6), Ticket im Fragment
   const choose_ = page.getByRole("button", { name: "In Google Drive auswählen" });
   await choose_.focus();
   const pickerResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/google-picker");

@@ -858,7 +858,7 @@
   position: relative;
 }
 
-/* ── 1.7 Vorfälle (Design «hocX Sicherheit Vorfälle») ──────────────────────────────── */
+/* ── 1.6 Vorfälle (Design «hocX Sicherheit Vorfälle») ──────────────────────────────── */
 
 .admin-incident-stats,
 .admin-situation-kpis {
@@ -1188,7 +1188,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ── 1.7 Lagebild (Design «hocX Sicherheit Lagebild») ──────────────────────────────── */
+/* ── 1.6 Lagebild (Design «hocX Sicherheit Lagebild») ──────────────────────────────── */
 
 .admin-situation-actions {
   display: flex;

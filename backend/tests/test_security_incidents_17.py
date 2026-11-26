@@ -1,4 +1,4 @@
-"""Sicherheitsbereich 1.7 (Plan 2026-11-23, Abschnitt «1.7: Vorfälle und Lagebild"): Bündelung der
+"""Sicherheitsbereich 1.6 (Plan 2026-11-23, Abschnitt «Vorfälle und Lagebild»): Bündelung der
 Alarmregeln zu Vorfällen, Rechte (nur owner), Passkey-Pflicht, Audit, Aufbewahrung, Mitlöschen mit
 dem Mandanten und Lagebild.
 

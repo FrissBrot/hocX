@@ -3,7 +3,7 @@ import { test, expect, request, type APIRequestContext, type Page } from "@playw
 import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 
-// Plattform-Admin › Datei-Importe: Notfall-Abbruch nur mit Passkey-Bestätigung (Security-Review 1.7,
+// Plattform-Admin › Datei-Importe: Notfall-Abbruch nur mit Passkey-Bestätigung (Security-Review 1.6,
 // Zweck «cloud-import-cancel»). Läuft im Projekt «tenant-import» (legt einen Import im Demo-Mandanten an).
 //
 // Wie security-admin-16.spec.ts: die Oberfläche läuft echt (step-up/start, navigator.credentials,

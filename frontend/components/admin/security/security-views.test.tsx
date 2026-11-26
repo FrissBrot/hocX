@@ -64,7 +64,7 @@ describe("Sicherheitsbereich (Plattform)", () => {
     expect(listCall?.[0]).toContain("range=24h");
   });
 
-  it("Warnungen zeigen ihren Vorfall statt einer Quittung (1.7)", async () => {
+  it("Warnungen zeigen ihren Vorfall statt einer Quittung (1.6)", async () => {
     respond({
       "/api/admin/auth-security/alerts": [
         { key: "auth:spraying:abc", rule: "spraying", subject: "abc", severity: "warning", title: "x", message: "y", incident: { id: 42, status: "in_progress", assignee: "Remo" } },

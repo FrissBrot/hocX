@@ -359,7 +359,7 @@ def nav_counts(db: Session, *, owner: bool) -> dict:
 
             now = datetime.now(UTC)
             problems = system_alert_service.current_problems(db, system_health_service.load_snapshot(), now=now)
-            # 1.7: Vorfälle im Status «Neu» (noch niemand hat übernommen) statt nicht quittierter Warnungen
+            # 1.6: Vorfälle im Status «Neu» (noch niemand hat übernommen) statt nicht quittierter Warnungen
             from app.auth_security import incidents
 
             result["security_alerts"] = incidents.open_new_count(db)

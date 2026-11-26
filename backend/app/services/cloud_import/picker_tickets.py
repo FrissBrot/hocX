@@ -1,4 +1,4 @@
-"""Picker-Tickets für die eigene Origin des Google Pickers (Security-Review 1.7, N3).
+"""Picker-Tickets für die eigene Origin des Google Pickers (Security-Review 1.6, N3).
 
 Der Google Picker lädt Fremdcode (apis.google.com, ``strict-dynamic``). Damit dieser Code nie neben
 der Vereins-Sitzung läuft, liegt die Picker-Seite auf einer eigenen Subdomain

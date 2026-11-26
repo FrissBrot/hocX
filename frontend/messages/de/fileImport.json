@@ -378,7 +378,10 @@
       "photos_session_missing": "Bitte zuerst die Auswahl in Google Fotos starten.",
       "wrong_source": "Dieser Schritt passt nicht zur gewählten Quelle.",
       "invalid_status": "Dieser Import ist nicht mehr im Entwurf. Bitte im Assistenten weitermachen.",
-      "ticket_invalid": "Der Zugang zur Google-Auswahl ist abgelaufen oder wurde schon verwendet. Bitte im Import-Assistenten erneut «In Google Drive auswählen» wählen."
+      "ticket_invalid": "Der Zugang zur Google-Auswahl ist abgelaufen oder wurde schon verwendet. Bitte im Import-Assistenten erneut «In Google Drive auswählen» wählen.",
+      "permission_required": "Dafür fehlt dir die Berechtigung. Lade die Seite neu, falls sich deine Rolle geändert hat.",
+      "feature_not_booked": "Diese Funktion ist im Abo eurer Organisation nicht enthalten.",
+      "feature_read_only": "Diese Funktion ist nur noch lesend verfügbar, weil sie nicht mehr im Abo eurer Organisation ist."
     },
     "adminConsent": {
       "title": "Hilfe: Freigabe durch die IT der Organisation",

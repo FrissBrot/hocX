@@ -53,7 +53,7 @@ const processKind = frontendRole();
 const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
 const WEBSITE_PATH = "/website";
 
-// Eigene Origin des Google Pickers (Datei-Import, Security-Review 1.7): dort nur /google-picker, ohne
+// Eigene Origin des Google Pickers (Datei-Import, Security-Review 1.6): dort nur /google-picker, ohne
 // Sitzungsprüfung (es gibt dort keine hocX-Sitzung - Cookies sind host-only) und als einzige Seite mit
 // gelockerter CSP. Ohne Variable gibt es die Seite nirgends (Google Drive wird dann nicht angeboten).
 const pickerHost = pickerHostFrom(process.env.CLOUD_IMPORT_PICKER_DOMAIN);

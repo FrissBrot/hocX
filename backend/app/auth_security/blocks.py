@@ -11,7 +11,7 @@ Gesperrt wird ein Pseudonym (HMAC der Quelle /32 bzw. /64, oder des Netzes /24),
 im Klartext. Bekannte Geräte sind ausgenommen (Abschnitt 6.3). Plattform-Admins (Ziti) sind von
 App-IP-Sperren ausgenommen: der Admin-Login ruft ``is_blocked`` bewusst nicht auf (Notfallzugang).
 Jedes Setzen/Aufheben erzeugt ein Ereignis ``block.set``/``block.clear`` mit gekürztem Subjekt,
-Admin und (ab 1.7) Vorfall, damit der Verlauf der Sperren-Seite daraus entsteht.
+Admin und (ab 1.6) Vorfall, damit der Verlauf der Sperren-Seite daraus entsteht.
 
 1.6 - Netz-Fingerprint-Sperre (Bereich ``net_fp``): Anmeldeereignisse tragen als Netz-Pseudonym
 ``ip_fingerprint`` (/24 bzw. /48, identisch mit ``audit_log.ip_hash``), die Sperren dagegen eigene
@@ -57,7 +57,7 @@ class Block:
     created: int = 0      # Unix-Zeit des Setzens bzw. der letzten Verlängerung
     minutes: int = 0      # gesetzte Dauer
     admin_id: int | None = None      # Plattform-Admin bei Stufe 5
-    incident_id: int | None = None   # Vorfall (1.7: Sperre aus einem Vorfall heraus)
+    incident_id: int | None = None   # Vorfall (1.6: Sperre aus einem Vorfall heraus)
     repeat: int = 0       # automatisch: wievielte Sperre dieser Quelle in 7 Tagen
 
     @classmethod

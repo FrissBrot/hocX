@@ -378,7 +378,10 @@
       "photos_session_missing": "Commence d’abord la sélection dans Google Photos.",
       "wrong_source": "Cette étape ne correspond pas à la source choisie.",
       "invalid_status": "Cet import n’est plus un brouillon. Continue dans l’assistant.",
-      "ticket_invalid": "L’accès au sélecteur Google a expiré ou a déjà été utilisé. Veuillez choisir à nouveau « Choisir dans Google Drive » dans l’assistant d’importation."
+      "ticket_invalid": "L’accès au sélecteur Google a expiré ou a déjà été utilisé. Veuillez choisir à nouveau « Choisir dans Google Drive » dans l’assistant d’importation.",
+      "permission_required": "Vous n'avez pas l'autorisation nécessaire. Rechargez la page si votre rôle a changé.",
+      "feature_not_booked": "Cette fonction n'est pas incluse dans l'abonnement de votre organisation.",
+      "feature_read_only": "Cette fonction n'est plus disponible qu'en lecture, car elle ne fait plus partie de l'abonnement de votre organisation."
     },
     "adminConsent": {
       "title": "Aide : autorisation par le service informatique de l’organisation",

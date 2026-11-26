@@ -86,7 +86,7 @@ class AuthSession(Base):
 
 
 class SecurityIncident(Base):
-    """Vorfall des Anmeldeschutzes (Migration 0282, 1.7): je Regelschlüssel höchstens ein offener.
+    """Vorfall des Anmeldeschutzes (Migration 0282, 1.6): je Regelschlüssel höchstens ein offener.
     Schreiben nur über app.auth_security.incidents."""
 
     __tablename__ = "security_incident"

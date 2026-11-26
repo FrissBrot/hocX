@@ -47,7 +47,7 @@ export function useDeferredPopupSave() {
   }
 
   // Beim Unmount eine noch wartende Änderung sofort speichern statt verwerfen: der Dialog bzw. das
-  // Panel kann auch ohne «Schliessen» verschwinden (Seitenwechsel, Wechsel Desktop/Mobil, 1.6.1).
+  // Panel kann auch ohne «Schliessen» verschwinden (Seitenwechsel, Wechsel Desktop/Mobil, 1.6).
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => {

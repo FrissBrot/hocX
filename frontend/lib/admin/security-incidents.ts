@@ -1,4 +1,4 @@
-// Vorfälle und Lagebild (/admin/security/incidents und /admin/security, 1.7). Reine Hilfen, ohne
+// Vorfälle und Lagebild (/admin/security/incidents und /admin/security, 1.6). Reine Hilfen, ohne
 // React testbar: URL-Zustand (nur Codes und die Vorfall-Nummer - keine Namen, keine Suchbegriffe),
 // Anzeige der Nummer, Dauer, Status-Farben, Heatmap und Balkenhöhen.
 

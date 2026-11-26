@@ -95,7 +95,7 @@ describe("createDebouncedSaveQueue", () => {
 });
 
 describe("useDebouncedSaveQueue", () => {
-  it("sendet beim Unmount wartende Speicherungen sofort statt sie zu verwerfen (1.6.1)", async () => {
+  it("sendet beim Unmount wartende Speicherungen sofort statt sie zu verwerfen (1.6)", async () => {
     const send = vi.fn(async () => true);
     const { result, unmount } = renderHook(() => useDebouncedSaveQueue<string>(700, send));
     act(() => result.current.schedule("block-1", "letzter Satz"));

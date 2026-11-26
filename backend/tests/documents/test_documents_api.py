@@ -415,7 +415,7 @@ def test_export_preview_matches_export_without_audit(db, setup, monkeypatch):
 
 
 def test_markdown_and_ics_exports_are_audited_without_content(db, setup):
-    """SECURITY-RULES §4.4 (Ausnahme, Entscheid 1.6.1): ICS und Markdown gehen unverschlüsselt raus
+    """SECURITY-RULES §4.4 (Ausnahme, Entscheid 1.6): ICS und Markdown gehen unverschlüsselt raus
     (Kalender-Import bzw. Zwischenablage), jeder Export steht aber im Audit-Log - ohne Inhalt."""
     from sqlalchemy import text as sql
 

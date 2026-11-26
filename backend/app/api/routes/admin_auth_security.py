@@ -90,7 +90,7 @@ POLICY_SETTINGS: dict[str, tuple[str, ...]] = {
 
 @router.get("/auth-security/overview")
 def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
-    """Kennzahlen 24 h, ausgelöste Warnungen, offene Vorfälle (1.7 statt Quittungen), aktive Sperren."""
+    """Kennzahlen 24 h, ausgelöste Warnungen, offene Vorfälle (1.6 statt Quittungen), aktive Sperren."""
     alerts = read_service.platform_alerts(db)
     stats = incidents.stats(db)
     return {
@@ -125,7 +125,7 @@ def _subject_labels(db: Session, alerts: list[dict]) -> dict[str, str]:
 
 
 def _alerts_with_incidents(db: Session) -> list[dict]:
-    """Live-Alarmregeln plus zugehöriger Vorfall (1.7: Vorfall-Status ersetzt die Quittung aus 0209)."""
+    """Live-Alarmregeln plus zugehöriger Vorfall (1.6: Vorfall-Status ersetzt die Quittung aus 0209)."""
     alerts = read_service.platform_alerts(db)
     linked = incidents.open_incident_for_keys(db, [alert["key"] for alert in alerts])
     labels = _subject_labels(db, alerts)
@@ -567,7 +567,7 @@ def resolve_event_subject(event_id: uuid.UUID, db: Session = Depends(get_db), ad
     return result
 
 
-# ── Vorfälle und Lagebild (1.7, Migration 0282) ──────────────────────────────────────────────
+# ── Vorfälle und Lagebild (1.6, Migration 0282) ──────────────────────────────────────────────
 # Lesen und Ändern nur owner (Pseudonyme sind Personenbezug); jede Änderung mit Passkey (Zweck
 # security-incident, Sperre: security-block) und Audit-Eintrag. Notiztexte stehen nicht im Audit-Log.
 

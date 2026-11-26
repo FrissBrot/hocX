@@ -1339,7 +1339,7 @@ Dieselben Sperren sind über `/api/admin/auth-security/blocks` (Plattform-Admin,
 setzbar (Stufe 5, Begründung + Ablauf, max. 30 Tage), verlängerbar (`…/blocks/{subject}/extend`, macht
 auch eine automatische Sperre zur manuellen Stufe 5) und aufhebbar - jeweils mit Passkey-Bestätigung
 (`security-block`); jedes Setzen/Verlängern/Aufheben erzeugt ein Ereignis `block.set`/`block.clear`
-(gekürztes Subjekt, Admin, ab 1.7 Vorfall) und einen Audit-Eintrag.
+(gekürztes Subjekt, Admin, ab 1.6 Vorfall) und einen Audit-Eintrag.
 
 **Konsole › Sicherheit (1.6):** *Sperren* zeigt die Abwehrleiter (Stufen 1-3 zählen bewusst **Ereignisse** der letzten 24 h -
 Fehlversuche, wegen Grenzen abgewiesene Versuche, Zusatzprüfungen -, nicht Quellen, weil es dafür nur
@@ -1358,7 +1358,7 @@ selbst entfernt und neu baut. Der Plattform-Login ist von den App-IP-Sperren
 ausgenommen (Ziti ist der stärkere Nachweis). Wer nicht mehr hineinkommt, obwohl das Konto in Ordnung
 ist: vom gewohnten Gerät anmelden (bekannte Geräte sind ausgenommen) oder `reset-account`.
 
-**Konsole › Sicherheit (1.7): Vorfälle und Lagebild.** Der Systemmonitor bündelt jede ausgelöste
+**Konsole › Sicherheit (1.6): Vorfälle und Lagebild.** Der Systemmonitor bündelt jede ausgelöste
 Alarmregel zu genau einem offenen Vorfall je Regelschlüssel `auth:<regel>[:<pseudonym>]`
 (Migration `0282_security_incidents`, Tabellen `security_incident`, `security_incident_activity`).
 Vorfälle schliessen nie von selbst; nach dem Abschliessen eröffnet erst ein neues auslösendes Ereignis
@@ -1525,7 +1525,7 @@ Rolle nicht):
 3. `scripts/deploy.sh` ausführen (schreibt die Secret-Dateien neu, startet den job-worker neu).
 
 
-## 27. Cloud-Import einrichten (1.7)
+## 27. Cloud-Import einrichten (1.6)
 
 Datei-Import direkt aus Cloud-Diensten (Technik: `docs-site/docs/technik/datei-import.md`, Abschnitt
 «API-Quellen»). Ein Anbieter erscheint im Wizard nur, wenn er vollständig konfiguriert ist; ZIP- und
@@ -1814,7 +1814,7 @@ eingeschränkt werden, damit niemand ihn auf fremden Seiten oder für andere API
    ```
    https://<CLOUD_IMPORT_PICKER_DOMAIN>/*
    ```
-   Vereins- und App-Domains gehören **nicht** dazu: der Picker läuft seit 1.7 nur auf seiner eigenen
+   Vereins- und App-Domains gehören **nicht** dazu: der Picker läuft seit 1.6 nur auf seiner eigenen
    Origin, auch wenn der Verein hocX über eine eigene App-Domain nutzt.
 4. **API-Einschränkungen:** **Schlüssel einschränken** → nur **Google Picker API** → **Speichern**.
 5. Den Schlüssel als `CLOUD_IMPORT_GOOGLE_API_KEY` notieren.
@@ -1822,7 +1822,7 @@ eingeschränkt werden, damit niemand ihn auf fremden Seiten oder für andere API
 #### Schritt 5a - Eigene Subdomain für den Picker (DNS, Zertifikat)
 
 Der Google Picker lädt Code von Google. Damit dieser Code nie neben der Vereins-Sitzung läuft, liegt
-die Picker-Seite auf einer **eigenen Subdomain ohne hocX-Sitzung** (Security-Review 1.7). Die Seite
+die Picker-Seite auf einer **eigenen Subdomain ohne hocX-Sitzung** (Security-Review 1.6). Die Seite
 erhält nur ein einmaliges Ticket (10 min, an Person und Auftrag gebunden) und schickt die Auswahl
 damit zurück; danach springt sie in den Wizard zurück.
 

@@ -32,7 +32,7 @@ router = APIRouter()
 # und Besucher (IPv6 je /64) in diesem Zeitfenster und Prozess, dazu eine Obergrenze je Dokument für
 # alle zusammen - zusätzlich zum Rate-Limit in Traefik. Wer die ID kennt, kann damit vermutete
 # Seiteninhalte nicht in grosser Zahl durchprobieren (Review 2026-11-18), sperrt den Vergleich aber
-# auch nicht mehr allein für alle anderen (Nachtlauf 2026-11-26, Entscheid 1.6.1).
+# auch nicht mehr allein für alle anderen (Nachtlauf 2026-11-26, Entscheid 1.6).
 _PAGE_CHECKS_PER_SOURCE = 20
 _PAGE_CHECKS_PER_DOCUMENT = 200
 _PAGE_CHECK_WINDOW_SECONDS = 600

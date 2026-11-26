@@ -1,4 +1,4 @@
-"""Vorfälle des Anmeldeschutzes (1.7, Migration 0282, Plan «1.7: Vorfälle und Lagebild").
+"""Vorfälle des Anmeldeschutzes (1.6, Migration 0282, Plan «1.6: Vorfälle und Lagebild").
 
 Bündelung (User-Entscheid 2026-11-23): je Regelschlüssel ``auth:<regel>[:<pseudonym>]`` genau ein
 offener Vorfall. Der Systemmonitor ruft bei jedem Durchlauf ``correlate`` mit den ausgelösten Regeln

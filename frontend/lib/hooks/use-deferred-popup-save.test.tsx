@@ -6,7 +6,7 @@ import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 
 describe("useDeferredPopupSave", () => {
-  it("speichert eine wartende Änderung beim Unmount sofort (1.6.1)", async () => {
+  it("speichert eine wartende Änderung beim Unmount sofort (1.6)", async () => {
     const save = vi.fn(async () => {});
     const { result, unmount } = renderHook(() => useDeferredPopupSave());
     act(() => result.current.schedule(save));

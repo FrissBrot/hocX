@@ -56,7 +56,7 @@ def test_lone_surrogate_is_an_input_error(db, path, body):
     (b'{"a": "\\\\ud800"}', False),  # escapter Backslash: «ud800» ist Text
     (b'{"a": "\\u00e4"}', False),
     (b'{"a": "\\ud800', True),  # auch in kaputtem JSON: 422 so oder so
-    (b'{"a": "a\xed\xa0\x80b"}', True),  # roh als UTF-8-Bytes (json.loads: surrogatepass), Review 1.6.1
+    (b'{"a": "a\xed\xa0\x80b"}', True),  # roh als UTF-8-Bytes (json.loads: surrogatepass), Review 1.6
     ('{"a": "ä😀"}'.encode(), False),  # echtes UTF-8 mit Emoji
     (b'{"a": "\\ud83d x\\ude00"}', True),  # High und Low nicht direkt hintereinander
     (b'{"a": "\\\\\\ud800"}', True),  # drei Backslashes: escapter Backslash + echtes Escape
@@ -142,7 +142,7 @@ def test_large_json_body_is_streamed_not_buffered():
 
 def test_duplicate_content_type_cannot_skip_the_guard(db):
     """Starlette/FastAPI lesen den ERSTEN Content-Type; die Prüfung nahm den letzten - ein zweiter
-    Header «text/plain» liess Surrogate und NUL ungeprüft als JSON durch (Security-Review 1.6.1)."""
+    Header «text/plain» liess Surrogate und NUL ungeprüft als JSON durch (Security-Review 1.6)."""
     app.dependency_overrides[get_db] = lambda: db
     try:
         client = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False)

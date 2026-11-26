@@ -378,7 +378,10 @@
       "photos_session_missing": "Please start the selection in Google Photos first.",
       "wrong_source": "This step does not match the selected source.",
       "invalid_status": "This import is no longer a draft. Please continue in the wizard.",
-      "ticket_invalid": "Access to the Google picker has expired or was already used. Please choose “Select in Google Drive” again in the import wizard."
+      "ticket_invalid": "Access to the Google picker has expired or was already used. Please choose “Select in Google Drive” again in the import wizard.",
+      "permission_required": "You don't have permission to do this. Reload the page if your role has changed.",
+      "feature_not_booked": "This feature is not included in your organisation's subscription.",
+      "feature_read_only": "This feature is now read-only because it is no longer part of your organisation's subscription."
     },
     "adminConsent": {
       "title": "Help: approval by the organisation’s IT",

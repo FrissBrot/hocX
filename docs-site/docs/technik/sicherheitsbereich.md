@@ -1,7 +1,7 @@
-# Sicherheitsbereich der Konsole: Vorfälle und Lagebild (1.7)
+# Sicherheitsbereich der Konsole: Vorfälle und Lagebild (1.6)
 
 Der Sicherheitsbereich des Plattform-Admins (`/admin/security/*`, nur Rolle **owner**) zeigt den
-Anmeldeschutz der ganzen Plattform. Ab 1.7 gibt es zwei neue Seiten: **Vorfälle** und das
+Anmeldeschutz der ganzen Plattform. Ab 1.6 gibt es zwei neue Seiten: **Vorfälle** und das
 **Lagebild** (ersetzt die bisherige Übersicht). Sperren, Anmeldeereignisse, Alarmregeln und das
 Audit-Log kamen mit 1.6.
 

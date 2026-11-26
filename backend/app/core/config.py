@@ -275,7 +275,7 @@ class Settings(BaseSettings):
     auth_step_up_admin_minutes: int = 15
     # Sicherheitsereignisse (auth_event): Aufbewahrung
     auth_event_retention_days: int = 90
-    # Vorfälle des Anmeldeschutzes samt Notizen (1.7, Migration 0282): ab letzter Aktivität
+    # Vorfälle des Anmeldeschutzes samt Notizen (1.6, Migration 0282): ab letzter Aktivität
     security_incident_retention_days: int = 365
     # Alarmregeln (Abschnitt 10.3)
     auth_alert_stuffing_min: int = 100
@@ -392,7 +392,7 @@ class Settings(BaseSettings):
     cloud_import_google_api_key: str = Field(default="", max_length=200, pattern=r"^[A-Za-z0-9_-]*$", validation_alias="CLOUD_IMPORT_GOOGLE_API_KEY")
     # Projektnummer des Google-Cloud-Projekts (PickerBuilder.setAppId; ohne sie gibt drive.file keinen Zugriff)
     cloud_import_google_app_id: str = Field(default="", max_length=30, pattern=r"^[0-9]*$", validation_alias="CLOUD_IMPORT_GOOGLE_APP_ID")
-    # Eigene Origin der Google-Picker-Seite (Security-Review 1.7, N3): Subdomain ohne hocX-Sitzung,
+    # Eigene Origin der Google-Picker-Seite (Security-Review 1.6, N3): Subdomain ohne hocX-Sitzung,
     # z. B. picker.hocx.ch (Traefik-Router, Zertifikat). Ohne sie wird Google Drive nicht angeboten.
     # Port nur im E2E-Stack (picker.localhost:13000).
     cloud_import_picker_domain: str = Field(

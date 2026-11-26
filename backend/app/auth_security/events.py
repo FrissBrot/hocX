@@ -64,7 +64,7 @@ OUTCOMES = frozenset({"success", "failure", "blocked", "challenged", "info"})
 _ALLOWED_DETAIL_KEYS = frozenset({
     "reason", "factor", "layer", "count", "limit", "minutes", "by_admin", "method", "purpose", "action",
     "error", "stage", "scope", "revoked", "known_device", "new_device", "new_network", "mode", "kind",
-    # 1.6 Sperren: gekürztes Subjekt der Sperre, setzender Admin, Vorfall (ab 1.7), Wiederholung
+    # 1.6 Sperren: gekürztes Subjekt der Sperre, setzender Admin, Vorfall (ab 1.6), Wiederholung
     "subject", "admin_id", "incident_id", "repeat",
 })
 # Risiko-Gewichte je Grund (1.6, ``details.weights``): nur bekannte Codes als Schlüssel, ganze Zahlen
@@ -213,7 +213,7 @@ def forget_user(db, user_ids: list[int]) -> int:
     und Geräte-Pseudonym. Die Ereignisse bleiben als anonyme Zählbasis bis zum Fristende."""
     if not user_ids:
         return 0
-    # Vorfälle «Konto unter Beschuss» tragen das gekürzte Subjekt-Pseudonym (1.7): mit anonymisieren
+    # Vorfälle «Konto unter Beschuss» tragen das gekürzte Subjekt-Pseudonym (1.6): mit anonymisieren
     from app.auth_security import incidents
 
     prefixes = list(db.scalars(

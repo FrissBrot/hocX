@@ -39,7 +39,7 @@ def contains_json_nul(body: bytes) -> bool:
 
 
 # Surrogat roh als UTF-8-Bytes (CESU-/WTF-8-Form, ED A0..BF xx): json.loads(bytes) dekodiert mit
-# «surrogatepass» und macht daraus ebenfalls einen nicht kodierbaren str (Security-Review 1.6.1).
+# «surrogatepass» und macht daraus ebenfalls einen nicht kodierbaren str (Security-Review 1.6).
 _RAW_SURROGATE_BYTES = re.compile(rb"\xed[\xa0-\xbf]")
 
 
@@ -48,7 +48,7 @@ def contains_json_lone_surrogate(body: bytes) -> bool:
 
     Ein gültiges Paar (Emoji als ``\\ud83d\\ude00``) ergibt beim Parsen ein normales Zeichen, nur ein
     Surrogat ohne Partner lässt sich nicht als UTF-8 kodieren. Linear über die Escapes statt den
-    Body zu parsen: kein CPU-/Speicheraufwand je Anfrage und kein Rekursionsrisiko (Review 1.6.1)."""
+    Body zu parsen: kein CPU-/Speicheraufwand je Anfrage und kein Rekursionsrisiko (Review 1.6)."""
     if _RAW_SURROGATE_BYTES.search(body) is not None:
         return True
     pending_high_end: int | None = None  # Ende eines High-Surrogats, das noch seinen Partner braucht
@@ -119,7 +119,7 @@ class NulGuardMiddleware:
         if scope.get("method") not in _BODY_METHODS:
             return await self.app(scope, receive, send)
         # Erster Content-Type wie Starlette/FastAPI (Headers.get): dict() nähme den letzten, ein
-        # doppelter Header liesse den Body sonst ungeprüft als JSON durch (Security-Review 1.6.1)
+        # doppelter Header liesse den Body sonst ungeprüft als JSON durch (Security-Review 1.6)
         content_type = next((value for key, value in scope.get("headers", []) if key.lower() == b"content-type"), None)
         if not parsed_as_json(content_type):
             return await self.app(scope, receive, send)

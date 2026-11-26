@@ -72,7 +72,7 @@ function respond(map: Record<string, unknown>) {
 
 const STATS = { open: 1, critical: 1, unassigned: 1, new: 1, mtta_seconds: 1740, mttr_seconds: null, false_positives: 2, closed: 9, false_positive_rate: 2 / 9, days: 30 };
 
-describe("Vorfälle (1.7)", () => {
+describe("Vorfälle (1.6)", () => {
   beforeEach(() => {
     browserApiFetchMock.mockReset();
     stepUpFetchMock.mockReset();
@@ -136,7 +136,7 @@ describe("Vorfälle (1.7)", () => {
   });
 });
 
-describe("Lagebild (1.7)", () => {
+describe("Lagebild (1.6)", () => {
   beforeEach(() => {
     browserApiFetchMock.mockReset();
     search = "";

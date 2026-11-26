@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from "@
 import { authFiles } from "./auth";
 import { openProtocol } from "./protocol-page";
 
-// 1.6.1: Wechsel zwischen Desktop- und Mobilansicht (gedrehtes Tablet, schmal gezogenes Fenster,
+// 1.6: Wechsel zwischen Desktop- und Mobilansicht (gedrehtes Tablet, schmal gezogenes Fenster,
 // Breakpoint 900 px) darf die Seite nicht neu mounten. Vorher tauschte die AppShell den ganzen Baum
 // (Sidebar-Rahmen <-> Mobile-Shell) und ResponsiveView die Seitenvariante: halb ausgefüllte
 // Eingaben, offene Dialoge und der Schritt im Datei-Import gingen verloren.

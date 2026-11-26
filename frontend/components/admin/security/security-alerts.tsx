@@ -15,7 +15,7 @@ import type { AuthAlert } from "@/types/admin-security";
 const KNOWN_RULES = new Set(["stuffing", "spraying", "account_attack", "admin_mfa", "admin_new_device", "blocks", "network", "cross_tenant", "tenant", "limiter"]);
 
 /** Tabelle der ausgelösten Alarmregeln. Titel kommen aus den Übersetzungen (je Regel), der
- * Schlüssel `auth:<regel>[:<pseudonym>]` entspricht dem Problemschlüssel im Systemmonitor. Ab 1.7
+ * Schlüssel `auth:<regel>[:<pseudonym>]` entspricht dem Problemschlüssel im Systemmonitor. Ab 1.6
  * zeigt jede Warnung ihren Vorfall (Status und Zuständig dort, statt der Quittung aus 1.5.1). */
 export function SecurityAlertList({ alerts, loading }: { alerts: AuthAlert[]; loading?: boolean }) {
   const t = useTranslations("adminSecurity");

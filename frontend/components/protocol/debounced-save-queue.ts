@@ -81,7 +81,7 @@ export function createDebouncedSaveQueue<T>(delayMs: number, send: SaveSender<T>
 /**
  * Warteschlange für eine Komponente: beim Unmount werden wartende Speicherungen sofort gesendet,
  * nicht verworfen. Der Editor kann jederzeit verschwinden, auch mitten im Entprellen: Seitenwechsel
- * oder Wechsel zwischen Desktop- und Mobil-Editor (1.6.1). Vorher rief der Editor `cancelAll()`,
+ * oder Wechsel zwischen Desktop- und Mobil-Editor (1.6). Vorher rief der Editor `cancelAll()`,
  * dann blieb nur die langsamere Outbox (offline-store) als Netz.
  */
 export function useDebouncedSaveQueue<T>(delayMs: number, send: SaveSender<T>): DebouncedSaveQueue<T> {

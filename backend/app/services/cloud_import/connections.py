@@ -213,7 +213,7 @@ def delete(db: Session, connection: ImportConnection) -> None:
 
 def revoke_and_clear(connection: ImportConnection) -> None:
     """Tokens widerrufen (best effort) und löschen, die Zeile mit der Kontokennung aber behalten:
-    ein laufender Import darf danach nur mit demselben Konto weitermachen (Security-Review 1.7, N1)."""
+    ein laufender Import darf danach nur mit demselben Konto weitermachen (Security-Review 1.6, N1)."""
     provider = providers.get(connection.provider)
     if provider is not None and connection.access_token_encrypted:
         try:
@@ -225,7 +225,7 @@ def revoke_and_clear(connection: ImportConnection) -> None:
 
 def purge_expired(db: Session) -> int:
     """Verbindungen nach purge_after löschen (läuft im Loop, mandantenübergreifend)."""
-    # Abgelaufen oder Konto gesperrt/deaktiviert (Security-Review 1.7, N2)
+    # Abgelaufen oder Konto gesperrt/deaktiviert (Security-Review 1.6, N2)
     inactive = select(AppUser.id).where(
         AppUser.id == ImportConnection.user_id, or_(AppUser.is_active.is_(False), AppUser.login_enabled.is_(False))
     ).exists()

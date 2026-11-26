@@ -16,7 +16,7 @@ docker compose -p hocx-tests -f docker-compose.tests.yml --profile tests config 
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml config --quiet
 
 # MAIN-OPS-005: Redis haengt nur im internen Netz "cache", das ausser Redis nur backend und job-worker
-# nutzen (job-worker seit 1.7: Token-Bucket der Cloud-Downloads, CHANGELOG [Unveroeffentlicht]).
+# nutzen (job-worker seit 1.6: Token-Bucket der Cloud-Downloads, CHANGELOG [1.6.0]).
 assert_redis_isolated() {
   EXPECTED_CACHE_USERS="$1" python3 -c '
 import json, os, sys

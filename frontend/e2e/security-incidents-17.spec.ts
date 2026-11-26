@@ -5,7 +5,7 @@ import { test, expect, request, type APIRequestContext, type Page } from "@playw
 import { authFiles, platformAdminSpecPasskeyFile } from "./auth";
 import { SoftPasskey, stepUpHeaders } from "./soft-passkey";
 
-// Sicherheitsbereich 1.7: Vorfälle (Bündelung, Übernehmen, Status, Notiz mit Passkey) und Lagebild.
+// Sicherheitsbereich 1.6: Vorfälle (Bündelung, Übernehmen, Status, Notiz mit Passkey) und Lagebild.
 //
 // Eigener Passkey dieser Spec (auth.ts, platformAdminSpecPasskeys): ein geteilter Signaturzähler über
 // parallele Worker sperrt den Passkey als möglichen Klon. Die Oberfläche läuft echt (step-up/start,
@@ -92,7 +92,7 @@ async function axe(page: Page) {
   expect(result.violations.map((violation) => `${violation.id}: ${violation.nodes.slice(0, 3).map((node) => node.target.join(" ")).join(" | ")}`)).toEqual([]);
 }
 
-test.describe("Sicherheitsbereich 1.7: Vorfälle und Lagebild", () => {
+test.describe("Sicherheitsbereich 1.6: Vorfälle und Lagebild", () => {
   test.use({ storageState: authFiles.platformAdmin });
   test.describe.configure({ mode: "serial" });
   test.setTimeout(360_000);

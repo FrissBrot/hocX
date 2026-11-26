@@ -97,7 +97,7 @@ def get_cloud_imports(db: Session = Depends(get_db), _admin: CurrentAdmin = Depe
     return AdminImportOverview(active=active, metrics=metrics, days=METRIC_DAYS)
 
 
-# Passkey-Bestätigung je Abbruch (Security-Review 1.7, I4), gebunden an Methode, Pfad und Body
+# Passkey-Bestätigung je Abbruch (Security-Review 1.6, I4), gebunden an Methode, Pfad und Body
 @router.post("/cloud-imports/{job_id}/cancel", response_model=AdminImportRead, dependencies=[Depends(require_step_up("cloud-import-cancel"))])
 def cancel_cloud_import(job_id: uuid.UUID, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     """Notfall-Abbruch: wie der Abbruch im Verein (bereits importierte Dateien bleiben, Tokens weg)."""

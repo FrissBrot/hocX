@@ -6,7 +6,7 @@ import { SecurityAlertsView } from "@/components/admin/security/security-alerts"
 import { SecurityPageHeader } from "@/components/admin/security/security-page-header";
 
 // Alarmregeln (1.6, vorher «Warnungen»): Regeln mit Messwerten oben, ausgelöste Warnungen mit
-// ihrem Vorfall darunter (1.7: Vorfall-Status statt Quittung).
+// ihrem Vorfall darunter (1.6: Vorfall-Status statt Quittung).
 export default async function AdminSecurityAlertsPage() {
   const t = await getTranslations("adminSecurity.alerts");
   return (

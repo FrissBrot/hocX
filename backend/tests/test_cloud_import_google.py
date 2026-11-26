@@ -526,7 +526,7 @@ def test_export_links_only_on_export_paths_and_base_url_refresh_is_single_flight
     assert pages == 2  # 4 Medien, 2 je Seite: genau ein Durchgang
 
 
-# --- Picker auf eigener Origin (Security-Review 1.7, N3) ---------------------------------------
+# --- Picker auf eigener Origin (Security-Review 1.6, N3) ---------------------------------------
 
 
 def _ticket(db, user, job_id) -> str:
@@ -611,7 +611,7 @@ def test_drive_is_not_offered_without_a_picker_domain(db, fake, monkeypatch):
 
 
 def test_picker_ticket_is_bound_to_the_issuing_session_and_expires_as_a_chain(db, fake):
-    """Security-Review 1.7 (Picker-Origin, N-2): Einzelabmeldung/Ablauf der ausstellenden Sitzung
+    """Security-Review 1.6 (Picker-Origin, N-2): Einzelabmeldung/Ablauf der ausstellenden Sitzung
     beendet das Ticket; das Apply-Ticket verlängert die 10 Minuten ab Ausstellung nicht."""
     import dataclasses
     import time

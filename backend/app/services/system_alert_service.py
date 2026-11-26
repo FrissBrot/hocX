@@ -467,7 +467,7 @@ def _auth_threats(db: Session) -> list | None:
 
 
 def _correlate_incidents(db: Session, auth_threats: list | None, now: datetime) -> None:
-    """Alarmregeln zu Vorfällen bündeln (1.7, app/auth_security/incidents.py). Ist die Erkennung
+    """Alarmregeln zu Vorfällen bündeln (1.6, app/auth_security/incidents.py). Ist die Erkennung
     fehlgeschlagen (None), bleibt alles, wie es ist - sonst klängen alle Vorfälle scheinbar ab. Ein
     Fehler hier darf ntfy nicht verhindern und landet im Fehlerprotokoll."""
     if auth_threats is None:

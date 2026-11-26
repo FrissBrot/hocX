@@ -74,7 +74,7 @@ describe("proxy", () => {
     expect(first.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
   });
 
-  it("lockert die CSP nur auf der Picker-Origin und nur für die Picker-Seite (Security-Review 1.7)", async () => {
+  it("lockert die CSP nur auf der Picker-Origin und nur für die Picker-Seite (Security-Review 1.6)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
     const directive = (csp: string, name: string) => csp.split("; ").find((entry) => entry.startsWith(`${name} `)) ?? "";
     const onHost = (host: string, path: string) => proxy(new NextRequest(`https://${host}${path}`, { headers: { host } }));

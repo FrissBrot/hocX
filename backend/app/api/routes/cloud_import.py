@@ -1073,7 +1073,7 @@ class BrowseIn(BaseModel):
     cursor: str | None = Field(default=None, max_length=4000)
 
 
-# POST statt GET (Security-Review 1.7, I1): das Lesen erneuert Tokens bzw. setzt die Verbindung auf
+# POST statt GET (Security-Review 1.6, I1): das Lesen erneuert Tokens bzw. setzt die Verbindung auf
 # needs_reauth - zustandsändernd, also nie per GET (SECURITY-RULES §3.1, Origin-Prüfung greift).
 @router.post("/cloud-import/jobs/{job_id}/browse", response_model=BrowseRead)
 def browse_cloud_folder(
@@ -1128,7 +1128,7 @@ def set_cloud_selection(
 ):
     """Gewählte Ordner/Dateien speichern und das Auflisten im Hintergrund starten (``listing``)."""
     _require_import(user)
-    # Löscht Einträge und startet das Auflisten beim Anbieter (Security-Review 1.7, I5)
+    # Löscht Einträge und startet das Auflisten beim Anbieter (Security-Review 1.6, I5)
     enforce_rate_limit(f"cloud-import-selection:{user.user_id}", limit=30, period_seconds=600)
     job = _load(db, user, job_id, owner=True, lock=True)
     if not providers.is_api_source(job.source) or job.status != "draft":
@@ -1154,7 +1154,7 @@ def set_cloud_selection(
 def disconnect_cloud_account(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Verbindung (Tokens) sofort löschen. Ein laufender Import wartet danach auf eine neue Anmeldung."""
     _require_import(user)
-    # Widerruf beim Anbieter je Aufruf (Security-Review 1.7, I5)
+    # Widerruf beim Anbieter je Aufruf (Security-Review 1.6, I5)
     enforce_rate_limit(f"cloud-import-disconnect:{user.user_id}", limit=20, period_seconds=600)
     job = _load(db, user, job_id, owner=True, lock=True)
     if not providers.is_api_source(job.source):

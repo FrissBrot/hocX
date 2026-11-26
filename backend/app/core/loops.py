@@ -405,7 +405,7 @@ async def auth_security_maintenance_loop() -> None:
 
 async def security_incident_retention_loop() -> None:
     """Vorfälle des Anmeldeschutzes samt Zeitleiste und Notizen nach security_incident_retention_days
-    (365 Tage ab letzter Aktivität, Plan 1.7) löschen (Datenschutz)."""
+    (365 Tage ab letzter Aktivität, Plan 1.6) löschen (Datenschutz)."""
     from app.auth_security import incidents
 
     await run_advisory_locked_loop(

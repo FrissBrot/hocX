@@ -378,7 +378,10 @@
       "photos_session_missing": "Avvia prima la selezione in Google Foto.",
       "wrong_source": "Questo passo non corrisponde alla fonte scelta.",
       "invalid_status": "Questa importazione non è più una bozza. Prosegui nell’assistente.",
-      "ticket_invalid": "L’accesso al selettore Google è scaduto o è già stato utilizzato. Scegli di nuovo «Scegli in Google Drive» nell’assistente di importazione."
+      "ticket_invalid": "L’accesso al selettore Google è scaduto o è già stato utilizzato. Scegli di nuovo «Scegli in Google Drive» nell’assistente di importazione.",
+      "permission_required": "Non hai l'autorizzazione necessaria. Ricarica la pagina se il tuo ruolo è cambiato.",
+      "feature_not_booked": "Questa funzione non è inclusa nell'abbonamento della tua organizzazione.",
+      "feature_read_only": "Questa funzione è disponibile solo in lettura perché non fa più parte dell'abbonamento della tua organizzazione."
     },
     "adminConsent": {
       "title": "Aiuto: approvazione da parte dell’IT dell’organizzazione",

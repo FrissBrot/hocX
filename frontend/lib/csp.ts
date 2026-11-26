@@ -19,7 +19,7 @@ export function createNonce(): string {
  * Host-Einträge in script-src ignorieren CSP3-Browser deshalb, sie bleiben nur für ältere Browser),
  * zeigt die Auswahl in einem iframe von docs.google.com und lädt Vorschaubilder.
  *
- * Seit 1.7 (Security-Review N3) gilt die Lockerung nur auf der **eigenen Origin**
+ * Seit 1.6 (Security-Review N3) gilt die Lockerung nur auf der **eigenen Origin**
  * CLOUD_IMPORT_PICKER_DOMAIN und nur für diesen Pfad (proxy.ts): dort gibt es keine hocX-Sitzung,
  * nachgeladener Fremdcode kann also nichts im Namen der angemeldeten Person tun. Auf der App-Origin
  * gibt es die Seite nicht.

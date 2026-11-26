@@ -76,7 +76,7 @@ function useSituationUrlState() {
   return { ...state, update };
 }
 
-/** /admin/security (1.7, Design «hocX Sicherheit Lagebild»): Lage-Stufe, Kennzahlen mit Verlauf,
+/** /admin/security (1.6, Design «hocX Sicherheit Lagebild»): Lage-Stufe, Kennzahlen mit Verlauf,
  * Vorfälle mit Detail, Verlauf mit Vorfall-Markierungen, Wochenmuster, Alarmregeln, Herkunft. Nur
  * echte Daten; jedes Diagramm mit Zusammenfassung und Tabellenalternative. */
 export function SecuritySituationView() {

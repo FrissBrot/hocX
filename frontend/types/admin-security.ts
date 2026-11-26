@@ -92,7 +92,7 @@ export type AuthAlert = {
   clears_at?: string | null;
   /** Name statt interner ID bei Admin-/Mandanten-Regeln (nur owner sieht Warnungen) */
   subject_label?: string | null;
-  /** Zugehöriger Vorfall (1.7, ersetzt die Quittung aus 1.5.1): offener, sonst jüngster */
+  /** Zugehöriger Vorfall (1.6, ersetzt die Quittung aus 1.5.1): offener, sonst jüngster */
   incident?: { id: number; status: IncidentStatus; assignee: string | null } | null;
 };
 
@@ -229,7 +229,7 @@ export type AlertRuleSeries = {
   points: { start: string; value: number }[];
 };
 
-// ── Vorfälle und Lagebild (1.7) ─────────────────────────────────────────────────────────────
+// ── Vorfälle und Lagebild (1.6) ─────────────────────────────────────────────────────────────
 
 export type IncidentStatus = "new" | "in_progress" | "resolved" | "false_positive";
 export type IncidentSeverity = "critical" | "warning";

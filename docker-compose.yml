@@ -333,7 +333,7 @@ services:
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
-      # Picker-Origin (Datei-Import 1.7): nur die Ticket-Routen des Google Pickers, nur POST
+      # Picker-Origin (Datei-Import 1.6): nur die Ticket-Routen des Google Pickers, nur POST
       - "traefik.http.routers.hocx-picker-api.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && PathPrefix(`/api/cloud-import/picker/`) && Method(`POST`)"
       - "traefik.http.routers.hocx-picker-api.middlewares=api-inflight"
       - "traefik.http.routers.hocx-picker-api.entrypoints=websecure"
@@ -583,7 +583,7 @@ services:
       - "traefik.http.routers.hocx-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+letsencrypt}"
       - "traefik.http.routers.hocx-website-frontend.priority=10"
       - "traefik.http.routers.hocx-website-frontend.service=hocx-frontend"
-      # Eigene Origin des Google Pickers (Datei-Import 1.7): nur die Picker-Seite und ihre Assets
+      # Eigene Origin des Google Pickers (Datei-Import 1.6): nur die Picker-Seite und ihre Assets
       - "traefik.http.routers.hocx-picker-frontend.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && (Path(`/google-picker`) || PathPrefix(`/_next/`))"
       - "traefik.http.routers.hocx-picker-frontend.middlewares=web-inflight"
       - "traefik.http.routers.hocx-picker-frontend.entrypoints=websecure"

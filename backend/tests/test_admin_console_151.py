@@ -157,7 +157,7 @@ def test_admin_list_has_passkey_count_and_last_login(db):
     assert mine["last_login_at"] is not None
 
 
-# ── Warnungen: Vorfall statt Quittung (1.7) ────────────────────────────────────────────────
+# ── Warnungen: Vorfall statt Quittung (1.6) ────────────────────────────────────────────────
 
 
 def _fake_alert(monkeypatch, key="auth:spraying:abc123def456"):
@@ -167,7 +167,7 @@ def _fake_alert(monkeypatch, key="auth:spraying:abc123def456"):
 
 
 def test_alerts_link_their_incident_and_ack_routes_are_gone(db, monkeypatch):
-    """1.7: die Quittung (0209) ist durch den Vorfall-Status ersetzt - die Warnung zeigt ihren Vorfall."""
+    """1.6: die Quittung (0209) ist durch den Vorfall-Status ersetzt - die Warnung zeigt ihren Vorfall."""
     from app.auth_security import incidents, threats
 
     client = _client(db, _admin(db))

@@ -86,7 +86,7 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
    (Excel mit Passwort, `documents/exports.py::encrypt_xlsx`, wahlweise AES-ZIP), die Person kann
    die Verschlüsselung im Export-Dialog aber bewusst abwählen (auditiert, `document.export_*` mit
    `encrypted: false`).
-   Ebenfalls ausgenommen (Entscheid 1.6.1): ICS- und Markdown-Exporte des Document Studio. ICS dient
+   Ebenfalls ausgenommen (Entscheid 1.6): ICS- und Markdown-Exporte des Document Studio. ICS dient
    dem Import in einen Kalender, Markdown dem Einfügen aus der Zwischenablage (z. B. in einen
    Chat); verschlüsselt wären beide dafür unbrauchbar. Jeder solche Export wird ohne Inhalt
    auditiert (`document.export_ics` / `document.export_markdown`, `encrypted: false`). Kalender-Abos

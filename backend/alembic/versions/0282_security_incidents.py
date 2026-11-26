@@ -1,4 +1,4 @@
-"""Sicherheitsbereich 1.7: Vorfälle (Plan 2026-11-23, Abschnitt «1.7: Vorfälle und Lagebild").
+"""Sicherheitsbereich 1.6: Vorfälle (Plan 2026-11-23, Abschnitt «Vorfälle und Lagebild»).
 
 - ``security_incident``: je Regelschlüssel des Anmeldeschutzes (``auth:<regel>[:<pseudonym>]``)
   höchstens ein offener Vorfall (Partial-Unique-Index). Der Systemmonitor bündelt die Treffer

@@ -645,7 +645,7 @@ def test_rejected_password_leads_to_needs_reauth_and_reentering_resumes(db, dav)
 
 
 def test_disconnect_mid_import_keeps_the_account_binding(db, dav):
-    """Security-Review 1.7, N1: «Trennen» mitten im Import löscht die Zugangsdaten, aber nicht die
+    """Security-Review 1.6, N1: «Trennen» mitten im Import löscht die Zugangsdaten, aber nicht die
     Kontokennung - ein anderes Konto/eine andere Adresse kann den Auftrag nicht übernehmen."""
     tenant = make_tenant(db)
     user = _admin(db, tenant)
@@ -668,7 +668,7 @@ def test_disconnect_mid_import_keeps_the_account_binding(db, dav):
 
 
 def test_cleanup_deletes_connections_of_deactivated_accounts(db, dav):
-    """Security-Review 1.7, N2: Zugangsdaten gesperrter Konten nicht bis purge_after behalten."""
+    """Security-Review 1.6, N2: Zugangsdaten gesperrter Konten nicht bis purge_after behalten."""
     tenant = make_tenant(db)
     user = _admin(db, tenant)
     job = _job(db, user)

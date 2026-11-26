@@ -458,7 +458,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   // teilen sich denselben Baum bis zum Seiteninhalt: nur Navigation und Rahmen wechseln, wo die
   // andere Ansicht kein Element hat, steht eine unsichtbare Hülle (`.shell-slot`, display: contents).
   // So bleiben Eingaben, Dialoge und Fokus beim Drehen des Tablets oder Schmalziehen des Fensters
-  // erhalten (1.6.1; vorher tauschte die Shell den ganzen Baum und mountete die Seite neu). Nur die
+  // erhalten (1.6; vorher tauschte die Shell den ganzen Baum und mountete die Seite neu). Nur die
   // erste Korrektur nach dem Laden baut neu auf (viewportEpoch), wie vorher.
   const desktop = !isMobile;
   const frameClass = desktop

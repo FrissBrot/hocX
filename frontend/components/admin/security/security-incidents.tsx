@@ -65,7 +65,7 @@ function useIncidentUrlState() {
   return { filters: state.filters, incident: state.incident, setFilters, setIncident };
 }
 
-/** /admin/security/incidents (1.7, Design «hocX Sicherheit Vorfälle»): Kennzahlen, Filter (in der
+/** /admin/security/incidents (1.6, Design «hocX Sicherheit Vorfälle»): Kennzahlen, Filter (in der
  * URL nur Codes und die Vorfall-Nummer), Liste oder Board, Detail mit Status, Zuständig und Notizen. */
 export function SecurityIncidents() {
   const t = useTranslations("adminSecurity.incidents");

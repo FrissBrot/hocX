@@ -1,4 +1,4 @@
-"""Lagebild des Sicherheitsbereichs (1.7, Design «hocX Sicherheit Lagebild»).
+"""Lagebild des Sicherheitsbereichs (1.6, Design «hocX Sicherheit Lagebild»).
 
 Nur echte Daten aus ``auth_event``, den Vorfällen und den Alarmregeln:
 

@@ -99,7 +99,7 @@ job-worker, siehe RUNBOOK Abschnitt 17. API-Quellen (P1): `CLOUD_IMPORT_ENABLED`
 
 ## API-Quellen (Phase P1, Fundament)
 
-Gemeinsames Fundament für alle Cloud-Anbieter (seit 1.7: Microsoft, Google Drive, Google Fotos, Dropbox und WebDAV nach demselben
+Gemeinsames Fundament für alle Cloud-Anbieter (seit 1.6: Microsoft, Google Drive, Google Fotos, Dropbox und WebDAV nach demselben
 Muster). Migration `0281_cloud_import_connections`.
 
 | Teil | Ort |
@@ -130,7 +130,7 @@ Muster). Migration `0281_cloud_import_connections`.
    die aus dem `state` ist, entsteht die Verbindung (Schutz vor Login-CSRF); sonst 403 und die Tokens
    sind verworfen.
 5. Ordnerbaum: `POST /cloud-import/jobs/{id}/browse` (Body `{ref, cursor}`; POST, weil das Lesen
-   Tokens erneuert, 1.7) liest live beim Anbieter, speichert nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
+   Tokens erneuert, 1.6) liest live beim Anbieter, speichert nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
 6. job-worker (`remote.run_listing`): rekursiv mit Paging, Stand in `import_job.listing_state` nach jeder
    Seite → `ready` (bzw. zurück zu `draft` mit `empty_source`/`selection_unavailable`).
 7. Regeln, Vorschau, Start wie P0. Danach lädt `remote.download_step` je Datei als Stream nach
@@ -274,7 +274,7 @@ Aufträge bekommen keine Mail.
 Dateinamen, keine Konten), Kennzahlen der letzten 30 Tage je Tag und Quelle (Importe, unterbrochene,
 importierte Dateien, Volumen, Dateien mit Fehler). **Notfall-Abbruch** (`POST
 /api/admin/cloud-imports/{id}/cancel`, `require_admin_write` und Passkey-Bestätigung
-`require_step_up("cloud-import-cancel")` (1.7), Audit `admin.cloud_import_cancelled`): wie
+`require_step_up("cloud-import-cancel")` (1.6), Audit `admin.cloud_import_cancelled`): wie
 der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
 
 ### Monitoring
@@ -304,7 +304,7 @@ Entscheid E-3 (a): nur `drive.file` + Google Picker, **kein** `drive.readonly` (
   `…/auth/userinfo.email`, `…/auth/drive.file`. Bei der granularen Zustimmung abgewählt →
   `tier = null` → Wizard zeigt `missing_scope` und «Neu anmelden».
 - Kein Ordnerbaum (`roots()` leer, `public_info = {"selection": "google_picker"}`).
-- **Eigene Origin (1.7, Security-Review N3):** Der Picker lädt Fremdcode (`apis.google.com`, über
+- **Eigene Origin (1.6, Security-Review N3):** Der Picker lädt Fremdcode (`apis.google.com`, über
   `'strict-dynamic'`). Er läuft deshalb auf `CLOUD_IMPORT_PICKER_DOMAIN` (eigene Subdomain, Traefik-Router
   `picker-frontend` nur für `/google-picker` und `/_next/`, `picker-api` nur für
   `POST /api/cloud-import/picker/`). Dort gibt es kein hocX-Sitzungscookie (host-only). Ablauf:

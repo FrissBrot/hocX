@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { SecurityIncidents } from "@/components/admin/security/security-incidents";
 
-// Vorfälle (1.7): Filter, Ansicht und geöffneter Vorfall stehen in der URL (useSearchParams braucht
+// Vorfälle (1.6): Filter, Ansicht und geöffneter Vorfall stehen in der URL (useSearchParams braucht
 // eine Suspense-Grenze).
 export default function AdminSecurityIncidentsPage() {
   return (

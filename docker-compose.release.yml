@@ -403,7 +403,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
-      # Picker-Origin (Datei-Import 1.7): nur die Ticket-Routen des Google Pickers, nur POST
+      # Picker-Origin (Datei-Import 1.6): nur die Ticket-Routen des Google Pickers, nur POST
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && PathPrefix(`/api/cloud-import/picker/`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.entrypoints=websecure"
@@ -625,7 +625,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
-      # Eigene Origin des Google Pickers (Datei-Import 1.7, Security-Review N3): nur die Picker-Seite
+      # Eigene Origin des Google Pickers (Datei-Import 1.6, Security-Review N3): nur die Picker-Seite
       # und ihre Assets, ohne hocX-Sitzung (Cookies sind host-only); die Ticket-Routen gehen ans
       # Backend (Router picker-api). Ohne CLOUD_IMPORT_PICKER_DOMAIN greift der Platzhalter nie und
       # der Cert-Resolver bleibt leer (wie bei der Website).

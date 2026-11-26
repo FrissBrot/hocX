@@ -2,7 +2,7 @@
 
 Beide Anbieter haben keinen Ordnerbaum (drive.file bzw. Photos Picker API):
 
-- Google Drive läuft auf einer **eigenen Origin** ohne hocX-Sitzung (Security-Review 1.7, N3,
+- Google Drive läuft auf einer **eigenen Origin** ohne hocX-Sitzung (Security-Review 1.6, N3,
   ``services/cloud_import/picker_tickets.py``): ``POST /cloud-import/jobs/{id}/google-drive/picker-ticket``
   (mit Sitzung, eigener Auftrag, Entwurf) gibt die Adresse der Picker-Seite mit einem einmaligen
   Ticket im Fragment. Die Seite tauscht es ohne Sitzung gegen das kurzlebige ``drive.file``-Token
