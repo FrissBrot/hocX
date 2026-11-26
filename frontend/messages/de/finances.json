@@ -23,7 +23,6 @@
   "saveAccountFailed": "Konto konnte nicht gespeichert werden",
   "deleteAccountConfirm": "Konto «{name}» löschen? Das geht nur, solange es keine Buchungen und Bussen hat.",
   "deleteAccountFailed": "Konto konnte nicht gelöscht werden",
-  "provisional": "provisorisch",
   "provisionalPending": "provisorisch (offene Bussen)",
   "transactionCount": "{count, plural, one {# Buchung} other {# Buchungen}}",
   "selectAccountHint": "Wähle ein Konto aus der Liste, um Buchungen anzuzeigen.",

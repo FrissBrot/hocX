@@ -23,7 +23,6 @@
   "saveAccountFailed": "Impossibile salvare il conto",
   "deleteAccountConfirm": "Eliminare il conto «{name}»? È possibile solo finché non ha registrazioni né multe.",
   "deleteAccountFailed": "Impossibile eliminare il conto",
-  "provisional": "provvisorio",
   "provisionalPending": "provvisorio (multe aperte)",
   "transactionCount": "{count, plural, one {# transazione} other {# transazioni}}",
   "selectAccountHint": "Scegli un conto dall'elenco per visualizzarne le transazioni.",

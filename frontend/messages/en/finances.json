@@ -23,7 +23,6 @@
   "saveAccountFailed": "Account could not be saved",
   "deleteAccountConfirm": "Delete account “{name}”? This is only possible while it has no entries and no fines.",
   "deleteAccountFailed": "Account could not be deleted",
-  "provisional": "provisional",
   "provisionalPending": "provisional (open fines)",
   "transactionCount": "{count, plural, one {# transaction} other {# transactions}}",
   "selectAccountHint": "Choose an account from the list to view its transactions.",
