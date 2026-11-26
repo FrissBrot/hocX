@@ -38,6 +38,7 @@
   "colDescription": "Descrizione",
   "colAmount": "Importo",
   "colBalance": "Saldo",
+  "txTableLabel": "Transazioni: {account}",
   "saveTxFailed": "Impossibile salvare la transazione",
   "deleteTxConfirm": "Eliminare definitivamente la transazione?",
   "deleteTxFailed": "Impossibile eliminare la transazione",

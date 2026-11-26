@@ -38,6 +38,7 @@
   "colDescription": "Description",
   "colAmount": "Amount",
   "colBalance": "Balance",
+  "txTableLabel": "Transactions: {account}",
   "saveTxFailed": "Transaction could not be saved",
   "deleteTxConfirm": "Permanently delete transaction?",
   "deleteTxFailed": "Transaction could not be deleted",
