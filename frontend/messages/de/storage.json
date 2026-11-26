@@ -1,4 +1,11 @@
 {
+  "categoryLabels": {
+    "photos": "Fotos",
+    "files": "Dateien",
+    "protocols": "Protokolle",
+    "trash": "Papierkorb",
+    "other": "Sonstiges"
+  },
   "categoryHints": {
     "photos": "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
     "files": "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
