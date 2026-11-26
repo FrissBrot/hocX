@@ -181,6 +181,17 @@ describe("FinesView (Kasse › Bussen)", () => {
     expect(toastMock).toHaveBeenCalledWith("Die Änderung ist nicht möglich, weil sich die Daten inzwischen geändert haben. Bitte neu laden.", "error");
   });
 
+  it("zeigt Kassier- und Löschdatum als Schweizer Kalendertag (nicht UTC-Tag des Zeitstempels)", () => {
+    // 07.11. 23:30 UTC = 08.11. 00:30 in Zürich; die API liefert Zeitstempel in UTC
+    const late = attendance("9", "Nina Nacht", "p-nina", { status: "collected", collected_at: `${YEAR}-11-07T23:30:00+00:00`, collected_by_display_name: "Kassier" });
+    const gone = todo("tf-9", "Nina Nacht", "p-nina", { status: "deleted", deleted_at: `${YEAR}-11-09T23:15:00+00:00` });
+    renderView({ initialFines: [late], initialTodoFines: [gone] });
+    fireEvent.click(screen.getByRole("tab", { name: /Kassiert/ }));
+    expect(screen.getByText("08.11. · Kassier")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Gelöscht|Erlassen/ }));
+    expect(screen.getByText("10.11.")).toBeInTheDocument();
+  });
+
   it("zeigt Leerzustände für «Alles kassiert» und «Keine Treffer»", () => {
     renderView({ initialFines: [annaCollected], initialTodoFines: [] });
     expect(screen.getByText("Alles kassiert.")).toBeInTheDocument();
