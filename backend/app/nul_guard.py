@@ -7,7 +7,10 @@ als 500 oder als 400 mit Eintrag im Fehlerprotokoll, obwohl nur die Eingabe ung�
 einzeln abzusichern, prüft diese Middleware zentral:
 
 - Pfad und Query-String (``%00``),
-- JSON-Bodies (``\\u0000``, nicht aber ein escapter Backslash vor «u0000» als normaler Text).
+- JSON-Bodies (``\\u0000``, nicht aber ein escapter Backslash vor «u0000» als normaler Text),
+- einzelne UTF-16-Surrogate in JSON-Bodies (``"\\ud800"`` ohne Partner): Python macht daraus einen
+  str, der sich nicht als UTF-8 kodieren lässt - jede Route scheiterte damit erst beim Hashen,
+  in Redis oder in der Datenbank mit 500 (Nachtlauf 2026-11-26, Login ohne Anmeldung).
 
 Multipart-Uploads (Dateien dürfen NUL-Bytes enthalten) und andere Inhaltstypen bleiben
 unberührt; Formularfelder in Multipart prüfen die Routen selbst. Die Grösse eines JSON-Bodys
@@ -15,6 +18,7 @@ begrenzt RequestBodyLimitMiddleware (weiter aussen), bevor er hier gepuffert wir
 """
 from __future__ import annotations
 
+import json
 import re
 
 from starlette.responses import JSONResponse
@@ -23,11 +27,31 @@ _BODY_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # \u0000 mit einer geraden Zahl (auch 0) Backslashes davor: ein echtes JSON-Escape. Bei ungerader
 # Zahl ist der erste Backslash escapt und «u0000» nur Text.
 _JSON_NUL_ESCAPE = re.compile(rb"(?<!\\)(?:\\\\)*\\u0000")
+# Escape eines Surrogats (U+D800-U+DFFF), ebenfalls nur mit gerader Zahl Backslashes davor
+_JSON_SURROGATE_ESCAPE = re.compile(rb"(?<!\\)(?:\\\\)*\\u[dD][89a-fA-F][0-9a-fA-F]{2}")
 _DETAIL = [{"type": "string_nul", "loc": ["request"], "msg": "must not contain NUL characters"}]
+_SURROGATE_DETAIL = [{"type": "string_unicode", "loc": ["request"], "msg": "must not contain unpaired surrogates"}]
 
 
 def contains_json_nul(body: bytes) -> bool:
     return b"\x00" in body or _JSON_NUL_ESCAPE.search(body) is not None
+
+
+def contains_json_lone_surrogate(body: bytes) -> bool:
+    """Gültige Paare (Emoji als ``\\ud83d\\ude00``) ergeben beim Parsen ein normales Zeichen; nur ein
+    Surrogat ohne Partner bleibt übrig und lässt sich nicht als UTF-8 kodieren. Geparst wird nur,
+    wenn überhaupt ein Surrogat-Escape vorkommt; ungültiges JSON lehnt FastAPI selbst ab."""
+    if _JSON_SURROGATE_ESCAPE.search(body) is None:
+        return False
+    try:
+        parsed = json.loads(body)
+    except (ValueError, RecursionError):
+        return False
+    try:
+        json.dumps(parsed, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        return True
+    return False
 
 
 def _url_contains_nul(scope) -> bool:
@@ -64,6 +88,8 @@ class NulGuardMiddleware:
         body = b"".join(chunks)
         if contains_json_nul(body):
             return await JSONResponse({"detail": _DETAIL}, 422)(scope, receive, send)
+        if contains_json_lone_surrogate(body):
+            return await JSONResponse({"detail": _SURROGATE_DETAIL}, 422)(scope, receive, send)
 
         replayed = False
 
