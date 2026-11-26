@@ -93,11 +93,13 @@ function amountOf(value: string): number {
 }
 
 /** Regeln der Pendenzen-Bussen: Filter, Intervall, Aufteilung und Beträge je Tarif. */
-export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, onChanged }: {
+export function TodoFineRules({ rules, setRules, tariffs, accounts, tenantCurrency = "", canManage, onChanged }: {
   rules: TodoFineRule[];
   setRules: (rules: TodoFineRule[]) => void;
   tariffs: FineTariffGroup[];
   accounts: FinanceAccount[];
+  /** Vereinswährung (tenant.finance_currency): gilt, solange kein Konto existiert. */
+  tenantCurrency?: string;
   canManage: boolean;
   onChanged: () => Promise<void>;
 }) {
@@ -201,7 +203,7 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   }
 
   const intervalDays = Math.max(1, Math.round(Number(draft.interval_days) || 1));
-  const currency = accounts.find((account) => account.id === draft.account_id)?.currency_label ?? accounts[0]?.currency_label ?? "CHF";
+  const currency = accounts.find((account) => account.id === draft.account_id)?.currency_label ?? accounts[0]?.currency_label ?? tenantCurrency;
 
   // Filter als Chip-Felder (Design «Bussenregel Dialog»): leer = alle, «+ Wählen» fügt hinzu.
   type FilterKey = "tags" | "task_package_ids" | "participant_ids" | "role_ids";

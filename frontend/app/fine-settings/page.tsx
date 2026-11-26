@@ -31,6 +31,7 @@ export default async function FineSettingsPage({ searchParams }: { searchParams:
           canManage={canManage}
           todoFinesAccess={todoFinesAccess}
           initialTab={tab}
+          tenantCurrency={session.current_tenant?.finance_currency ?? ""}
         />
       </section>
     </AppShell>

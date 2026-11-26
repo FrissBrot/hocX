@@ -117,6 +117,7 @@
   "tariffAbsentLabel": "Importo «non giustificato»",
   "tariffSaved": "Tariffa salvata",
   "tariffSaveFailed": "Impossibile salvare la tariffa",
+  "tariffAmountRange": "Importo da 0 a {max}",
   "tariffSummary": "Tariffa: ritardo {late} · non giustificato {absent} · conto {account}",
   "tariffNotSet": "Nessuna tariffa impostata – i blocchi presenze non creano multe.",
   "accountDeleteConflict": "Il conto contiene ancora movimenti o multe e non può essere eliminato.",

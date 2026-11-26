@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { DocsLink } from "@/components/ui/help-popover";
@@ -9,6 +9,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { MAX_FINE_TARIFF_AMOUNT, parseTariffAmount, tariffAmountValid } from "@/components/finances/fines-model";
+import { formatMoney } from "@/lib/utils/format";
 import { FinanceAccount, TemplateFineTariff } from "@/types/api";
 
 type Props = {
@@ -27,6 +29,7 @@ export function TemplateFineTariffModal({ open, templateId, accounts, onClose, o
   const t = useTranslations("templates.editor.fineTariff");
   const tFinances = useTranslations("finances");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const showToast = useToast();
   const [loaded, setLoaded] = useState<TemplateFineTariff | null>(null);
   const [override, setOverride] = useState(false);
@@ -60,8 +63,11 @@ export function TemplateFineTariffModal({ open, templateId, accounts, onClose, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, templateId]);
 
-  const parse = (value: string) => Number(value.replace(",", ".") || "0");
-  const valid = !override || [amountLate, amountAbsent].every((value) => Number.isFinite(parse(value)) && parse(value) >= 0);
+  const parse = parseTariffAmount;
+  const lateValid = tariffAmountValid(amountLate);
+  const absentValid = tariffAmountValid(amountAbsent);
+  const valid = !override || (lateValid && absentValid);
+  const rangeHint = tFinances("tariffAmountRange", { max: formatMoney(MAX_FINE_TARIFF_AMOUNT, "", locale) });
   const accountName = (id: string | null) => (id ? accounts.find((account) => account.id === id)?.name ?? tFinances("unknownAccount") : null);
   const tenantTariff = loaded?.tenant_tariff;
 
@@ -128,11 +134,13 @@ export function TemplateFineTariffModal({ open, templateId, accounts, onClose, o
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{tFinances("tariffLateLabel")}</span>
-                <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate} onChange={(event) => setAmountLate(event.target.value)} />
+                <input type="number" min="0" max={MAX_FINE_TARIFF_AMOUNT} step="0.50" inputMode="decimal" value={amountLate} aria-invalid={!lateValid || undefined} onChange={(event) => setAmountLate(event.target.value)} />
+                {lateValid ? null : <span className="field-help">{rangeHint}</span>}
               </label>
               <label className="field-stack">
                 <span className="field-label">{tFinances("tariffAbsentLabel")}</span>
-                <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent} onChange={(event) => setAmountAbsent(event.target.value)} />
+                <input type="number" min="0" max={MAX_FINE_TARIFF_AMOUNT} step="0.50" inputMode="decimal" value={amountAbsent} aria-invalid={!absentValid || undefined} onChange={(event) => setAmountAbsent(event.target.value)} />
+                {absentValid ? null : <span className="field-help">{rangeHint}</span>}
               </label>
             </div>
           </>

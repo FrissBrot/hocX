@@ -10,6 +10,21 @@ import type { AttendanceFineListItem, TodoFineListItem } from "@/types/api";
  * kommen dort nicht an). */
 export const FINES_PAGE_SIZE = 500;
 
+/** Obergrenze eines Präsenz-Bussentarifs (Backend schemas/fines.py: FineTariffUpdate,
+ * TemplateFineTariffUpdate le=100000). Darüber antwortete das Backend 422 mit englischem
+ * Pydantic-Text im Toast (Nachtlauf 2026-11-26) - das Formular prüft deshalb selbst. */
+export const MAX_FINE_TARIFF_AMOUNT = 100000;
+
+/** Leer = 0; sonst Zahl von 0 bis MAX_FINE_TARIFF_AMOUNT (Komma als Dezimaltrenner erlaubt). */
+export function parseTariffAmount(value: string): number {
+  return Number(value.replace(",", ".") || "0");
+}
+
+export function tariffAmountValid(value: string): boolean {
+  const parsed = parseTariffAmount(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= MAX_FINE_TARIFF_AMOUNT;
+}
+
 export type FineRow =
   | { kind: "attendance"; key: string; fine: AttendanceFineListItem }
   | { kind: "todo"; key: string; fine: TodoFineListItem };

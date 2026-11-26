@@ -117,6 +117,7 @@
   "tariffAbsentLabel": "Amount “unexcused”",
   "tariffSaved": "Fine rates saved",
   "tariffSaveFailed": "Fine rates could not be saved",
+  "tariffAmountRange": "Amount from 0 to {max}",
   "tariffSummary": "Rates: late {late} · unexcused {absent} · account {account}",
   "tariffNotSet": "No fine rates set – attendance blocks create no fines.",
   "accountDeleteConflict": "The account still has transactions or fines and cannot be deleted.",

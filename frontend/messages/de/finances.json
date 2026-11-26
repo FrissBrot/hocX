@@ -117,6 +117,7 @@
   "tariffAbsentLabel": "Betrag «unentschuldigt»",
   "tariffSaved": "Bussentarif gespeichert",
   "tariffSaveFailed": "Bussentarif konnte nicht gespeichert werden",
+  "tariffAmountRange": "Betrag von 0 bis {max}",
   "tariffSummary": "Tarif: zu spät {late} · unentschuldigt {absent} · Konto {account}",
   "tariffNotSet": "Kein Bussentarif hinterlegt – Anwesenheitsblöcke erzeugen keine Bussen.",
   "accountDeleteConflict": "Das Konto hat noch Buchungen oder Bussen und kann nicht gelöscht werden.",

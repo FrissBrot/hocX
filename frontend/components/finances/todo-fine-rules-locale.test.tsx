@@ -47,4 +47,12 @@ describe("TodoFineRules (UI-Sprache fr)", () => {
     expect(preview).toContain("12,50");
     expect(preview).not.toContain("12.50");
   });
+
+  it("nimmt ohne Konto die Vereinswährung statt fest «CHF»", () => {
+    render(<TodoFineRules rules={[]} setRules={vi.fn()} tariffs={[tariff]} accounts={[]} tenantCurrency="EUR" canManage onChanged={vi.fn(async () => {})} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter une règle" }));
+    const table = screen.getByRole("table", { name: /./ });
+    expect(within(table).getAllByText("EUR").length).toBeGreaterThan(0);
+    expect(within(table).queryByText("CHF")).toBeNull();
+  });
 });
