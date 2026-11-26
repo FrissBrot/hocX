@@ -280,7 +280,8 @@
       "rate_limited": "trop d'invitations",
       "not_found": "introuvable",
       "failed": "échec",
-      "protected": "règle de protection, p. ex. dernier admin"
+      "protected": "règle de protection, p. ex. dernier admin",
+      "user_limit": "limite d'utilisateurs atteinte"
     }
   }
 }

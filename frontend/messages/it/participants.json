@@ -280,7 +280,8 @@
       "rate_limited": "troppi inviti",
       "not_found": "non trovato",
       "failed": "non riuscito",
-      "protected": "regola di protezione, ad es. ultimo admin"
+      "protected": "regola di protezione, ad es. ultimo admin",
+      "user_limit": "limite di utenti raggiunto"
     }
   }
 }

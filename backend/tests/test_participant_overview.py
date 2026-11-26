@@ -167,3 +167,20 @@ def test_bulk_invite_keeps_role_when_the_invite_fails(db, mail, monkeypatch):
     assert result.done == []
     assert [item.participant_id for item in result.skipped] == [person_public_id]
     assert [role.system_key for role in role_service.roles_by_user(db, [person_id])[person_id]] == ["reader"]
+
+
+def test_user_limit_has_stable_code_and_own_bulk_reason(db, mail):
+    """Benutzerlimit: deutscher Satz ohne Code erschien in en/fr/it roh; in der Mehrfach-Einladung
+    hiess der Grund «Schutzregel, z. B. letzter Admin»."""
+    tenant = make_tenant(db)
+    actor = _actor(db, tenant)
+    tenant.user_limit_override = 1  # der Admin selbst belegt den einzigen Platz
+    db.flush()
+    person = _person(db, tenant, "Zu viel", "zu-viel@example.com")
+    with pytest.raises(HTTPException) as single:
+        participant_routes.invite_participant(person.public_id, db=db, user=actor)
+    assert single.value.status_code == 409
+    assert single.value.detail["code"] == "user_limit_reached"
+    assert single.value.detail["params"] == {"limit": 1}
+    result = participant_routes.bulk_invite_participants(ParticipantBulkInvite(participant_ids=[person.public_id]), db=db, user=actor)
+    assert [(item.participant_id, item.reason) for item in result.skipped] == [(person.public_id, "user_limit")]
