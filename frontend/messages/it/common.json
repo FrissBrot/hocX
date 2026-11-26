@@ -168,7 +168,17 @@
       "public_link": "Link pubblico",
       "context_visibility": "Visibilità dei file",
       "activity": "Cronologia",
-      "todo_fine": "Multa per attività"
+      "todo_fine": "Multa per attività",
+      "agenda_item": "Punto all'ordine del giorno",
+      "file": "File",
+      "file_import": "Importazione file",
+      "finance_settings": "Impostazioni finanziarie",
+      "mfa": "Accesso a due fattori",
+      "password": "Password",
+      "photo": "Foto",
+      "sessions": "Sessioni",
+      "submission": "Invio",
+      "template_element": "Elemento del modello"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",

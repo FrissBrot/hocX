@@ -168,7 +168,17 @@
       "public_link": "Lien public",
       "context_visibility": "Visibilité des fichiers",
       "activity": "Historique",
-      "todo_fine": "Amende de tâche"
+      "todo_fine": "Amende de tâche",
+      "agenda_item": "Point de l'ordre du jour",
+      "file": "Fichier",
+      "file_import": "Import de fichiers",
+      "finance_settings": "Paramètres financiers",
+      "mfa": "Connexion à deux facteurs",
+      "password": "Mot de passe",
+      "photo": "Photo",
+      "sessions": "Sessions",
+      "submission": "Envoi",
+      "template_element": "Élément de modèle"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",

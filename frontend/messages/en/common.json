@@ -168,7 +168,17 @@
       "public_link": "Public link",
       "context_visibility": "File visibility",
       "activity": "Activity log",
-      "todo_fine": "Task fine"
+      "todo_fine": "Task fine",
+      "agenda_item": "Agenda item",
+      "file": "File",
+      "file_import": "File import",
+      "finance_settings": "Finance settings",
+      "mfa": "Two-factor sign-in",
+      "password": "Password",
+      "photo": "Photo",
+      "sessions": "Sessions",
+      "submission": "Upload",
+      "template_element": "Template element"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

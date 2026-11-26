@@ -168,7 +168,17 @@
       "public_link": "Öffentlicher Link",
       "context_visibility": "Sichtbarkeit von Dateien",
       "activity": "Verlauf",
-      "todo_fine": "Pendenzen-Busse"
+      "todo_fine": "Pendenzen-Busse",
+      "agenda_item": "Traktandum",
+      "file": "Datei",
+      "file_import": "Dateiimport",
+      "finance_settings": "Finanz-Einstellungen",
+      "mfa": "Zwei-Faktor-Anmeldung",
+      "password": "Passwort",
+      "photo": "Foto",
+      "sessions": "Sitzungen",
+      "submission": "Einreichung",
+      "template_element": "Vorlagenelement"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",
