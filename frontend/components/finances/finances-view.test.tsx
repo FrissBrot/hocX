@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FinancesView } from "./finances-view";
 import type { FinanceAccount, FinanceTransaction } from "@/types/api";
@@ -104,4 +104,20 @@ describe("Gesperrte Buchungen und Jahressicht", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "2025" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${account.id}/transactions?limit=50&year=2025`));
   });
+
+  it("stellt die Buchungen als Tabelle mit Spaltenköpfen dar (Screenreader)", async () => {
+    fetchMock.mockImplementation((url: string) => Promise.resolve(url === "/api/finance/accounts" ? [account] : url.includes("/summary") ? null : [expense]));
+    render(<FinancesView initialAccounts={[account]} canWrite />);
+    await screen.findByText("Raummiete");
+    const table = screen.getByRole("table", { name: "Buchungen: Vereinskasse" });
+    const headers = within(table).getAllByRole("columnheader").map((cell) => cell.textContent);
+    expect(headers.slice(0, 4)).toEqual(["Datum", "Beschreibung", "Betrag", "Saldo"]);
+    expect(within(table).getAllByRole("columnheader")[4]).toHaveAccessibleName("Aktionen");
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(2);
+    const cells = within(rows[1]).getAllByRole("cell");
+    expect(cells).toHaveLength(5);
+    expect(cells[1]).toHaveTextContent("Raummiete");
+  });
 });
+

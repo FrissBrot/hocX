@@ -39,6 +39,7 @@
   "colDescription": "Description",
   "colAmount": "Montant",
   "colBalance": "Solde",
+  "txTableLabel": "Transactions : {account}",
   "saveTxFailed": "La transaction n'a pas pu être enregistrée",
   "deleteTxConfirm": "Supprimer définitivement la transaction ?",
   "deleteTxFailed": "La transaction n'a pas pu être supprimée",
