@@ -11,7 +11,7 @@ import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { useTenantGeneralForm } from "@/components/settings/tenant-general-settings";
 import { FEATURE_ICONS, subscriptionCostRp, SubscriptionDiscountNote, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
 import { MobileTenantCharges } from "@/components/settings/tenant-charges";
-import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { CATEGORY_COLORS, categoryHints, categoryLabels, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { Badge } from "@/components/ui/badge";
 import { CopyField } from "@/components/ui/copy-field";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
@@ -177,7 +177,9 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
 export function MobileTenantSubscription({ initialTenant }: { initialTenant: TenantSummary }) {
   const t = useTranslations("tenantSettings");
   const tMobile = useTranslations("mobile");
-  const storageHints = categoryHints(useTranslations("storage"));
+  const tStorage = useTranslations("storage");
+  const storageHints = categoryHints(tStorage);
+  const storageLabels = categoryLabels(tStorage);
   const locale = useLocale() as Locale;
   const router = useRouter();
   const { subscription, subscriptionLoading, storageUsage } = useTenantSubscriptionData(initialTenant.id);
@@ -245,7 +247,7 @@ export function MobileTenantSubscription({ initialTenant }: { initialTenant: Ten
             leading={<span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />}
             label={
               <span className="mobile-row-stack">
-                <span className="mobile-row-title">{category.label}</span>
+                <span className="mobile-row-title">{storageLabels[category.key]}</span>
                 <span className="mobile-row-meta mobile-row-meta-wrap">{storageHints[category.key]}</span>
               </span>
             }
