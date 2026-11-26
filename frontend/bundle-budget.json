@@ -126,6 +126,11 @@
       "css_gzip_kb": 59,
       "css_raw_kb": 378
     },
+    "/admin/(console)/security/incidents": {
+      "js_gzip_kb": 253,
+      "css_gzip_kb": 60,
+      "css_raw_kb": 375
+    },
     "/admin/(console)/security/policy": {
       "js_gzip_kb": 231,
       "css_gzip_kb": 59,

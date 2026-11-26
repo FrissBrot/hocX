@@ -10,6 +10,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { stepUpFetch } from "@/lib/admin-step-up";
+import { apiErrorCode } from "@/lib/files/file-import";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize, formatInteger } from "@/lib/utils/format";
 
@@ -88,7 +89,9 @@ export function AdminCloudImports({ initialOverview }: { initialOverview: AdminI
       setOverview(await browserApiFetch<AdminImportOverview>("/api/admin/cloud-imports"));
       showToast(t("cancelled"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("cancelFailed"), "error");
+      // Fachfehler als Code (not_found, invalid_status): Text aus fileImport.errors
+      const code = apiErrorCode(error);
+      showToast(code && tImport.has(`errors.${code}`) ? tImport(`errors.${code}`) : error instanceof Error ? error.message : t("cancelFailed"), "error");
     }
   }
 
