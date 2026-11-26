@@ -93,4 +93,25 @@ describe("DocumentVerificationSettings", () => {
     expect(screen.getByText("Nicht eingerichtet")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Prüf-Domain einrichten/ })).toHaveAttribute("href", "/tenant-settings/domains");
   });
+
+  it("zeigt Verifizierungs-, Aufhebungs- und Antragsdatum als Schweizer Kalendertag (nicht UTC)", () => {
+    // 23:30 UTC am 25.11. ist 00:30 am 26.11. in Zürich
+    const { unmount } = render(<DocumentVerificationSettings initialState={{ ...base, verified_at: "2026-11-25T23:30:00Z" }} />);
+    expect(screen.getByText("Verifiziert seit 26.11.2026")).toBeInTheDocument();
+    unmount();
+
+    const { unmount: unmountRevoked } = render(
+      <DocumentVerificationSettings initialState={{ ...base, revoked_at: "2026-11-25T23:30:00Z", revoked_reason: "admin" }} />
+    );
+    expect(screen.getByText(/am 26\.11\.2026 von hocX aufgehoben/)).toBeInTheDocument();
+    unmountRevoked();
+
+    render(
+      <DocumentVerificationSettings
+        initialState={{ ...base, request: { status: "pending", tenant_name: "Musikverein", message: null, requested_at: "2026-06-30T22:15:00Z", decided_at: null, decision_note: null } }}
+      />
+    );
+    // Sommerzeit: 22:15 UTC am 30.06. ist 00:15 am 01.07.
+    expect(screen.getByText(/Antrag vom 01\.07\.2026/)).toBeInTheDocument();
+  });
 });
