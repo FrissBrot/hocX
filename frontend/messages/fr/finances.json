@@ -99,6 +99,7 @@
   "amountLabel": "Montant",
   "createFineSuccess": "Amende enregistrée",
   "createFineFailed": "L'amende n'a pas pu être enregistrée",
+  "createFineDuplicate": "{name} a déjà une amende « {type} » dans ce procès-verbal.",
   "recordButton": "Enregistrer",
   "newTransactionTitle": "Nouvelle transaction",
   "editTransactionTitle": "Modifier la transaction",
