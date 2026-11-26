@@ -98,6 +98,7 @@
   "amountLabel": "Importo",
   "createFineSuccess": "Multa registrata",
   "createFineFailed": "Impossibile registrare la multa",
+  "createFineDuplicate": "{name} ha già una multa «{type}» in questo verbale.",
   "recordButton": "Registra",
   "newTransactionTitle": "Nuova transazione",
   "editTransactionTitle": "Modifica transazione",

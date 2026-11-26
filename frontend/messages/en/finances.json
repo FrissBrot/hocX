@@ -98,6 +98,7 @@
   "amountLabel": "Amount",
   "createFineSuccess": "Fine recorded",
   "createFineFailed": "Fine could not be recorded",
+  "createFineDuplicate": "{name} already has a “{type}” fine in these minutes.",
   "recordButton": "Record",
   "newTransactionTitle": "New transaction",
   "editTransactionTitle": "Edit transaction",
