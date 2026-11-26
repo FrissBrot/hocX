@@ -366,7 +366,7 @@ function BlockHistory({ history }: { history: AuthBlockHistory }) {
   );
 }
 
-function DurationField({
+export function DurationField({
   preset, custom, onPreset, onCustom,
 }: {
   preset: string;

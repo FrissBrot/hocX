@@ -25,7 +25,8 @@ export type StepUpPurpose =
   | "security-block"
   | "security-export"
   | "security-resolve"
-  | "cloud-import-cancel";
+  | "cloud-import-cancel"
+  | "security-incident";
 
 export const STEP_UP_HEADER = "X-Hocx-Step-Up";
 

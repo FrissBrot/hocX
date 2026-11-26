@@ -5,6 +5,13 @@ import type { AdminIconKey } from "@/components/ui/admin-shell-nav";
 /** Linienicons im Stil von nav-icons.tsx, nur für die Admin-Navigation. */
 export function AdminNavIcon({ name }: { name: AdminIconKey }) {
   const paths: Record<AdminIconKey, ReactNode> = {
+    // Vorfall: Fahne (Sicherheit › Vorfälle, 1.7)
+    incidents: (
+      <>
+        <path d="M5 21V4" />
+        <path d="M5 4.5h11l-2 4 2 4H5" />
+      </>
+    ),
     dashboard: (
       <>
         <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.5" />

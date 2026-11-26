@@ -623,6 +623,10 @@
         "title": "Écrire les dates de prise de vue dans les fichiers",
         "description": "Écrit les dates de prise de vue corrigées dans les fichiers image et y réécrit la date d’origine lors du rétablissement."
       },
+      "security_incident_retention": {
+        "title": "Conservation des incidents de sécurité",
+        "description": "Supprime les incidents de la protection de connexion, avec leur chronologie et leurs notes, 365 jours après la dernière activité (quotidien)."
+      },
       "auth_security_maintenance": {
         "title": "Nettoyage de la protection des connexions",
         "description": "Toutes les heures : supprime les événements de sécurité après 90 jours, les sessions terminées et les appareils longtemps inutilisés, et répare les compteurs sans expiration."
@@ -1699,7 +1703,8 @@
         "security-block": "Poser ou lever des blocages de connexion",
         "security-export": "Exporter les données de sécurité",
         "security-resolve": "Associer un pseudonyme à un compte",
-        "cloud-import-cancel": "Interrompre d’urgence une importation de fichiers"
+        "cloud-import-cancel": "Interrompre d’urgence une importation de fichiers",
+        "security-incident": "Traiter les incidents de sécurité (statut, responsable, notes)"
       }
     },
     "integrations": {

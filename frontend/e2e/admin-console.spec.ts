@@ -15,6 +15,7 @@ const ADMIN_PAGES = [
   "/admin/users",
   "/admin/admins",
   "/admin/security",
+  "/admin/security/incidents",
   "/admin/security/events",
   "/admin/security/blocks",
   "/admin/security/alerts",

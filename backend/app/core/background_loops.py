@@ -83,6 +83,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Leak-Prüfung bestehender Passwörter (1.5.2, Migration 0219, app/auth_security/breach.py).
     # 202600070: 038-069 sind teils von parallel entwickelten Jobs (1.6) belegt.
     "password_breach_recheck": 202600070,
+    # Aufbewahrung der Vorfälle des Anmeldeschutzes (1.7, Migration 0282, app/auth_security/incidents.py)
+    "security_incident_retention": 202600071,
     # Kamera-Kürzel für Altfotos (Migration 0253, services/camera_serial_backfill.py)
     "camera_serial_backfill": 202600051,
     # Foto-Standorte (Migration 0260_photo_places): Ortsdaten laden, Ortsnamen nachtragen.

@@ -79,16 +79,6 @@
       "platform": true,
       "admin_level": "O"
     },
-    "POST /api/admin/auth-security/alerts/ack": {
-      "handler": "admin_auth_security.acknowledge_alert",
-      "platform": true,
-      "admin_level": "W"
-    },
-    "POST /api/admin/auth-security/alerts/unack": {
-      "handler": "admin_auth_security.unacknowledge_alert",
-      "platform": true,
-      "admin_level": "W"
-    },
     "GET /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.auth_security_blocks",
       "platform": true,
@@ -161,6 +151,45 @@
       "step_up": "security-export",
       "serves_files": true
     },
+    "GET /api/admin/auth-security/incidents": {
+      "handler": "admin_auth_security.auth_security_incidents",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/incidents/stats": {
+      "handler": "admin_auth_security.auth_security_incident_stats",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/incidents/{incident_id}": {
+      "handler": "admin_auth_security.auth_security_incident_detail",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/assign": {
+      "handler": "admin_auth_security.assign_incident",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/block": {
+      "handler": "admin_auth_security.block_incident_network",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-block"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/notes": {
+      "handler": "admin_auth_security.add_incident_note",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/status": {
+      "handler": "admin_auth_security.change_incident_status",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
     "GET /api/admin/auth-security/overview": {
       "handler": "admin_auth_security.auth_security_overview",
       "platform": true,
@@ -168,6 +197,11 @@
     },
     "GET /api/admin/auth-security/policy": {
       "handler": "admin_auth_security.auth_security_policy",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/situation": {
+      "handler": "admin_auth_security.auth_security_situation",
       "platform": true,
       "admin_level": "O"
     },

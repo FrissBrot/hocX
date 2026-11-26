@@ -18,7 +18,8 @@
     "cashflow": "Ricavi e fatturazione",
     "users": "Cerca utenti",
     "admins": "Admin piattaforma",
-    "securityOverview": "Sicurezza",
+    "securityOverview": "Situazione",
+    "securityIncidents": "Incidenti",
     "securityEvents": "Eventi di accesso",
     "securityBlocks": "Blocchi",
     "securityAlerts": "Regole di allarme",
@@ -112,7 +113,7 @@
     "empty": "Niente di aperto.",
     "items": {
       "verifications_open": "{count, plural, one {# verifica aperta} other {# verifiche aperte}}",
-      "security_alerts": "{count, plural, one {# avviso di sicurezza} other {# avvisi di sicurezza}}",
+      "security_alerts": "{count, plural, one {# nuovo incidente di sicurezza} other {# nuovi incidenti di sicurezza}}",
       "operations_problems": "{count, plural, one {# problema di esercizio} other {# problemi di esercizio}}"
     }
   },

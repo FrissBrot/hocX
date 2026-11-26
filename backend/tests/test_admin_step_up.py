@@ -132,6 +132,11 @@ STEP_UP = {
     ("POST", "/api/admin/auth-security/events/{event_id}/resolve-subject"): "security-resolve",
     ("POST", "/api/admin/cloud-imports/{job_id}/cancel"): "cloud-import-cancel",
     ("POST", "/api/admin/auth-security/events/{event_id}/block"): "security-block",
+    # 1.7: Vorfälle (Status, Zuständig, Notizen) und Netzsperre aus dem Vorfall
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/status"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/assign"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/notes"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/block"): "security-block",
     # 1.5.1: Zurücksetzungslink statt Passwort setzen
     ("POST", "/api/admin/users/{user_id}/password-reset"): "user-credentials",
     ("POST", "/api/admin/tenants/import/authorize"): "tenant-import",
@@ -180,8 +185,6 @@ EXEMPT = {
     ("POST", "/api/admin/tenants"): "legt einen leeren Mandanten an (Konten darin brauchen user-manage)",
     ("POST", "/api/admin/tenants/import"): "verlangt ein Import-Ticket aus tenants/import/authorize (dort Passkey-Bestätigung, "
                                            "an Admin und Namen gebunden, einmalig)",
-    ("POST", "/api/admin/auth-security/alerts/ack"): "Quittung einer Warnung (Markierung), ändert keine Sperre, Meldung oder Daten; Audit-Log",
-    ("POST", "/api/admin/auth-security/alerts/unack"): "nimmt nur die Quittung zurück; Audit-Log",
     ("PATCH", "/api/admin/tenants/{tenant_id}"): "nur Name und Profilbild",
     ("PUT", "/api/admin/tenants/{tenant_id}/website-listing"): "Anzeige auf der Website",
     ("PUT", "/api/admin/tenants/{tenant_id}/features"): _COMMERCIAL,

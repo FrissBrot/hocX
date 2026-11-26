@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, SmallInteger, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Identity, Integer, SmallInteger, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -83,3 +83,42 @@ class AuthSession(Base):
     ip_net_hash: Mapped[str | None] = mapped_column(Text)
     user_agent_family: Mapped[str | None] = mapped_column(Text)
     country: Mapped[str | None] = mapped_column(Text)
+
+
+class SecurityIncident(Base):
+    """Vorfall des Anmeldeschutzes (Migration 0282, 1.7): je Regelschlüssel höchstens ein offener.
+    Schreiben nur über app.auth_security.incidents."""
+
+    __tablename__ = "security_incident"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    rule_key: Mapped[str] = mapped_column(Text, nullable=False)
+    rule: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str | None] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'new'"))
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    assignee_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    last_triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    trigger_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class SecurityIncidentActivity(Base):
+    """Zeitleiste eines Vorfalls (Migration 0282)."""
+
+    __tablename__ = "security_incident_activity"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    incident_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("security_incident.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    from_value: Mapped[str | None] = mapped_column(Text)
+    to_value: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)

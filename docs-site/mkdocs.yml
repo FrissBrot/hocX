@@ -127,6 +127,7 @@ nav:
       - Dokumentverwaltung-Testbook: technik/dokumentverwaltung-testbook.md
       - Release-1.2.0-Testbook: technik/release-1.2.0-testbook.md
       - Sicherheit: technik/sicherheit.md
+      - Sicherheitsbereich (Vorfälle, Lagebild): technik/sicherheitsbereich.md
       - Dokumentverwaltung: technik/dokumente.md
       - Dateispeicher (S3) & Wartung:
           - Übersicht: technik/storage/index.md

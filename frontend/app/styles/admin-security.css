@@ -76,10 +76,6 @@
 }
 
 
-/* Quittierte Warnung (1.5.1): abgesetzt, bleibt lesbar */
-.admin-alert-acknowledged td {
-  color: var(--muted);
-}
 /* Ereignisse: Risikogründe unter dem Wert (Codes aus auth_event.risk_reasons, übersetzt) */
 .admin-security-reasons { display: block; }
 
@@ -860,4 +856,563 @@
    wie die Tabelle (390 px: 1112 px) */
 .admin-security-panel .table-shell {
   position: relative;
+}
+
+/* ── 1.7 Vorfälle (Design «hocX Sicherheit Vorfälle») ──────────────────────────────── */
+
+.admin-incident-stats,
+.admin-situation-kpis {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-incident-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.admin-incident-search {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.admin-incident-filter-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-incident-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-incident-chips .button-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-incident-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.admin-incident-chips .admin-incident-dot { margin-right: 0; }
+.admin-incident-dot-critical { background: var(--danger); }
+.admin-incident-dot-warning { background: var(--warning); }
+
+.admin-incident-row-selected td { background: var(--accent-soft); }
+.admin-incident-row-closed td { color: var(--muted); }
+
+.admin-incident-spark {
+  display: inline-flex;
+  width: 72px;
+  height: 22px;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.admin-incident-spark-bar {
+  min-width: 0;
+  flex: 1;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+}
+
+.admin-incident-row-closed .admin-incident-spark-bar { background: var(--border-strong); }
+
+.admin-incident-board {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.admin-incident-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.admin-incident-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-incident-column-list,
+.admin-situation-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Karte als <button>: eigene Klasse ohne button-Präfix (DESIGN.md Abschnitt 7) */
+.admin-incident-card {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-incident-card:hover { border-color: var(--border-strong); }
+.admin-incident-card-selected { border-color: var(--accent); background: var(--accent-soft); }
+.admin-incident-card-critical { border-left: 3px solid var(--danger); }
+.admin-incident-card-warning { border-left: 3px solid var(--warning); }
+
+.admin-incident-card-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.admin-incident-card-title {
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-incident-head {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-incident-badges,
+.admin-incident-head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-incident-id {
+  font-weight: 600;
+}
+
+.admin-incident-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.admin-incident-assignee {
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+
+.admin-incident-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.admin-incident-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.admin-incident-facts dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-incident-facts dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-incident-timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-incident-timeline-item {
+  display: grid;
+  grid-template-columns: minmax(0, 110px) 12px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+}
+
+.admin-incident-timeline-time {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-incident-timeline-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.admin-incident-kind-rule .admin-incident-timeline-dot,
+.admin-incident-kind-auto .admin-incident-timeline-dot { border-radius: var(--radius-xs); }
+.admin-incident-kind-rule .admin-incident-timeline-dot { background: var(--warning); }
+.admin-incident-kind-auto .admin-incident-timeline-dot { background: var(--violet); }
+.admin-incident-kind-person .admin-incident-timeline-dot { background: var(--chart-2); }
+.admin-incident-kind-failure .admin-incident-timeline-dot { background: var(--danger); }
+.admin-incident-kind-success .admin-incident-timeline-dot { background: var(--success); }
+
+.admin-incident-timeline-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.admin-incident-timeline-kind {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.admin-incident-participants {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-incident-participant-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.admin-incident-participant-group h4 { margin: 0; }
+
+.admin-incident-stages,
+.admin-situation-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-situation-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.admin-incident-stage,
+.admin-situation-step {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.admin-incident-stage-bar,
+.admin-situation-step-bar {
+  height: 6px;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-incident-stage-reached .admin-incident-stage-bar { background: var(--violet); }
+.admin-incident-stage-current,
+.admin-situation-step[aria-current="step"] { color: var(--text); font-weight: 600; }
+
+.admin-incident-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-incident-notes li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg);
+  overflow-wrap: anywhere;
+}
+
+/* ── 1.7 Lagebild (Design «hocX Sicherheit Lagebild») ──────────────────────────────── */
+
+.admin-situation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-situation-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-situation-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.admin-situation-live-dot-on { background: var(--success); }
+
+.admin-situation-top {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.admin-situation-posture {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.admin-situation-posture h2 { margin: 0; }
+.admin-situation-posture p { margin: 0; }
+.admin-situation-posture-badge { align-self: flex-start; font-size: var(--text-md); }
+.admin-situation-posture-attack,
+.admin-situation-posture-attack_mode { border-color: var(--danger); }
+.admin-situation-posture-elevated { border-color: var(--warning); }
+
+.admin-situation-step-on .admin-situation-step-bar { background: var(--success); }
+.admin-situation-posture-elevated .admin-situation-step-on .admin-situation-step-bar { background: var(--warning); }
+.admin-situation-posture-attack .admin-situation-step-on .admin-situation-step-bar,
+.admin-situation-posture-attack_mode .admin-situation-step-on .admin-situation-step-bar { background: var(--danger); }
+
+.admin-situation-kpis .sparkline { margin-top: var(--space-1); }
+
+.admin-situation-incidents,
+.admin-situation-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.admin-situation-incidents { grid-template-columns: minmax(0, 360px) minmax(0, 1fr); }
+
+.admin-situation-chart { min-width: 0; }
+
+.admin-situation-series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-situation-series .button-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-situation-fill-failures { background: var(--danger); }
+.admin-situation-fill-blocked { background: var(--warning); }
+.admin-situation-fill-challenged { background: var(--violet); }
+.admin-situation-fill-successes { background: var(--success); }
+
+.admin-situation-bars { height: 140px; }
+
+.admin-situation-markers {
+  position: relative;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-situation-markers li {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.admin-situation-marker {
+  padding: 0 var(--space-1);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-xs);
+  background: var(--panel-solid);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-situation-marker-critical { color: var(--danger-fg); }
+.admin-situation-marker-warning { color: var(--warning-fg); }
+
+.admin-situation-ticks {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-situation-ticks span {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.admin-situation-heatmap-scroll {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+
+.admin-situation-heatmap {
+  display: flex;
+  min-width: 360px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-situation-heatmap-row {
+  display: grid;
+  grid-template-columns: 28px repeat(24, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
+}
+
+.admin-situation-heatmap-day,
+.admin-situation-heatmap-axis span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-situation-heat {
+  display: inline-block;
+  min-width: 10px;
+  height: 14px;
+  border-radius: var(--radius-xs);
+}
+
+.admin-situation-heat-0 { background: var(--neutral-bg); }
+.admin-situation-heat-1 { background: color-mix(in oklab, var(--danger) 25%, transparent); }
+.admin-situation-heat-2 { background: color-mix(in oklab, var(--danger) 45%, transparent); }
+.admin-situation-heat-3 { background: color-mix(in oklab, var(--danger) 70%, transparent); }
+.admin-situation-heat-4 { background: var(--danger); }
+
+.admin-situation-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.admin-situation-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-situation-rule {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.admin-situation-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-situation-rule-value { font-size: var(--text-xs); }
+.admin-situation-rule-fill-fired { background: var(--danger); }
+.admin-situation-rule-fill-near { background: var(--warning); }
+.admin-situation-rule-fill-quiet { background: var(--success); }
+
+.admin-situation-share {
+  display: block;
+  min-width: 60px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.admin-situation-share-fill,
+.admin-situation-share-home {
+  display: block;
+  height: 100%;
+}
+
+.admin-situation-share-fill { background: var(--danger); }
+.admin-situation-share-home { background: var(--chart-2); }
+
+@media (max-width: 900px) {
+  .admin-situation-top,
+  .admin-situation-incidents,
+  .admin-situation-row,
+  .admin-incident-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

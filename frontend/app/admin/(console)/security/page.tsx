@@ -1,16 +1,15 @@
-import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 
-import { SecurityOverview } from "@/components/admin/security/security-overview";
-import { SecurityPageHeader } from "@/components/admin/security/security-page-header";
+import { SecuritySituationView } from "@/components/admin/security/security-situation";
 
-// Sicherheitsbereich (Plan §2 D): Übersicht über den Anmeldeschutz der Plattform. Das persönliche
-// Profil liegt seit dem Redesign unter /admin/account.
-export default async function AdminSecurityPage() {
-  const t = await getTranslations("adminSecurity.overview");
+// Lagebild (1.7, ersetzt die Übersicht aus Plan §2 D): Zeitraum, Vorfall-Auswahl und Warteschlange in
+// der URL (useSearchParams braucht eine Suspense-Grenze). Das persönliche Profil liegt unter /admin/account.
+export default function AdminSecurityPage() {
   return (
-    <section className="panel section-stack">
-      <SecurityPageHeader title={t("title")} description={t("description")} />
-      <SecurityOverview />
+    <section className="panel section-stack admin-security-panel">
+      <Suspense fallback={null}>
+        <SecuritySituationView />
+      </Suspense>
     </section>
   );
 }

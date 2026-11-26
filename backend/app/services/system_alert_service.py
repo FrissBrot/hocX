@@ -447,8 +447,9 @@ def current_problems(db: Session, snapshot: SystemHealthSnapshot | None, *, now:
 _reported_threat_error: str | None = None
 
 
-def _auth_threats(db: Session) -> list:
-    """Alarmregeln des Anmeldeschutzes; ein Fehler darf die übrigen Alarme nicht verhindern."""
+def _auth_threats(db: Session) -> list | None:
+    """Alarmregeln des Anmeldeschutzes; ein Fehler darf die übrigen Alarme nicht verhindern (None =
+    Erkennung fehlgeschlagen, derive_problems behandelt das wie keine Treffer)."""
     global _reported_threat_error
     from app.auth_security import threats
 
@@ -460,12 +461,29 @@ def _auth_threats(db: Session) -> list:
         if error != _reported_threat_error:
             _reported_threat_error = error
             record_system_error(db, exc=exc)
-        return []
+        return None
     _reported_threat_error = None
     return result
 
 
+def _correlate_incidents(db: Session, auth_threats: list | None, now: datetime) -> None:
+    """Alarmregeln zu Vorfällen bündeln (1.7, app/auth_security/incidents.py). Ist die Erkennung
+    fehlgeschlagen (None), bleibt alles, wie es ist - sonst klängen alle Vorfälle scheinbar ab. Ein
+    Fehler hier darf ntfy nicht verhindern und landet im Fehlerprotokoll."""
+    if auth_threats is None:
+        return
+    from app.auth_security import incidents
+
+    try:
+        incidents.correlate(db, auth_threats, now=now)
+    except Exception as exc:  # noqa: BLE001 - Monitor-Durchlauf muss weiterlaufen
+        db.rollback()
+        record_system_error(db, exc=exc)
+
+
 def _click_path(source: str) -> str:
+    if source == "auth":
+        return "/admin/security/incidents"
     return "/admin/jobs" if source == "job" else "/admin/system"
 
 
@@ -485,9 +503,10 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
     notification_settings = settings_service.get_row(db)
     reminder = timedelta(hours=notification_settings.reminder_hours) if notification_settings.reminder_hours else None
 
+    auth_threats = _auth_threats(db)
     problems = {problem.key: problem for problem in derive_problems(
         snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now),
-        auth_threats=_auth_threats(db),
+        auth_threats=auth_threats,
     )}
     states = {row.problem_key: row for row in db.scalars(select(SystemAlertState))}
     # Nachrichten mit Titelpräfix für die in diesem Durchlauf neu angelegten Ereignisse.
@@ -559,6 +578,7 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
     for event, message in fresh_events:
         fresh_messages[event.id] = message
     db.commit()
+    _correlate_incidents(db, auth_threats, now)
 
     if not notification_settings.ntfy_enabled:
         return

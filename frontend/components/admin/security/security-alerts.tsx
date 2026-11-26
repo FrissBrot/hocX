@@ -1,41 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
-import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { useToast } from "@/contexts/toast-context";
 import { useAdminResource } from "@/components/admin/security/use-admin-resource";
-import { browserApiFetch } from "@/lib/api/client";
+import { incidentLabel, statusVariant } from "@/lib/admin/security-incidents";
 import { formatDateTime } from "@/lib/utils/format";
 import type { AuthAlert } from "@/types/admin-security";
 
 const KNOWN_RULES = new Set(["stuffing", "spraying", "account_attack", "admin_mfa", "admin_new_device", "blocks", "network", "cross_tenant", "tenant", "limiter"]);
 
 /** Tabelle der ausgelösten Alarmregeln. Titel kommen aus den Übersetzungen (je Regel), der
- * Schlüssel `auth:<regel>[:<pseudonym>]` entspricht dem Problemschlüssel im Systemmonitor.
- * Mit `onToggleAck` (nur Warnungsseite, owner) lassen sich Warnungen quittieren (1.5.1). */
-export function SecurityAlertList({
-  alerts,
-  loading,
-  onToggleAck,
-}: {
-  alerts: AuthAlert[];
-  loading?: boolean;
-  onToggleAck?: (alert: AuthAlert) => void;
-}) {
+ * Schlüssel `auth:<regel>[:<pseudonym>]` entspricht dem Problemschlüssel im Systemmonitor. Ab 1.7
+ * zeigt jede Warnung ihren Vorfall (Status und Zuständig dort, statt der Quittung aus 1.5.1). */
+export function SecurityAlertList({ alerts, loading }: { alerts: AuthAlert[]; loading?: boolean }) {
   const t = useTranslations("adminSecurity");
   const locale = useLocale();
-  const columns = [t("alerts.columns.severity"), t("alerts.columns.rule"), t("alerts.columns.subject"), t("alerts.columns.status"), t("alerts.columns.key")];
-  if (onToggleAck) columns.push(t("alerts.columns.actions"));
+  const columns = [t("alerts.columns.severity"), t("alerts.columns.rule"), t("alerts.columns.subject"), t("alerts.columns.incident"), t("alerts.columns.key")];
   return (
     <DataTable columns={columns} emptyMessage={loading ? undefined : t("alerts.empty")}>
-      {/* Quittierte Warnungen abgesetzt am Ende, bis die Regel neu auslöst */}
-      {[...alerts].sort((a, b) => Number(Boolean(a.acknowledged_at)) - Number(Boolean(b.acknowledged_at))).map((alert) => (
-        <tr key={alert.key} className={alert.acknowledged_at ? "admin-alert-acknowledged" : undefined}>
+      {alerts.map((alert) => (
+        <tr key={alert.key}>
           <td>
             <Badge variant={alert.severity === "critical" ? "danger" : "warning"} dot>
               {t(`severity.${alert.severity}`)}
@@ -53,16 +42,16 @@ export function SecurityAlertList({
             ) : null}
           </td>
           <td>
-            {alert.acknowledged_at ? (
+            {alert.incident ? (
               <>
-                <Badge variant="neutral">{t("alerts.acknowledged")}</Badge>
-                <div className="muted admin-cell-sub">
-                  {t("alerts.acknowledgedBy", { name: alert.acknowledged_by ?? "—", time: formatDateTime(alert.acknowledged_at, locale) })}
-                </div>
-                {alert.acknowledged_note ? <div className="muted admin-cell-sub">{t("alerts.noteShown", { note: alert.acknowledged_note })}</div> : null}
+                <Link href={`/admin/security/incidents?incident=${alert.incident.id}` as Route} className="admin-security-inline-link">
+                  {incidentLabel(alert.incident.id)}
+                </Link>{" "}
+                <Badge variant={statusVariant(alert.incident.status)} dot>{t(`statuses.${alert.incident.status}`)}</Badge>
+                {alert.incident.assignee ? <div className="muted admin-cell-sub">{t("alerts.assignee", { name: alert.incident.assignee })}</div> : null}
               </>
             ) : (
-              <Badge variant="warning">{t("alerts.open")}</Badge>
+              <span className="muted">{t("alerts.noIncident")}</span>
             )}
             {alert.clears_at && alert.window_minutes ? (
               <div className="muted admin-cell-sub">
@@ -71,80 +60,25 @@ export function SecurityAlertList({
             ) : null}
           </td>
           <td><code>{alert.key}</code></td>
-          {onToggleAck ? (
-            <td>
-              <button type="button" className="button-secondary" onClick={() => onToggleAck(alert)}>
-                {alert.acknowledged_at ? t("alerts.reopen") : t("alerts.acknowledge")}
-              </button>
-            </td>
-          ) : null}
         </tr>
       ))}
     </DataTable>
   );
 }
 
-export function SecurityAlertsView({ canWrite = true }: { canWrite?: boolean }) {
+export function SecurityAlertsView() {
   const t = useTranslations("adminSecurity");
-  const showToast = useToast();
   const alerts = useAdminResource<AuthAlert[]>("/api/admin/auth-security/alerts");
-  const [acknowledging, setAcknowledging] = useState<AuthAlert | null>(null);
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
   if (alerts.forbidden) return <StatusBanner tone="neutral" message={t("ownerOnly")} />;
-
-  async function send(alert: AuthAlert, acknowledge: boolean, text?: string) {
-    setBusy(true);
-    try {
-      await browserApiFetch(`/api/admin/auth-security/alerts/${acknowledge ? "ack" : "unack"}`, {
-        method: "POST",
-        body: JSON.stringify(acknowledge && text ? { key: alert.key, note: text } : { key: alert.key }),
-      });
-      showToast(acknowledge ? t("alerts.acknowledgedToast") : t("alerts.reopenedToast"), "success");
-      setAcknowledging(null);
-      setNote("");
-      alerts.reload();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function toggleAck(alert: AuthAlert) {
-    // Quittieren mit optionaler Notiz (1.5.1, bleibt in 1.6; in 1.7 wird daraus der Vorfall-Status)
-    if (alert.acknowledged_at) void send(alert, false);
-    else setAcknowledging(alert);
-  }
-
   return (
     <section className="card section-stack" aria-labelledby="security-open-alerts">
       <h2 id="security-open-alerts" className="section-title">{t("alerts.openTitle")}</h2>
       {alerts.failed ? <StatusBanner tone="error" message={t("loadFailed")} /> : null}
-      <p className="muted">{t("alerts.ackHelp")}</p>
+      <p className="muted">{t("alerts.incidentHelp")}</p>
       <div className="admin-security-toolbar">
         <button type="button" className="button-secondary" onClick={alerts.reload}>{t("refresh")}</button>
       </div>
-      <SecurityAlertList alerts={alerts.data ?? []} loading={alerts.loading} onToggleAck={canWrite ? toggleAck : undefined} />
-      <Modal open={acknowledging !== null} title={t("alerts.acknowledgeTitle")} description={t("alerts.acknowledgeConfirm")} onClose={() => setAcknowledging(null)}>
-        <ModalSaveForm
-          className="section-stack"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (acknowledging) return send(acknowledging, true, note.trim() || undefined);
-          }}
-        >
-          <label className="field-stack">
-            <span className="field-label">{t("alerts.noteLabel")}</span>
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} />
-            <span className="field-help">{t("alerts.noteHelp")}</span>
-          </label>
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setAcknowledging(null)}>{t("blocks.cancel")}</button>
-            <button type="submit" className="button-primary" disabled={busy}>{t("alerts.acknowledge")}</button>
-          </div>
-        </ModalSaveForm>
-      </Modal>
+      <SecurityAlertList alerts={alerts.data ?? []} loading={alerts.loading} />
     </section>
   );
 }

@@ -275,6 +275,8 @@ class Settings(BaseSettings):
     auth_step_up_admin_minutes: int = 15
     # Sicherheitsereignisse (auth_event): Aufbewahrung
     auth_event_retention_days: int = 90
+    # Vorfälle des Anmeldeschutzes samt Notizen (1.7, Migration 0282): ab letzter Aktivität
+    security_incident_retention_days: int = 365
     # Alarmregeln (Abschnitt 10.3)
     auth_alert_stuffing_min: int = 100
     auth_alert_stuffing_networks: int = 20

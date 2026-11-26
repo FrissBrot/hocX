@@ -623,6 +623,10 @@
         "title": "Aufnahmedatum in Dateien schreiben",
         "description": "Schreibt korrigierte Aufnahmedaten in die Bilddateien und stellt beim Wiederherstellen das ursprüngliche Datum in der Datei wieder her."
       },
+      "security_incident_retention": {
+        "title": "Aufbewahrung Sicherheitsvorfälle",
+        "description": "Löscht Vorfälle des Anmeldeschutzes samt Zeitleiste und Notizen 365 Tage nach der letzten Aktivität (täglich)."
+      },
       "auth_security_maintenance": {
         "title": "Anmeldeschutz aufräumen",
         "description": "Stündlich: löscht Sicherheitsereignisse nach 90 Tagen, beendete Sitzungen und lange unbenutzte Geräte und repariert Zähler ohne Ablauf."
@@ -1699,7 +1703,8 @@
         "security-block": "Anmeldesperren setzen oder aufheben",
         "security-export": "Sicherheitsdaten exportieren",
         "security-resolve": "Pseudonym einem Konto zuordnen",
-        "cloud-import-cancel": "Datei-Import notfallmässig abbrechen"
+        "cloud-import-cancel": "Datei-Import notfallmässig abbrechen",
+        "security-incident": "Sicherheitsvorfälle bearbeiten (Status, Zuständig, Notizen)"
       }
     },
     "integrations": {

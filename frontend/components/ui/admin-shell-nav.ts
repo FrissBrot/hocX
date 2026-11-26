@@ -12,7 +12,7 @@ export type AdminIconKey =
   | "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents"
   | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "security" | "storage"
   | "backups" | "maintenance" | "analytics" | "settings" | "delivery" | "blocks" | "events" | "alerts"
-  | "policy" | "audit" | "account";
+  | "policy" | "audit" | "account" | "incidents";
 
 /** Zähler aus GET /api/admin/nav-counts */
 export type AdminNavCountKey = "tenants" | "verifications_open" | "security_alerts" | "operations_problems";
@@ -66,9 +66,10 @@ const NAV: AdminNavGroup[] = [
     badge: "security_alerts",
     links: [
       { href: "/admin/security", labelKey: "nav.securityOverview", icon: "security" },
+      { href: "/admin/security/incidents", labelKey: "nav.securityIncidents", icon: "incidents", ownerOnly: true, badge: "security_alerts" },
       { href: "/admin/security/events", labelKey: "nav.securityEvents", icon: "events", ownerOnly: true },
       { href: "/admin/security/blocks", labelKey: "nav.securityBlocks", icon: "blocks", ownerOnly: true },
-      { href: "/admin/security/alerts", labelKey: "nav.securityAlerts", icon: "alerts", ownerOnly: true, badge: "security_alerts" },
+      { href: "/admin/security/alerts", labelKey: "nav.securityAlerts", icon: "alerts", ownerOnly: true },
       { href: "/admin/security/audit", labelKey: "nav.auditLog", icon: "audit", ownerOnly: true },
       { href: "/admin/security/policy", labelKey: "nav.securityPolicy", icon: "policy", ownerOnly: true },
     ],
@@ -176,7 +177,7 @@ export function attentionItems(counts: AdminNavCounts | null, role: AdminRole | 
     if (typeof value === "number" && value > 0) items.push({ key, count: value, href });
   };
   push("verifications_open", "/admin/verifications");
-  push("security_alerts", role === "owner" ? "/admin/security/alerts" : "/admin/security");
+  push("security_alerts", role === "owner" ? "/admin/security/incidents?status=new" : "/admin/security");
   push("operations_problems", role === "owner" ? "/admin/system" : "/admin");
   return items;
 }

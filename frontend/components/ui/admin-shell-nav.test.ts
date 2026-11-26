@@ -53,7 +53,7 @@ describe("admin-shell-nav", () => {
     expect(groupCount(nav.find((group) => group.id === "operations")!, counts)).toBeNull();
     const verifications = nav.find((group) => group.id === "tenants")!.links.find((link) => link.href === "/admin/verifications")!;
     expect(linkCount(verifications, counts)).toBeNull();
-    expect(attentionItems(counts, "owner")).toEqual([{ key: "security_alerts", count: 2, href: "/admin/security/alerts" }]);
+    expect(attentionItems(counts, "owner")).toEqual([{ key: "security_alerts", count: 2, href: "/admin/security/incidents?status=new" }]);
     expect(attentionItems(counts, "support")[0].href).toBe("/admin/security");
     expect(attentionItems(null, "owner")).toEqual([]);
   });

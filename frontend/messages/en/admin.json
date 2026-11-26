@@ -623,6 +623,10 @@
         "title": "Write capture dates to files",
         "description": "Writes corrected capture dates into the image files and writes the original date back when it is restored."
       },
+      "security_incident_retention": {
+        "title": "Security incident retention",
+        "description": "Deletes sign-in protection incidents with their timeline and notes 365 days after the last activity (daily)."
+      },
       "auth_security_maintenance": {
         "title": "Sign-in protection cleanup",
         "description": "Hourly: deletes security events after 90 days, ended sessions and long-unused devices, and repairs counters without expiry."
@@ -1699,7 +1703,8 @@
         "security-block": "Set or lift sign-in blocks",
         "security-export": "Export security data",
         "security-resolve": "Map pseudonym to an account",
-        "cloud-import-cancel": "Emergency-cancel a file import"
+        "cloud-import-cancel": "Emergency-cancel a file import",
+        "security-incident": "Handle security incidents (status, assignee, notes)"
       }
     },
     "integrations": {

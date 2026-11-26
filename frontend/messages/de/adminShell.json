@@ -18,7 +18,8 @@
     "cashflow": "Umsatz & Abrechnung",
     "users": "Benutzer suchen",
     "admins": "Plattform-Admins",
-    "securityOverview": "Sicherheit",
+    "securityOverview": "Lagebild",
+    "securityIncidents": "Vorfälle",
     "securityEvents": "Anmeldeereignisse",
     "securityBlocks": "Sperren",
     "securityAlerts": "Alarmregeln",
@@ -112,7 +113,7 @@
     "empty": "Nichts offen.",
     "items": {
       "verifications_open": "{count, plural, one {# Prüfung offen} other {# Prüfungen offen}}",
-      "security_alerts": "{count, plural, one {# Sicherheitswarnung} other {# Sicherheitswarnungen}}",
+      "security_alerts": "{count, plural, one {# neuer Sicherheitsvorfall} other {# neue Sicherheitsvorfälle}}",
       "operations_problems": "{count, plural, one {# Problem im Betrieb} other {# Probleme im Betrieb}}"
     }
   },

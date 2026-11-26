@@ -18,7 +18,8 @@
     "cashflow": "Revenue & billing",
     "users": "Find users",
     "admins": "Platform admins",
-    "securityOverview": "Security",
+    "securityOverview": "Situation",
+    "securityIncidents": "Incidents",
     "securityEvents": "Sign-in events",
     "securityBlocks": "Blocks",
     "securityAlerts": "Alert rules",
@@ -112,7 +113,7 @@
     "empty": "Nothing open.",
     "items": {
       "verifications_open": "{count, plural, one {# review open} other {# reviews open}}",
-      "security_alerts": "{count, plural, one {# security alert} other {# security alerts}}",
+      "security_alerts": "{count, plural, one {# new security incident} other {# new security incidents}}",
       "operations_problems": "{count, plural, one {# operations problem} other {# operations problems}}"
     }
   },

@@ -10,6 +10,22 @@ Installationen aktualisieren können.
 
 ### Hinzugefügt
 
+- **Sicherheit › Vorfälle (Plattform-Admin):** Ausgelöste Alarmregeln des Anmeldeschutzes werden
+  automatisch zu Vorfällen gebündelt, genau einer pro Regel und Quelle. Jeder Vorfall hat Status
+  (Neu, In Bearbeitung, Erledigt, Fehlalarm), eine zuständige Person, Notizen und eine Zeitleiste
+  mit Auslösungen, Abklingen, Sperren und Änderungen. Liste oder Board, Filter nach Status, Schwere
+  und Zuständigkeit (in der Adresse), Kennzahlen offen, ohne Zuständige, Ø bis Übernahme, Ø bis
+  erledigt und Fehlalarm-Quote. Aus einem Netz-Vorfall lässt sich das Netz manuell sperren
+  (Stufe 5). Jede Änderung braucht den Passkey und steht im Audit-Log. Nur für Owner. Vorfälle
+  werden 365 Tage nach der letzten Aktivität gelöscht (neuer Job «Aufbewahrung Sicherheitsvorfälle»),
+  mit einem Mandanten auch seine Vorfälle (Migration 0282).
+- **Sicherheit › Lagebild** ersetzt die bisherige Sicherheits-Übersicht: Lage-Stufe (ruhig, erhöht,
+  Angriff, Angriffsmodus), Kennzahlen für 24 h oder 7 Tage mit Vorperiode und Verlauf,
+  Vorfall-Warteschlange mit Detail, Verlauf der Anmeldungen mit Vorfall-Markierungen, Fehlversuche
+  nach Wochentag und Stunde, Messwert jeder Alarmregel gegen die Schwelle, Herkunft nach Land sowie
+  auffällige Netze und Konten. Jedes Diagramm mit Tabelle und Zusammenfassung; Live-Aktualisierung
+  alle 30 Sekunden, abschaltbar.
+
 - **Datei-Import direkt aus Microsoft OneDrive und SharePoint (P1):** Neue Quelle «Microsoft
   OneDrive / SharePoint» im Import-Assistenten für private Microsoft-Konten, OneDrive for Business und
   SharePoint-Bibliotheken. Anmeldung direkt bei Microsoft (OAuth mit PKCE), danach ein eigener
@@ -89,8 +105,20 @@ Installationen aktualisieren können.
   Import behält die Kontobindung (ein anderes Konto kann den Auftrag nicht übernehmen); Tokens
   werden bei Rechteverlust bzw. gesperrten Konten sofort gelöscht.
 
+### Geändert
+
+- **Sicherheitswarnungen quittieren entfällt:** Status und Zuständigkeit eines Vorfalls ersetzen die
+  Quittung aus 1.5.1. Die Alarmregeln-Seite verlinkt zu jeder Warnung ihren Vorfall; Glocke und
+  Navigationszahl zählen neue Vorfälle. Bestehende Quittungen werden als «In Bearbeitung» übernommen.
+  ntfy-Meldungen des Anmeldeschutzes verlinken die Vorfall-Seite.
+
 ### Update
 
+- Sicherheitsvorfälle: Migration `0282_security_incidents` (Tabellen `security_incident`,
+  `security_incident_activity` mit RLS, Übernahme aktiver Quittungen aus `system_alert_state`),
+  Revision nach `0281_cloud_import_connections`. Neue optionale Einstellung
+  `SECURITY_INCIDENT_RETENTION_DAYS` (Standard 365), neuer Job `security_incident_retention`.
+  Entfernte Routen: `POST /api/admin/auth-security/alerts/ack` und `/unack`.
 - Cloud-Import (P1): Migration `0281_cloud_import_connections` (Tabelle `import_connection` mit RLS und
   verschlüsselten Tokens; `import_job` erhält Verbindung, Auswahl, Auflist-Stand, Drosselung und die
   Status `listing`/`needs_reauth`, alle Quellwerte für 1.7 im CHECK; `import_item` erhält die

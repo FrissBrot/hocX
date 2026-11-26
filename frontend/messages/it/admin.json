@@ -623,6 +623,10 @@
         "title": "Scrivere le date di scatto nei file",
         "description": "Scrive le date di scatto corrette nei file immagine e, al ripristino, riscrive nel file la data originale."
       },
+      "security_incident_retention": {
+        "title": "Conservazione degli incidenti di sicurezza",
+        "description": "Elimina gli incidenti della protezione degli accessi con cronologia e note 365 giorni dopo l’ultima attività (ogni giorno)."
+      },
       "auth_security_maintenance": {
         "title": "Pulizia protezione accessi",
         "description": "Ogni ora: elimina gli eventi di sicurezza dopo 90 giorni, le sessioni terminate e i dispositivi inutilizzati da tempo e ripara i contatori senza scadenza."
@@ -1699,7 +1703,8 @@
         "security-block": "Impostare o rimuovere blocchi di accesso",
         "security-export": "Esportare dati di sicurezza",
         "security-resolve": "Associare uno pseudonimo a un account",
-        "cloud-import-cancel": "Interrompere d’emergenza un’importazione di file"
+        "cloud-import-cancel": "Interrompere d’emergenza un’importazione di file",
+        "security-incident": "Gestire gli incidenti di sicurezza (stato, responsabile, note)"
       }
     },
     "integrations": {

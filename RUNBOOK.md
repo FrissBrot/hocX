@@ -1358,6 +1358,21 @@ selbst entfernt und neu baut. Der Plattform-Login ist von den App-IP-Sperren
 ausgenommen (Ziti ist der stärkere Nachweis). Wer nicht mehr hineinkommt, obwohl das Konto in Ordnung
 ist: vom gewohnten Gerät anmelden (bekannte Geräte sind ausgenommen) oder `reset-account`.
 
+**Konsole › Sicherheit (1.7): Vorfälle und Lagebild.** Der Systemmonitor bündelt jede ausgelöste
+Alarmregel zu genau einem offenen Vorfall je Regelschlüssel `auth:<regel>[:<pseudonym>]`
+(Migration `0282_security_incidents`, Tabellen `security_incident`, `security_incident_activity`).
+Vorfälle schliessen nie von selbst; nach dem Abschliessen eröffnet erst ein neues auslösendes Ereignis
+einen neuen. Status, Zuständig, Notizen und «Netz sperren (Stufe 5)» nur für Owner mit Passkey
+(`security-incident` bzw. `security-block`), je Änderung ein Audit-Eintrag `admin.security_incident_*`
+(Notiztext nicht im Audit-Log). Glocke und Nav-Zahl zählen Vorfälle im Status «Neu» (ersetzt die
+Quittung aus 1.5.1; 0282 hat aktive Quittungen als «In Bearbeitung» übernommen). Aufbewahrung:
+Job `security_incident_retention` (täglich) löscht Vorfälle 365 Tage nach der letzten Aktivität
+(`SECURITY_INCIDENT_RETENTION_DAYS`); mit einem Mandanten verschwinden seine Vorfälle (CASCADE).
+ntfy-Meldungen des Anmeldeschutzes verlinken jetzt `/admin/security/incidents`. Das Lagebild
+(`/admin/security`) liest `/api/admin/auth-security/situation?range=24h|7d` (30 s Cache). Vorgehen
+bei einem neuen Vorfall: übernehmen, «Alle Ereignisse» prüfen, bei einem fremden Netz ggf. sperren,
+mit Begründung «Erledigt» oder «Fehlalarm» setzen. Details: `docs-site/docs/technik/sicherheitsbereich.md`.
+
 **Redis voll (noeviction):** Die Zählerschlüssel sind kurz und laufen nach höchstens 2 h ab; der Check
 `auth_protection` warnt ab 70 %. Optional kann ein eigenes Redis nur für die Zähler betrieben werden
 (`RATELIMIT_REDIS_URL` in `backend/app/core/config.py`, z. B. mit `maxmemory-policy volatile-lru`):
