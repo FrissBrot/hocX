@@ -177,6 +177,16 @@ export function safeReturnPath(from: string | null | undefined): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+// Feste 403-Texte der zentralen Prüfungen (backend app/core/security.py: require_permission,
+// require_feature). Sie haben keinen Code und landeten roh im Toast («Permission required»,
+// «Feature 'custom_domain' nicht gebucht»); hier in die UI-Sprache übersetzt.
+function centralForbiddenMessage(detail: string): string | null {
+  if (detail === "Permission required") return clientMessage("permissionRequired");
+  if (/^Feature '[a-z_]+' nicht gebucht$/.test(detail)) return clientMessage("featureNotBooked");
+  if (/^Feature '[a-z_]+' nur noch lesend/.test(detail)) return clientMessage("featureReadOnly");
+  return null;
+}
+
 function errorFromResponse(status: number, text: string): ApiError {
   let message = text || `Request failed with status ${status}`;
   let detail: unknown;
@@ -185,7 +195,7 @@ function errorFromResponse(status: number, text: string): ApiError {
     if (json?.detail) {
       detail = json.detail;
       if (typeof json.detail === "string") {
-        message = json.detail;
+        message = (status === 403 && centralForbiddenMessage(json.detail)) || json.detail;
       } else if (!Array.isArray(json.detail) && typeof json.detail.message === "string") {
         message = json.detail.message;
       } else if (Array.isArray(json.detail)) {
