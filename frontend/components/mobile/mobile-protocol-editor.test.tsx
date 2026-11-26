@@ -40,7 +40,7 @@ function renderEditor(status: string) {
     template_id: "t-1",
     protocol_date: "2026-11-18",
   } as unknown as ProtocolSummary;
-  render(
+  const view = render(
     <MobileProtocolEditor
       protocol={protocol}
       initialElements={[]}
@@ -54,7 +54,7 @@ function renderEditor(status: string) {
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Notizen" }));
-  return screen.getByRole("textbox", { name: "Sitzungsnotizen" }) as HTMLTextAreaElement;
+  return Object.assign(screen.getByRole("textbox", { name: "Sitzungsnotizen" }) as HTMLTextAreaElement, { unmountEditor: view.unmount });
 }
 
 // Abgeschlossene Protokolle sind eingefroren (Backend: 409 auf session_notes). Mobil liess das
@@ -65,4 +65,30 @@ it("shows the session notes of a finalized protocol read-only", () => {
 
 it("keeps the session notes editable while the protocol is open", () => {
   expect(renderEditor("durchgeführt").readOnly).toBe(false);
+});
+
+// Collaboration-Audit F-09: die Unmount-Bereinigung löschte nur den Timer, die letzten ~800 ms
+// Eingabe gingen bei Navigation oder Wechsel Desktop/Mobil ohne Hinweis verloren.
+it("saves pending session notes immediately when the editor unmounts", () => {
+  const notes = renderEditor("durchgeführt");
+  api.mockClear();
+  fireEvent.change(notes, { target: { value: "Kassier fehlt, Revisor auch" } });
+  expect(api).not.toHaveBeenCalled();
+  notes.unmountEditor();
+  const patches = api.mock.calls.filter(([url, init]) => url === "/api/protocols/p-1" && (init as RequestInit | undefined)?.method === "PATCH");
+  expect(patches).toHaveLength(1);
+  expect(JSON.parse(String((patches[0][1] as RequestInit).body))).toEqual({
+    session_notes: "Kassier fehlt, Revisor auch",
+    expected_session_notes: "Kassier fehlt",
+  });
+});
+
+it("closing the notes sheet saves only once", () => {
+  const notes = renderEditor("durchgeführt");
+  api.mockClear();
+  fireEvent.change(notes, { target: { value: "Neu" } });
+  fireEvent.click(screen.getByRole("button", { name: "Schliessen" }));
+  notes.unmountEditor();
+  const patches = api.mock.calls.filter(([url, init]) => url === "/api/protocols/p-1" && (init as RequestInit | undefined)?.method === "PATCH");
+  expect(patches).toHaveLength(1);
 });

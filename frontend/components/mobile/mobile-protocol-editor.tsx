@@ -499,6 +499,7 @@ export function MobileProtocolEditor({
       ) : null}
       {sheet?.kind === "notes" ? (
         <NotesSheet
+          key={protocol.id}
           protocolId={protocol.id}
           value={sessionNotes}
           editable={!isReadOnly}
@@ -1109,25 +1110,45 @@ function NotesSheet({
     [protocolId, onSaved, showToast, t]
   );
 
+  // Noch nicht gesendeter Text (wartet auf den Timer). Beim Unmount sofort speichern statt
+  // verwerfen (Collaboration-Audit F-09, wie useDeferredPopupSave/useDebouncedSaveQueue in 1.6.0):
+  // das Blatt verschwindet auch ohne «Schliessen», etwa bei Navigation, beim Wechsel zwischen
+  // Desktop- und Mobil-Editor oder beim Neuladen nach einem Vorlagen-Abgleich.
+  const unsent = useRef<string | null>(null);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  const onPendingSaveRef = useRef(onPendingSave);
+  onPendingSaveRef.current = onPendingSave;
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
+      timer.current = null;
+      if (unsent.current !== null) {
+        const next = unsent.current;
+        unsent.current = null;
+        onPendingSaveRef.current?.(flushRef.current(next));
+      }
     },
     []
   );
+
+  function sendNow(next: string) {
+    unsent.current = null;
+    timer.current = null;
+    onPendingSave?.(flush(next));
+  }
 
   function change(next: string) {
     setDraft(next);
     setState("saving");
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => onPendingSave?.(flush(next)), 800);
+    unsent.current = next;
+    timer.current = window.setTimeout(() => sendNow(next), 800);
   }
 
   function close() {
-    if (timer.current && state === "saving") {
-      window.clearTimeout(timer.current);
-      onPendingSave?.(flush(draft));
-    }
+    if (timer.current) window.clearTimeout(timer.current);
+    if (unsent.current !== null) sendNow(unsent.current);
     onClose();
   }
 
