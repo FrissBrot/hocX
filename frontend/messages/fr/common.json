@@ -109,7 +109,10 @@
     "pdfExportFailed": "Échec de l'export PDF",
     "tagColorTransferFailed": "Étiquette renommée, mais sa couleur n'a pas pu être transférée",
     "noHistoricalCycleSelected": "Aucun cycle historique sélectionné",
-    "noDraftToConfirm": "Aucun brouillon à confirmer"
+    "noDraftToConfirm": "Aucun brouillon à confirmer",
+    "permissionRequired": "Vous n'avez pas l'autorisation nécessaire. Rechargez la page si votre rôle a changé.",
+    "featureNotBooked": "Cette fonction n'est pas incluse dans l'abonnement de votre organisation.",
+    "featureReadOnly": "Cette fonction n'est plus disponible qu'en lecture, car elle ne fait plus partie de l'abonnement de votre organisation."
   },
   "profileImage": {
     "invalidType": "Veuillez choisir une image PNG, JPG, GIF ou WebP (le SVG n'est pas pris en charge).",

@@ -109,7 +109,10 @@
     "pdfExportFailed": "PDF export failed",
     "tagColorTransferFailed": "Tag renamed, but its colour could not be transferred",
     "noHistoricalCycleSelected": "No historical cycle selected",
-    "noDraftToConfirm": "No draft to confirm"
+    "noDraftToConfirm": "No draft to confirm",
+    "permissionRequired": "You don't have permission to do this. Reload the page if your role has changed.",
+    "featureNotBooked": "This feature is not included in your organisation's subscription.",
+    "featureReadOnly": "This feature is now read-only because it is no longer part of your organisation's subscription."
   },
   "profileImage": {
     "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
