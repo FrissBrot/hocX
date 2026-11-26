@@ -260,6 +260,7 @@
       "months": "Monate",
       "years": "Jahre"
     },
+    "valueRange": "Ganze Zahl von 1 bis {max}",
     "autoApply": "Vorschläge für Einreichungen und ehemalige Mitglieder automatisch umsetzen",
     "autoApplyHint": "Galeriebilder bleiben immer ein Vorschlag. Jede Umsetzung steht im Verlauf.",
     "save": "Speichern",

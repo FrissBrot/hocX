@@ -260,6 +260,7 @@
       "months": "Mois",
       "years": "Ans"
     },
+    "valueRange": "Nombre entier de 1 à {max}",
     "autoApply": "Appliquer automatiquement les propositions pour les dépôts et les anciens membres",
     "autoApplyHint": "Les images de la galerie restent toujours une proposition. Chaque action figure dans l’historique.",
     "save": "Enregistrer",

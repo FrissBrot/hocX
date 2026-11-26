@@ -260,6 +260,7 @@
       "months": "Months",
       "years": "Years"
     },
+    "valueRange": "Whole number from 1 to {max}",
     "autoApply": "Apply suggestions for submissions and former members automatically",
     "autoApplyHint": "Gallery images always remain a suggestion. Every action is listed in the activity log.",
     "save": "Save",

@@ -260,6 +260,7 @@
       "months": "Mesi",
       "years": "Anni"
     },
+    "valueRange": "Numero intero da 1 a {max}",
     "autoApply": "Applicare automaticamente le proposte per consegne ed ex membri",
     "autoApplyHint": "Le immagini della galleria restano sempre una proposta. Ogni azione compare nella cronologia.",
     "save": "Salva",
