@@ -54,6 +54,34 @@ def contains_json_lone_surrogate(body: bytes) -> bool:
     return False
 
 
+def parsed_as_json(content_type: bytes | None) -> bool:
+    """Wie FastAPI (``fastapi.routing``, ``strict_content_type`` = Standard): ``application/json`` und
+    ``application/*+json`` werden als JSON gelesen, ein Body ohne Content-Type nicht. Nur
+    ``application/json`` zu prüfen liess NUL und Surrogate über ``application/vnd.api+json`` an der
+    Prüfung vorbei (Nachtlauf 2026-11-26)."""
+    if not content_type:
+        return False
+    media_type = content_type.split(b";", 1)[0].strip().lower()
+    if not media_type.startswith(b"application/"):
+        return False
+    subtype = media_type[len(b"application/"):]
+    return subtype == b"json" or subtype.endswith(b"+json")
+
+
+def _replay_then(body: bytes, receive, *, more_body: bool):
+    """Erst den gepufferten Teil liefern, danach wieder vom Client lesen."""
+    replayed = False
+
+    async def replay():
+        nonlocal replayed
+        if not replayed:
+            replayed = True
+            return {"type": "http.request", "body": body, "more_body": more_body}
+        return await receive()
+
+    return replay
+
+
 def _url_contains_nul(scope) -> bool:
     raw_path = scope.get("raw_path") or scope.get("path", "").encode("utf-8", "surrogateescape")
     query = scope.get("query_string") or b""
@@ -61,9 +89,13 @@ def _url_contains_nul(scope) -> bool:
 
 
 class NulGuardMiddleware:
-    def __init__(self, app, *, prefix: str = "/api/"):
+    def __init__(self, app, *, prefix: str = "/api/", max_buffer_bytes: int = 16 * 1024 * 1024):
         self.app = app
         self.prefix = prefix
+        # Höchstens so viel puffern: unter den Galerie-/Import-Pfaden begrenzt RequestBodyLimit nicht,
+        # ein grosser Body ohne Content-Type läge sonst ganz im Speicher. Darüber ungeprüft weiter
+        # (die Route lehnt einen solchen Body ohnehin ab, JSON-Bodies sind sonst kleiner).
+        self.max_buffer_bytes = max_buffer_bytes
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not scope.get("path", "").startswith(self.prefix):
@@ -73,31 +105,26 @@ class NulGuardMiddleware:
         if scope.get("method") not in _BODY_METHODS:
             return await self.app(scope, receive, send)
         headers = dict(scope.get("headers", []))
-        if not headers.get(b"content-type", b"").lower().startswith(b"application/json"):
+        if not parsed_as_json(headers.get(b"content-type")):
             return await self.app(scope, receive, send)
 
         # JSON-Body puffern (Starlette liest ihn ohnehin ganz) und danach unverändert weiterreichen.
         chunks: list[bytes] = []
+        size = 0
         while True:
             message = await receive()
             if message["type"] == "http.disconnect":
                 return
             chunks.append(message.get("body", b""))
+            size += len(chunks[-1])
             if not message.get("more_body", False):
                 break
+            if size > self.max_buffer_bytes:
+                return await self.app(scope, _replay_then(b"".join(chunks), receive, more_body=True), send)
         body = b"".join(chunks)
         if contains_json_nul(body):
             return await JSONResponse({"detail": _DETAIL}, 422)(scope, receive, send)
         if contains_json_lone_surrogate(body):
             return await JSONResponse({"detail": _SURROGATE_DETAIL}, 422)(scope, receive, send)
 
-        replayed = False
-
-        async def replay():
-            nonlocal replayed
-            if not replayed:
-                replayed = True
-                return {"type": "http.request", "body": body, "more_body": False}
-            return await receive()
-
-        await self.app(scope, replay, send)
+        await self.app(scope, _replay_then(body, receive, more_body=False), send)
