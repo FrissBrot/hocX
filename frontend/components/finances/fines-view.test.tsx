@@ -162,6 +162,25 @@ describe("FinesView (Kasse › Bussen)", () => {
     expect(toastMock.mock.calls[0][0]).toBe("Anna Muster: CHF 12.00 kassiert");
   });
 
+  it("Pendenzen-Busse ohne Konto: übersetzte Meldung statt rohem Backend-Text", async () => {
+    // Backend (todo_fines.collect): 409 mit Code no_account und deutschem Text, der in en/fr/it sonst roh erschien
+    fetchMock.mockRejectedValue(Object.assign(new Error("Kein Konto für diese Busse festgelegt"), {
+      status: 409, detail: { code: "no_account", message: "Kein Konto für diese Busse festgelegt" },
+    }));
+    renderView();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Busse von Anna Muster als kassiert markieren" })); });
+    expect(toastMock).toHaveBeenCalledWith("Für diese Busse ist kein Konto festgelegt. Lege unter «Bussen-Regeln» ein Konto fest.", "error");
+  });
+
+  it("Pendenzen-Busse mit geändertem Status: Konfliktmeldung statt englischem Backend-Text", async () => {
+    fetchMock.mockRejectedValue(Object.assign(new Error("Fine status does not allow this action"), {
+      status: 409, detail: "Fine status does not allow this action",
+    }));
+    renderView();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Busse von Anna Muster als kassiert markieren" })); });
+    expect(toastMock).toHaveBeenCalledWith("Die Änderung ist nicht möglich, weil sich die Daten inzwischen geändert haben. Bitte neu laden.", "error");
+  });
+
   it("zeigt Leerzustände für «Alles kassiert» und «Keine Treffer»", () => {
     renderView({ initialFines: [annaCollected], initialTodoFines: [] });
     expect(screen.getByText("Alles kassiert.")).toBeInTheDocument();

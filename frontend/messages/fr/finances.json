@@ -393,7 +393,11 @@
     "conflict": "La modification n’est pas possible, car les données ont changé entre-temps. Veuillez recharger.",
     "readOnly": "Les finances sont en lecture seule dans votre abonnement. Les modifications ne sont plus possibles.",
     "forbidden": "Vous n’avez pas l’autorisation nécessaire.",
-    "invalid": "Veuillez vérifier vos saisies (montant et description)."
+    "invalid": "Veuillez vérifier vos saisies (montant et description).",
+    "no_account": "Aucun compte n’est défini pour cette amende. Définis un compte dans « Règles des amendes ».",
+    "protocol_closed": "Le procès-verbal est clôturé. L’amende ne peut plus y être supprimée.",
+    "no_open_protocol": "Il n’y a aucun procès-verbal ouvert dans lequel la suppression peut être mentionnée. Crée d’abord un procès-verbal.",
+    "reason_required": "Indique un motif."
   },
   "locked": {
     "label": "Écriture verrouillée",

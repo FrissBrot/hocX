@@ -393,7 +393,11 @@
     "conflict": "The change is not possible because the data has changed in the meantime. Please reload.",
     "readOnly": "Finances are read-only in your plan. Changes are no longer possible.",
     "forbidden": "You do not have permission to do this.",
-    "invalid": "Please check your input (amount and description)."
+    "invalid": "Please check your input (amount and description).",
+    "no_account": "No account is set for this fine. Set an account under “Fine rules”.",
+    "protocol_closed": "The minutes are finalised. The fine can no longer be deleted there.",
+    "no_open_protocol": "There are no open minutes in which the deletion could be listed. Create minutes first.",
+    "reason_required": "Please enter a reason."
   },
   "locked": {
     "label": "Locked entry",

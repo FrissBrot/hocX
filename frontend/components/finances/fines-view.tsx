@@ -210,7 +210,7 @@ export function FinesView({
   }
 
   function actionError(error: unknown, action: "collect" | "reopen" | "restore", row: FineRow): string {
-    if (row.kind === "todo") return error instanceof Error && error.message ? error.message : t("todoFines.actionFailed");
+    if (row.kind === "todo") return financeErrorMessage(error, t, "todoFines.actionFailed");
     const fallback = action === "collect" ? "collectFailed" : action === "reopen" ? "reopenFailed" : "restoreFineFailed";
     return financeErrorMessage(error, t, fallback);
   }
@@ -312,7 +312,7 @@ export function FinesView({
         action: { label: undoLabel, onClick: () => void undo([row], "restore", name) },
       });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
+      showToast(financeErrorMessage(error, t, "todoFines.actionFailed"), "error");
     } finally {
       setBusyFor([id], false);
     }

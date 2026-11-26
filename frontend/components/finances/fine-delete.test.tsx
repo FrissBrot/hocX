@@ -6,7 +6,8 @@ const fetchMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: (...args: unknown[]) => fetchMock(...args) }));
 const confirmMock = vi.fn();
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
-vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
+const toastMock = vi.fn();
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => toastMock }));
 
 let requestDelete: ReturnType<typeof useFineDelete>["requestDelete"];
 
@@ -16,7 +17,7 @@ function Harness({ protocolId }: { protocolId?: string }) {
   return <>{hook.dialog}</>;
 }
 
-beforeEach(() => { fetchMock.mockReset(); fetchMock.mockResolvedValue(undefined); confirmMock.mockReset(); });
+beforeEach(() => { fetchMock.mockReset(); fetchMock.mockResolvedValue(undefined); confirmMock.mockReset(); toastMock.mockReset(); });
 
 describe("useFineDelete", () => {
   it("löscht eine Busse aus offenem Ursprung nach Rückfrage ohne Begründung", async () => {
@@ -49,6 +50,23 @@ describe("useFineDelete", () => {
       body: JSON.stringify({ reason: "Doppelt erfasst", protocol_id: "p-2" }),
     });
     await expect(pending).resolves.toBe("soft");
+  });
+
+  it("ohne offenes Protokoll: übersetzte Meldung statt rohem Backend-Text", async () => {
+    // Backend (FineDeleteError no_open_protocol): 409, Text nur deutsch
+    fetchMock.mockRejectedValue(Object.assign(new Error("Es gibt kein offenes Protokoll, in dem die Löschung aufgeführt werden kann"), {
+      status: 409, detail: { code: "no_open_protocol", message: "Es gibt kein offenes Protokoll, in dem die Löschung aufgeführt werden kann" },
+    }));
+    render(<Harness />);
+
+    act(() => { void requestDelete({ id: "f-1", participant_name_snapshot: "Anna", delete_requires_reason: true }); });
+    fireEvent.change(await screen.findByRole("textbox", { name: /Begründung/ }), { target: { value: "Doppelt" } });
+    fireEvent.click(screen.getByRole("button", { name: "Löschen" }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock).toHaveBeenCalledWith(
+      "Es gibt kein offenes Protokoll, in dem die Löschung aufgeführt werden kann. Lege zuerst ein Protokoll an.", "error",
+    );
   });
 
   it("bricht ohne Löschen ab, wenn der Dialog geschlossen wird", async () => {

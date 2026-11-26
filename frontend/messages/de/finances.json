@@ -393,7 +393,11 @@
     "conflict": "Die Änderung ist nicht möglich, weil sich die Daten inzwischen geändert haben. Bitte neu laden.",
     "readOnly": "Finanzen sind in deinem Abo nur noch lesbar. Ändern ist nicht mehr möglich.",
     "forbidden": "Dafür fehlt dir die Berechtigung.",
-    "invalid": "Bitte die Eingaben prüfen (Betrag und Beschreibung)."
+    "invalid": "Bitte die Eingaben prüfen (Betrag und Beschreibung).",
+    "no_account": "Für diese Busse ist kein Konto festgelegt. Lege unter «Bussen-Regeln» ein Konto fest.",
+    "protocol_closed": "Das Protokoll ist abgeschlossen. Die Busse kann dort nicht mehr gelöscht werden.",
+    "no_open_protocol": "Es gibt kein offenes Protokoll, in dem die Löschung aufgeführt werden kann. Lege zuerst ein Protokoll an.",
+    "reason_required": "Bitte gib eine Begründung an."
   },
   "locked": {
     "label": "Gesperrte Buchung",
