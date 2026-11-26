@@ -153,7 +153,8 @@
     "mfa_locked": "Zu viele falsche Codes. Bitte warte eine Minute und versuche es erneut.",
     "auth_email_unavailable": "Anmeldung aktuell nicht möglich, wende dich an deinen Administrator.",
     "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes.",
-    "password_breached": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen."
+    "password_breached": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen.",
+    "own_account_delete": "Dein eigenes Konto kannst du nicht löschen. Entferne es aus der Auswahl."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
