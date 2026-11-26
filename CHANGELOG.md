@@ -8,6 +8,31 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.6.1] - 2026-11-26
+
+### Behoben
+
+- **Protokoll-Editor, Mitschreiben zu zweit: letzter Text kam bei den anderen nicht an.** Wer einen
+  Textblock direkt nach dem Tippen verliess (Escape, «Fertig», Klick daneben), gab die Sperre frei,
+  bevor die entprellte Speicherung lief. Der Server verwarf die anschliessende Live-Meldung, die
+  anderen sahen den alten Stand und stiessen beim Nachbessern auf einen «Konflikt». Die Sperre wird
+  jetzt erst freigegeben, wenn die Speicherungen des Blocks (Text und Blockeinstellungen) samt
+  Live-Meldung durch sind (Collaboration-Audit F-01).
+- **Aufzählungen, Tabellen und Matrizen: eigene schnelle Änderungen gingen verloren.** Zwei
+  Speicherungen desselben Blocks kurz hintereinander (Punkt bearbeiten und sofort «+ Punkt»,
+  Zelle bearbeiten und sofort «Spalte hinzufügen», zweimal «Löschen») liefen parallel mit derselben
+  Version; die zweite scheiterte mit 409, und die Meldung behauptete, jemand anderes habe geändert.
+  Speicherungen laufen jetzt pro Block nacheinander mit der Version der letzten Antwort; der Hinweis
+  erscheint nur noch bei einer echten Änderung durch andere (F-04).
+- **Live-Zusammenarbeit brach ab rund 100 offenen Editoren je Backend-Prozess ab.** Jede
+  Verbindung belegte eine eigene Redis-Verbindung; darüber zeigte der Editor «Offline», ohne dass
+  ein Fehler im Fehlerprotokoll erschien. Jetzt teilt sich jeder Prozess ein Pub/Sub-Abonnement und
+  verteilt die Meldungen an die eigenen Verbindungen des jeweiligen Protokolls. Fehler beim Abo
+  landen im Fehlerprotokoll, die Verbindung wird sauber mit «später erneut» (1013) geschlossen (F-02).
+- **Mobil: Sitzungsnotizen verloren die letzte Eingabe**, wenn das Notizblatt ohne «Schliessen»
+  verschwand (Navigation, Wechsel zwischen Desktop- und Mobil-Ansicht). Wartender Text wird jetzt
+  sofort gespeichert (F-09).
+
 ## [1.6.0] - 2026-11-26
 
 ### Hinzugefügt
