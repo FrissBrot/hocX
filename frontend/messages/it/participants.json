@@ -242,7 +242,8 @@
     "inviteHelp": "La persona imposta da sé la password.",
     "role": "Ruolo",
     "createAndInvite": "Crea e invita",
-    "createdInvited": "{name} creato e invitato"
+    "createdInvited": "{name} creato e invitato",
+    "createdPartial": "{name} è stato aggiunto, ma non tutto è riuscito: {reason} Completa il resto nella pagina della persona."
   },
   "bulk": {
     "label": "Azioni multiple",
