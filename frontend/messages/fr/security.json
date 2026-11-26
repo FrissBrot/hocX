@@ -154,7 +154,7 @@
     "auth_email_unavailable": "Connexion actuellement impossible, adresse-toi à ton administrateur.",
     "password_leaked": "Ce mot de passe figure dans une fuite de données et n’est donc pas sûr. Choisis-en un autre.",
     "password_breached": "Ce mot de passe figure dans une fuite de données. Fais-le redéfinir par une autre personne owner ou via admin_cli.",
-    "own_account_delete": "Tu ne peux pas supprimer ton propre compte. Retire-le de la sélection."
+    "own_account_delete": "Vous ne pouvez pas supprimer votre propre compte. Retirez-le de la sélection."
   },
   "grace": {
     "title": "Le second facteur devient obligatoire",
