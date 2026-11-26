@@ -167,7 +167,7 @@ test.describe("Sicherheitsbereich 1.7: Vorfälle und Lagebild", () => {
     await expect(page).toHaveURL(/range=7d/);
     const chart = page.getByRole("img", { name: "Anmeldungen im Zeitraum" });
     await expect(chart).toHaveAttribute("aria-describedby", /.+/);
-    const marker = page.getByRole("button", { name: /^INC-\d{4,} öffnen, erkannt/ }).first();
+    const marker = page.getByRole("button", { name: /^#\d+ öffnen, erkannt/ }).first();
     await marker.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/incident=\d+/);

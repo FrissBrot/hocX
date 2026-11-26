@@ -70,6 +70,8 @@ export function incidentApiQuery(filters: IncidentFilters, { q, limit }: { q?: s
   if (term && /^[A-Za-z0-9_#-]{1,40}$/.test(term)) params.set("q", term);
   params.set("limit", String(limit));
   params.set("offset", String(filters.view === "board" ? 0 : filters.page * limit));
+  // Board ohne Mini-Verlauf (das Backend rechnet ihn je Zeile)
+  if (filters.view === "board") params.set("spark", "false");
   return params;
 }
 

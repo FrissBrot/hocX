@@ -170,7 +170,7 @@ describe("Lagebild (1.7)", () => {
     render(<SecuritySituationView />);
     expect(await screen.findByText("1 kritischer Vorfall offen, die Regel löst noch aus. Die Abwehr greift automatisch.")).toBeInTheDocument();
     expect(screen.getByText("1381 % ggü. Vorperiode (31)")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^INC-0042 öffnen, erkannt/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^#42 öffnen, erkannt/ })).toBeInTheDocument();
     // ohne Auswahl: der offene Vorfall im Detail
     expect(await screen.findByRole("complementary", { name: "Password Spraying aus einem Netz" })).toBeInTheDocument();
     const heatmap = screen.getByRole("img", { name: "Fehlversuche nach Wochentag und Stunde" });

@@ -85,7 +85,7 @@ export function SecuritySituationView() {
   const { range, queue, incident, update } = useSituationUrlState();
   const [live, setLive] = useState(true);
   const data = useAdminResource<SecuritySituation>(`/api/admin/auth-security/situation?range=${range}`);
-  const queueList = useAdminResource<SecurityIncidentList>(`/api/admin/auth-security/incidents?status=${queue}&limit=8`);
+  const queueList = useAdminResource<SecurityIncidentList>(`/api/admin/auth-security/incidents?status=${queue}&limit=8&spark=false`);
   const rules = useAdminResource<AlertRuleRow[]>("/api/admin/auth-security/alert-rules");
   const reloadData = data.reload;
   const reloadQueue = queueList.reload;
@@ -346,7 +346,7 @@ function TrafficChart({ situation, onSelect }: { situation: SecuritySituation; o
                   <button
                     type="button"
                     className={`admin-situation-marker admin-situation-marker-${marker.severity}`}
-                    aria-label={t("marker", { label: incidentLabel(marker.id), time: formatDateTime(marker.at, locale) })}
+                    aria-label={t("marker", { label: `#${marker.id}`, time: formatDateTime(marker.at, locale) })} // i18n-ok: Kurzform der Nummer wie die sichtbare Markierung
                     onClick={() => onSelect(marker.id)}
                   >
                     #{marker.id}

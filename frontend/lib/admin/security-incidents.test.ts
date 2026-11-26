@@ -36,6 +36,8 @@ describe("Vorfälle: URL-Zustand", () => {
     expect(board.get("status")).toBe("all");
     expect(board.get("offset")).toBe("0");
     expect(board.has("q")).toBe(false);
+    expect(board.get("spark")).toBe("false");
+    expect(list.has("spark")).toBe(false);
   });
 });
 

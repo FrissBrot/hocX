@@ -992,6 +992,9 @@
 
 .admin-incident-card:hover { border-color: var(--border-strong); }
 .admin-incident-card-selected { border-color: var(--accent); background: var(--accent-soft); }
+/* Kontrast: gedämpfter Text auf --accent-soft reicht nicht (axe color-contrast) */
+.admin-incident-card-selected .muted,
+.admin-incident-row-selected .muted { color: var(--text); }
 .admin-incident-card-critical { border-left: 3px solid var(--danger); }
 .admin-incident-card-warning { border-left: 3px solid var(--warning); }
 

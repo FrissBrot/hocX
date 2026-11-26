@@ -144,6 +144,34 @@ def test_tenant_rule_links_tenant_and_is_deleted_with_it(db):
     assert db.scalar(text("SELECT count(*) FROM security_incident_activity WHERE incident_id = :id"), {"id": row["id"]}) == 0
 
 
+def test_tenant_rule_without_tenant_creates_no_incident(db):
+    incidents.correlate(db, [_threat(rule="tenant", subject="999999999")])
+    assert _incident(db, "auth:tenant:999999999") is None
+
+
+def test_forgotten_account_and_tenant_are_removed_from_incidents(db):
+    from app.auth_security import events
+    from tests.factories import make_app_user
+
+    tenant = make_tenant(db, f"Verein {uuid.uuid4().hex[:6]}")
+    user = make_app_user(db, f"s17-{uuid.uuid4().hex[:6]}@example.com", tenant_id=tenant.id)
+    subject = "ab12" * 8
+    db.execute(
+        text("INSERT INTO auth_event (event_type, outcome, actor_kind, actor_user_id, tenant_id, subject_hash, ts) "
+             "VALUES ('login.success', 'success', 'user', :user, :tenant, :subject, now())"),
+        {"user": user.id, "tenant": tenant.id, "subject": subject},
+    )
+    incidents.correlate(db, [_threat(rule="account_attack", subject=subject[:12]), _threat(rule="tenant", subject=str(tenant.id))])
+    attack = _incident(db, f"auth:account_attack:{subject[:12]}")
+    events.forget_user(db, [user.id])
+    anonymised = db.execute(text("SELECT subject, rule_key FROM security_incident WHERE id = :id"), {"id": attack["id"]}).one()
+    assert anonymised.subject is None and anonymised.rule_key == f"auth:account_attack:erased-{attack['id']}"
+    # Mandantenvorfall auch ohne Verknüpfung (tenant_id) über den Schlüssel
+    db.execute(text("UPDATE security_incident SET tenant_id = NULL WHERE rule = 'tenant'"))
+    events.forget_tenant(db, tenant.id)
+    assert _incident(db, f"auth:tenant:{tenant.id}") is None
+
+
 # ── Aufbewahrung ─────────────────────────────────────────────────────────────────────────
 
 

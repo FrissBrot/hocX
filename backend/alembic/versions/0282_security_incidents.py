@@ -11,8 +11,9 @@
 - Aufbewahrung 365 Tage ab letzter Aktivität (Job ``security_incident_retention``).
 - Übernahme der Quittungen aus 0209: jede aktive Anmeldeschutz-Warnung in ``system_alert_state``
   wird ein Vorfall; quittierte als «In Bearbeitung» mit dem quittierenden Admin als zuständig und
-  der Notiz in der Zeitleiste. Die Spalten aus 0209 bleiben (Downgrade), werden aber nicht mehr
-  geschrieben.
+  der Notiz in der Zeitleiste (zuständig nur, wenn der Admin noch aktiver owner ist); danach werden
+  die Quittungen in ``system_alert_state`` geleert. Die Spalten aus 0209 bleiben (Downgrade), werden
+  aber nicht mehr geschrieben. Mandanten-Warnungen ohne existierenden Mandanten werden nicht übernommen.
 
 Revision ID: 0282_security_incidents
 Revises: 0281_cloud_import_connections
@@ -108,9 +109,14 @@ def upgrade() -> None:
                CASE WHEN s.acknowledged_at IS NOT NULL THEN 'in_progress' ELSE 'new' END,
                CASE WHEN split_part(s.problem_key, ':', 2) = 'tenant' AND split_part(s.problem_key, ':', 3) ~ '^[0-9]{1,18}$'
                     THEN (SELECT t.id FROM tenant t WHERE t.id = split_part(s.problem_key, ':', 3)::bigint) END,
-               s.acknowledged_by_admin_id, s.first_seen_at, s.first_seen_at, s.acknowledged_at, now()
+               a.id, s.first_seen_at, s.first_seen_at, s.acknowledged_at, now()
           FROM system_alert_state s
+          LEFT JOIN platform_admin a ON a.id = s.acknowledged_by_admin_id AND a.role = 'owner' AND a.is_active
          WHERE s.problem_key LIKE 'auth:%' AND length(s.problem_key) <= 200
+           -- Mandanten-Warnung ohne (noch existierenden) Mandanten nicht übernehmen (kein CASCADE möglich)
+           AND (split_part(s.problem_key, ':', 2) <> 'tenant' OR EXISTS (
+                SELECT 1 FROM tenant t WHERE split_part(s.problem_key, ':', 3) ~ '^[0-9]{1,18}$'
+                   AND t.id = split_part(s.problem_key, ':', 3)::bigint))
         """
     )
     op.execute(
@@ -120,8 +126,9 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO security_incident_activity (incident_id, created_at, kind, admin_id, from_value, to_value)
-        SELECT i.id, i.acknowledged_at, 'status', i.assignee_admin_id, 'new', 'in_progress'
-          FROM security_incident i WHERE i.acknowledged_at IS NOT NULL
+        SELECT i.id, i.acknowledged_at, 'status', s.acknowledged_by_admin_id, 'new', 'in_progress'
+          FROM security_incident i JOIN system_alert_state s ON s.problem_key = i.rule_key
+         WHERE i.acknowledged_at IS NOT NULL
         """
     )
     op.execute(
@@ -131,6 +138,11 @@ def upgrade() -> None:
           FROM security_incident i JOIN system_alert_state s ON s.problem_key = i.rule_key
          WHERE s.acknowledged_at IS NOT NULL AND s.acknowledged_note IS NOT NULL AND btrim(s.acknowledged_note) <> ''
         """
+    )
+    # Quittungen liegen jetzt beim Vorfall (mit Frist) - nicht doppelt ohne eigene Frist behalten
+    op.execute(
+        "UPDATE system_alert_state SET acknowledged_at = NULL, acknowledged_by_admin_id = NULL, acknowledged_note = NULL "
+        "WHERE problem_key LIKE 'auth:%'"
     )
 
 

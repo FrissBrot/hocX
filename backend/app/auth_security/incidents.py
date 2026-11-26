@@ -119,12 +119,18 @@ def correlate(db: Session, detected: list, *, now: datetime | None = None) -> di
                            {"id": row.id, "severity": threat.severity, "now": now})
             db.execute(text("UPDATE security_incident SET last_triggered_at = :last WHERE id = :id"), {"id": row.id, **changes})
             continue
+        # gleicher Schlüssel wie beim Wiederöffnen (set_status) - kein Wettlauf um den offenen Vorfall
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
         last_closed = db.scalar(
             text("SELECT max(closed_at) FROM security_incident WHERE rule_key = :key AND status IN ('resolved', 'false_positive')"),
             {"key": key},
         )
         if last_closed is not None and triggered_at <= last_closed:
             # Derselbe Ausbruch wurde schon abgeschlossen; erst ein neues Ereignis eröffnet einen Vorfall
+            continue
+        tenant_id = _tenant_for(db, threat)
+        if threat.rule in TENANT_RULES and tenant_id is None:
+            # Mandant (inzwischen) gelöscht: kein Vorfall, der die interne ID ohne CASCADE hielte
             continue
         incident_id = db.scalar(
             text(
@@ -133,7 +139,7 @@ def correlate(db: Session, detected: list, *, now: datetime | None = None) -> di
                 "ON CONFLICT (rule_key) WHERE status IN ('new', 'in_progress') DO NOTHING RETURNING id"
             ),
             {"key": key, "rule": threat.rule, "subject": threat.subject, "severity": threat.severity if threat.severity in SEVERITIES else "warning",
-             "tenant": _tenant_for(db, threat), "now": now, "last": triggered_at},
+             "tenant": tenant_id, "now": now, "last": triggered_at},
         )
         if incident_id is not None:
             _activity(db, incident_id, "triggered", to_value=threat.severity, at=now)
@@ -174,6 +180,30 @@ def open_incident_for_keys(db: Session, keys: list[str]) -> dict[str, dict]:
         {"keys": keys},
     )
     return {row.rule_key: {"id": row.id, "status": row.status, "assignee": row.assignee} for row in rows}
+
+
+def forget_accounts(db: Session, prefixes: list[str]) -> int:
+    """Konto gelöscht (events.forget_user): Vorfälle «Konto unter Beschuss» zu dessen Pseudonym
+    anonymisieren - Subjekt weg, Schlüssel eindeutig ohne Pseudonym. Ohne Commit (Aufrufer)."""
+    prefixes = [prefix for prefix in prefixes if _is_hex(prefix)]
+    if not prefixes:
+        return 0
+    return db.execute(
+        text(
+            "UPDATE security_incident SET subject = NULL, rule_key = 'auth:account_attack:erased-' || id, updated_at = now() "
+            "WHERE rule = 'account_attack' AND subject = ANY(:prefixes)"
+        ),
+        {"prefixes": prefixes},
+    ).rowcount or 0
+
+
+def forget_tenant(db: Session, tenant_id: int) -> int:
+    """Mandant gelöscht: auch Vorfälle mit seiner ID im Schlüssel, die (noch) nicht verknüpft sind
+    (die verknüpften entfernt ON DELETE CASCADE). Ohne Commit (Aufrufer)."""
+    return db.execute(
+        text("DELETE FROM security_incident WHERE rule = 'tenant' AND (subject = :subject OR tenant_id = :tenant_id)"),
+        {"subject": str(int(tenant_id)), "tenant_id": int(tenant_id)},
+    ).rowcount or 0
 
 
 def purge(db: Session, *, retention_days: int) -> int:
@@ -267,7 +297,26 @@ def _subject_label(db: Session, row) -> str | None:
     return None
 
 
+_SPARK_CACHE_SECONDS = 30
+_spark_cache: dict[int, tuple[float, list[int]]] = {}
+
+
 def _spark(db: Session, row) -> list[int]:
+    """Mini-Verlauf je Vorfall, 30 s im Prozess zwischengespeichert (Liste wird gepollt)."""
+    import time
+
+    now = time.monotonic()
+    hit = _spark_cache.get(row.id)
+    if hit and now - hit[0] < _SPARK_CACHE_SECONDS:
+        return hit[1]
+    values = _spark_query(db, row)
+    if len(_spark_cache) > 2000:
+        _spark_cache.clear()
+    _spark_cache[row.id] = (now, values)
+    return values
+
+
+def _spark_query(db: Session, row) -> list[int]:
     start, end = _window(row)
     scope = scope_for(row.rule, row.subject)
     condition = threats._RULE_SQL.get(row.rule, ("false", None, ""))[0]
@@ -329,7 +378,7 @@ def _filter_sql(flt: IncidentFilter, admin_id: int) -> tuple[list[str], dict]:
     return conditions, params
 
 
-def list_incidents(db: Session, flt: IncidentFilter, *, admin_id: int, offset: int = 0, limit: int = 50) -> dict:
+def list_incidents(db: Session, flt: IncidentFilter, *, admin_id: int, offset: int = 0, limit: int = 50, with_spark: bool = True) -> dict:
     base, params = _filter_sql(flt, admin_id)
     where_base = (" WHERE " + " AND ".join(base)) if base else ""
     counts_row = db.execute(
@@ -353,7 +402,7 @@ def list_incidents(db: Session, flt: IncidentFilter, *, admin_id: int, offset: i
     ).all()
     total = int(counts_row[flt.status] if flt.status in STATUS_GROUPS else counts_row["open"])
     return {
-        "items": [_item(db, row, with_spark=True) for row in rows],
+        "items": [_item(db, row, with_spark=with_spark) for row in rows],
         "total": total, "offset": offset, "limit": limit,
         "counts": {key: int(value) for key, value in counts_row.items()},
     }
@@ -582,6 +631,10 @@ def _touch(db: Session, incident_id: int) -> None:
 def set_status(db: Session, incident_id: int, status: str, *, admin_id: int, note: str | None = None) -> dict:
     if status not in STATUSES:
         raise ValueError("Status ungültig")
+    # Reihenfolge wie in correlate: erst die Sperre auf den Schlüssel, dann die Zeile - so legt die
+    # Bündelung nicht gleichzeitig einen offenen Vorfall desselben Schlüssels an (kein Deadlock)
+    key = _row(db, incident_id).rule_key
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
     row = _row(db, incident_id, lock=True)
     if row.status == status:
         raise IncidentConflict("status_unchanged", "Der Vorfall hat diesen Status bereits.")

@@ -31,6 +31,7 @@ from starlette.background import BackgroundTask
 from app.auth_security import blocks, event_query, incidents, read_service, situation
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.core.admin_step_up import require_step_up
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
@@ -602,13 +603,15 @@ def auth_security_incidents(
     q: str | None = Query(None, max_length=40, pattern=r"^[A-Za-z0-9_#-]*$"),
     offset: int = Query(0, ge=0, le=100_000),
     limit: int = Query(50, ge=1, le=100),
+    spark: bool = True,
     db: Session = Depends(get_db),
     admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     """Vorfälle mit Filtern (Status-Gruppe, Schwere, Zuständig, Suche nach ID, Regel oder
     Pseudonym-Präfix), offene und kritische zuerst; Zähler je Status-Gruppe."""
     flt = incidents.IncidentFilter(status=status, severities=tuple(dict.fromkeys(severity or [])), assignee=assignee, q=q)
-    return incidents.list_incidents(db, flt, admin_id=admin.admin_id, offset=offset, limit=limit)
+    # Board und Lagebild-Warteschlange brauchen keinen Mini-Verlauf (je Zeile eine Abfrage)
+    return incidents.list_incidents(db, flt, admin_id=admin.admin_id, offset=offset, limit=limit, with_spark=spark)
 
 
 @router.get("/auth-security/incidents/stats", dependencies=[Depends(require_admin_owner)])
@@ -713,8 +716,13 @@ def block_incident_network(
                                   admin_id=admin.admin_id, incident_id=incident_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    incidents.record_block(db, incident_id, short, admin_id=admin.admin_id)
-    event_query.clear_cache()
+    # Audit sofort nach dem Setzen: die Sperre gilt ab hier, auch wenn der Zeitleisten-Eintrag scheitert
     _block_audit(db, admin, "admin.auth_block_set", block, source="incident", incident=incident_id)
+    event_query.clear_cache()
+    try:
+        incidents.record_block(db, incident_id, short, admin_id=admin.admin_id)
+    except Exception as exc:  # noqa: BLE001 - Sperre ist gesetzt und auditiert; Zeitleiste ist Beiwerk
+        db.rollback()
+        record_system_error(db, exc=exc, actor_email=admin.email)
     _incident_changed()
     return {"subject": block.short, "until": block.until}

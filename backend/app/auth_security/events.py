@@ -213,6 +213,14 @@ def forget_user(db, user_ids: list[int]) -> int:
     und Geräte-Pseudonym. Die Ereignisse bleiben als anonyme Zählbasis bis zum Fristende."""
     if not user_ids:
         return 0
+    # Vorfälle «Konto unter Beschuss» tragen das gekürzte Subjekt-Pseudonym (1.7): mit anonymisieren
+    from app.auth_security import incidents
+
+    prefixes = list(db.scalars(
+        text("SELECT DISTINCT left(subject_hash, 12) FROM auth_event WHERE actor_user_id = ANY(:ids) AND subject_hash IS NOT NULL"),
+        {"ids": list(user_ids)},
+    ))
+    incidents.forget_accounts(db, prefixes)
     return db.execute(
         text("UPDATE auth_event SET actor_user_id = NULL, subject_hash = NULL, device_hash = NULL WHERE actor_user_id = ANY(:ids)"),
         {"ids": list(user_ids)},
@@ -220,6 +228,9 @@ def forget_user(db, user_ids: list[int]) -> int:
 
 
 def forget_tenant(db, tenant_id: int) -> int:
+    from app.auth_security import incidents
+
+    incidents.forget_tenant(db, tenant_id)
     return db.execute(text("DELETE FROM auth_event WHERE tenant_id = :tenant_id"), {"tenant_id": tenant_id}).rowcount or 0
 
 
