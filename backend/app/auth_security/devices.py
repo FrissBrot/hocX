@@ -69,7 +69,9 @@ def parse_cookie(value: str | None) -> str | None:
     if len(parts) != 3 or parts[0] != _VERSION or not parts[1] or len(parts[1]) > 64:
         return None
     for secret in _secrets():
-        if hmac.compare_digest(_sign(secret, parts[1]), parts[2]):
+        # Als Bytes vergleichen: compare_digest wirft bei Nicht-ASCII-str TypeError (Cookie-Header
+        # ist latin-1, Nachtlauf 2026-11-26)
+        if hmac.compare_digest(_sign(secret, parts[1]).encode(), parts[2].encode("utf-8")):
             return parts[1]
     return None
 

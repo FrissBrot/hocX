@@ -17,7 +17,9 @@ def generate_totp_secret() -> str:
 
 
 def normalize_totp_code(code: str) -> str:
-    return "".join(ch for ch in code if ch.isdigit())
+    # Dezimalziffern jeder Schrift (z. B. «١٢٣», Vollbreite) als ASCII; isdigit() liess auch «²» durch,
+    # und Nicht-ASCII-Text lässt hmac.compare_digest mit TypeError scheitern (Nachtlauf 2026-11-26).
+    return "".join(str(int(ch)) for ch in code if ch.isdecimal())
 
 
 def build_totp_uri(*, issuer: str, account_name: str, secret: str) -> str:
