@@ -251,8 +251,9 @@ def encrypt_xlsx(content: bytes, password: str) -> bytes:
     LibreOffice fragen beim Öffnen nach dem Passwort - ohne Zusatzsoftware (anders als AES-ZIP)."""
     from msoffcrypto.format.ooxml import OOXMLFile
 
-    secret = (password or "").strip()
-    if len(secret) < 12:
+    # Unverändert verwenden (wie archive.validate_password): Excel fragt genau die Eingabe ab
+    secret = password or ""
+    if len(secret.strip()) < 12:
         raise ValueError("passwordRequired")
     target = io.BytesIO()
     OOXMLFile(io.BytesIO(content)).encrypt(secret, target)
