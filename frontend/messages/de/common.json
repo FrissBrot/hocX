@@ -109,7 +109,10 @@
     "pdfExportFailed": "PDF-Export fehlgeschlagen",
     "tagColorTransferFailed": "Tag umbenannt, Farbe konnte aber nicht übertragen werden",
     "noHistoricalCycleSelected": "Kein historischer Zyklus ausgewählt",
-    "noDraftToConfirm": "Kein Entwurf zum Bestätigen"
+    "noDraftToConfirm": "Kein Entwurf zum Bestätigen",
+    "permissionRequired": "Dafür fehlt dir die Berechtigung. Lade die Seite neu, falls sich deine Rolle geändert hat.",
+    "featureNotBooked": "Diese Funktion ist im Abo eurer Organisation nicht enthalten.",
+    "featureReadOnly": "Diese Funktion ist nur noch lesend verfügbar, weil sie nicht mehr im Abo eurer Organisation ist."
   },
   "profileImage": {
     "invalidType": "Bitte ein PNG-, JPG-, GIF- oder WebP-Bild wählen (SVG wird nicht unterstützt).",
