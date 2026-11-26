@@ -55,7 +55,11 @@ def test_lone_surrogate_is_an_input_error(db, path, body):
     (b'{"a": "\\ud83d\\ude00"}', False),  # gültiges Paar (Emoji)
     (b'{"a": "\\\\ud800"}', False),  # escapter Backslash: «ud800» ist Text
     (b'{"a": "\\u00e4"}', False),
-    (b'{"a": "\\ud800', False),  # kein gültiges JSON: entscheidet FastAPI
+    (b'{"a": "\\ud800', True),  # auch in kaputtem JSON: 422 so oder so
+    (b'{"a": "a\xed\xa0\x80b"}', True),  # roh als UTF-8-Bytes (json.loads: surrogatepass), Review 1.6.1
+    ('{"a": "ä😀"}'.encode(), False),  # echtes UTF-8 mit Emoji
+    (b'{"a": "\\ud83d x\\ude00"}', True),  # High und Low nicht direkt hintereinander
+    (b'{"a": "\\\\\\ud800"}', True),  # drei Backslashes: escapter Backslash + echtes Escape
 ])
 def test_contains_json_lone_surrogate(body, expected):
     from app.nul_guard import contains_json_lone_surrogate
@@ -134,3 +138,29 @@ def test_large_json_body_is_streamed_not_buffered():
     req.headers["content-type"] = "application/json"
     res = client.send(req)
     assert res.status_code == 200 and res.json() == {"size": 6000}, res.text
+
+
+def test_duplicate_content_type_cannot_skip_the_guard(db):
+    """Starlette/FastAPI lesen den ERSTEN Content-Type; die Prüfung nahm den letzten - ein zweiter
+    Header «text/plain» liess Surrogate und NUL ungeprüft als JSON durch (Security-Review 1.6.1)."""
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False)
+        res = client.post(
+            "/api/auth/login",
+            content=b'{"email": "a@example.com", "password": "x\\ud800y"}',
+            headers=[("content-type", "application/json"), ("content-type", "text/plain")],
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+    assert res.status_code == 422, res.text
+
+
+def test_raw_surrogate_bytes_on_login_are_an_input_error(db):
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app, base_url="https://hocx.example", raise_server_exceptions=False)
+        res = client.post("/api/auth/login", content=b'{"email": "a@example.com", "password": "x\xed\xa0\x80y"}', headers={"content-type": "application/json"})
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+    assert res.status_code == 422, res.text

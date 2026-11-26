@@ -18,7 +18,6 @@ begrenzt RequestBodyLimitMiddleware (weiter aussen), bevor er hier gepuffert wir
 """
 from __future__ import annotations
 
-import json
 import re
 
 from starlette.responses import JSONResponse
@@ -27,8 +26,10 @@ _BODY_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # \u0000 mit einer geraden Zahl (auch 0) Backslashes davor: ein echtes JSON-Escape. Bei ungerader
 # Zahl ist der erste Backslash escapt und «u0000» nur Text.
 _JSON_NUL_ESCAPE = re.compile(rb"(?<!\\)(?:\\\\)*\\u0000")
-# Escape eines Surrogats (U+D800-U+DFFF), ebenfalls nur mit gerader Zahl Backslashes davor
-_JSON_SURROGATE_ESCAPE = re.compile(rb"(?<!\\)(?:\\\\)*\\u[dD][89a-fA-F][0-9a-fA-F]{2}")
+# Escape eines Surrogats (U+D800-U+DFFF) samt allen Backslashes davor; echt ist es nur bei ungerader
+# Zahl Backslashes (sonst ist der letzte escapt und «udxxx» nur Text). Beginnt mit einem festen
+# Zeichen, damit finditer auch über grosse Bodies schnell bleibt.
+_JSON_SURROGATE_ESCAPE = re.compile(rb"\\+u[dD][89a-fA-F][0-9a-fA-F]{2}")
 _DETAIL = [{"type": "string_nul", "loc": ["request"], "msg": "must not contain NUL characters"}]
 _SURROGATE_DETAIL = [{"type": "string_unicode", "loc": ["request"], "msg": "must not contain unpaired surrogates"}]
 
@@ -37,21 +38,34 @@ def contains_json_nul(body: bytes) -> bool:
     return b"\x00" in body or _JSON_NUL_ESCAPE.search(body) is not None
 
 
+# Surrogat roh als UTF-8-Bytes (CESU-/WTF-8-Form, ED A0..BF xx): json.loads(bytes) dekodiert mit
+# «surrogatepass» und macht daraus ebenfalls einen nicht kodierbaren str (Security-Review 1.6.1).
+_RAW_SURROGATE_BYTES = re.compile(rb"\xed[\xa0-\xbf]")
+
+
 def contains_json_lone_surrogate(body: bytes) -> bool:
-    """Gültige Paare (Emoji als ``\\ud83d\\ude00``) ergeben beim Parsen ein normales Zeichen; nur ein
-    Surrogat ohne Partner bleibt übrig und lässt sich nicht als UTF-8 kodieren. Geparst wird nur,
-    wenn überhaupt ein Surrogat-Escape vorkommt; ungültiges JSON lehnt FastAPI selbst ab."""
-    if _JSON_SURROGATE_ESCAPE.search(body) is None:
-        return False
-    try:
-        parsed = json.loads(body)
-    except (ValueError, RecursionError):
-        return False
-    try:
-        json.dumps(parsed, ensure_ascii=False).encode("utf-8")
-    except UnicodeEncodeError:
+    """Einzelnes UTF-16-Surrogat im JSON-Body, als Escape (``\\ud800``) oder roh als Bytes.
+
+    Ein gültiges Paar (Emoji als ``\\ud83d\\ude00``) ergibt beim Parsen ein normales Zeichen, nur ein
+    Surrogat ohne Partner lässt sich nicht als UTF-8 kodieren. Linear über die Escapes statt den
+    Body zu parsen: kein CPU-/Speicheraufwand je Anfrage und kein Rekursionsrisiko (Review 1.6.1)."""
+    if _RAW_SURROGATE_BYTES.search(body) is not None:
         return True
-    return False
+    pending_high_end: int | None = None  # Ende eines High-Surrogats, das noch seinen Partner braucht
+    for match in _JSON_SURROGATE_ESCAPE.finditer(body):
+        if (len(match.group(0)) - 5) % 2 == 0:
+            continue  # gerade Zahl Backslashes: escapter Backslash, kein Escape
+        unit = int(match.group(0)[-4:], 16)
+        start = match.end() - 6
+        if pending_high_end is not None:
+            if unit >= 0xDC00 and start == pending_high_end:
+                pending_high_end = None  # gültiges Paar
+                continue
+            return True  # High ohne direkt folgendes Low
+        if unit >= 0xDC00:
+            return True  # Low ohne High davor
+        pending_high_end = match.end()
+    return pending_high_end is not None
 
 
 def parsed_as_json(content_type: bytes | None) -> bool:
@@ -104,8 +118,10 @@ class NulGuardMiddleware:
             return await JSONResponse({"detail": _DETAIL}, 422)(scope, receive, send)
         if scope.get("method") not in _BODY_METHODS:
             return await self.app(scope, receive, send)
-        headers = dict(scope.get("headers", []))
-        if not parsed_as_json(headers.get(b"content-type")):
+        # Erster Content-Type wie Starlette/FastAPI (Headers.get): dict() nähme den letzten, ein
+        # doppelter Header liesse den Body sonst ungeprüft als JSON durch (Security-Review 1.6.1)
+        content_type = next((value for key, value in scope.get("headers", []) if key.lower() == b"content-type"), None)
+        if not parsed_as_json(content_type):
             return await self.app(scope, receive, send)
 
         # JSON-Body puffern (Starlette liest ihn ohnehin ganz) und danach unverändert weiterreichen.
