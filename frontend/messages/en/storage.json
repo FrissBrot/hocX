@@ -1,4 +1,11 @@
 {
+  "categoryLabels": {
+    "photos": "Photos",
+    "files": "Files",
+    "protocols": "Protocols",
+    "trash": "Trash",
+    "other": "Other"
+  },
   "categoryHints": {
     "photos": "Gallery, protocol images and submission-box images",
     "files": "Word imports, submission-box documents and other uploads",

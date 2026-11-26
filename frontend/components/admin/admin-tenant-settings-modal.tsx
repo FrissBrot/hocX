@@ -26,7 +26,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate, formatFileSize, formatPercentNumber } from "@/lib/utils/format";
-import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { CATEGORY_COLORS, categoryHints, categoryLabels, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
 import { primarySystemRole } from "@/components/users/user-form-shared";
 import { rolesLabel } from "@/lib/permissions";
@@ -97,7 +97,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
   const locale = useLocale();
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
-  const storageHints = categoryHints(useTranslations("storage"));
+  const tStorage = useTranslations("storage");
+  const storageHints = categoryHints(tStorage);
+  const storageLabels = categoryLabels(tStorage);
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
   const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
   const showToast = useToast();
@@ -980,7 +982,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                               key={category.key}
                               className="storage-usage-segment"
                               style={{ width: `${(category.bytes / storageBarTotal) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                              title={`${category.label}: ${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
+                              title={`${storageLabels[category.key]}:${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
                             />
                           ))
                         : null}
@@ -993,7 +995,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                           <div key={category.key} className="admin-storage-legend-item" title={storageHints[category.key]}>
                             <span>
                               <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
-                              {category.label}
+                              {storageLabels[category.key]}
                             </span>
                             <strong>{formatFileSize(category.bytes)}</strong>
                           </div>

@@ -21,7 +21,7 @@ import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { Tabs } from "@/components/ui/tabs";
 import type { NavIconKey } from "@/components/ui/nav-icons";
 import { colorForUser, initials } from "@/components/protocol/collaboration-presence";
-import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { CATEGORY_COLORS, categoryHints, categoryLabels, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize, formatPercentNumber, formatRappen } from "@/lib/utils/format";
 import { FEATURES } from "@/lib/features.generated";
@@ -435,7 +435,9 @@ function UsersCard({ subscription, tenantUsers }: { subscription: TenantSubscrip
 
 function StorageCard({ subscription, storageUsage }: { subscription: TenantSubscription; storageUsage: StorageUsageRead | null }) {
   const t = useTranslations("tenantSettings");
-  const storageHints = categoryHints(useTranslations("storage"));
+  const tStorage = useTranslations("storage");
+  const storageHints = categoryHints(tStorage);
+  const storageLabels = categoryLabels(tStorage);
   const usedBytes = storageUsage?.total_bytes ?? subscription.storage_used_bytes ?? 0;
   const quotaBytes = storageUsage?.quota_bytes ?? null;
   return (
@@ -462,7 +464,7 @@ function StorageCard({ subscription, storageUsage }: { subscription: TenantSubsc
                   key={category.key}
                   className="storage-usage-segment"
                   style={{ width: `${(category.bytes / Math.max(storageUsage.total_bytes, quotaBytes ?? 0)) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                  title={`${category.label}: ${formatFileSize(category.bytes)}`}
+                  title={`${storageLabels[category.key]}:${formatFileSize(category.bytes)}`}
                 />
               ))}
           </div>
@@ -477,7 +479,7 @@ function StorageCard({ subscription, storageUsage }: { subscription: TenantSubsc
                   <div className="tenant-storage-legend-row">
                     <span>
                       <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
-                      {category.label}
+                      {storageLabels[category.key]}
                     </span>
                     <span>{formatFileSize(category.bytes)}</span>
                   </div>
