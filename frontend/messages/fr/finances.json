@@ -415,6 +415,7 @@
   "docsLink": "Aide sur les finances",
   "noTransactionsReadOnly": "Ce compte ne contient encore aucune écriture.",
   "noTransactionsYear": "Aucune écriture en {year}.",
+  "noTransactionsFilter": "Aucune écriture pour ce filtre.",
   "txSaved": "Écriture enregistrée",
   "txDeleted": "Écriture supprimée",
   "accountSaved": "Compte enregistré",
