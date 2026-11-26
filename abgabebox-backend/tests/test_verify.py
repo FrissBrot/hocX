@@ -237,3 +237,56 @@ def test_page_checks_are_limited_per_document_id(pages):
     # Andere Dokumente und die reine Hash-Prüfung bleiben unberührt
     assert client.post("/api/public/verify", json={**payload, "document_id": str(uuid.uuid4())}).status_code == 200
     assert client.post("/api/public/verify", json={"sha256": SHA}).json()["found"] is True
+
+
+def test_page_check_limit_counts_per_source_so_others_still_can_check(pages, monkeypatch):
+    """Nachtlauf 2026-11-26: das Limit galt für alle Besucher zusammen - wer die ID kannte, sperrte den
+    Seitenvergleich für alle. Jetzt 20 je Quelle (IPv6 je /64) und 200 je Dokument insgesamt."""
+    from app.routes import verify as verify_route
+
+    source = {"value": "203.0.113.7"}
+    monkeypatch.setattr(verify_route, "rate_limit_source", lambda request: source["value"])
+    payload = {"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16]}
+    for _ in range(20):
+        assert client.post("/api/public/verify", json=payload).status_code == 200
+    assert client.post("/api/public/verify", json=payload).status_code == 429
+    source["value"] = "198.51.100.9"  # andere Quelle: weiterhin möglich
+    assert client.post("/api/public/verify", json=payload).status_code == 200
+
+
+def test_page_check_limit_has_a_global_cap_per_document(pages, monkeypatch):
+    from app.routes import verify as verify_route
+
+    counter = iter(range(10_000))
+    monkeypatch.setattr(verify_route, "rate_limit_source", lambda request: f"192.0.2.{next(counter) % 250}")
+    payload = {"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16]}
+    statuses = [client.post("/api/public/verify", json=payload).status_code for _ in range(201)]
+    assert statuses[:200] == [200] * 200
+    assert statuses[200] == 429
+
+
+@pytest.mark.parametrize(("address", "expected"), [
+    ("203.0.113.7", "203.0.113.7"),
+    ("::ffff:203.0.113.7", "203.0.113.7"),
+    ("2001:db8:1:2:aaaa::1", "2001:db8:1:2::/64"),
+    ("2001:db8:1:2:bbbb::9", "2001:db8:1:2::/64"),  # gleiches /64 = gleiche Quelle
+    ("kaputt", "x:kaputt"),
+])
+def test_source_key_groups_ipv6_per_64(address, expected):
+    from app.client_source import source_key
+
+    assert source_key(address) == expected
+
+
+def test_forwarded_for_only_from_trusted_proxy():
+    from starlette.requests import Request
+
+    from app.client_source import client_ip
+
+    def request(peer: str, forwarded: str) -> Request:
+        return Request({"type": "http", "headers": [(b"x-forwarded-for", forwarded.encode())], "client": (peer, 1234)})
+
+    # Traefik im Compose-Netz: rechtester fremder Eintrag zählt (vorne gefälschte Einträge nicht)
+    assert client_ip(request("172.18.0.5", "198.51.100.1, 203.0.113.7")) == "203.0.113.7"
+    # Direkt von aussen: X-Forwarded-For wird ignoriert
+    assert client_ip(request("203.0.113.9", "198.51.100.1")) == "203.0.113.9"

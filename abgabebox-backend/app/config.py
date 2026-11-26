@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     # explicitly setting one of the values in _DEV_LIKE_ENVIRONMENTS below, rather than an
     # operator who simply forgot to set this ending up with silently-disabled captcha in prod.
     environment: str = Field(default="production", validation_alias="ABGABEBOX_ENVIRONMENT")
+    # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), wie im Backend;
+    # app/client_source.py (Grenze des Seitenvergleichs je Besucher)
+    trusted_proxy_cidrs: str = Field(
+        default="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7", validation_alias="TRUSTED_PROXY_CIDRS"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
