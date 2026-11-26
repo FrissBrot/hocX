@@ -17,8 +17,12 @@ MIN_PASSWORD_LENGTH = 12
 
 
 def validate_password(password: str | None) -> str:
-    value = (password or "").strip()
-    if len(value) < MIN_PASSWORD_LENGTH:
+    """Liefert das Passwort unverändert: die Datei muss sich mit genau der Eingabe öffnen lassen.
+    Die Mindestlänge zählt ohne Leerzeichen am Rand (nur Leerzeichen ist kein Passwort) - früher
+    wurde das Passwort selbst gekürzt, ein « geheim… » öffnete die Datei dann nicht mehr
+    (Nachtlauf 2026-11-26)."""
+    value = password or ""
+    if len(value.strip()) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"Das Passwort braucht mindestens {MIN_PASSWORD_LENGTH} Zeichen")
     return value
 
