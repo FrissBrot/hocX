@@ -242,7 +242,8 @@
     "inviteHelp": "Die Person legt ihr Passwort selbst fest.",
     "role": "Rolle",
     "createAndInvite": "Erfassen und einladen",
-    "createdInvited": "{name} erfasst und eingeladen"
+    "createdInvited": "{name} erfasst und eingeladen",
+    "createdPartial": "{name} wurde erfasst, aber nicht alles hat geklappt: {reason} Ergänze den Rest auf der Personenseite."
   },
   "bulk": {
     "label": "Mehrfachaktionen",

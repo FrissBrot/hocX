@@ -270,8 +270,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
     event.preventDefault();
     if (!newMember || !newMember.display_name.trim() || creating) return;
     setCreating(true);
+    let created: ParticipantSummary;
     try {
-      const created = await browserApiFetch<ParticipantSummary>("/api/participants", {
+      created = await browserApiFetch<ParticipantSummary>("/api/participants", {
         method: "POST",
         body: JSON.stringify({
           tenant_id: tenantId,
@@ -284,6 +285,16 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
           left_at: null,
         }),
       });
+    } catch (error) {
+      showToast(errorText(error, t("toasts.saveFailed")), "error");
+      setCreating(false);
+      return;
+    }
+    // Ab hier existiert die Person: ein Fehler in den Folgeschritten (Vorlagen, Tarif, Rolle,
+    // Einladung - z. B. Benutzerlimit) darf den Dialog nicht offen lassen, sonst legt ein zweiter
+    // Klick auf «Erfassen» sie doppelt an.
+    let followUpError: unknown = null;
+    try {
       if (newMember.template_ids.length) {
         await browserApiFetch(`/api/participants/${created.id}/templates`, { method: "PUT", body: JSON.stringify({ template_ids: newMember.template_ids }) });
       }
@@ -296,14 +307,17 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
         }
         await browserApiFetch(`/api/participants/${created.id}/invite`, { method: "POST" });
       }
-      const fresh = await browserApiFetch<ParticipantSummary>(`/api/participants/${created.id}`);
-      setParticipants((current) => [fresh, ...current]);
-      setNewMember(null);
-      showToast(newMember.invite ? t("newMember.createdInvited", { name: fresh.display_name }) : t("toasts.created", { name: fresh.display_name }), "success");
     } catch (error) {
-      showToast(errorText(error, t("toasts.saveFailed")), "error");
-    } finally {
-      setCreating(false);
+      followUpError = error;
+    }
+    const fresh = await browserApiFetch<ParticipantSummary>(`/api/participants/${created.id}`).catch(() => created);
+    setParticipants((current) => [fresh, ...current.filter((participant) => participant.id !== fresh.id)]);
+    setNewMember(null);
+    setCreating(false);
+    if (followUpError) {
+      showToast(t("newMember.createdPartial", { name: fresh.display_name, reason: errorText(followUpError, t("toasts.saveFailed")) }), "error");
+    } else {
+      showToast(newMember.invite ? t("newMember.createdInvited", { name: fresh.display_name }) : t("toasts.created", { name: fresh.display_name }), "success");
     }
   }
 
