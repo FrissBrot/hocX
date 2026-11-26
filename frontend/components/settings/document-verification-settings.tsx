@@ -9,7 +9,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatDate } from "@/lib/utils/format";
+import { formatTimestampDate } from "@/lib/utils/format";
 
 type VerificationRequest = {
   status: "pending" | "approved" | "rejected" | "withdrawn";
@@ -172,7 +172,7 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
             title={t("verificationTitle")}
             pill={
               verified ? (
-                <Badge variant="success">{t("verifiedSince", { date: formatDate(state.verified_at) })}</Badge>
+                <Badge variant="success">{t("verifiedSince", { date: formatTimestampDate(state.verified_at) })}</Badge>
               ) : pending ? (
                 <Badge variant="info">{t("pending")}</Badge>
               ) : (
@@ -183,12 +183,12 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
             <span>{t("levelVerificationText")}</span>
             {verified ? <span className="docverify-note">{state.show_identity ? t("verifiedNameChangeNote") : t("verifiedButHidden")}</span> : null}
             {state.revoked_reason === "name_changed" && !verified ? (
-              <StatusBanner tone="error" message={t("revokedNameChanged", { date: formatDate(state.revoked_at) })} />
+              <StatusBanner tone="error" message={t("revokedNameChanged", { date: formatTimestampDate(state.revoked_at) })} />
             ) : null}
-            {state.revoked_reason === "admin" && !verified ? <StatusBanner tone="error" message={t("revokedByAdmin", { date: formatDate(state.revoked_at) })} /> : null}
+            {state.revoked_reason === "admin" && !verified ? <StatusBanner tone="error" message={t("revokedByAdmin", { date: formatTimestampDate(state.revoked_at) })} /> : null}
             {rejected ? <StatusBanner tone="error" message={t("rejected", { reason: state.request?.decision_note ?? "" })} /> : null}
             {pending && state.request ? (
-              <span>{t("pendingSince", { date: formatDate(state.request.requested_at), name: state.request.tenant_name })}</span>
+              <span>{t("pendingSince", { date: formatTimestampDate(state.request.requested_at), name: state.request.tenant_name })}</span>
             ) : null}
             {!verified && !pending ? (
               <label className="field-stack docverify-request">
@@ -227,7 +227,7 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
                 </span>
                 <div>
                   <div className="docverify-result-title">{t("previewOriginal")}</div>
-                  <div className="docverify-result-text">{t("previewText", { date: formatDate(new Date().toISOString()) })}</div>
+                  <div className="docverify-result-text">{t("previewText", { date: formatTimestampDate(new Date().toISOString()) })}</div>
                 </div>
               </div>
               {state.show_identity ? (

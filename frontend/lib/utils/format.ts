@@ -240,6 +240,12 @@ export function appCalendarDate(input: Date | string): string {
   return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: APP_TIME_ZONE }).format(parsed);
 }
 
+// Datum (TT.MM.JJJJ) eines Zeitstempels aus der API (UTC, z. B. verified_at, created_at) als
+// Schweizer Kalendertag. formatDate allein schneidet den UTC-Tag ab: 00:30 Uhr wäre der Vortag.
+export function formatTimestampDate(input: string | null | undefined): string {
+  return input ? formatDate(appCalendarDate(input)) : "";
+}
+
 // Monat und Jahr ("November 2026"), z. B. für den Termin eines Anliegens. `input` ist ein
 // ISO-Datum (Monatserster); gerechnet wird ohne Zeitzone, damit der Monat nie kippt.
 export function formatMonthYear(input: string | null | undefined, locale?: string) {

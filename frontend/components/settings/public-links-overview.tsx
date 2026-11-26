@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { formatDateTime, formatTimestampDate } from "@/lib/utils/format";
 import type { PartnerHistoryEntry, PublicLinkItem } from "@/types/api";
 
 type Group = "all" | "files" | "submissions" | "calendar" | "accounts" | "partners" | "other";
@@ -42,7 +42,7 @@ const REVOCABLE = new Set(["share_files", "share_album", "share_album_partner"])
 
 /** Nur Tag und Monat («17.11.») - für «genutzt …» in der Zeile. */
 function dayMonth(input: string): string {
-  return formatDate(input).slice(0, 6);
+  return formatTimestampDate(input).slice(0, 6);
 }
 
 /**
@@ -136,8 +136,8 @@ export function PublicLinksOverview({
   }
 
   function expiry(link: PublicLinkItem) {
-    if (link.expiry === "date") return link.expires_at ? t("expiry.date", { date: formatDate(link.expires_at) }) : t("expiry.never");
-    if (link.expiry === "single_use") return link.expires_at ? t("expiry.singleUseUntil", { date: formatDate(link.expires_at) }) : t("expiry.singleUse");
+    if (link.expiry === "date") return link.expires_at ? t("expiry.date", { date: formatTimestampDate(link.expires_at) }) : t("expiry.never");
+    if (link.expiry === "single_use") return link.expires_at ? t("expiry.singleUseUntil", { date: formatTimestampDate(link.expires_at) }) : t("expiry.singleUse");
     if (link.expiry === "window") return t("expiry.window");
     return t("expiry.never");
   }
@@ -145,7 +145,7 @@ export function PublicLinksOverview({
   // Erstellt/von steht nicht mehr sichtbar in der Zeile, sondern als Tooltip am Namen.
   function createdTitle(link: PublicLinkItem) {
     if (!link.created_at) return link.created_by ? t("createdBy", { name: link.created_by }) : undefined;
-    const date = formatDate(link.created_at);
+    const date = formatTimestampDate(link.created_at);
     return link.created_by ? t("createdAtBy", { date, name: link.created_by }) : t("createdAt", { date });
   }
 
@@ -223,7 +223,7 @@ export function PublicLinksOverview({
     if (entry.event === "accepted") return t("history.event.accepted");
     if (entry.event === "declined") return t("history.event.declined");
     return entry.expires_at
-      ? t("history.event.publicLinkCreatedUntil", { name: entry.link_name ?? "—", date: formatDate(entry.expires_at) })
+      ? t("history.event.publicLinkCreatedUntil", { name: entry.link_name ?? "—", date: formatTimestampDate(entry.expires_at) })
       : t("history.event.publicLinkCreated", { name: entry.link_name ?? "—" });
   }
 
