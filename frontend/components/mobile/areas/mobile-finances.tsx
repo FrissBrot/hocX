@@ -222,7 +222,18 @@ export function MobileFinances({ initialAccounts, currency, canWrite, readOnly =
               </div>
             </section>
           ))}
-          {groups.length === 0 ? <MobileEmpty title={canWrite ? t("noTransactions") : t("noTransactionsReadOnly")} /> : null}
+          {groups.length === 0 ? (
+            <MobileEmpty
+              title={
+                // Konto hat Buchungen, nur der Filter trifft keine: nicht «Noch keine Buchungen» melden
+                transactions.length > 0
+                  ? filter === "year"
+                    ? t("noTransactionsYear", { year: String(new Date().getFullYear()) })
+                    : t("noTransactionsFilter")
+                  : canWrite ? t("noTransactions") : t("noTransactionsReadOnly")
+              }
+            />
+          ) : null}
         </>
       )}
 

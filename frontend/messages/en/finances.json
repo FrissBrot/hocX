@@ -420,6 +420,7 @@
   "docsLink": "Help on finances",
   "noTransactionsReadOnly": "There are no entries on this account yet.",
   "noTransactionsYear": "No entries in {year}.",
+  "noTransactionsFilter": "No entries match this filter.",
   "txSaved": "Entry saved",
   "txDeleted": "Entry deleted",
   "accountSaved": "Account saved",

@@ -420,6 +420,7 @@
   "docsLink": "Aiuto sulle finanze",
   "noTransactionsReadOnly": "Su questo conto non ci sono ancora registrazioni.",
   "noTransactionsYear": "Nessuna registrazione nel {year}.",
+  "noTransactionsFilter": "Nessuna registrazione per questo filtro.",
   "txSaved": "Registrazione salvata",
   "txDeleted": "Registrazione eliminata",
   "accountSaved": "Conto salvato",

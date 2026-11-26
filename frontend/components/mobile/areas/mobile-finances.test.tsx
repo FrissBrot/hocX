@@ -60,4 +60,15 @@ describe("MobileFinances", () => {
     fireEvent.click(screen.getByText("Nina Nacht"));
     expect(screen.getByText(`Kassiert · ${dateParts.dayMonth("2026-11-08", "de")}`)).toBeInTheDocument();
   });
+
+  it("Filter ohne Treffer: eigener Leerzustand statt «Noch keine Buchungen» (Konto hat Buchungen)", async () => {
+    apiFetch.mockResolvedValue([tx("t1", "Mitgliederbeitrag")]);
+    render(<MobileFinances initialAccounts={[account("a", "Kasse A")]} currency="CHF" canWrite />);
+    await act(async () => {});
+    expect(screen.getByText("Mitgliederbeitrag")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ausgabe" }));
+    expect(screen.queryByText("Noch keine Buchungen. Füge die erste Buchung hinzu.")).not.toBeInTheDocument();
+    expect(screen.getByText("Keine Buchungen für diesen Filter.")).toBeInTheDocument();
+  });
 });
+
