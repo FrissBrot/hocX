@@ -518,7 +518,10 @@
       "reset_complete": "Mot de passe réinitialisé",
       "password_change": "Mot de passe modifié",
       "stepup_success": "Confirmation",
-      "stepup_failure": "Confirmation échouée"
+      "stepup_failure": "Confirmation échouée",
+      "stepup_required": "Confirmation demandée",
+      "device_revoke": "Appareil oublié",
+      "mfa_setup_skipped": "Configuration MFA ignorée"
     },
     "outcomes": {
       "success": "Réussite",

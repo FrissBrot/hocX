@@ -518,7 +518,10 @@
       "reset_complete": "Passwort zurückgesetzt",
       "password_change": "Passwort geändert",
       "stepup_success": "Bestätigung",
-      "stepup_failure": "Bestätigung fehlgeschlagen"
+      "stepup_failure": "Bestätigung fehlgeschlagen",
+      "stepup_required": "Bestätigung verlangt",
+      "device_revoke": "Gerät vergessen",
+      "mfa_setup_skipped": "MFA-Einrichtung übersprungen"
     },
     "outcomes": {
       "success": "Erfolg",
