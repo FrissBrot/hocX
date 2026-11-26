@@ -518,7 +518,10 @@
       "reset_complete": "Password reset",
       "password_change": "Password changed",
       "stepup_success": "Confirmation",
-      "stepup_failure": "Confirmation failed"
+      "stepup_failure": "Confirmation failed",
+      "stepup_required": "Confirmation requested",
+      "device_revoke": "Device forgotten",
+      "mfa_setup_skipped": "MFA setup skipped"
     },
     "outcomes": {
       "success": "Success",

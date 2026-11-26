@@ -22,6 +22,7 @@ const RISK_TONE: Record<string, BadgeVariant> = { normal: "neutral", moderate: "
 const KNOWN_EVENTS = new Set([
   "login.password", "login.locked", "login.challenge", "login.mfa.totp", "login.mfa.passkey", "login.success", "mfa.enroll",
   "mfa.remove", "session.revoke", "session.logout", "reset.request", "reset.complete", "password.change", "stepup.success", "stepup.failure",
+  "stepup.required", "device.revoke", "mfa.setup_skipped",
 ]);
 // Übersetzungsschlüssel ohne Punkte (next-intl liest Punkte als Verschachtelung): login.mfa.totp -> login_mfa_totp
 const KNOWN_OUTCOMES = new Set(Object.keys(OUTCOME_TONE));
