@@ -7,6 +7,7 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { financeErrorMessage } from "@/components/finances/finance-errors";
 import type { AttendanceFine } from "@/types/api";
 
 type DeletableFine = Pick<AttendanceFine, "id" | "participant_name_snapshot" | "delete_requires_reason">;
@@ -50,7 +51,7 @@ export function useFineDelete(protocolId?: string): {
         await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
         return "hard";
       } catch (error) {
-        showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
+        showToast(financeErrorMessage(error, t, "deleteFineFailed"), "error");
         return null;
       }
     }
@@ -73,7 +74,7 @@ export function useFineDelete(protocolId?: string): {
       });
       finish("soft");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
+      showToast(financeErrorMessage(error, t, "deleteFineFailed"), "error");
     } finally {
       setSaving(false);
     }
