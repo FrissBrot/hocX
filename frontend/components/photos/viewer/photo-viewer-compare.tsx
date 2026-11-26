@@ -23,6 +23,7 @@ import {
   toggleDecision,
   ViewerGroup,
 } from "./viewer-logic";
+import { RetryImage } from "@/components/ui/retry-image";
 
 /** Vergleichsmodus der Foto-Ansicht: Raster einer Duplikat- oder Ähnlich-Gruppe, Behalten/Löschen
  * je Bild (Vorschlag vorausgefüllt), nicht löschbare Bilder bleiben. «Anwenden» legt die
@@ -218,7 +219,7 @@ function CompareCard({
 }
 
 function CardImage({ src, alt }: { src: string; alt: string }) {
-  return <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} />;
+  return <RetryImage src={src} alt={alt} loading="lazy" decoding="async" draggable={false} />;
 }
 
 function CardBadges({ isBest, isCurrent, trash }: { isBest: boolean; isCurrent: boolean; trash: boolean }) {

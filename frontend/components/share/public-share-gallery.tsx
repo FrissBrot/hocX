@@ -15,6 +15,7 @@ import { useModalFocus } from "@/lib/a11y/use-focus-trap";
 import { useShortcut } from "@/lib/keyboard/use-shortcut";
 import { formatFileSize, formatLongDateRange, formatShortMonthDate } from "@/lib/utils/format";
 import { PublicShare, PublicShareFile } from "@/types/api";
+import { useImageRetry } from "@/lib/hooks/use-image-retry";
 
 const HOCX_LANDING_URL = "https://hocx.ch";
 
@@ -78,12 +79,13 @@ function FileMeta({ file }: { file: PublicShareFile }) {
 
 /** Vorschau einer Datei: Foto bzw. erste Dokumentseite vom Server, sonst eine schlichte Typ-Kachel. */
 function FilePreview({ file, variant }: { file: PublicShareFile; variant: "tile" | "row" }) {
-  const [failed, setFailed] = useState(false);
-  if (file.thumbnail_url && !failed) {
+  // Vorübergehende Fehler (503 «Vorschau wird erzeugt», 429) begrenzt wiederholen, erst dann die Typ-Kachel.
+  const image = useImageRetry(file.thumbnail_url);
+  if (image.src && !image.failed) {
     return (
       <span className={file.is_image ? `public-share-preview-photo public-share-preview-photo-${variant}` : `public-share-preview-page public-share-preview-page-${variant}`}>
         {/* eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt vom öffentlichen Link-Endpunkt */}
-        <img src={file.thumbnail_url} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+        <img src={image.src} alt="" loading="lazy" decoding="async" className={image.waiting ? "image-retry-pending" : undefined} onError={image.onError} />
       </span>
     );
   }

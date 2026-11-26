@@ -17,6 +17,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { AlbumShareRequest, PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
+import { RetryImage } from "@/components/ui/retry-image";
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -373,7 +374,7 @@ export function PhotoAlbums({
                 {Array.from({ length: 4 }).map((_, index) => {
                   const url = album.cover_thumbnail_urls[index];
                   return url ? (
-                    <img key={index} src={url} alt="" className="album-cover-cell" draggable={false} />
+                    <RetryImage key={index} src={url} alt="" className="album-cover-cell" draggable={false} fallback={<div className="album-cover-cell album-cover-empty" />} />
                   ) : (
                     <div key={index} className="album-cover-cell album-cover-empty" />
                   );

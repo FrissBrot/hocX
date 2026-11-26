@@ -17,6 +17,7 @@ import { CaptureDateBox } from "./capture-date-box";
 import { PhotoViewerPlaceSection, SearchPlaceHandler } from "./photo-viewer-place";
 import type { PhotoPlace } from "@/lib/photos/places";
 import { describeExposure, describeSharpness, sharpnessFraction, ViewerGroup } from "./viewer-logic";
+import { RetryImage } from "@/components/ui/retry-image";
 
 type Props = {
   item: FileOverviewItem;
@@ -94,7 +95,7 @@ function GroupCard({ entry, currentId, onOpen }: { entry: ViewerGroup; currentId
     <button type="button" className={`photo-viewer-group-card photo-viewer-group-card-${entry.kind}`} onClick={onOpen}>
       <span className="photo-viewer-group-thumbs" aria-hidden="true">
         {entry.group.images.slice(0, 4).map((image) => (
-          <img key={image.id} src={`${browserApiBaseUrl}${image.thumbnail_url ?? image.content_url}`} alt="" loading="lazy" decoding="async" />
+          <RetryImage key={image.id} src={`${browserApiBaseUrl}${image.thumbnail_url ?? image.content_url}`} alt="" loading="lazy" decoding="async" />
         ))}
       </span>
       <span className="photo-viewer-group-text">

@@ -2,7 +2,6 @@
 
 // Kachelansicht des Dateien-Tabs (Design «Dateien v2»): Vorschau der ersten PDF-Seite, sonst ein
 // Dateisymbol mit Hinweis (in Verarbeitung, fehlgeschlagen, keine PDF-Ansicht).
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { DOCUMENT_STATUS_VARIANT } from "./document-panel";
@@ -13,26 +12,20 @@ import { ActionIcon } from "@/components/ui/action-icons";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { browserApiBaseUrl } from "@/lib/api/client";
+import { useImageRetry } from "@/lib/hooks/use-image-retry";
 import { fileDisplay } from "@/lib/files/display";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { FileOverviewItem } from "@/types/api";
 
 function TilePreview({ item }: { item: FileOverviewItem }) {
   const t = useTranslations("files");
-  const [failed, setFailed] = useState(false);
   const display = fileDisplay(item);
   const document = item.document ?? null;
   const previewUrl = document?.preview_url ?? null;
-  if (previewUrl && !failed) {
-    return (
-      <span className="files-tile-page">
-        {/* eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt authentifiziert von der API */}
-        <img src={`${browserApiBaseUrl}${previewUrl}`} alt="" loading="lazy" onError={() => setFailed(true)} />
-      </span>
-    );
-  }
+  // Vorübergehende Fehler (503/429) lädt useImageRetry selbst nach; den Platzhalter gibt es erst danach.
+  const image = useImageRetry(previewUrl ? `${browserApiBaseUrl}${previewUrl}` : null);
   const status = document?.status;
-  return (
+  const placeholder = (
     <span className="files-tile-placeholder">
       <FileTypeIcon name={item.original_name} extension={display.extension} />
       {status === "processing" ? (
@@ -47,6 +40,13 @@ function TilePreview({ item }: { item: FileOverviewItem }) {
       ) : (
         <span className="files-tile-note">{t("grid.noPdf")}</span>
       )}
+    </span>
+  );
+  if (!image.src || image.failed) return placeholder;
+  return (
+    <span className="files-tile-page">
+      {/* eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt authentifiziert von der API */}
+      <img src={image.src} alt="" loading="lazy" className={image.waiting ? "image-retry-pending" : undefined} onError={image.onError} />
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
+import { IMAGE_RETRY_DELAYS_MS } from "@/lib/hooks/use-image-retry";
 import { PhotoTile } from "./photo-tile";
 
 const item = {
@@ -224,4 +225,75 @@ it("never requests the preview of a blocked photo and labels it", () => {
 it("names the photo in the selection checkbox label", () => {
   render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
   expect(screen.getByRole("checkbox", { name: "photo.jpg auswählen" })).toBeTruthy();
+});
+
+// --- Bug 1.6: ein einzelner Fehlschlag (503 «Vorschau wird erzeugt», 429, Abbruch) liess die Kachel
+// bis zum erneuten Mounten auf «Vorschau nicht verfügbar» stehen ---
+
+function renderVisibleTile() {
+  const view = render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  intersect(0, true);
+  return view;
+}
+
+/** Neue URL je Versuch: der IntersectionObserver der Kachel fordert sie an, solange sie sichtbar ist. */
+function intersectLatest() {
+  intersect(observers.length - 1, true);
+}
+
+it("reloads the preview after a failed request without scrolling and never shows the placeholder meanwhile", () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(false);
+  const { container } = renderVisibleTile();
+  expect(screen.getByRole("img")).toHaveAttribute("src", "/api/stored-files/photo-1/thumbnail");
+  fireEvent.error(screen.getByRole("img"));
+  expect(screen.queryByText("Vorschau nicht verfügbar")).toBeNull();
+  act(() => { vi.advanceTimersByTime(IMAGE_RETRY_DELAYS_MS[0]); });
+  intersectLatest();
+  expect(screen.getByRole("img")).toHaveAttribute("src", "/api/stored-files/photo-1/thumbnail?retry=1");
+  fireEvent.load(screen.getByRole("img"));
+  expect(container.querySelector(".photo-tile-preview-loaded")).not.toBeNull();
+  expect(screen.queryByText("Vorschau nicht verfügbar")).toBeNull();
+  vi.useRealTimers();
+});
+
+it("shows the placeholder only after every retry failed", () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  renderVisibleTile();
+  for (const delay of IMAGE_RETRY_DELAYS_MS) {
+    fireEvent.error(screen.getByRole("img"));
+    expect(screen.queryByText("Vorschau nicht verfügbar")).toBeNull();
+    act(() => { vi.advanceTimersByTime(delay); });
+    intersectLatest();
+  }
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining(`retry=${IMAGE_RETRY_DELAYS_MS.length}`));
+  fireEvent.error(screen.getByRole("img"));
+  expect(screen.getByText("Vorschau nicht verfügbar")).toBeTruthy();
+  expect(screen.queryByRole("img")).toBeNull();
+  vi.useRealTimers();
+});
+
+it("does not request a retry while the tile is out of view", () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  renderVisibleTile();
+  fireEvent.error(screen.getByRole("img"));
+  act(() => { vi.advanceTimersByTime(IMAGE_RETRY_DELAYS_MS[0]); });
+  intersect(observers.length - 1, false);
+  expect(screen.getByRole("img")).not.toHaveAttribute("src", expect.stringContaining("retry=1"));
+  intersectLatest();
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("retry=1"));
+  vi.useRealTimers();
+});
+
+it("cancels a scheduled retry on unmount", () => {
+  vi.useFakeTimers();
+  const { unmount } = renderVisibleTile();
+  fireEvent.error(screen.getByRole("img"));
+  expect(vi.getTimerCount()).toBe(1);
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
+  vi.useRealTimers();
 });

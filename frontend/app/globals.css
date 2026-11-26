@@ -13685,6 +13685,11 @@ a.export-step-meta {
   border: 0;
 }
 
+/* RetryImage: Vorschau zwischen zwei Ladeversuchen - Platz bleibt, kein kaputtes Bildsymbol */
+.image-retry-pending {
+  visibility: hidden;
+}
+
 .reorder-buttons {
   display: inline-flex;
   gap: var(--space-1);

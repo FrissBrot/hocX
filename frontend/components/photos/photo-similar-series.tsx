@@ -12,6 +12,7 @@ import { PhotoViewer, ViewerPermissions } from "./photo-viewer";
 import { SimilarityComputedAt, SimilarityState } from "./similarity-state";
 import { markSimilarityGroupReviewed, useReviewedSimilarityGroups, useSimilarityGroups } from "./use-similarity-groups";
 import { groupKey } from "./viewer/viewer-logic";
+import { RetryImage } from "@/components/ui/retry-image";
 
 export function PhotoSimilarSeries({
   search,
@@ -149,7 +150,7 @@ export function PhotoSimilarSeries({
                         aria-label={t("openAriaLabel", { name: image.original_name })}
                         onClick={() => setViewer({ groupId: group.best_id, index })}
                       >
-                        <img src={thumbnailUrl} alt={image.original_name} loading="lazy" decoding="async" draggable={false} />
+                        <RetryImage src={thumbnailUrl} alt={image.original_name} loading="lazy" decoding="async" draggable={false} />
                         {isBest && <span className="photo-series-badge">{t("bestChoice")}</span>}
                       </button>
                       <span className="photo-series-caption muted">
