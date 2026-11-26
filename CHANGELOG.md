@@ -40,6 +40,11 @@ keine neuen Funktionen, keine Migration.
 - Verschlüsselte Exporte (Excel mit Passwort, AES-ZIP, Vereinsexport, Datenauskunft): das Passwort
   wird nicht mehr still um Leerzeichen am Rand gekürzt - die Datei öffnet mit genau der Eingabe.
 - Plattform-Admin-Login: Gross-/Kleinschreibung der E-Mail spielt keine Rolle mehr.
+- Mandanten-Profilbild: ein Bild über 40 Megapixel meldet das übersetzt, statt «muss ein JPEG-,
+  PNG-… sein»; «Domain nicht gefunden» erscheint in der UI-Sprache; die Avatarreihe der Abo-Seite
+  nennt die Konten auch für Screenreader; Plattform-Admin › Speicher zeigt Datumsangaben als
+  Schweizer Kalendertag. Export-Passwörter zählen für die Mindestlänge überall ohne Leerzeichen am
+  Rand (das Passwort selbst bleibt unverändert).
 
 ### Sicherheit
 
@@ -50,12 +55,19 @@ keine neuen Funktionen, keine Migration.
   Schriften.
 - Traefik-Ratelimits (Login, TOTP, Domain-Erkennung, Word-Import, Abgabebox, Prüfseite) zählen
   IPv6-Adressen je /64 statt je Adresse, wie die Grenzen im Backend.
+- Prüfseite: der Seitenvergleich über die Dokument-ID ist je Besucher begrenzt (20 je 10 Minuten,
+  IPv6 je /64) plus 200 je Dokument insgesamt. Vorher galt die Grenze für alle zusammen, und wer
+  eine Dokument-ID kannte, konnte den Vergleich für alle anderen sperren.
+- ICS- und Markdown-Exporte des Document Studio sind als begründete Ausnahme in den
+  Sicherheitsregeln (§4.4) festgehalten; jeder solche Export steht ohne Inhalt im Audit-Log.
 
 ### Update
 
 - Abhängigkeiten: pypdfium2 5.15.2 (Backend).
-- Keine Migration, kein neues Secret, keine neue Einstellung. Die Traefik-Labels der Ratelimits
-  ändern sich (`docker-compose.release.yml`), `deploy.sh` übernimmt sie wie gewohnt.
+- Keine Migration, kein neues Secret. Die Traefik-Labels der Ratelimits ändern sich
+  (`docker-compose.release.yml`), `deploy.sh` übernimmt sie wie gewohnt.
+- Neue optionale Einstellung der Abgabebox `TRUSTED_PROXY_CIDRS` (Standard wie im Backend: private
+  Netze), für die Grenze des Seitenvergleichs.
 
 ## [1.6.0] - 2026-11-24
 
