@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.schemas.base import MAX_QUERY_OFFSET
 from app.core.db import get_db
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.security import CurrentUser, get_current_user, permission_denied, require_permission
 from app.models.entities import ElementType, Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
 from app.schemas.protocol import (
     ProtocolTodoCreate,
@@ -353,7 +353,7 @@ def patch_todo(
         # eigenen (zugewiesenen) Pendenz - ohne dieses Recht ist der Zugang read-only.
         require_permission(user, P.TODOS_COMPLETE_OWN)
         if payload.model_fields_set - {"todo_status_id", "completed_at"}:
-            raise HTTPException(status_code=403, detail="Permission required")
+            raise permission_denied()
         existing = _todo_or_404(db, user, todo_id)
         if user.user_id not in access_service._todo_assignee_user_ids(db, existing):
             raise HTTPException(status_code=404, detail="Todo not found")  # wie fremde: kein Orakel

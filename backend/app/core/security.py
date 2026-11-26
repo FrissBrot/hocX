@@ -563,6 +563,13 @@ def get_current_user(request: Request, user: CurrentUser | None = Depends(get_op
     return user
 
 
+def permission_denied() -> HTTPException:
+    """403 der zentralen Rechteprüfung. Mit Code, damit das Frontend die Meldung zentral übersetzt
+    (lib/api/client.ts); früher stand «Permission required» roh im Toast (Nachtlauf 2026-11-26).
+    Ebenso require_feature: feature_not_booked / feature_read_only."""
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "permission_required", "message": "Permission required"})
+
+
 def require_feature(user: CurrentUser, code: str, *, write: bool = True) -> CurrentUser:
     """Feature-Gating pro Mandant - orthogonal zur Berechtigung. Ein 403 hier bedeutet "fuer
     diesen Mandanten nicht gebucht", nicht "darf das nicht". ``write=False`` (nur lesen) lässt
@@ -570,8 +577,14 @@ def require_feature(user: CurrentUser, code: str, *, write: bool = True) -> Curr
     if user.has_feature(code, write=write):
         return user
     if code in user.current_tenant_read_only_features:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nur noch lesend (nicht mehr im Abo)")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nicht gebucht")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "feature_read_only", "message": f"Feature '{code}' nur noch lesend (nicht mehr im Abo)", "params": {"feature": code}},
+        )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"code": "feature_not_booked", "message": f"Feature '{code}' nicht gebucht", "params": {"feature": code}},
+    )
 
 
 def require_permission(user: CurrentUser, permission: P) -> CurrentUser:
@@ -582,7 +595,7 @@ def require_permission(user: CurrentUser, permission: P) -> CurrentUser:
     if feature is not None:
         require_feature(user, feature, write=permission not in FEATURES[feature].read_permissions)
     if permission not in user.permissions:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission required")
+        raise permission_denied()
     return user
 
 
@@ -591,4 +604,4 @@ def require_any_permission(user: CurrentUser, *permissions: P) -> CurrentUser:
     meetings.edit). Bewusst ohne Feature-Sonderfall - nur für Permissions ohne Modulbindung."""
     if any(user.can(permission) for permission in permissions):
         return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission required")
+    raise permission_denied()

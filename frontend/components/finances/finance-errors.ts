@@ -24,8 +24,7 @@ export function financeErrorMessage(error: unknown, t: TFunc, fallbackKey: strin
     return CONFLICT_CODES.has(code) ? t(`errors.${code}`) : t("errors.conflict");
   }
   if (status === 403) {
-    const text = error instanceof Error ? error.message : "";
-    return text.includes("nur noch lesend") ? t("errors.readOnly") : t("errors.forbidden");
+    return code === "feature_read_only" ? t("errors.readOnly") : t("errors.forbidden");
   }
   if (status === 422) return t("errors.invalid");
   return t(fallbackKey);
