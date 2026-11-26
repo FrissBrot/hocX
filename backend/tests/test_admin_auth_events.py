@@ -180,3 +180,24 @@ def test_source_limit_does_not_block_the_admin_emergency_access(db, admin, monke
             _login(db, f"fremd-{index}@example.com", password="falsch-falsch")
         assert exc_info.value.status_code == 401
     assert _login(db, admin.email).authenticated is False
+
+
+def test_login_email_ignores_case_and_surrounding_spaces(db, admin):
+    """Wie beim Mandanten-Login (Nachtlauf 2026-11-26): «Events-…@Example.COM» ist dasselbe Konto."""
+    pending = _login(db, f"  {admin.email.upper()} ")
+    assert pending.authenticated is False  # Passwort ok, weiter zum Passkey
+    outcomes = [event.outcome for event in _events(db, admin.id, "admin.login.password")]
+    assert outcomes == ["success"]
+
+
+def test_login_email_case_match_must_be_unique(db, admin):
+    """Zwei Konten, die sich nur in der Schreibweise unterscheiden: ohne exakten Treffer kein Raten."""
+    from app.core.security import hash_password
+
+    twin = PlatformAdmin(email=admin.email.upper(), password_hash=hash_password(PASSWORD), display_name="Ops 2")
+    db.add(twin)
+    db.flush()
+    assert _login(db, admin.email).authenticated is False  # exakter Treffer gewinnt
+    with pytest.raises(HTTPException) as exc_info:
+        _login(db, admin.email.title())
+    assert exc_info.value.status_code == 401

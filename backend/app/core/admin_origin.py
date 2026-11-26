@@ -35,4 +35,8 @@ def expected_admin_origin(request: Request) -> str:
 
 
 def admin_request_hostname(request: Request) -> str | None:
-    return urlparse(_browser_origin(request)).hostname
+    # Nicht lesbarer Origin (z. B. «http://[»): unbekannter Host statt 500 (Nachtlauf 2026-11-26)
+    try:
+        return urlparse(_browser_origin(request)).hostname
+    except ValueError:
+        return None

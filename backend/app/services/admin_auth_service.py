@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, Request, Response, status
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin, issue_admin_session_cookie
+from app.core.auth_pseudonym import normalize_email
 from app.core.config import settings
 from app.auth_security import context as request_context
 from app.auth_security import breach, devices, events
@@ -37,6 +38,18 @@ def _admin_device_known(db: Session, admin_id: int, device_hash: str | None) -> 
     ))
 
 
+def _admin_by_login_email(db: Session, email: str) -> PlatformAdmin | None:
+    """Admin zur eingegebenen E-Mail. Gross-/Kleinschreibung und Rand-Leerzeichen zählen nicht (wie
+    beim Mandanten-Login, Nachtlauf 2026-11-26): «Ops@Example.com» meldete sonst «falsche
+    Anmeldedaten». Die Spalte ist nur exakt eindeutig - ein exakter Treffer gewinnt, sonst nur ein
+    eindeutiger Treffer ohne Gross-/Kleinschreibung (nie ein beliebiger von mehreren)."""
+    exact = db.query(PlatformAdmin).filter(PlatformAdmin.email == email).one_or_none()
+    if exact is not None:
+        return exact
+    matches = db.query(PlatformAdmin).filter(func.lower(PlatformAdmin.email) == normalize_email(email)).limit(2).all()
+    return matches[0] if len(matches) == 1 else None
+
+
 class AdminAuthService:
     def __init__(self) -> None:
         self.mfa_service = AdminMfaService()
@@ -52,7 +65,7 @@ class AdminAuthService:
         Geräte). Ein richtiges Passwort gibt nie eine Session."""
         guard = LoginGuard(scope="login-admin")
         ctx = request_context.current(client_address)
-        admin = db.query(PlatformAdmin).filter(PlatformAdmin.email == payload.email).one_or_none()
+        admin = _admin_by_login_email(db, payload.email)
         device_id = devices.device_id_from_request(request)
         device_hash = devices.device_hash(device_id) if device_id else None
         known = _admin_device_known(db, admin.id if admin is not None else -1, device_hash)

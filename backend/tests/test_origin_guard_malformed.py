@@ -10,7 +10,10 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
+from app.api.routes import users as users_routes
+from app.core.admin_origin import admin_request_hostname
 from app.core.origin_guard import OriginGuardMiddleware, origin_allowed
 from app.core.security import get_current_user
 from app.main import app
@@ -51,3 +54,19 @@ def test_step_up_options_with_unparsable_origin_is_400(db):
     finally:
         app.dependency_overrides.pop(get_current_user, None)
     assert response.status_code == 400
+
+
+def _get_request(origin: str) -> Request:
+    return Request({
+        "type": "http", "method": "GET", "path": "/api/users/me/mfa", "query_string": b"", "scheme": "https",
+        "server": ("example.test", 443), "headers": [(b"origin", origin.encode("latin-1")), (b"host", b"example.test")],
+    })
+
+
+@pytest.mark.parametrize("origin", MALFORMED)
+def test_hostname_helpers_treat_unparsable_origin_as_unknown_host(origin):
+    """GET-Routen (z. B. /api/users/me/mfa) laufen nicht durch die CSRF-Middleware und lasen den
+    Origin selbst: ein kaputter Wert ergab dort 500 statt «Passkey hier nicht möglich»."""
+    assert users_routes._request_hostname(_get_request(origin)) is None
+    assert admin_request_hostname(_get_request(origin)) is None
+    assert users_routes._request_hostname(_get_request("https://example.test")) == "example.test"
