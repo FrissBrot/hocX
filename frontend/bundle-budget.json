@@ -331,11 +331,6 @@
       "css_gzip_kb": 64,
       "css_raw_kb": 395
     },
-    "/files/import/google-picker": {
-      "js_gzip_kb": 212,
-      "css_gzip_kb": 60,
-      "css_raw_kb": 364
-    },
     "/files/uploads": {
       "js_gzip_kb": 326,
       "css_gzip_kb": 64,
@@ -360,6 +355,11 @@
       "js_gzip_kb": 261,
       "css_gzip_kb": 47,
       "css_raw_kb": 305
+    },
+    "/google-picker": {
+      "js_gzip_kb": 211,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 278
     },
     "/lists": {
       "js_gzip_kb": 273,
