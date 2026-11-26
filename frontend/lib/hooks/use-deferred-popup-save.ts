@@ -46,6 +46,13 @@ export function useDeferredPopupSave() {
     timer.current = setTimeout(() => { void flush(); }, 500);
   }
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // Beim Unmount eine noch wartende Änderung sofort speichern statt verwerfen: der Dialog bzw. das
+  // Panel kann auch ohne «Schliessen» verschwinden (Seitenwechsel, Wechsel Desktop/Mobil, 1.6.1).
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (pending.current) void flushRef.current();
+  }, []);
   return { schedule, flush, saving, saveError };
 }

@@ -32,42 +32,48 @@ export function usesSettingsFrame(pathname: string): boolean {
  * Unternavigation (Übersicht + Gruppen), rechts der unveränderte Inhalt der Seite. Kopf-Breadcrumb
  * und Chip «← Zurück zu <Bereich>» kommen aus der Kopfzeile der App-Shell. Nur Desktop - auf dem
  * Handy führt «Mehr › Einstellungen» zur Übersicht.
+ *
+ * Die App-Shell rendert den Rahmen für jede Seite, ohne `enabled` nur als zwei unsichtbare Hüllen
+ * (`.shell-slot`, display: contents): so liegt der Seiteninhalt immer an derselben Stelle im
+ * React-Baum und wird beim Wechsel Desktop/Mobil nicht neu gemountet.
  */
-export function SettingsFrame({ groups, pathname, children }: { groups: SettingsGroup[]; pathname: string; children: ReactNode }) {
+export function SettingsFrame({ groups, pathname, enabled = true, children }: { groups: SettingsGroup[]; pathname: string; enabled?: boolean; children: ReactNode }) {
   const t = useTranslations("nav");
   const tSettings = useTranslations("settings.hub");
   return (
-    <div className="settings-frame">
-      <nav className="settings-subnav" aria-label={t("groups.settings")}>
-        <Link
-          href={SETTINGS_HREF as Route}
-          className={pathname === SETTINGS_HREF ? "settings-subnav-link settings-subnav-link-active" : "settings-subnav-link"}
-          aria-current={pathname === SETTINGS_HREF ? "page" : undefined}
-        >
-          <NavIcon name="dashboard" className="settings-subnav-icon" />
-          <span>{tSettings("overview")}</span>
-        </Link>
-        {groups.map((group) => (
-          <div className="settings-subnav-group" key={group.titleKey}>
-            <div className="settings-subnav-title">{t(group.titleKey)}</div>
-            {group.links.map((link) => {
-              const active = isNavLinkActive(link, pathname);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href as Route}
-                  className={active ? "settings-subnav-link settings-subnav-link-active" : "settings-subnav-link"}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <NavIcon name={link.icon} className="settings-subnav-icon" />
-                  <span>{t(link.labelKey)}</span>
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-      <div className="settings-frame-content">{children}</div>
+    <div className={enabled ? "settings-frame" : "shell-slot"}>
+      {enabled ? (
+        <nav className="settings-subnav" aria-label={t("groups.settings")}>
+          <Link
+            href={SETTINGS_HREF as Route}
+            className={pathname === SETTINGS_HREF ? "settings-subnav-link settings-subnav-link-active" : "settings-subnav-link"}
+            aria-current={pathname === SETTINGS_HREF ? "page" : undefined}
+          >
+            <NavIcon name="dashboard" className="settings-subnav-icon" />
+            <span>{tSettings("overview")}</span>
+          </Link>
+          {groups.map((group) => (
+            <div className="settings-subnav-group" key={group.titleKey}>
+              <div className="settings-subnav-title">{t(group.titleKey)}</div>
+              {group.links.map((link) => {
+                const active = isNavLinkActive(link, pathname);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href as Route}
+                    className={active ? "settings-subnav-link settings-subnav-link-active" : "settings-subnav-link"}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <NavIcon name={link.icon} className="settings-subnav-icon" />
+                    <span>{t(link.labelKey)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      ) : null}
+      <div className={enabled ? "settings-frame-content" : "shell-slot shell-page"}>{children}</div>
     </div>
   );
 }

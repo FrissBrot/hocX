@@ -76,7 +76,7 @@ import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
 import { AgendaQuickCreateForm } from "@/components/protocol/agenda-quick-create-form";
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
-import { createDebouncedSaveQueue } from "@/components/protocol/debounced-save-queue";
+import { useDebouncedSaveQueue } from "@/components/protocol/debounced-save-queue";
 import { createTextDraftStore, decideDraftRestore, settleDraftAfterSave, textDraftBaseKey, textDraftKey } from "@/components/protocol/text-drafts";
 import { useTextDraftEmptiness } from "@/components/protocol/use-text-draft";
 import { jumpToSection, prefersReducedMotion } from "@/components/protocol/document-scroll";
@@ -649,12 +649,10 @@ export function ProtocolEditor({
   // Per text block: the currently running save. Saves of the same block are serialized so a
   // save never reads the baseline before the previous save's response has updated it.
   // Umgesetzt in createDebouncedSaveQueue (debounced-save-queue.ts).
-  const sendTextSaveRef = useRef<(blockId: string, content: string) => Promise<boolean>>(async () => true);
-  const [textSaveQueue] = useState(() =>
-    createDebouncedSaveQueue<string>(700, (blockId, content) => sendTextSaveRef.current(blockId, content))
-  );
-  // Funktionsdeklaration (gehoistet), liest bei jedem Aufruf den aktuellen Render-Stand.
-  sendTextSaveRef.current = sendTextSave;
+  // Beim Unmount (Seitenwechsel, Wechsel Desktop/Mobil) sendet die Warteschlange wartende
+  // Speicherungen sofort, statt sie zu verwerfen. sendTextSave ist eine gehoistete
+  // Funktionsdeklaration und liest bei jedem Aufruf den aktuellen Render-Stand.
+  const textSaveQueue = useDebouncedSaveQueue<string>(700, (blockId, content) => sendTextSave(blockId, content));
   const shouldScrollToElementRef = useRef(false);
   // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
   // set in focusElement below) should steal focus into a field. Restoring the remembered
@@ -673,12 +671,6 @@ export function ProtocolEditor({
   selectedElementIdRef.current = selectedElementId;
   const documentRef = useRef<HTMLDivElement | null>(null);
   const sessionPanelRef = useRef<SessionPanelHandle | null>(null);
-  useEffect(() => {
-    return () => {
-      textSaveQueue.cancelAll();
-    };
-  }, [textSaveQueue]);
-
   // Recover text that was typed before a tab/browser crash or a failed request. A draft is
   // only ever removed after the backend confirmed the exact value.
   // Ein Entwurf, dessen Baseline nicht mehr dem Serverstand entspricht (jemand anderes hat

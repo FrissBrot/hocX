@@ -15,6 +15,18 @@ keine neuen Funktionen, keine Migration.
 
 ### Behoben
 
+- **Wechsel zwischen Desktop- und Mobilansicht verliert keine Eingaben mehr:** Beim Drehen eines
+  Tablets, beim Schmalziehen des Fensters oder sonst über die 900-px-Grenze tauschte die App-Shell
+  den ganzen Baum aus und baute die Seite neu auf. Halb ausgefüllte Formulare (z. B. Personenseite),
+  offene Dialoge (Pendenz, Termin), der Fokus und der Stand im Datei-Import gingen dabei verloren;
+  der Import zeigte danach wieder die beim Laden geholten, veralteten Daten. Jetzt wechseln nur
+  Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
+  Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
+  getippt wird.
+- **Protokoll-Editor, Sitzungsnotizen, Foto- und Dateidetails speichern beim Verschwinden sofort:**
+  Verschwand der Editor innerhalb der Entprellzeit (Ansichtswechsel, Seitenwechsel), wurde die
+  wartende Speicherung verworfen. Im Protokoll-Editor holte die Outbox sie erst nach rund 1,5 s nach;
+  im Foto-Viewer und in den Dateidetails konnte sie verloren gehen. Jetzt wird sie sofort gesendet.
 - Fehlermeldungen in der UI-Sprache statt roher Backend-Texte: fehlende Berechtigung und nicht
   gebuchte bzw. nur noch lesbare Abo-Funktionen («Permission required», «Feature 'x' nicht
   gebucht») werden jetzt in jeder Ansicht übersetzt (zentral über Fehlercodes); ebenso MFA
