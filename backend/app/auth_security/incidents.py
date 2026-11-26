@@ -250,7 +250,8 @@ def scope_for(rule: str, subject: str | None) -> Scope:
         sql, params = _prefix("subject_hash", "scope_subject", subject)
         return Scope(sql, params, True)
     if rule in ADMIN_RULES and str(subject or "").isdigit():
-        return Scope("e.platform_admin_id = :scope_admin", {"scope_admin": int(subject)}, True)
+        # Sperren, die dieser Admin selbst gesetzt hat, tragen seine ID - sie gehören nicht zum Vorfall
+        return Scope("e.platform_admin_id = :scope_admin AND e.event_type NOT IN ('block.set', 'block.clear')", {"scope_admin": int(subject)}, True)
     if rule in TENANT_RULES and str(subject or "").isdigit():
         return Scope("e.tenant_id = :scope_tenant", {"scope_tenant": int(subject)}, True)
     condition = threats._RULE_SQL.get(rule, ("false", None, ""))[0]

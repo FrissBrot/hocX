@@ -333,6 +333,20 @@ def test_detail_shows_facts_participants_and_blocks_the_network(db):
     assert client.get(f"/api/admin/auth-security/incidents/{incident_id}").json()["stage"] == 5
 
 
+def test_admin_incident_ignores_blocks_set_by_that_admin(db):
+    owner = _admin(db)
+    db.execute(
+        text("INSERT INTO auth_event (event_type, outcome, actor_kind, platform_admin_id, ts, details) VALUES "
+             "('admin.login.success', 'success', 'admin', :id, now(), '{\"new_device\": true}'::jsonb), "
+             "('block.set', 'info', 'admin', :id, now(), '{\"stage\": 5}'::jsonb)"),
+        {"id": owner.admin_id},
+    )
+    incidents.correlate(db, [_threat(rule="admin_new_device", subject=str(owner.admin_id))])
+    detail = incidents.detail(db, _incident(db, f"auth:admin_new_device:{owner.admin_id}")["id"])
+    assert detail["stage"] == 0 and detail["facts"]["successes"] == 1
+    assert all(item.get("event_type") != "block.set" for item in detail["timeline"])
+
+
 def test_block_only_for_network_incidents(db):
     incidents.correlate(db, [_threat(rule="limiter", subject=None, severity="critical")])
     incident_id = _incident(db, "auth:limiter")["id"]
