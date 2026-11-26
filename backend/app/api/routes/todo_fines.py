@@ -102,6 +102,9 @@ def create_tariff(payload: FineTariffGroupWrite, db: Session = Depends(get_db), 
     tenant_id = _manage_tariffs(user)
     try:
         group = config.create_group(db, tenant_id, payload)
+    except config.TariffNameTakenError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": "tariff_name_taken", "message": str(exc)}) from exc
     except (SQLAlchemyError, ValueError) as exc:
         raise _bad_request(db, exc, "Tariff could not be created") from exc
     audit.log(db, action="todo_fine.tariff_created", actor=user, entity_type="fine_tariff_group", entity_id=group.id, details={"name": group.name})
@@ -125,6 +128,9 @@ def update_tariff(tariff_id: uuid.UUID, payload: FineTariffGroupWrite, db: Sessi
         raise HTTPException(status_code=404, detail="Tariff not found")
     try:
         config.update_group(db, tenant_id, group, payload)
+    except config.TariffNameTakenError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"code": "tariff_name_taken", "message": str(exc)}) from exc
     except (SQLAlchemyError, ValueError) as exc:
         raise _bad_request(db, exc, "Tariff could not be saved") from exc
     audit.log(db, action="todo_fine.tariff_updated", actor=user, entity_type="fine_tariff_group", entity_id=group.id, details={"name": group.name})

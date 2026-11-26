@@ -359,6 +359,7 @@
     "tariffDeleteTitle": "Supprimer le tarif «{name}» ?",
     "tariffDeleteRest": "{count, plural, =0 {Personne n’a ce tarif attribué directement.} one {# personne revient au tarif standard.} other {# personnes reviennent au tarif standard.}}",
     "tariffCreated": "Tarif «{name}» créé",
+    "tariffNameTaken": "Un tarif « {name} » existe déjà. Choisis un autre nom.",
     "tariffSavedToast": "Tarif enregistré",
     "tariffDeleted": "Tarif «{name}» supprimé",
     "standardPlaceholder": "Standard ({amount})"

@@ -712,3 +712,23 @@ def test_todo_routes_answer_404_for_foreign_tenant(db, setup):
         with pytest.raises(HTTPException) as exc:
             call()
         assert exc.value.status_code == 404
+
+
+def test_duplicate_tariff_name_returns_translatable_conflict(db, setup):
+    """Doppelter Tarifname beim Anlegen: 409 mit Code tariff_name_taken statt 400 mit englischem
+    Text, den das Frontend roh anzeigte (Nachtlauf 2026-11-26)."""
+    s = setup
+    with pytest.raises(HTTPException) as exc:
+        route.create_tariff(FineTariffGroupWrite(name="Lernende"), db=db, user=s["manager"])
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "tariff_name_taken"
+
+
+def test_rename_to_taken_tariff_name_returns_translatable_conflict(db, setup):
+    """Dasselbe beim Umbenennen (eigener Test: die Route rollt die Sitzung zurück, danach fehlen
+    die Tarife aus dem Fixture)."""
+    s = setup
+    with pytest.raises(HTTPException) as exc:
+        route.update_tariff(s["earners"].id, FineTariffGroupWrite(name="Lernende"), db=db, user=s["manager"])
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "tariff_name_taken"

@@ -359,6 +359,7 @@
     "tariffDeleteTitle": "Delete tariff «{name}»?",
     "tariffDeleteRest": "{count, plural, =0 {Nobody has this tariff assigned directly.} one {# person falls back to the default tariff.} other {# people fall back to the default tariff.}}",
     "tariffCreated": "Tariff «{name}» created",
+    "tariffNameTaken": "A tariff “{name}” already exists. Please choose a different name.",
     "tariffSavedToast": "Tariff saved",
     "tariffDeleted": "Tariff «{name}» deleted",
     "standardPlaceholder": "Default ({amount})"

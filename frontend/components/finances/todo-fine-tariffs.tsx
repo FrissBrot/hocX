@@ -11,6 +11,7 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { financeErrorMessage } from "@/components/finances/finance-errors";
 import { formatMoney } from "@/lib/utils/format";
 import type { FineTariff, FineTariffGroup, FineTariffMember } from "@/types/api";
 
@@ -85,7 +86,9 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, clubTariff = n
       showToast(editing === "new" ? t("todoFines.tariffCreated", { name: name.trim() }) : t("todoFines.tariffSavedToast"), "success");
       setEditing(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
+      // Doppelter Name: übersetzte Meldung statt «Tariff name already exists» (Backend-Code)
+      const code = (error as { detail?: { code?: unknown } } | null)?.detail?.code;
+      showToast(code === "tariff_name_taken" ? t("todoFines.tariffNameTaken", { name: name.trim() }) : financeErrorMessage(error, t, "todoFines.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -106,7 +109,7 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, clubTariff = n
       showToast(t("todoFines.tariffDeleted", { name: tariff.name }), "success");
       await onChanged();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
+      showToast(financeErrorMessage(error, t, "todoFines.saveFailed"), "error");
     }
   }
 
