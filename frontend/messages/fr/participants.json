@@ -242,7 +242,8 @@
     "inviteHelp": "La personne définit elle-même son mot de passe.",
     "role": "Rôle",
     "createAndInvite": "Créer et inviter",
-    "createdInvited": "{name} créé·e et invité·e"
+    "createdInvited": "{name} créé·e et invité·e",
+    "createdPartial": "{name} a été ajouté·e, mais tout n'a pas fonctionné : {reason} Complétez le reste sur la page de la personne."
   },
   "bulk": {
     "label": "Actions groupées",

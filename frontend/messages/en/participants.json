@@ -242,7 +242,8 @@
     "inviteHelp": "The person sets their own password.",
     "role": "Role",
     "createAndInvite": "Create and invite",
-    "createdInvited": "{name} created and invited"
+    "createdInvited": "{name} created and invited",
+    "createdPartial": "{name} was added, but not everything worked: {reason} Complete the rest on the person's page."
   },
   "bulk": {
     "label": "Bulk actions",
