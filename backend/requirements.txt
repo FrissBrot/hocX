@@ -23,7 +23,7 @@ typst==0.15.2
 markdown-it-py==4.2.0
 pypdf==7.1.1
 # Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (TYPST-005, STUDIO-015)
-pypdfium2==5.15.0
+pypdfium2==5.15.2
 openpyxl==3.1.5
 # Zeichenabdeckung der Schriften (PDF/A verbietet fehlende Glyphen, siehe renderer.py)
 fonttools==4.68.0
