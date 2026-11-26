@@ -125,6 +125,9 @@ describe("Google-Auswahl", () => {
     expect(safeReturnUrl("https://hocx.example/admin")).toBeNull();
     expect(safeReturnUrl("https://user@evil.example/files/import")).toBeNull();
     expect(safeReturnUrl(5)).toBeNull();
+    // http nur auf einer http-Seite (E2E-Stack), sonst nur https
+    expect(safeReturnUrl("http://127.0.0.1:13000/files/import?job=1", "https:")).toBeNull();
+    expect(safeReturnUrl("http://127.0.0.1:13000/files/import?job=1", "http:")).toBe("http://127.0.0.1:13000/files/import?job=1");
   });
 
   it("öffnet nur Auswahlseiten von Google Fotos", () => {

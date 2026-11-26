@@ -372,12 +372,14 @@ export function pickerTicket(hash: string): string | null {
   return ticket && /^[A-Za-z0-9_-]{20,100}$/.test(ticket) ? ticket : null;
 }
 
-/** Rücksprung in den Wizard nur auf eine http(s)-Adresse des Wizards (das Backend bestimmt sie). */
-export function safeReturnUrl(value: unknown): string | null {
+/** Rücksprung in den Wizard nur auf eine https-Adresse des Wizards (das Backend bestimmt sie); http
+ *  nur, wenn die Seite selbst über http läuft (E2E-Stack). */
+export function safeReturnUrl(value: unknown, pageProtocol = typeof window === "undefined" ? "https:" : window.location.protocol): string | null {
   if (typeof value !== "string") return null;
   try {
     const url = new URL(value);
-    return (url.protocol === "https:" || url.protocol === "http:") && url.pathname === "/files/import" && !url.username ? url.toString() : null;
+    const protocolOk = url.protocol === "https:" || (url.protocol === "http:" && pageProtocol === "http:");
+    return protocolOk && url.pathname === "/files/import" && !url.username ? url.toString() : null;
   } catch {
     return null;
   }

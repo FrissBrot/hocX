@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import secrets
+import time
 from dataclasses import asdict, dataclass
 
 from app.core.config import settings
@@ -40,8 +42,11 @@ class TicketData:
     user_id: int
     job_id: str
     return_url: str
-    # Ausstellung (Unix-Zeit): Sitzungen, die danach beendet wurden, machen das Ticket ungültig
+    # Ausstellung (Unix-Zeit): Sitzungen, die danach beendet wurden, machen das Ticket ungültig;
+    # die ganze Kette (Token- und Apply-Ticket) lebt höchstens TICKET_TTL_SECONDS ab hier
     issued_at: float
+    # Ausstellende Sitzung (Session-Register): Einzelabmeldung oder Ablauf beendet auch das Ticket
+    session_id: str | None = None
 
 
 def _key(ticket: str) -> str:
@@ -69,8 +74,12 @@ def picker_url(ticket: str) -> str:
 def issue(data: TicketData) -> str:
     if data.stage not in STAGES:
         raise ValueError("stage")
+    # Nie länger als bis Ausstellung + TTL (das Apply-Ticket verlängert die Kette nicht)
+    remaining = math.ceil(data.issued_at + TICKET_TTL_SECONDS - time.time())
+    if remaining <= 0:
+        raise ValueError("expired")
     ticket = secrets.token_urlsafe(32)
-    get_redis_sync().set(_key(ticket), json.dumps(asdict(data)), ex=TICKET_TTL_SECONDS, nx=True)
+    get_redis_sync().set(_key(ticket), json.dumps(asdict(data)), ex=min(remaining, TICKET_TTL_SECONDS), nx=True)
     return ticket
 
 

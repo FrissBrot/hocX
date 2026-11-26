@@ -1813,7 +1813,8 @@ damit zurück; danach springt sie in den Wizard zurück.
 
 1. Namen wählen, z. B. `picker.hocx.ch` (Test-Host: `picker.test.hocx.ch`). Nicht die App-, Admin-,
    Abgabebox-, Doku- oder Website-Domain und keine Vereinsdomain (`deploy.sh` und das Backend
-   prüfen das).
+   prüfen die Systemdomains; eine Vereinsdomain mit diesem Namen bekommt keinen Router, weil die
+   Picker-Domain reserviert ist).
 2. **DNS:** A- bzw. AAAA-Eintrag (oder CNAME) auf denselben Server wie `TRAEFIK_DOMAIN`.
 3. **Zertifikat:** holt Traefik selbst (Router `picker-frontend` und `picker-api`, gleicher
    Cert-Resolver wie die App). Mit DNS-Challenge oder Wildcard-Zertifikat ist nichts weiter zu tun.

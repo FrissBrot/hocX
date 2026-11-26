@@ -608,3 +608,30 @@ def test_drive_is_not_offered_without_a_picker_domain(db, fake, monkeypatch):
     with pytest.raises(HTTPException) as error:
         google_routes.google_drive_picker_ticket(job.id, _request(), Response(), db=db, user=user)
     assert error.value.detail["code"] == "provider_unavailable"
+
+
+def test_picker_ticket_is_bound_to_the_issuing_session_and_expires_as_a_chain(db, fake):
+    """Security-Review 1.7 (Picker-Origin, N-2): Einzelabmeldung/Ablauf der ausstellenden Sitzung
+    beendet das Ticket; das Apply-Ticket verlängert die 10 Minuten ab Ausstellung nicht."""
+    import dataclasses
+    import time
+
+    from app.services.cloud_import import picker_tickets
+
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id)
+    # Sitzung, die es im Session-Register nicht (mehr) gibt
+    gone = dataclasses.replace(user, session_id=uuid.uuid4())
+    ticket = _ticket(db, gone, job.id)
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_token(google_routes.PickerTicketIn(ticket=ticket), _request(), Response(), db=db)
+    assert error.value.detail["code"] == "ticket_invalid"
+
+    stale = picker_tickets.TicketData(
+        stage="apply", tenant_id=tenant.id, user_id=user.user_id, job_id=str(job.id), return_url="https://hocx.test/files/import",
+        issued_at=time.time() - picker_tickets.TICKET_TTL_SECONDS - 1,
+    )
+    with pytest.raises(ValueError):
+        picker_tickets.issue(stale)

@@ -559,11 +559,13 @@ class Settings(BaseSettings):
                 print(f"FATAL: {name} must be empty or a random value of at least 32 characters.", file=sys.stderr)
                 sys.exit(1)
         picker_host = self.cloud_import_picker_domain.strip().lower()
-        if picker_host and (
-            picker_host in {d.strip().lower() for d in (self.traefik_domain, self.traefik_admin_domain) if d}
-            or (self.is_production and ":" in picker_host)
-        ):
-            print("FATAL: CLOUD_IMPORT_PICKER_DOMAIN must be its own host (not the app or admin domain, no port in production).", file=sys.stderr)
+        system_hosts = {
+            d.strip().lower().split(":")[0]
+            for d in (self.traefik_domain, self.traefik_admin_domain, self.traefik_abgabebox_domain, self.traefik_docs_domain, self.traefik_website_domain)
+            if d
+        }
+        if picker_host and (picker_host.split(":")[0] in system_hosts or (self.is_production and ":" in picker_host)):
+            print("FATAL: CLOUD_IMPORT_PICKER_DOMAIN must be its own host (not an app, admin, abgabebox, docs or website domain; no port in production).", file=sys.stderr)
             sys.exit(1)
         if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
             print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)

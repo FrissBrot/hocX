@@ -29,7 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.routes import cloud_import as routes
-from app.core.client_ip import client_ip
+from app.auth_security import sessions as auth_sessions
+from app.core.client_ip import rate_limit_source
 from app.core.db import get_db
 from app.core.tenant_scope import bind_tenant_scope
 from app.core.rate_limit import enforce_rate_limit
@@ -109,7 +110,7 @@ def google_drive_picker_ticket(
     ticket = picker_tickets.issue(picker_tickets.TicketData(
         stage="token", tenant_id=job.tenant_id, user_id=user.user_id, job_id=str(job.id),
         return_url=_wizard_return_url(db, job.tenant_id, request.headers.get("host"), job.id),
-        issued_at=datetime.now(UTC).timestamp(),
+        issued_at=datetime.now(UTC).timestamp(), session_id=str(user.session_id) if user.session_id else None,
     ))
     AuditService().log(
         db, action="cloud_import.picker_ticket", actor=user, entity_type="import_job",
@@ -160,6 +161,8 @@ def _ticket_user(db: Session, data: picker_tickets.TicketData) -> CurrentUser:
         or not account.login_enabled
         or account.has_left
         or (revoked is not None and revoked.timestamp() >= data.issued_at)
+        # Ausstellende Sitzung abgemeldet, widerrufen oder abgelaufen (Session-Register)
+        or (data.session_id is not None and auth_sessions.validate(db, data.session_id, data.user_id, touch=False) is None)
     ):
         raise HTTPException(status_code=404, detail={"code": "ticket_invalid", "message": "ticket_invalid", "params": {}})
     user = build_current_user(db, account, mfa_verified=True)
@@ -169,7 +172,7 @@ def _ticket_user(db: Session, data: picker_tickets.TicketData) -> CurrentUser:
 
 def _consume(payload: PickerTicketIn, request: Request, stage: str) -> picker_tickets.TicketData:
     # Ohne Sitzung: Grenze je Quell-IP (Tickets sind ohnehin zufällig, einmalig und kurzlebig)
-    enforce_rate_limit(f"cloud-import-picker-ticket:{client_ip(request)}", limit=60, period_seconds=600)
+    enforce_rate_limit(f"cloud-import-picker-ticket:{rate_limit_source(request)}", limit=60, period_seconds=600)
     data = picker_tickets.consume(payload.ticket, stage)
     if data is None:
         raise HTTPException(status_code=404, detail={"code": "ticket_invalid", "message": "ticket_invalid", "params": {}})
@@ -194,10 +197,14 @@ def google_drive_picker_token(payload: PickerTicketIn, request: Request, respons
         raise _ticket_failure(exc, data) from exc
     expires = connection.access_expires_at
     remaining = int((expires - datetime.now(UTC)).total_seconds()) if expires else 0
-    apply_ticket = picker_tickets.issue(picker_tickets.TicketData(
-        stage="apply", tenant_id=data.tenant_id, user_id=data.user_id, job_id=data.job_id,
-        return_url=data.return_url, issued_at=data.issued_at,
-    ))
+    try:
+        apply_ticket = picker_tickets.issue(picker_tickets.TicketData(
+            stage="apply", tenant_id=data.tenant_id, user_id=data.user_id, job_id=data.job_id,
+            return_url=data.return_url, issued_at=data.issued_at, session_id=data.session_id,
+        ))
+    except ValueError as exc:
+        # Kette abgelaufen (Ausstellung + 10 min): neu im Wizard öffnen
+        raise HTTPException(status_code=404, detail={"code": "ticket_invalid", "message": "ticket_invalid", "params": {}, "return_url": data.return_url}) from exc
     AuditService().log(
         db, action="cloud_import.picker_token", actor=user, entity_type="import_job",
         details={"job_id": str(job.id), "provider": provider.key}, commit=False,
