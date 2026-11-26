@@ -1004,6 +1004,9 @@ export type UserSummary = {
   email: string | null;
   preferred_language: string;
   is_active: boolean;
+  joined_at?: string | null;
+  /** Austrittsdatum (inklusiv); danach ist der Login gesperrt (AppUser.has_left) */
+  left_at?: string | null;
   external_identity_json: Record<string, unknown>;
   tenant_id: string;
   tenant_name: string;

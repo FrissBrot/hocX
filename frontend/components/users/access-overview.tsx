@@ -14,6 +14,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { roleName } from "@/lib/permissions";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
+import { swissDateToday } from "@/lib/utils/participant-membership";
 import type { ParticipantInvite, RoleRead, UserSummary } from "@/types/api";
 
 type Props = {
@@ -38,12 +39,15 @@ export function AccessOverview({ users, invites, roles, tenantRequiresMfa }: Pro
 
   const rows = useMemo<Row[]>(() => {
     const invited = new Set(invites.map((invite) => invite.participant_id));
+    const today = swissDateToday();
     return users
       .filter((user) => user.login_enabled || invited.has(user.id))
       .map((user) => {
         const required = tenantRequiresMfa || rolesNeedMfa(roles, user.roles.map((role) => role.id));
-        const status: Row["status"] = !user.login_enabled ? "invited" : user.is_active ? "active" : "inactive";
-        return { user, status, mfa: user.login_enabled ? mfaState(Boolean(user.mfa_enabled), required) : "optional" };
+        // Ein Austrittsdatum vor heute sperrt den Login wie Deaktivieren (Backend AppUser.has_left)
+        const hasLeft = Boolean(user.left_at && user.left_at < today);
+        const status: Row["status"] = !user.login_enabled ? "invited" : user.is_active && !hasLeft ? "active" : "inactive";
+        return { user, status, mfa: status === "active" ? mfaState(Boolean(user.mfa_enabled), required) : "optional" };
       })
       .sort((a, b) => a.user.display_name.localeCompare(b.user.display_name));
   }, [users, invites, roles, tenantRequiresMfa]);
@@ -111,7 +115,7 @@ export function AccessOverview({ users, invites, roles, tenantRequiresMfa }: Pro
                   : <span className="muted">{t("access.noRole")}</span>}
               </span>
             </td>
-            <td>{status === "invited" ? <span className="muted">–</span> : <Badge variant={MFA_BADGE[mfa]} dot>{t(`access.mfa.${mfa}`)}</Badge>}</td>
+            <td>{status !== "active" ? <span className="muted">–</span> : <Badge variant={MFA_BADGE[mfa]} dot>{t(`access.mfa.${mfa}`)}</Badge>}</td>
           </tr>
         ))}
       </DataTable>
