@@ -28,6 +28,7 @@ import type {
 } from "@/types/api";
 
 import { actorLabel, reasonLabel, resultSummary, UploadItemStatusBadge, UploadStatusBadge, UploadsT } from "./upload-labels";
+import { RetryImage } from "@/components/ui/retry-image";
 
 type Props = {
   area: "photos" | "files";
@@ -255,8 +256,7 @@ function FileState({ file }: { file: UploadJobItemFile | null }) {
     return (
       <span className="upload-item-file">
         {file.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Vorschaubild aus dem Backend, wie im Papierkorb
-          <img className="upload-item-thumb" src={`${browserApiBaseUrl}${file.thumbnail_url}`} alt="" loading="lazy" />
+          <RetryImage className="upload-item-thumb" src={`${browserApiBaseUrl}${file.thumbnail_url}`} alt="" loading="lazy" />
         ) : null}
         <Link href={file.is_image ? `/photos?open=${file.id}` : `/files?open=${file.id}`}>{t("fileState.open")}</Link>
       </span>

@@ -329,6 +329,13 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- **Fotogalerie: «Vorschau nicht verfügbar» trotz vorhandener Vorschau.** Ein einzelner
+  fehlgeschlagener Vorschau-Request (503, während viele Vorschaubilder gleichzeitig entstehen oder
+  der Server ausgelastet ist, 429 oder ein Abbruch) liess die Kachel stehen, bis man weg- und
+  zurückscrollte. Kacheln laden die Vorschau jetzt selbst nach (bis zu drei Wiederholungen mit
+  wachsendem Abstand und Zufallsanteil, nur solange sichtbar); den Hinweis gibt es erst, wenn alle
+  Versuche scheitern. Gleich behoben in Dateien-Kacheln, Alben, Album-Auswahl, Foto-Ansicht,
+  Duplikat-/Serienvergleich, Upload-Verlauf, Papierkorb, Abgabe-Fotos und öffentlichen Links.
 - Foto-Ansicht: die Kopfzeile springt beim Blättern nicht mehr (feste Höhe, Dateiname, Datum und
   Ort einzeilig; die Unterzeile hängt nicht mehr an den je Foto nachgeladenen Metadaten).
 - **Vollständige Wiederherstellung behält das Audit-Log:** Der Datenbanktausch setzte das

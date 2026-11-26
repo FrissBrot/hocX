@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { RetryImage } from "@/components/ui/retry-image";
 
 export type DeletionPreviewFile = {
   id: string;
@@ -84,8 +85,7 @@ export function DeleteWithFilesModal({ open, title, message, files, busy, onCanc
                         onChange={() => toggle(file.id)}
                       />
                       {file.thumbnail_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className="delete-files-thumb" src={file.thumbnail_url} alt="" loading="lazy" />
+                        <RetryImage className="delete-files-thumb" src={file.thumbnail_url} alt="" loading="lazy" />
                       ) : (
                         <span className="delete-files-thumb delete-files-thumb-empty" aria-hidden="true" />
                       )}

@@ -14,6 +14,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import type { FileTrashActionResult, FileTrashItem, FileTrashList } from "@/types/api";
+import { RetryImage } from "@/components/ui/retry-image";
 
 type Props = {
   open: boolean;
@@ -123,8 +124,7 @@ export function TrashModal({ open, onClose, onRestored }: Props) {
               <td>
                 <div className="trash-name">
                   {item.thumbnail_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="trash-thumb" src={`${browserApiBaseUrl}${item.thumbnail_url}`} alt="" loading="lazy" />
+                    <RetryImage className="trash-thumb" src={`${browserApiBaseUrl}${item.thumbnail_url}`} alt="" loading="lazy" />
                   ) : null}
                   <div>
                     <div>{item.original_name}</div>

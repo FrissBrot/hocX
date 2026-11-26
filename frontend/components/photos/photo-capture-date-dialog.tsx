@@ -22,6 +22,7 @@ import {
   FileOverviewItem,
   StoredFileMetadata,
 } from "@/types/api";
+import { RetryImage } from "@/components/ui/retry-image";
 
 // Korrigiertes Aufnahmedatum (Backend: capture_date.py, Migration 0200). Hat Vorrang vor EXIF und
 // Schätzung; das EXIF-Datum bleibt gespeichert und die Korrektur lässt sich wieder entfernen.
@@ -557,8 +558,7 @@ function CapturePreview({ preview }: { preview: FileBulkCaptureDatePreview }) {
         <ul className="capture-preview-samples">
           {preview.samples.map((sample) => (
             <li key={sample.id} className="capture-preview-sample">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Vorschaubild aus dem Backend, wie im Papierkorb */}
-              <img src={`${browserApiBaseUrl}${sample.thumbnail_url}`} alt="" loading="lazy" />
+              <RetryImage src={`${browserApiBaseUrl}${sample.thumbnail_url}`} alt="" loading="lazy" />
               <span className="capture-preview-name">{sample.name}</span>
               <span className="capture-preview-change">
                 {t("previewBeforeAfter", { before: formatMoment(sample.before, sample.before_has_time), after: formatMoment(sample.after, sample.after_has_time) })}

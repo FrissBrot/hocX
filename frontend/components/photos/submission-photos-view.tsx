@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { ContextPhoto } from "@/types/api";
+import { RetryImage } from "@/components/ui/retry-image";
 
 const PAGE_SIZE = 60;
 
@@ -56,7 +57,7 @@ export function SubmissionPhotosView() {
             {items.map((photo) => (
               <figure key={photo.id} className="photo-tile">
                 <a href={photo.content_url} target="_blank" rel="noreferrer" aria-label={photo.original_name}>
-                  <img className="photo-tile-img" src={photo.thumbnail_url} alt={photo.original_name} loading="lazy" />
+                  <RetryImage className="photo-tile-img" src={photo.thumbnail_url} alt={photo.original_name} loading="lazy" />
                 </a>
                 {photo.assignment_title ? <figcaption className="field-help">{photo.assignment_title}</figcaption> : null}
               </figure>

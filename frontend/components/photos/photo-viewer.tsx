@@ -41,6 +41,7 @@ import {
   isDeletable,
   nextAfterRemoval,
 } from "./viewer/viewer-logic";
+import { RetryImage } from "@/components/ui/retry-image";
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -586,7 +587,7 @@ export function PhotoViewer({
                         aria-label={entry.original_name}
                         onClick={() => onIndexChange(entryIndex)}
                       >
-                        <img src={`${browserApiBaseUrl}${entry.thumbnail_url ?? entry.content_url}`} alt="" loading="lazy" decoding="async" draggable={false} />
+                        <RetryImage src={`${browserApiBaseUrl}${entry.thumbnail_url ?? entry.content_url}`} alt="" loading="lazy" decoding="async" draggable={false} />
                         {flaggedIds.has(entry.id) ? <span className="photo-viewer-thumb-flag" aria-hidden="true" /> : null}
                         {entry.is_best ? <span className="photo-viewer-thumb-best" aria-hidden="true">★</span> : null}
                       </button>

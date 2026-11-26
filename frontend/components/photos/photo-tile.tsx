@@ -5,10 +5,11 @@ import { useTranslations } from "next-intl";
 import { PhotoActionIcon } from "./photo-action-icon";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { browserApiBaseUrl } from "@/lib/api/client";
+import { useImageRetry } from "@/lib/hooks/use-image-retry";
 import { FileOverviewItem } from "@/types/api";
 
-const PENDING_RETRY_MS = 10000;
-const PENDING_RETRY_LIMIT = 6;
+// Während der Virenprüfung (425): bis zu sechsmal im Abstand von 10 s erneut laden.
+const PENDING_RETRY_DELAYS_MS: readonly number[] = Array.from({ length: 6 }, () => 10000);
 
 export function PhotoTile({
   item,
@@ -35,15 +36,17 @@ export function PhotoTile({
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   // Live Photo: der Clip spielt, solange der Zeiger auf der Kachel liegt (oder sie per Tastatur fokussiert ist).
   const [liveActive, setLiveActive] = useState(false);
-  // Vorschau nicht ladbar (z. B. 425 während der Virenprüfung, 422 bei gesperrten Dateien):
-  // Hinweis statt kaputtem Bild. Bei "wird geprüft" in Abständen erneut versuchen.
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
+  // Vorschau nicht ladbar: vorübergehende Fehler (503 «Vorschau wird erzeugt»/Überlast, 429,
+  // Abbruch) wiederholt useImageRetry begrenzt mit Backoff; erst danach erscheint der Hinweis
+  // (Bug 1.6: vorher blieb ein einzelner Fehlschlag bis zum erneuten Mounten stehen). Bei
+  // "wird geprüft" (425) in festen Abständen von 10 s.
   const scanStatus = item.scan_status ?? "clean";
   const blocked = scanStatus === "error" || scanStatus === "infected";
   const baseThumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : `${browserApiBaseUrl}${item.content_url}`;
-  const thumbnailUrl = retry > 0 ? `${baseThumbnailUrl}${baseThumbnailUrl.includes("?") ? "&" : "?"}retry=${retry}` : baseThumbnailUrl;
-  const failed = failedUrl === thumbnailUrl;
+  const image = useImageRetry(baseThumbnailUrl, scanStatus === "pending" ? { delays: PENDING_RETRY_DELAYS_MS } : undefined);
+  const thumbnailUrl = image.src ?? baseThumbnailUrl;
+  // Während der Virenprüfung zeigt die Kachel schon beim Warten den Prüf-Hinweis (wie bisher).
+  const failed = image.failed || (scanStatus === "pending" && image.waiting);
   const requested = requestedUrl === thumbnailUrl;
   const loaded = loadedUrl === thumbnailUrl;
   const placeholderTone = Array.from(item.id).reduce((hash, character) => hash + character.charCodeAt(0), 0) % 6;
@@ -84,13 +87,6 @@ export function PhotoTile({
     if (requested && image?.complete && image.naturalWidth > 0) setLoadedUrl(thumbnailUrl);
   }, [requested, thumbnailUrl]);
 
-  useEffect(() => {
-    // Während der Virenprüfung: bis zu sechsmal im Abstand von 10 s erneut laden.
-    if (!failed || scanStatus !== "pending" || retry >= PENDING_RETRY_LIMIT) return;
-    // Neue URL: der IntersectionObserver oben fordert sie an, sobald die Kachel sichtbar ist.
-    const timer = window.setTimeout(() => setRetry((value) => value + 1), PENDING_RETRY_MS);
-    return () => window.clearTimeout(timer);
-  }, [failed, scanStatus, retry]);
   // Reserve space even for older photos whose dimensions are not yet known.
   const aspectRatio = square ? 1 : item.width && item.height ? item.width / item.height : 4 / 3;
 
@@ -119,7 +115,7 @@ export function PhotoTile({
             decoding="async"
             className="photo-tile-img photo-tile-img-fitted"
             onLoad={() => { if (requested) setLoadedUrl(thumbnailUrl); }}
-            onError={() => { if (requested) setFailedUrl(thumbnailUrl); }}
+            onError={() => { if (requested) image.onError(); }}
           />
         )}
         {(blocked || failed) && (

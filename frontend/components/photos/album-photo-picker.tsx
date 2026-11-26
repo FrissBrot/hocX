@@ -14,6 +14,7 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, FileOverviewSource, PhotoAlbum } from "@/types/api";
+import { RetryImage } from "@/components/ui/retry-image";
 
 const PAGE_SIZE = 60;
 
@@ -247,7 +248,7 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
                         className={`album-picker-tile${contained ? " album-picker-tile-contained" : ""}${selected ? " album-picker-tile-selected" : ""}`}
                         onClick={() => { if (!contained) toggle(item.id); }}
                       >
-                        <img
+                        <RetryImage
                           alt=""
                           src={`${browserApiBaseUrl}${item.thumbnail_url ?? item.content_url}`}
                           loading="lazy"
