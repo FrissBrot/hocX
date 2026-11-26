@@ -221,7 +221,15 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
           ) : (
             <>
               <p className="muted">{t("cloud.chooseHint")}</p>
-              <ImportCloudTree jobId={job.id} selected={selected} onToggle={toggle} onRequestTier={(tier) => void login({ tier })} />
+              {/* Neu laden, sobald sich Konto oder freigegebene Stufen ändern (zweite Zustimmung):
+                  sonst blieben die zuvor geladenen, noch gesperrten Wurzeln stehen */}
+              <ImportCloudTree
+                key={`${connection?.account_label ?? ""}|${connection?.tier ?? ""}|${(connection?.tiers ?? []).join(",")}`}
+                jobId={job.id}
+                selected={selected}
+                onToggle={toggle}
+                onRequestTier={(tier) => void login({ tier })}
+              />
               <p className="file-import-listing-summary">{t("cloud.selected", { count: selected.size })}</p>
               <div className="modal-actions">
                 <button type="button" className="button-ghost" disabled={busy} onClick={() => void cancel()}>{t("cancel.label")}</button>
