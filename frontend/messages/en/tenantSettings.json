@@ -182,6 +182,7 @@
     "noticeTitle": "Privacy notice",
     "noticeUrl": "Link to your privacy notice",
     "noticeUrlHint": "Before uploading, the upload box shows that your organization is responsible and links to this page. Empty = the platform’s default notice.",
+    "noticeUrlInvalid": "Please enter a complete address starting with https://, without spaces.",
     "noticeSave": "Save link",
     "fileVisibility": {
       "title": "File visibility",

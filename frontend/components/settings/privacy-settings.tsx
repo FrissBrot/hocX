@@ -16,6 +16,18 @@ export type PrivacySettingsState = {
 
 const API = "/api/privacy-settings";
 
+/** Wie das Backend (privacy_settings._https_only): leer oder https:// mit Adresse, ohne Leerzeichen. */
+export function isValidNoticeUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "") return true;
+  if (/\s/.test(trimmed) || !trimmed.startsWith("https://")) return false;
+  try {
+    return new URL(trimmed).hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
 // Mandanten-Einstellungen → Datenschutz (nur Mandanten-Admins).
 export function PrivacySettings({ initialState, fileVisibility }: { initialState: PrivacySettingsState; fileVisibility?: ContextVisibilityModule[] | null }) {
   const t = useTranslations("tenantSettings.privacy");
@@ -23,6 +35,7 @@ export function PrivacySettings({ initialState, fileVisibility }: { initialState
   const [state, setState] = useState(initialState);
   const [busy, setBusy] = useState(false);
   const [noticeUrl, setNoticeUrl] = useState(initialState.privacy_notice_url ?? "");
+  const noticeUrlValid = isValidNoticeUrl(noticeUrl);
 
   async function save(changes: Partial<Record<keyof PrivacySettingsState, boolean | string>>) {
     setBusy(true);
@@ -65,14 +78,23 @@ export function PrivacySettings({ initialState, fileVisibility }: { initialState
           </div>
           <label className="field-stack">
             <span className="field-label">{t("noticeUrl")}</span>
-            <input type="url" inputMode="url" placeholder="https://" value={noticeUrl} maxLength={500} onChange={(event) => setNoticeUrl(event.target.value)} />
+            <input
+              type="url"
+              inputMode="url"
+              placeholder="https://"
+              value={noticeUrl}
+              maxLength={500}
+              aria-invalid={!noticeUrlValid || undefined}
+              onChange={(event) => setNoticeUrl(event.target.value)}
+            />
+            {!noticeUrlValid ? <span className="field-help">{t("noticeUrlInvalid")}</span> : null}
             <span className="field-help">{t("noticeUrlHint")}</span>
           </label>
           <div className="table-actions table-actions-start">
             <button
               type="button"
               className="button-secondary"
-              disabled={busy || noticeUrl.trim() === (state.privacy_notice_url ?? "") || (noticeUrl.trim() !== "" && !noticeUrl.trim().startsWith("https://"))}
+              disabled={busy || noticeUrl.trim() === (state.privacy_notice_url ?? "") || !noticeUrlValid}
               onClick={() => void save({ privacy_notice_url: noticeUrl.trim() })}
             >
               {t("noticeSave")}

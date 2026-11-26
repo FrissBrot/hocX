@@ -182,6 +182,7 @@
     "noticeTitle": "Datenschutzhinweise",
     "noticeUrl": "Link zu euren Datenschutzhinweisen",
     "noticeUrlHint": "Die Abgabebox zeigt vor dem Hochladen, dass eure Organisation verantwortlich ist, und verlinkt diese Seite. Leer = Standardhinweis der Plattform.",
+    "noticeUrlInvalid": "Bitte eine vollständige Adresse mit https:// eingeben, ohne Leerzeichen.",
     "noticeSave": "Link speichern",
     "fileVisibility": {
       "title": "Sichtbarkeit von Dateien",

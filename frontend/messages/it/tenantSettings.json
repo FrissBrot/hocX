@@ -182,6 +182,7 @@
     "noticeTitle": "Informativa sulla privacy",
     "noticeUrl": "Link alla vostra informativa sulla privacy",
     "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra organizzazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
+    "noticeUrlInvalid": "Inserisci un indirizzo completo che inizi con https://, senza spazi.",
     "noticeSave": "Salva link",
     "fileVisibility": {
       "title": "Visibilità dei file",

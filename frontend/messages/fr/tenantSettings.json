@@ -182,6 +182,7 @@
     "noticeTitle": "Protection des données",
     "noticeUrl": "Lien vers votre déclaration de protection des données",
     "noticeUrlHint": "Avant le dépôt, la boîte de dépôt indique que votre organisation est responsable et renvoie vers cette page. Vide = déclaration par défaut de la plateforme.",
+    "noticeUrlInvalid": "Veuillez saisir une adresse complète commençant par https://, sans espaces.",
     "noticeSave": "Enregistrer le lien",
     "fileVisibility": {
       "title": "Visibilité des fichiers",
