@@ -255,6 +255,9 @@ async def lifespan(_: FastAPI):
         runtime_metrics_task.cancel()
         for task in loop_tasks:
             task.cancel()
+        from app.services.collaboration_fanout import get_collaboration_fanout
+
+        await get_collaboration_fanout().close()
         await close_redis_pool()
     finally:
         shutdown_word_import_parse_pool()

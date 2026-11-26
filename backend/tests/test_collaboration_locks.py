@@ -150,3 +150,20 @@ def test_connection_lock_count_and_cleanup_of_expired_locks():
     _run(scenario())
     assert not redis_sync.smembers(module._protocol_locks_key(protocol_id))
     assert 0 < redis_sync.ttl(module._protocol_locks_key(protocol_id)) or not redis_sync.exists(module._protocol_locks_key(protocol_id))
+
+
+def test_delayed_unlock_of_one_tab_does_not_release_the_same_users_lock_in_another_tab():
+    """Security-Review 1.6.1: die Freigabe kommt seit F-01 erst nach den Speicherungen. Hat dieselbe
+    Person den Block inzwischen in einem zweiten Tab übernommen, darf der verspätete unlock des
+    ersten Tabs diese Sperre nicht lösen."""
+    protocol_id = _protocol()
+
+    async def scenario():
+        collab = CollaborationService(get_redis())
+        assert await collab.try_acquire_lock(protocol_id, "block-1", "tab1", 1, "Anna") is None
+        assert await collab.try_acquire_lock(protocol_id, "block-1", "tab2", 1, "Anna") is None
+        assert await collab.release_lock(protocol_id, "block-1", 1, "tab1") is False
+        assert set(await collab.locks_snapshot(protocol_id)) == {"block-1"}
+        assert await collab.release_lock(protocol_id, "block-1", 1, "tab2") is True
+
+    _run(scenario())

@@ -272,7 +272,10 @@ class CollaborationService:
         return int(await self.redis.scard(_lock_index_key(protocol_id, connection_id)) or 0)
 
     async def release_lock(self, protocol_id: int, field_key: str, user_id: int, connection_id: str) -> bool:
-        released = bool(await self.redis.eval(_RELEASE, 1, _lock_key(protocol_id, field_key), str(user_id), ""))
+        # Nur die Sperre dieser Verbindung (Security-Review 1.6.1): seit F-01 kommt die Freigabe erst
+        # nach den Speicherungen - hatte dieselbe Person den Block inzwischen in einem anderen Tab
+        # übernommen, löste der verspätete unlock sonst deren Sperre.
+        released = bool(await self.redis.eval(_RELEASE, 1, _lock_key(protocol_id, field_key), str(user_id), connection_id))
         if released:
             await self._forget(protocol_id, connection_id, field_key)
         return released

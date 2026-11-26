@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.error_log import record_system_error
-from app.core.redis_client import get_redis, get_redis_pubsub
+from app.core.redis_client import get_redis
 from app.core.permissions import P
 from app.core.security import (
     CurrentUser,
@@ -34,6 +34,7 @@ from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, ListDefinition, Protocol, TenantDomain
 from app.services import list_snapshot_service, public_id_service
 from app.services.access_service import AccessService
+from app.services.collaboration_fanout import Subscription, SubscriptionClosed, get_collaboration_fanout
 from app.services.collaboration_service import CollaborationService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import responsible_list_definition_ids
@@ -57,6 +58,9 @@ SESSION_REVALIDATE_INTERVAL_SECONDS = 30
 _LOCK_FIELD_KEY = re.compile(r"^block-[0-9A-Za-z-]{1,40}(-cell-[0-9A-Za-z_-]{1,80})?$")
 _BROADCAST_FIELD_KEY = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
 MAX_LOCKS_PER_CONNECTION = 50
+# Frist für das Senden an einen Socket: wer nicht liest, hält sonst seine Weiterleitung und den
+# Puffer im geteilten Abo unbegrenzt fest (Security-Review 1.6.1).
+SEND_TIMEOUT_SECONDS = 10.0
 # «Wo ist wer» (Editor 1a): höchstens eine Fokus-Weitergabe je Intervall und Verbindung
 FOCUS_MIN_INTERVAL_SECONDS = 0.5
 _FOCUS_MODES = frozenset({"viewing", "editing"})
@@ -384,20 +388,46 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     connection_id = uuid.uuid4().hex
     channel = collab.channel(protocol_id)
 
-    # Eigener Pool ohne socket_timeout: das Abonnement wartet beliebig lange auf Nachrichten.
-    pubsub = get_redis_pubsub().pubsub()
-    await pubsub.subscribe(channel)
+    # Collaboration-Audit F-02: kein eigenes Pub/Sub-Abo (= eigene Redis-Verbindung) mehr je
+    # Socket, sondern ein geteiltes je Prozess, das an die lokalen Sockets dieses Protokolls
+    # verteilt (collaboration_fanout.py). Vorher war bei rund 100 Sockets je Prozess Schluss.
+    fanout = get_collaboration_fanout()
+    try:
+        subscription: Subscription = await fanout.subscribe(channel)
+    except Exception as exc:
+        # Vorher lag das Abo vor dem try: der Fehler erreichte system_error_log nie und der
+        # Socket brach ohne Close-Frame ab. Jetzt melden und mit 1013 («später erneut») schliessen.
+        await asyncio.to_thread(_record_ws_error, exc, user)
+        try:
+            await websocket.close(code=1013)
+        except RuntimeError:
+            pass
+        return
 
     async def forward_from_redis() -> None:
         try:
-            async for message in pubsub.listen():
-                if message.get("type") != "message":
-                    continue
+            while True:
+                data = await subscription.get()
                 if websocket.application_state != WebSocketState.CONNECTED:
                     break
-                await websocket.send_text(message["data"])
+                await asyncio.wait_for(websocket.send_text(data), SEND_TIMEOUT_SECONDS)
         except asyncio.CancelledError:
             pass
+        except asyncio.TimeoutError:
+            # Client liest nicht: schliessen, er verbindet neu (wie ein Überlauf)
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1013)
+                except RuntimeError:
+                    pass
+        except SubscriptionClosed as closed:
+            # Listener ausgefallen (bereits gemeldet) oder Socket kam nicht nach: schliessen,
+            # der Client verbindet sich neu und lädt den aktuellen Stand.
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1013 if closed.reason == "overflow" else 1011)
+                except RuntimeError:
+                    pass
         except Exception as exc:
             _record_ws_error(exc, user)
             # Ohne Weiterleitung bekäme der Client still keine Änderungen der anderen mehr
@@ -421,9 +451,27 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     # and independent of connection-pool sharing - never root-caused further). A poll
     # every 15s is simple, has no such reliability question, and is a perfectly adequate
     # latency for a background "the data changed elsewhere" indicator.
-    list_ids = await asyncio.to_thread(_referenced_list_ids, protocol_id, user.current_tenant_id)
-    known_list_versions = await asyncio.to_thread(_list_content_versions, list_ids, user.current_tenant_id)
-    public_list_ids = await asyncio.to_thread(_public_list_id_map, list_ids, user.current_tenant_id) if list_ids else {}
+    try:
+        list_ids = await asyncio.to_thread(_referenced_list_ids, protocol_id, user.current_tenant_id)
+        known_list_versions = await asyncio.to_thread(_list_content_versions, list_ids, user.current_tenant_id)
+        public_list_ids = await asyncio.to_thread(_public_list_id_map, list_ids, user.current_tenant_id) if list_ids else {}
+    except BaseException as exc:
+        # Ohne Aufräumen blieben Weiterleitung und Anmeldung im geteilten Abo zurück (auch bei
+        # Abbruch, z. B. beim Herunterfahren).
+        forward_task.cancel()
+        try:
+            await forward_task
+        except asyncio.CancelledError:
+            pass
+        await fanout.unsubscribe(subscription)
+        if not isinstance(exc, Exception):
+            raise
+        await asyncio.to_thread(_record_ws_error, exc, user)
+        try:
+            await websocket.close(code=1011)
+        except RuntimeError:
+            pass
+        return
 
     async def poll_list_versions() -> None:
         try:
@@ -660,8 +708,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
             except asyncio.CancelledError:
                 pass
         await focus_throttle.close()
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
+        await fanout.unsubscribe(subscription)
 
         released_fields = await collab.release_all_for_connection(protocol_id, connection_id)
         await collab.leave(protocol_id, connection_id)
