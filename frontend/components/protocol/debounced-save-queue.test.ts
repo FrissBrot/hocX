@@ -118,3 +118,53 @@ describe("useDebouncedSaveQueue", () => {
     expect(second).toHaveBeenCalledWith("block-1", "Text");
   });
 });
+
+describe("flush(key) (Collaboration-Audit F-01)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("sendet nur den wartenden Wert dieses Schlüssels sofort und wartet ihn ab", async () => {
+    let release: () => void = () => {};
+    const send = vi.fn(
+      (key: string) =>
+        new Promise<boolean>((resolve) => {
+          if (key === "a") release = () => resolve(true);
+          else resolve(true);
+        })
+    );
+    const queue = createDebouncedSaveQueue<string>(700, send);
+    queue.schedule("a", "Schlusssatz");
+    queue.schedule("b", "anderer Block");
+    let flushed: boolean | undefined;
+    const flushing = queue.flush("a").then((ok) => {
+      flushed = ok;
+    });
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("a", "Schlusssatz");
+    expect(flushed).toBeUndefined();
+    release();
+    await flushing;
+    expect(flushed).toBe(true);
+    // Block b bleibt entprellt
+    await vi.advanceTimersByTimeAsync(700);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith("b", "anderer Block");
+  });
+
+  it("wartet auch eine bereits laufende Speicherung ab und ist ohne Arbeit sofort fertig", async () => {
+    let release: () => void = () => {};
+    const send = vi.fn(() => new Promise<boolean>((resolve) => { release = () => resolve(true); }));
+    const queue = createDebouncedSaveQueue<string>(700, send);
+    await expect(queue.flush("leer")).resolves.toBe(true);
+    queue.schedule("a", "x");
+    await vi.advanceTimersByTimeAsync(700);
+    let done = false;
+    const flushing = queue.flush("a").then(() => { done = true; });
+    await Promise.resolve();
+    expect(done).toBe(false);
+    release();
+    await flushing;
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});

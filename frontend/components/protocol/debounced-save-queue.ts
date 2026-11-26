@@ -14,6 +14,12 @@ export type DebouncedSaveQueue<T> = {
   schedule: (key: string, value: T) => void;
   /** Löst alle wartenden Speicherungen sofort aus und wartet, bis alle laufenden fertig sind. */
   flushAll: () => Promise<boolean>;
+  /**
+   * Wie flushAll, aber nur für einen Schlüssel: die wartende Speicherung sofort senden und die
+   * jüngste (auch eine bereits laufende) abwarten. Der Editor gibt die Sperre eines Blocks erst
+   * danach frei (Collaboration-Audit F-01).
+   */
+  flush: (key: string) => Promise<boolean>;
   /** Verwirft wartende Timer (z. B. beim Verlassen der Seite). */
   cancelAll: () => void;
   /** true, solange eine Speicherung wartet oder läuft. */
@@ -53,6 +59,17 @@ export function createDebouncedSaveQueue<T>(delayMs: number, send: SaveSender<T>
           start(key, latest);
         }, delayMs)
       );
+    },
+    async flush(key) {
+      if (waiting.has(key)) {
+        const timer = timers.get(key);
+        if (timer !== undefined) clearTimeout(timer);
+        timers.delete(key);
+        const value = waiting.get(key) as T;
+        waiting.delete(key);
+        start(key, value);
+      }
+      return (await chains.get(key)) ?? true;
     },
     async flushAll() {
       for (const [key, value] of Array.from(waiting.entries())) {

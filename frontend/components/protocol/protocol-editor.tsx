@@ -77,6 +77,7 @@ import { AgendaQuickCreateForm } from "@/components/protocol/agenda-quick-create
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 import { useDebouncedSaveQueue } from "@/components/protocol/debounced-save-queue";
+import { blockIdOfLockKey, createDeferredUnlock, createSerialQueue } from "@/components/protocol/block-save-queue";
 import { createTextDraftStore, decideDraftRestore, settleDraftAfterSave, textDraftBaseKey, textDraftKey } from "@/components/protocol/text-drafts";
 import { useTextDraftEmptiness } from "@/components/protocol/use-text-draft";
 import { jumpToSection, prefersReducedMotion } from "@/components/protocol/document-scroll";
@@ -653,6 +654,31 @@ export function ProtocolEditor({
   // Speicherungen sofort, statt sie zu verwerfen. sendTextSave ist eine gehoistete
   // Funktionsdeklaration und liest bei jedem Aufruf den aktuellen Render-Stand.
   const textSaveQueue = useDebouncedSaveQueue<string>(700, (blockId, content) => sendTextSave(blockId, content));
+  // Konfigurations-Speicherungen pro Block nacheinander (Collaboration-Audit F-04, siehe
+  // saveBlockConfiguration). configVersionRef: zuletzt vom Server bestätigte config_version je
+  // Block, unabhängig davon, ob schon neu gerendert wurde.
+  const [configSaveQueue] = useState(createSerialQueue);
+  const configVersionRef = useRef<Record<string, number | undefined>>({});
+  // Version aus der Antwort der vorherigen eigenen Speicherung derselben, noch laufenden Kette.
+  // Eine Fremdänderung, die währenddessen eintrifft, hebt sie nicht an: die wartende Speicherung
+  // bekommt dann ehrlich einen 409, statt die Änderung der anderen Person still zu überschreiben.
+  const configChainVersionRef = useRef<Record<string, number | undefined>>({});
+  // Erhöht bei einem echten Fremdkonflikt: danach wartende eigene Speicherungen bauten noch auf dem
+  // alten Stand auf und werden verworfen statt die Änderung der anderen Person zu überschreiben.
+  const configConflictEpochRef = useRef<Record<string, number>>({});
+  // Sperre eines Blocks erst nach dessen Speicherungen freigeben (Collaboration-Audit F-01, siehe
+  // createDeferredUnlock). Stabil wie collab.fieldLocks, damit die Punkte nicht neu rendern.
+  const textSaveQueueRef = useRef(textSaveQueue);
+  textSaveQueueRef.current = textSaveQueue;
+  const editorFieldLocks = useMemo(() => {
+    const base = collab.fieldLocks;
+    const deferred = createDeferredUnlock(base, async (fieldKey) => {
+      const blockId = blockIdOfLockKey(fieldKey);
+      if (!blockId) return;
+      await Promise.all([textSaveQueueRef.current.flush(blockId), configSaveQueue.whenIdle(blockId)]);
+    });
+    return { ...base, lockField: deferred.lockField, unlockField: deferred.unlockField };
+  }, [collab.fieldLocks, configSaveQueue]);
   const shouldScrollToElementRef = useRef(false);
   // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
   // set in focusElement below) should steal focus into a field. Restoring the remembered
@@ -1372,8 +1398,14 @@ export function ProtocolEditor({
     }
   }
 
+  // Neueste bekannte Version: die letzte eigene Server-Antwort oder - falls neuer - der Stand im
+  // State (Live-Änderung einer anderen Person). config_version steigt nur (Trigger im Backend).
   function currentConfigVersion(blockId: string): number | undefined {
-    return elements.flatMap((element) => element.blocks).find((block) => block.id === blockId)?.config_version;
+    const fromState = elementsRef.current.flatMap((element) => element.blocks).find((block) => block.id === blockId)?.config_version;
+    const fromServer = configVersionRef.current[blockId];
+    if (fromServer === undefined) return fromState;
+    if (fromState === undefined) return fromServer;
+    return Math.max(fromServer, fromState);
   }
 
   // 409 config_conflict: jemand anderes hat die Blockkonfiguration inzwischen gespeichert. Der
@@ -1383,6 +1415,12 @@ export function ProtocolEditor({
     if (!(err instanceof ApiError) || err.status !== 409) return false;
     const detail = err.detail as { code?: string; configuration_snapshot_json?: Record<string, unknown>; config_version?: number } | undefined;
     if (detail?.code !== "config_conflict" || !detail.configuration_snapshot_json) return false;
+    // Seit F-04 sind eigene Speicherungen serialisiert: ein 409 heisst jetzt wirklich, dass
+    // jemand anderes (oder ein anderer Tab) gespeichert hat. Wartende eigene Speicherungen
+    // bauten auf dem alten Stand auf und werden verworfen.
+    configConflictEpochRef.current[blockId] = (configConflictEpochRef.current[blockId] ?? 0) + 1;
+    if (typeof detail.config_version === "number") configVersionRef.current[blockId] = detail.config_version;
+    delete configChainVersionRef.current[blockId];
     updateBlockInState(blockId, (block) => ({
       ...block,
       configuration_snapshot_json: detail.configuration_snapshot_json!,
@@ -1393,27 +1431,49 @@ export function ProtocolEditor({
     return true;
   }
 
+  // Reiht eine Konfigurations-Speicherung ein; ist die Kette danach leer, gilt die Kettenversion
+  // nicht mehr (die nächste Speicherung baut wieder auf dem gerenderten Stand auf).
+  function runConfigSave(blockId: string, task: () => Promise<void>) {
+    return configSaveQueue.run(blockId, task).finally(() => {
+      if (configSaveQueue.pending(blockId) === 0) delete configChainVersionRef.current[blockId];
+    });
+  }
+
+  // Pro Block serialisiert (Collaboration-Audit F-04): die nächste Speicherung startet erst nach
+  // der Antwort der vorherigen und schickt deren config_version als expected_config_version mit.
+  // Jede Speicherung trägt den ganzen, lokal schon aktualisierten Stand des Blocks, eine spätere
+  // enthält also auch die frühere Änderung.
   async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
-    const expectedVersion = currentConfigVersion(blockId);
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
-    try {
-      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson, expected_config_version: expectedVersion }),
-      });
-      updateBlockInState(blockId, (block) => ({
-        ...block,
-        configuration_snapshot_json: updated.configuration_snapshot_json,
-        config_version: updated.config_version,
-      }));
-      setStatus(blockId, "saved");
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
-    } catch (err: unknown) {
-      if (applyConfigConflict(blockId, err)) return;
-      setStatus(blockId, "error");
-      showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
-    }
+    const epoch = configConflictEpochRef.current[blockId] ?? 0;
+    // Basis ist der Stand, auf dem diese Änderung aufbaut (beim Einreihen), nicht ein später
+    // eintreffender fremder Stand.
+    const baseVersion = currentConfigVersion(blockId);
+    await runConfigSave(blockId, async () => {
+      if ((configConflictEpochRef.current[blockId] ?? 0) !== epoch) return;
+      try {
+        const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson, expected_config_version: configChainVersionRef.current[blockId] ?? baseVersion }),
+        });
+        configVersionRef.current[blockId] = updated.config_version;
+        configChainVersionRef.current[blockId] = updated.config_version;
+        // Wartet schon die nächste eigene Speicherung, bleibt deren (neuerer) lokaler Stand stehen.
+        const newerPending = configSaveQueue.pending(blockId) > 1;
+        updateBlockInState(blockId, (block) => ({
+          ...block,
+          ...(newerPending ? {} : { configuration_snapshot_json: updated.configuration_snapshot_json }),
+          config_version: updated.config_version,
+        }));
+        if (!newerPending) setStatus(blockId, "saved");
+        collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
+      } catch (err: unknown) {
+        if (applyConfigConflict(blockId, err)) return;
+        setStatus(blockId, "error");
+        showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
+      }
+    });
   }
 
   // Dedicated atomic single-participant save for the attendance block's status buttons - see
@@ -1454,6 +1514,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
         { method: "POST", body: JSON.stringify({ status }) }
       );
+      configVersionRef.current[blockId] = updated.config_version;
       updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
@@ -2063,17 +2124,25 @@ export function ProtocolEditor({
     if (!block) return;
     const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: !visible };
     updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: visible, configuration_snapshot_json: newConfig }));
-    try {
-      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: visible, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
-      });
-      updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
-    } catch (err: unknown) {
-      if (applyConfigConflict(blockId, err)) return;
-      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: block.is_visible_snapshot, configuration_snapshot_json: block.configuration_snapshot_json }));
-      showToast(err instanceof Error ? err.message : t(visible ? "eventShowFailed" : "eventHideFailed"), "error");
-    }
+    // Gleiche Reihenfolge und Version wie saveBlockConfiguration (F-04)
+    const epoch = configConflictEpochRef.current[blockId] ?? 0;
+    const baseVersion = currentConfigVersion(blockId);
+    await runConfigSave(blockId, async () => {
+      if ((configConflictEpochRef.current[blockId] ?? 0) !== epoch) return;
+      try {
+        const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_visible_snapshot: visible, configuration_snapshot_json: newConfig, expected_config_version: configChainVersionRef.current[blockId] ?? baseVersion }),
+        });
+        configVersionRef.current[blockId] = updated.config_version;
+        configChainVersionRef.current[blockId] = updated.config_version;
+        updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
+      } catch (err: unknown) {
+        if (applyConfigConflict(blockId, err)) return;
+        updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: block.is_visible_snapshot, configuration_snapshot_json: block.configuration_snapshot_json }));
+        showToast(err instanceof Error ? err.message : t(visible ? "eventShowFailed" : "eventHideFailed"), "error");
+      }
+    });
   }
 
   function unhideEventBlock(blockId: string) {
@@ -2512,7 +2581,7 @@ export function ProtocolEditor({
                   tagConfig={tagConfig}
                   updateTagColor={updateTagColor}
                   renameTag={renameTag}
-                  collab={collab.fieldLocks}
+                  collab={editorFieldLocks}
                   trackChangesActive={trackChangesActive}
                   element={element}
                   elementIndex={index}
