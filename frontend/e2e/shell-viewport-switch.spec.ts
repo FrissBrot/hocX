@@ -1,6 +1,7 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 import { authFiles } from "./auth";
+import { openProtocol } from "./protocol-page";
 
 // 1.6.1: Wechsel zwischen Desktop- und Mobilansicht (gedrehtes Tablet, schmal gezogenes Fenster,
 // Breakpoint 900 px) darf die Seite nicht neu mounten. Vorher tauschte die AppShell den ganzen Baum
@@ -28,6 +29,29 @@ async function markNode(locator: Locator) {
   await locator.evaluate((node) => {
     (window as unknown as { __shellMarker?: Element }).__shellMarker = node;
   });
+}
+
+async function post(request: APIRequestContext, path: string, data: unknown) {
+  const response = await request.post(path, { data });
+  expect(response.ok(), `POST ${path}: ${await response.text()}`).toBeTruthy();
+  return response.json();
+}
+
+/** Protokoll mit einem Punkt und einem Textblock (wie protocol-editor-1a.spec.ts). */
+async function textProtocol(request: APIRequestContext) {
+  const suffix = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  const template = await post(request, "/api/templates", { name: `E2E Shell ${suffix}`, protocol_number_pattern: "S-{n}", title_pattern: "Shell {dd.mm.yyyy}", auto_create_next_protocol: false });
+  const definition = await post(request, "/api/element-definitions", {
+    title: "Begrüssung",
+    blocks: [{ id: 1, title: "Text", block_title: "Text", element_type_id: 1, render_type_id: 2, sort_index: 10, configuration_json: {} }],
+  });
+  await post(request, `/api/templates/${template.id}/elements`, { element_definition_id: definition.id, sort_index: 10 });
+  return post(request, "/api/protocols/from-template", { template_id: template.id, protocol_date: new Date().toISOString().slice(0, 10), title: `E2E Shell ${suffix}` });
+}
+
+async function protocolText(request: APIRequestContext, protocolId: string): Promise<string> {
+  const elements = (await (await request.get(`/api/protocols/${protocolId}/elements`)).json()) as { blocks: { text_content: string | null }[] }[];
+  return elements.flatMap((element) => element.blocks).map((block) => block.text_content ?? "").join("|");
 }
 
 async function markedNodeStillMounted(page: Page): Promise<boolean> {
@@ -132,5 +156,30 @@ test.describe("Wechsel Desktop/Mobil behält den Seitenzustand", () => {
     await expect(dialog.getByLabel("Titel", { exact: true })).toHaveValue(title);
     await resizeTo(page, DESKTOP);
     await expect(dialog.getByLabel("Titel", { exact: true })).toHaveValue(title);
+  });
+
+  test("Protokoll-Editor: Text gleich nach dem Verlassen des Blocks gespeichert, auch wenn der Editor wechselt", async ({ page, request }) => {
+    const text = `Shell-Wechsel Protokoll ${Date.now()}`;
+    const protocol = await textProtocol(request);
+    await page.setViewportSize(DESKTOP);
+    await openProtocol(page, protocol.id);
+    const block = page.locator('.editor-block-card[data-block-type="text"]').first();
+    await block.getByRole("button", { name: /bearbeiten$/ }).click();
+    await expect(block.locator(".rich-text-editor-content")).toBeFocused();
+    await page.keyboard.type(text);
+
+    // Feld verlassen und sofort auf 390 px: der Desktop-Editor verschwindet noch innerhalb der
+    // Entprellzeit (700 ms). Die wartende Speicherung geht dann sofort raus, nicht erst über die
+    // Outbox (1,5 s) oder gar nicht.
+    const saved = page.waitForRequest((req) => req.method() === "PUT" && /\/api\/protocol-element-blocks\/[^/]+\/text$/.test(req.url()), { timeout: 1_200 });
+    await page.keyboard.press("Escape");
+    await page.setViewportSize(MOBILE);
+    expect(String((await saved).postDataJSON()?.content ?? "")).toContain(text);
+    await expect(page.locator(".mobile-tabbar")).toBeVisible();
+    await expect.poll(() => protocolText(request, protocol.id), { timeout: 15_000 }).toContain(text);
+
+    // Neu laden (jetzt Mobil-Editor): der Text ist da
+    await page.reload();
+    await expect(page.getByText(text)).toBeVisible({ timeout: 30_000 });
   });
 });

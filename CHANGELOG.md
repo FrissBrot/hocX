@@ -18,6 +18,10 @@ Installationen aktualisieren können.
   Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
   Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
   getippt wird.
+- **Protokoll-Editor, Sitzungsnotizen, Foto- und Dateidetails speichern beim Verschwinden sofort:**
+  Verschwand der Editor innerhalb der Entprellzeit (Ansichtswechsel, Seitenwechsel), wurde die
+  wartende Speicherung verworfen. Im Protokoll-Editor holte die Outbox sie erst nach rund 1,5 s nach;
+  im Foto-Viewer und in den Dateidetails konnte sie verloren gehen. Jetzt wird sie sofort gesendet.
 
 ## [1.6.0] - 2026-11-24
 

@@ -4,6 +4,8 @@
 // (Audit 2026-11, Protokolle: der verzögerte PUT kam sonst nach dem PATCH auf
 // «abgeschlossen» an und scheiterte mit 409; der letzte Satz fehlte im PDF).
 
+import { useEffect, useRef, useState } from "react";
+
 /** Liefert true, wenn der Wert sicher gespeichert (oder durch einen neueren ersetzt) wurde. */
 export type SaveSender<T> = (key: string, value: T) => Promise<boolean>;
 
@@ -74,4 +76,20 @@ export function createDebouncedSaveQueue<T>(delayMs: number, send: SaveSender<T>
       return waiting.size > 0 || running > 0;
     },
   };
+}
+
+/**
+ * Warteschlange für eine Komponente: beim Unmount werden wartende Speicherungen sofort gesendet,
+ * nicht verworfen. Der Editor kann jederzeit verschwinden, auch mitten im Entprellen: Seitenwechsel
+ * oder Wechsel zwischen Desktop- und Mobil-Editor (1.6.1). Vorher rief der Editor `cancelAll()`,
+ * dann blieb nur die langsamere Outbox (offline-store) als Netz.
+ */
+export function useDebouncedSaveQueue<T>(delayMs: number, send: SaveSender<T>): DebouncedSaveQueue<T> {
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const [queue] = useState(() => createDebouncedSaveQueue<T>(delayMs, (key, value) => sendRef.current(key, value)));
+  useEffect(() => () => {
+    void queue.flushAll();
+  }, [queue]);
+  return queue;
 }
