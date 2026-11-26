@@ -35,8 +35,8 @@ import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
 import { Menu, MenuDivider, MenuItem, menuButtonKeyDown, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
-import { MobileShell } from "@/components/mobile/mobile-shell";
-import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { MobileMorePanel, MobileShellProviders, MobileTabBar } from "@/components/mobile/mobile-shell";
+import { useIsMobile, useViewportEpoch } from "@/lib/hooks/use-is-mobile";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 import { MfaGraceBanner } from "@/components/ui/mfa-grace-banner";
 import { PasswordBreachedBanner } from "@/components/ui/password-breached-banner";
@@ -132,12 +132,19 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const tCommon = useTranslations("common");
   const showToast = useToast();
   const isMobile = useIsMobile();
+  const viewportEpoch = useViewportEpoch();
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // «Mehr»-Panel der Mobile-Shell. Seitenwechsel und Wechsel auf Desktop schliessen es.
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const openMobileMore = useCallback(() => setMobileMoreOpen(true), []);
+  useEffect(() => {
+    setMobileMoreOpen(false);
+  }, [pathname, isMobile]);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const navToggleRef = useRef<HTMLButtonElement | null>(null);
   // Ausklappbare Seitenleiste (schmale Fenster, Schreibmodus): Escape schliesst sie und gibt den
@@ -446,44 +453,37 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     />
   ) : null;
 
-  // Mobile (bis 900 px): eigene Shell mit Tableiste statt Sidebar. Dieselben Routen, nur die
-  // Bereiche aus dem Mobile-Design stehen in der Navigation (siehe mobile-shell.tsx).
-  if (isMobile) {
-    return (
-      <>
-        <MobileShell
-          session={session}
-          themePreference={themePreference}
-          themeReady={themeReady}
-          onSelectTheme={selectTheme}
-          onOpenProfile={() => setProfileModalOpen(true)}
-          onOpenSearch={openSearch}
-          onLogout={() => void logout()}
-        >
-          {children}
-        </MobileShell>
-        {profileModal}
-        {globalSearch}
-        {shortcutHelp}
-      </>
-    );
-  }
+  // Desktop: Rahmen mit Sidebar und Kopfzeile. Mobile (bis 900 px): Tableiste statt Sidebar, nur die
+  // Bereiche aus dem Mobile-Design stehen in der Navigation (siehe mobile-shell.tsx). Beide Ansichten
+  // teilen sich denselben Baum bis zum Seiteninhalt: nur Navigation und Rahmen wechseln, wo die
+  // andere Ansicht kein Element hat, steht eine unsichtbare Hülle (`.shell-slot`, display: contents).
+  // So bleiben Eingaben, Dialoge und Fokus beim Drehen des Tablets oder Schmalziehen des Fensters
+  // erhalten (1.6.1; vorher tauschte die Shell den ganzen Baum und mountete die Seite neu). Nur die
+  // erste Korrektur nach dem Laden baut neu auf (viewportEpoch), wie vorher.
+  const desktop = !isMobile;
+  const frameClass = desktop
+    ? `app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`
+    : "mobile-shell";
 
   return (
-    <div className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
-      <SkipLink />
+    <MobileShellProviders session={session} onOpenMore={openMobileMore}>
+    {/* Key wechselt nur bei der ersten Korrektur nach dem Laden (Server rendert Desktop, Client
+        ist schmal): dann wie bisher neu aufbauen, spaetere Wechsel behalten den Inhalt. */}
+    <div key={viewportEpoch} className={frameClass}>
+      {desktop ? <SkipLink /> : null}
       <ConnectivityStatus userId={session?.user?.id ?? null} />
-      <div className="shell">
-        {isProtocolWriting && (
+      <div className={desktop ? "shell" : "shell-slot"}>
+        {desktop && isProtocolWriting && (
           <div
             className="sidebar-edge-trigger"
             aria-hidden="true"
             onMouseEnter={() => setMobileNavOpen(true)}
           />
         )}
-        {mobileNavOpen && (
+        {desktop && mobileNavOpen && (
           <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
         )}
+        {desktop ? (
         <aside
           ref={sidebarRef}
           className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
@@ -587,7 +587,9 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             <CopyrightNotice />
           </div>
         </aside>
-        <div className="shell-main">
+        ) : null}
+        <div className={desktop ? "shell-main" : "shell-slot"}>
+          {desktop ? (
           <header className="topbar">
             <div className="topbar-actions">
               <button
@@ -708,25 +710,40 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               </Menu>
             </Popover>
           </header>
-          <main id={MAIN_CONTENT_ID} tabIndex={-1} className="shell-content">
-            <PasswordBreachedBanner
-              breached={session?.password_breached}
-              onChange={() => { setProfileInitialTab(profileTabFromLink("security")); setProfileModalOpen(true); }}
-            />
-            <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} />
+          ) : null}
+          {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className={desktop ? "shell-content" : "mobile-shell-content"} hidden={!desktop && mobileMoreOpen}>
+            {desktop ? (
+              <PasswordBreachedBanner
+                breached={session?.password_breached}
+                onChange={() => { setProfileInitialTab(profileTabFromLink("security")); setProfileModalOpen(true); }}
+              />
+            ) : null}
+            {desktop ? <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} /> : null}
             <InstallAppPrompt />
-            {inSettings && usesSettingsFrame(pathname) ? (
-              <SettingsFrame groups={settingsGroups} pathname={pathname}>{children}</SettingsFrame>
-            ) : (
-              children
-            )}
+            <SettingsFrame groups={settingsGroups} pathname={pathname} enabled={desktop && inSettings && usesSettingsFrame(pathname)}>
+              {children}
+            </SettingsFrame>
           </main>
         </div>
       </div>
+      {!desktop && mobileMoreOpen ? (
+        <MobileMorePanel
+          session={session}
+          themePreference={themePreference}
+          themeReady={themeReady}
+          onSelectTheme={selectTheme}
+          onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenSearch={() => { setMobileMoreOpen(false); openSearch(); }}
+          onLogout={() => void logout()}
+        />
+      ) : null}
+      {!desktop ? <MobileTabBar session={session} moreOpen={mobileMoreOpen} onMoreOpenChange={setMobileMoreOpen} /> : null}
 
       {profileModal}
       {globalSearch}
       {shortcutHelp}
     </div>
+    </MobileShellProviders>
   );
 }

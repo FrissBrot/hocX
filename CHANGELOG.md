@@ -8,6 +8,17 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- **Wechsel zwischen Desktop- und Mobilansicht verliert keine Eingaben mehr:** Beim Drehen eines
+  Tablets, beim Schmalziehen des Fensters oder sonst über die 900-px-Grenze tauschte die App-Shell
+  den ganzen Baum aus und baute die Seite neu auf. Halb ausgefüllte Formulare (z. B. Personenseite),
+  offene Dialoge (Pendenz, Termin), der Fokus und der Stand im Datei-Import gingen dabei verloren;
+  der Import zeigte danach wieder die beim Laden geholten, veralteten Daten. Jetzt wechseln nur
+  Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
+  Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
+  getippt wird.
+
 ## [1.6.0] - 2026-11-24
 
 ### Hinzugefügt
