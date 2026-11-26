@@ -107,4 +107,20 @@ describe("TenantSubscriptionView – Plätze", () => {
     expect(await screen.findByText(/0 Plätze frei/)).toBeInTheDocument();
     expect(screen.getByText(/2 offene Einladungen belegen Plätze/)).toBeInTheDocument();
   });
+
+  it("nennt die Konten in der Avatarreihe mit Namen statt nur mit Initialen (Screenreader)", async () => {
+    const users = Array.from({ length: 10 }, (_, index) => ({ id: `u${index}`, display_name: `Person ${index}` }));
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path.endsWith("/subscription")) return subscription;
+      if (path.endsWith("/charges")) return charges;
+      if (path === "/api/users") return users;
+      throw new Error(path);
+    });
+    render(<TenantSubscriptionView initialTenant={tenant} />);
+    const list = await screen.findByRole("list", { name: "Konten" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items).toHaveLength(9);
+    expect(items[0]).toHaveTextContent("Person 0");
+    expect(items[8]).toHaveTextContent("2 weitere Konten");
+  });
 });

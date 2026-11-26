@@ -64,3 +64,15 @@ def test_minimum_length_ignores_surrounding_whitespace(password):
         validate_password(password)
     with pytest.raises(ValueError, match="passwordRequired"):
         extra_formats.encrypt_xlsx(_xlsx(), password)
+
+
+
+def test_admin_and_audit_exports_count_length_without_surrounding_spaces():
+    """export_crypto.validate_password (Plattform-Admin-/Audit-Exporte) zählte Leerzeichen am Rand
+    mit - jetzt dieselbe Regel wie die übrigen Exporte, das Passwort bleibt unverändert."""
+    from app.services import export_crypto
+
+    with pytest.raises(ValueError):
+        export_crypto.validate_password(" " * 6 + "kurz" + " " * 6)
+    assert export_crypto.validate_password(PASSWORD) == PASSWORD
+    assert export_crypto.validate_password("") is None

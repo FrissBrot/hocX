@@ -68,6 +68,8 @@
   "discountBadge": "{percent} % Rabatt",
   "costNotSet": "Noch nicht festgelegt",
   "usersEyebrow": "Nutzer",
+  "usersAvatarsLabel": "Konten",
+  "usersAvatarsMore": "{count, plural, one {# weiteres Konto} other {# weitere Konten}}",
   "ofLimit": "von {limit}",
   "unlimited": "unbegrenzt",
   "manageUsersLink": "Benutzer verwalten →",
@@ -325,7 +327,9 @@
     "domain_domain_taken": "Diese Domain ist bereits bei einer anderen Organisation aktiv.",
     "domain_already_active": "Diese Domain ist für diesen Zweck bereits aktiv.",
     "domain_txt_missing": "Der TXT-Eintrag {record} mit dem Prüfwert wurde noch nicht gefunden. Prüfe Name und Wert beim Domain-Anbieter oder warte, bis die Änderung verbreitet ist.",
-    "domain_not_routed": "{domain} zeigt noch nicht auf {target}. Prüfe den CNAME- bzw. A-Eintrag oder warte, bis die Änderung verbreitet ist."
+    "domain_not_routed": "{domain} zeigt noch nicht auf {target}. Prüfe den CNAME- bzw. A-Eintrag oder warte, bis die Änderung verbreitet ist.",
+    "domain_not_found": "Diese Domain gibt es nicht mehr. Lade die Seite neu.",
+    "domain_server_not_configured": "Die Server-Domain ist nicht eingerichtet. Bitte wende dich an den Betrieb der Plattform."
   },
   "renameRevokesVerificationConfirm": "Eure Organisation ist durch hocX verifiziert. Wenn du den Namen änderst, wird diese Verifizierung aufgehoben und neue PDFs werden nicht mehr als verifiziert ausgewiesen. Du kannst sie danach unter Einstellungen › Domains & Echtheit neu beantragen. Trotzdem speichern?",
   "renameConfirmLabel": "Name ändern",

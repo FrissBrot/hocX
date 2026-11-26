@@ -413,14 +413,21 @@ function UsersCard({ subscription, tenantUsers }: { subscription: TenantSubscrip
       {userLimit !== null ? <UsageBar value={subscription.user_count} max={userLimit} /> : null}
       <div className="tenant-avatar-row">
         {tenantUsers.length > 0 ? (
-          <div className="tenant-user-avatars">
+          // Liste mit Namen statt nur title: Screenreader lasen sonst nur die Initialen vor
+          <ul className="tenant-user-avatars" aria-label={t("usersAvatarsLabel")}>
             {tenantUsers.slice(0, 8).map((u) => (
-              <span key={u.id} className="tenant-user-avatar" style={{ backgroundColor: colorForUser(u.id) }} title={u.display_name}>
-                {initials(u.display_name)}
-              </span>
+              <li key={u.id} className="tenant-user-avatar" style={{ backgroundColor: colorForUser(u.id) }} title={u.display_name}>
+                <span aria-hidden="true">{initials(u.display_name)}</span>
+                <span className="visually-hidden">{u.display_name}</span>
+              </li>
             ))}
-            {tenantUsers.length > 8 ? <span className="tenant-user-avatar tenant-user-avatar-overflow">+{tenantUsers.length - 8}</span> : null}
-          </div>
+            {tenantUsers.length > 8 ? (
+              <li className="tenant-user-avatar tenant-user-avatar-overflow">
+                <span aria-hidden="true">+{tenantUsers.length - 8}</span>
+                <span className="visually-hidden">{t("usersAvatarsMore", { count: tenantUsers.length - 8 })}</span>
+              </li>
+            ) : null}
+          </ul>
         ) : null}
         {userLimit !== null ? (
           <span className="muted tenant-usage-note">

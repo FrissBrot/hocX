@@ -27,7 +27,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize, formatPercentNumber, formatTimestampDate } from "@/lib/utils/format";
 import { CATEGORY_COLORS, categoryHints, categoryLabels, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
-import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
+import { PROFILE_IMAGE_ACCEPT, profileImageErrorMessage, profileImageProblem } from "@/lib/utils/profile-image";
 import { primarySystemRole } from "@/components/users/user-form-shared";
 import { rolesLabel } from "@/lib/permissions";
 import {
@@ -438,7 +438,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
       showToast(t("tenantModal.toasts.tenantSaved"), "success");
       onSaved(updated);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.tenantSaveFailed"), "error");
+      showToast(profileImageErrorMessage(error, tCommon) ?? (error instanceof Error ? error.message : t("tenantModal.toasts.tenantSaveFailed")), "error");
     } finally {
       setTenantBusy(false);
     }

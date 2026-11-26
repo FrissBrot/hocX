@@ -129,16 +129,26 @@ def _normalize_tenant_profile_image(content: bytes) -> bytes:
     Das Neukodieren entfernt eingebettete Fremdinhalte (Polyglot-Dateien, Metadaten);
     die Dateiendung kommt damit nie mehr aus dem Client-Dateinamen (Audit MAIN-SEC-002).
     """
+    # Mit Code: die Oberfläche übersetzt (common.profileImage.*); ein zu grosses Bild hiess früher
+    # irreführend «muss ein JPEG-, PNG-… sein» (Nachtlauf 2026-11-26)
     invalid = HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Das Profilbild muss ein JPEG-, PNG-, GIF- oder WebP-Bild sein",
+        detail={"code": "profile_image_invalid", "message": "Das Profilbild muss ein JPEG-, PNG-, GIF- oder WebP-Bild sein"},
+    )
+    too_many_pixels = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "code": "profile_image_too_many_pixels",
+            "message": "Das Profilbild hat zu viele Bildpunkte (höchstens 40 Megapixel)",
+            "params": {"max_megapixels": _TENANT_PROFILE_IMAGE_MAX_PIXELS // 1_000_000},
+        },
     )
     try:
         with Image.open(BytesIO(content)) as image:
             if image.format not in _TENANT_PROFILE_IMAGE_FORMATS:
                 raise invalid
             if image.width * image.height > _TENANT_PROFILE_IMAGE_MAX_PIXELS:
-                raise invalid
+                raise too_many_pixels
             image.seek(0)
             image.load()
             converted = image.convert("RGBA")
@@ -160,7 +170,7 @@ async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image:
     if len(content) > TENANT_PROFILE_IMAGE_MAX_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Das Profilbild ist zu gross (maximal 5 MB)",
+            detail={"code": "profile_image_too_large", "message": "Das Profilbild ist zu gross (maximal 5 MB)"},
         )
     normalized = _normalize_tenant_profile_image(content)
     upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
@@ -452,7 +462,7 @@ class TenantService:
         # a downgrade.
         row = db.query(TenantDomain).filter(TenantDomain.id == domain_id, TenantDomain.tenant_id == tenant_id).one_or_none()
         if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_domain_error("not_found", "Domain nicht gefunden"))
         require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[row.purpose])
         if traefik_config_service.is_reserved_domain(row.domain):
             # Vor SEC-AUTH-001 angelegte, noch ausstehende Domain: nie aktivieren
@@ -462,7 +472,7 @@ class TenantService:
 
         target_host = traefik_config_service.target_host_for_purpose(row.purpose)
         if not target_host:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server-Domain nicht konfiguriert")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=_domain_error("server_not_configured", "Server-Domain nicht konfiguriert"))
 
         ok, code = domain_verification_service.verify_domain(row.domain, row.verification_token, target_host)
         if not ok:
@@ -501,7 +511,7 @@ class TenantService:
         self._require_manageable(tenant_id, actor)
         row = db.query(TenantDomain).filter(TenantDomain.id == domain_id, TenantDomain.tenant_id == tenant_id).one_or_none()
         if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_domain_error("not_found", "Domain nicht gefunden"))
 
         was_active = row.status == "active"
         db.delete(row)

@@ -122,3 +122,13 @@ def test_pending_system_domain_from_old_data_is_never_verified(db, setup, monkey
         TenantService().verify_domain(db, tenant.id, actor, pending.id)
     assert exc_info.value.status_code == 400
     assert regenerated == []
+
+
+def test_unknown_domain_answers_with_translatable_code(db, setup):
+    """Nachtlauf 2026-11-26: «Domain nicht gefunden» ohne Code erschien in jeder Sprache deutsch."""
+    tenant, actor, _live, _regenerated = setup
+    for call in (TenantService().verify_domain, TenantService().delete_domain):
+        with pytest.raises(HTTPException) as exc:
+            call(db, tenant.id, actor, 987654321)
+        assert exc.value.status_code == 404
+        assert exc.value.detail["code"] == "domain_not_found"

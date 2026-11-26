@@ -42,7 +42,8 @@ export function ProtectedExportForm({ path, fallbackFilename, extraBody, submitL
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [busy, setBusy] = useState(false);
-  const valid = password.length >= MIN_PASSWORD_LENGTH && password === repeat;
+  // Mindestlänge ohne Rand-Leerzeichen wie das Backend (export_crypto.validate_password); gesendet wird die Eingabe unverändert
+  const valid = password.trim().length >= MIN_PASSWORD_LENGTH && password === repeat;
 
   async function submit(event: FormEvent) {
     event.preventDefault();

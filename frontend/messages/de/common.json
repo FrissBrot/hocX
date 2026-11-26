@@ -116,7 +116,8 @@
   },
   "profileImage": {
     "invalidType": "Bitte ein PNG-, JPG-, GIF- oder WebP-Bild wählen (SVG wird nicht unterstützt).",
-    "tooLarge": "Das Bild ist zu gross (maximal 5 MB)."
+    "tooLarge": "Das Bild ist zu gross (maximal 5 MB).",
+    "tooManyPixels": "Das Bild hat zu viele Bildpunkte (höchstens {max, number} Megapixel). Bitte verkleinern."
   },
   "deleteWithFiles": {
     "selectedCount": "{selected, number} von {total, number} zum Löschen ausgewählt",

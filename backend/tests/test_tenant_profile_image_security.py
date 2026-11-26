@@ -204,3 +204,24 @@ def test_logo_url_is_versioned_without_leaking_the_storage_key(db):
     assert first != second
     assert first.startswith(f"/api/tenants/{tenant.public_id}/profile-image?v=")
     assert tenant.profile_image_path not in second and f"tenant-{tenant.id}" not in second
+
+
+def test_profile_image_with_too_many_pixels_has_own_code(db, monkeypatch):
+    """Über 40 MP (unter 5 MB) hiess es «muss ein JPEG-, PNG-… sein» - roh deutsch und irreführend.
+    Jetzt eigener Code, die Oberfläche übersetzt (Nachtlauf 2026-11-26)."""
+    from app.services import tenant_service
+
+    monkeypatch.setattr(tenant_service, "_TENANT_PROFILE_IMAGE_MAX_PIXELS", 100)  # 40x30 = 1200 Bildpunkte
+    tenant = make_tenant(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(apply_tenant_profile_image(db, tenant, _upload(_png(), "logo.png", "image/png")))
+    assert exc.value.status_code == 400
+    assert exc.value.detail["code"] == "profile_image_too_many_pixels"
+    assert tenant.profile_image_path is None
+
+
+def test_profile_image_non_image_has_code(db):
+    tenant = make_tenant(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(apply_tenant_profile_image(db, tenant, _upload(b"<html></html>", "logo.html", "text/html")))
+    assert exc.value.detail["code"] == "profile_image_invalid"
