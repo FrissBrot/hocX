@@ -88,8 +88,9 @@ export function MfaProfilePanel({ open }: Props) {
               ? t("requiredHint")
               : t("optionalHint")}
           </div>
-          {overview?.preferred_factor_label ? (
-            <div className="muted">{t("defaultMethod", { method: overview.preferred_factor_label })}</div>
+          {/* Typ statt preferred_factor_label: das Backend liefert dort fertigen deutschen Text */}
+          {overview?.preferred_factor_type ? (
+            <div className="muted">{t("defaultMethod", { method: mfaFactorTypeLabel(overview.preferred_factor_type) })}</div>
           ) : null}
         </div>
         <div className="status-row">
