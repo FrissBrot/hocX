@@ -16,7 +16,7 @@ const platformAdminRoutes = [
   "/admin/plans", "/admin/security", "/admin/account", "/admin/analytics", "/admin/system", "/admin/tenants", "/admin/upload-pipeline",
   "/admin/users",
 ];
-const publicRoutes = ["/login", "/admin/login", "/website", "/auth/bridge#token=ungueltig", "/share/ungueltig"];
+const publicRoutes = ["/login", "/admin/login", "/website", "/website/privacy", "/website/terms", "/auth/bridge#token=ungueltig", "/share/ungueltig"];
 
 async function collectViolations(page: Page): Promise<string[]> {
   const violations: string[] = [];

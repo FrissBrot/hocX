@@ -580,6 +580,16 @@
       "js_gzip_kb": 212,
       "css_gzip_kb": 53,
       "css_raw_kb": 335
+    },
+    "/website/privacy": {
+      "js_gzip_kb": 214,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 306
+    },
+    "/website/terms": {
+      "js_gzip_kb": 214,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 306
     }
   }
 }

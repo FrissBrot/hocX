@@ -136,6 +136,22 @@ describe("proxy", () => {
     vi.unstubAllEnvs();
   });
 
+  it("liefert Datenschutzerklärung und Nutzungsbedingungen auf der Website-Domain ohne Login aus", async () => {
+    vi.stubEnv("TRAEFIK_WEBSITE_DOMAIN", "www.example.ch");
+    vi.resetModules();
+    const { proxy: websiteProxy } = await import("./proxy");
+    const fetchSpy = unauthenticatedBackend();
+
+    for (const page of ["privacy", "terms"]) {
+      const response = await websiteProxy(new NextRequest(`http://0.0.0.0:3000/${page}`, { headers: { host: "www.example.ch" } }));
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-middleware-rewrite")).toBe(`http://0.0.0.0:3000/website/${page}`);
+      expect(response.headers.get("content-security-policy")).toContain("'strict-dynamic'");
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
   it("schreibt die Admin-Domain auch hinter der Bind-Adresse 0.0.0.0 auf /admin um", async () => {
     // Audit MAIN-FE-003: nextUrl.hostname ist hinter HOSTNAME=0.0.0.0 die Bind-Adresse.
     vi.stubEnv("TRAEFIK_ADMIN_DOMAIN", "admin.example.ch");
