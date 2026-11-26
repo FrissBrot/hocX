@@ -106,3 +106,30 @@ def test_create_fine_scopes_nameless_participant_duplicates_by_name_snapshot(db)
 
     with pytest.raises(DuplicateFineError):
         repo.create_fine(db, anna_payload, tenant.id)
+
+
+def test_route_returns_translatable_code_for_duplicate(db):
+    """Route: 409 mit Code duplicate_fine statt nur deutschem Text (Nachtlauf 2026-11-26): das
+    Frontend (fine-create-modal.tsx) zeigt dazu eine übersetzte Meldung mit dem Busse-Typ."""
+    from fastapi import HTTPException
+
+    from app.api.routes import fines as fine_routes
+    from tests.factories import make_app_user, make_current_user
+
+    tenant, protocol, account = _setup(db)
+    participant = make_participant(db, tenant.id, display_name="Anna Muster")
+    user = make_current_user(tenant.id, role="admin", user_id=make_app_user(db, email="dup@example.com", tenant_id=tenant.id).id)
+    payload = AttendanceFineCreate(
+        protocol_id=protocol.public_id,
+        participant_id=participant.public_id,
+        participant_name_snapshot=participant.display_name,
+        fine_type="absent",
+        amount=5,
+        account_id=account.public_id,
+    )
+    FinesRepository().create_fine(db, payload, tenant.id)
+
+    with pytest.raises(HTTPException) as exc:
+        fine_routes.create_fine(payload, db=db, user=user)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "duplicate_fine"

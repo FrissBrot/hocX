@@ -99,6 +99,7 @@
   "amountLabel": "Betrag",
   "createFineSuccess": "Busse erfasst",
   "createFineFailed": "Busse konnte nicht erfasst werden",
+  "createFineDuplicate": "{name} hat in diesem Protokoll bereits eine Busse «{type}».",
   "recordButton": "Erfassen",
   "newTransactionTitle": "Neue Buchung",
   "editTransactionTitle": "Buchung bearbeiten",
