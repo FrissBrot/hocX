@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { RouteTabs, type RouteTab } from "@/components/ui/route-tabs";
 
 // Unterseiten des Sicherheitsbereichs (Plan §2 D) - eigene Routen, damit jede Ansicht verlinkbar ist.
-export const SECURITY_SECTIONS = ["overview", "events", "blocks", "alerts", "audit", "policy"] as const;
+export const SECURITY_SECTIONS = ["overview", "incidents", "events", "blocks", "alerts", "audit", "policy"] as const;
 export type SecuritySection = (typeof SECURITY_SECTIONS)[number];
 
 export function securityHref(section: SecuritySection): string {

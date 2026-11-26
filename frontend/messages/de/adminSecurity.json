@@ -1,7 +1,8 @@
 {
   "tabsLabel": "Sicherheitsbereich",
   "tabs": {
-    "overview": "Übersicht",
+    "overview": "Lagebild",
+    "incidents": "Vorfälle",
     "events": "Anmeldeereignisse",
     "blocks": "Sperren",
     "alerts": "Alarmregeln",
@@ -24,46 +25,8 @@
     "warning": "Warnung"
   },
   "overview": {
-    "title": "Sicherheit",
-    "description": "Anmeldeschutz der ganzen Plattform: Warnungen, Fehlversuche, Sperren. Adressen erscheinen nur als gekürzte Pseudonyme.",
-    "tiles": {
-      "openAlerts": "Offene Warnungen",
-      "criticalAlerts": "{count, plural, =0 {keine kritisch} one {# kritisch} other {# kritisch}}",
-      "failures": "Fehlversuche 24 h",
-      "previous": "Vortag: {count, number}",
-      "activeBlocks": "Aktive Sperren",
-      "blocked": "Abgewiesen 24 h: {count, number}",
-      "adminLogins": "Admin-Anmeldungen 24 h"
-    },
-    "chartTitle": "Anmeldungen der letzten 48 Stunden",
-    "chartSummary": "{failures, number} Fehlversuche und {successes, number} erfolgreiche Anmeldungen in 48 Stunden, in 5-Minuten-Abschnitten.",
     "showTable": "Daten als Tabelle",
-    "showChart": "Als Diagramm",
-    "chartEmpty": "In den letzten 48 Stunden gab es keine Anmeldeereignisse.",
-    "series": {
-      "failures": "Fehlversuche",
-      "successes": "Erfolgreich",
-      "blocked": "Gesperrt"
-    },
-    "columns": {
-      "bucket": "Zeit",
-      "failures": "Fehlversuche",
-      "successes": "Erfolgreich",
-      "blocked": "Gesperrt",
-      "network": "Netz (Pseudonym)",
-      "account": "Konto (Pseudonym)",
-      "accounts": "Konten",
-      "networks": "Netze",
-      "tenants": "Mandanten",
-      "lastSeen": "Zuletzt"
-    },
-    "topNetworks": "Auffällige Netze (24 h)",
-    "topAccounts": "Betroffene Konten (24 h)",
-    "noTopNetworks": "Keine Fehlversuche aus einzelnen Netzen.",
-    "noTopAccounts": "Keine Konten mit Fehlversuchen.",
-    "alertsTitle": "Aktuelle Warnungen",
-    "allAlerts": "Zu den Alarmregeln",
-    "auditLink": "Audit-Log öffnen"
+    "showChart": "Als Diagramm"
   },
   "events": {
     "title": "Anmeldeereignisse",
@@ -319,8 +282,7 @@
       "rule": "Regel",
       "subject": "Betroffen (Pseudonym)",
       "key": "Schlüssel",
-      "status": "Status",
-      "actions": "Aktion"
+      "incident": "Vorfall"
     },
     "rules": {
       "stuffing": "Credential Stuffing: viele Fehlversuche aus vielen Netzen",
@@ -335,21 +297,11 @@
       "limiter": "Anmeldeschutz (Redis) gestört",
       "unknown": "Andere Regel"
     },
-    "open": "Offen",
-    "acknowledged": "Quittiert",
-    "acknowledgedBy": "von {name}, {time}",
-    "acknowledge": "Quittieren",
-    "reopen": "Wieder öffnen",
-    "acknowledgeConfirm": "Warnung als gesehen quittieren? Sie zählt dann nicht mehr als offen, bis sie abklingt und erneut auftritt. Sperren und Benachrichtigungen bleiben unverändert.",
-    "acknowledgedToast": "Warnung quittiert",
-    "reopenedToast": "Warnung wieder offen",
-    "ackHelp": "Quittierte Warnungen bleiben sichtbar, zählen aber nicht mehr in Glocke und Übersicht. Tritt eine Warnung nach dem Abklingen erneut auf, ist sie wieder offen.",
     "clearsAt": "Erledigt sich von selbst um {time}, wenn bis dahin nichts Neues passiert (Fenster {minutes, plural, one {# Minute} other {# Minuten}} ab dem letzten Ereignis).",
     "openTitle": "Ausgelöste Warnungen",
-    "acknowledgeTitle": "Warnung quittieren",
-    "noteLabel": "Notiz (optional)",
-    "noteHelp": "Kurz, was geprüft wird – ohne Personendaten.",
-    "noteShown": "Notiz: {note}"
+    "assignee": "zuständig: {name}",
+    "noIncident": "wird beim nächsten Durchlauf des Monitors als Vorfall erfasst",
+    "incidentHelp": "Jede ausgelöste Regel wird zu genau einem offenen Vorfall gebündelt. Status, Zuständigkeit und Notizen setzt ihr unter «Vorfälle»."
   },
   "audit": {
     "title": "Audit-Log",
@@ -470,5 +422,301 @@
     "seriesThreshold": "gestrichelt: Schwelle {threshold} {unit}",
     "seriesSummary": "Höchster Wert {peak}, Schwelle {threshold}; {over, plural, =0 {kein Abschnitt} one {# Abschnitt} other {# Abschnitte}} über der Schwelle (Abschnitte zu {minutes} Minuten).",
     "seriesApprox": "Näherung: feste Abschnitte zu {minutes} Minuten statt des gleitenden Fensters der Regel."
+  },
+  "statuses": {
+    "new": "Neu",
+    "in_progress": "In Bearbeitung",
+    "resolved": "Erledigt",
+    "false_positive": "Fehlalarm"
+  },
+  "incidents": {
+    "title": "Vorfälle",
+    "description": "Ausgelöste Alarmregeln, gebündelt je Regel und Netz, Konto oder Mandant. Jeder Vorfall hat einen Status und eine zuständige Person; jede Änderung bestätigst du mit dem Passkey, sie landet im Audit-Log.",
+    "filtersLabel": "Filter der Vorfälle",
+    "searchPlaceholder": "Nummer, Regel oder Pseudonym",
+    "searchLabel": "Vorfälle suchen (Nummer, Regel oder Pseudonym)",
+    "searchClear": "Suche leeren",
+    "severityFilter": "Schwere",
+    "assigneeFilter": "Zuständig",
+    "assignee": {
+      "all": "Alle",
+      "me": "Meine",
+      "none": "Ohne Zuständige"
+    },
+    "views": {
+      "label": "Ansicht",
+      "list": "Liste",
+      "board": "Board"
+    },
+    "statusFilter": "Status",
+    "statusGroups": {
+      "open": "Offen",
+      "new": "Neu",
+      "in_progress": "In Bearbeitung",
+      "closed": "Abgeschlossen",
+      "all": "Alle"
+    },
+    "listLabel": "Liste der Vorfälle",
+    "columns": {
+      "id": "Nr.",
+      "incident": "Vorfall",
+      "affected": "Betroffen",
+      "status": "Status",
+      "trend": "Verlauf",
+      "assignee": "Zuständig",
+      "start": "Beginn",
+      "duration": "Dauer"
+    },
+    "empty": "Keine Vorfälle für diese Auswahl.",
+    "openIncident": "{label} öffnen",
+    "active": "löst aus",
+    "cleared": "abgeklungen",
+    "triggers": "{count, plural, one {# Auslösung} other {# Auslösungen}}",
+    "sparkLabel": "Ereignisse der Regel über die Dauer des Vorfalls: {values}",
+    "nobody": "niemand",
+    "boardEmpty": "Keine",
+    "affected": {
+      "platform": "Plattform",
+      "net": "Netz {subject}",
+      "account": "Konto {subject}",
+      "tenant": "Mandant {name}",
+      "admin": "Admin {name}"
+    },
+    "duration": {
+      "days": "{days} T {hours} h",
+      "hours": "{hours} h {minutes} min",
+      "minutes": "{minutes} min"
+    },
+    "stats": {
+      "open": "Offen",
+      "openHint": "{count, plural, =0 {keiner kritisch} other {# kritisch}}",
+      "unassigned": "Ohne Zuständige",
+      "unassignedHint": "warten auf Übernahme",
+      "mtta": "Ø bis Übernahme",
+      "mttr": "Ø bis erledigt",
+      "periodHint": "letzte {days} Tage",
+      "falsePositive": "Fehlalarm-Quote",
+      "falsePositiveHint": "{count} von {total} abgeschlossen in {days} Tagen"
+    },
+    "facts": {
+      "failures": "Fehlversuche",
+      "accounts": "Konten",
+      "networks": "Netze",
+      "tenants": "Mandanten",
+      "blocked": "Abgewiesen",
+      "successes": "Erfolgreich",
+      "maxRisk": "Höchstes Risiko",
+      "untilTakeover": "Bis Übernahme",
+      "untilClosed": "Bis erledigt",
+      "triggers": "Auslösungen"
+    },
+    "stages": {
+      "1": "Beobachten",
+      "2": "Grenzen gesenkt",
+      "3": "Zusatzprüfung",
+      "4": "Befristet gesperrt",
+      "5": "Manuell gesperrt"
+    },
+    "detail": {
+      "openInSituation": "Im Lagebild öffnen",
+      "openInList": "In Vorfällen öffnen",
+      "close": "Vorfall schliessen",
+      "loading": "Lädt …",
+      "window": "{start} – {end}",
+      "statusLabel": "Status",
+      "assigneeLabel": "Zuständig",
+      "takeOver": "Übernehmen",
+      "takenOver": "Du bist jetzt zuständig.",
+      "assigned": "Zuständigkeit gespeichert.",
+      "statusSaved": "Status «{status}» gesetzt, im Audit-Log vermerkt.",
+      "passkeyHint": "Änderungen bestätigst du mit deinem Passkey.",
+      "failed": "Aktion fehlgeschlagen: {message}",
+      "participantsTitle": "Beteiligte",
+      "participantsHint": "Netze, Konten, Mandanten und Länder im Zeitraum des Vorfalls (gekürzte Pseudonyme).",
+      "reasonsTitle": "Warum riskant",
+      "reasonCount": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
+      "noReasons": "Keine Risikogründe im Zeitraum.",
+      "stageTitle": "Abwehrstufe",
+      "stageReached": "Höchste erreichte Stufe: {stage}",
+      "stageNone": "Noch keine Abwehr nötig",
+      "notesTitle": "Notizen",
+      "notesEmpty": "Noch keine Notizen.",
+      "noteMeta": "{name} · {time}",
+      "unknownAdmin": "gelöschter Admin",
+      "noteLabel": "Notiz hinzufügen",
+      "noteHelp": "Kurz und ohne Personendaten (keine Namen, Adressen oder E-Mails).",
+      "noteSave": "Notiz mit Passkey speichern",
+      "noteSaved": "Notiz gespeichert.",
+      "allEvents": "Alle Ereignisse",
+      "blockAction": "Netz sperren (Stufe 5)",
+      "blocked": "Netz gesperrt.",
+      "closeTitle": "Status «{status}» setzen",
+      "closeDescription": "Der Vorfall wird abgeschlossen. Löst die Regel danach mit einem neuen Ereignis erneut aus, entsteht ein neuer Vorfall.",
+      "closeReasonLabel": "Begründung (optional)",
+      "cancel": "Abbrechen",
+      "closeSave": "Mit Passkey bestätigen",
+      "blockTitle": "Netz {net} sperren",
+      "blockDescription": "Manuelle Sperre (Stufe 5) des Netzes dieses Vorfalls, IPv4 /24 bzw. IPv6 /48. Plattform-Admins werden nie gesperrt. Geteilte Netze (Firma, Schule, Mobilfunk) treffen alle ohne bekanntes Gerät."
+    },
+    "timeline": {
+      "title": "Zeitleiste",
+      "triggered": "Regel ausgelöst",
+      "retriggered": "Regel erneut ausgelöst",
+      "cleared": "Regel abgeklungen",
+      "note": "Notiz",
+      "status": "Status «{from}» → «{to}»",
+      "assigned": "Zuständig: {name}",
+      "unassigned": "Zuständigkeit entfernt",
+      "escalated": "Verschärft auf «{to}»",
+      "block": "Netz {net} manuell gesperrt (Stufe 5)",
+      "eventFirst": "Erstes Ereignis",
+      "eventLast": "Letztes Ereignis",
+      "event": "Ereignis",
+      "kinds": {
+        "failure": "Fehlversuch",
+        "success": "Erfolg",
+        "auto": "Automatisch",
+        "event": "Ereignis",
+        "person": "Person",
+        "rule": "Regel"
+      },
+      "account": "Konto {value}",
+      "net": "Netz {value}",
+      "risk": "Risiko {score}",
+      "stage": "Stufe {stage}"
+    },
+    "participants": {
+      "value": "Wert",
+      "failures": "Fehlversuche",
+      "events": "Ereignisse",
+      "networks": "Netze",
+      "accounts": "Konten",
+      "tenants": "Mandanten",
+      "countries": "Länder",
+      "empty": "Keine Ereignisse im Zeitraum des Vorfalls."
+    }
+  },
+  "situation": {
+    "title": "Lagebild",
+    "description": "Lage des Anmeldeschutzes über die ganze Plattform. Zusammengehörige Warnungen werden zu Vorfällen gebündelt. Adressen erscheinen nur als gekürzte Pseudonyme.",
+    "live": "Live",
+    "paused": "Pausiert",
+    "liveLabel": "Automatisch alle 30 Sekunden aktualisieren",
+    "detailEmpty": "Kein Vorfall ausgewählt.",
+    "posture": {
+      "title": "Lage",
+      "levels": {
+        "calm": "Ruhig",
+        "elevated": "Erhöht",
+        "attack": "Angriff",
+        "attack_mode": "Angriffsmodus"
+      },
+      "texts": {
+        "calm": "Fehlversuche im gewohnten Rahmen, keine offenen Vorfälle.",
+        "elevated": "{open, plural, =0 {Keine offenen Vorfälle} one {# offener Vorfall} other {# offene Vorfälle}}, {near, plural, =0 {keine Regel nahe der Schwelle} one {# Regel nahe der Schwelle} other {# Regeln nahe der Schwelle}}.",
+        "attack": "{critical, plural, one {# kritischer Vorfall} other {# kritische Vorfälle}} offen, die Regel löst noch aus. Die Abwehr greift automatisch.",
+        "attack_mode": "Viele Fehlversuche aus vielen Netzen: Der Angriffsmodus prüft unbekannte Geräte zusätzlich."
+      },
+      "stepsLabel": "Stufen der Lage"
+    },
+    "kpis": {
+      "openIncidents": "Offene Vorfälle",
+      "openHint": "{count, plural, =0 {keiner kritisch} other {# kritisch}}",
+      "failures": "Fehlversuche {range}",
+      "blocked": "Abgewiesen {range}",
+      "blockedHint": "{count, plural, =0 {keine Sperre aktiv} one {# Sperre aktiv} other {# Sperren aktiv}}",
+      "challenged": "Zusatzprüfungen {range}",
+      "challengedHint": "E-Mail-Code oder zweiter Faktor",
+      "successes": "Erfolgreich {range}",
+      "adminLogins": "Admin-Anmeldungen {range}",
+      "mtta": "Ø bis Übernahme",
+      "mttaHint": "letzte {days} Tage",
+      "vsPrevious": "{change} % ggü. Vorperiode ({previous})",
+      "noPrevious": "Vorperiode: {previous}",
+      "sparkLabel": "Verlauf: {label}"
+    },
+    "queue": {
+      "title": "Vorfälle",
+      "all": "Alle Vorfälle",
+      "hint": "Offene zuerst, dann nach Schwere und Zeit.",
+      "filters": {
+        "open": "Offen",
+        "closed": "Abgeschlossen",
+        "all": "Alle"
+      },
+      "empty": "Keine Vorfälle für diese Auswahl."
+    },
+    "chart": {
+      "title": "Anmeldungen im Zeitraum",
+      "summary": "{failures} fehlgeschlagen · {blocked} abgewiesen · {challenged} Zusatzprüfungen · {successes} erfolgreich",
+      "showTable": "Daten als Tabelle",
+      "showChart": "Diagramm anzeigen",
+      "seriesLabel": "Reihen ein- und ausblenden",
+      "series": {
+        "failures": "Fehlgeschlagen",
+        "blocked": "Abgewiesen",
+        "challenged": "Zusatzprüfung",
+        "successes": "Erfolgreich"
+      },
+      "columns": {
+        "bucket": "Abschnitt ab"
+      },
+      "markersLabel": "Vorfälle im Zeitraum",
+      "marker": "{label} öffnen, erkannt {time}",
+      "bar": "{time}: {failures} fehlgeschlagen, {blocked} abgewiesen, {challenged} Zusatzprüfungen, {successes} erfolgreich",
+      "scaleHint": "Wurzelskala, damit Grundrauschen neben Spitzen sichtbar bleibt · Abschnitte à {minutes} min · eine Markierung öffnet den Vorfall"
+    },
+    "heatmap": {
+      "title": "Fehlversuche nach Wochentag und Stunde",
+      "summary": "Letzte {days} Tage: {total} Fehlversuche, höchstens {max} in einer Stunde.",
+      "showTable": "Daten als Tabelle",
+      "showChart": "Diagramm anzeigen",
+      "columns": {
+        "day": "Tag"
+      },
+      "days": {
+        "1": "Mo",
+        "2": "Di",
+        "3": "Mi",
+        "4": "Do",
+        "5": "Fr",
+        "6": "Sa",
+        "7": "So"
+      },
+      "cell": "{day} {hour}:00 · {count} Fehlversuche",
+      "less": "wenig",
+      "more": "viel"
+    },
+    "rules": {
+      "title": "Alarmregeln",
+      "hint": "Aktueller Wert gegen die Schwelle im Fenster der Regel, sichtbar, bevor eine Regel auslöst.",
+      "link": "Zu den Alarmregeln",
+      "meter": "Messwert {rule}",
+      "value": "{value} / {threshold} {unit} · Fenster {minutes} min"
+    },
+    "countries": {
+      "title": "Herkunft der Fehlversuche",
+      "hint": "{range} · Ländercode aus der lokalen GeoIP-Datenbank, nie die Adresse.",
+      "empty": "Keine Fehlversuche im Zeitraum.",
+      "country": "Land",
+      "share": "Anteil",
+      "failures": "Fehlversuche",
+      "unknown": "unbekannt"
+    },
+    "networks": {
+      "title": "Auffällige Netze",
+      "empty": "Keine Fehlversuche aus einzelnen Netzen.",
+      "net": "Netz",
+      "failures": "Fehlversuche",
+      "meta": "Betroffen",
+      "metaText": "{accounts, plural, one {# Konto} other {# Konten}} · {tenants, plural, one {# Mandant} other {# Mandanten}}"
+    },
+    "accounts": {
+      "title": "Auffällige Konten",
+      "empty": "Keine Fehlversuche auf einzelne Konten.",
+      "account": "Konto",
+      "failures": "Fehlversuche",
+      "networks": "Netze"
+    }
   }
 }

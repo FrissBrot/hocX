@@ -155,7 +155,7 @@ def test_new_platform_endpoints_are_owner_only():
 
 def test_overview_and_alerts_shape(db):
     overview = admin_auth_security.auth_security_overview(db=db, _admin=None)
-    for key in ("failures_24h", "failures_prev_24h", "admin_logins_24h", "open_alerts", "active_blocks"):
+    for key in ("failures_24h", "failures_prev_24h", "admin_logins_24h", "active_alerts", "open_incidents", "active_blocks"):
         assert key in overview
     alerts = admin_auth_security.auth_security_alerts(db=db, _admin=None)
     assert isinstance(alerts, list)

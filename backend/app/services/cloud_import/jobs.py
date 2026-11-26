@@ -137,6 +137,11 @@ class _Entry:
     entry_index: int | None = None
     encrypted: bool = False
     hint_date: date | None = None
+    # API-Quellen (0281)
+    provider_item_id: str | None = None
+    provider_drive_id: str | None = None
+    provider_hash: str | None = None
+    provider_mime: str | None = None
 
 
 def _insert_entries(db: Session, job: ImportJob, entries: list[_Entry]) -> int:
@@ -167,6 +172,8 @@ def _insert_entries(db: Session, job: ImportJob, entries: list[_Entry]) -> int:
                     "modified_at": entry.modified_at, "archive_index": entry.archive_index,
                     "entry_index": entry.entry_index, "kind": kind, "listing_code": code, "status": "listed",
                     "hint_date": entry.hint_date if kind == paths.KIND_IMAGE else None,
+                    "provider_item_id": entry.provider_item_id, "provider_drive_id": entry.provider_drive_id,
+                    "provider_hash": entry.provider_hash, "provider_mime": entry.provider_mime,
                 }
             )
         result = db.execute(
@@ -313,6 +320,9 @@ def add_manifest(db: Session, job: ImportJob, raw_entries: list[dict]) -> int:
 
 def finish_listing(db: Session, job: ImportJob) -> None:
     require_status(job, "draft")
+    if job.source not in ("zip", "folder"):
+        # API-Quellen listet der Worker (Auswahl → listing → ready)
+        raise ImportFailure(409, "wrong_source")
     if job.total_items == 0:
         raise ImportFailure(400, "empty_source")
     job.status = "ready"
@@ -561,18 +571,32 @@ def start(db: Session, job: ImportJob, outcomes: list[Outcome]) -> None:
 
 # --- Abbruch, Fortsetzen ----------------------------------------------------------------------
 
-RETRYABLE_CODES = ("quota_exceeded", "internal", "scan_failed", "lock_busy")
+RETRYABLE_CODES = ("quota_exceeded", "internal", "scan_failed", "lock_busy", "download_failed")
+
+
+def _release_remote(db: Session, job: ImportJob) -> None:
+    from app.services.cloud_import import remote
+
+    if remote.is_remote(job):
+        remote.release_connection(db, job)
 
 
 def cancel(db: Session, job: ImportJob) -> None:
-    if job.status in ("draft", "ready"):
-        # Noch nichts importiert: Liste und gestagte Quellen sofort weg.
+    if job.status in ("draft", "ready", "listing"):
+        # Noch nichts importiert: Liste, gestagte Quellen und Tokens sofort weg.
         db.execute(delete(ImportItem).where(ImportItem.job_id == job.id, ImportItem.tenant_id == job.tenant_id))
         job.status = "cancelled"
         job.archives = []
+        job.listing_state = {}
         job.finished_at = now()
         touch(job)
         remove_staging(job)
+        _release_remote(db, job)
+        return
+    if job.status == "needs_reauth":
+        # Kein Worker aktiv (wartet auf Anmeldung): sofort abschliessen wie ein abgebrochener Lauf
+        finalize_cancel(db, job)
+        _release_remote(db, job)
         return
     if job.status in ("queued", "running"):
         job.status = "cancel_requested"
@@ -580,6 +604,7 @@ def cancel(db: Session, job: ImportJob) -> None:
         return
     if job.status == "failed":
         finalize_cancel(db, job)
+        _release_remote(db, job)
         return
     raise ImportFailure(409, "invalid_status", {"status": job.status})
 
@@ -604,6 +629,13 @@ def resume(db: Session, job: ImportJob) -> None:
     require_status(job, "failed")
     if job.source == "zip" and not all((Path(settings.storage_root) / a["path"]).is_file() for a in job.archives):
         raise ImportFailure(409, "source_gone")
+    from app.services.cloud_import import remote
+
+    if remote.is_remote(job):
+        connection = remote._connection(db, job)
+        if connection is None or connection.status != "active":
+            # Tokens gelöscht (7 Tage) oder abgelaufen: zuerst neu anmelden
+            raise ImportFailure(409, "reconnect_required")
     active = db.scalar(
         select(ImportJob.id).where(
             ImportJob.tenant_id == job.tenant_id, ImportJob.id != job.id, ImportJob.status.in_(IMPORT_JOB_ACTIVE_STATUSES)
@@ -615,9 +647,13 @@ def resume(db: Session, job: ImportJob) -> None:
     db.execute(
         update(ImportItem)
         .where(ImportItem.job_id == job.id, ImportItem.tenant_id == job.tenant_id, ImportItem.status == "failed", ImportItem.result_code.in_(RETRYABLE_CODES))
-        .values(status="queued", result_code=None, attempts=0)
+        .values(status="queued", result_code=None, attempts=0, next_attempt_at=None)
     )
-    job.status = "queued"
+    job.not_before = None
+    # API-Quelle, die schon beim Auflisten abbrach: dort weitermachen (Stand in listing_state)
+    job.status = "listing" if job.started_at is None and remote.is_remote(job) else "queued"
+    if job.status == "listing":
+        job.listing_state = {**(job.listing_state or {}), "errors": 0}
     job.error = None
     job.finished_at = None
     job.last_progress_at = now()
@@ -691,7 +727,7 @@ def expire_stale_drafts(db: Session) -> int:
     Mandanten, ein Import gleichzeitig)."""
     cutoff = now() - DRAFT_EXPIRY
     # Nach created_at (nicht updated_at): weitere Uploads verlängern die Frist nicht (Plattenschutz).
-    jobs = list(db.scalars(select(ImportJob).where(ImportJob.status.in_(("draft", "ready")), ImportJob.created_at < cutoff)))
+    jobs = list(db.scalars(select(ImportJob).where(ImportJob.status.in_(("draft", "listing", "ready")), ImportJob.created_at < cutoff)))
     for job in jobs:
         cancel(db, job)
         job.error = "expired"

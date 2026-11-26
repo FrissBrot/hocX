@@ -273,6 +273,11 @@
         "title": "Geolocalizzazione per paese",
         "detail": "{state, select, ok {DB-IP «IP to Country Lite», versione del {buildDate} ({ageDays, number} giorni)} other {Non configurata – segnale «nuovo paese» disattivato}}",
         "problem": "Geolocalizzazione per paese compromessa"
+      },
+      "cloud_import": {
+        "title": "Importazione cloud",
+        "detail": "{active, number} attive · {stalled, number} senza avanzamento · {needsReauth, number} in attesa di accesso{secretKnown, select, 1 { · client secret ancora {secretDays, number} giorni} other {}}",
+        "problem": "Importazione cloud: il client secret scade o importazioni bloccate"
       }
     },
     "problems": {
@@ -617,6 +622,10 @@
       "capture_date_file_sync": {
         "title": "Scrivere le date di scatto nei file",
         "description": "Scrive le date di scatto corrette nei file immagine e, al ripristino, riscrive nel file la data originale."
+      },
+      "security_incident_retention": {
+        "title": "Conservazione degli incidenti di sicurezza",
+        "description": "Elimina gli incidenti della protezione degli accessi con cronologia e note 365 giorni dopo l’ultima attività (ogni giorno)."
       },
       "auth_security_maintenance": {
         "title": "Pulizia protezione accessi",
@@ -1693,7 +1702,9 @@
         "platform-settings": "Impostazioni della piattaforma e credenziali",
         "security-block": "Impostare o rimuovere blocchi di accesso",
         "security-export": "Esportare dati di sicurezza",
-        "security-resolve": "Associare uno pseudonimo a un account"
+        "security-resolve": "Associare uno pseudonimo a un account",
+        "cloud-import-cancel": "Interrompere d’emergenza un’importazione di file",
+        "security-incident": "Gestire gli incidenti di sicurezza (stato, responsabile, note)"
       }
     },
     "integrations": {
@@ -1799,5 +1810,48 @@
     "tenant": "Mandante",
     "storage": "Spazio",
     "empty": "Ancora nessun valore."
+  },
+  "cloudImports": {
+    "title": "Importazioni di file",
+    "intro": "Importazioni in corso di tutte le organizzazioni (solo numeri, nessun nome di file) e indicatori degli ultimi giorni. Un arresto d’emergenza mantiene i file già importati ed elimina l’accesso cloud.",
+    "loadFailed": "Non è stato possibile caricare la panoramica.",
+    "kpis": {
+      "title": "Indicatori degli ultimi {days} giorni",
+      "active": "Importazioni in corso",
+      "jobs": "Importazioni ({days} giorni)",
+      "failedJobs": "{count, plural, one {# interrotta} other {# interrotte}}",
+      "files": "File importati",
+      "errorRate": "Tasso di errore",
+      "percent": "{value} %",
+      "failedItems": "{count, plural, one {# file con errore} other {# file con errori}}"
+    },
+    "active": {
+      "title": "Importazioni in corso",
+      "empty": "Al momento non è in corso nessuna importazione."
+    },
+    "metrics": {
+      "title": "Per giorno e fonte ({days} giorni)",
+      "empty": "Nessuna importazione conclusa in questo periodo."
+    },
+    "columns": {
+      "tenant": "Organizzazione",
+      "source": "Fonte",
+      "status": "Stato",
+      "progress": "Avanzamento",
+      "lastProgress": "Ultimo avanzamento",
+      "day": "Giorno",
+      "jobs": "Importazioni",
+      "imported": "Importati",
+      "volume": "Volume",
+      "failedItems": "Errori"
+    },
+    "progress": "{done} di {total} ({size})",
+    "jobsCell": "{jobs, number} ({failed, number} interrotte)",
+    "throttled": "rallentata",
+    "cancel": "Annulla",
+    "cancelImport": "Interrompi l’importazione",
+    "cancelConfirm": "Annullare l’importazione di «{tenant}»? I file già importati restano, l’accesso cloud viene eliminato.",
+    "cancelled": "L’importazione viene annullata.",
+    "cancelFailed": "Non è stato possibile annullare l’importazione."
   }
 }

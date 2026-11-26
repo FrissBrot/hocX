@@ -57,7 +57,7 @@ class Block:
     created: int = 0      # Unix-Zeit des Setzens bzw. der letzten Verlängerung
     minutes: int = 0      # gesetzte Dauer
     admin_id: int | None = None      # Plattform-Admin bei Stufe 5
-    incident_id: int | None = None   # Vorfall (vorbereitet für 1.7, bis dahin immer None)
+    incident_id: int | None = None   # Vorfall (1.7: Sperre aus einem Vorfall heraus)
     repeat: int = 0       # automatisch: wievielte Sperre dieser Quelle in 7 Tagen
 
     @classmethod
@@ -218,7 +218,10 @@ def _check_subject(subject: str, scope: str) -> None:
         raise ValueError("ungültige Quelle")
 
 
-def set_manual(*, ip: str | None = None, subject: str | None = None, scope: str = "source", minutes: int, reason: str, admin_id: int | None = None) -> Block:
+def set_manual(
+    *, ip: str | None = None, subject: str | None = None, scope: str = "source", minutes: int, reason: str, admin_id: int | None = None,
+    incident_id: int | None = None,
+) -> Block:
     """Stufe 5: manuelle Sperre durch einen Plattform-Admin (Begründung und Ablauf Pflicht).
     ``scope="net_fp"`` sperrt einen Netz-Fingerprint aus einem Ereignis (``subject`` Pflicht) oder
     das Netz einer eingegebenen Adresse."""
@@ -236,7 +239,7 @@ def set_manual(*, ip: str | None = None, subject: str | None = None, scope: str 
     now = int(time.time())
     block = Block(
         subject=subject, scope=scope, until=now + minutes * 60, reason=reason.strip()[:200], manual=True, stage=5,
-        created=now, minutes=minutes, admin_id=admin_id,
+        created=now, minutes=minutes, admin_id=admin_id, incident_id=incident_id,
     )
     _store(block)
     _event("block.set", block, reason="manual", admin_id=admin_id)

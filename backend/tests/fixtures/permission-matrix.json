@@ -144,14 +144,44 @@
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/browse": {
+      "handler": "cloud_import.browse_cloud_folder",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/cancel": {
       "handler": "cloud_import.cancel_import_job",
       "allowed": [
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/disconnect": {
+      "handler": "cloud_import.disconnect_cloud_account",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/finish-listing": {
       "handler": "cloud_import.finish_import_listing",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker-ticket": {
+      "handler": "cloud_import_google.google_drive_picker_ticket",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session": {
+      "handler": "cloud_import_google.google_photos_session",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll": {
+      "handler": "cloud_import_google.google_photos_poll",
       "allowed": [
         "admin"
       ]
@@ -186,8 +216,50 @@
         "admin"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/selection": {
+      "handler": "cloud_import.set_cloud_selection",
+      "allowed": [
+        "admin"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/start": {
       "handler": "cloud_import.start_import_job",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/webdav/connect": {
+      "handler": "cloud_import.connect_webdav",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/oauth/finish": {
+      "handler": "cloud_import.finish_cloud_oauth",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/start": {
+      "handler": "cloud_import.start_cloud_oauth",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/apply": {
+      "handler": "cloud_import_google.google_drive_picker_apply",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/token": {
+      "handler": "cloud_import_google.google_drive_picker_token",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/cloud-import/providers": {
+      "handler": "cloud_import.list_import_providers",
       "allowed": [
         "admin"
       ]

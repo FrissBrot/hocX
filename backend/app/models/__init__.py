@@ -230,9 +230,9 @@ __all__ += [
     "StorageState",
 ]
 
-from app.models.auth_security_entities import AuthEvent, AuthKnownDevice, AuthSession  # noqa: E402 - Migration 0206
+from app.models.auth_security_entities import AuthEvent, AuthKnownDevice, AuthSession, SecurityIncident, SecurityIncidentActivity  # noqa: E402 - Migration 0206, 0282
 
-__all__ += ["AuthEvent", "AuthKnownDevice", "AuthSession"]
+__all__ += ["AuthEvent", "AuthKnownDevice", "AuthSession", "SecurityIncident", "SecurityIncidentActivity"]
 
 from app.models.backup_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0115
     BackupContent,
@@ -285,12 +285,13 @@ __all__ += [
 # Papierkorb-Hook (do_orm_execute) für jede Session registrieren, auch ohne app.core.db.
 from app.core import trash_scope as _trash_scope  # noqa: E402,F401
 
-from app.models.import_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0230
+from app.models.import_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0230/0281
+    ImportConnection,
     ImportItem,
     ImportJob,
 )
 
-__all__ += ["ImportItem", "ImportJob"]
+__all__ += ["ImportConnection", "ImportItem", "ImportJob"]
 
 from app.models.upload_history_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0250
     CameraSerialBackfill,

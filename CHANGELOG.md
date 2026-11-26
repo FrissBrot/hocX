@@ -8,80 +8,7 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-## [1.6.1] - 2026-11-26
-
-Korrekturversion zu 1.6.0 mit den Funden des Nachtlaufs vom 26.11.2026. Nur Fehlerbehebungen,
-keine neuen Funktionen, keine Migration.
-
-### Behoben
-
-- **Wechsel zwischen Desktop- und Mobilansicht verliert keine Eingaben mehr:** Beim Drehen eines
-  Tablets, beim Schmalziehen des Fensters oder sonst über die 900-px-Grenze tauschte die App-Shell
-  den ganzen Baum aus und baute die Seite neu auf. Halb ausgefüllte Formulare (z. B. Personenseite),
-  offene Dialoge (Pendenz, Termin), der Fokus und der Stand im Datei-Import gingen dabei verloren;
-  der Import zeigte danach wieder die beim Laden geholten, veralteten Daten. Jetzt wechseln nur
-  Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
-  Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
-  getippt wird.
-- **Protokoll-Editor, Sitzungsnotizen, Foto- und Dateidetails speichern beim Verschwinden sofort:**
-  Verschwand der Editor innerhalb der Entprellzeit (Ansichtswechsel, Seitenwechsel), wurde die
-  wartende Speicherung verworfen. Im Protokoll-Editor holte die Outbox sie erst nach rund 1,5 s nach;
-  im Foto-Viewer und in den Dateidetails konnte sie verloren gehen. Jetzt wird sie sofort gesendet.
-- Fehlermeldungen in der UI-Sprache statt roher Backend-Texte: fehlende Berechtigung und nicht
-  gebuchte bzw. nur noch lesbare Abo-Funktionen («Permission required», «Feature 'x' nicht
-  gebucht») werden jetzt in jeder Ansicht übersetzt (zentral über Fehlercodes); ebenso MFA
-  einrichten/entfernen (z. B. falscher Code, letzter zweiter Faktor, Standardmethode), «eigenes
-  Konto löschen», Benutzerlimit des Abos (auch als eigener Grund in der Mehrfach-Einladung, ebenso
-  eine schon vergebene Login-E-Mail), Bussen kassieren/erlassen/löschen, doppelte Busse
-  («… vom Typ 'absent'»), doppelter Tarifname und Bussentarif über 100 000.
-- Mitglieder: «Erfassen und einladen» legt die Person nicht mehr doppelt an, wenn die Einladung
-  scheitert (Dialog schliesst, Hinweis nennt den Grund). Ausgetretene mit Login erscheinen in
-  «Wer hat Zugriff», in der Mitgliederliste und auf der Personenseite als gesperrt statt aktiv.
-  Datum der Einladung in der UI-Sprache. Sicherheitsaktivität zeigt «Bestätigung verlangt»,
-  «Gerät vergessen» und «MFA-Einrichtung übersprungen» übersetzt.
-- Kasse: mobile Beträge im Zahlenformat der UI-Sprache, Kassier- und Löschdatum von Bussen als
-  Schweizer Kalendertag (nach Mitternacht nicht mehr der Vortag), Filter ohne Treffer mit eigenem
-  Leerzustand, Buchungsliste mit Tabellensemantik für Screenreader, Vorschau im Regel-Dialog im
-  Zahlenformat der UI-Sprache und ohne Konto in der Vereinswährung statt fest «CHF».
-- Einstellungen: Speicherkategorien übersetzt; Zeitstempel in Echtheitsprüfung, Zugangslinks und
-  Plattform-Admin als Schweizer Kalendertag; der Link zu den Datenschutzhinweisen wird wie im
-  Backend geprüft (Hinweis statt rohem 422); das Fristfeld der Aufbewahrung lässt sich leeren,
-  ohne auf 1 zu springen («24» wurde zu «124»); Domain-Assistent mit Enter bedienbar,
-  Prüffehler werden angesagt; Verlauf zeigt die bisher englischen Vorgänge («File · Trashed»,
-  «Mfa · Enroll») übersetzt. Plattform-Admin: Preise mit Tausendertrennung der UI-Sprache.
-- Verschlüsselte Exporte (Excel mit Passwort, AES-ZIP, Vereinsexport, Datenauskunft): das Passwort
-  wird nicht mehr still um Leerzeichen am Rand gekürzt - die Datei öffnet mit genau der Eingabe.
-- Plattform-Admin-Login: Gross-/Kleinschreibung der E-Mail spielt keine Rolle mehr.
-- Mandanten-Profilbild: ein Bild über 40 Megapixel meldet das übersetzt, statt «muss ein JPEG-,
-  PNG-… sein»; «Domain nicht gefunden» erscheint in der UI-Sprache; die Avatarreihe der Abo-Seite
-  nennt die Konten auch für Screenreader; Plattform-Admin › Speicher zeigt Datumsangaben als
-  Schweizer Kalendertag. Export-Passwörter zählen für die Mindestlänge überall ohne Leerzeichen am
-  Rand (das Passwort selbst bleibt unverändert).
-
-### Sicherheit
-
-- Anfragen ohne Anmeldung mit kaputten Eingaben ergeben Eingabefehler statt Serverfehler samt
-  Eintrag im Fehlerprotokoll: nicht lesbarer `Origin`-Header (403/400), einzelne UTF-16-Surrogate
-  in JSON (422, die NUL-/Surrogat-Prüfung gilt jetzt auch für `application/*+json`; Pufferung auf
-  16 MiB begrenzt), Nicht-ASCII-Zeichen im Gerätecookie und TOTP-Codes mit Ziffern anderer
-  Schriften.
-- Traefik-Ratelimits (Login, TOTP, Domain-Erkennung, Word-Import, Abgabebox, Prüfseite) zählen
-  IPv6-Adressen je /64 statt je Adresse, wie die Grenzen im Backend.
-- Prüfseite: der Seitenvergleich über die Dokument-ID ist je Besucher begrenzt (20 je 10 Minuten,
-  IPv6 je /64) plus 200 je Dokument insgesamt. Vorher galt die Grenze für alle zusammen, und wer
-  eine Dokument-ID kannte, konnte den Vergleich für alle anderen sperren.
-- ICS- und Markdown-Exporte des Document Studio sind als begründete Ausnahme in den
-  Sicherheitsregeln (§4.4) festgehalten; jeder solche Export steht ohne Inhalt im Audit-Log.
-
-### Update
-
-- Abhängigkeiten: pypdfium2 5.15.2 (Backend).
-- Keine Migration, kein neues Secret. Die Traefik-Labels der Ratelimits ändern sich
-  (`docker-compose.release.yml`), `deploy.sh` übernimmt sie wie gewohnt.
-- Neue optionale Einstellung der Abgabebox `TRUSTED_PROXY_CIDRS` (Standard wie im Backend: private
-  Netze), für die Grenze des Seitenvergleichs.
-
-## [1.6.0] - 2026-11-24
+## [1.6.0] - 2026-11-26
 
 ### Hinzugefügt
 
@@ -187,7 +114,7 @@ keine neuen Funktionen, keine Migration.
   Messwert gegen die Schwelle – auch unterhalb («ruhig», «nahe Schwelle», «ausgelöst») –, Bedingung in
   Worten, Kurve der letzten 24 h je Regel (mit Tabellenalternative), Auslösungen der letzten 30 Tage
   aus dem Systemmonitor und die wirksamen Einstellungen (nur lesen, geändert wird in der
-  Serverkonfiguration). Ausgelöste Warnungen lassen sich weiterhin quittieren, jetzt mit Notiz.
+  Serverkonfiguration). Zu jeder ausgelösten Warnung führt ein Link zu ihrem Vorfall.
 - **Konsole › Sicherheit › Anmeldeereignisse neu (1.6):** Filter nach Konto-, Netz- und
   Geräte-Pseudonym (Klick auf ein Pseudonym oder Eingabe wie `netz:3f9a1c07`), Land, Typ, Ergebnis
   und Mandant (Suche statt Mandantenliste); der Zeitraum ist Pflicht (1 h bis 14 Tage). Ein
@@ -205,7 +132,7 @@ keine neuen Funktionen, keine Migration.
   Voreinstellungen (1 h bis 30 Tage) und freie Minuten. Neu kann eine Sperre auch einen
   **Netz-Fingerprint** (Pseudonym der Anmeldeereignisse, /24 bzw. /48) treffen; Plattform-Admins
   bleiben ausgenommen. `block.set`/`block.clear` tragen jetzt gekürztes Subjekt, Admin und
-  (vorbereitet für 1.7) Vorfall.
+  Vorfall.
 - **Aufgabenpakete: Pendenz erst vor dem Termin erstellen:** Bei Wiederholung «Pro Termin» lässt
   sich optional festlegen, dass die Pendenz eines Termins erst X Tage vor dem Termin entsteht
   (`recurrence_json.create_days_before`, 0–3650, keine Migration). Der tägliche Lauf
@@ -215,6 +142,78 @@ keine neuen Funktionen, keine Migration.
   neuen Datum, schon angelegte Pendenzen bleiben und werden wie bisher nachgeführt. Die Vorschau zeigt «Entsteht am …»,
   die Übersicht «erstellt X Tage vor dem Termin»; liegt die Fälligkeit vor dem Erstelldatum, weist
   das Formular darauf hin.
+- **Sicherheit › Vorfälle (Plattform-Admin):** Ausgelöste Alarmregeln des Anmeldeschutzes werden
+  automatisch zu Vorfällen gebündelt, genau einer pro Regel und Quelle. Jeder Vorfall hat Status
+  (Neu, In Bearbeitung, Erledigt, Fehlalarm), eine zuständige Person, Notizen und eine Zeitleiste
+  mit Auslösungen, Abklingen, Sperren und Änderungen. Liste oder Board, Filter nach Status, Schwere
+  und Zuständigkeit (in der Adresse), Kennzahlen offen, ohne Zuständige, Ø bis Übernahme, Ø bis
+  erledigt und Fehlalarm-Quote. Aus einem Netz-Vorfall lässt sich das Netz manuell sperren
+  (Stufe 5). Jede Änderung braucht den Passkey und steht im Audit-Log. Nur für Owner. Vorfälle
+  werden 365 Tage nach der letzten Aktivität gelöscht (neuer Job «Aufbewahrung Sicherheitsvorfälle»),
+  mit einem Mandanten auch seine Vorfälle (Migration 0282).
+- **Sicherheit › Lagebild** ersetzt die bisherige Sicherheits-Übersicht: Lage-Stufe (ruhig, erhöht,
+  Angriff, Angriffsmodus), Kennzahlen für 24 h oder 7 Tage mit Vorperiode und Verlauf,
+  Vorfall-Warteschlange mit Detail, Verlauf der Anmeldungen mit Vorfall-Markierungen, Fehlversuche
+  nach Wochentag und Stunde, Messwert jeder Alarmregel gegen die Schwelle, Herkunft nach Land sowie
+  auffällige Netze und Konten. Jedes Diagramm mit Tabelle und Zusammenfassung; Live-Aktualisierung
+  alle 30 Sekunden, abschaltbar.
+- **Datei-Import direkt aus Microsoft OneDrive und SharePoint (P1):** Neue Quelle «Microsoft
+  OneDrive / SharePoint» im Import-Assistenten für private Microsoft-Konten, OneDrive for Business und
+  SharePoint-Bibliotheken. Anmeldung direkt bei Microsoft (OAuth mit PKCE), danach ein eigener
+  Ordnerbaum in hocX (kein Microsoft-Picker): Ordner und Dateien ankreuzen, Ebenen werden nachgeladen,
+  per Tastatur bedienbar. hocX fragt zuerst nur Lesezugriff auf die eigenen Dateien an; «Für mich
+  freigegeben» (Geschäftskonten) und SharePoint brauchen eine zweite Zustimmung, erst wenn man sie
+  öffnet. Verlangt die Organisation eine Freigabe durch ihre IT, zeigt der Assistent eine Anleitung
+  mit Freigabe-Link für die Administratoren. Das Auflisten und der Download laufen im Hintergrund
+  (job-worker); danach gelten Regeln, Vorschau, Bericht und die normale Upload-Pipeline wie beim
+  ZIP-Import. Bremst Microsoft (429/503), pausiert der Import ohne Fehler; verlangt Microsoft eine
+  neue Anmeldung (z. B. nach einem Passwortwechsel), wartet der Import bis zu 7 Tage, die Person
+  bekommt eine E-Mail (neue Kategorie «Datei-Import») und setzt mit «Neu anmelden» fort. Der Zugang
+  wird verschlüsselt gespeichert und gelöscht, sobald der Import endet; «Verbindung trennen» löscht
+  ihn sofort. Der Anbieter erscheint nur, wenn der Betreiber ihn eingerichtet hat.
+- **Fundament für weitere Cloud-Quellen:** gemeinsame Adapter-Schnittstelle, Verbindungen mit
+  verschlüsselten Tokens, OAuth-Callback, Ordnerbaum, Hintergrund-Download mit Wiederaufnahme und
+  Monitoring - Google Drive, Google Fotos, WebDAV und Dropbox schliessen daran an.
+- **Datei-Import aus Google Drive:** Nach der Anmeldung bei Google wählt man die Dateien in der
+  Google-Auswahl (Picker) aus, auch aus geteilten Ablagen, bis 200 pro Durchgang. hocX bekommt nur auf
+  diese Dateien Zugriff (`drive.file`, kein Lesezugriff aufs ganze Drive). Google Docs, Tabellen und
+  Präsentationen kommen als Word, Excel und PowerPoint, Zeichnungen als PDF; Exporte über 10 MB laufen
+  über die Exportlinks von Google, sonst stehen sie als «zu gross» im Bericht. Formulare, Sites und
+  Verknüpfungen erscheinen als «nicht unterstützt». Ganze Ordner weiterhin über Google Takeout (ZIP).
+- **Datei-Import aus Google Fotos:** Fotos werden direkt in Google Fotos ausgewählt (Photos Picker API,
+  neues Fenster); der Assistent merkt das Ende der Auswahl von selbst und listet die Fotos im Ordner
+  «Google Fotos» auf. Videos werden nicht übernommen.
+- Beide Google-Quellen erscheinen nur, wenn der Betreiber das Google-Projekt eingerichtet hat (neue
+  Variablen `CLOUD_IMPORT_GOOGLE_CLIENT_ID`, `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET` (Secret),
+  `CLOUD_IMPORT_GOOGLE_API_KEY`, `CLOUD_IMPORT_GOOGLE_APP_ID`, `CLOUD_IMPORT_PICKER_DOMAIN` (nur Drive), optional
+  `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES`; RUNBOOK 27.2). Wurde bei der Anmeldung der Zugriff auf
+  Dateien bzw. Fotos abgewählt, bietet der Assistent «Neu anmelden» an. Nach dem Import löscht hocX den
+  Zugang und widerruft ihn zusätzlich bei Google.
+- **Datei-Import aus WebDAV (kDrive, Nextcloud, SwissDisk …):** neue Quelle im Assistenten unter
+  *Dateien › Importieren*. Der Verein wählt eine Vorlage (Infomaniak kDrive: nur Benutzer und
+  App-Passwort; Nextcloud: zusätzlich die Serveradresse) oder gibt eine WebDAV-Adresse ein. hocX
+  prüft Adresse und Zugangsdaten sofort, speichert das App-Passwort nur verschlüsselt
+  (`CLOUD_IMPORT_TOKEN_KEY`) und löscht es mit dem Ende des Imports. Lehnt der Speicher das
+  Passwort später ab, pausiert der Import und läuft nach erneuter Eingabe weiter. Strenger
+  SSRF-Schutz: nur `https` auf Port 443/8443, keine internen oder privaten Adressen (DNS-Prüfung
+  mit gepinnter Adresse gegen DNS-Rebinding, auch IPv6/NAT64/6to4), jeder Redirect neu geprüft,
+  Grössen- und Zeitgrenzen, PROPFIND-XML ohne DTD (kein XXE). Neuer Schalter
+  `CLOUD_IMPORT_WEBDAV_ENABLED` (Standard `true`). Anleitung für App-Passwörter bei kDrive und
+  Nextcloud in der Benutzerdoku.
+- **Datei-Import aus Dropbox:** Anmeldung mit OAuth + PKCE (nur Lesen: `files.metadata.read`,
+  `files.content.read`), eigener Ordnerbaum mit seitenweisem Laden, Download im Hintergrund,
+  Drosselung von Dropbox wird abgewartet, Token-Widerruf nach dem Import. Erscheint nur mit
+  `CLOUD_IMPORT_DROPBOX_APP_KEY` und `CLOUD_IMPORT_DROPBOX_APP_SECRET` (Secret, nur backend und
+  job-worker). Einrichtung inkl. Produktionsfreigabe ab 50 Konten: RUNBOOK 27.3.
+- **Mails zum Datei-Import (alle Quellen, auch ZIP/Ordner):** «Import abgeschlossen» bzw. «Import
+  unterbrochen» mit Zahlen, Grund und Link zum Bericht, nur an die Person, die den Import gestartet
+  hat (Kategorie «Datei-Import», abschaltbar).
+- **Plattform-Admin › Datei-Importe:** laufende Importe aller Organisationen (nur Zahlen), Kennzahlen der
+  letzten 30 Tage je Tag und Quelle und ein Notfall-Abbruch (auditiert).
+- Cloud-Downloads laufen parallel (Standard 2 je Import) und werden je Konto über einen gemeinsamen
+  Token-Bucket gebremst, zusätzlich zu den Drosselhinweisen des Anbieters.
+- Systemstatus: neue Prüfung **Cloud-Import** (aktive und hängende Importe, wartende Anmeldungen,
+  Ablauf des Client-Secrets mit Warnung 30 Tage vorher).
 
 ### Geändert
 
@@ -315,6 +314,10 @@ keine neuen Funktionen, keine Migration.
   **Python 3.14** (`python:3.14-slim` per Digest), ebenso die CI-Jobs, die `backend/requirements.txt`
   installieren. `google-re2` (Regel-Engine des Datei-Imports) hat noch kein Wheel für 3.15, und das
   schlanke Image hat keinen C++-Compiler; Wechsel auf 3.15, sobald ein cp315-Wheel erscheint.
+- **Sicherheitswarnungen quittieren entfällt:** Status und Zuständigkeit eines Vorfalls ersetzen die
+  Quittung aus 1.5.1. Die Alarmregeln-Seite verlinkt zu jeder Warnung ihren Vorfall; Glocke und
+  Navigationszahl zählen neue Vorfälle. Bestehende Quittungen werden als «In Bearbeitung» übernommen.
+  ntfy-Meldungen des Anmeldeschutzes verlinken die Vorfall-Seite.
 
 ### Behoben
 
@@ -344,6 +347,48 @@ keine neuen Funktionen, keine Migration.
 - Zwei gleichzeitige Album-Einladungen an denselben Verein ergeben die normale Meldung statt 500.
 - Mandant aufräumen: «Hochgeladene Dokumente» trifft keine Galeriefotos, Pendenz-Anhänge und
   archivierten Exporte mehr.
+- **Wechsel zwischen Desktop- und Mobilansicht verliert keine Eingaben mehr:** Beim Drehen eines
+  Tablets, beim Schmalziehen des Fensters oder sonst über die 900-px-Grenze tauschte die App-Shell
+  den ganzen Baum aus und baute die Seite neu auf. Halb ausgefüllte Formulare (z. B. Personenseite),
+  offene Dialoge (Pendenz, Termin), der Fokus und der Stand im Datei-Import gingen dabei verloren;
+  der Import zeigte danach wieder die beim Laden geholten, veralteten Daten. Jetzt wechseln nur
+  Navigation und Rahmen, der Seiteninhalt bleibt erhalten. Seiten mit eigener Mobil- und
+  Desktop-Variante wechseln erst, wenn kein Dialog mehr offen ist und nicht mehr in einem Feld
+  getippt wird.
+- **Protokoll-Editor, Sitzungsnotizen, Foto- und Dateidetails speichern beim Verschwinden sofort:**
+  Verschwand der Editor innerhalb der Entprellzeit (Ansichtswechsel, Seitenwechsel), wurde die
+  wartende Speicherung verworfen. Im Protokoll-Editor holte die Outbox sie erst nach rund 1,5 s nach;
+  im Foto-Viewer und in den Dateidetails konnte sie verloren gehen. Jetzt wird sie sofort gesendet.
+- Fehlermeldungen in der UI-Sprache statt roher Backend-Texte: fehlende Berechtigung und nicht
+  gebuchte bzw. nur noch lesbare Abo-Funktionen («Permission required», «Feature 'x' nicht
+  gebucht») werden jetzt in jeder Ansicht übersetzt (zentral über Fehlercodes); ebenso MFA
+  einrichten/entfernen (z. B. falscher Code, letzter zweiter Faktor, Standardmethode), «eigenes
+  Konto löschen», Benutzerlimit des Abos (auch als eigener Grund in der Mehrfach-Einladung, ebenso
+  eine schon vergebene Login-E-Mail), Bussen kassieren/erlassen/löschen, doppelte Busse
+  («… vom Typ 'absent'»), doppelter Tarifname und Bussentarif über 100 000.
+- Mitglieder: «Erfassen und einladen» legt die Person nicht mehr doppelt an, wenn die Einladung
+  scheitert (Dialog schliesst, Hinweis nennt den Grund). Ausgetretene mit Login erscheinen in
+  «Wer hat Zugriff», in der Mitgliederliste und auf der Personenseite als gesperrt statt aktiv.
+  Datum der Einladung in der UI-Sprache. Sicherheitsaktivität zeigt «Bestätigung verlangt»,
+  «Gerät vergessen» und «MFA-Einrichtung übersprungen» übersetzt.
+- Kasse: mobile Beträge im Zahlenformat der UI-Sprache, Kassier- und Löschdatum von Bussen als
+  Schweizer Kalendertag (nach Mitternacht nicht mehr der Vortag), Filter ohne Treffer mit eigenem
+  Leerzustand, Buchungsliste mit Tabellensemantik für Screenreader, Vorschau im Regel-Dialog im
+  Zahlenformat der UI-Sprache und ohne Konto in der Vereinswährung statt fest «CHF».
+- Einstellungen: Speicherkategorien übersetzt; Zeitstempel in Echtheitsprüfung, Zugangslinks und
+  Plattform-Admin als Schweizer Kalendertag; der Link zu den Datenschutzhinweisen wird wie im
+  Backend geprüft (Hinweis statt rohem 422); das Fristfeld der Aufbewahrung lässt sich leeren,
+  ohne auf 1 zu springen («24» wurde zu «124»); Domain-Assistent mit Enter bedienbar,
+  Prüffehler werden angesagt; Verlauf zeigt die bisher englischen Vorgänge («File · Trashed»,
+  «Mfa · Enroll») übersetzt. Plattform-Admin: Preise mit Tausendertrennung der UI-Sprache.
+- Verschlüsselte Exporte (Excel mit Passwort, AES-ZIP, Vereinsexport, Datenauskunft): das Passwort
+  wird nicht mehr still um Leerzeichen am Rand gekürzt - die Datei öffnet mit genau der Eingabe.
+- Plattform-Admin-Login: Gross-/Kleinschreibung der E-Mail spielt keine Rolle mehr.
+- Mandanten-Profilbild: ein Bild über 40 Megapixel meldet das übersetzt, statt «muss ein JPEG-,
+  PNG-… sein»; «Domain nicht gefunden» erscheint in der UI-Sprache; die Avatarreihe der Abo-Seite
+  nennt die Konten auch für Screenreader; Plattform-Admin › Speicher zeigt Datumsangaben als
+  Schweizer Kalendertag. Export-Passwörter zählen für die Mindestlänge überall ohne Leerzeichen am
+  Rand (das Passwort selbst bleibt unverändert).
 
 ### Sicherheit
 
@@ -371,17 +416,48 @@ keine neuen Funktionen, keine Migration.
   des Protokoll-Dokuments übernommen.
 - Metadatenfilter: ein JPEG-Kommentar übersteht die Neukodierung nicht mehr.
 - Buchungen lassen sich nur mit einem lesbaren Protokoll verknüpfen.
+- Anfragen ohne Anmeldung mit kaputten Eingaben ergeben Eingabefehler statt Serverfehler samt
+  Eintrag im Fehlerprotokoll: nicht lesbarer `Origin`-Header (403/400), einzelne UTF-16-Surrogate
+  in JSON (422, die NUL-/Surrogat-Prüfung gilt jetzt auch für `application/*+json`; Pufferung auf
+  16 MiB begrenzt), Nicht-ASCII-Zeichen im Gerätecookie und TOTP-Codes mit Ziffern anderer
+  Schriften.
+- Traefik-Ratelimits (Login, TOTP, Domain-Erkennung, Word-Import, Abgabebox, Prüfseite) zählen
+  IPv6-Adressen je /64 statt je Adresse, wie die Grenzen im Backend.
+- Prüfseite: der Seitenvergleich über die Dokument-ID ist je Besucher begrenzt (20 je 10 Minuten,
+  IPv6 je /64) plus 200 je Dokument insgesamt. Vorher galt die Grenze für alle zusammen, und wer
+  eine Dokument-ID kannte, konnte den Vergleich für alle anderen sperren.
+- ICS- und Markdown-Exporte des Document Studio sind als begründete Ausnahme in den
+  Sicherheitsregeln (§4.4) festgehalten; jeder solche Export steht ohne Inhalt im Audit-Log.
+- **Google Picker auf eigener Origin:** Die Picker-Seite läuft auf einer eigenen Subdomain
+  (`CLOUD_IMPORT_PICKER_DOMAIN`) ohne hocX-Sitzung; nachgeladener Google-Code kann so nichts im Namen
+  der angemeldeten Person tun. Die Seite bekommt nur einmalige, 10 Minuten gültige Tickets (an Person
+  und Auftrag gebunden, im URL-Fragment): eines für das `drive.file`-Token, eines für das Übernehmen
+  der Auswahl; danach springt sie in den Wizard zurück (Adresse vom Backend). Nur dort ist die
+  Content-Security-Policy gelockert (Skripte von `apis.google.com`, iframe von `docs.google.com`,
+  Nonce bleibt, kein `unsafe-inline`); auf der App-Origin gibt es die Seite nicht. Ohne Picker-Domain
+  wird Google Drive nicht angeboten.
+- Google meldet Drosselung teils als 403 (`userRateLimitExceeded`): wird jetzt wie 429 behandelt
+  (Pause statt «kein Zugriff»). Das Bearer-Token für Google-Fotos-Downloads geht nur an
+  `lhN.googleusercontent.com`, nie an andere Hosts unter `googleusercontent.com`.
+- Cloud-Import: die Prüfung öffentlicher Adressen sperrt zusätzlich CGNAT (100.64/10), das
+  Benchmark-Netz (198.18/15) und IPv6-Formen mit eingebetteter IPv4 (NAT64, 6to4, Teredo).
+- Cloud-Import (Security-Review): der Notfall-Abbruch im Plattform-Admin verlangt eine
+  Passkey-Bestätigung (Zweck «cloud-import-cancel»); der Ordnerbaum wird per `POST` gelesen (das
+  Lesen erneuert Tokens); Rate-Limits für Auswahl und «Verbindung trennen»; «Trennen» mitten im
+  Import behält die Kontobindung (ein anderes Konto kann den Auftrag nicht übernehmen); Tokens
+  werden bei Rechteverlust bzw. gesperrten Konten sofort gelöscht.
 
 ### Update
 
-- Abhängigkeiten: next 16.4.6 (beide Frontends), neuer Digest des ClamAV-Images.
+- Abhängigkeiten: next 16.4.6 (beide Frontends), pypdfium2 5.15.2 (Backend), neuer Digest des
+  ClamAV-Images.
 - Migration `0230_cloud_import` (Tabellen `import_job`, `import_item` mit RLS, Berechtigung
   `files.import`, Funktion `hocx_analyze_upload_tables()` für ANALYZE nach grossen Importen). Die Revision folgt auf `0219_password_breach_check` (letzte 1.5.2-Migration).
 - Neue Einstellungen (kein Secret, optional): `CLOUD_IMPORT_MAX_JOB_FILES` (50000),
   `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und job-worker.
 - Neue Abhängigkeit `google-re2==1.1.20251105` (BSD-3) im Backend.
 - Upload-Verlauf: Migrationen `0250_upload_history`, `0251_capture_change_batches`,
-  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0260` → `0270` → `0280`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
+  `0252_upload_history_abgabebox` (Kette `0219` → `0230` → `0250`–`0254` → `0260` → `0270` → `0280` → `0281` → `0282`). Neue Tabellen mit RLS, Spalten `stored_file.upload_job_id`/`camera_serial_key`, Trigger
   mit SECURITY DEFINER (Aufräumen nach endgültigem Löschen, Erfassung der Abgabebox ohne neue Rechte
   für `hocx_abgabebox`). Kein neues Secret.
 - **Nach dem Update einmal ausführen:** `python -m app.workers.upload_history_backfill` im
@@ -401,6 +477,38 @@ keine neuen Funktionen, keine Migration.
   `GEO_DATABASE_URL`. Optionale Einstellungen `GEO_PLACES_AUTO_UPDATE`
   (true), `GEO_PLACES_COUNTRIES` (CH,LI,AT,DE,FR,IT), `GEO_PLACES_MAX_AGE_DAYS` (30). Ohne Netz:
   `python -m scripts.import_geo_places` mit lokalen Dateien.
+- Cloud-Import (P1): Migration `0281_cloud_import_connections` (Tabelle `import_connection` mit RLS und
+  verschlüsselten Tokens; `import_job` erhält Verbindung, Auswahl, Auflist-Stand, Drosselung und die
+  Status `listing`/`needs_reauth`, alle Quellwerte der Cloud-Quellen im CHECK; `import_item` erhält die
+  Kennungen beim Anbieter). Revision nach `0280_auth_event_subject_index`.
+- **Neues Secret `CLOUD_IMPORT_TOKEN_KEY`** (Verschlüsselung der OAuth-Tokens, nur backend und
+  job-worker): `scripts/deploy.sh` erzeugt es bei bestehenden Installationen automatisch; Rotation über
+  `CLOUD_IMPORT_TOKEN_KEY_PREVIOUS`. Microsoft wird erst angeboten mit `CLOUD_IMPORT_MS_CLIENT_ID`,
+  **`CLOUD_IMPORT_MS_CLIENT_SECRET`** (Secret) und `CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES`; optional
+  `CLOUD_IMPORT_ENABLED`, `CLOUD_IMPORT_REDIRECT_BASE_URL`, `CLOUD_IMPORT_MS_AUTHORITY`,
+  `CLOUD_IMPORT_MS_DOWNLOAD_MODE`, `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (2). Der **job-worker** hängt neu im
+  Netz `cache` und bekommt `REDIS_URL`/`redis_password` (Token-Bucket). Schritt-für-Schritt-Anleitung (Entra-App, Redirect-URIs je Umgebung,
+  Scopes, Secret mit Ablaufdatum, Herausgeberverifizierung, `.env`): RUNBOOK Abschnitt 27.
+  `deploy.sh` bricht ab, wenn die Client-ID ohne Secret oder Ablaufdatum gesetzt ist.
+- **Neue Variable `CLOUD_IMPORT_PICKER_DOMAIN`** (kein Secret, backend, job-worker, frontend): eigene
+  Subdomain für den Google Picker, z. B. `picker.hocx.ch`. DNS-Eintrag auf den Server anlegen, das
+  Zertifikat holt Traefik (neue Router `picker-frontend`, `picker-api`). Bei Google die Picker-Domain
+  als JavaScript-Quelle und als einzige Referrer-Einschränkung des API-Keys eintragen (RUNBOOK 27.2,
+  Schritte 4, 5, 5a). Ohne sie wird Google Drive nicht angeboten.
+- Ausgehende Verbindungen von backend und job-worker (nur wenn Microsoft eingerichtet ist):
+  `login.microsoftonline.com`, `graph.microsoft.com`, `*.sharepoint.com`, `*.1drv.com`,
+  `*.livefilestore.com` (HTTPS). Microsoft schafft die vorauthentifizierten Download-URLs für
+  OneDrive for Business/SharePoint am 1.4.2027 ab; hocX schickt dann automatisch das Token mit
+  (`CLOUD_IMPORT_MS_DOWNLOAD_MODE=auto`).
+- Sicherheitsvorfälle: Migration `0282_security_incidents` (Tabellen `security_incident`,
+  `security_incident_activity` mit RLS, Übernahme aktiver Quittungen aus `system_alert_state`),
+  Revision nach `0281_cloud_import_connections`. Neue optionale Einstellung
+  `SECURITY_INCIDENT_RETENTION_DAYS` (Standard 365), neuer Job `security_incident_retention`.
+  Entfernte Routen: `POST /api/admin/auth-security/alerts/ack` und `/unack`.
+- Die Traefik-Labels der Ratelimits ändern sich (`docker-compose.release.yml`), `deploy.sh`
+  übernimmt sie wie gewohnt.
+- Neue optionale Einstellung der Abgabebox `TRUSTED_PROXY_CIDRS` (Standard wie im Backend: private
+  Netze), für die Grenze des Seitenvergleichs.
 
 ## [1.5.2] - 2026-11-23
 

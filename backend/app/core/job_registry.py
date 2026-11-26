@@ -118,6 +118,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("storage_purge", "storage", 1),
     # Anmeldeschutz: Sicherheitsereignisse nach Frist löschen, Sessions/Geräte aufräumen, Zähler ohne TTL
     _loop("auth_security_maintenance", "cleanup", 60),
+    # Vorfälle des Anmeldeschutzes nach 365 Tagen ohne Aktivität löschen (täglich)
+    _loop("security_incident_retention", "cleanup", 24 * 60),
     # Leak-Prüfung: Konten mit veralteter Prüfung für die nächste Anmeldung vormerken (täglich)
     _loop("password_breach_recheck", "maintenance", 24 * 60),
     # Kennzahlen-Rollup (Dashboard/Analysen): tickt stündlich, rechnet nur fehlende Tage.

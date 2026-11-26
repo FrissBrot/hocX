@@ -23,6 +23,10 @@ def _load_file_secrets() -> None:
         "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "AUTH_SECRET_PREVIOUS", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
         "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY", "REDIS_PASSWORD",
         "EXPORT_ENCRYPTION_KEY", "ADMIN_GATE_SECRET", "GEO_DATABASE_URL",
+        # Datei-Import aus der Cloud (services/cloud_import, Plan 2026-11-21 §12.1)
+        "CLOUD_IMPORT_TOKEN_KEY", "CLOUD_IMPORT_TOKEN_KEY_PREVIOUS", "CLOUD_IMPORT_MS_CLIENT_SECRET",
+        "CLOUD_IMPORT_GOOGLE_CLIENT_SECRET",
+        "CLOUD_IMPORT_DROPBOX_APP_SECRET",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -271,6 +275,8 @@ class Settings(BaseSettings):
     auth_step_up_admin_minutes: int = 15
     # Sicherheitsereignisse (auth_event): Aufbewahrung
     auth_event_retention_days: int = 90
+    # Vorfälle des Anmeldeschutzes samt Notizen (1.7, Migration 0282): ab letzter Aktivität
+    security_incident_retention_days: int = 365
     # Alarmregeln (Abschnitt 10.3)
     auth_alert_stuffing_min: int = 100
     auth_alert_stuffing_networks: int = 20
@@ -353,6 +359,60 @@ class Settings(BaseSettings):
     cloud_import_max_job_bytes: int = Field(
         default=100 * 1024**3, ge=1024**2, le=100 * 1024**3, validation_alias="CLOUD_IMPORT_MAX_JOB_BYTES"
     )
+    # Datei-Import aus Cloud-Diensten (services/cloud_import/providers, RUNBOOK «Cloud-Import
+    # einrichten»). Globaler Schalter für alle API-Anbieter; ein Anbieter ohne Konfiguration wird
+    # ohnehin nicht angeboten.
+    cloud_import_enabled: bool = Field(default=True, validation_alias="CLOUD_IMPORT_ENABLED")
+    # Schlüssel für die OAuth-Tokens in import_connection (MultiFernet, token_crypto.py). Nur backend
+    # und job-worker. _PREVIOUS = bisheriger Schlüssel während einer Rotation (nur entschlüsseln).
+    cloud_import_token_key: str = Field(default="", validation_alias="CLOUD_IMPORT_TOKEN_KEY")
+    cloud_import_token_key_previous: str = Field(default="", validation_alias="CLOUD_IMPORT_TOKEN_KEY_PREVIOUS")
+    # Basis der fest registrierten Redirect-URI (…/api/cloud-import/oauth/<anbieter>/callback).
+    # Leer = https://TRAEFIK_DOMAIN (zentrale Domain; Rücksprung danach auf die Vereinsdomain).
+    cloud_import_redirect_base_url: str = Field(default="", validation_alias="CLOUD_IMPORT_REDIRECT_BASE_URL")
+    # Microsoft Entra App (OneDrive privat/Business, SharePoint). Ohne Client-ID/Secret: nicht angeboten.
+    cloud_import_ms_client_id: str = Field(default="", validation_alias="CLOUD_IMPORT_MS_CLIENT_ID")
+    cloud_import_ms_client_secret: str = Field(default="", validation_alias="CLOUD_IMPORT_MS_CLIENT_SECRET")
+    # Ablaufdatum des Client-Secrets (JJJJ-MM-TT) für den Monitoring-Check «Cloud-Import».
+    cloud_import_ms_client_secret_expires: str = Field(default="", validation_alias="CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES")
+    # Autorität: "common" (Arbeits-/Schulkonten und persönliche Konten), sonst Tenant-ID.
+    cloud_import_ms_authority: str = Field(default="common", validation_alias="CLOUD_IMPORT_MS_AUTHORITY")
+    # Download aus OneDrive for Business/SharePoint: "auto" (vorauthentifizierte URL, bei 401 bzw. ab
+    # 1.4.2027 Bearer-Token), "tempauth" oder "bearer" (nur noch Bearer).
+    cloud_import_ms_download_mode: str = Field(default="auto", pattern="^(auto|tempauth|bearer)$", validation_alias="CLOUD_IMPORT_MS_DOWNLOAD_MODE")
+    # Google-Cloud-Projekt (Google Drive mit drive.file + Picker, Google Fotos über die Photos
+    # Picker API; Plan §3, E-3 a). Ohne Client-ID/Secret werden beide nicht angeboten, Google Drive
+    # zusätzlich nicht ohne API-Key und App-ID (der Picker braucht beides).
+    cloud_import_google_client_id: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_ID")
+    cloud_import_google_client_secret: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_SECRET")
+    # Optional: Ablaufdatum (JJJJ-MM-TT), falls das Secret ablaufen soll (Google: unbegrenzt, sonst leer)
+    cloud_import_google_client_secret_expires: str = Field(default="", validation_alias="CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES")
+    # Browser-Schlüssel für den Google Picker - öffentlich, in der Google-Cloud-Konsole auf die
+    # HTTP-Referrer der hocX-Domains und die Picker API beschränken (kein Secret).
+    cloud_import_google_api_key: str = Field(default="", max_length=200, pattern=r"^[A-Za-z0-9_-]*$", validation_alias="CLOUD_IMPORT_GOOGLE_API_KEY")
+    # Projektnummer des Google-Cloud-Projekts (PickerBuilder.setAppId; ohne sie gibt drive.file keinen Zugriff)
+    cloud_import_google_app_id: str = Field(default="", max_length=30, pattern=r"^[0-9]*$", validation_alias="CLOUD_IMPORT_GOOGLE_APP_ID")
+    # Eigene Origin der Google-Picker-Seite (Security-Review 1.7, N3): Subdomain ohne hocX-Sitzung,
+    # z. B. picker.hocx.ch (Traefik-Router, Zertifikat). Ohne sie wird Google Drive nicht angeboten.
+    # Port nur im E2E-Stack (picker.localhost:13000).
+    cloud_import_picker_domain: str = Field(
+        default="", max_length=260,
+        pattern=r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?)?$",
+        validation_alias="CLOUD_IMPORT_PICKER_DOMAIN",
+    )
+    # Dropbox-App (Scoped access, files.metadata.read + files.content.read). Ohne App-Key/Secret wird
+    # Dropbox nicht angeboten. Produktionsfreigabe bei Dropbox ab 50 verknüpften Konten (RUNBOOK).
+    cloud_import_dropbox_app_key: str = Field(default="", validation_alias="CLOUD_IMPORT_DROPBOX_APP_KEY")
+    cloud_import_dropbox_app_secret: str = Field(default="", validation_alias="CLOUD_IMPORT_DROPBOX_APP_SECRET")
+    # WebDAV (kDrive, Nextcloud, SwissDisk …): braucht keine Registrierung beim Anbieter, nur diesen
+    # Schalter. Adresse, Benutzer und App-Passwort gibt der Verein ein (SSRF-Schutz in dav_http.py).
+    cloud_import_webdav_enabled: bool = Field(default=True, validation_alias="CLOUD_IMPORT_WEBDAV_ENABLED")
+    # Nachgebaute Anbieter für E2E/Tests (services/cloud_import/fake_*.py). Wirkt nur mit
+    # HOCX_ENVIRONMENT=development; in jeder anderen Umgebung bricht der Start ab. Nie in .env*/deploy.
+    cloud_import_fake_providers: bool = Field(default=False, validation_alias="CLOUD_IMPORT_FAKE_PROVIDERS")
+    # Gleichzeitige Downloads je Import-Auftrag im job-worker (Plan §8.3). Konservativ: Anbieter
+    # drosseln je App und Konto; mehr bringt selten mehr Durchsatz, aber schneller 429.
+    cloud_import_max_parallel_downloads: int = Field(default=2, ge=1, le=8, validation_alias="CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS")
     # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
     # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
     # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).
@@ -490,6 +550,36 @@ class Settings(BaseSettings):
             print(
                 "FATAL: STORAGE_CREDENTIALS_KEY is insecure or not set although LOCAL_S3_* is configured. "
                 "Set a random value of at least 32 characters in .env.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if self.cloud_import_fake_providers and self.environment.strip().lower() != "development":
+            print("FATAL: CLOUD_IMPORT_FAKE_PROVIDERS is only allowed in test stacks (HOCX_ENVIRONMENT=development).", file=sys.stderr)
+            sys.exit(1)
+        for name, value in (("CLOUD_IMPORT_TOKEN_KEY", self.cloud_import_token_key), ("CLOUD_IMPORT_TOKEN_KEY_PREVIOUS", self.cloud_import_token_key_previous)):
+            if value and (value in _INSECURE_DEFAULTS or len(value) < 32):
+                print(f"FATAL: {name} must be empty or a random value of at least 32 characters.", file=sys.stderr)
+                sys.exit(1)
+        picker_host = self.cloud_import_picker_domain.strip().lower()
+        system_hosts = {
+            d.strip().lower().split(":")[0]
+            for d in (self.traefik_domain, self.traefik_admin_domain, self.traefik_abgabebox_domain, self.traefik_docs_domain, self.traefik_website_domain)
+            if d
+        }
+        if picker_host and (picker_host.split(":")[0] in system_hosts or (self.is_production and ":" in picker_host)):
+            print("FATAL: CLOUD_IMPORT_PICKER_DOMAIN must be its own host (not an app, admin, abgabebox, docs or website domain; no port in production).", file=sys.stderr)
+            sys.exit(1)
+        if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
+            print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)
+            sys.exit(1)
+        if self.is_production and (
+            self.cloud_import_ms_client_id
+            or self.cloud_import_google_client_id
+            or self.cloud_import_dropbox_app_key
+        ) and not self.cloud_import_token_key:
+            print(
+                "FATAL: CLOUD_IMPORT_TOKEN_KEY is not set although a cloud import provider is configured. "
+                "Run scripts/deploy.sh (scripts/lib/env_migrate.sh creates it).",
                 file=sys.stderr,
             )
             sys.exit(1)

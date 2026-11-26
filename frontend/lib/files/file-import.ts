@@ -1,8 +1,20 @@
 // Datei-Import (Backend: routes/cloud_import.py): Typen und reine Hilfsfunktionen für den Wizard.
 
-export type ImportSource = "zip" | "folder";
+/** API-Anbieter (Backend: services/cloud_import/providers); angeboten werden nur konfigurierte. */
+export type CloudProviderKey = "microsoft" | "google_drive" | "google_photos" | "dropbox" | "webdav";
+export type ImportSource = "zip" | "folder" | CloudProviderKey;
 export type ImportTypeFilter = "all" | "images" | "documents";
-export type ImportJobStatus = "draft" | "ready" | "queued" | "running" | "cancel_requested" | "cancelled" | "done" | "failed";
+export type ImportJobStatus =
+  | "draft"
+  | "listing"
+  | "ready"
+  | "queued"
+  | "running"
+  | "needs_reauth"
+  | "cancel_requested"
+  | "cancelled"
+  | "done"
+  | "failed";
 export type ImportItemStatus = "listed" | "queued" | "staged" | "imported" | "duplicate" | "skipped" | "failed" | "cancelled";
 
 export type ImportRuleAction =
@@ -56,6 +68,41 @@ export type ImportJob = {
   codes: Record<string, number>;
   processed_bytes: number;
   albums: { name: string; reused: boolean; candidates: number }[];
+  // API-Quellen
+  connection?: CloudConnection | null;
+  selection_count?: number;
+  listing?: { folders: number; queued_folders: number; errors: number } | null;
+  not_before?: string | null;
+};
+
+export type CloudConnection = {
+  provider: CloudProviderKey;
+  status: "active" | "needs_reauth";
+  account_label: string | null;
+  account_kind: string | null;
+  tier: string | null;
+  tiers: string[];
+};
+
+export type CloudProvider = {
+  key: CloudProviderKey;
+  tiers: string[];
+  default_tier: string;
+  info: Record<string, string>;
+};
+
+export type CloudNode = {
+  ref: string;
+  name: string;
+  kind: "folder" | "file";
+  size: number | null;
+  modified_at: string | null;
+  child_count: number | null;
+  available: boolean;
+  requires_tier: string | null;
+  selectable: boolean;
+  label_key: string | null;
+  file_kind: "image" | "document" | "other" | null;
 };
 
 export type ImportRuleError = { rule_id: string; field: string; code: string };
@@ -108,7 +155,23 @@ export type ImportReportItem = {
   file_id: string | null;
 };
 
-export const ACTIVE_STATUSES: ImportJobStatus[] = ["draft", "ready", "queued", "running", "cancel_requested"];
+export const ACTIVE_STATUSES: ImportJobStatus[] = ["draft", "listing", "ready", "queued", "running", "needs_reauth", "cancel_requested"];
+
+export function isCloudSource(source: ImportSource): source is CloudProviderKey {
+  return source !== "zip" && source !== "folder";
+}
+
+/** Parameter, mit denen der OAuth-Callback in den Wizard zurückspringt (Abschluss-Token im Fragment). */
+export function readCloudReturn(search: string, hash: string): { job: string | null; error: string | null; notice: string | null; finish: string | null } {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  return {
+    job: query.get("job"),
+    error: query.get("cloud_error"),
+    notice: query.get("cloud_notice"),
+    finish: fragment.get("cloud_finish"),
+  };
+}
 export const RUNNING_STATUSES: ImportJobStatus[] = ["queued", "running", "cancel_requested"];
 
 export function isActive(job: ImportJob): boolean {
@@ -269,4 +332,112 @@ export function apiErrorCode(error: unknown): string | null {
     return (detail as { code: string }).code;
   }
   return null;
+}
+
+/** Startet die Anmeldung beim Anbieter (Navigation im selben Fenster; Rückkehr über den Callback). */
+export async function startCloudLogin(
+  fetcher: <T>(path: string, init?: RequestInit) => Promise<T>,
+  jobId: string,
+  provider: CloudProviderKey,
+  options: { tier?: string | null; selectAccount?: boolean } = {},
+): Promise<void> {
+  const result = await fetcher<{ authorize_url: string }>(`/api/cloud-import/oauth/${provider}/start`, {
+    method: "POST",
+    body: JSON.stringify({ job_id: jobId, tier: options.tier ?? null, select_account: options.selectAccount ?? false }),
+  });
+  window.location.assign(result.authorize_url);
+}
+
+// --- Google (Drive-Picker, Fotos-Sitzung) -----------------------------------------------------
+
+/** Loader des Google Pickers bzw. sein Nachbau im E2E-Stack (Backend, nur CLOUD_IMPORT_FAKE_PROVIDERS). */
+export const GOOGLE_PICKER_SCRIPT = "https://apis.google.com/js/api.js";
+export const GOOGLE_PICKER_FAKE_SCRIPT = "/api/cloud-import/fake-google/picker.js";
+
+/** Antwort beim Einlösen des Token-Tickets (Picker-Origin, ohne Sitzung). */
+export type GooglePickerConfig = {
+  access_token: string;
+  api_key: string;
+  app_id: string;
+  expires_in: number;
+  max_items: number;
+  fake: boolean;
+  apply_ticket: string;
+  return_url: string;
+};
+
+/** Ticket aus dem Fragment der Picker-Seite (#ticket=…), sonst null. */
+export function pickerTicket(hash: string): string | null {
+  const ticket = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash).get("ticket");
+  return ticket && /^[A-Za-z0-9_-]{20,100}$/.test(ticket) ? ticket : null;
+}
+
+/** Rücksprung in den Wizard nur auf eine https-Adresse des Wizards (das Backend bestimmt sie); http
+ *  nur, wenn die Seite selbst über http läuft (E2E-Stack). */
+export function safeReturnUrl(value: unknown, pageProtocol = typeof window === "undefined" ? "https:" : window.location.protocol): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const protocolOk = url.protocol === "https:" || (url.protocol === "http:" && pageProtocol === "http:");
+    return protocolOk && url.pathname === "/files/import" && !url.username ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export type PhotosSession = { picker_uri: string; poll_seconds: number; timeout_seconds: number | null };
+export type PhotosPoll = { done: boolean; poll_seconds: number; job: ImportJob };
+
+/** Auswahl-Art eines Anbieters ohne Ordnerbaum (Backend: provider.public_info()["selection"]). */
+export function cloudSelectionMode(provider: CloudProvider | null): "tree" | "google_picker" | "photos_picker" {
+  const mode = provider?.info.selection;
+  return mode === "google_picker" || mode === "photos_picker" ? mode : "tree";
+}
+
+/** Nur IDs gewählter Dateien (Ordner gibt drive.file nicht frei), ohne Doppelte, höchstens max. */
+export function pickedFileIds(docs: { id?: unknown; mimeType?: unknown }[], max: number): string[] {
+  const ids = docs
+    .filter((doc) => typeof doc.id === "string" && /^[A-Za-z0-9_-]{1,300}$/.test(doc.id) && doc.mimeType !== "application/vnd.google-apps.folder")
+    .map((doc) => doc.id as string);
+  return Array.from(new Set(ids)).slice(0, max);
+}
+
+/** Nur Auswahlseiten von Google Fotos öffnen (Backend prüft das auch); im E2E-Stack der Nachbau
+ *  auf der eigenen Origin. */
+export function isPhotosPickerUri(uri: string, origin: string): boolean {
+  try {
+    const url = new URL(uri);
+    if (url.protocol === "https:" && url.host === "photos.google.com") return true;
+    return url.origin === origin && url.pathname.startsWith("/api/cloud-import/fake-google/photos/");
+  } catch {
+    return false;
+  }
+}
+
+/** Google Fotos schliesst das Auswahlfenster selbst, wenn die URI auf «/autoclose» endet. */
+export function photosPickerUrl(uri: string): string {
+  return uri.endsWith("/autoclose") ? uri : `${uri.replace(/\/$/, "")}/autoclose`;
+}
+
+export type WebdavPreset = "kdrive" | "nextcloud" | "generic";
+
+/** Body für POST /api/cloud-import/jobs/{id}/webdav/connect: nur die Felder der gewählten Vorlage. */
+export function webdavConnectBody(input: {
+  preset: WebdavPreset;
+  server: string;
+  kdriveId: string;
+  url: string;
+  username: string;
+  password: string;
+}): Record<string, string> {
+  const body: Record<string, string> = { preset: input.preset, username: input.username.trim(), password: input.password };
+  if (input.preset === "kdrive" && input.kdriveId.trim()) body.kdrive_id = input.kdriveId.trim();
+  if (input.preset === "nextcloud") body.server = input.server.trim();
+  if (input.preset === "generic") body.url = input.url.trim();
+  return body;
+}
+
+/** Anbieter mit Zugangsdaten statt OAuth (WebDAV). */
+export function usesCredentials(provider: { info: Record<string, string> } | null | undefined): boolean {
+  return provider?.info.auth === "credentials";
 }

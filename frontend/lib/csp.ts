@@ -13,19 +13,67 @@ export function createNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export function contentSecurityPolicy(nonce: string, isDevelopment = process.env.NODE_ENV !== "production"): string {
+/**
+ * Einzige Seite mit gelockerter CSP: der Google Picker des Datei-Imports (Google Drive mit drive.file).
+ * Er lädt den API-Loader von apis.google.com (per Nonce-Skript, danach über 'strict-dynamic' - die
+ * Host-Einträge in script-src ignorieren CSP3-Browser deshalb, sie bleiben nur für ältere Browser),
+ * zeigt die Auswahl in einem iframe von docs.google.com und lädt Vorschaubilder.
+ *
+ * Seit 1.7 (Security-Review N3) gilt die Lockerung nur auf der **eigenen Origin**
+ * CLOUD_IMPORT_PICKER_DOMAIN und nur für diesen Pfad (proxy.ts): dort gibt es keine hocX-Sitzung,
+ * nachgeladener Fremdcode kann also nichts im Namen der angemeldeten Person tun. Auf der App-Origin
+ * gibt es die Seite nicht.
+ */
+export const GOOGLE_PICKER_PATH = "/google-picker";
+
+const GOOGLE_PICKER_SOURCES = {
+  script: ["https://apis.google.com"],
+  frame: ["https://docs.google.com", "https://drive.google.com"],
+  connect: ["https://apis.google.com", "https://www.googleapis.com", "https://content.googleapis.com"],
+  // Vorschaubilder/Symbole des Pickers - nur Googles Bild-Hosts, nicht ganz *.googleusercontent.com
+  img: [
+    "https://lh3.googleusercontent.com",
+    "https://lh4.googleusercontent.com",
+    "https://lh5.googleusercontent.com",
+    "https://lh6.googleusercontent.com",
+    "https://drive-thirdparty.googleusercontent.com",
+    "https://ssl.gstatic.com",
+    "https://www.gstatic.com",
+  ],
+};
+
+export type CspVariant = "default" | "google-picker";
+
+/** Gelockerte Variante nur auf der Picker-Origin (Host ohne Port) und nur für die Picker-Seite. */
+export function cspVariantFor(host: string | undefined, pathname: string, pickerHost: string | undefined): CspVariant {
+  return !!pickerHost && host === pickerHost && pathname === GOOGLE_PICKER_PATH ? "google-picker" : "default";
+}
+
+/** Host der Picker-Origin aus CLOUD_IMPORT_PICKER_DOMAIN (ohne Port; im E2E-Stack mit Port gesetzt). */
+export function pickerHostFrom(value: string | undefined): string | undefined {
+  const host = (value ?? "").trim().toLowerCase().split(":")[0];
+  return host || undefined;
+}
+
+export function contentSecurityPolicy(
+  nonce: string,
+  isDevelopment = process.env.NODE_ENV !== "production",
+  variant: CspVariant = "default",
+): string {
+  const picker = variant === "google-picker";
+  const extra = (sources: string[]) => (picker ? ` ${sources.join(" ")}` : "");
   const scriptSrc = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", isDevelopment && "'unsafe-eval'"]
     .filter(Boolean)
     .join(" ");
   return [
     "default-src 'self'",
-    `script-src ${scriptSrc}`,
+    `script-src ${scriptSrc}${extra(GOOGLE_PICKER_SOURCES.script)}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob:${extra(GOOGLE_PICKER_SOURCES.img)}`,
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src 'self'${extra(GOOGLE_PICKER_SOURCES.connect)}`,
     "object-src 'none'",
-    "frame-src 'none'",
+    picker ? `frame-src ${GOOGLE_PICKER_SOURCES.frame.join(" ")}` : "frame-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

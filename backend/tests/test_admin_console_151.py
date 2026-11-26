@@ -157,7 +157,7 @@ def test_admin_list_has_passkey_count_and_last_login(db):
     assert mine["last_login_at"] is not None
 
 
-# ── Warnungen quittieren ───────────────────────────────────────────────────────────────────
+# ── Warnungen: Vorfall statt Quittung (1.7) ────────────────────────────────────────────────
 
 
 def _fake_alert(monkeypatch, key="auth:spraying:abc123def456"):
@@ -166,27 +166,18 @@ def _fake_alert(monkeypatch, key="auth:spraying:abc123def456"):
     return alert
 
 
-def test_acknowledge_and_reopen_alert(db, monkeypatch):
-    owner = _admin(db)
-    client = _client(db, owner)
-    alert = _fake_alert(monkeypatch)
-    assert client.get("/api/admin/auth-security/overview").json()["open_alerts"] == 1
-    response = client.post("/api/admin/auth-security/alerts/ack", json={"key": alert["key"], "note": "wird geprüft"})
-    assert response.status_code == 200, response.text
-    listed = client.get("/api/admin/auth-security/alerts").json()
-    assert listed[0]["acknowledged_at"] is not None and listed[0]["acknowledged_by"] == owner.display_name
-    overview = client.get("/api/admin/auth-security/overview").json()
-    assert overview["open_alerts"] == 0 and overview["acknowledged_alerts"] == 1
-    assert client.post("/api/admin/auth-security/alerts/unack", json={"key": alert["key"]}).status_code == 200
-    assert client.get("/api/admin/auth-security/overview").json()["open_alerts"] == 1
+def test_alerts_link_their_incident_and_ack_routes_are_gone(db, monkeypatch):
+    """1.7: die Quittung (0209) ist durch den Vorfall-Status ersetzt - die Warnung zeigt ihren Vorfall."""
+    from app.auth_security import incidents, threats
 
-
-def test_acknowledge_rejects_inactive_or_foreign_keys(db, monkeypatch):
     client = _client(db, _admin(db))
-    _fake_alert(monkeypatch)
-    assert client.post("/api/admin/auth-security/alerts/ack", json={"key": "auth:spraying:anderes"}).status_code == 404
-    # Nur Anmeldeschutz-Warnungen (keine Systemprobleme quittierbar)
-    assert client.post("/api/admin/auth-security/alerts/ack", json={"key": "job:export_cleanup"}).status_code == 422
+    alert = _fake_alert(monkeypatch)
+    assert client.get("/api/admin/auth-security/alerts").json()[0]["incident"] is None
+    incidents.correlate(db, [threats.Threat("spraying", "abc123def456", "warning", "T", "M", None)])
+    listed = client.get("/api/admin/auth-security/alerts").json()[0]
+    assert listed["key"] == alert["key"] and listed["incident"]["status"] == "new"
+    assert client.get("/api/admin/auth-security/overview").json()["new_incidents"] >= 1
+    assert client.post("/api/admin/auth-security/alerts/ack", json={"key": alert["key"]}).status_code in (404, 405)
 
 
 # ── Export ─────────────────────────────────────────────────────────────────────────────────
@@ -425,9 +416,8 @@ def test_admin_cli_create_user_reads_password_from_stdin(db, monkeypatch, capsys
     assert admin_cli.main(["create-user", "--tenant-name", "Gibt es nicht", "--email", "x@example.com"]) == 1
 
 
-def test_ack_reopens_on_new_event_and_shows_admin_name_and_clear_time(db, monkeypatch):
-    """Koordinator-Ergänzung: neue Auslösung öffnet die quittierte Warnung wieder; Admin-Regeln zeigen
-    den Namen statt #ID; «erledigt sich» aus dem Regelfenster (threats.RULE_WINDOW_MINUTES)."""
+def test_alerts_show_admin_name_and_clear_time(db, monkeypatch):
+    """Admin-Regeln zeigen den Namen statt #ID; «erledigt sich» aus dem Regelfenster."""
     from datetime import datetime, timedelta, timezone
 
     from app.auth_security.threats import RULE_WINDOW_MINUTES
@@ -442,12 +432,6 @@ def test_ack_reopens_on_new_event_and_shows_admin_name_and_clear_time(db, monkey
     listed = client.get("/api/admin/auth-security/alerts").json()[0]
     assert listed["subject_label"] == owner.display_name
     assert listed["window_minutes"] == 60 and listed["clears_at"]
-    assert client.post("/api/admin/auth-security/alerts/ack", json={"key": key}).status_code == 200
-    db.execute(text("UPDATE system_alert_state SET acknowledged_at = :at WHERE problem_key = :key"), {"at": seen + timedelta(minutes=1), "key": key})
-    assert client.get("/api/admin/auth-security/alerts").json()[0]["acknowledged_at"] is not None
-    alert["last_at"] = seen + timedelta(minutes=3)  # neue Anmeldung von einem neuen Gerät nach der Quittung
-    assert client.get("/api/admin/auth-security/alerts").json()[0]["acknowledged_at"] is None
-    assert client.get("/api/admin/auth-security/overview").json()["open_alerts"] == 1
 
 
 def test_threat_windows_cover_every_rule(db):

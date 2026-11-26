@@ -28,9 +28,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app.auth_security import blocks, event_query, read_service
+from app.auth_security import blocks, event_query, incidents, read_service, situation
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.core.admin_step_up import require_step_up
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
@@ -81,7 +82,7 @@ POLICY_SETTINGS: dict[str, tuple[str, ...]] = {
     "alerts": ("auth_alert_stuffing_min", "auth_alert_stuffing_networks", "auth_alert_spraying_accounts", "auth_alert_account_failures",
                "auth_alert_account_networks", "auth_alert_admin_mfa_failures", "auth_alert_blocks_per_hour", "auth_alert_cross_tenant",
                "auth_alert_redis_memory_ratio"),
-    "retention": ("auth_event_retention_days",),
+    "retention": ("auth_event_retention_days", "security_incident_retention_days"),
     # Leak-Prüfung neuer Passwörter (SEC-AUTH-015) und Länder-Geolocation (Signal «neues Land»)
     "passwords": ("password_leak_check", "password_leak_min_count", "password_leak_timeout_seconds", "geoip_auto_update"),
 }
@@ -89,22 +90,17 @@ POLICY_SETTINGS: dict[str, tuple[str, ...]] = {
 
 @router.get("/auth-security/overview")
 def auth_security_overview(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
-    """Kacheln der Sicherheits-Übersicht: Zähler 24 h, offene (nicht quittierte) Warnungen, aktive Sperren."""
-    alerts = _alerts_with_acks(db)
-    open_alerts = [alert for alert in alerts if alert["acknowledged_at"] is None]
+    """Kennzahlen 24 h, ausgelöste Warnungen, offene Vorfälle (1.7 statt Quittungen), aktive Sperren."""
+    alerts = read_service.platform_alerts(db)
+    stats = incidents.stats(db)
     return {
         **read_service.platform_counters(db),
-        "open_alerts": len(open_alerts),
-        "critical_alerts": sum(1 for alert in open_alerts if alert["severity"] == "critical"),
-        "acknowledged_alerts": len(alerts) - len(open_alerts),
+        "active_alerts": len(alerts),
+        "critical_alerts": sum(1 for alert in alerts if alert["severity"] == "critical"),
+        "open_incidents": stats["open"],
+        "new_incidents": stats["new"],
         "active_blocks": len(blocks.active_blocks()),
     }
-
-
-def _ack_is_current(acknowledged_at, last_at) -> bool:
-    """Eine Quittung gilt nur bis zum nächsten auslösenden Ereignis: kommt nach dem Quittieren ein
-    neues (z. B. die nächste Anmeldung von einem neuen Gerät), ist die Warnung wieder offen."""
-    return acknowledged_at is not None and (last_at is None or acknowledged_at >= last_at)
 
 
 # Regeln, deren Subjekt eine interne ID ist (kein Pseudonym): für die Anzeige auflösen (nur owner sieht
@@ -128,36 +124,18 @@ def _subject_labels(db: Session, alerts: list[dict]) -> dict[str, str]:
     return labels
 
 
-def _alerts_with_acks(db: Session) -> list[dict]:
-    """Live-Alarmregeln plus Quittung aus system_alert_state (gleicher Schlüssel wie im Systemmonitor)."""
+def _alerts_with_incidents(db: Session) -> list[dict]:
+    """Live-Alarmregeln plus zugehöriger Vorfall (1.7: Vorfall-Status ersetzt die Quittung aus 0209)."""
     alerts = read_service.platform_alerts(db)
-    keys = [alert["key"] for alert in alerts]
-    acks = {}
-    if keys:
-        acks = {
-            row.problem_key: row
-            for row in db.execute(
-                text(
-                    "SELECT s.problem_key, s.first_seen_at, s.acknowledged_at, s.acknowledged_note, a.display_name AS acknowledged_by "
-                    "FROM system_alert_state s LEFT JOIN platform_admin a ON a.id = s.acknowledged_by_admin_id "
-                    "WHERE s.problem_key = ANY(:keys)"
-                ),
-                {"keys": keys},
-            )
-        }
+    linked = incidents.open_incident_for_keys(db, [alert["key"] for alert in alerts])
     labels = _subject_labels(db, alerts)
     result = []
     for alert in alerts:
-        row = acks.get(alert["key"])
-        current = bool(row) and _ack_is_current(row.acknowledged_at, alert.get("last_at"))
         kind = "admin" if alert["rule"] in _ADMIN_SUBJECT_RULES else "tenant" if alert["rule"] in _TENANT_SUBJECT_RULES else None
         result.append({
             **alert,
             "subject_label": labels.get(f"{kind}:{alert['subject']}") if kind else None,
-            "first_seen_at": row.first_seen_at if row else None,
-            "acknowledged_at": row.acknowledged_at if current else None,
-            "acknowledged_by": row.acknowledged_by if current else None,
-            "acknowledged_note": row.acknowledged_note if current else None,
+            "incident": linked.get(alert["key"]),
         })
     return result
 
@@ -181,62 +159,8 @@ def auth_security_alert_rule_series(rule: AlertRule, db: Session = Depends(get_d
 @router.get("/auth-security/alerts")
 def auth_security_alerts(db: Session = Depends(get_db), _admin: CurrentAdmin = Depends(require_admin_owner)):
     """Aktuell ausgelöste Alarmregeln (dieselben wie im Systemmonitor, nur Zahlen und Pseudonyme),
-    mit Quittung."""
-    return _alerts_with_acks(db)
-
-
-class AlertAck(BaseModel):
-    key: str = Field(min_length=5, max_length=200, pattern=r"^auth:[a-z_]+(:[A-Za-z0-9_-]+)?$")
-    note: str | None = Field(default=None, max_length=500)
-
-
-def _active_alert(db: Session, key: str) -> dict:
-    alert = next((item for item in read_service.platform_alerts(db) if item["key"] == key), None)
-    if alert is None:
-        raise HTTPException(status_code=404, detail={"code": "alert_not_active", "message": "Die Warnung ist nicht (mehr) aktiv."})
-    return alert
-
-
-@router.post("/auth-security/alerts/ack")
-def acknowledge_alert(payload: AlertAck, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
-    """Warnung quittieren: «gesehen, wird bearbeitet». Gilt, solange die Warnung offen ist - klingt
-    sie ab und tritt später wieder auf, ist sie wieder offen (die Zeile in system_alert_state
-    verschwindet mit dem Problem). Ändert nichts an Sperren oder Benachrichtigungen."""
-    alert = _active_alert(db, payload.key)
-    note = (payload.note or "").strip() or None
-    # Der Systemmonitor legt die Zeile beim nächsten Durchlauf ohnehin an; existiert sie noch nicht,
-    # mit denselben Werten anlegen (gleicher Schlüssel, first_seen jetzt).
-    db.execute(
-        text(
-            "INSERT INTO system_alert_state (problem_key, severity, reason, title, message, first_seen_at, acknowledged_at, "
-            "acknowledged_by_admin_id, acknowledged_note) VALUES (:key, :severity, :reason, :title, :message, now(), now(), :admin_id, :note) "
-            "ON CONFLICT (problem_key) DO UPDATE SET acknowledged_at = now(), acknowledged_by_admin_id = :admin_id, acknowledged_note = :note"
-        ),
-        {"key": alert["key"], "severity": alert["severity"], "reason": alert["rule"], "title": alert["title"], "message": alert["message"],
-         "admin_id": admin.admin_id, "note": note},
-    )
-    db.commit()
-    audit.log(db, action="admin.security_alert_acknowledged", actor_email=admin.email, details={"key": alert["key"], "rule": alert["rule"]})
-    _invalidate_nav_counts()
-    return {"key": alert["key"], "acknowledged": True}
-
-
-@router.post("/auth-security/alerts/unack")
-def unacknowledge_alert(payload: AlertAck, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
-    """Quittung zurücknehmen (Warnung wieder als offen zählen)."""
-    updated = db.execute(
-        text(
-            "UPDATE system_alert_state SET acknowledged_at = NULL, acknowledged_by_admin_id = NULL, acknowledged_note = NULL "
-            "WHERE problem_key = :key AND acknowledged_at IS NOT NULL"
-        ),
-        {"key": payload.key},
-    ).rowcount
-    db.commit()
-    if not updated:
-        raise HTTPException(status_code=404, detail={"code": "alert_not_acknowledged", "message": "Die Warnung ist nicht quittiert."})
-    audit.log(db, action="admin.security_alert_reopened", actor_email=admin.email, details={"key": payload.key})
-    _invalidate_nav_counts()
-    return {"key": payload.key, "acknowledged": False}
+    mit dem zugehörigen Vorfall."""
+    return _alerts_with_incidents(db)
 
 
 def _invalidate_nav_counts() -> None:
@@ -641,3 +565,164 @@ def resolve_event_subject(event_id: uuid.UUID, db: Session = Depends(get_db), ad
         details={"event_id": str(event_id), "kind": result.kind, "via": via},
     )
     return result
+
+
+# ── Vorfälle und Lagebild (1.7, Migration 0282) ──────────────────────────────────────────────
+# Lesen und Ändern nur owner (Pseudonyme sind Personenbezug); jede Änderung mit Passkey (Zweck
+# security-incident, Sperre: security-block) und Audit-Eintrag. Notiztexte stehen nicht im Audit-Log.
+
+IncidentStatus = Literal["new", "in_progress", "resolved", "false_positive"]
+_INCIDENT_ID = PathParam(ge=1, le=2**62)
+
+
+def _incident_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, incidents.IncidentNotFound):
+        return HTTPException(status_code=404, detail="Vorfall nicht gefunden")
+    if isinstance(exc, incidents.IncidentConflict):
+        return HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)})
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+def _incident_changed() -> None:
+    situation.clear_cache()
+    _invalidate_nav_counts()
+
+
+@router.get("/auth-security/situation", dependencies=[Depends(require_admin_owner)])
+def auth_security_situation(range_: Literal["24h", "7d"] = Query("24h", alias="range"), db: Session = Depends(get_db)):
+    """Lagebild: Lage-Stufe, Kennzahlen mit Vorperiode, Verlauf mit Vorfall-Markierungen, Wochenmuster,
+    Herkunft nach Land und auffällige Netze (30 s Cache)."""
+    return situation.situation(db, range_)
+
+
+@router.get("/auth-security/incidents", dependencies=[Depends(require_admin_owner)])
+def auth_security_incidents(
+    status: Literal["open", "new", "in_progress", "closed", "all"] = "open",
+    severity: Annotated[list[Literal["critical", "warning"]] | None, Query()] = None,
+    assignee: Literal["all", "me", "none"] = "all",
+    q: str | None = Query(None, max_length=40, pattern=r"^[A-Za-z0-9_#-]*$"),
+    offset: int = Query(0, ge=0, le=100_000),
+    limit: int = Query(50, ge=1, le=100),
+    spark: bool = True,
+    db: Session = Depends(get_db),
+    admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Vorfälle mit Filtern (Status-Gruppe, Schwere, Zuständig, Suche nach ID, Regel oder
+    Pseudonym-Präfix), offene und kritische zuerst; Zähler je Status-Gruppe."""
+    flt = incidents.IncidentFilter(status=status, severities=tuple(dict.fromkeys(severity or [])), assignee=assignee, q=q)
+    # Board und Lagebild-Warteschlange brauchen keinen Mini-Verlauf (je Zeile eine Abfrage)
+    return incidents.list_incidents(db, flt, admin_id=admin.admin_id, offset=offset, limit=limit, with_spark=spark)
+
+
+@router.get("/auth-security/incidents/stats", dependencies=[Depends(require_admin_owner)])
+def auth_security_incident_stats(db: Session = Depends(get_db)):
+    return incidents.stats(db)
+
+
+@router.get("/auth-security/incidents/{incident_id}")
+def auth_security_incident_detail(
+    incident_id: Annotated[int, _INCIDENT_ID], db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Vorfall mit Fakten, Zeitleiste, Beteiligten (gekürzte Pseudonyme), Gründen, Abwehrstufe und Notizen;
+    ``me`` = eigene Admin-ID (für «Übernehmen»)."""
+    try:
+        return {**incidents.detail(db, incident_id), "me": admin.admin_public_id}
+    except incidents.IncidentNotFound as exc:
+        raise _incident_error(exc) from exc
+
+
+class IncidentStatusChange(BaseModel):
+    status: IncidentStatus
+    note: str | None = Field(default=None, max_length=incidents.NOTE_MAX)
+
+
+class IncidentAssign(BaseModel):
+    # None = Zuständigkeit entfernen
+    admin_id: uuid.UUID | None = None
+
+
+class IncidentNote(BaseModel):
+    note: str = Field(min_length=1, max_length=incidents.NOTE_MAX)
+
+
+@router.post("/auth-security/incidents/{incident_id}/status", dependencies=[Depends(require_step_up("security-incident"))])
+def change_incident_status(
+    incident_id: Annotated[int, _INCIDENT_ID], payload: IncidentStatusChange, db: Session = Depends(get_db),
+    admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Status setzen (Neu, In Bearbeitung, Erledigt, Fehlalarm); Wiederöffnen nur, wenn zur Regel kein
+    anderer Vorfall offen ist. Optional mit Notiz (Begründung)."""
+    note = (payload.note or "").strip() or None
+    try:
+        result = incidents.set_status(db, incident_id, payload.status, admin_id=admin.admin_id, note=note)
+    except (incidents.IncidentNotFound, incidents.IncidentConflict) as exc:
+        raise _incident_error(exc) from exc
+    audit.log(db, action="admin.security_incident_status", actor_email=admin.email, entity_type="security_incident", entity_id=incident_id,
+              details={"incident": incident_id, "from": result["from"], "to": result["to"], "with_note": note is not None})
+    _incident_changed()
+    return result
+
+
+@router.post("/auth-security/incidents/{incident_id}/assign", dependencies=[Depends(require_step_up("security-incident"))])
+def assign_incident(
+    incident_id: Annotated[int, _INCIDENT_ID], payload: IncidentAssign, db: Session = Depends(get_db),
+    admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Zuständig setzen (aktiver owner) oder entfernen; «Übernehmen» = eigene ID, setzt einen neuen
+    Vorfall auf «In Bearbeitung»."""
+    try:
+        result = incidents.assign(db, incident_id, payload.admin_id, admin_id=admin.admin_id)
+    except (incidents.IncidentNotFound, incidents.IncidentConflict) as exc:
+        raise _incident_error(exc) from exc
+    audit.log(db, action="admin.security_incident_assigned", actor_email=admin.email, entity_type="security_incident", entity_id=incident_id,
+              details={"incident": incident_id, "assignee": str(payload.admin_id) if payload.admin_id else None,
+                       "status_changed": result["status_changed"]})
+    _incident_changed()
+    return result
+
+
+@router.post("/auth-security/incidents/{incident_id}/notes", status_code=201, dependencies=[Depends(require_step_up("security-incident"))])
+def add_incident_note(
+    incident_id: Annotated[int, _INCIDENT_ID], payload: IncidentNote, db: Session = Depends(get_db),
+    admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Notiz zum Vorfall (ohne Personendaten, Hinweis in der Oberfläche); der Text steht nicht im Audit-Log."""
+    note = payload.note.strip()
+    if not note:
+        raise HTTPException(status_code=422, detail="Notiz fehlt")
+    try:
+        result = incidents.add_note(db, incident_id, note, admin_id=admin.admin_id)
+    except incidents.IncidentNotFound as exc:
+        raise _incident_error(exc) from exc
+    audit.log(db, action="admin.security_incident_note", actor_email=admin.email, entity_type="security_incident", entity_id=incident_id,
+              details={"incident": incident_id, "length": len(note)})
+    _incident_changed()
+    return result
+
+
+@router.post("/auth-security/incidents/{incident_id}/block", status_code=201, dependencies=[Depends(require_step_up("security-block"))])
+def block_incident_network(
+    incident_id: Annotated[int, _INCIDENT_ID], payload: BlockExtend, db: Session = Depends(get_db),
+    admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Netz des Vorfalls manuell sperren (Stufe 5, Netz-Fingerprint /24 bzw. /48 wie «Quelle sperren»);
+    die Sperre trägt die Vorfall-Nummer, die Zeitleiste vermerkt sie."""
+    try:
+        fingerprint, short = incidents.block_target(db, incident_id)
+    except (incidents.IncidentNotFound, incidents.IncidentConflict) as exc:
+        raise _incident_error(exc) from exc
+    try:
+        block = blocks.set_manual(subject=fingerprint, scope="net_fp", minutes=payload.minutes, reason=payload.reason,
+                                  admin_id=admin.admin_id, incident_id=incident_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Audit sofort nach dem Setzen: die Sperre gilt ab hier, auch wenn der Zeitleisten-Eintrag scheitert
+    _block_audit(db, admin, "admin.auth_block_set", block, source="incident", incident=incident_id)
+    event_query.clear_cache()
+    try:
+        incidents.record_block(db, incident_id, short, admin_id=admin.admin_id)
+    except Exception as exc:  # noqa: BLE001 - Sperre ist gesetzt und auditiert; Zeitleiste ist Beiwerk
+        db.rollback()
+        record_system_error(db, exc=exc, actor_email=admin.email)
+    _incident_changed()
+    return {"subject": block.short, "until": block.until}

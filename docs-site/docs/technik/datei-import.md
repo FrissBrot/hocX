@@ -91,4 +91,277 @@ mit Minuten Laufzeit (Befund aus fix/search-perf-1.5.1). Fehler werden nur gelog
 ## Variablen
 
 `CLOUD_IMPORT_MAX_JOB_FILES` (50000) und `CLOUD_IMPORT_MAX_JOB_BYTES` (100 GiB) für backend und
-job-worker, siehe RUNBOOK Abschnitt 17. Keine Secrets in P0.
+job-worker, siehe RUNBOOK Abschnitt 17. API-Quellen (P1): `CLOUD_IMPORT_ENABLED`,
+`CLOUD_IMPORT_TOKEN_KEY` (+ `_PREVIOUS`, Secret, von `env_migrate.sh` erzeugt),
+`CLOUD_IMPORT_REDIRECT_BASE_URL` und je Anbieter Client-ID/Secret/Ablaufdatum, siehe RUNBOOK
+«Cloud-Import einrichten». Dropbox: `CLOUD_IMPORT_DROPBOX_APP_KEY`, `CLOUD_IMPORT_DROPBOX_APP_SECRET`
+(Secret, `_FILE`); WebDAV: nur der Schalter `CLOUD_IMPORT_WEBDAV_ENABLED`.
+
+## API-Quellen (Phase P1, Fundament)
+
+Gemeinsames Fundament für alle Cloud-Anbieter (seit 1.7: Microsoft, Google Drive, Google Fotos, Dropbox und WebDAV nach demselben
+Muster). Migration `0281_cloud_import_connections`.
+
+| Teil | Ort |
+|---|---|
+| Tabelle `import_connection` (tenant_id + RLS, Tokens nur verschlüsselt) | `backend/app/models/import_entities.py` |
+| Token-Verschlüsselung (MultiFernet, `CLOUD_IMPORT_TOKEN_KEY` + `_PREVIOUS`) | `services/cloud_import/token_crypto.py` |
+| Ausgehendes HTTP (Allowlist, SSRF, Redirects, Bearer-Regeln, 429/503) | `services/cloud_import/http.py` |
+| OAuth Code + PKCE, `state`, ausstehende Verbindung | `services/cloud_import/oauth.py` |
+| Verbindungen, Refresh, Löschen | `services/cloud_import/connections.py` |
+| Adapter-Schnittstelle und Register | `services/cloud_import/providers/base.py`, `providers/__init__.py` |
+| Auflisten und Download im job-worker | `services/cloud_import/remote.py` (aus `worker.run_slice`) |
+| Zentraler Callback (ohne Sitzung) | `api/routes/cloud_import_oauth.py` |
+| Wizard: Anmelden, eigener Ordnerbaum, Auflisten | `frontend/components/file-import/import-cloud-step.tsx`, `import-cloud-tree.tsx` |
+| Nachgebauter Transport für Tests/E2E | `services/cloud_import/fake_http.py` (nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`) |
+
+### Ablauf
+
+1. Wizard: Kachel des Anbieters (nur angeboten, wenn `CLOUD_IMPORT_ENABLED`, `CLOUD_IMPORT_TOKEN_KEY` und
+   die Anbieter-Konfiguration gesetzt sind) → `POST /cloud-import/jobs` mit `source=<anbieter>` (`draft`).
+2. `POST /cloud-import/oauth/<anbieter>/start` → Autorisierungs-URL. `state` (32 Byte, Redis 10 min,
+   nur der SHA-256 als Schlüssel) bindet Person, Mandant, Auftrag, Stufe und Rücksprung-Host; PKCE S256.
+3. Anbieter → `…/api/cloud-import/oauth/<anbieter>/callback` auf der zentralen Domain
+   (`CLOUD_IMPORT_REDIRECT_BASE_URL`, sonst `https://TRAEFIK_DOMAIN`). `form_post` als POST (Origin-Guard
+   nimmt genau diesen Pfad aus), `query` nur für Anbieter ohne `form_post`. Der Callback löst den Code mit
+   dem Verifier ein, legt die Tokens verschlüsselt als «ausstehend» ab (10 min) und leitet auf
+   `/files/import?job=…#cloud_finish=<einmal-token>` (zentrale oder eigene App-Domain, sonst relativ).
+4. Der Wizard ruft mit der Sitzung `POST /cloud-import/oauth/finish`. Nur wenn die angemeldete Person
+   die aus dem `state` ist, entsteht die Verbindung (Schutz vor Login-CSRF); sonst 403 und die Tokens
+   sind verworfen.
+5. Ordnerbaum: `POST /cloud-import/jobs/{id}/browse` (Body `{ref, cursor}`; POST, weil das Lesen
+   Tokens erneuert, 1.7) liest live beim Anbieter, speichert nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
+6. job-worker (`remote.run_listing`): rekursiv mit Paging, Stand in `import_job.listing_state` nach jeder
+   Seite → `ready` (bzw. zurück zu `draft` mit `empty_source`/`selection_unavailable`).
+7. Regeln, Vorschau, Start wie P0. Danach lädt `remote.download_step` je Datei als Stream nach
+   `UPLOAD_ROOT/_staging/cloud-import/<auftrag>/` (`staged`), höchstens 12 gestagte Dateien je Auftrag; die
+   bestehende Pipeline übernimmt.
+8. Ende (`done`/`cancelled`): Verbindung samt Tokens sofort gelöscht. `failed`: bis `purge_after`
+   (7 Tage ohne Nutzung) für «Fortsetzen».
+
+### Fehler und Wiederaufnahme
+
+- `429`/`503` mit `Retry-After` → `import_job.not_before`; `claim_next` bedient den Auftrag erst danach.
+- Refresh mit `invalid_grant` → Verbindung `needs_reauth` (Tokens gelöscht), Auftrag `needs_reauth`, Mail
+  `cloud_import.needs_reauth` (Kategorie «Datei-Import», nur mit `files.import`). Neue Anmeldung über
+  denselben Wizard setzt den Auftrag fort (`listing` bzw. `queued`); nach 7 Tagen `failed` (`reauth_expired`).
+- Je Datei bis 5 Versuche mit wachsender Wartezeit (`next_attempt_at`), dann `download_failed`;
+  `not_found`, `access_denied`, `too_large`, `host_not_allowed` sofort.
+- Absturz: Lease läuft ab, `listing_state` bzw. Einträge `queued`/`staged` machen ohne Doppelte weiter.
+
+### Sicherheit
+
+- Host-Allowlist je Adapter (`HostPolicy`), nur https/443, DNS-Prüfung jeder Adresse (privat, Loopback,
+  Link-Local, reserviert → abgelehnt) und Verbindung genau zur geprüften Adresse (kein DNS-Rebinding).
+- Redirects nur selbst (höchstens 3), jedes Ziel erneut geprüft. Bearer-Token nur an `api_hosts`, an
+  Download-Hosts nur bei `bearer_download_suffixes` (z. B. SharePoint nach tempauth-Ende).
+- Referenzen aus dem Browser nur nach `validate_ref`, Benutzer liefern nie URLs.
+- Logs: nur Methode, Host, Pfad ohne Query, Status. `TokenSet.__repr__` ohne Tokens.
+- Callback in `EXEMPT_PUBLIC_ROUTES`, Token-Spalten in `EXEMPT_COLUMNS` begründet.
+- Rücksprung mit dem Abschluss-Token nur auf die zentrale Domain oder eine **gesunde** eigene App-Domain
+  mit gebuchtem Feature (wie die Domain-Bridge), geprüft beim Start und erneut im Callback; sonst
+  relativ auf die Callback-Domain. Microsoft zeigt immer die Kontoauswahl (`prompt=select_account`), damit
+  ein fremder Autorisierungs-Link nie still per SSO durchläuft.
+- «Gleiches Konto» beim erneuten Anmelden über die stabile Kennung des Anbieters (`account_subject`,
+  Microsoft: Tenant + Objekt-ID), nie über den Anzeigenamen.
+- Ein 401 vom Download-Host ist kein abgelaufenes Token (kein Refresh/needs_reauth), sondern
+  `access_denied`; je Download höchstens 30 min, die Lease deckt das ab.
+- `CLOUD_IMPORT_FAKE_PROVIDERS` setzt nur `docker-compose.e2e.yml`; `docker-compose.yml` erzwingt `false`
+  (nicht über `.env` aktivierbar), `config.py` bricht ausserhalb von `development` ab.
+- `User-Agent: ISV|hocX|hocX/<Version>` (Microsoft-Empfehlung gegen Drosselung).
+
+### Dropbox (P3)
+
+`services/cloud_import/providers/dropbox.py`, Nachbau `fake_dropbox.py`.
+
+- App mit **Scoped access**, Scopes `account_info.read` (immer dabei), `files.metadata.read`,
+  `files.content.read`; nur lesend. Code + PKCE, `token_access_type=offline` (Refresh-Token),
+  `force_reapprove=true` (Zustimmungsseite immer sichtbar). Dropbox liefert den Code nur in der Query
+  → GET-Callback. Beim Code-Einlösen und beim Refresh **kein** `scope`-Parameter
+  (`OAuthConfig.send_scope_on_exchange`/`send_scope_on_refresh = False`).
+- Allowlist: `api.dropboxapi.com`, `content.dropboxapi.com` (Bearer nur dort). RPC über
+  `SafeHttpClient.post_json`; der `cursor` von `files/list_folder` geht nur im JSON-Körper an Dropbox.
+- Referenzen: `root` oder Datei-/Ordner-ID `id:…` (streng geprüft). Download `GET files/download` mit
+  `Dropbox-API-Arg`-Header (`SafeHttpClient.download(headers=…)`, nie an Redirect-Ziele).
+- Fachliche Fehler (409, z. B. `path/not_found`) → `not_found`. 429 mit `Retry-After` → Auftrag
+  pausiert; zusätzlich Token-Bucket je Konto `request_rate = (5/s, Burst 10)`.
+- Nicht ladbare Dateien (Paper, `is_downloadable=false`) erscheinen nicht. Team-Spaces
+  (`Dropbox-API-Path-Root`) werden nicht gesondert behandelt: sichtbar ist der persönliche Bereich
+  inkl. eingebundener freigegebener Ordner.
+- Widerruf bei Trennen/Auftragsende: `auth/token/revoke`.
+- `account_subject = dropbox:<account_id>`.
+
+### WebDAV (P3: kDrive, Nextcloud, SwissDisk)
+
+`services/cloud_import/providers/webdav.py`, Client `dav_http.py`, Nachbau `fake_webdav.py`.
+
+- Kein OAuth: `POST /cloud-import/jobs/{id}/webdav/connect` (`files.import`, nur Ersteller, Status
+  `draft`/`needs_reauth`/`failed`, Rate-Limit 10/10 min je Person und 30/h je Mandant) mit `preset`
+  (`kdrive`, `nextcloud`, `generic`), Benutzer, App-Passwort und je nach Vorlage Server, kDrive-ID oder
+  URL. Vorlagen: kDrive `https://connect.drive.infomaniak.com/` bzw.
+  `https://<id>.connect.kdrive.infomaniak.com/`; Nextcloud `https://<server>/remote.php/dav/files/<user>/`,
+  Rückfall `…/remote.php/webdav/`. Erst ein erfolgreicher `PROPFIND` (Depth 0, Ordner) speichert etwas.
+- Zugangsdaten `{"url","user","password"}` als JSON, verschlüsselt mit `CLOUD_IMPORT_TOKEN_KEY` in
+  `import_connection.access_token_encrypted` (kein Refresh-Token, keine eigene Migration).
+  `connections.context` gibt sie Adaptern ohne `oauth_config()` über `token()`; ein 401 setzt die
+  Verbindung auf `needs_reauth` (Zugangsdaten gelöscht) → Passwort neu eingeben, gleiche Adresse und
+  gleicher Benutzer (`account_subject` = Hash aus Adresse und Benutzer) setzen den Auftrag fort.
+- Referenzen: `p` + base64url des Pfads relativ zur Basisadresse (`dav_http.encode_ref`), dekodiert
+  ohne `..`, Steuerzeichen, Backslash. Auflisten mit `PROPFIND` Depth 1 (nie `infinity`), kein Paging.
+- Schalter `CLOUD_IMPORT_WEBDAV_ENABLED` (Standard `true`); keine Registrierung nötig.
+
+**SSRF-Schutz (`dav_http.py`, gilt für jede Verbindung inkl. Redirects):**
+
+| Regel | Umsetzung |
+|---|---|
+| Schema | nur `https`; `http` nur im Fake-Testmodus über den nachgebauten Transport, `RealDavTransport` verbindet nie unverschlüsselt |
+| Port | 443, 8443 (`ALLOWED_PORTS`) |
+| Adresse | keine Zugangsdaten, Query oder Fragment; keine IP-Literale (auch nicht `2130706433`, `0x7f.1`, `127.1`), keine internen Namen (`localhost`, `*.local`, `*.internal`, `*.home.arpa`, `*.arpa` …), IDN als Punycode |
+| DNS | alle Adressen müssen öffentlich sein; die Meldung an die Person unterscheidet «privat aufgelöst» nicht von «nicht auflösbar» (kein Orakel für interne Namen) (`http.ip_is_public`: privat, Loopback, Link-Local/Metadaten, CGNAT 100.64/10, Multicast, reserviert, ULA, Site-Local, IPv4-mapped, NAT64, 6to4, Teredo gesperrt) |
+| Rebinding | eine Auflösung je Verbindung, verbunden wird mit genau dieser Adresse; TLS mit SNI und Zertifikatsprüfung auf den Namen |
+| Redirects | höchstens 3, jedes Ziel neu geprüft und aufgelöst, Nicht-ASCII prozentkodiert; `PROPFIND` nur auf denselben Ursprung, Downloads auch auf fremde öffentliche Hosts, aber ohne Zugangsdaten (ein 401 dort ist `access_denied`, kein abgelehntes Passwort) |
+| Grössen | `PROPFIND` 16 MiB, 20 000 Einträge; Downloads am Strom gemessen (Typ-Limit) |
+| Zeit | Aufbau 10 s, Lese-Inaktivität 60 s, Gesamtzeit je Anfrage per Watchdog (schliesst den Socket auch mitten im TLS-Handshake oder Header-Empfang): `PROPFIND` 120 s (Verbindungstest 30 s, ohne offene DB-Transaktion), Download 60 s + 256 KiB/s |
+| XML | expat ohne DTD: jede `<!DOCTYPE>`/Entität bricht ab (XXE, Billion Laughs), Tiefe ≤ 32, ≤ 400 000 Elemente; `href` auf fremde Hosts oder ausserhalb der Basis werden ignoriert |
+| Geheimnis | Basic-Auth nur an den eingegebenen Ursprung; `DavCredentials.__repr__` ohne Passwort; Logs nur Methode, Host, Pfad, Status; Validierungsfehler spiegeln das Passwort nicht (`hide_input_in_errors`) |
+
+Grenzen: Ein Server im öffentlichen Internet, dessen Name auf die eigene öffentliche Adresse von hocX
+zeigt, ist erreichbar (nur die öffentlich gerouteten Dienste, wie für jeden Besucher).
+
+### Neue Quelle hinzufügen
+
+1. Modul `services/cloud_import/providers/<anbieter>.py` mit einer Klasse nach `CloudProvider`
+   (`key` = Wert aus `IMPORT_PROVIDERS`, Migration 0281 kennt schon `google_drive`, `google_photos`,
+   `dropbox`, `webdav`), `host_policy`, `oauth_config()`, `account_info`, `roots`, `list_children`,
+   `get_node`, `download`, optional `revoke`, `map_authorize_error`, `public_info`; am Modulende
+   `register(<Klasse>())`.
+2. Modulname in `providers._ADAPTER_MODULES` eintragen.
+3. Nachbau für Tests/E2E: `fake_transport()` (über `fake_http.FakeTransport`) und `fake_scenarios()` für
+   die Test-Anmeldeseite `/api/cloud-import/fake-authorize/<anbieter>` (nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`
+   im E2E-Stack). Vorlage: `backend/tests/cloud_import_fakes.py`.
+4. Konfiguration nach SECURITY-RULES §5.2 (config.py inkl. `_FILE`, `.env*.example`, `env.sh`, `deploy.sh`,
+   `docker-compose.release.yml` nur backend + job-worker), Ablaufdatum des Secrets in
+   `system_health_service.cloud_import_secret_expiries`.
+5. Übersetzungen `fileImport.source.provider.<anbieter>`, `source.providerHint.<anbieter>`,
+   `cloud.connectHint.<anbieter>`; Registrierungsanleitung in RUNBOOK und
+   `audit-reports/plans/2026-11-25-cloud-import-registrierung.md`.
+
+### Parallelität, Drosselung, Fairness (Plan §8.3)
+
+- `CLOUD_IMPORT_MAX_PARALLEL_DOWNLOADS` (Standard 2, 1–8) Downloads je Auftrag gleichzeitig. Die Threads
+  übertragen nur (Netz → Datei); Token-Refresh und alle DB-Änderungen bleiben im Haupt-Thread. Ein 401
+  in einem Thread führt zu einem Refresh im Haupt-Thread und einem neuen Versuch im nächsten Durchgang.
+- Token-Bucket je Anbieter und Konto in Redis (`services/cloud_import/pacing.py`, Schlüssel
+  `cloud_import_bucket:<anbieter>:<hash des kontos>`), Rate je Adapter über
+  `CloudProvider.request_rate = (pro Sekunde, Burst)`; Microsoft 8/s, Burst 16. Backend (Ordnerbaum) und
+  job-worker teilen den Eimer (job-worker deshalb im Netz `cache`). Kurze Wartezeit (≤ 2 s) wird
+  abgewartet, längere pausiert den Auftrag wie ein 429. Ohne Redis: lokaler Eimer je Prozess.
+- Fairness zwischen Mandanten: höchstens ein Import je Mandant, `claim_next` bedient immer den am
+  längsten nicht bedienten Auftrag, Zeitscheibe 60 s je Auftrag und Tick, gedrosselte Aufträge
+  (`not_before`) werden übersprungen.
+
+### Mails (Plan §9)
+
+Kategorie «Datei-Import» (`imports`, nur mit `files.import`), nur an die auslösende Person, ohne
+Dateinamen: `cloud_import.done` (abgeschlossen, Zahlen + Link `/files/import?job=…`),
+`cloud_import.failed` (unterbrochen, mit Grund: Kontingent, Rechte, Anbieter, `reauth_expired` …) für
+**alle Quellen** inkl. ZIP/Ordner, und `cloud_import.needs_reauth`. Abgebrochene und nie gestartete
+Aufträge bekommen keine Mail.
+
+### Plattform-Admin
+
+`/admin/cloud-imports` (owner): laufende Importe aller Mandanten mit Status und Fortschritt (keine
+Dateinamen, keine Konten), Kennzahlen der letzten 30 Tage je Tag und Quelle (Importe, unterbrochene,
+importierte Dateien, Volumen, Dateien mit Fehler). **Notfall-Abbruch** (`POST
+/api/admin/cloud-imports/{id}/cancel`, `require_admin_write` und Passkey-Bestätigung
+`require_step_up("cloud-import-cancel")` (1.7), Audit `admin.cloud_import_cancelled`): wie
+der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
+
+### Monitoring
+
+Check `cloud_import` in `/admin/system`: aktive Aufträge, Aufträge ohne Fortschritt seit 30 min (nicht
+gedrosselt), Anzahl `needs_reauth`, Ablauf der Client-Secrets (Warnung ab 30 Tagen, kritisch nach Ablauf,
+Warnung ohne gültiges Ablaufdatum), Belegung der Zwischenablage (`stagedMb`, Warnung ab 20 GiB).
+
+## Google Drive und Google Fotos (P2/P3)
+
+Entscheid E-3 (a): nur `drive.file` + Google Picker, **kein** `drive.readonly` (keine CASA). Ganze Ordner
+über das Takeout-ZIP (P0). Google Fotos über die Photos Picker API (seit 31.3.2025 einziger Weg).
+
+| Teil | Ort |
+|---|---|
+| Gemeinsam (OAuth `query`, `access_type=offline`, `prompt=consent`, ID-Token → `sub`/E-Mail/`hd`, Widerruf) | `services/cloud_import/providers/google_common.py` |
+| Google Drive (Metadaten, Export, Download) | `providers/google_drive.py` |
+| Google Fotos (Picker-Sitzung, `mediaItems`, `baseUrl`) | `providers/google_photos.py` |
+| Picker-Tickets, Fotos-Sitzung (Routen) | `api/routes/cloud_import_google.py`, `services/cloud_import/picker_tickets.py` |
+| Picker-Seite auf eigener Origin mit eigener CSP | `frontend/app/google-picker/page.tsx`, `components/file-import/google-drive-picker.tsx`, `lib/csp.ts`, `proxy.ts` |
+| Auswahl im Wizard | `components/file-import/import-google-select.tsx` |
+| Nachbau (Tests/E2E) | `services/cloud_import/fake_google.py` (+ `/api/cloud-import/fake-google/*` nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`) |
+
+### Google Drive
+
+- Scopes (volle URLs, so liefert Google sie in der Token-Antwort zurück): `openid`,
+  `…/auth/userinfo.email`, `…/auth/drive.file`. Bei der granularen Zustimmung abgewählt →
+  `tier = null` → Wizard zeigt `missing_scope` und «Neu anmelden».
+- Kein Ordnerbaum (`roots()` leer, `public_info = {"selection": "google_picker"}`).
+- **Eigene Origin (1.7, Security-Review N3):** Der Picker lädt Fremdcode (`apis.google.com`, über
+  `'strict-dynamic'`). Er läuft deshalb auf `CLOUD_IMPORT_PICKER_DOMAIN` (eigene Subdomain, Traefik-Router
+  `picker-frontend` nur für `/google-picker` und `/_next/`, `picker-api` nur für
+  `POST /api/cloud-import/picker/`). Dort gibt es kein hocX-Sitzungscookie (host-only). Ablauf:
+  1. Wizard (mit Sitzung): `POST /cloud-import/jobs/{id}/google-drive/picker-ticket` → Token-Ticket
+     (32 Byte, Redis nur SHA-256, einmalig, 10 min, gebunden an Mandant, Person, Auftrag, Stufe) und
+     `picker_url = https://<picker>/google-picker#ticket=…` (Fragment, nie in Logs/Referer); voller
+     Seitenwechsel. Auditiert `cloud_import.picker_ticket`.
+  2. Picker-Seite (ohne Sitzung, `credentials: "omit"`): `POST /cloud-import/picker/google-drive/token`
+     mit dem Ticket → Access-Token der Verbindung (nur `drive.file`), API-Key, App-ID, **Apply-Ticket**
+     und Rücksprung-Adresse (`no-store`, auditiert `cloud_import.picker_token`). Das Backend prüft die
+     Person erneut (aktiv, Anmeldung erlaubt, keine danach beendeten Sitzungen, `files.import`,
+     eigener Auftrag im Entwurf, Scope).
+  3. Picker (Liste, Mehrfachauswahl, geteilte Ablagen, keine Ordnerauswahl, höchstens 200), dann
+     `POST /cloud-import/picker/google-drive/apply` mit Apply-Ticket und Datei-IDs → `listing`, danach
+     voller Seitenwechsel zur Rücksprung-Adresse (zentrale oder aktive App-Domain des Vereins, sonst
+     `CLOUD_IMPORT_REDIRECT_BASE_URL` - nie eine Adresse aus dem Browser).
+  Ohne `CLOUD_IMPORT_PICKER_DOMAIN` wird Google Drive nicht angeboten (kein Rückfall auf die App-Origin).
+  Die Domain ist für Mandanten gesperrt (`traefik_config_service.reserved_system_domains`).
+- **CSP:** gelockert nur auf der Picker-Origin und nur für `/google-picker` (`lib/csp.ts::cspVariantFor`,
+  `proxy.ts`; auf der App-Origin gibt es die Seite nicht, 404): `script-src` + `https://apis.google.com`
+  (Nonce und `'strict-dynamic'` bleiben, kein `'unsafe-inline'`; unter `'strict-dynamic'` wirkt der
+  Host-Eintrag nur in älteren Browsern), `frame-src https://docs.google.com https://drive.google.com`
+  (sonst `'none'`), `connect-src` + `apis.google.com`, `www.googleapis.com`, `content.googleapis.com`,
+  `img-src` + `lh3`–`lh6.googleusercontent.com`, `drive-thirdparty.googleusercontent.com`,
+  `ssl.gstatic.com`, `www.gstatic.com`. `frame-ancestors 'none'` bleibt. Test: `proxy.test.ts` und E2E
+  `cloud-import-google.spec.ts` (Picker auf `picker.localhost`, ohne Sitzung).
+- Google-Formate: `files.export` → DOCX/XLSX/PPTX (Zeichnungen PDF); Name bekommt die Endung,
+  `provider_mime` bleibt der Google-Typ (der Download entscheidet daran). `exportSizeLimitExceeded`
+  (> 10 MB) → `exportLinks` auf `docs.google.com` (Bearer), sonst `too_large`. Nicht exportierbare Typen
+  (Formular, Site, Verknüpfung …) haben keine Endung → `unsupported_format` im Bericht.
+- Hashes: `sha256:`/`md5:` aus `sha256Checksum`/`md5Checksum` (nur Binärdateien).
+- Allowlist: API `www.googleapis.com`, `docs.google.com` (Bearer), Token `oauth2.googleapis.com` (ohne
+  Bearer), Umleitungsziele `*.googleusercontent.com` ohne Bearer.
+- Drosselung: 429 und 403 `userRateLimitExceeded`/`rateLimitExceeded` → `ProviderThrottled`
+  (`http.GOOGLE_RATE_LIMIT_REASONS`), Token-Bucket 8/s, Burst 20.
+
+### Google Fotos
+
+- Scope `…/auth/photospicker.mediaitems.readonly`. `POST /cloud-import/jobs/{id}/google-photos/session`
+  legt bei Google eine Sitzung an (ID in `import_job.listing_state.picker_session`), Antwort nur die
+  `pickerUri` (muss mit `https://photos.google.com/` beginnen). Der Wizard öffnet sie mit `/autoclose` in
+  einem neuen Fenster (Google Fotos lässt sich nicht einbetten → keine CSP-Änderung) und ruft
+  `…/session/poll` im Takt von `pollingConfig` auf. Bei `mediaItemsSet` wird die Auswahl
+  `session:<id>` gesetzt und das Auflisten beginnt (Ordner «Google Fotos»).
+- Download: `baseUrl=d` mit Bearer (Pflicht laut Google), Bearer nur an `lhN.googleusercontent.com`
+  (`PhotosHostPolicy`, nie an andere `*.googleusercontent.com`). `baseUrl` gilt 60 min: Zwischenspeicher
+  je Prozess (45 min), sonst liest der Adapter die Sitzung frisch.
+- Videos (`VIDEO`) → `unsupported_format`. Google liefert die Bilder ohne Standort.
+- Ende/Trennen: Token wird bei Google widerrufen (damit ist auch die Sitzung wertlos), eine ersetzte
+  Sitzung wird sofort gelöscht.
+- Grenze: Die Sitzung läuft bei Google ab (`expireTime`); sehr grosse Auswahlen müssen bis dahin
+  heruntergeladen sein, sonst `not_found` im Bericht.
+
+### Variablen (Google)
+
+`CLOUD_IMPORT_GOOGLE_CLIENT_ID`, `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET` (Secret, `_FILE`),
+`CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES` (optional, nur dann im Monitoring),
+`CLOUD_IMPORT_GOOGLE_API_KEY` (öffentlich, Referrer-beschränkt) und `CLOUD_IMPORT_GOOGLE_APP_ID`
+(Projektnummer). Google Drive braucht alle vier Pflichtwerte, Google Fotos nur Client-ID und Secret.
+Einrichtung: RUNBOOK «Cloud-Import einrichten», Abschnitt Google.

@@ -1,7 +1,8 @@
 {
   "tabsLabel": "Security area",
   "tabs": {
-    "overview": "Overview",
+    "overview": "Situation",
+    "incidents": "Incidents",
     "events": "Sign-in events",
     "blocks": "Blocks",
     "alerts": "Alert rules",
@@ -24,46 +25,8 @@
     "warning": "Warning"
   },
   "overview": {
-    "title": "Security",
-    "description": "Sign-in protection across the whole platform: alerts, failed attempts, blocks. Addresses only appear as shortened pseudonyms.",
-    "tiles": {
-      "openAlerts": "Open alerts",
-      "criticalAlerts": "{count, plural, =0 {none critical} one {# critical} other {# critical}}",
-      "failures": "Failed attempts 24 h",
-      "previous": "Previous day: {count, number}",
-      "activeBlocks": "Active blocks",
-      "blocked": "Rejected 24 h: {count, number}",
-      "adminLogins": "Admin sign-ins 24 h"
-    },
-    "chartTitle": "Sign-ins in the last 48 hours",
-    "chartSummary": "{failures, number} failed attempts and {successes, number} successful sign-ins in 48 hours, in 5-minute buckets.",
     "showTable": "Data as table",
-    "showChart": "As chart",
-    "chartEmpty": "There were no sign-in events in the last 48 hours.",
-    "series": {
-      "failures": "Failed",
-      "successes": "Successful",
-      "blocked": "Blocked"
-    },
-    "columns": {
-      "bucket": "Time",
-      "failures": "Failed",
-      "successes": "Successful",
-      "blocked": "Blocked",
-      "network": "Network (pseudonym)",
-      "account": "Account (pseudonym)",
-      "accounts": "Accounts",
-      "networks": "Networks",
-      "tenants": "Tenants",
-      "lastSeen": "Last seen"
-    },
-    "topNetworks": "Conspicuous networks (24 h)",
-    "topAccounts": "Affected accounts (24 h)",
-    "noTopNetworks": "No failed attempts from single networks.",
-    "noTopAccounts": "No accounts with failed attempts.",
-    "alertsTitle": "Current alerts",
-    "allAlerts": "Go to alert rules",
-    "auditLink": "Open audit log"
+    "showChart": "As chart"
   },
   "events": {
     "title": "Sign-in events",
@@ -319,8 +282,7 @@
       "rule": "Rule",
       "subject": "Affected (pseudonym)",
       "key": "Key",
-      "status": "Status",
-      "actions": "Action"
+      "incident": "Incident"
     },
     "rules": {
       "stuffing": "Credential stuffing: many failures from many networks",
@@ -335,21 +297,11 @@
       "limiter": "Sign-in protection (Redis) disrupted",
       "unknown": "Other rule"
     },
-    "open": "Open",
-    "acknowledged": "Acknowledged",
-    "acknowledgedBy": "by {name}, {time}",
-    "acknowledge": "Acknowledge",
-    "reopen": "Reopen",
-    "acknowledgeConfirm": "Acknowledge this warning as seen? It no longer counts as open until it subsides and occurs again. Blocks and notifications stay unchanged.",
-    "acknowledgedToast": "Warning acknowledged",
-    "reopenedToast": "Warning reopened",
-    "ackHelp": "Acknowledged warnings stay visible but no longer count in the bell and overview. If a warning occurs again after subsiding, it is open again.",
     "clearsAt": "Clears by itself at {time} if nothing new happens until then (window of {minutes, plural, one {# minute} other {# minutes}} after the last event).",
     "openTitle": "Triggered alerts",
-    "acknowledgeTitle": "Acknowledge alert",
-    "noteLabel": "Note (optional)",
-    "noteHelp": "Briefly what is being checked – no personal data.",
-    "noteShown": "Note: {note}"
+    "assignee": "assigned to {name}",
+    "noIncident": "will be recorded as an incident on the next monitor run",
+    "incidentHelp": "Every triggered rule is bundled into exactly one open incident. Set status, assignee and notes under «Incidents»."
   },
   "audit": {
     "title": "Audit log",
@@ -470,5 +422,301 @@
     "seriesThreshold": "dashed: threshold {threshold} {unit}",
     "seriesSummary": "Highest value {peak}, threshold {threshold}; {over, plural, =0 {no section} one {# section} other {# sections}} above the threshold (sections of {minutes} minutes).",
     "seriesApprox": "Approximation: fixed sections of {minutes} minutes instead of the rule's sliding window."
+  },
+  "statuses": {
+    "new": "New",
+    "in_progress": "In progress",
+    "resolved": "Resolved",
+    "false_positive": "False alarm"
+  },
+  "incidents": {
+    "title": "Incidents",
+    "description": "Triggered alert rules, bundled per rule and network, account or tenant. Each incident has a status and an assignee; you confirm every change with your passkey and it is recorded in the audit log.",
+    "filtersLabel": "Incident filters",
+    "searchPlaceholder": "Number, rule or pseudonym",
+    "searchLabel": "Search incidents (number, rule or pseudonym)",
+    "searchClear": "Clear search",
+    "severityFilter": "Severity",
+    "assigneeFilter": "Assignee",
+    "assignee": {
+      "all": "All",
+      "me": "Mine",
+      "none": "Unassigned"
+    },
+    "views": {
+      "label": "View",
+      "list": "List",
+      "board": "Board"
+    },
+    "statusFilter": "Status",
+    "statusGroups": {
+      "open": "Open",
+      "new": "New",
+      "in_progress": "In progress",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "listLabel": "List of incidents",
+    "columns": {
+      "id": "No.",
+      "incident": "Incident",
+      "affected": "Affected",
+      "status": "Status",
+      "trend": "Trend",
+      "assignee": "Assignee",
+      "start": "Started",
+      "duration": "Duration"
+    },
+    "empty": "No incidents for this selection.",
+    "openIncident": "Open {label}",
+    "active": "firing",
+    "cleared": "cleared",
+    "triggers": "{count, plural, one {# trigger} other {# triggers}}",
+    "sparkLabel": "Rule events over the duration of the incident: {values}",
+    "nobody": "nobody",
+    "boardEmpty": "None",
+    "affected": {
+      "platform": "Platform",
+      "net": "Network {subject}",
+      "account": "Account {subject}",
+      "tenant": "Tenant {name}",
+      "admin": "Admin {name}"
+    },
+    "duration": {
+      "days": "{days} d {hours} h",
+      "hours": "{hours} h {minutes} min",
+      "minutes": "{minutes} min"
+    },
+    "stats": {
+      "open": "Open",
+      "openHint": "{count, plural, =0 {none critical} other {# critical}}",
+      "unassigned": "Unassigned",
+      "unassignedHint": "waiting to be taken over",
+      "mtta": "Avg. time to take over",
+      "mttr": "Avg. time to resolve",
+      "periodHint": "last {days} days",
+      "falsePositive": "False alarm rate",
+      "falsePositiveHint": "{count} of {total} closed in {days} days"
+    },
+    "facts": {
+      "failures": "Failed attempts",
+      "accounts": "Accounts",
+      "networks": "Networks",
+      "tenants": "Tenants",
+      "blocked": "Rejected",
+      "successes": "Successful",
+      "maxRisk": "Highest risk",
+      "untilTakeover": "Until taken over",
+      "untilClosed": "Until resolved",
+      "triggers": "Triggers"
+    },
+    "stages": {
+      "1": "Observe",
+      "2": "Limits lowered",
+      "3": "Extra verification",
+      "4": "Temporarily blocked",
+      "5": "Blocked manually"
+    },
+    "detail": {
+      "openInSituation": "Open in situation",
+      "openInList": "Open in incidents",
+      "close": "Close incident",
+      "loading": "Loading …",
+      "window": "{start} – {end}",
+      "statusLabel": "Status",
+      "assigneeLabel": "Assignee",
+      "takeOver": "Take over",
+      "takenOver": "You are now assigned.",
+      "assigned": "Assignee saved.",
+      "statusSaved": "Status «{status}» set and recorded in the audit log.",
+      "passkeyHint": "You confirm changes with your passkey.",
+      "failed": "Action failed: {message}",
+      "participantsTitle": "Involved",
+      "participantsHint": "Networks, accounts, tenants and countries during the incident (shortened pseudonyms).",
+      "reasonsTitle": "Why risky",
+      "reasonCount": "{count, plural, one {# event} other {# events}}",
+      "noReasons": "No risk reasons in this period.",
+      "stageTitle": "Defence stage",
+      "stageReached": "Highest stage reached: {stage}",
+      "stageNone": "No defence needed yet",
+      "notesTitle": "Notes",
+      "notesEmpty": "No notes yet.",
+      "noteMeta": "{name} · {time}",
+      "unknownAdmin": "deleted admin",
+      "noteLabel": "Add note",
+      "noteHelp": "Short and without personal data (no names, addresses or emails).",
+      "noteSave": "Save note with passkey",
+      "noteSaved": "Note saved.",
+      "allEvents": "All events",
+      "blockAction": "Block network (stage 5)",
+      "blocked": "Network blocked.",
+      "closeTitle": "Set status «{status}»",
+      "closeDescription": "The incident will be closed. If the rule fires again with a new event afterwards, a new incident is created.",
+      "closeReasonLabel": "Reason (optional)",
+      "cancel": "Cancel",
+      "closeSave": "Confirm with passkey",
+      "blockTitle": "Block network {net}",
+      "blockDescription": "Manual block (stage 5) of this incident's network, IPv4 /24 or IPv6 /48. Platform admins are never blocked. Shared networks (company, school, mobile) affect everyone without a known device."
+    },
+    "timeline": {
+      "title": "Timeline",
+      "triggered": "Rule triggered",
+      "retriggered": "Rule triggered again",
+      "cleared": "Rule cleared",
+      "note": "Note",
+      "status": "Status «{from}» → «{to}»",
+      "assigned": "Assigned to {name}",
+      "unassigned": "Assignee removed",
+      "escalated": "Escalated to «{to}»",
+      "block": "Network {net} blocked manually (stage 5)",
+      "eventFirst": "First event",
+      "eventLast": "Last event",
+      "event": "Event",
+      "kinds": {
+        "failure": "Failed attempt",
+        "success": "Success",
+        "auto": "Automatic",
+        "event": "Event",
+        "person": "Person",
+        "rule": "Rule"
+      },
+      "account": "Account {value}",
+      "net": "Network {value}",
+      "risk": "Risk {score}",
+      "stage": "Stage {stage}"
+    },
+    "participants": {
+      "value": "Value",
+      "failures": "Failed attempts",
+      "events": "Events",
+      "networks": "Networks",
+      "accounts": "Accounts",
+      "tenants": "Tenants",
+      "countries": "Countries",
+      "empty": "No events during the incident."
+    }
+  },
+  "situation": {
+    "title": "Situation",
+    "description": "State of sign-in protection across the whole platform. Related warnings are bundled into incidents. Addresses only appear as shortened pseudonyms.",
+    "live": "Live",
+    "paused": "Paused",
+    "liveLabel": "Refresh automatically every 30 seconds",
+    "detailEmpty": "No incident selected.",
+    "posture": {
+      "title": "Situation",
+      "levels": {
+        "calm": "Calm",
+        "elevated": "Elevated",
+        "attack": "Attack",
+        "attack_mode": "Attack mode"
+      },
+      "texts": {
+        "calm": "Failed attempts within the usual range, no open incidents.",
+        "elevated": "{open, plural, =0 {No open incidents} one {# open incident} other {# open incidents}}, {near, plural, =0 {no rule near its threshold} one {# rule near its threshold} other {# rules near their threshold}}.",
+        "attack": "{critical, plural, one {# critical incident} other {# critical incidents}} open, the rule is still firing. Defences act automatically.",
+        "attack_mode": "Many failed attempts from many networks: attack mode additionally verifies unknown devices."
+      },
+      "stepsLabel": "Situation levels"
+    },
+    "kpis": {
+      "openIncidents": "Open incidents",
+      "openHint": "{count, plural, =0 {none critical} other {# critical}}",
+      "failures": "Failed attempts {range}",
+      "blocked": "Rejected {range}",
+      "blockedHint": "{count, plural, =0 {no active block} one {# active block} other {# active blocks}}",
+      "challenged": "Extra verifications {range}",
+      "challengedHint": "Email code or second factor",
+      "successes": "Successful {range}",
+      "adminLogins": "Admin sign-ins {range}",
+      "mtta": "Avg. time to take over",
+      "mttaHint": "last {days} days",
+      "vsPrevious": "{change} % vs. previous period ({previous})",
+      "noPrevious": "Previous period: {previous}",
+      "sparkLabel": "Trend: {label}"
+    },
+    "queue": {
+      "title": "Incidents",
+      "all": "All incidents",
+      "hint": "Open first, then by severity and time.",
+      "filters": {
+        "open": "Open",
+        "closed": "Closed",
+        "all": "All"
+      },
+      "empty": "No incidents for this selection."
+    },
+    "chart": {
+      "title": "Sign-ins in this period",
+      "summary": "{failures} failed · {blocked} rejected · {challenged} extra verifications · {successes} successful",
+      "showTable": "Data as table",
+      "showChart": "Show chart",
+      "seriesLabel": "Show and hide series",
+      "series": {
+        "failures": "Failed",
+        "blocked": "Rejected",
+        "challenged": "Extra verification",
+        "successes": "Successful"
+      },
+      "columns": {
+        "bucket": "Period from"
+      },
+      "markersLabel": "Incidents in this period",
+      "marker": "Open {label}, detected {time}",
+      "bar": "{time}: {failures} failed, {blocked} rejected, {challenged} extra verifications, {successes} successful",
+      "scaleHint": "Square-root scale so background noise stays visible next to peaks · {minutes} min periods · a marker opens the incident"
+    },
+    "heatmap": {
+      "title": "Failed attempts by weekday and hour",
+      "summary": "Last {days} days: {total} failed attempts, at most {max} in one hour.",
+      "showTable": "Data as table",
+      "showChart": "Show chart",
+      "columns": {
+        "day": "Day"
+      },
+      "days": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      },
+      "cell": "{day} {hour}:00 · {count} failed attempts",
+      "less": "few",
+      "more": "many"
+    },
+    "rules": {
+      "title": "Alert rules",
+      "hint": "Current value against the threshold in the rule's window, visible before a rule fires.",
+      "link": "Go to alert rules",
+      "meter": "Measured value {rule}",
+      "value": "{value} / {threshold} {unit} · window {minutes} min"
+    },
+    "countries": {
+      "title": "Origin of failed attempts",
+      "hint": "{range} · country code from the local GeoIP database, never the address.",
+      "empty": "No failed attempts in this period.",
+      "country": "Country",
+      "share": "Share",
+      "failures": "Failed attempts",
+      "unknown": "unknown"
+    },
+    "networks": {
+      "title": "Conspicuous networks",
+      "empty": "No failed attempts from individual networks.",
+      "net": "Network",
+      "failures": "Failed attempts",
+      "meta": "Affected",
+      "metaText": "{accounts, plural, one {# account} other {# accounts}} · {tenants, plural, one {# tenant} other {# tenants}}"
+    },
+    "accounts": {
+      "title": "Conspicuous accounts",
+      "empty": "No failed attempts on individual accounts.",
+      "account": "Account",
+      "failures": "Failed attempts",
+      "networks": "Networks"
+    }
   }
 }

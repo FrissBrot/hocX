@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   apiErrorCode,
   chunk,
+  cloudSelectionMode,
+  isPhotosPickerUri,
+  photosPickerUrl,
+  pickedFileIds,
+  pickerTicket,
+  safeReturnUrl,
   cleanRule,
   importProgress,
   isHiddenPath,
@@ -10,6 +16,8 @@ import {
   newRule,
   normalizeImportPath,
   pathedFromInput,
+  isCloudSource,
+  readCloudReturn,
   uploadBatches,
   type ImportJob,
 } from "./file-import";
@@ -69,5 +77,71 @@ describe("file-import helpers", () => {
   it("reads the error code of an api error", () => {
     expect(apiErrorCode({ detail: { code: "import_active" } })).toBe("import_active");
     expect(apiErrorCode(new Error("x"))).toBeNull();
+  });
+});
+
+describe("Rückkehr vom Cloud-Anbieter", () => {
+  it("liest Auftrag, Fehler und Abschluss-Token (nur aus dem Fragment)", () => {
+    expect(readCloudReturn("?job=j1&cloud_error=cancelled", "")).toEqual({ job: "j1", error: "cancelled", notice: null, finish: null });
+    expect(readCloudReturn("?job=j1&cloud_finish=nein", "#cloud_finish=abc")).toEqual({ job: "j1", error: null, notice: null, finish: "abc" });
+    expect(readCloudReturn("?cloud_notice=admin_consent_done", "")).toMatchObject({ notice: "admin_consent_done" });
+  });
+
+  it("erkennt API-Quellen", () => {
+    expect(isCloudSource("microsoft")).toBe(true);
+    expect(isCloudSource("zip")).toBe(false);
+    expect(isCloudSource("folder")).toBe(false);
+  });
+});
+
+describe("Google-Auswahl", () => {
+  it("erkennt die Auswahl-Art eines Anbieters", () => {
+    expect(cloudSelectionMode(null)).toBe("tree");
+    expect(cloudSelectionMode({ key: "google_drive", tiers: [], default_tier: "basic", info: { selection: "google_picker" } })).toBe("google_picker");
+    expect(cloudSelectionMode({ key: "google_photos", tiers: [], default_tier: "basic", info: { selection: "photos_picker" } })).toBe("photos_picker");
+    expect(cloudSelectionMode({ key: "microsoft", tiers: [], default_tier: "basic", info: { selection: "other" } })).toBe("tree");
+  });
+
+  it("nimmt nur gültige Datei-IDs aus der Picker-Antwort", () => {
+    const docs = [
+      { id: "abc_DEF-1", mimeType: "image/jpeg" },
+      { id: "abc_DEF-1", mimeType: "image/jpeg" },
+      { id: "folder1", mimeType: "application/vnd.google-apps.folder" },
+      { id: "../x?y", mimeType: "text/plain" },
+      { id: 5 },
+      { id: "doc2", mimeType: "application/vnd.google-apps.document" },
+    ];
+    expect(pickedFileIds(docs, 200)).toEqual(["abc_DEF-1", "doc2"]);
+    expect(pickedFileIds(docs, 1)).toEqual(["abc_DEF-1"]);
+  });
+
+  it("liest das Picker-Ticket nur aus dem Fragment und springt nur in den Wizard zurück", () => {
+    const ticket = "Ab-_0123456789abcdefghijKLMN";
+    expect(pickerTicket(`#ticket=${ticket}`)).toBe(ticket);
+    expect(pickerTicket("#ticket=kurz")).toBeNull();
+    expect(pickerTicket("#ticket=<script>alert(1)</script>xxxxxxxxxxxx")).toBeNull();
+    expect(safeReturnUrl("https://hocx.example/files/import?job=1")).toBe("https://hocx.example/files/import?job=1");
+    expect(safeReturnUrl("javascript:alert(1)")).toBeNull();
+    expect(safeReturnUrl("https://hocx.example/admin")).toBeNull();
+    expect(safeReturnUrl("https://user@evil.example/files/import")).toBeNull();
+    expect(safeReturnUrl(5)).toBeNull();
+    // http nur auf einer http-Seite (E2E-Stack), sonst nur https
+    expect(safeReturnUrl("http://127.0.0.1:13000/files/import?job=1", "https:")).toBeNull();
+    expect(safeReturnUrl("http://127.0.0.1:13000/files/import?job=1", "http:")).toBe("http://127.0.0.1:13000/files/import?job=1");
+  });
+
+  it("öffnet nur Auswahlseiten von Google Fotos", () => {
+    const origin = "https://verein.hocx.test";
+    expect(isPhotosPickerUri("https://photos.google.com/picker/abc", origin)).toBe(true);
+    expect(isPhotosPickerUri("http://photos.google.com/picker/abc", origin)).toBe(false);
+    expect(isPhotosPickerUri("https://photos.google.com.evil.example/x", origin)).toBe(false);
+    expect(isPhotosPickerUri("javascript:alert(1)", origin)).toBe(false);
+    expect(isPhotosPickerUri(`${origin}/api/cloud-import/fake-google/photos/s1`, origin)).toBe(true);
+    expect(isPhotosPickerUri(`${origin}/files`, origin)).toBe(false);
+  });
+
+  it("hängt /autoclose genau einmal an", () => {
+    expect(photosPickerUrl("https://photos.google.com/picker/abc")).toBe("https://photos.google.com/picker/abc/autoclose");
+    expect(photosPickerUrl("https://photos.google.com/picker/abc/autoclose")).toBe("https://photos.google.com/picker/abc/autoclose");
   });
 });

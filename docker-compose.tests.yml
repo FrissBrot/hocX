@@ -118,6 +118,8 @@ services:
       REDIS_URL: redis://test-redis:6379/0
       # Leak-Prüfung ohne Netz (SEC-AUTH-015): Tests prüfen HIBP nur gemockt
       PASSWORD_LEAK_CHECK: local-only
+      # Datei-Import aus Cloud-Diensten: Token-Schlüssel nur für Tests (Anbieter nur nachgebaut)
+      CLOUD_IMPORT_TOKEN_KEY: test-cloud-import-token-key-0123456789abcdef
       # Objektspeicher-Tests (tests/test_object_storage*.py, test_storage_migration_e2e.py) gegen
       # das isolierte test-s3 - nie gegen produktive Buckets.
       TEST_S3_ENDPOINT: http://test-s3:3900

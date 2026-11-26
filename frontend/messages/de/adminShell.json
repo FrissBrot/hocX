@@ -18,7 +18,8 @@
     "cashflow": "Umsatz & Abrechnung",
     "users": "Benutzer suchen",
     "admins": "Plattform-Admins",
-    "securityOverview": "Sicherheit",
+    "securityOverview": "Lagebild",
+    "securityIncidents": "Vorfälle",
     "securityEvents": "Anmeldeereignisse",
     "securityBlocks": "Sperren",
     "securityAlerts": "Alarmregeln",
@@ -38,7 +39,8 @@
     "account": "Profil & Passkeys",
     "settingsSecurity": "Sicherheit & Anmeldung",
     "settingsIntegrations": "Integrationen",
-    "settingsSystem": "Technik"
+    "settingsSystem": "Technik",
+    "cloudImports": "Datei-Importe"
   },
   "keywords": {
     "pricing": "Preise Pläne Features Speicherpakete Umbuchung",
@@ -48,7 +50,8 @@
     "theme": "Darstellung Theme hell dunkel",
     "settingsSecurity": "Passkey Step-up Bestätigung Sitzung Anmeldung",
     "settingsIntegrations": "SMTP ntfy S3 Captcha ClamAV Docker Backup",
-    "settingsSystem": "Version Umgebung Migration Datenbank Domains Katalog"
+    "settingsSystem": "Version Umgebung Migration Datenbank Domains Katalog",
+    "cloudImports": "Import OneDrive SharePoint Cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Darstellung: hell",
@@ -110,7 +113,7 @@
     "empty": "Nichts offen.",
     "items": {
       "verifications_open": "{count, plural, one {# Prüfung offen} other {# Prüfungen offen}}",
-      "security_alerts": "{count, plural, one {# Sicherheitswarnung} other {# Sicherheitswarnungen}}",
+      "security_alerts": "{count, plural, one {# neuer Sicherheitsvorfall} other {# neue Sicherheitsvorfälle}}",
       "operations_problems": "{count, plural, one {# Problem im Betrieb} other {# Probleme im Betrieb}}"
     }
   },

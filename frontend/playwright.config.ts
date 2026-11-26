@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Specs, die Datei-Importe des Demo-Mandanten anlegen und abbrechen (Projekt «tenant-import»).
+const IMPORT_SPECS = /(file-import|cloud-import-[a-z]+)\.spec\.ts/;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -30,11 +33,15 @@ export default defineConfig({
   },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: [/auth\.setup\.ts/, /feature-gating\.spec\.ts/, /storage-quota\.spec\.ts/, /storage-packages\.spec\.ts/] },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: [/auth\.setup\.ts/, /feature-gating\.spec\.ts/, /storage-quota\.spec\.ts/, /storage-packages\.spec\.ts/, IMPORT_SPECS] },
+    // Datei-Import (ZIP/Ordner und Cloud-Quellen): ein Import je Mandant gleichzeitig, und jede Spec bricht
+    // zu Beginn offene Importe ab. Parallel brach file-import.spec den Microsoft-Import der anderen
+    // Worker-Instanz ab - deshalb ein Worker für alle Import-Specs (parallel zu «chromium»).
+    { name: "tenant-import", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testMatch: IMPORT_SPECS, workers: 1 },
     // feature-gating.spec.ts schaltet alle Module des gemeinsamen Demo-Mandanten kurz ab. Parallel
     // zu anderen Specs liefen deren Abgabebox-/Finanz-Aufrufe dann zufaellig in 403 (z.B.
     // captcha-verify in abgabebox-photo-album-sync.spec.ts) - deshalb erst nach allen anderen.
-    { name: "tenant-wide", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["chromium"], testMatch: /feature-gating\.spec\.ts/ },
+    { name: "tenant-wide", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["chromium", "tenant-import"], testMatch: /feature-gating\.spec\.ts/ },
     // storage-quota.spec.ts setzt den Demo-Mandanten auf einen knappen Plan, storage-packages.spec.ts
     // weist ihm Zusatzspeicher zu - beide ändern dasselbe Kontingent. Parallel zueinander (oder zu
     // Upload-Specs) sah jede die Änderung der anderen (400 erwartet, 201 erhalten bzw. falsches

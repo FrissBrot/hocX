@@ -79,16 +79,6 @@
       "platform": true,
       "admin_level": "O"
     },
-    "POST /api/admin/auth-security/alerts/ack": {
-      "handler": "admin_auth_security.acknowledge_alert",
-      "platform": true,
-      "admin_level": "W"
-    },
-    "POST /api/admin/auth-security/alerts/unack": {
-      "handler": "admin_auth_security.unacknowledge_alert",
-      "platform": true,
-      "admin_level": "W"
-    },
     "GET /api/admin/auth-security/blocks": {
       "handler": "admin_auth_security.auth_security_blocks",
       "platform": true,
@@ -161,6 +151,45 @@
       "step_up": "security-export",
       "serves_files": true
     },
+    "GET /api/admin/auth-security/incidents": {
+      "handler": "admin_auth_security.auth_security_incidents",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/incidents/stats": {
+      "handler": "admin_auth_security.auth_security_incident_stats",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/incidents/{incident_id}": {
+      "handler": "admin_auth_security.auth_security_incident_detail",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/assign": {
+      "handler": "admin_auth_security.assign_incident",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/block": {
+      "handler": "admin_auth_security.block_incident_network",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-block"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/notes": {
+      "handler": "admin_auth_security.add_incident_note",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
+    "POST /api/admin/auth-security/incidents/{incident_id}/status": {
+      "handler": "admin_auth_security.change_incident_status",
+      "platform": true,
+      "admin_level": "O",
+      "step_up": "security-incident"
+    },
     "GET /api/admin/auth-security/overview": {
       "handler": "admin_auth_security.auth_security_overview",
       "platform": true,
@@ -168,6 +197,11 @@
     },
     "GET /api/admin/auth-security/policy": {
       "handler": "admin_auth_security.auth_security_policy",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "GET /api/admin/auth-security/situation": {
+      "handler": "admin_auth_security.auth_security_situation",
       "platform": true,
       "admin_level": "O"
     },
@@ -324,6 +358,17 @@
       "handler": "admin.preview_catalog_import",
       "platform": true,
       "admin_level": "W"
+    },
+    "GET /api/admin/cloud-imports": {
+      "handler": "admin_cloud_import.get_cloud_imports",
+      "platform": true,
+      "admin_level": "O"
+    },
+    "POST /api/admin/cloud-imports/{job_id}/cancel": {
+      "handler": "admin_cloud_import.cancel_cloud_import",
+      "platform": true,
+      "admin_level": "W",
+      "step_up": "cloud-import-cancel"
     },
     "GET /api/admin/document-templates": {
       "handler": "admin_document_templates.list_system_templates",
@@ -1126,14 +1171,44 @@
         "files.import"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/browse": {
+      "handler": "cloud_import.browse_cloud_folder",
+      "requires": [
+        "files.import"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/cancel": {
       "handler": "cloud_import.cancel_import_job",
       "requires": [
         "files.import"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/disconnect": {
+      "handler": "cloud_import.disconnect_cloud_account",
+      "requires": [
+        "files.import"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/finish-listing": {
       "handler": "cloud_import.finish_import_listing",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker-ticket": {
+      "handler": "cloud_import_google.google_drive_picker_ticket",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session": {
+      "handler": "cloud_import_google.google_photos_session",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll": {
+      "handler": "cloud_import_google.google_photos_poll",
       "requires": [
         "files.import"
       ]
@@ -1171,6 +1246,12 @@
         "files.import"
       ]
     },
+    "POST /api/cloud-import/jobs/{job_id}/selection": {
+      "handler": "cloud_import.set_cloud_selection",
+      "requires": [
+        "files.import"
+      ]
+    },
     "POST /api/cloud-import/jobs/{job_id}/start": {
       "handler": "cloud_import.start_import_job",
       "requires": [
@@ -1179,6 +1260,50 @@
       "requires_if": [
         "files.manage",
         "photos.manage"
+      ]
+    },
+    "POST /api/cloud-import/jobs/{job_id}/webdav/connect": {
+      "handler": "cloud_import.connect_webdav",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/oauth/finish": {
+      "handler": "cloud_import.finish_cloud_oauth",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "GET /api/cloud-import/oauth/{provider_key}/callback": {
+      "handler": "cloud_import_oauth.oauth_callback_query",
+      "note": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)"
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/callback": {
+      "handler": "cloud_import_oauth.oauth_callback_form",
+      "note": "OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import)"
+    },
+    "POST /api/cloud-import/oauth/{provider_key}/start": {
+      "handler": "cloud_import.start_cloud_oauth",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/apply": {
+      "handler": "cloud_import_google.google_drive_picker_apply",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/token": {
+      "handler": "cloud_import_google.google_drive_picker_token",
+      "requires": [
+        "files.import"
+      ]
+    },
+    "GET /api/cloud-import/providers": {
+      "handler": "cloud_import.list_import_providers",
+      "requires": [
+        "files.import"
       ]
     },
     "POST /api/cloud-import/uploads/{job_id}/archive": {

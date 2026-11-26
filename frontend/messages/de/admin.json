@@ -273,6 +273,11 @@
         "title": "Länder-Geolocation",
         "detail": "{state, select, ok {DB-IP «IP to Country Lite», Stand {buildDate} ({ageDays, number} Tage)} other {Nicht eingerichtet – Signal «neues Land» entfällt}}",
         "problem": "Länder-Geolocation gestört"
+      },
+      "cloud_import": {
+        "title": "Cloud-Import",
+        "detail": "{active, number} aktiv · {stalled, number} ohne Fortschritt · {needsReauth, number} warten auf Anmeldung{secretKnown, select, 1 { · Client-Secret noch {secretDays, number} Tage} other {}}",
+        "problem": "Cloud-Import: Client-Secret läuft ab oder Importe hängen"
       }
     },
     "problems": {
@@ -617,6 +622,10 @@
       "capture_date_file_sync": {
         "title": "Aufnahmedatum in Dateien schreiben",
         "description": "Schreibt korrigierte Aufnahmedaten in die Bilddateien und stellt beim Wiederherstellen das ursprüngliche Datum in der Datei wieder her."
+      },
+      "security_incident_retention": {
+        "title": "Aufbewahrung Sicherheitsvorfälle",
+        "description": "Löscht Vorfälle des Anmeldeschutzes samt Zeitleiste und Notizen 365 Tage nach der letzten Aktivität (täglich)."
       },
       "auth_security_maintenance": {
         "title": "Anmeldeschutz aufräumen",
@@ -1693,7 +1702,9 @@
         "platform-settings": "Plattform-Einstellungen und Zugangsdaten",
         "security-block": "Anmeldesperren setzen oder aufheben",
         "security-export": "Sicherheitsdaten exportieren",
-        "security-resolve": "Pseudonym einem Konto zuordnen"
+        "security-resolve": "Pseudonym einem Konto zuordnen",
+        "cloud-import-cancel": "Datei-Import notfallmässig abbrechen",
+        "security-incident": "Sicherheitsvorfälle bearbeiten (Status, Zuständig, Notizen)"
       }
     },
     "integrations": {
@@ -1799,5 +1810,48 @@
     "tenant": "Mandant",
     "storage": "Speicher",
     "empty": "Noch keine Werte."
+  },
+  "cloudImports": {
+    "title": "Datei-Importe",
+    "intro": "Laufende Importe aller Organisationen (nur Zahlen, keine Dateinamen) und Kennzahlen der letzten Tage. Ein Notfall-Abbruch behält bereits importierte Dateien und löscht den Cloud-Zugang.",
+    "loadFailed": "Die Übersicht konnte nicht geladen werden.",
+    "kpis": {
+      "title": "Kennzahlen der letzten {days} Tage",
+      "active": "Laufende Importe",
+      "jobs": "Importe ({days} Tage)",
+      "failedJobs": "{count, plural, one {# unterbrochen} other {# unterbrochen}}",
+      "files": "Importierte Dateien",
+      "errorRate": "Fehlerquote",
+      "percent": "{value} %",
+      "failedItems": "{count, plural, one {# Datei mit Fehler} other {# Dateien mit Fehler}}"
+    },
+    "active": {
+      "title": "Laufende Importe",
+      "empty": "Zurzeit läuft kein Import."
+    },
+    "metrics": {
+      "title": "Nach Tag und Quelle ({days} Tage)",
+      "empty": "Keine abgeschlossenen Importe in diesem Zeitraum."
+    },
+    "columns": {
+      "tenant": "Organisation",
+      "source": "Quelle",
+      "status": "Status",
+      "progress": "Fortschritt",
+      "lastProgress": "Letzter Fortschritt",
+      "day": "Tag",
+      "jobs": "Importe",
+      "imported": "Importiert",
+      "volume": "Volumen",
+      "failedItems": "Fehler"
+    },
+    "progress": "{done} von {total} ({size})",
+    "jobsCell": "{jobs, number} ({failed, number} unterbrochen)",
+    "throttled": "gedrosselt",
+    "cancel": "Abbrechen",
+    "cancelImport": "Import abbrechen",
+    "cancelConfirm": "Import von «{tenant}» abbrechen? Bereits importierte Dateien bleiben, der Cloud-Zugang wird gelöscht.",
+    "cancelled": "Der Import wird abgebrochen.",
+    "cancelFailed": "Der Import konnte nicht abgebrochen werden."
   }
 }

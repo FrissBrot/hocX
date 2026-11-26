@@ -13,7 +13,7 @@ import logging
 import shutil
 import time
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pyclamd
@@ -730,6 +730,74 @@ def _check_render_queue(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="render_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
 
 
+CLOUD_IMPORT_STALL_AGE = timedelta(minutes=30)
+CLOUD_IMPORT_SECRET_WARNING_DAYS = 30
+# Mehr als so viel gestagte Import-Dateien = Verarbeitung kommt nicht nach (Platte)
+CLOUD_IMPORT_STAGED_WARNING_BYTES = 20 * 1024**3
+
+
+def cloud_import_secret_expiries() -> dict[str, str]:
+    """Ablaufdaten der Client-Secrets je konfiguriertem Anbieter (JJJJ-MM-TT aus der .env).
+    Weitere Anbieter tragen ihr Feld hier ein."""
+    expiries: dict[str, str] = {}
+    if settings.cloud_import_ms_client_id:
+        expiries["microsoft"] = settings.cloud_import_ms_client_secret_expires
+    # Google-Client-Secrets laufen standardmässig nicht ab: nur überwachen, wenn ein Datum gesetzt ist
+    if settings.cloud_import_google_client_id and settings.cloud_import_google_client_secret_expires.strip():
+        expiries["google"] = settings.cloud_import_google_client_secret_expires
+    return expiries
+
+
+def _check_cloud_import(db: Session, now: datetime) -> HealthCheckRead:
+    """Datei-Import aus Cloud-Diensten (Plan §12.3): Warteschlange, Aufträge ohne Fortschritt
+    (nicht gedrosselt), Anteil «neu anmelden» und Ablauf der Client-Secrets (Warnung 30 Tage
+    vorher, kritisch ab Ablauf - danach scheitert jede Anmeldung still)."""
+    rows = db.execute(
+        text(
+            "SELECT status, count(*) FROM import_job WHERE status IN ('listing', 'queued', 'running', 'needs_reauth') "
+            "AND source NOT IN ('zip', 'folder') GROUP BY status"
+        )
+    ).all()
+    counts = {status: count for status, count in rows}
+    stalled = db.scalar(
+        text(
+            "SELECT count(*) FROM import_job WHERE status IN ('listing', 'running') AND source NOT IN ('zip', 'folder') "
+            "AND coalesce(last_progress_at, updated_at) < :cutoff AND (not_before IS NULL OR not_before < :now)"
+        ),
+        {"cutoff": now - CLOUD_IMPORT_STALL_AGE, "now": now},
+    ) or 0
+    # Belegung der Zwischenablage (heruntergeladen bzw. hochgeladen, noch nicht verarbeitet), Plan §12.3
+    staged_bytes = int(db.scalar(text("SELECT coalesce(sum(size_bytes), 0) FROM import_item WHERE status = 'staged'")) or 0)
+    secret_days: int | None = None
+    secret_invalid = False
+    for value in cloud_import_secret_expiries().values():
+        if not value:
+            secret_invalid = True
+            continue
+        try:
+            expires = date.fromisoformat(value.strip())
+        except ValueError:
+            secret_invalid = True
+            continue
+        days = (expires - now.date()).days
+        secret_days = days if secret_days is None else min(secret_days, days)
+    status: HealthStatus = "ok"
+    if stalled or secret_invalid or staged_bytes > CLOUD_IMPORT_STAGED_WARNING_BYTES or (secret_days is not None and secret_days <= CLOUD_IMPORT_SECRET_WARNING_DAYS):
+        status = "warning"
+    if secret_days is not None and secret_days < 0:
+        status = "critical"
+    return HealthCheckRead(key="cloud_import", status=status, params={
+        "active": int(counts.get("listing", 0) + counts.get("queued", 0) + counts.get("running", 0)),
+        "needsReauth": int(counts.get("needs_reauth", 0)),
+        "stalled": int(stalled),
+        "secretKnown": 1 if secret_days is not None else 0,
+        "secretDays": int(secret_days or 0),
+        "secretMissing": 1 if secret_invalid else 0,
+        "providers": len(cloud_import_secret_expiries()),
+        "stagedMb": staged_bytes // 1024**2,
+    })
+
+
 # Laufzeitkennzahlen der Dienstprozesse (core/runtime_metrics.py, Migration 0148).
 RUNTIME_REPORT_MAX_AGE = timedelta(seconds=60)
 RUNTIME_LAG_WARNING_MS = 1000
@@ -931,6 +999,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("cloud_import", lambda: _check_cloud_import(db, now), failure_status="unknown", db=db)
     checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
     checks += _run_check("overload", lambda: _check_overload(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)

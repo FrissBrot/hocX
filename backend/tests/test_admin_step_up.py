@@ -130,7 +130,13 @@ STEP_UP = {
     # 1.5.1: Export und Subjekt-Auflösung (Personenbezug) mit eigenem Zweck
     ("POST", "/api/admin/auth-security/export"): "security-export",
     ("POST", "/api/admin/auth-security/events/{event_id}/resolve-subject"): "security-resolve",
+    ("POST", "/api/admin/cloud-imports/{job_id}/cancel"): "cloud-import-cancel",
     ("POST", "/api/admin/auth-security/events/{event_id}/block"): "security-block",
+    # 1.7: Vorfälle (Status, Zuständig, Notizen) und Netzsperre aus dem Vorfall
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/status"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/assign"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/notes"): "security-incident",
+    ("POST", "/api/admin/auth-security/incidents/{incident_id}/block"): "security-block",
     # 1.5.1: Zurücksetzungslink statt Passwort setzen
     ("POST", "/api/admin/users/{user_id}/password-reset"): "user-credentials",
     ("POST", "/api/admin/tenants/import/authorize"): "tenant-import",
@@ -179,8 +185,6 @@ EXEMPT = {
     ("POST", "/api/admin/tenants"): "legt einen leeren Mandanten an (Konten darin brauchen user-manage)",
     ("POST", "/api/admin/tenants/import"): "verlangt ein Import-Ticket aus tenants/import/authorize (dort Passkey-Bestätigung, "
                                            "an Admin und Namen gebunden, einmalig)",
-    ("POST", "/api/admin/auth-security/alerts/ack"): "Quittung einer Warnung (Markierung), ändert keine Sperre, Meldung oder Daten; Audit-Log",
-    ("POST", "/api/admin/auth-security/alerts/unack"): "nimmt nur die Quittung zurück; Audit-Log",
     ("PATCH", "/api/admin/tenants/{tenant_id}"): "nur Name und Profilbild",
     ("PUT", "/api/admin/tenants/{tenant_id}/website-listing"): "Anzeige auf der Website",
     ("PUT", "/api/admin/tenants/{tenant_id}/features"): _COMMERCIAL,
@@ -327,3 +331,25 @@ def test_tenant_import_needs_single_use_ticket(db):
     except zipfile.BadZipFile:
         return
     assert accepted.status_code != 403, accepted.text
+
+
+def test_cloud_import_emergency_cancel_requires_step_up(db):
+    """Security-Review 1.7, I4: Notfall-Abbruch eines Datei-Imports nur mit frischer Passkey-Bestätigung
+    (eigener Zweck, gebunden an Methode und Pfad)."""
+    from app.api.routes import admin_cloud_import
+
+    admin, passkey, actor = _owner(db)
+    app = FastAPI()
+    app.include_router(admin_cloud_import.router, prefix="/api/admin")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_admin] = lambda: actor
+    client = TestClient(app)
+    path = f"/api/admin/cloud-imports/{uuid.uuid4()}/cancel"
+
+    missing = client.post(path)
+    assert missing.status_code == 403 and missing.json()["detail"]["code"] == "admin_step_up_required"
+    wrong = step_up_header(db, admin.id, passkey, purpose="security-block", method="POST", path=path, body=b"", rp_id=RP_ID, origin=ORIGIN)
+    assert client.post(path, headers=wrong).status_code == 401
+    headers = step_up_header(db, admin.id, passkey, purpose="cloud-import-cancel", method="POST", path=path, body=b"", rp_id=RP_ID, origin=ORIGIN)
+    # Bestätigung gültig: danach greift erst die Fachprüfung (unbekannter Auftrag)
+    assert client.post(path, headers=headers).status_code == 404

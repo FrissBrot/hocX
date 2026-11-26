@@ -8,19 +8,32 @@ import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
-import { isActive, type ImportJob, type ImportJobStatus, type PathedFile } from "@/lib/files/file-import";
+import { useToast } from "@/contexts/toast-context";
+import {
+  apiErrorCode,
+  isActive,
+  isCloudSource,
+  readCloudReturn,
+  type CloudProvider,
+  type ImportJob,
+  type ImportJobStatus,
+  type PathedFile,
+} from "@/lib/files/file-import";
 import { formatDateTime } from "@/lib/utils/format";
 
 import { ImportProgress } from "./import-progress";
 import { ImportReport } from "./import-report";
 import { ImportRulesStep } from "./import-rules-step";
+import { ImportCloudStep } from "./import-cloud-step";
 import { ImportSourceStep } from "./import-source-step";
 
 const STATUS_VARIANT: Record<ImportJobStatus, BadgeVariant> = {
   draft: "neutral",
+  listing: "info",
   ready: "info",
   queued: "info",
   running: "info",
+  needs_reauth: "warning",
   cancel_requested: "warning",
   cancelled: "neutral",
   done: "success",
@@ -35,15 +48,19 @@ export function ImportStatusBadge({ status }: { status: ImportJobStatus }) {
 const STEPS = ["source", "rules", "import", "report"] as const;
 
 function stepOf(job: ImportJob | null): (typeof STEPS)[number] {
-  if (!job || job.status === "draft") return "source";
+  if (!job || job.status === "draft" || job.status === "listing") return "source";
   if (job.status === "ready") return "rules";
-  if (["queued", "running", "cancel_requested"].includes(job.status)) return "import";
+  if (["queued", "running", "needs_reauth", "cancel_requested"].includes(job.status)) return "import";
   return "report";
 }
 
-export function FileImportView({ initialJobs }: { initialJobs: ImportJob[] }) {
+export function FileImportView({ initialJobs, providers }: { initialJobs: ImportJob[]; providers: CloudProvider[] }) {
   const t = useTranslations("fileImport");
   const locale = useLocale();
+  const showToast = useToast();
+  // Rückkehr vom Anbieter (OAuth-Callback): Fehlercode in der Query, Abschluss-Token im Fragment
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const finishing = useRef(false);
   const [jobs, setJobs] = useState<ImportJob[]>(initialJobs);
   const [selectedId, setSelectedId] = useState<string | null>(() => initialJobs.find(isActive)?.id ?? null);
   const [startingNew, setStartingNew] = useState(false);
@@ -67,6 +84,31 @@ export function FileImportView({ initialJobs }: { initialJobs: ImportJob[] }) {
   useEffect(() => {
     if (active && !selectedId && !startingNew) setSelectedId(active.id);
   }, [active, selectedId, startingNew]);
+
+  useEffect(() => {
+    const result = readCloudReturn(window.location.search, window.location.hash);
+    // Frischer Stand beim Mount: AppShell tauscht beim Wechsel Desktop/Mobil den Baum aus, die
+    // Ansicht wird dann neu gemountet und hätte sonst die veralteten Daten des Seitenaufrufs
+    // (z. B. «nicht verbunden» nach der Anmeldung). Beim Abschluss einer Anmeldung liefert
+    // /oauth/finish den neuen Stand selbst (ein paralleles Neuladen könnte ihn mit dem alten
+    // überschreiben) - auch beim zweiten Effektlauf im Strict Mode, wenn das Fragment schon weg ist.
+    if (!result.finish && !finishing.current) void reload().catch(() => undefined);
+    if (!result.job && !result.error && !result.notice && !result.finish) return;
+    // Token und Codes sofort aus Adresszeile und Verlauf entfernen
+    window.history.replaceState(null, "", window.location.pathname);
+    if (result.job) setSelectedId(result.job);
+    if (result.notice) showToast(t.has(`cloud.notices.${result.notice}`) ? t(`cloud.notices.${result.notice}`) : t("cloud.notices.generic"), "info");
+    if (result.error) setCloudError(result.error);
+    if (!result.finish || finishing.current) return;
+    finishing.current = true;
+    browserApiFetch<ImportJob>("/api/cloud-import/oauth/finish", { method: "POST", body: JSON.stringify({ token: result.finish }) })
+      .then((job) => {
+        replaceJob(job);
+        setCloudError(null);
+        showToast(t("cloud.connectedToast", { account: job.connection?.account_label ?? "" }), "success");
+      })
+      .catch((error) => setCloudError(apiErrorCode(error) ?? "generic"));
+  }, [reload, replaceJob, showToast, t]);
 
   function rememberFiles(files: PathedFile[]) {
     folderFiles.current = new Map(files.map((entry) => [entry.path, entry.file]));
@@ -109,8 +151,18 @@ export function FileImportView({ initialJobs }: { initialJobs: ImportJob[] }) {
         <StatusBanner tone="neutral" message={t("othersImport", { name: selected.requested_by_name ?? t("someone") })} />
       ) : null}
 
-      {step === "source" && !readOnly ? (
+      {step === "source" && !readOnly && selected && !startingNew && isCloudSource(selected.source) ? (
+        <ImportCloudStep
+          job={selected}
+          provider={providers.find((entry) => entry.key === selected.source) ?? null}
+          returnError={cloudError}
+          onJob={(job) => { setCloudError(null); replaceJob(job); }}
+          onCancelled={async () => { setSelectedId(null); await reload(); }}
+        />
+      ) : null}
+      {step === "source" && !readOnly && !(selected && !startingNew && isCloudSource(selected.source)) ? (
         <ImportSourceStep
+          providers={providers}
           job={startingNew ? null : selected}
           blocked={active !== null && (startingNew || selected === null)}
           onJob={(job) => { setStartingNew(false); replaceJob(job); }}
@@ -122,7 +174,13 @@ export function FileImportView({ initialJobs }: { initialJobs: ImportJob[] }) {
         <ImportRulesStep job={selected} readOnly={readOnly} onJob={replaceJob} onCancelled={async () => { setSelectedId(null); await reload(); }} />
       ) : null}
       {step === "import" && selected ? (
-        <ImportProgress job={selected} onJob={replaceJob} folderFiles={folderFiles} onFiles={rememberFiles} />
+        <ImportProgress
+          job={selected}
+          provider={providers.find((entry) => entry.key === selected.source) ?? null}
+          onJob={replaceJob}
+          folderFiles={folderFiles}
+          onFiles={rememberFiles}
+        />
       ) : null}
       {step === "report" && selected ? <ImportReport job={selected} onJob={replaceJob} /> : null}
 
@@ -135,7 +193,7 @@ export function FileImportView({ initialJobs }: { initialJobs: ImportJob[] }) {
           {jobs.map((job) => (
             <tr key={job.id} className={job.id === selectedId ? "file-import-history-current" : undefined}>
               <td>{formatDateTime(job.started_at ?? job.created_at, locale)}</td>
-              <td>{t(job.takeout ? "source.takeout" : `source.${job.source}`)}</td>
+              <td>{t(job.takeout ? "source.takeout" : isCloudSource(job.source) ? `source.provider.${job.source}` : `source.${job.source}`)}</td>
               <td>{t("history.fileCount", { count: job.total_items })}</td>
               <td><ImportStatusBadge status={job.status} /></td>
               <td>{job.requested_by_name ?? "–"}</td>

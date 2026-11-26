@@ -72,8 +72,10 @@ export type AuthSecurityOverview = {
   failures_prev_24h: number;
   admin_logins_24h: number;
   blocked_24h: number;
-  open_alerts: number;
+  active_alerts: number;
   critical_alerts: number;
+  open_incidents: number;
+  new_incidents: number;
   active_blocks: number;
 };
 
@@ -90,11 +92,8 @@ export type AuthAlert = {
   clears_at?: string | null;
   /** Name statt interner ID bei Admin-/Mandanten-Regeln (nur owner sieht Warnungen) */
   subject_label?: string | null;
-  /** Quittung (1.5.1, system_alert_state) */
-  first_seen_at?: string | null;
-  acknowledged_at?: string | null;
-  acknowledged_by?: string | null;
-  acknowledged_note?: string | null;
+  /** Zugehöriger Vorfall (1.7, ersetzt die Quittung aus 1.5.1): offener, sonst jüngster */
+  incident?: { id: number; status: IncidentStatus; assignee: string | null } | null;
 };
 
 /** POST /api/admin/auth-security/events/{id}/resolve-subject */
@@ -228,4 +227,126 @@ export type AlertRuleSeries = {
   threshold: number;
   comparator: ">=" | ">";
   points: { start: string; value: number }[];
+};
+
+// ── Vorfälle und Lagebild (1.7) ─────────────────────────────────────────────────────────────
+
+export type IncidentStatus = "new" | "in_progress" | "resolved" | "false_positive";
+export type IncidentSeverity = "critical" | "warning";
+
+/** GET /api/admin/auth-security/incidents (Eintrag) */
+export type SecurityIncident = {
+  id: number;
+  key: string;
+  rule: string;
+  subject: string | null;
+  subject_label: string | null;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  active: boolean;
+  trigger_count: number;
+  first_seen_at: string;
+  last_triggered_at: string;
+  cleared_at: string | null;
+  acknowledged_at: string | null;
+  closed_at: string | null;
+  updated_at: string;
+  assignee: { id: string; name: string } | null;
+  tenant: { id: string; name: string } | null;
+  window_minutes: number | null;
+  spark: number[] | null;
+};
+
+export type SecurityIncidentList = {
+  items: SecurityIncident[];
+  total: number;
+  offset: number;
+  limit: number;
+  counts: Record<"open" | "new" | "in_progress" | "closed" | "all", number>;
+};
+
+export type SecurityIncidentStats = {
+  open: number;
+  critical: number;
+  unassigned: number;
+  new: number;
+  mtta_seconds: number | null;
+  mttr_seconds: number | null;
+  false_positives: number;
+  closed: number;
+  false_positive_rate: number | null;
+  days: number;
+};
+
+export type IncidentActivity = {
+  kind: "activity";
+  id: number;
+  at: string;
+  type: "triggered" | "retriggered" | "cleared" | "escalated" | "status" | "assigned" | "note" | "block";
+  admin: string | null;
+  from: string | null;
+  to: string | null;
+  note: string | null;
+};
+
+export type IncidentTimelineEvent = {
+  kind: "event";
+  at: string;
+  event_id: string;
+  event_type: string;
+  outcome: string;
+  risk_score: number | null;
+  subject: string | null;
+  net: string | null;
+  country: string | null;
+  marker: "first" | "last" | null;
+  stage: number | null;
+  block_scope: string | null;
+};
+
+export type IncidentParticipant = { key: string; events: number; failures: number; country?: string | null };
+
+/** GET /api/admin/auth-security/incidents/{id} */
+export type SecurityIncidentDetail = SecurityIncident & {
+  window: { start: string; end: string };
+  facts: Record<"events" | "failures" | "blocked" | "challenged" | "successes" | "accounts" | "networks" | "tenants" | "countries", number>;
+  max_risk: number | null;
+  stage: number;
+  participants: {
+    networks: IncidentParticipant[];
+    accounts: IncidentParticipant[];
+    tenants: { id: string; name: string; events: number; failures: number; accounts: number }[];
+    countries: { code: string; events: number; failures: number }[];
+  };
+  reasons: { code: string; count: number; weight: number | null }[];
+  timeline: (IncidentActivity | IncidentTimelineEvent)[];
+  notes: IncidentActivity[];
+  assignees: { id: string; name: string }[];
+  can_block: boolean;
+  event_filter: { net?: string; subject?: string; tenant_id?: string };
+  me: string;
+};
+
+export type SituationLevel = "calm" | "elevated" | "attack" | "attack_mode";
+
+export type SituationPoint = { start: string; failures: number; blocked: number; challenged: number; successes: number };
+
+/** GET /api/admin/auth-security/situation */
+export type SecuritySituation = {
+  range: "24h" | "7d";
+  start: string;
+  end: string;
+  bucket_minutes: number;
+  posture: { level: SituationLevel; attack_mode: boolean; open: number; critical: number; active_rules: number; rules_near: number };
+  points: SituationPoint[];
+  totals: Omit<SituationPoint, "start"> & { admin_logins: number };
+  previous: Omit<SituationPoint, "start"> & { admin_logins: number };
+  incident_stats: SecurityIncidentStats;
+  markers: { id: number; rule: string; severity: IncidentSeverity; status: IncidentStatus; at: string }[];
+  heatmap: { dow: number; hour: number; count: number }[];
+  heatmap_days: number;
+  countries: { code: string | null; failures: number }[];
+  networks: { net: string; failures: number; accounts: number; tenants: number; country: string | null }[];
+  accounts: { subject: string; failures: number; networks: number }[];
+  active_blocks: number;
 };

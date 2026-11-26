@@ -1,7 +1,8 @@
 {
   "tabsLabel": "Espace sécurité",
   "tabs": {
-    "overview": "Vue d’ensemble",
+    "overview": "Situation",
+    "incidents": "Incidents",
     "events": "Événements de connexion",
     "blocks": "Blocages",
     "alerts": "Règles d'alerte",
@@ -24,46 +25,8 @@
     "warning": "Avertissement"
   },
   "overview": {
-    "title": "Sécurité",
-    "description": "Protection des connexions de toute la plateforme : alertes, tentatives échouées, blocages. Les adresses n’apparaissent que sous forme de pseudonymes abrégés.",
-    "tiles": {
-      "openAlerts": "Alertes ouvertes",
-      "criticalAlerts": "{count, plural, =0 {aucune critique} one {# critique} other {# critiques}}",
-      "failures": "Échecs 24 h",
-      "previous": "Veille : {count, number}",
-      "activeBlocks": "Blocages actifs",
-      "blocked": "Refusés 24 h : {count, number}",
-      "adminLogins": "Connexions admin 24 h"
-    },
-    "chartTitle": "Connexions des dernières 48 heures",
-    "chartSummary": "{failures, number} tentatives échouées et {successes, number} connexions réussies en 48 heures, par tranches de 5 minutes.",
     "showTable": "Données en tableau",
-    "showChart": "En graphique",
-    "chartEmpty": "Aucun événement de connexion durant les dernières 48 heures.",
-    "series": {
-      "failures": "Échecs",
-      "successes": "Réussies",
-      "blocked": "Bloquées"
-    },
-    "columns": {
-      "bucket": "Heure",
-      "failures": "Échecs",
-      "successes": "Réussies",
-      "blocked": "Bloquées",
-      "network": "Réseau (pseudonyme)",
-      "account": "Compte (pseudonyme)",
-      "accounts": "Comptes",
-      "networks": "Réseaux",
-      "tenants": "Mandants",
-      "lastSeen": "Dernière fois"
-    },
-    "topNetworks": "Réseaux suspects (24 h)",
-    "topAccounts": "Comptes concernés (24 h)",
-    "noTopNetworks": "Aucune tentative échouée depuis un réseau isolé.",
-    "noTopAccounts": "Aucun compte avec des tentatives échouées.",
-    "alertsTitle": "Alertes actuelles",
-    "allAlerts": "Vers les règles d'alerte",
-    "auditLink": "Ouvrir le journal d’audit"
+    "showChart": "En graphique"
   },
   "events": {
     "title": "Événements de connexion",
@@ -319,8 +282,7 @@
       "rule": "Règle",
       "subject": "Concerné (pseudonyme)",
       "key": "Clé",
-      "status": "Statut",
-      "actions": "Action"
+      "incident": "Incident"
     },
     "rules": {
       "stuffing": "Credential stuffing : nombreux échecs depuis de nombreux réseaux",
@@ -335,21 +297,11 @@
       "limiter": "Protection des connexions (Redis) perturbée",
       "unknown": "Autre règle"
     },
-    "open": "Ouverte",
-    "acknowledged": "Acquittée",
-    "acknowledgedBy": "par {name}, {time}",
-    "acknowledge": "Acquitter",
-    "reopen": "Rouvrir",
-    "acknowledgeConfirm": "Acquitter cet avertissement comme vu ? Il ne compte plus comme ouvert jusqu'à ce qu'il disparaisse et réapparaisse. Les blocages et notifications restent inchangés.",
-    "acknowledgedToast": "Avertissement acquitté",
-    "reopenedToast": "Avertissement rouvert",
-    "ackHelp": "Les avertissements acquittés restent visibles mais ne comptent plus dans la cloche et la vue d'ensemble. S'il réapparaît après avoir disparu, il est de nouveau ouvert.",
     "clearsAt": "Disparaît d'elle-même à {time} si rien de nouveau ne se produit d'ici là (fenêtre de {minutes, plural, one {# minute} other {# minutes}} après le dernier événement).",
     "openTitle": "Alertes déclenchées",
-    "acknowledgeTitle": "Accuser réception de l'alerte",
-    "noteLabel": "Note (facultative)",
-    "noteHelp": "Brièvement ce qui est vérifié – sans données personnelles.",
-    "noteShown": "Note : {note}"
+    "assignee": "responsable : {name}",
+    "noIncident": "sera enregistré comme incident au prochain passage du moniteur",
+    "incidentHelp": "Chaque règle déclenchée est regroupée dans exactement un incident ouvert. Statut, responsable et notes se définissent sous « Incidents »."
   },
   "audit": {
     "title": "Journal d’audit",
@@ -470,5 +422,301 @@
     "seriesThreshold": "pointillé : seuil {threshold} {unit}",
     "seriesSummary": "Valeur maximale {peak}, seuil {threshold} ; {over, plural, =0 {aucune section} one {# section} other {# sections}} au-dessus du seuil (sections de {minutes} minutes).",
     "seriesApprox": "Approximation : sections fixes de {minutes} minutes au lieu de la fenêtre glissante de la règle."
+  },
+  "statuses": {
+    "new": "Nouveau",
+    "in_progress": "En cours",
+    "resolved": "Résolu",
+    "false_positive": "Fausse alerte"
+  },
+  "incidents": {
+    "title": "Incidents",
+    "description": "Règles d’alerte déclenchées, regroupées par règle et réseau, compte ou organisation. Chaque incident a un statut et un responsable ; vous confirmez chaque modification avec votre passkey et elle est consignée dans le journal d’audit.",
+    "filtersLabel": "Filtres des incidents",
+    "searchPlaceholder": "Numéro, règle ou pseudonyme",
+    "searchLabel": "Rechercher des incidents (numéro, règle ou pseudonyme)",
+    "searchClear": "Effacer la recherche",
+    "severityFilter": "Gravité",
+    "assigneeFilter": "Responsable",
+    "assignee": {
+      "all": "Tous",
+      "me": "Les miens",
+      "none": "Sans responsable"
+    },
+    "views": {
+      "label": "Vue",
+      "list": "Liste",
+      "board": "Tableau"
+    },
+    "statusFilter": "Statut",
+    "statusGroups": {
+      "open": "Ouverts",
+      "new": "Nouveaux",
+      "in_progress": "En cours",
+      "closed": "Clôturés",
+      "all": "Tous"
+    },
+    "listLabel": "Liste des incidents",
+    "columns": {
+      "id": "N°",
+      "incident": "Incident",
+      "affected": "Concerné",
+      "status": "Statut",
+      "trend": "Évolution",
+      "assignee": "Responsable",
+      "start": "Début",
+      "duration": "Durée"
+    },
+    "empty": "Aucun incident pour cette sélection.",
+    "openIncident": "Ouvrir {label}",
+    "active": "actif",
+    "cleared": "retombé",
+    "triggers": "{count, plural, one {# déclenchement} other {# déclenchements}}",
+    "sparkLabel": "Événements de la règle sur la durée de l’incident : {values}",
+    "nobody": "personne",
+    "boardEmpty": "Aucun",
+    "affected": {
+      "platform": "Plateforme",
+      "net": "Réseau {subject}",
+      "account": "Compte {subject}",
+      "tenant": "Organisation {name}",
+      "admin": "Admin {name}"
+    },
+    "duration": {
+      "days": "{days} j {hours} h",
+      "hours": "{hours} h {minutes} min",
+      "minutes": "{minutes} min"
+    },
+    "stats": {
+      "open": "Ouverts",
+      "openHint": "{count, plural, =0 {aucun critique} one {# critique} other {# critiques}}",
+      "unassigned": "Sans responsable",
+      "unassignedHint": "en attente de prise en charge",
+      "mtta": "Ø jusqu’à la prise en charge",
+      "mttr": "Ø jusqu’à la résolution",
+      "periodHint": "{days} derniers jours",
+      "falsePositive": "Taux de fausses alertes",
+      "falsePositiveHint": "{count} sur {total} clôturés en {days} jours"
+    },
+    "facts": {
+      "failures": "Échecs",
+      "accounts": "Comptes",
+      "networks": "Réseaux",
+      "tenants": "Organisations",
+      "blocked": "Refusés",
+      "successes": "Réussis",
+      "maxRisk": "Risque le plus élevé",
+      "untilTakeover": "Jusqu’à la prise en charge",
+      "untilClosed": "Jusqu’à la résolution",
+      "triggers": "Déclenchements"
+    },
+    "stages": {
+      "1": "Observer",
+      "2": "Limites abaissées",
+      "3": "Vérification supplémentaire",
+      "4": "Bloqué temporairement",
+      "5": "Bloqué manuellement"
+    },
+    "detail": {
+      "openInSituation": "Ouvrir dans la situation",
+      "openInList": "Ouvrir dans les incidents",
+      "close": "Fermer l’incident",
+      "loading": "Chargement …",
+      "window": "{start} – {end}",
+      "statusLabel": "Statut",
+      "assigneeLabel": "Responsable",
+      "takeOver": "Prendre en charge",
+      "takenOver": "Vous êtes maintenant responsable.",
+      "assigned": "Responsable enregistré.",
+      "statusSaved": "Statut « {status} » défini et consigné dans le journal d’audit.",
+      "passkeyHint": "Vous confirmez les modifications avec votre passkey.",
+      "failed": "Échec de l’action : {message}",
+      "participantsTitle": "Impliqués",
+      "participantsHint": "Réseaux, comptes, organisations et pays pendant l’incident (pseudonymes abrégés).",
+      "reasonsTitle": "Pourquoi risqué",
+      "reasonCount": "{count, plural, one {# événement} other {# événements}}",
+      "noReasons": "Aucun motif de risque sur cette période.",
+      "stageTitle": "Niveau de défense",
+      "stageReached": "Niveau le plus élevé atteint : {stage}",
+      "stageNone": "Aucune défense nécessaire pour l’instant",
+      "notesTitle": "Notes",
+      "notesEmpty": "Pas encore de notes.",
+      "noteMeta": "{name} · {time}",
+      "unknownAdmin": "admin supprimé",
+      "noteLabel": "Ajouter une note",
+      "noteHelp": "Courte et sans données personnelles (ni noms, ni adresses, ni e-mails).",
+      "noteSave": "Enregistrer la note avec la passkey",
+      "noteSaved": "Note enregistrée.",
+      "allEvents": "Tous les événements",
+      "blockAction": "Bloquer le réseau (niveau 5)",
+      "blocked": "Réseau bloqué.",
+      "closeTitle": "Définir le statut « {status} »",
+      "closeDescription": "L’incident sera clôturé. Si la règle se déclenche ensuite à nouveau avec un nouvel événement, un nouvel incident est créé.",
+      "closeReasonLabel": "Justification (facultative)",
+      "cancel": "Annuler",
+      "closeSave": "Confirmer avec la passkey",
+      "blockTitle": "Bloquer le réseau {net}",
+      "blockDescription": "Blocage manuel (niveau 5) du réseau de cet incident, IPv4 /24 ou IPv6 /48. Les admins de la plateforme ne sont jamais bloqués. Les réseaux partagés (entreprise, école, mobile) touchent tous les appareils inconnus."
+    },
+    "timeline": {
+      "title": "Chronologie",
+      "triggered": "Règle déclenchée",
+      "retriggered": "Règle à nouveau déclenchée",
+      "cleared": "Règle retombée",
+      "note": "Note",
+      "status": "Statut « {from} » → « {to} »",
+      "assigned": "Responsable : {name}",
+      "unassigned": "Responsable retiré",
+      "escalated": "Aggravé en « {to} »",
+      "block": "Réseau {net} bloqué manuellement (niveau 5)",
+      "eventFirst": "Premier événement",
+      "eventLast": "Dernier événement",
+      "event": "Événement",
+      "kinds": {
+        "failure": "Échec",
+        "success": "Succès",
+        "auto": "Automatique",
+        "event": "Événement",
+        "person": "Personne",
+        "rule": "Règle"
+      },
+      "account": "Compte {value}",
+      "net": "Réseau {value}",
+      "risk": "Risque {score}",
+      "stage": "Niveau {stage}"
+    },
+    "participants": {
+      "value": "Valeur",
+      "failures": "Échecs",
+      "events": "Événements",
+      "networks": "Réseaux",
+      "accounts": "Comptes",
+      "tenants": "Organisations",
+      "countries": "Pays",
+      "empty": "Aucun événement pendant l’incident."
+    }
+  },
+  "situation": {
+    "title": "Situation",
+    "description": "État de la protection de connexion sur toute la plateforme. Les alertes liées sont regroupées en incidents. Les adresses n’apparaissent que sous forme de pseudonymes abrégés.",
+    "live": "En direct",
+    "paused": "En pause",
+    "liveLabel": "Actualiser automatiquement toutes les 30 secondes",
+    "detailEmpty": "Aucun incident sélectionné.",
+    "posture": {
+      "title": "Situation",
+      "levels": {
+        "calm": "Calme",
+        "elevated": "Élevée",
+        "attack": "Attaque",
+        "attack_mode": "Mode attaque"
+      },
+      "texts": {
+        "calm": "Échecs dans la norme, aucun incident ouvert.",
+        "elevated": "{open, plural, =0 {Aucun incident ouvert} one {# incident ouvert} other {# incidents ouverts}}, {near, plural, =0 {aucune règle proche du seuil} one {# règle proche du seuil} other {# règles proches du seuil}}.",
+        "attack": "{critical, plural, one {# incident critique ouvert} other {# incidents critiques ouverts}}, la règle se déclenche encore. La défense agit automatiquement.",
+        "attack_mode": "Nombreux échecs depuis de nombreux réseaux : le mode attaque vérifie en plus les appareils inconnus."
+      },
+      "stepsLabel": "Niveaux de la situation"
+    },
+    "kpis": {
+      "openIncidents": "Incidents ouverts",
+      "openHint": "{count, plural, =0 {aucun critique} one {# critique} other {# critiques}}",
+      "failures": "Échecs {range}",
+      "blocked": "Refusés {range}",
+      "blockedHint": "{count, plural, =0 {aucun blocage actif} one {# blocage actif} other {# blocages actifs}}",
+      "challenged": "Vérifications supplémentaires {range}",
+      "challengedHint": "Code par e-mail ou second facteur",
+      "successes": "Réussis {range}",
+      "adminLogins": "Connexions admin {range}",
+      "mtta": "Ø jusqu’à la prise en charge",
+      "mttaHint": "{days} derniers jours",
+      "vsPrevious": "{change} % par rapport à la période précédente ({previous})",
+      "noPrevious": "Période précédente : {previous}",
+      "sparkLabel": "Évolution : {label}"
+    },
+    "queue": {
+      "title": "Incidents",
+      "all": "Tous les incidents",
+      "hint": "Ouverts d’abord, puis par gravité et date.",
+      "filters": {
+        "open": "Ouverts",
+        "closed": "Clôturés",
+        "all": "Tous"
+      },
+      "empty": "Aucun incident pour cette sélection."
+    },
+    "chart": {
+      "title": "Connexions sur la période",
+      "summary": "{failures} échouées · {blocked} refusées · {challenged} vérifications supplémentaires · {successes} réussies",
+      "showTable": "Données en tableau",
+      "showChart": "Afficher le graphique",
+      "seriesLabel": "Afficher ou masquer les séries",
+      "series": {
+        "failures": "Échouées",
+        "blocked": "Refusées",
+        "challenged": "Vérification supplémentaire",
+        "successes": "Réussies"
+      },
+      "columns": {
+        "bucket": "Tranche dès"
+      },
+      "markersLabel": "Incidents sur la période",
+      "marker": "Ouvrir {label}, détecté {time}",
+      "bar": "{time} : {failures} échouées, {blocked} refusées, {challenged} vérifications supplémentaires, {successes} réussies",
+      "scaleHint": "Échelle racine carrée pour que le bruit de fond reste visible à côté des pics · tranches de {minutes} min · un repère ouvre l’incident"
+    },
+    "heatmap": {
+      "title": "Échecs par jour de la semaine et heure",
+      "summary": "{days} derniers jours : {total} échecs, au plus {max} en une heure.",
+      "showTable": "Données en tableau",
+      "showChart": "Afficher le graphique",
+      "columns": {
+        "day": "Jour"
+      },
+      "days": {
+        "1": "lu",
+        "2": "ma",
+        "3": "me",
+        "4": "je",
+        "5": "ve",
+        "6": "sa",
+        "7": "di"
+      },
+      "cell": "{day} {hour}:00 · {count} échecs",
+      "less": "peu",
+      "more": "beaucoup"
+    },
+    "rules": {
+      "title": "Règles d’alerte",
+      "hint": "Valeur actuelle par rapport au seuil dans la fenêtre de la règle, visible avant le déclenchement.",
+      "link": "Vers les règles d’alerte",
+      "meter": "Valeur mesurée {rule}",
+      "value": "{value} / {threshold} {unit} · fenêtre {minutes} min"
+    },
+    "countries": {
+      "title": "Origine des échecs",
+      "hint": "{range} · code pays issu de la base GeoIP locale, jamais l’adresse.",
+      "empty": "Aucun échec sur la période.",
+      "country": "Pays",
+      "share": "Part",
+      "failures": "Échecs",
+      "unknown": "inconnu"
+    },
+    "networks": {
+      "title": "Réseaux suspects",
+      "empty": "Aucun échec provenant de réseaux isolés.",
+      "net": "Réseau",
+      "failures": "Échecs",
+      "meta": "Concernés",
+      "metaText": "{accounts, plural, one {# compte} other {# comptes}} · {tenants, plural, one {# organisation} other {# organisations}}"
+    },
+    "accounts": {
+      "title": "Comptes suspects",
+      "empty": "Aucun échec sur des comptes isolés.",
+      "account": "Compte",
+      "failures": "Échecs",
+      "networks": "Réseaux"
+    }
   }
 }

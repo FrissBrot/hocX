@@ -273,6 +273,11 @@
         "title": "Country geolocation",
         "detail": "{state, select, ok {DB-IP “IP to Country Lite”, built {buildDate} ({ageDays, number} days)} other {Not set up – “new country” signal disabled}}",
         "problem": "Country geolocation impaired"
+      },
+      "cloud_import": {
+        "title": "Cloud import",
+        "detail": "{active, number} active · {stalled, number} without progress · {needsReauth, number} waiting for sign-in{secretKnown, select, 1 { · client secret {secretDays, number} days left} other {}}",
+        "problem": "Cloud import: client secret expiring or imports stuck"
       }
     },
     "problems": {
@@ -617,6 +622,10 @@
       "capture_date_file_sync": {
         "title": "Write capture dates to files",
         "description": "Writes corrected capture dates into the image files and writes the original date back when it is restored."
+      },
+      "security_incident_retention": {
+        "title": "Security incident retention",
+        "description": "Deletes sign-in protection incidents with their timeline and notes 365 days after the last activity (daily)."
       },
       "auth_security_maintenance": {
         "title": "Sign-in protection cleanup",
@@ -1693,7 +1702,9 @@
         "platform-settings": "Platform settings and credentials",
         "security-block": "Set or lift sign-in blocks",
         "security-export": "Export security data",
-        "security-resolve": "Map pseudonym to an account"
+        "security-resolve": "Map pseudonym to an account",
+        "cloud-import-cancel": "Emergency-cancel a file import",
+        "security-incident": "Handle security incidents (status, assignee, notes)"
       }
     },
     "integrations": {
@@ -1799,5 +1810,48 @@
     "tenant": "Tenant",
     "storage": "Storage",
     "empty": "No values yet."
+  },
+  "cloudImports": {
+    "title": "File imports",
+    "intro": "Running imports of all organisations (numbers only, no file names) and figures of the last days. An emergency stop keeps files already imported and deletes the cloud access.",
+    "loadFailed": "The overview could not be loaded.",
+    "kpis": {
+      "title": "Figures of the last {days} days",
+      "active": "Running imports",
+      "jobs": "Imports ({days} days)",
+      "failedJobs": "{count, plural, one {# interrupted} other {# interrupted}}",
+      "files": "Imported files",
+      "errorRate": "Error rate",
+      "percent": "{value} %",
+      "failedItems": "{count, plural, one {# file with an error} other {# files with errors}}"
+    },
+    "active": {
+      "title": "Running imports",
+      "empty": "No import is running at the moment."
+    },
+    "metrics": {
+      "title": "By day and source ({days} days)",
+      "empty": "No finished imports in this period."
+    },
+    "columns": {
+      "tenant": "Organisation",
+      "source": "Source",
+      "status": "Status",
+      "progress": "Progress",
+      "lastProgress": "Last progress",
+      "day": "Day",
+      "jobs": "Imports",
+      "imported": "Imported",
+      "volume": "Volume",
+      "failedItems": "Errors"
+    },
+    "progress": "{done} of {total} ({size})",
+    "jobsCell": "{jobs, number} ({failed, number} interrupted)",
+    "throttled": "throttled",
+    "cancel": "Cancel",
+    "cancelImport": "Cancel import",
+    "cancelConfirm": "Cancel the import of “{tenant}”? Files already imported stay, the cloud access is deleted.",
+    "cancelled": "The import is being cancelled.",
+    "cancelFailed": "The import could not be cancelled."
   }
 }

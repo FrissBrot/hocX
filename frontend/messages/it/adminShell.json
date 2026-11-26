@@ -18,7 +18,8 @@
     "cashflow": "Ricavi e fatturazione",
     "users": "Cerca utenti",
     "admins": "Admin piattaforma",
-    "securityOverview": "Sicurezza",
+    "securityOverview": "Situazione",
+    "securityIncidents": "Incidenti",
     "securityEvents": "Eventi di accesso",
     "securityBlocks": "Blocchi",
     "securityAlerts": "Regole di allarme",
@@ -38,7 +39,8 @@
     "account": "Profilo e passkey",
     "settingsSecurity": "Sicurezza e accesso",
     "settingsIntegrations": "Integrazioni",
-    "settingsSystem": "Tecnica"
+    "settingsSystem": "Tecnica",
+    "cloudImports": "Importazioni di file"
   },
   "keywords": {
     "pricing": "prezzi piani funzionalità pacchetti di archiviazione cambio",
@@ -48,7 +50,8 @@
     "theme": "aspetto tema chiaro scuro",
     "settingsSecurity": "passkey conferma sessione accesso",
     "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker backup",
-    "settingsSystem": "versione ambiente migrazione database domini catalogo"
+    "settingsSystem": "versione ambiente migrazione database domini catalogo",
+    "cloudImports": "importazione OneDrive SharePoint cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Aspetto: chiaro",
@@ -110,7 +113,7 @@
     "empty": "Niente di aperto.",
     "items": {
       "verifications_open": "{count, plural, one {# verifica aperta} other {# verifiche aperte}}",
-      "security_alerts": "{count, plural, one {# avviso di sicurezza} other {# avvisi di sicurezza}}",
+      "security_alerts": "{count, plural, one {# nuovo incidente di sicurezza} other {# nuovi incidenti di sicurezza}}",
       "operations_problems": "{count, plural, one {# problema di esercizio} other {# problemi di esercizio}}"
     }
   },

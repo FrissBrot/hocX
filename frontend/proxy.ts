@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminAllowedOnHost, adminGateForwardHeaders, frontendRole, isAdminPagePath } from "@/lib/admin-gate";
-import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
+import { contentSecurityPolicy, createNonce, cspVariantFor, GOOGLE_PICKER_PATH, NONCE_HEADER, pickerHostFrom } from "@/lib/csp";
 
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
 // requireAdminSession(), siehe lib/api/server.ts + admin-server.ts) über redirect(). Next.js
@@ -53,6 +53,11 @@ const processKind = frontendRole();
 const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
 const WEBSITE_PATH = "/website";
 
+// Eigene Origin des Google Pickers (Datei-Import, Security-Review 1.7): dort nur /google-picker, ohne
+// Sitzungsprüfung (es gibt dort keine hocX-Sitzung - Cookies sind host-only) und als einzige Seite mit
+// gelockerter CSP. Ohne Variable gibt es die Seite nirgends (Google Drive wird dann nicht angeboten).
+const pickerHost = pickerHostFrom(process.env.CLOUD_IMPORT_PICKER_DOMAIN);
+
 // Favicon der hocX Konsole (public/icons/console, app/admin/layout.tsx)
 export const CONSOLE_FAVICON_PATH = "/icons/console/favicon.ico";
 
@@ -98,7 +103,14 @@ async function isOverloadedResponse(res: Response): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   // Nonce-CSP (MAIN-FE-013): auf Request (für Next und layout.tsx) und Antwort.
   const nonce = createNonce();
-  const csp = contentSecurityPolicy(nonce);
+  // Gelockerte CSP nur für die Seite des Google Pickers auf ihrer eigenen Origin (lib/csp.ts), nie
+  // auf der Admin-Domain (und nicht auf der Website-Domain, dort wird jeder Pfad nach /website umgeschrieben)
+  const cspHost = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+  const variant =
+    processKind === "admin" || (!!adminDomain && cspHost === adminDomain) || (!!websiteDomain && cspHost === websiteDomain)
+      ? "default"
+      : cspVariantFor(cspHost, request.nextUrl.pathname, pickerHost);
+  const csp = contentSecurityPolicy(nonce, undefined, variant);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(NONCE_HEADER, nonce);
   requestHeaders.set("Content-Security-Policy", csp);
@@ -119,6 +131,16 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   }
   if (processKind === "admin" && !adminAllowedOnHost(requestHost, adminDomain)) {
     // Das Admin-Frontend bedient nur die Admin-Domain.
+    return new NextResponse(null, { status: 404 });
+  }
+  // Picker-Origin: nur die Picker-Seite, ohne Sitzungsprüfung. Auf jeder anderen Origin gibt es sie nicht.
+  if (!!pickerHost && requestHost.toLowerCase() === pickerHost) {
+    if (processKind === "admin" || pathname !== GOOGLE_PICKER_PATH) {
+      return new NextResponse(null, { status: 404 });
+    }
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+  if (pathname === GOOGLE_PICKER_PATH || pathname.startsWith(`${GOOGLE_PICKER_PATH}/`)) {
     return new NextResponse(null, { status: 404 });
   }
   // Favicon der hocX Konsole (1.5.2): Browser fragen /favicon.ico teils direkt an, ohne die

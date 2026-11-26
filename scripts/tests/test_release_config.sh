@@ -15,19 +15,21 @@ docker compose --env-file .env.test.example "${COMPOSE_FILES[@]}" -f docker-comp
 docker compose -p hocx-tests -f docker-compose.tests.yml --profile tests config --quiet
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml config --quiet
 
-# MAIN-OPS-005: Redis haengt nur im internen Netz "cache", das ausser Redis nur das Backend nutzt.
+# MAIN-OPS-005: Redis haengt nur im internen Netz "cache", das ausser Redis nur backend und job-worker
+# nutzen (job-worker seit 1.7: Token-Bucket der Cloud-Downloads, CHANGELOG [Unveroeffentlicht]).
 assert_redis_isolated() {
-  python3 -c '
-import json, sys
+  EXPECTED_CACHE_USERS="$1" python3 -c '
+import json, os, sys
 services = json.load(sys.stdin)["services"]
 redis = sorted((services["redis"].get("networks") or {}).keys())
 assert redis == ["cache"], f"redis-Netze: {redis}"
 users = sorted(n for n, s in services.items() if "cache" in (s.get("networks") or {}))
-assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
+expected = os.environ["EXPECTED_CACHE_USERS"].split()
+assert users == expected, f"cache-Netz genutzt von: {users}"
 '
 }
-docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
-docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
+docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated "backend job-worker redis"
+docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated "backend redis"
 
 # Jeder von Traefik angesprochene Dienst in mehr als einem Netz nennt das Netz für Traefik - sonst
 # wählt Traefik je nach Reihenfolge eine IP in einem internen Netz, das es nicht erreicht (504).

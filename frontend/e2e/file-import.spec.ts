@@ -68,7 +68,7 @@ function storedZip(entries: Record<string, Buffer>): Buffer {
 /** Gemeinsamer E2E-Mandant: ein offener Import eines früheren Laufs blockiert den neuen (einer je Verein). */
 async function cancelOpenImports(api: APIRequestContext) {
   const jobs = (await (await api.get("/api/cloud-import/jobs")).json()) as { id: string; status: string }[];
-  for (const job of jobs.filter((entry) => ["draft", "ready", "queued", "running"].includes(entry.status))) {
+  for (const job of jobs.filter((entry) => ["draft", "listing", "ready", "queued", "running", "needs_reauth"].includes(entry.status))) {
     await api.post(`/api/cloud-import/jobs/${job.id}/cancel`);
   }
   await expect

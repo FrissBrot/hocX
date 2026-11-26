@@ -17,7 +17,7 @@ export const platformAdminPasskeyFile = "e2e/.auth/platform-admin-passkey.json";
 // verbraucht hatte - das Backend sperrt den Passkey dann als möglichen Klon (admin_mfa_service.py,
 // Review L8), und alle weiteren Bestätigungen scheitern mit passkey_not_registered.
 // Innerhalb einer Datei laufen die Tests nacheinander (fullyParallel: false).
-export const platformAdminSpecPasskeys = ["admin-passkey", "security-admin", "admin-backups", "storage-quota"] as const;
+export const platformAdminSpecPasskeys = ["admin-passkey", "security-admin", "admin-backups", "storage-quota", "cloud-imports", "security-incidents"] as const;
 export type PlatformAdminSpecPasskey = (typeof platformAdminSpecPasskeys)[number];
 export function platformAdminSpecPasskeyFile(spec: PlatformAdminSpecPasskey): string {
   return `e2e/.auth/platform-admin-passkey-${spec}.json`;

@@ -50,7 +50,8 @@ BATCH_CANDIDATES = 40
 MAX_ATTEMPTS = 3
 UPLOAD_IDLE_TIMEOUT = timedelta(days=7)
 REPORT_MIN_AGE = timedelta(days=7)
-ACTIVE_WORK_STATUSES = ("queued", "running", "cancel_requested")
+# listing: API-Quellen listen im Worker (services/cloud_import/remote.py)
+ACTIVE_WORK_STATUSES = ("listing", "queued", "running", "cancel_requested")
 
 _WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
@@ -121,6 +122,8 @@ def claim_next(db: Session) -> ImportJob | None:
         .where(
             ImportJob.status.in_(ACTIVE_WORK_STATUSES),
             (ImportJob.lease_until.is_(None)) | (ImportJob.lease_until < current),
+            # Anbieter drosselt (Retry-After): erst danach wieder bedienen
+            (ImportJob.not_before.is_(None)) | (ImportJob.not_before <= current),
         )
         .order_by(ImportJob.served_at.asc().nulls_first(), ImportJob.created_at)
         .limit(1)
@@ -152,9 +155,17 @@ def run_slice(db: Session, service: FileService, job: ImportJob) -> None:
         if job.status == "cancel_requested":
             _finish_cancel(db, job)
             return
+        if job.status == "listing":
+            from app.services.cloud_import import remote
+
+            remote.run_listing(db, job, work.expired)
+            return
         if job.status == "queued":
             job.status = "running"
             db.commit()
+        from app.services.cloud_import import remote
+
+        remote_source = remote.is_remote(job)
         while not work.expired():
             db.refresh(job)
             if job.status == "cancel_requested":
@@ -162,8 +173,16 @@ def run_slice(db: Session, service: FileService, job: ImportJob) -> None:
                 return
             if job.status != "running":
                 return
+            fetched = None
+            if remote_source:
+                # API-Quelle: erst herunterladen (Stream auf Platte), dann dieselbe Pipeline wie P0
+                fetched = remote.download_step(db, job)
+                if fetched == "paused":
+                    return
             batch = _next_batch(db, job)
             if not batch:
+                if fetched == "downloaded":
+                    continue
                 _maybe_finish(db, job)
                 return
             if not _process_batch(db, service, job, batch, work):
@@ -292,9 +311,12 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         job.status = "failed"
         job.error = "requester_unauthorized"
         job.finished_at = jobs.now()
+        # Tokens bzw. App-Passwort nicht bis purge_after liegen lassen (Security-Review 1.7, N2)
+        _release_remote(db, job)
         from app.services import upload_job_service
 
         upload_job_service.finish_import_job(db, job)
+        _notify_end(db, job)
         AuditService().log(
             db, action="file_import.stopped_unauthorized", actor_user_id=job.requested_by, tenant_id=job.tenant_id,
             entity_type="import_job", details={"job_id": str(job.id)}, commit=False,
@@ -379,6 +401,7 @@ def _process_batch(db: Session, service: FileService, job: ImportJob, batch: lis
         from app.services import upload_job_service
 
         upload_job_service.finish_import_job(db, job)
+        _notify_end(db, job)
         db.commit()
         return False
     return True
@@ -588,6 +611,8 @@ def _finish(db: Session, job: ImportJob, status: str) -> None:
     job.finished_at = jobs.now()
     job.archives = []
     jobs.touch(job)
+    _release_remote(db, job)
+    _notify_end(db, job)
     by_status, _codes, _bytes = jobs.status_counts(db, job)
     AuditService().log(
         db, action=f"file_import.{'finished' if status == 'done' else status}", actor_user_id=job.requested_by,
@@ -597,6 +622,21 @@ def _finish(db: Session, job: ImportJob, status: str) -> None:
     db.commit()
     jobs.remove_staging(job)
     _after_job_end(db, job)
+
+
+def _notify_end(db: Session, job: ImportJob) -> None:
+    """Mail «Import abgeschlossen/unterbrochen» an die auslösende Person (Plan §9, alle Quellen)."""
+    from app.notifications import cloud_import as cloud_import_notifications
+
+    cloud_import_notifications.on_job_end(db, job)
+
+
+def _release_remote(db: Session, job: ImportJob) -> None:
+    """API-Quelle beendet: Tokens sofort löschen (Plan §5.5)."""
+    from app.services.cloud_import import remote
+
+    if remote.is_remote(job):
+        remote.release_connection(db, job)
 
 
 def _after_job_end(db: Session, job: ImportJob) -> None:
@@ -611,6 +651,7 @@ def _finish_cancel(db: Session, job: ImportJob) -> None:
 
     upload_job_service.finish_import_job(db, job, cancelled=True)
     jobs.finalize_cancel(db, job)
+    _release_remote(db, job)
     AuditService().log(
         db, action="file_import.cancelled", actor_user_id=job.requested_by, tenant_id=job.tenant_id,
         entity_type="import_job", details={"job_id": str(job.id), "source": job.source}, commit=False,
@@ -623,6 +664,14 @@ def cleanup(db: Session) -> None:
     """Aufräumen (läuft mandantenübergreifend, gibt nichts zurück)."""
     try:
         jobs.expire_stale_drafts(db)
+        db.commit()
+        # API-Quellen: wer sich 7 Tage nicht neu anmeldet, dessen Auftrag gilt als unterbrochen;
+        # Verbindungen nach purge_after löschen (Tokens weg)
+        from app.services.cloud_import import connections, remote
+
+        remote.expire_reauth(db)
+        db.commit()
+        connections.purge_expired(db)
         db.commit()
         # Fehlgeschlagene Aufträge, die 7 Tage nicht fortgesetzt wurden: Quelle verwerfen.
         stale_failed = list(

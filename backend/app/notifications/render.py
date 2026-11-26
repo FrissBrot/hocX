@@ -20,7 +20,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 from app.core import geoip
-from app.documents.strings import text
+from app.documents.strings import strings_for, text
 
 TZ = ZoneInfo("Europe/Zurich")
 LOGO_CID = "hocx-tenant-logo"
@@ -719,7 +719,57 @@ def render_submission_withdrawn(
     )
 
 
-FINE_RENDERERS = {"fine.upcoming": render_fine_upcoming, "fine.issued": render_fine_issued, "submission.withdrawn": render_submission_withdrawn}
+# ── Datei-Import: neu anmelden (an die auftraggebende Person) ────────
+
+
+def render_cloud_import(
+    *, lang: str, items: list[dict], recipient_name: str, tenant_name: str, base_url: str | None, can_login: bool,
+    brand: Brand | None = None, **_,
+) -> Rendered:
+    brand = brand or Brand(tenant_name)
+    greeting = text(lang, "email.greeting", name=recipient_name)
+    item = items[-1]  # neuester Stand des Auftrags
+    kind = item.get("kind")
+    if kind in ("cloud_import.done", "cloud_import.failed"):
+        done = kind == "cloud_import.done"
+        body = text(
+            lang, "email.cloudImport.doneBody" if done else "email.cloudImport.failedBody", tenant=tenant_name,
+            imported=item.get("imported", 0), duplicates=item.get("duplicates", 0), failed=item.get("failed", 0),
+        )
+        reason_key = f"email.cloudImport.reason.{item.get('error')}"
+        if not done:
+            reason = text(lang, reason_key) if item.get("error") and reason_key in strings_for(lang) else text(lang, "email.cloudImport.reason.generic")
+            body = f"{body} {reason}"
+        title_key = "email.title.cloudImportDone" if done else "email.title.cloudImportFailed"
+        subject = text(lang, "email.cloudImport.doneSubject" if done else "email.cloudImport.failedSubject", tenant=tenant_name)
+        button = text(lang, "email.cloudImport.reportButton")
+    else:
+        body = text(lang, "email.cloudImport.reauthBody", tenant=tenant_name)
+        title_key = "email.title.cloudImportReauth"
+        subject = text(lang, "email.cloudImport.reauthSubject", tenant=tenant_name)
+        button = text(lang, "email.cloudImport.openButton")
+    html_parts = [
+        _kicker(text(lang, "email.kicker.cloudImport"), RED if kind == "cloud_import.failed" else NAVY),
+        _title(text(lang, title_key)),
+        _greeting(greeting, body),
+    ]
+    plain = [greeting, "", body, ""]
+    # Link nur mit der (nicht geheimen) Auftrags-ID, der Bericht prüft Rechte und Mandant
+    job_id = str(item.get("job_id") or "")
+    link = f"{base_url}/files/import" + (f"?job={job_id}" if job_id else "") if base_url and can_login else None
+    if link:
+        html_parts.append(_button(button, link))
+        plain += [f"{button}: {link}", ""]
+    return _finish(
+        subject=subject, brand=brand, label=_via(lang),
+        card=_card("".join(html_parts)), footer=_footer(lang, tenant_name, base_url=base_url, can_login=can_login), plain=plain,
+    )
+
+
+FINE_RENDERERS = {
+    "fine.upcoming": render_fine_upcoming, "fine.issued": render_fine_issued, "submission.withdrawn": render_submission_withdrawn,
+    "cloud_import": render_cloud_import,
+}
 
 
 def render(*, group: str, **kwargs) -> Rendered:

@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,7 +32,6 @@ function render(ui: ReactElement) {
 import { SecurityAlertRules } from "./security-alert-rules";
 import { SecurityAlertsView } from "./security-alerts";
 import { SecurityEvents } from "./security-events";
-import { SecurityOverview } from "./security-overview";
 import { SecurityPolicyView } from "./security-policy";
 
 function respond(map: Record<string, unknown>) {
@@ -46,20 +45,6 @@ function respond(map: Record<string, unknown>) {
 
 describe("Sicherheitsbereich (Plattform)", () => {
   beforeEach(() => browserApiFetchMock.mockReset());
-
-  it("Übersicht zeigt Kacheln und leere Zustände ohne Ereignisse", async () => {
-    respond({
-      "/api/admin/auth-security/overview": { failures_24h: 37, failures_prev_24h: 21, admin_logins_24h: 3, blocked_24h: 4, open_alerts: 1, critical_alerts: 0, active_blocks: 2 },
-      "/api/admin/auth-security/summary": { timeseries: [], top_networks: [], top_accounts: [], active_blocks: [] },
-      "/api/admin/auth-security/alerts": [{ key: "auth:account_attack:abc", rule: "account_attack", subject: "abc", severity: "warning", title: "x", message: "y" }],
-    });
-    render(<SecurityOverview />);
-    expect(await screen.findByText("37")).toBeInTheDocument();
-    expect(screen.getByText("Offene Warnungen")).toBeInTheDocument();
-    expect(await screen.findByText("Konto unter Beschuss")).toBeInTheDocument();
-    expect(screen.getByText("In den letzten 48 Stunden gab es keine Anmeldeereignisse.")).toBeInTheDocument();
-    expect(screen.getByText("Keine Fehlversuche aus einzelnen Netzen.")).toBeInTheDocument();
-  });
 
   it("support-Rolle (403) sieht einen Hinweis statt eines Fehlers", async () => {
     respond({ "/api/admin/auth-security": new ApiError("forbidden", "auth", 403) });
@@ -79,22 +64,19 @@ describe("Sicherheitsbereich (Plattform)", () => {
     expect(listCall?.[0]).toContain("range=24h");
   });
 
-  it("Warnungen lassen sich nach Rückfrage quittieren (1.5.1)", async () => {
+  it("Warnungen zeigen ihren Vorfall statt einer Quittung (1.7)", async () => {
     respond({
-      "/api/admin/auth-security/alerts": [{ key: "auth:spraying:abc", rule: "spraying", subject: "abc", severity: "warning", title: "x", message: "y", acknowledged_at: null }],
-      "/api/admin/auth-security/alerts/ack": { key: "auth:spraying:abc", acknowledged: true },
+      "/api/admin/auth-security/alerts": [
+        { key: "auth:spraying:abc", rule: "spraying", subject: "abc", severity: "warning", title: "x", message: "y", incident: { id: 42, status: "in_progress", assignee: "Remo" } },
+        { key: "auth:limiter", rule: "limiter", subject: null, severity: "critical", title: "x", message: "y", incident: null },
+      ],
     });
     render(<SecurityAlertsView />);
-    fireEvent.click(await screen.findByRole("button", { name: "Quittieren" }));
-    const dialog = await screen.findByRole("dialog", { name: "Warnung quittieren" });
-    fireEvent.change(within(dialog).getByLabelText(/^Notiz \(optional\)/), { target: { value: "wird geprüft" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Quittieren" }));
-    await waitFor(() =>
-      expect(browserApiFetchMock).toHaveBeenCalledWith(
-        "/api/admin/auth-security/alerts/ack",
-        expect.objectContaining({ method: "POST", body: JSON.stringify({ key: "auth:spraying:abc", note: "wird geprüft" }) }),
-      ),
-    );
+    expect(await screen.findByRole("link", { name: "INC-0042" })).toHaveAttribute("href", "/admin/security/incidents?incident=42");
+    expect(screen.getByText("In Bearbeitung")).toBeInTheDocument();
+    expect(screen.getByText("zuständig: Remo")).toBeInTheDocument();
+    expect(screen.getByText(/wird beim nächsten Durchlauf/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quittieren" })).toBeNull();
   });
 
   it("Alarmregeln zeigen Messwert gegen Schwelle und die Kurve der gewählten Regel (1.6)", async () => {

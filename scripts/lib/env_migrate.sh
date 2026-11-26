@@ -132,7 +132,9 @@ migrate_env_file() {
   # 64 Hex-Zeichen; ein Neuerzeugen machte ohne Passwort erstellte Exporte unlesbar.
   # ADMIN_GATE_SECRET (Auth-Audit SEC-AUTH-001): Nachweis, dass ein /api/admin-Request über Traefiks
   # Admin-Entrypoint kam (deploy.sh schreibt daraus infra/traefik/dynamic/admin-gate.yml).
-  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY ADMIN_GATE_SECRET GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
+  # CLOUD_IMPORT_TOKEN_KEY (Datei-Import 1.7): verschlüsselt die OAuth-Tokens der Cloud-Verbindungen;
+  # ein Neuerzeugen macht nur laufende Verbindungen ungültig (Personen melden sich neu an).
+  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY ADMIN_GATE_SECRET CLOUD_IMPORT_TOKEN_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
     LOCAL_S3_ACCESS_KEY LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
     if [ -n "$(env_file_value "$tmp_file" "$storage_key")" ]; then
       continue

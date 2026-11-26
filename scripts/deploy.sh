@@ -434,9 +434,70 @@ run_preflight() {
     echo "AUTH_SECRET_PREVIOUS muss leer oder mindestens 32 Zeichen lang sein." >&2
     return 1
   fi
+  # Datei-Import aus Cloud-Diensten (RUNBOOK «Cloud-Import einrichten»): Token-Schlüssel immer
+  # (env_migrate erzeugt ihn), Anbieter nur vollständig oder gar nicht konfiguriert.
+  if [ -n "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}" ] && [ "${#CLOUD_IMPORT_TOKEN_KEY_PREVIOUS}" -lt 32 ]; then
+    echo "CLOUD_IMPORT_TOKEN_KEY_PREVIOUS muss leer oder mindestens 32 Zeichen lang sein." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_MS_CLIENT_ID:-}" ]; then
+    if [ -z "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}" ]; then
+      echo "CLOUD_IMPORT_MS_CLIENT_ID ist gesetzt, CLOUD_IMPORT_MS_CLIENT_SECRET fehlt." >&2
+      return 1
+    fi
+    if ! [[ "${CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+      echo "CLOUD_IMPORT_MS_CLIENT_SECRET_EXPIRES (Ablaufdatum des Client-Secrets, JJJJ-MM-TT) fehlt oder ist ungueltig." >&2
+      return 1
+    fi
+  fi
+  # Google (Drive + Fotos): Client-ID nur mit Secret; API-Key und App-ID (Picker, nur Google Drive)
+  # gemeinsam oder gar nicht. Ablaufdatum optional (Google-Secrets laufen standardmaessig nicht ab).
+  if [ -n "${CLOUD_IMPORT_GOOGLE_CLIENT_ID:-}" ] && [ -z "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}" ]; then
+    echo "CLOUD_IMPORT_GOOGLE_CLIENT_ID ist gesetzt, CLOUD_IMPORT_GOOGLE_CLIENT_SECRET fehlt." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_GOOGLE_API_KEY:-}${CLOUD_IMPORT_GOOGLE_APP_ID:-}" ]; then
+    if ! [[ "${CLOUD_IMPORT_GOOGLE_API_KEY:-}" =~ ^[A-Za-z0-9_-]{20,200}$ ]] || ! [[ "${CLOUD_IMPORT_GOOGLE_APP_ID:-}" =~ ^[0-9]{6,30}$ ]]; then
+      echo "CLOUD_IMPORT_GOOGLE_API_KEY und CLOUD_IMPORT_GOOGLE_APP_ID (Projektnummer) nur gemeinsam und gueltig setzen." >&2
+      return 1
+    fi
+  fi
+  # Eigene Origin des Google Pickers: ein Hostname, nicht die App-, Admin-, Abgabebox-, Doku- oder
+  # Website-Domain. Ohne ihn wird Google Drive nicht angeboten (kein Rueckfall auf die App-Origin).
+  if [ -n "${CLOUD_IMPORT_PICKER_DOMAIN:-}" ]; then
+    if ! [[ "${CLOUD_IMPORT_PICKER_DOMAIN}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]]; then
+      echo "CLOUD_IMPORT_PICKER_DOMAIN muss ein Hostname sein (z. B. picker.hocx.ch, ohne https:// und ohne Port)." >&2
+      return 1
+    fi
+    local picker_other
+    for picker_other in "${TRAEFIK_DOMAIN:-}" "${TRAEFIK_ADMIN_DOMAIN:-}" "${TRAEFIK_ABGABEBOX_DOMAIN:-}" "${TRAEFIK_DOCS_DOMAIN:-}" "${TRAEFIK_WEBSITE_DOMAIN:-}"; do
+      if [ -n "$picker_other" ] && [ "$picker_other" = "$CLOUD_IMPORT_PICKER_DOMAIN" ]; then
+        echo "CLOUD_IMPORT_PICKER_DOMAIN muss eine eigene Subdomain sein (nicht $picker_other)." >&2
+        return 1
+      fi
+    done
+  elif [ -n "${CLOUD_IMPORT_GOOGLE_API_KEY:-}" ]; then
+    echo "Hinweis: CLOUD_IMPORT_PICKER_DOMAIN fehlt - Google Drive wird nicht angeboten (RUNBOOK 27.2)." >&2
+  fi
+  if [ -n "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES:-}" ] && ! [[ "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    echo "CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES muss leer oder ein Datum (JJJJ-MM-TT) sein." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_DROPBOX_APP_KEY:-}" ] && [ -z "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}" ]; then
+    echo "CLOUD_IMPORT_DROPBOX_APP_KEY ist gesetzt, CLOUD_IMPORT_DROPBOX_APP_SECRET fehlt." >&2
+    return 1
+  fi
+  if [ -n "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}" ] && [ -z "${CLOUD_IMPORT_DROPBOX_APP_KEY:-}" ]; then
+    echo "CLOUD_IMPORT_DROPBOX_APP_SECRET ist gesetzt, CLOUD_IMPORT_DROPBOX_APP_KEY fehlt." >&2
+    return 1
+  fi
+  case "${CLOUD_IMPORT_WEBDAV_ENABLED:-true}" in
+    true|false) ;;
+    *) echo "CLOUD_IMPORT_WEBDAV_ENABLED muss true oder false sein." >&2; return 1 ;;
+  esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "${ADMIN_GATE_SECRET:-}" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${GEO_DB_PASSWORD:-}" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" "$CLOUD_IMPORT_TOKEN_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|hocx_geo|*keep-local-only*)
@@ -524,6 +585,15 @@ write_secret_files() {
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
   write_secret_file "$secrets_dir" storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
   write_secret_file "$secrets_dir" export_encryption_key "$EXPORT_ENCRYPTION_KEY"
+  # Datei-Import (Cloud): Token-Schlüssel, bisheriger Schlüssel während einer Rotation (leer = keine)
+  # und Client-Secret der Entra-App (leer = Microsoft nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_token_key "$CLOUD_IMPORT_TOKEN_KEY"
+  write_secret_file "$secrets_dir" cloud_import_token_key_previous "${CLOUD_IMPORT_TOKEN_KEY_PREVIOUS:-}"
+  write_secret_file "$secrets_dir" cloud_import_ms_client_secret "${CLOUD_IMPORT_MS_CLIENT_SECRET:-}"
+  # Client-Secret des Google-Cloud-Projekts (leer = Google Drive/Fotos nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_google_client_secret "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}"
+  # App-Secret der Dropbox-App (leer = Dropbox nicht angeboten)
+  write_secret_file "$secrets_dir" cloud_import_dropbox_app_secret "${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}"
   write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"

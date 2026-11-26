@@ -87,6 +87,8 @@ EXEMPT_COLUMNS: dict[str, str] = {
     "storage_migration.fencing_token": "Sperrzähler gegen parallele Speicher-Migrationen, kein Zugang",
     "backup_job.fencing_token": "Sperrzähler gegen parallele Backups, kein Zugang",
     "backup_restore_job.fencing_token": "Sperrzähler gegen parallele Wiederherstellungen, kein Zugang",
+    "import_connection.access_token_encrypted": "OAuth-Token zum Cloud-Konto einer Person (Datei-Import), verschlüsselt; nur bei Google Drive geht es kurzlebig (drive.file) an den Picker derselben angemeldeten Person, kein Link",
+    "import_connection.refresh_token_encrypted": "OAuth-Token zum Cloud-Konto einer Person (Datei-Import), verschlüsselt, verlässt den Server nie, kein Link",
 }
 
 # Routen ohne Anmeldung, die keinen Zugang zu Vereinsdaten über einen Link geben (Pfad-Präfix).
@@ -99,5 +101,7 @@ EXEMPT_PUBLIC_ROUTES: dict[str, str] = {
     "/api/public/plan-comparison": "Funktionsvergleich der Website, keine Daten einer Organisation",
     "/api/public/customers": "Namen und Logos der Organisationen, die auf der Website erscheinen wollen (show_on_website), sonst nichts; Logo nur über nicht erratbare Kennung (HMAC)",
     "/api/system-status/summary": "Plattform-Statusseite mit eigenem Token, kein Mandant",
+    "/api/cloud-import/picker/google-drive/": "Google-Picker auf eigener Origin ohne hocX-Sitzung (Datei-Import, Security-Review 1.7): Tickets einmalig, 10 min, an Person und Auftrag gebunden, vom Wizard mit Sitzung ausgestellt; Rate-Limit; keine Dauer-Links",
+    "/api/cloud-import/oauth/{provider_key}/callback": "OAuth-Rückkehr vom Cloud-Anbieter (Datei-Import): einmaliger state + PKCE, Rate-Limit; legt nichts an - die Verbindung entsteht erst mit der Sitzung derselben Person (/oauth/finish)",
     "/api/tenants/{tenant_id}/profile-image": "Logo der Organisation: ohne Anmeldung nur bei aktiver eigener App-Domain (Login-Branding) oder freigegebener Identität auf der Prüfseite, sonst nur für Angemeldete des Mandanten/vertraute Partner",
 }

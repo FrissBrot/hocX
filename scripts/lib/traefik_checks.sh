@@ -160,6 +160,8 @@ admin_isolation_checks() {
   [ -z "${TRAEFIK_ADMIN_DOMAIN:-}" ] || hosts+=("$TRAEFIK_ADMIN_DOMAIN")
   [ -z "${TRAEFIK_DOCS_DOMAIN:-}" ] || hosts+=("$TRAEFIK_DOCS_DOMAIN")
   [ -z "${TRAEFIK_WEBSITE_DOMAIN:-}" ] || hosts+=("$TRAEFIK_WEBSITE_DOMAIN")
+  # Picker-Origin des Datei-Imports (nur /google-picker und die Ticket-Routen)
+  [ -z "${CLOUD_IMPORT_PICKER_DOMAIN:-}" ] || hosts+=("$CLOUD_IMPORT_PICKER_DOMAIN")
   while IFS= read -r tenant; do
     [ -z "$tenant" ] || hosts+=("$tenant")
   done < <(admin_check_tenant_domains)

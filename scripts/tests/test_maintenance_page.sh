@@ -113,6 +113,8 @@ expected = {
     "frontend": "maintenance-errors@file",
     "admin-frontend": "maintenance-errors-admin@file",
     "abgabebox-frontend": "maintenance-errors-abgabebox@file",
+    # Picker-Origin des Datei-Imports (HTML-Seite wie das Frontend)
+    "picker-frontend": "maintenance-errors@file",
 }
 missing = []
 for name, router in app.items():

@@ -15,11 +15,156 @@ zum Beispiel den Vereinsordner aus OneDrive, Google Drive oder Dropbox. Zu finde
 |---|---|---|
 | **ZIP-Archiv** | Download aus OneDrive/Dropbox, Google Takeout, Archiv vom PC | Mehrere ZIPs pro Import möglich (z. B. Takeout-Teilarchive), je bis 10 GB. Bei Google Takeout wird der Ordner «Takeout» automatisch erkannt. Die Metadaten-Dateien (`.json`) werden nicht importiert, ihr Aufnahmedatum aber übernommen, wenn das Foto selbst keines hat (siehe unten). |
 | **Ordner hochladen** | Synchronisierter Ordner auf dem PC (OneDrive, Google Drive, …) | Zuerst wird nur die Dateiliste übertragen. Nach dem Start lädt der Browser genau die Dateien hoch, die importiert werden - das Fenster muss dafür offen bleiben. Wird es geschlossen, denselben Ordner später erneut wählen; der Upload geht weiter. |
+| **Microsoft OneDrive / SharePoint** | OneDrive privat, OneDrive for Business, SharePoint-Bibliotheken | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
+| **Google Drive** | Einzelne Dateien aus «Meine Ablage» und geteilten Ablagen | Auswahl in der Google-Auswahl, siehe unten. Ganze Ordner über **Google Takeout** (ZIP). Erscheint nur, wenn der Betreiber Google eingerichtet hat. |
+| **Google Fotos** | Fotos aus Google Fotos | Auswahl direkt in Google Fotos, siehe unten. Videos werden nicht übernommen. |
+| **Dropbox** | Persönliche Dropbox, freigegebene Ordner in der eigenen Dropbox | Direkte Verbindung, siehe unten. Erscheint nur, wenn der Betreiber die Verbindung eingerichtet hat. |
+| **WebDAV (kDrive, Nextcloud …)** | Infomaniak kDrive, Nextcloud, SwissDisk und andere Speicher mit WebDAV | Verbindung mit Benutzername und **App-Passwort**, siehe unten. |
 
-Direkte Verbindungen zu OneDrive und Google Drive folgen in einer späteren Version.
+
+### Direkt aus Microsoft OneDrive und SharePoint
+
+1. Kachel **Microsoft OneDrive / SharePoint** wählen, Dateitypen und Optionen festlegen, **Weiter**.
+2. **Bei Microsoft anmelden** - die Anmeldung läuft direkt bei Microsoft (privates Konto oder Konto
+   von Arbeit/Schule). hocX bittet zuerst nur um **Lesezugriff auf die eigenen Dateien**.
+3. Im Ordnerbaum die gewünschten Ordner oder Dateien ankreuzen (Pfeiltasten nicht nötig: Tab zu
+   «aufklappen» bzw. zur Checkbox, Enter/Leertaste). Ein gewählter Ordner umfasst alle Unterordner.
+   - **Mein OneDrive**: die eigenen Dateien.
+   - **Für mich freigegeben** und **SharePoint-Websites**: bei Geschäftskonten erst nach einer zweiten
+     Zustimmung («Zugriff erlauben»); hocX fragt erst danach, wenn du es brauchst.
+4. **Dateien auflisten** - hocX geht die Ordner im Hintergrund durch (die Seite darf geschlossen
+   werden). Danach folgen Regeln, Vorschau und Start wie beim ZIP-Import.
+5. Während des Imports lädt hocX die Dateien selbst bei Microsoft herunter; der Browser muss nicht
+   offen bleiben.
+
+**«Freigabe durch die IT nötig»:** Viele Firmen- und Schulkonten erlauben neue Apps erst, wenn ein
+Administrator der Organisation zustimmt. Der Assistent zeigt dann eine Anleitung: Domain der
+Organisation (z. B. `verein.onmicrosoft.com`) eingeben, den **Freigabe-Link** kopieren und der IT
+schicken. Nach der Freigabe erneut anmelden. Private Konten sind nicht betroffen.
+
+**Neu anmelden:** Verlangt Microsoft mitten im Import eine neue Anmeldung (z. B. nach einem
+Passwortwechsel), pausiert der Import und du bekommst eine E-Mail. Mit **Neu anmelden** im Assistenten
+geht es dort weiter, wo der Import stand. Ohne Anmeldung wird er nach 7 Tagen beendet.
+
+**Datenschutz:** hocX liest nur die gewählten Ordner, nur lesend. Der Zugang (Token) wird
+verschlüsselt gespeichert und gelöscht, sobald der Import beendet ist; **Verbindung trennen** löscht
+ihn sofort. Die App-Berechtigung selbst entfernst du bei Microsoft: privat unter
+<https://account.live.com/consent/Manage>, geschäftlich unter <https://myapps.microsoft.com>.
+
+### Direkt aus Google Drive
+
+1. Kachel **Google Drive** wählen, Dateitypen und Optionen festlegen, **Weiter**.
+2. **Bei Google Drive anmelden** - die Anmeldung läuft direkt bei Google. Lässt Google dich einzelne
+   Berechtigungen ankreuzen, das Häkchen für die Dateien setzen; sonst meldet der Assistent «Zugriff
+   nicht erlaubt» und bietet **Neu anmelden** an.
+3. **In Google Drive auswählen** öffnet die Google-Auswahl auf einer eigenen Seite. Dort die Dateien
+   markieren (Mehrfachauswahl, höchstens 200 pro Durchgang, auch aus geteilten Ablagen) und
+   bestätigen. hocX erhält **nur auf diese Dateien** Zugriff, nicht auf den Rest des Drives.
+4. Zurück im Assistenten listet hocX die Dateien auf; danach Regeln, Vorschau und Start wie beim
+   ZIP-Import. Während des Imports lädt hocX die Dateien selbst herunter.
+
+- **Google Docs, Tabellen und Präsentationen** werden als **Word (.docx)**, **Excel (.xlsx)** und
+  **PowerPoint (.pptx)** übernommen, Zeichnungen als PDF. Formulare, Sites und Verknüpfungen lassen
+  sich nicht übernehmen und stehen im Bericht als «nicht unterstützt».
+- **Ganze Ordner** gibt Google über diese Auswahl nicht frei (Google erlaubt hocX nur den Zugriff auf
+  einzeln gewählte Dateien). Für ganze Ordner mit Unterordnern: unter <https://takeout.google.com>
+  «Drive» exportieren und die ZIP-Dateien mit der Quelle **ZIP-Archiv** importieren.
+
+### Direkt aus Google Fotos
+
+1. Kachel **Google Fotos** wählen, **Weiter**, **Bei Google Fotos anmelden**.
+2. **In Google Fotos auswählen** öffnet Google Fotos in einem neuen Fenster (bzw. Tab). Dort die
+   Fotos auswählen und **Fertig** tippen; das Fenster schliesst sich. Öffnet sich kein Fenster
+   (Popup-Blocker), den Link **Google Fotos öffnen** benutzen.
+3. Der Assistent merkt die Auswahl von selbst und listet die Fotos im Ordner «Google Fotos» auf;
+   danach Regeln, Vorschau und Start wie gewohnt.
+
+- Google liefert die Fotos mit Aufnahmedatum und Kameradaten, aber **ohne Standort** (GPS).
+- **Videos** werden nicht übernommen und stehen im Bericht.
+- Die Auswahl bei Google gilt nur begrenzte Zeit. Ist sie abgelaufen, meldet der Assistent das;
+  dann **Auswahl neu starten**.
+
+**Neu anmelden und Datenschutz bei Google:** wie bei Microsoft (oben). Nach dem Import löscht hocX den
+Zugang und widerruft ihn zusätzlich bei Google. Die App-Berechtigung siehst und entfernst du unter
+<https://myaccount.google.com/connections>.
 
 Grenzen: höchstens 50 000 Dateien und 100 GB pro Import; Dokumente bis 20 MB, Bilder bis 100 MB
 (wie beim normalen Hochladen). Grössere oder nicht unterstützte Dateien erscheinen im Bericht.
+
+### Direkt aus Dropbox
+
+1. Kachel **Dropbox** wählen, Optionen festlegen, **Weiter**.
+2. **Bei Dropbox anmelden** - die Anmeldung läuft direkt bei Dropbox. hocX bittet nur um
+   **Lesezugriff** (Dateien und Ordnerangaben); Dropbox zeigt die Berechtigungen vor der Zustimmung.
+3. Im Ordnerbaum unter **Dropbox** die Ordner oder Dateien ankreuzen. Grosse Ordner werden
+   seitenweise geladen (**Weitere laden**). Paper-Dokumente lassen sich nicht als Datei laden und
+   erscheinen nicht.
+4. **Dateien auflisten**, danach Regeln, Vorschau und Start wie oben. Bremst Dropbox (zu viele
+   Anfragen), wartet hocX und macht automatisch weiter.
+
+**Datenschutz:** Der Zugang wird verschlüsselt gespeichert und nach dem Import bei Dropbox
+widerrufen und gelöscht (**Verbindung trennen** sofort). Unter
+<https://www.dropbox.com/account/connected_apps> siehst und entfernst du verbundene Apps.
+
+### Aus kDrive, Nextcloud oder einem anderen WebDAV-Speicher {#webdav}
+
+WebDAV ist ein offenes Verfahren, mit dem viele Schweizer und europäische Speicher Dateien
+bereitstellen. hocX meldet sich dort mit **Benutzername und App-Passwort** an.
+
+1. Kachel **WebDAV (kDrive, Nextcloud …)** wählen, Optionen festlegen, **Weiter**.
+2. **Anbieter** wählen:
+   - **Infomaniak kDrive:** nur Benutzername (die E-Mail-Adresse des Infomaniak-Kontos) und
+     App-Passwort. Wer mehrere kDrives hat, gibt zusätzlich die **kDrive-ID** an (die Zahl in der
+     Adresse, wenn kDrive im Browser offen ist).
+   - **Nextcloud:** zusätzlich die **Serveradresse** des Vereins, z. B. `cloud.verein.ch` (ohne
+     `https://`). Den Pfad ergänzt hocX selbst.
+   - **Andere WebDAV-Adresse** (z. B. SwissDisk): die vollständige WebDAV-Adresse mit `https://`,
+     wie sie der Anbieter angibt.
+3. **Verbinden** - hocX prüft Adresse und Zugangsdaten sofort. Danach wie oben Ordner wählen,
+   **Dateien auflisten**, Regeln, Vorschau, Start.
+
+Erlaubt sind nur verschlüsselte Adressen (`https://`) auf den Ports 443 oder 8443. Adressen im
+eigenen Netz (z. B. ein NAS zu Hause oder `192.168.…`) sind aus Sicherheitsgründen gesperrt - hocX
+kann sie ohnehin nicht erreichen.
+
+**Passwort abgelehnt:** Wird das App-Passwort während des Imports ungültig (gelöscht, geändert),
+pausiert der Import, du bekommst eine E-Mail und gibst mit **Neu anmelden** ein neues App-Passwort
+ein. Der Import geht dort weiter, wo er stand. Adresse und Benutzer müssen dieselben bleiben.
+
+**Datenschutz:** Das App-Passwort wird verschlüsselt gespeichert, nie angezeigt und gelöscht,
+sobald der Import beendet ist (**Verbindung trennen** sofort). Lösche das App-Passwort nach dem
+Import am besten auch beim Anbieter.
+
+#### App-Passwort erstellen {#app-passwort}
+
+Ein App-Passwort ist ein eigenes Passwort nur für hocX. Es funktioniert auch mit
+Zwei-Faktor-Anmeldung und lässt sich jederzeit einzeln löschen, ohne dein normales Passwort zu
+ändern. Die Menüs der Anbieter können sich ändern; im Zweifel in deren Hilfe nach «App-Passwort»
+bzw. «Anwendungspasswort» suchen.
+
+**Infomaniak kDrive**
+
+1. Im Infomaniak Manager anmelden, oben rechts auf das **Profilbild** → **Mein Profil**.
+2. **Sicherheit** → **Anwendungspasswörter** → **Ein Anwendungspasswort erstellen**.
+3. Name `hocX Import` eingeben, bestätigen und das angezeigte Passwort kopieren (es wird nur
+   einmal gezeigt).
+4. In hocX: Anbieter **Infomaniak kDrive**, Benutzername = E-Mail-Adresse des Infomaniak-Kontos,
+   App-Passwort einfügen.
+5. Nach dem Import: dort das Anwendungspasswort wieder löschen.
+
+**Nextcloud**
+
+1. In Nextcloud anmelden, oben rechts auf das **Profilbild** → **Persönliche Einstellungen**.
+2. **Sicherheit** → Abschnitt **Geräte & Sitzungen** → App-Name `hocX Import` eingeben →
+   **Neues App-Passwort erstellen**.
+3. Nextcloud zeigt **Benutzername** und **Passwort** - beide so übernehmen (der Benutzername kann
+   von deinem Anmeldenamen abweichen).
+4. In hocX: Anbieter **Nextcloud**, Serveradresse (wie in der Adresszeile, ohne `https://` und
+   Pfad), Benutzername und App-Passwort.
+5. Nach dem Import: in derselben Liste das App-Passwort mit **Widerrufen** löschen.
+
+**SwissDisk und andere:** In den Kontoeinstellungen des Anbieters nach «WebDAV» suchen; dort
+stehen die Adresse und, falls angeboten, ein App- oder Gerätepasswort.
 
 ## Regeln
 

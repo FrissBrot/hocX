@@ -403,6 +403,18 @@ async def auth_security_maintenance_loop() -> None:
     await run_advisory_locked_loop(name="auth_security_maintenance", interval_seconds=60 * 60, task=_task)
 
 
+async def security_incident_retention_loop() -> None:
+    """Vorfälle des Anmeldeschutzes samt Zeitleiste und Notizen nach security_incident_retention_days
+    (365 Tage ab letzter Aktivität, Plan 1.7) löschen (Datenschutz)."""
+    from app.auth_security import incidents
+
+    await run_advisory_locked_loop(
+        name="security_incident_retention",
+        interval_seconds=24 * 60 * 60,
+        task=lambda db: {"deleted": incidents.purge(db, retention_days=settings.security_incident_retention_days)},
+    )
+
+
 async def password_breach_recheck_loop() -> None:
     """Nachtjob der Leak-Prüfung (1.5.2): merkt Konten und Plattform-Admins vor, deren letzte
     Prüfung älter als PASSWORD_BREACH_RECHECK_DAYS ist - die nächste Anmeldung prüft dann ohne
@@ -464,6 +476,7 @@ BACKEND_LOOPS: tuple[LoopFactory, ...] = (
     document_sync_loop,
     storage_purge_loop,
     auth_security_maintenance_loop,
+    security_incident_retention_loop,
     password_breach_recheck_loop,
 )
 

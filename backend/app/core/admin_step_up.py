@@ -54,6 +54,8 @@ PURPOSES = frozenset({
     "security-block",     # Anmeldeschutz: manuell sperren/entsperren
     "security-export",    # Export von Anmeldeereignissen/Audit-Log
     "security-resolve",   # pseudonymisiertes Subjekt eines Ereignisses einer Person zuordnen
+    "cloud-import-cancel",  # 1.7: Notfall-Abbruch eines Datei-Imports (Plattform-Admin › Datei-Importe)
+    "security-incident",  # 1.7: Vorfall-Status, Zuständig und Notizen (Sicherheit › Vorfälle)
 })
 
 

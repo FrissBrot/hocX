@@ -18,7 +18,8 @@
     "cashflow": "Revenue & billing",
     "users": "Find users",
     "admins": "Platform admins",
-    "securityOverview": "Security",
+    "securityOverview": "Situation",
+    "securityIncidents": "Incidents",
     "securityEvents": "Sign-in events",
     "securityBlocks": "Blocks",
     "securityAlerts": "Alert rules",
@@ -38,7 +39,8 @@
     "account": "Profile & passkeys",
     "settingsSecurity": "Security & sign-in",
     "settingsIntegrations": "Integrations",
-    "settingsSystem": "Technical"
+    "settingsSystem": "Technical",
+    "cloudImports": "File imports"
   },
   "keywords": {
     "pricing": "prices plans features storage packages rebooking",
@@ -48,7 +50,8 @@
     "theme": "appearance theme light dark",
     "settingsSecurity": "passkey step-up confirmation session sign-in",
     "settingsIntegrations": "SMTP ntfy S3 captcha ClamAV Docker backup",
-    "settingsSystem": "version environment migration database domains catalogue"
+    "settingsSystem": "version environment migration database domains catalogue",
+    "cloudImports": "import OneDrive SharePoint cloud ZIP Takeout"
   },
   "actions": {
     "themeLight": "Appearance: light",
@@ -110,7 +113,7 @@
     "empty": "Nothing open.",
     "items": {
       "verifications_open": "{count, plural, one {# review open} other {# reviews open}}",
-      "security_alerts": "{count, plural, one {# security alert} other {# security alerts}}",
+      "security_alerts": "{count, plural, one {# new security incident} other {# new security incidents}}",
       "operations_problems": "{count, plural, one {# operations problem} other {# operations problems}}"
     }
   },
