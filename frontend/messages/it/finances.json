@@ -394,7 +394,11 @@
     "conflict": "La modifica non è possibile perché i dati sono cambiati nel frattempo. Ricarica la pagina.",
     "readOnly": "Nel tuo abbonamento le finanze sono solo in lettura. Le modifiche non sono più possibili.",
     "forbidden": "Non hai l’autorizzazione necessaria.",
-    "invalid": "Controlla i dati inseriti (importo e descrizione)."
+    "invalid": "Controlla i dati inseriti (importo e descrizione).",
+    "no_account": "Per questa multa non è definito alcun conto. Definisci un conto in «Regole delle multe».",
+    "protocol_closed": "Il verbale è chiuso. La multa non può più esservi eliminata.",
+    "no_open_protocol": "Non c’è alcun verbale aperto in cui riportare l’eliminazione. Crea prima un verbale.",
+    "reason_required": "Indica un motivo."
   },
   "locked": {
     "label": "Registrazione bloccata",

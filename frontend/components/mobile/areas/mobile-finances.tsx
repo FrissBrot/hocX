@@ -494,7 +494,7 @@ export function MobileFines({
       setTodoFines((list) => list.map((item) => (item.id === updated.id ? updated : item)));
       setOpenTodoKey(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
+      showToast(financeErrorMessage(error, t, "todoFines.actionFailed"), "error");
     }
   }
 

@@ -136,6 +136,19 @@ def test_route_maps_missing_reason_to_422(db):
     with pytest.raises(HTTPException) as exc:
         fine_routes.delete_fine(fine.public_id, payload=None, db=db, user=user)
     assert exc.value.status_code == 422
+    # Code für die Übersetzung im Frontend (finance-errors.ts), nicht nur deutscher Text (Nachtlauf 2026-11-26)
+    assert exc.value.detail["code"] == "reason_required"
+
+
+def test_route_without_open_protocol_returns_translatable_code(db):
+    user, following, fine = _route_setup(db)
+    following.status = "abgeschlossen"
+    db.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        fine_routes.delete_fine(fine.public_id, payload=DeleteFinePayload(reason="Erlassen"), db=db, user=user)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "no_open_protocol"
 
 
 def test_route_deletes_with_reason_in_the_given_protocol(db):
