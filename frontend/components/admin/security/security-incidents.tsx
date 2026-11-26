@@ -254,7 +254,7 @@ function IncidentTable({
         <tr key={item.id} className={`${selected === item.id ? "admin-incident-row-selected" : ""}${isOpenStatus(item.status) ? "" : " admin-incident-row-closed"}`}>
           <td>
             <span className={`admin-incident-dot admin-incident-dot-${item.severity}`} aria-hidden="true" />
-            <button type="button" className="table-row-link admin-security-mono" aria-label={t("openIncident", { label: incidentLabel(item.id) })} onClick={() => onSelect(item.id)}>
+            <button type="button" className="table-row-link admin-security-mono admin-incident-id-link" aria-label={t("openIncident", { label: incidentLabel(item.id) })} onClick={() => onSelect(item.id)}>
               {incidentLabel(item.id)}
             </button>
           </td>

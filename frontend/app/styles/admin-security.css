@@ -1419,3 +1419,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Nummer «INC-0042» nie umbrechen (schmale Tabelle neben dem Detail) */
+.admin-incident-id-link { white-space: nowrap; }
