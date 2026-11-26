@@ -25,9 +25,11 @@ describe("ImportCloudTree", () => {
   });
 
   it("lädt Ebenen nach, wählt und sperrt Kinder eines gewählten Ordners", async () => {
-    browserApiFetchMock.mockImplementation(async (raw: unknown) => {
-      const path = String(raw);
-      if (path.endsWith("/browse")) return { nodes: [node("me", "OneDrive"), node("shared", "Geteilt", { selectable: false, available: false, requires_tier: "extended" })], cursor: null };
+    browserApiFetchMock.mockImplementation(async (raw: unknown, init?: { method?: string; body?: string }) => {
+      expect(init?.method).toBe("POST");
+      const { ref, cursor } = JSON.parse(init?.body ?? "{}") as { ref: string | null; cursor: string | null };
+      const path = `${String(raw)}${ref ? `?ref=${ref}` : ""}${cursor ? `&cursor=${cursor}` : ""}`;
+      if (!ref) return { nodes: [node("me", "OneDrive"), node("shared", "Geteilt", { selectable: false, available: false, requires_tier: "extended" })], cursor: null };
       if (path.includes("ref=me") && path.includes("cursor=")) return { nodes: [node("item:d:2", "b.jpg", { kind: "file", size: 10, file_kind: "image" })], cursor: null };
       if (path.includes("ref=me")) return { nodes: [node("item:d:1", "Fotos")], cursor: "next-page" };
       throw new Error(path);
@@ -43,7 +45,7 @@ describe("ImportCloudTree", () => {
     await screen.findByText("Fotos");
     fireEvent.click(screen.getByRole("button", { name: "Weitere laden" }));
     await screen.findByText("b.jpg");
-    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/cloud-import/jobs/j1/browse?ref=me&cursor=next-page");
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/cloud-import/jobs/j1/browse", { method: "POST", body: JSON.stringify({ ref: "me", cursor: "next-page" }) });
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ ref: "me" }), true);

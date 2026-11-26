@@ -129,8 +129,8 @@ Muster). Migration `0281_cloud_import_connections`.
 4. Der Wizard ruft mit der Sitzung `POST /cloud-import/oauth/finish`. Nur wenn die angemeldete Person
    die aus dem `state` ist, entsteht die Verbindung (Schutz vor Login-CSRF); sonst 403 und die Tokens
    sind verworfen.
-5. Ordnerbaum: `GET /cloud-import/jobs/{id}/browse?ref=&cursor=` liest live beim Anbieter, speichert
-   nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
+5. Ordnerbaum: `POST /cloud-import/jobs/{id}/browse` (Body `{ref, cursor}`; POST, weil das Lesen
+   Tokens erneuert, 1.7) liest live beim Anbieter, speichert nichts. Auswahl: `POST /cloud-import/jobs/{id}/selection` → `listing`.
 6. job-worker (`remote.run_listing`): rekursiv mit Paging, Stand in `import_job.listing_state` nach jeder
    Seite → `ready` (bzw. zurück zu `draft` mit `empty_source`/`selection_unavailable`).
 7. Regeln, Vorschau, Start wie P0. Danach lädt `remote.download_step` je Datei als Stream nach
@@ -273,7 +273,8 @@ Aufträge bekommen keine Mail.
 `/admin/cloud-imports` (owner): laufende Importe aller Mandanten mit Status und Fortschritt (keine
 Dateinamen, keine Konten), Kennzahlen der letzten 30 Tage je Tag und Quelle (Importe, unterbrochene,
 importierte Dateien, Volumen, Dateien mit Fehler). **Notfall-Abbruch** (`POST
-/api/admin/cloud-imports/{id}/cancel`, `require_admin_write`, Audit `admin.cloud_import_cancelled`): wie
+/api/admin/cloud-imports/{id}/cancel`, `require_admin_write` und Passkey-Bestätigung
+`require_step_up("cloud-import-cancel")` (1.7), Audit `admin.cloud_import_cancelled`): wie
 der Abbruch im Verein, importierte Dateien bleiben, Tokens werden gelöscht.
 
 ### Monitoring
@@ -292,8 +293,8 @@ Entscheid E-3 (a): nur `drive.file` + Google Picker, **kein** `drive.readonly` (
 | Gemeinsam (OAuth `query`, `access_type=offline`, `prompt=consent`, ID-Token → `sub`/E-Mail/`hd`, Widerruf) | `services/cloud_import/providers/google_common.py` |
 | Google Drive (Metadaten, Export, Download) | `providers/google_drive.py` |
 | Google Fotos (Picker-Sitzung, `mediaItems`, `baseUrl`) | `providers/google_photos.py` |
-| Picker-Token, Fotos-Sitzung (Routen) | `api/routes/cloud_import_google.py` |
-| Picker-Seite mit eigener CSP | `frontend/app/files/import/google-picker/page.tsx`, `components/file-import/google-drive-picker.tsx`, `lib/csp.ts` |
+| Picker-Tickets, Fotos-Sitzung (Routen) | `api/routes/cloud_import_google.py`, `services/cloud_import/picker_tickets.py` |
+| Picker-Seite auf eigener Origin mit eigener CSP | `frontend/app/google-picker/page.tsx`, `components/file-import/google-drive-picker.tsx`, `lib/csp.ts`, `proxy.ts` |
 | Auswahl im Wizard | `components/file-import/import-google-select.tsx` |
 | Nachbau (Tests/E2E) | `services/cloud_import/fake_google.py` (+ `/api/cloud-import/fake-google/*` nur mit `CLOUD_IMPORT_FAKE_PROVIDERS`) |
 
@@ -302,21 +303,34 @@ Entscheid E-3 (a): nur `drive.file` + Google Picker, **kein** `drive.readonly` (
 - Scopes (volle URLs, so liefert Google sie in der Token-Antwort zurück): `openid`,
   `…/auth/userinfo.email`, `…/auth/drive.file`. Bei der granularen Zustimmung abgewählt →
   `tier = null` → Wizard zeigt `missing_scope` und «Neu anmelden».
-- Kein Ordnerbaum (`roots()` leer, `public_info = {"selection": "google_picker"}`). Der Wizard verlinkt
-  auf `/files/import/google-picker?job=<id>` (voller Seitenwechsel). Die Seite holt
-  `POST /cloud-import/jobs/{id}/google-drive/picker` (Access-Token der eigenen Verbindung, API-Key,
-  App-ID; `no-store`, auditiert `cloud_import.picker_token`), lädt `https://apis.google.com/js/api.js`
-  mit Nonce, zeigt den Picker (Liste, Mehrfachauswahl, geteilte Ablagen, keine Ordnerauswahl, höchstens
-  200) und schickt die IDs an `/selection`. Danach wieder voller Seitenwechsel in den Wizard.
-- **CSP (Plan §5.3):** nur für genau `/files/import/google-picker` (`lib/csp.ts::cspVariantForPath`,
-  `proxy.ts`, nie auf der Admin-Domain): `script-src` + `https://apis.google.com` (Nonce und
-  `'strict-dynamic'` bleiben, kein `'unsafe-inline'`), `frame-src https://docs.google.com
-  https://drive.google.com` (sonst `'none'`), `connect-src` + `apis.google.com`, `www.googleapis.com`,
-  `content.googleapis.com`, `img-src` + `lh3`–`lh6.googleusercontent.com`, `drive-thirdparty.googleusercontent.com`,
-  `ssl.gstatic.com`, `www.gstatic.com`. Nicht auf Admin- und Website-Domain.
-  `frame-ancestors 'none'` bleibt. Die Seite hat keine App-Shell und keine App-Links, damit die
-  Lockerung nicht über Client-Navigation in andere Ansichten «mitgenommen» wird. Test: `proxy.test.ts`
-  und E2E `cloud-import-google.spec.ts`.
+- Kein Ordnerbaum (`roots()` leer, `public_info = {"selection": "google_picker"}`).
+- **Eigene Origin (1.7, Security-Review N3):** Der Picker lädt Fremdcode (`apis.google.com`, über
+  `'strict-dynamic'`). Er läuft deshalb auf `CLOUD_IMPORT_PICKER_DOMAIN` (eigene Subdomain, Traefik-Router
+  `picker-frontend` nur für `/google-picker` und `/_next/`, `picker-api` nur für
+  `POST /api/cloud-import/picker/`). Dort gibt es kein hocX-Sitzungscookie (host-only). Ablauf:
+  1. Wizard (mit Sitzung): `POST /cloud-import/jobs/{id}/google-drive/picker-ticket` → Token-Ticket
+     (32 Byte, Redis nur SHA-256, einmalig, 10 min, gebunden an Mandant, Person, Auftrag, Stufe) und
+     `picker_url = https://<picker>/google-picker#ticket=…` (Fragment, nie in Logs/Referer); voller
+     Seitenwechsel. Auditiert `cloud_import.picker_ticket`.
+  2. Picker-Seite (ohne Sitzung, `credentials: "omit"`): `POST /cloud-import/picker/google-drive/token`
+     mit dem Ticket → Access-Token der Verbindung (nur `drive.file`), API-Key, App-ID, **Apply-Ticket**
+     und Rücksprung-Adresse (`no-store`, auditiert `cloud_import.picker_token`). Das Backend prüft die
+     Person erneut (aktiv, Anmeldung erlaubt, keine danach beendeten Sitzungen, `files.import`,
+     eigener Auftrag im Entwurf, Scope).
+  3. Picker (Liste, Mehrfachauswahl, geteilte Ablagen, keine Ordnerauswahl, höchstens 200), dann
+     `POST /cloud-import/picker/google-drive/apply` mit Apply-Ticket und Datei-IDs → `listing`, danach
+     voller Seitenwechsel zur Rücksprung-Adresse (zentrale oder aktive App-Domain des Vereins, sonst
+     `CLOUD_IMPORT_REDIRECT_BASE_URL` - nie eine Adresse aus dem Browser).
+  Ohne `CLOUD_IMPORT_PICKER_DOMAIN` wird Google Drive nicht angeboten (kein Rückfall auf die App-Origin).
+  Die Domain ist für Mandanten gesperrt (`traefik_config_service.reserved_system_domains`).
+- **CSP:** gelockert nur auf der Picker-Origin und nur für `/google-picker` (`lib/csp.ts::cspVariantFor`,
+  `proxy.ts`; auf der App-Origin gibt es die Seite nicht, 404): `script-src` + `https://apis.google.com`
+  (Nonce und `'strict-dynamic'` bleiben, kein `'unsafe-inline'`; unter `'strict-dynamic'` wirkt der
+  Host-Eintrag nur in älteren Browsern), `frame-src https://docs.google.com https://drive.google.com`
+  (sonst `'none'`), `connect-src` + `apis.google.com`, `www.googleapis.com`, `content.googleapis.com`,
+  `img-src` + `lh3`–`lh6.googleusercontent.com`, `drive-thirdparty.googleusercontent.com`,
+  `ssl.gstatic.com`, `www.gstatic.com`. `frame-ancestors 'none'` bleibt. Test: `proxy.test.ts` und E2E
+  `cloud-import-google.spec.ts` (Picker auf `picker.localhost`, ohne Sitzung).
 - Google-Formate: `files.export` → DOCX/XLSX/PPTX (Zeichnungen PDF); Name bekommt die Endung,
   `provider_mime` bleibt der Google-Typ (der Download entscheidet daran). `exportSizeLimitExceeded`
   (> 10 MB) → `exportLinks` auf `docs.google.com` (Bearer), sonst `too_large`. Nicht exportierbare Typen

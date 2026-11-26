@@ -215,7 +215,7 @@ export function ImportCloudStep({ job, provider, returnError, onJob, onCancelled
               </div>
             </>
           ) : selectionMode === "google_picker" ? (
-            <GoogleDriveSelect job={job} busy={busy} onCancel={() => void cancel()} />
+            <GoogleDriveSelect job={job} busy={busy} onCancel={() => void cancel()} errorText={errorText} />
           ) : selectionMode === "photos_picker" ? (
             <GooglePhotosSelect job={job} onJob={onJob} onCancel={() => void cancel()} errorText={errorText} />
           ) : (

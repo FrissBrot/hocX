@@ -44,7 +44,7 @@ type SettingsSystem = {
 const KNOWN_PURPOSES = new Set([
   "passkey-manage", "admin-manage", "tenant-delete", "tenant-export", "tenant-import", "storage-destructive", "backup-restore",
   "backup-settings", "catalog-change", "user-mfa-reset", "user-manage", "user-credentials", "platform-settings", "security-block",
-  "security-export", "security-resolve",
+  "security-export", "security-resolve", "cloud-import-cancel",
 ]);
 const INTEGRATION_KEYS = new Set(["smtp", "ntfy", "status_endpoint", "object_storage", "captcha", "clamav", "docker_proxy", "backup"]);
 const DOMAIN_KEYS = ["app", "admin", "abgabebox", "docs", "website"] as const;

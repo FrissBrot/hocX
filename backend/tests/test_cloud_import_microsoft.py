@@ -248,7 +248,7 @@ def test_full_import_work_account_with_sharepoint_and_incremental_consent(db, gr
     job = _job(db, user)
     connected, _ = _connect(db, user, job.id, "work")
     assert connected.connection.tier == "basic" and connected.connection.account_kind == "work"
-    roots = routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=user)
+    roots = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=user)
     assert [(n.ref, n.available, n.label_key) for n in roots.nodes][2] == ("sites", False, "microsoft_sites")
     # Zweite Zustimmung (SharePoint): gleiches Konto, Scopes ergänzt
     connected, params = _connect(db, user, job.id, "work", tier="extended")
@@ -285,7 +285,7 @@ def test_expired_access_token_refresh_then_invalid_grant(db, graph):
     connection.access_expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db.commit()
     before = len(graph.tokens)
-    routes.browse_cloud_folder(job.id, ref="me", cursor=None, db=db, user=user)
+    routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="me", cursor=None), db=db, user=user)
     assert len(graph.tokens) == before + 1  # Refresh mit dem gespeicherten Refresh-Token
     db.refresh(connection)
     assert connection.access_expires_at > datetime.now(UTC)
@@ -294,7 +294,7 @@ def test_expired_access_token_refresh_then_invalid_grant(db, graph):
     graph.invalid_grant = True
     db.commit()
     with pytest.raises(HTTPException) as error:
-        routes.browse_cloud_folder(job.id, ref="me", cursor=None, db=db, user=user)
+        routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="me", cursor=None), db=db, user=user)
     assert error.value.detail["code"] == "reconnect_required"
     db.refresh(connection)
     assert connection.status == "needs_reauth" and connection.refresh_token_encrypted is None

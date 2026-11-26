@@ -2,17 +2,19 @@
 
 Beide Anbieter haben keinen Ordnerbaum (drive.file bzw. Photos Picker API):
 
-- ``POST /cloud-import/jobs/{id}/google-drive/picker`` gibt der Picker-Seite
-  (``/files/import/google-picker``, eigene CSP nur dort) das kurzlebige Access-Token der eigenen
-  Verbindung (nur ``drive.file``), den öffentlichen API-Key und die App-ID. Nur die Person, der die
-  Verbindung gehört, nur im Entwurf, ``Cache-Control: no-store``. Die gewählten IDs gehen danach
-  über ``/cloud-import/jobs/{id}/selection`` (wie bei Microsoft).
+- Google Drive läuft auf einer **eigenen Origin** ohne hocX-Sitzung (Security-Review 1.7, N3,
+  ``services/cloud_import/picker_tickets.py``): ``POST /cloud-import/jobs/{id}/google-drive/picker-ticket``
+  (mit Sitzung, eigener Auftrag, Entwurf) gibt die Adresse der Picker-Seite mit einem einmaligen
+  Ticket im Fragment. Die Seite tauscht es ohne Sitzung gegen das kurzlebige ``drive.file``-Token
+  (``POST /cloud-import/picker/google-drive/token``) und schickt die Auswahl mit einem zweiten
+  Ticket (``…/apply``). ``Cache-Control: no-store`` auf allem, was ein Token enthält.
 - ``POST /cloud-import/jobs/{id}/google-photos/session`` legt eine Picker-Sitzung bei Google an und
   gibt nur die ``pickerUri`` (immer ``https://photos.google.com/…``) zurück; die Sitzungs-ID bleibt
   am Auftrag (``listing_state.picker_session``). ``…/session/poll`` fragt den Stand ab und startet
   bei ``mediaItemsSet`` das Auflisten (Auswahl ``session:<id>``).
 
-Alle Routen: ``files.import`` (über ``cloud_import._load``), eigener Auftrag, Rate-Limit.
+Alle Routen: ``files.import`` (über ``cloud_import._load``, bei den Ticket-Routen für die Person des
+Tickets neu geprüft), eigener Auftrag, Rate-Limit.
 """
 
 from __future__ import annotations
@@ -21,21 +23,27 @@ import uuid
 from datetime import UTC, datetime
 from html import escape
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.routes import cloud_import as routes
+from app.core.client_ip import client_ip
 from app.core.db import get_db
+from app.core.tenant_scope import bind_tenant_scope
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.config import settings
+from app.core.security import CurrentUser, build_current_user, get_current_user, require_permission
+from app.models.entities import AppUser
 from app.services.audit_service import AuditService
-from app.services.cloud_import import connections, providers
+from app.services.cloud_import import connections, picker_tickets, providers
 from app.services.cloud_import.http import ProviderError
 from app.services.cloud_import.jobs import ImportFailure
 from app.services.cloud_import.providers.base import ReauthRequired
+from app.services.cloud_import.providers.google_common import GOOGLE_ID
+from app.services.cloud_import.providers.google_drive import PICKER_MAX_ITEMS
 
 router = APIRouter()
 
@@ -55,7 +63,7 @@ def _google_job(db: Session, user: CurrentUser, job_id: uuid.UUID, source: str, 
     return job, provider, ctx, connection
 
 
-# --- Google Drive: Picker ---------------------------------------------------------------------
+# --- Google Drive: Picker auf eigener Origin (Tickets) ------------------------------------------
 
 
 class DrivePickerRead(BaseModel):
@@ -67,26 +75,153 @@ class DrivePickerRead(BaseModel):
     fake: bool = False
 
 
-@router.post("/cloud-import/jobs/{job_id}/google-drive/picker", response_model=DrivePickerRead)
-def google_drive_picker(job_id: uuid.UUID, response: Response, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    """Picker-Angaben für die eigene Verbindung (Access-Token nur drive.file, kurzlebig)."""
+class PickerTicketRead(BaseModel):
+    # https://<CLOUD_IMPORT_PICKER_DOMAIN>/google-picker#ticket=… (Ticket nur im Fragment)
+    picker_url: str
+
+
+def _wizard_return_url(db: Session, tenant_id: int, request_host: str | None, job_id: uuid.UUID) -> str:
+    """Rücksprung in den Wizard (absolut, die Picker-Seite liegt auf einer anderen Origin): die
+    zentrale Domain oder die aktive App-Domain des Vereins (wie der OAuth-Rücksprung), sonst die
+    Basis der Callbacks - nie eine Adresse aus dem Browser (kein Open Redirect)."""
+    host = routes._allowed_return_host(db, tenant_id, request_host)
+    if host:
+        base = f"https://{host}"
+    elif settings.cloud_import_redirect_base_url:
+        base = settings.cloud_import_redirect_base_url.rstrip("/")
+    elif settings.traefik_domain:
+        base = f"https://{settings.traefik_domain}"
+    else:
+        raise routes._http(ImportFailure(404, "provider_unavailable"))
+    return f"{base}/files/import?job={job_id}"
+
+
+@router.post("/cloud-import/jobs/{job_id}/google-drive/picker-ticket", response_model=PickerTicketRead)
+def google_drive_picker_ticket(
+    job_id: uuid.UUID, request: Request, response: Response, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user),
+):
+    """Ticket für die Picker-Seite auf ihrer eigenen Origin (einmalig, 10 min, an Auftrag und Person gebunden)."""
     require_permission(user, P.FILES_IMPORT)
     enforce_rate_limit(f"cloud-import-picker:{user.user_id}", limit=60, period_seconds=600)
-    job, provider, ctx, connection = _google_job(db, user, job_id, "google_drive")
+    if picker_tickets.picker_origin() is None or not providers.is_available("google_drive"):
+        raise routes._http(ImportFailure(404, "provider_unavailable"))
+    job, provider, _ctx, _connection = _google_job(db, user, job_id, "google_drive")
+    ticket = picker_tickets.issue(picker_tickets.TicketData(
+        stage="token", tenant_id=job.tenant_id, user_id=user.user_id, job_id=str(job.id),
+        return_url=_wizard_return_url(db, job.tenant_id, request.headers.get("host"), job.id),
+        issued_at=datetime.now(UTC).timestamp(),
+    ))
+    AuditService().log(
+        db, action="cloud_import.picker_ticket", actor=user, entity_type="import_job",
+        details={"job_id": str(job.id), "provider": provider.key}, commit=False,
+    )
+    db.commit()
+    response.headers.update(_NO_STORE)
+    return PickerTicketRead(picker_url=picker_tickets.picker_url(ticket))
+
+
+class PickerTicketIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    ticket: str = Field(min_length=20, max_length=100)
+
+
+class PickerTokenRead(DrivePickerRead):
+    # Zweites, eigenes Ticket für das Übernehmen der Auswahl
+    apply_ticket: str
+    return_url: str
+
+
+class PickerApplyIn(PickerTicketIn):
+    file_ids: list[str] = Field(min_length=1, max_length=PICKER_MAX_ITEMS)
+
+
+class PickerApplyRead(BaseModel):
+    return_url: str
+
+
+def _ticket_failure(exc: HTTPException, data: picker_tickets.TicketData) -> HTTPException:
+    """Fehler nach einem gültigen Ticket: die Rücksprung-Adresse mitgeben (die Seite kennt sie sonst nicht)."""
+    if isinstance(exc.detail, dict):
+        return HTTPException(status_code=exc.status_code, detail={**exc.detail, "return_url": data.return_url})
+    return exc
+
+
+def _ticket_user(db: Session, data: picker_tickets.TicketData) -> CurrentUser:
+    """Person des Tickets im Mandanten des Tickets: Konto aktiv, Anmeldung erlaubt, keine danach
+    beendeten Sitzungen; die Berechtigung prüfen die Routen danach wie mit Sitzung."""
+    bind_tenant_scope(db, data.tenant_id)
+    account = db.get(AppUser, data.user_id)
+    revoked = account.session_revoke_at if account is not None else None
+    if (
+        account is None
+        or account.tenant_id != data.tenant_id
+        or not account.is_active
+        or not account.login_enabled
+        or account.has_left
+        or (revoked is not None and revoked.timestamp() >= data.issued_at)
+    ):
+        raise HTTPException(status_code=404, detail={"code": "ticket_invalid", "message": "ticket_invalid", "params": {}})
+    user = build_current_user(db, account, mfa_verified=True)
+    require_permission(user, P.FILES_IMPORT)
+    return user
+
+
+def _consume(payload: PickerTicketIn, request: Request, stage: str) -> picker_tickets.TicketData:
+    # Ohne Sitzung: Grenze je Quell-IP (Tickets sind ohnehin zufällig, einmalig und kurzlebig)
+    enforce_rate_limit(f"cloud-import-picker-ticket:{client_ip(request)}", limit=60, period_seconds=600)
+    data = picker_tickets.consume(payload.ticket, stage)
+    if data is None:
+        raise HTTPException(status_code=404, detail={"code": "ticket_invalid", "message": "ticket_invalid", "params": {}})
+    return data
+
+
+@router.post("/cloud-import/picker/google-drive/token", response_model=PickerTokenRead)
+def google_drive_picker_token(payload: PickerTicketIn, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Für die Picker-Seite (eigene Origin, ohne Sitzung): Token-Ticket → kurzlebiges Access-Token der
+    Verbindung (nur drive.file), API-Key, App-ID und ein Apply-Ticket."""
+    response.headers.update(_NO_STORE)
+    data = _consume(payload, request, "token")
     try:
-        config = provider.picker_config(ctx)
-    except (ProviderError, ReauthRequired) as exc:
-        db.commit()  # erneuerte Tokens bzw. needs_reauth der Verbindung behalten
-        raise routes._provider_failure(exc) from exc
+        user = _ticket_user(db, data)
+        job, provider, ctx, connection = _google_job(db, user, uuid.UUID(data.job_id), "google_drive")
+        try:
+            config = provider.picker_config(ctx)
+        except (ProviderError, ReauthRequired) as exc:
+            db.commit()  # erneuerte Tokens bzw. needs_reauth der Verbindung behalten
+            raise routes._provider_failure(exc) from exc
+    except HTTPException as exc:
+        raise _ticket_failure(exc, data) from exc
     expires = connection.access_expires_at
     remaining = int((expires - datetime.now(UTC)).total_seconds()) if expires else 0
+    apply_ticket = picker_tickets.issue(picker_tickets.TicketData(
+        stage="apply", tenant_id=data.tenant_id, user_id=data.user_id, job_id=data.job_id,
+        return_url=data.return_url, issued_at=data.issued_at,
+    ))
     AuditService().log(
         db, action="cloud_import.picker_token", actor=user, entity_type="import_job",
         details={"job_id": str(job.id), "provider": provider.key}, commit=False,
     )
     db.commit()
+    return PickerTokenRead(**config, expires_in=max(0, remaining), apply_ticket=apply_ticket, return_url=data.return_url)
+
+
+@router.post("/cloud-import/picker/google-drive/apply", response_model=PickerApplyRead)
+def google_drive_picker_apply(payload: PickerApplyIn, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Für die Picker-Seite: gewählte Datei-IDs (nur Dateien, Ordner gibt drive.file nicht frei)
+    übernehmen und das Auflisten starten; danach Rücksprung in den Wizard."""
     response.headers.update(_NO_STORE)
-    return DrivePickerRead(**config, expires_in=max(0, remaining))
+    data = _consume(payload, request, "apply")
+    try:
+        user = _ticket_user(db, data)
+        refs = list(dict.fromkeys(payload.file_ids))[:PICKER_MAX_ITEMS]
+        if not all(GOOGLE_ID.match(ref) for ref in refs):
+            raise routes._http(ImportFailure(422, "invalid_ref"))
+        job, _provider, _ctx, _connection = _google_job(db, user, uuid.UUID(data.job_id), "google_drive")
+        routes.set_cloud_selection(job.id, routes.SelectionIn(refs=refs), db=db, user=user)
+    except HTTPException as exc:
+        raise _ticket_failure(exc, data) from exc
+    return PickerApplyRead(return_url=data.return_url)
 
 
 # --- Google Fotos: Picker-Sitzung -------------------------------------------------------------

@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 697 (Plattform-Admin: 168)
-- Mandanten-Routen mit Rechteprüfung: 438
+- Routen gesamt: 699 (Plattform-Admin: 168)
+- Mandanten-Routen mit Rechteprüfung: 440
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 91
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 24
@@ -210,11 +210,11 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/cloud-import/jobs` | files.import |
 | `POST /api/cloud-import/jobs` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}` | files.import |
-| `GET /api/cloud-import/jobs/{job_id}/browse` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/browse` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/cancel` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/disconnect` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/finish-listing` | files.import |
-| `POST /api/cloud-import/jobs/{job_id}/google-drive/picker` | files.import |
+| `POST /api/cloud-import/jobs/{job_id}/google-drive/picker-ticket` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/google-photos/session` | files.import |
 | `POST /api/cloud-import/jobs/{job_id}/google-photos/session/poll` | files.import |
 | `GET /api/cloud-import/jobs/{job_id}/items` | files.import |
@@ -229,6 +229,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
 | `POST /api/cloud-import/oauth/{provider_key}/callback` | OAuth-Callback ohne Sitzung: einmaliger state (Person/Mandant), PKCE, Rate-Limit; Verbindung erst mit Sitzung über finish (files.import) |
 | `POST /api/cloud-import/oauth/{provider_key}/start` | files.import |
+| `POST /api/cloud-import/picker/google-drive/apply` | files.import |
+| `POST /api/cloud-import/picker/google-drive/token` | files.import |
 | `GET /api/cloud-import/providers` | files.import |
 | `POST /api/cloud-import/uploads/{job_id}/archive` | files.import |
 | `POST /api/cloud-import/uploads/{job_id}/files` | files.import |

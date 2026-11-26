@@ -47,6 +47,7 @@ def _isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "cloud_import_google_client_secret", "google-client-secret-value")
     monkeypatch.setattr(settings, "cloud_import_google_api_key", "AIzaTestPickerKey0123456789")
     monkeypatch.setattr(settings, "cloud_import_google_app_id", "123456789012")
+    monkeypatch.setattr(settings, "cloud_import_picker_domain", "picker.hocx.test")
     for module in (routes, oauth_routes, google_routes):
         monkeypatch.setattr(module, "enforce_rate_limit", lambda *a, **k: None)
     from app.services.cloud_import import jobs
@@ -69,6 +70,13 @@ def _admin(db, tenant):
 
 def _request() -> Request:
     return Request({"type": "http", "method": "GET", "path": "/", "headers": [(b"host", b"hocx.test")], "client": ("203.0.113.7", 1)})
+
+
+def _picker(db, user, job_id, response=None):
+    """Wie der Browser: Ticket mit Sitzung holen, auf der Picker-Origin ohne Sitzung einlösen."""
+    issued = google_routes.google_drive_picker_ticket(job_id, _request(), Response(), db=db, user=user)
+    ticket = parse_qs(urlsplit(issued.picker_url).fragment)["ticket"][0]
+    return google_routes.google_drive_picker_token(google_routes.PickerTicketIn(ticket=ticket), _request(), response or Response(), db=db)
 
 
 def _job(db, user, source=DRIVE):
@@ -160,10 +168,10 @@ def test_drive_full_flow_with_picker_native_formats_and_hashes(db, fake, caplog)
     assert row.account_subject == "google:1100anna" and row.account_kind == "personal"
 
     # Kein Ordnerbaum unter drive.file
-    assert routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=user).nodes == []
+    assert routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=user).nodes == []
     # Picker-Angaben: eigenes Access-Token, öffentlicher Key, App-ID, nicht zwischenspeichern
     response = Response()
-    picker = google_routes.google_drive_picker(job.id, response, db=db, user=user)
+    picker = _picker(db, user, job.id, response)
     assert picker.access_token in fake.tokens and picker.api_key == "AIzaTestPickerKey0123456789"
     assert picker.app_id == "123456789012" and picker.max_items == 200 and picker.expires_in > 3000
     assert response.headers["cache-control"] == "no-store"
@@ -312,7 +320,7 @@ def test_refresh_keeps_the_refresh_token_and_invalid_grant_needs_reauth(db, fake
 
     row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db.commit()
-    google_routes.google_drive_picker(job.id, Response(), db=db, user=user)
+    _picker(db, user, job.id)
     refreshes = [r for r in fake.requests if r.path == "/token" and r.form.get("grant_type") == "refresh_token"]
     assert len(refreshes) == 1 and "scope" not in refreshes[0].form
     db.refresh(row)
@@ -339,12 +347,12 @@ def test_picker_token_only_for_the_owner_and_only_in_draft(db, fake):
     job = _job(db, owner)
     # Ohne Verbindung: neu anmelden
     with pytest.raises(HTTPException) as error:
-        google_routes.google_drive_picker(job.id, Response(), db=db, user=owner)
+        _picker(db, owner, job.id)
     assert error.value.detail["code"] == "reconnect_required"
     _connect(db, owner, job.id)
     for intruder in (other, foreign):
         with pytest.raises(HTTPException) as error:
-            google_routes.google_drive_picker(job.id, Response(), db=db, user=intruder)
+            _picker(db, intruder, job.id)
         assert error.value.status_code in (403, 404)
     # Falsche Quelle
     with pytest.raises(HTTPException) as error:
@@ -353,7 +361,7 @@ def test_picker_token_only_for_the_owner_and_only_in_draft(db, fake):
     fake.pick("anna", "imgHock00001")
     routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["imgHock00001"]), db=db, user=owner)
     with pytest.raises(HTTPException) as error:
-        google_routes.google_drive_picker(job.id, Response(), db=db, user=owner)
+        _picker(db, owner, job.id)
     assert error.value.detail["code"] == "invalid_status"
 
 
@@ -364,7 +372,7 @@ def test_unticked_scope_requires_a_new_sign_in(db, fake):
     connected, _params = _connect(db, user, job.id, scenario="noscope")
     assert connected.connection.tier is None
     with pytest.raises(HTTPException) as error:
-        google_routes.google_drive_picker(job.id, Response(), db=db, user=user)
+        _picker(db, user, job.id)
     assert error.value.detail["code"] == "missing_scope"
 
 
@@ -466,7 +474,7 @@ def test_picker_token_is_refused_when_the_connection_has_broader_scopes(db, fake
     row.granted_scopes = f"{row.granted_scopes} https://www.googleapis.com/auth/drive.readonly"
     db.commit()
     with pytest.raises(HTTPException) as error:
-        google_routes.google_drive_picker(job.id, Response(), db=db, user=user)
+        _picker(db, user, job.id)
     assert error.value.status_code == 403 and error.value.detail["code"] == "provider_access_denied"
 
 
@@ -516,3 +524,87 @@ def test_export_links_only_on_export_paths_and_base_url_refresh_is_single_flight
     assert not errors
     pages = len([r for r in fake.requests if r.path == "/v1/mediaItems"]) - before
     assert pages == 2  # 4 Medien, 2 je Seite: genau ein Durchgang
+
+
+# --- Picker auf eigener Origin (Security-Review 1.7, N3) ---------------------------------------
+
+
+def _ticket(db, user, job_id) -> str:
+    issued = google_routes.google_drive_picker_ticket(job_id, _request(), Response(), db=db, user=user)
+    assert issued.picker_url.startswith("https://picker.hocx.test/google-picker#ticket=")
+    return parse_qs(urlsplit(issued.picker_url).fragment)["ticket"][0]
+
+
+def test_picker_tickets_are_single_use_stage_bound_and_lead_back_to_the_wizard(db, fake):
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id)
+    ticket = _ticket(db, user, job.id)
+    # Token-Ticket taugt nicht als Apply-Ticket
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_apply(google_routes.PickerApplyIn(ticket=ticket, file_ids=["imgHock00001"]), _request(), Response(), db=db)
+    assert error.value.status_code == 404 and error.value.detail["code"] == "ticket_invalid"
+    # … und ist danach verbraucht (falsche Stufe löscht es ebenfalls)
+    with pytest.raises(HTTPException):
+        google_routes.google_drive_picker_token(google_routes.PickerTicketIn(ticket=ticket), _request(), Response(), db=db)
+
+    response = Response()
+    token = _picker(db, user, job.id, response)
+    assert token.access_token in fake.tokens and response.headers["cache-control"] == "no-store"
+    assert token.return_url == f"https://hocx.test/files/import?job={job.id}"
+    # Ordner-IDs bzw. ungültige IDs: abgelehnt, das Ticket ist trotzdem verbraucht
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_apply(google_routes.PickerApplyIn(ticket=token.apply_ticket, file_ids=["../x"]), _request(), Response(), db=db)
+    assert error.value.detail["code"] == "invalid_ref" and error.value.detail["return_url"] == token.return_url
+
+    token = _picker(db, user, job.id)
+    fake.pick("anna", "imgHock00001")
+    applied = google_routes.google_drive_picker_apply(
+        google_routes.PickerApplyIn(ticket=token.apply_ticket, file_ids=["imgHock00001", "imgHock00001"]), _request(), Response(), db=db,
+    )
+    assert applied.return_url == token.return_url
+    row = db.get(ImportJob, job.id)
+    db.refresh(row)
+    assert row.status == "listing" and row.selection == [{"ref": "imgHock00001"}]
+    with pytest.raises(HTTPException):
+        google_routes.google_drive_picker_apply(
+            google_routes.PickerApplyIn(ticket=token.apply_ticket, file_ids=["imgHock00001"]), _request(), Response(), db=db,
+        )
+
+
+def test_picker_ticket_is_void_after_sign_out_everywhere_or_lost_permission(db, fake):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.entities import AppUser
+
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id)
+    ticket = _ticket(db, user, job.id)
+    account = db.get(AppUser, user.user_id)
+    account.session_revoke_at = datetime.now(UTC) + timedelta(seconds=1)
+    db.flush()
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_token(google_routes.PickerTicketIn(ticket=ticket), _request(), Response(), db=db)
+    assert error.value.status_code == 404 and error.value.detail["code"] == "ticket_invalid"
+    account.session_revoke_at = None
+    account.is_active = False
+    db.flush()
+    ticket = _ticket(db, user, job.id)
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_token(google_routes.PickerTicketIn(ticket=ticket), _request(), Response(), db=db)
+    assert error.value.detail["code"] == "ticket_invalid"
+
+
+def test_drive_is_not_offered_without_a_picker_domain(db, fake, monkeypatch):
+    tenant = make_tenant(db)
+    user = _admin(db, tenant)
+    job = _job(db, user)
+    _connect(db, user, job.id)
+    monkeypatch.setattr(settings, "cloud_import_picker_domain", "")
+    assert not providers.is_available(DRIVE)
+    with pytest.raises(HTTPException) as error:
+        google_routes.google_drive_picker_ticket(job.id, _request(), Response(), db=db, user=user)
+    assert error.value.detail["code"] == "provider_unavailable"

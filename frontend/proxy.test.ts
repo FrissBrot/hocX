@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Eigene Origin des Google Pickers (proxy.ts liest die Variable beim Laden des Moduls)
+vi.hoisted(() => {
+  process.env.CLOUD_IMPORT_PICKER_DOMAIN = "picker.example.ch";
+});
+
 import { proxy } from "./proxy";
 
 function unauthenticatedBackend() {
@@ -69,19 +74,31 @@ describe("proxy", () => {
     expect(first.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
   });
 
-  it("lockert die CSP nur auf der Seite des Google Pickers (Cloud-Import §5.3)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
+  it("lockert die CSP nur auf der Picker-Origin und nur für die Picker-Seite (Security-Review 1.7)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
     const directive = (csp: string, name: string) => csp.split("; ").find((entry) => entry.startsWith(`${name} `)) ?? "";
+    const onHost = (host: string, path: string) => proxy(new NextRequest(`https://${host}${path}`, { headers: { host } }));
 
-    const picker = (await proxy(new NextRequest("https://app.example.ch/files/import/google-picker?job=1"))).headers.get("content-security-policy") ?? "";
+    const response = await onHost("picker.example.ch", "/google-picker");
+    const picker = response.headers.get("content-security-policy") ?? "";
+    expect(response.status).toBe(200);
     expect(directive(picker, "frame-src")).toBe("frame-src https://docs.google.com https://drive.google.com");
     expect(directive(picker, "script-src")).toContain("https://apis.google.com");
     expect(directive(picker, "script-src")).toMatch(/'nonce-[^']+'/);
     expect(directive(picker, "script-src")).not.toContain("'unsafe-inline'");
     expect(directive(picker, "frame-ancestors")).toBe("frame-ancestors 'none'");
+    // Ohne Sitzungsprüfung (auf dieser Origin gibt es keine Sitzung)
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    for (const path of ["/files/import", "/files/import/google-picker/x", "/files/import/google-picker-x", "/photos", "/share/abc"]) {
-      const csp = (await proxy(new NextRequest(`https://app.example.ch${path}`))).headers.get("content-security-policy") ?? "";
+    // Auf der Picker-Origin nichts anderes
+    for (const path of ["/", "/files/import", "/google-picker/x", "/login", "/admin"]) {
+      expect((await onHost("picker.example.ch", path)).status, path).toBe(404);
+    }
+    // Auf der App-Origin gibt es die Picker-Seite nicht, und nirgends eine gelockerte CSP
+    for (const path of ["/google-picker", "/google-picker/x", "/files/import/google-picker", "/files/import", "/photos", "/share/abc"]) {
+      const appResponse = await onHost("app.example.ch", path);
+      const csp = appResponse.headers.get("content-security-policy") ?? "";
+      if (path.startsWith("/google-picker")) expect(appResponse.status, path).toBe(404);
       expect(directive(csp, "frame-src"), path).toBe("frame-src 'none'");
       expect(csp, path).not.toContain("google");
     }

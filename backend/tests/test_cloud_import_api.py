@@ -286,16 +286,16 @@ def test_full_flow_connects_lists_downloads_and_imports(db, cloud, caplog):
     assert row.access_token_encrypted and row.access_token_encrypted not in cloud.issued_access
     assert cloud.issued_access[0] not in (row.access_token_encrypted or "")
 
-    roots = routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=user)
+    roots = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=user)
     assert [n.ref for n in roots.nodes] == ["root", "shared"] and roots.nodes[1].available is False
-    page = routes.browse_cloud_folder(job.id, ref="root", cursor=None, db=db, user=user)
+    page = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="root", cursor=None), db=db, user=user)
     assert [n.name for n in page.nodes] == ["Fotos", "Protokoll.pdf"] and page.cursor is None
-    folder = routes.browse_cloud_folder(job.id, ref="f1", cursor=None, db=db, user=user)
+    folder = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="f1", cursor=None), db=db, user=user)
     assert folder.cursor  # Paging (2 je Seite)
-    more = routes.browse_cloud_folder(job.id, ref="f1", cursor=folder.cursor, db=db, user=user)
+    more = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="f1", cursor=folder.cursor), db=db, user=user)
     assert [n.name for n in more.nodes] == ["b.png"]
     with pytest.raises(HTTPException):
-        routes.browse_cloud_folder(job.id, ref="../x?y", cursor=None, db=db, user=user)
+        routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="../x?y", cursor=None), db=db, user=user)
 
     listed = routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["f1", "d1"]), db=db, user=user)
     assert listed.status == "listing"
@@ -393,7 +393,7 @@ def test_foreign_tenant_and_other_admin_cannot_use_the_connection(db, cloud):
     _connect(db, owner, cloud, job.id)
     for user in (colleague, foreign):
         for call in (
-            lambda u: routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=u),
+            lambda u: routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=u),
             lambda u: routes.set_cloud_selection(job.id, routes.SelectionIn(refs=["f1"]), db=db, user=u),
             lambda u: routes.start_cloud_oauth(KEY, routes.OAuthStartIn(job_id=job.id), _request(), db=db, user=u),
             lambda u: routes.disconnect_cloud_account(job.id, db=db, user=u),
@@ -624,7 +624,7 @@ def test_provider_context_paces_every_call(db, cloud, monkeypatch):
     job = _job(db, user)
     _connect(db, user, cloud, job.id)
     calls.clear()
-    routes.browse_cloud_folder(job.id, ref="root", cursor=None, db=db, user=user)
+    routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="root", cursor=None), db=db, user=user)
     assert calls == [(KEY, (100.0, 100))]
 
 

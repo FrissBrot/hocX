@@ -23,12 +23,26 @@ describe("Google-Auswahl im Wizard", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("Google Drive: Auswahl ist ein echter Link auf die Picker-Seite (voller Seitenwechsel)", () => {
-    render(<GoogleDriveSelect job={job} busy={false} onCancel={vi.fn()} />);
-    const link = screen.getByRole("link", { name: "In Google Drive auswählen" });
-    expect(link.getAttribute("href")).toBe(`/files/import/google-picker?job=${job.id}`);
+  it("Google Drive: holt ein Ticket und wechselt auf die Picker-Origin (Ticket nur im Fragment)", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { href: "http://localhost/files/import", pathname: "/files/import", search: "", hash: "", assign });
+    browserApiFetchMock.mockResolvedValue({ picker_url: "https://picker.hocx.example/google-picker#ticket=abc" });
+    render(<GoogleDriveSelect job={job} busy={false} onCancel={vi.fn()} errorText={() => "Fehler"} />);
+    fireEvent.click(screen.getByRole("button", { name: "In Google Drive auswählen" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://picker.hocx.example/google-picker#ticket=abc"));
+    expect(browserApiFetchMock).toHaveBeenCalledWith(`/api/cloud-import/jobs/${job.id}/google-drive/picker-ticket`, { method: "POST" });
+  });
+
+  it("Google Drive: Fehler beim Ticket erscheint als Meldung, Knopf wieder bedienbar", async () => {
+    browserApiFetchMock.mockRejectedValue(new Error("x"));
+    render(<GoogleDriveSelect job={job} busy={false} onCancel={vi.fn()} errorText={() => "Fehler"} />);
+    const choose = screen.getByRole("button", { name: "In Google Drive auswählen" });
+    fireEvent.click(choose);
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith("Fehler", "error"));
+    expect(choose).toBeEnabled();
   });
 
   it("Google Fotos: öffnet die Auswahl im neuen Fenster, fragt ab und meldet den Auftrag weiter", async () => {

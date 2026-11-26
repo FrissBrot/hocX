@@ -269,6 +269,7 @@ services:
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES: ${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES:-}
       CLOUD_IMPORT_GOOGLE_API_KEY: ${CLOUD_IMPORT_GOOGLE_API_KEY:-}
       CLOUD_IMPORT_GOOGLE_APP_ID: ${CLOUD_IMPORT_GOOGLE_APP_ID:-}
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       CLOUD_IMPORT_TOKEN_KEY_FILE: /run/secrets/cloud_import_token_key
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
       CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret
@@ -402,6 +403,13 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
+      # Picker-Origin (Datei-Import 1.7): nur die Ticket-Routen des Google Pickers, nur POST
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && PathPrefix(`/api/cloud-import/picker/`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.middlewares=maintenance-errors-api@file,${ROUTER_PREFIX:-hocx}-api-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.tls.certresolver=${CLOUD_IMPORT_PICKER_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.priority=100"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-api.service=${ROUTER_PREFIX:-hocx}-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.amount=100"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
@@ -565,6 +573,8 @@ services:
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
       TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
+      # Eigene Origin des Google Pickers (proxy.ts: nur /google-picker, gelockerte CSP nur dort)
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
       # Hilfe-Links in der App (lib/docs.ts); leer = keine Links
       TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
@@ -611,6 +621,16 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
+      # Eigene Origin des Google Pickers (Datei-Import 1.7, Security-Review N3): nur die Picker-Seite
+      # und ihre Assets, ohne hocX-Sitzung (Cookies sind host-only); die Ticket-Routen gehen ans
+      # Backend (Router picker-api). Ohne CLOUD_IMPORT_PICKER_DOMAIN greift der Platzhalter nie und
+      # der Cert-Resolver bleibt leer (wie bei der Website).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && (Path(`/google-picker`) || PathPrefix(`/_next/`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.middlewares=maintenance-errors@file,${ROUTER_PREFIX:-hocx}-web-inflight"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.tls.certresolver=${CLOUD_IMPORT_PICKER_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-picker-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
   # Plattform-Admin-Panel (Review M3): dasselbe Frontend-Image als eigener Prozess, nur über den
   # Admin-Entrypoint (adminsecure, OpenZiti) erreichbar. Nur dieser Dienst bekommt von Traefik den
@@ -1008,6 +1028,7 @@ services:
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES: ${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES:-}
       CLOUD_IMPORT_GOOGLE_API_KEY: ${CLOUD_IMPORT_GOOGLE_API_KEY:-}
       CLOUD_IMPORT_GOOGLE_APP_ID: ${CLOUD_IMPORT_GOOGLE_APP_ID:-}
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       CLOUD_IMPORT_TOKEN_KEY_FILE: /run/secrets/cloud_import_token_key
       CLOUD_IMPORT_TOKEN_KEY_PREVIOUS_FILE: /run/secrets/cloud_import_token_key_previous
       CLOUD_IMPORT_MS_CLIENT_SECRET_FILE: /run/secrets/cloud_import_ms_client_secret

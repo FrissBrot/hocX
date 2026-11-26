@@ -33,7 +33,9 @@ const nextConfig = {
   // markup rendered, but nothing was interactive - inputs still worked natively,
   // but anything needing JS (onClick, contenteditable) looked dead. Has no effect
   // outside dev (only read when `next dev` is running).
-  allowedDevOrigins: ["127.0.0.1"],
+  // Dazu die eigene Picker-Origin (CLOUD_IMPORT_PICKER_DOMAIN, im E2E-Stack picker.localhost):
+  // die Picker-Seite lädt ihre Dev-Ressourcen von dort.
+  allowedDevOrigins: ["127.0.0.1", ...[(process.env.CLOUD_IMPORT_PICKER_DOMAIN ?? "").trim().toLowerCase().split(":")[0]].filter(Boolean)],
   experimental: {
     // 10 GiB Fotos + 1 MiB Multipart-Overhead, wie der Release-Router.
     proxyClientMaxBodySize: 10738466816,

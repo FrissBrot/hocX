@@ -14,13 +14,17 @@ export function createNonce(): string {
 }
 
 /**
- * Einzige Seite mit gelockerter CSP: der Google Picker des Datei-Imports (Plan Cloud-Import §5.3,
- * Google Drive mit drive.file). Er lädt den API-Loader von apis.google.com (per Nonce-Skript, danach
- * über 'strict-dynamic'), zeigt die Auswahl in einem iframe von docs.google.com und lädt Vorschaubilder.
- * Gilt nur für genau diesen Pfad (proxy.ts) - die Seite navigiert danach mit einem vollen Seitenwechsel
- * zurück, damit die gelockerte CSP nie für andere Ansichten gilt.
+ * Einzige Seite mit gelockerter CSP: der Google Picker des Datei-Imports (Google Drive mit drive.file).
+ * Er lädt den API-Loader von apis.google.com (per Nonce-Skript, danach über 'strict-dynamic' - die
+ * Host-Einträge in script-src ignorieren CSP3-Browser deshalb, sie bleiben nur für ältere Browser),
+ * zeigt die Auswahl in einem iframe von docs.google.com und lädt Vorschaubilder.
+ *
+ * Seit 1.7 (Security-Review N3) gilt die Lockerung nur auf der **eigenen Origin**
+ * CLOUD_IMPORT_PICKER_DOMAIN und nur für diesen Pfad (proxy.ts): dort gibt es keine hocX-Sitzung,
+ * nachgeladener Fremdcode kann also nichts im Namen der angemeldeten Person tun. Auf der App-Origin
+ * gibt es die Seite nicht.
  */
-export const GOOGLE_PICKER_PATH = "/files/import/google-picker";
+export const GOOGLE_PICKER_PATH = "/google-picker";
 
 const GOOGLE_PICKER_SOURCES = {
   script: ["https://apis.google.com"],
@@ -40,8 +44,15 @@ const GOOGLE_PICKER_SOURCES = {
 
 export type CspVariant = "default" | "google-picker";
 
-export function cspVariantForPath(pathname: string): CspVariant {
-  return pathname === GOOGLE_PICKER_PATH ? "google-picker" : "default";
+/** Gelockerte Variante nur auf der Picker-Origin (Host ohne Port) und nur für die Picker-Seite. */
+export function cspVariantFor(host: string | undefined, pathname: string, pickerHost: string | undefined): CspVariant {
+  return !!pickerHost && host === pickerHost && pathname === GOOGLE_PICKER_PATH ? "google-picker" : "default";
+}
+
+/** Host der Picker-Origin aus CLOUD_IMPORT_PICKER_DOMAIN (ohne Port; im E2E-Stack mit Port gesetzt). */
+export function pickerHostFrom(value: string | undefined): string | undefined {
+  const host = (value ?? "").trim().toLowerCase().split(":")[0];
+  return host || undefined;
 }
 
 export function contentSecurityPolicy(

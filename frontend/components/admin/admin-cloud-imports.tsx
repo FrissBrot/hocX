@@ -9,6 +9,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { stepUpFetch } from "@/lib/admin-step-up";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize, formatInteger } from "@/lib/utils/format";
 
@@ -79,10 +80,11 @@ export function AdminCloudImports({ initialOverview }: { initialOverview: AdminI
   }
 
   async function cancel(job: AdminImport) {
-    const ok = await confirm({ tone: "danger", message: t("cancelConfirm", { tenant: job.tenant_name }), confirmLabel: t("cancel") });
+    const ok = await confirm({ tone: "danger", message: t("cancelConfirm", { tenant: job.tenant_name }), confirmLabel: t("cancelImport") });
     if (!ok) return;
     try {
-      await browserApiFetch(`/api/admin/cloud-imports/${job.id}/cancel`, { method: "POST" });
+      // Passkey-Bestätigung je Abbruch (Backend require_step_up("cloud-import-cancel"))
+      await stepUpFetch("cloud-import-cancel", `/api/admin/cloud-imports/${job.id}/cancel`, { method: "POST" });
       setOverview(await browserApiFetch<AdminImportOverview>("/api/admin/cloud-imports"));
       showToast(t("cancelled"), "success");
     } catch (error) {

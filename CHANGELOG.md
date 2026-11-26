@@ -38,7 +38,7 @@ Installationen aktualisieren können.
   «Google Fotos» auf. Videos werden nicht übernommen.
 - Beide Google-Quellen erscheinen nur, wenn der Betreiber das Google-Projekt eingerichtet hat (neue
   Variablen `CLOUD_IMPORT_GOOGLE_CLIENT_ID`, `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET` (Secret),
-  `CLOUD_IMPORT_GOOGLE_API_KEY`, `CLOUD_IMPORT_GOOGLE_APP_ID`, optional
+  `CLOUD_IMPORT_GOOGLE_API_KEY`, `CLOUD_IMPORT_GOOGLE_APP_ID`, `CLOUD_IMPORT_PICKER_DOMAIN` (nur Drive), optional
   `CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES`; RUNBOOK 27.2). Wurde bei der Anmeldung der Zugriff auf
   Dateien bzw. Fotos abgewählt, bietet der Assistent «Neu anmelden» an. Nach dem Import löscht hocX den
   Zugang und widerruft ihn zusätzlich bei Google.
@@ -70,14 +70,24 @@ Installationen aktualisieren können.
 
 ### Sicherheit
 
-- Die Content-Security-Policy wird nur für die Seite des Google Pickers (`/files/import/google-picker`)
-  gelockert (Skripte von `apis.google.com`, iframe von `docs.google.com`, Nonce bleibt, kein
-  `unsafe-inline`); die Seite hat keine App-Navigation und wechselt mit vollem Seitenaufruf zurück.
+- **Google Picker auf eigener Origin:** Die Picker-Seite läuft auf einer eigenen Subdomain
+  (`CLOUD_IMPORT_PICKER_DOMAIN`) ohne hocX-Sitzung; nachgeladener Google-Code kann so nichts im Namen
+  der angemeldeten Person tun. Die Seite bekommt nur einmalige, 10 Minuten gültige Tickets (an Person
+  und Auftrag gebunden, im URL-Fragment): eines für das `drive.file`-Token, eines für das Übernehmen
+  der Auswahl; danach springt sie in den Wizard zurück (Adresse vom Backend). Nur dort ist die
+  Content-Security-Policy gelockert (Skripte von `apis.google.com`, iframe von `docs.google.com`,
+  Nonce bleibt, kein `unsafe-inline`); auf der App-Origin gibt es die Seite nicht. Ohne Picker-Domain
+  wird Google Drive nicht angeboten.
 - Google meldet Drosselung teils als 403 (`userRateLimitExceeded`): wird jetzt wie 429 behandelt
   (Pause statt «kein Zugriff»). Das Bearer-Token für Google-Fotos-Downloads geht nur an
   `lhN.googleusercontent.com`, nie an andere Hosts unter `googleusercontent.com`.
 - Cloud-Import: die Prüfung öffentlicher Adressen sperrt zusätzlich CGNAT (100.64/10), das
   Benchmark-Netz (198.18/15) und IPv6-Formen mit eingebetteter IPv4 (NAT64, 6to4, Teredo).
+- Cloud-Import (Security-Review 1.7): der Notfall-Abbruch im Plattform-Admin verlangt eine
+  Passkey-Bestätigung (Zweck «cloud-import-cancel»); der Ordnerbaum wird per `POST` gelesen (das
+  Lesen erneuert Tokens); Rate-Limits für Auswahl und «Verbindung trennen»; «Trennen» mitten im
+  Import behält die Kontobindung (ein anderes Konto kann den Auftrag nicht übernehmen); Tokens
+  werden bei Rechteverlust bzw. gesperrten Konten sofort gelöscht.
 
 ### Update
 
@@ -94,6 +104,11 @@ Installationen aktualisieren können.
   Netz `cache` und bekommt `REDIS_URL`/`redis_password` (Token-Bucket). Schritt-für-Schritt-Anleitung (Entra-App, Redirect-URIs je Umgebung,
   Scopes, Secret mit Ablaufdatum, Herausgeberverifizierung, `.env`): RUNBOOK Abschnitt 27.
   `deploy.sh` bricht ab, wenn die Client-ID ohne Secret oder Ablaufdatum gesetzt ist.
+- **Neue Variable `CLOUD_IMPORT_PICKER_DOMAIN`** (kein Secret, backend, job-worker, frontend): eigene
+  Subdomain für den Google Picker, z. B. `picker.hocx.ch`. DNS-Eintrag auf den Server anlegen, das
+  Zertifikat holt Traefik (neue Router `picker-frontend`, `picker-api`). Bei Google die Picker-Domain
+  als JavaScript-Quelle und als einzige Referrer-Einschränkung des API-Keys eintragen (RUNBOOK 27.2,
+  Schritte 4, 5, 5a). Ohne sie wird Google Drive nicht angeboten.
 - Ausgehende Verbindungen von backend und job-worker (nur wenn Microsoft eingerichtet ist):
   `login.microsoftonline.com`, `graph.microsoft.com`, `*.sharepoint.com`, `*.1drv.com`,
   `*.livefilestore.com` (HTTPS). Microsoft schafft die vorauthentifizierten Download-URLs für

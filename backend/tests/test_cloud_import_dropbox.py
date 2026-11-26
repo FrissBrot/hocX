@@ -134,13 +134,13 @@ def test_full_import_with_paging_download_and_token_cleanup(db, box, caplog):
     exchange = next(r for r in box.requests if r.path == "/oauth2/token")
     assert "scope" not in exchange.form and exchange.form["client_secret"] == "dbx-app-secret-value"
 
-    roots = routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=user)
+    roots = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=user)
     assert [(n.ref, n.label_key) for n in roots.nodes] == [("root", "dropbox")]
-    first = routes.browse_cloud_folder(job.id, ref="root", cursor=None, db=db, user=user)
+    first = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="root", cursor=None), db=db, user=user)
     assert [n.name for n in first.nodes] == ["Fotos", "Statuten.pdf"] and first.cursor is None  # Paper-Dokument fehlt
-    lager = routes.browse_cloud_folder(job.id, ref="id:lager", cursor=None, db=db, user=user)
+    lager = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="id:lager", cursor=None), db=db, user=user)
     assert len(lager.nodes) == 2 and lager.cursor  # Seite 1 von 2
-    more = routes.browse_cloud_folder(job.id, ref="id:lager", cursor=lager.cursor, db=db, user=user)
+    more = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="id:lager", cursor=lager.cursor), db=db, user=user)
     assert [n.name for n in more.nodes] == ["See.jpg"] and more.cursor is None
     # Der Cursor geht nur im JSON-Körper an Dropbox, nie in eine URL
     continued = [r for r in box.requests if r.path == "/2/files/list_folder/continue"]
@@ -201,7 +201,7 @@ def test_refresh_keeps_the_refresh_token(db, box):
     before = row.refresh_token_encrypted
     row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db.commit()
-    routes.browse_cloud_folder(job.id, ref="root", cursor=None, db=db, user=user)
+    routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="root", cursor=None), db=db, user=user)
     db.refresh(row)
     refresh = [r for r in box.requests if r.path == "/oauth2/token" and r.form.get("grant_type") == "refresh_token"]
     assert refresh and "scope" not in refresh[0].form

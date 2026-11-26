@@ -377,7 +377,8 @@
       "photos_session_expired": "Die Auswahl in Google Fotos ist abgelaufen. Bitte neu starten.",
       "photos_session_missing": "Bitte zuerst die Auswahl in Google Fotos starten.",
       "wrong_source": "Dieser Schritt passt nicht zur gewählten Quelle.",
-      "invalid_status": "Dieser Import ist nicht mehr im Entwurf. Bitte im Assistenten weitermachen."
+      "invalid_status": "Dieser Import ist nicht mehr im Entwurf. Bitte im Assistenten weitermachen.",
+      "ticket_invalid": "Der Zugang zur Google-Auswahl ist abgelaufen oder wurde schon verwendet. Bitte im Import-Assistenten erneut «In Google Drive auswählen» wählen."
     },
     "adminConsent": {
       "title": "Hilfe: Freigabe durch die IT der Organisation",

@@ -8,7 +8,6 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import {
   apiErrorCode,
-  GOOGLE_PICKER_PAGE,
   isPhotosPickerUri,
   photosPickerUrl,
   type ImportJob,
@@ -18,19 +17,44 @@ import {
 
 type ErrorText = (error: unknown) => string;
 
-/** Google Drive (drive.file): Auswahl nur im Google Picker auf eigener Seite (eigene CSP). */
-export function GoogleDriveSelect({ job, onCancel, busy }: { job: ImportJob; onCancel: () => void; busy: boolean }) {
+/** Google Drive (drive.file): Auswahl im Google Picker auf eigener Origin ohne hocX-Sitzung (eigene CSP).
+ *  Die Seite bekommt nur ein einmaliges Ticket im Fragment (backend picker_tickets.py). */
+export function GoogleDriveSelect({
+  job,
+  onCancel,
+  busy,
+  errorText,
+}: {
+  job: ImportJob;
+  onCancel: () => void;
+  busy: boolean;
+  errorText: ErrorText;
+}) {
   const t = useTranslations("fileImport");
+  const showToast = useToast();
+  const [opening, setOpening] = useState(false);
+
+  async function openPicker() {
+    setOpening(true);
+    try {
+      const issued = await browserApiFetch<{ picker_url: string }>(`/api/cloud-import/jobs/${job.id}/google-drive/picker-ticket`, { method: "POST" });
+      // Voller Seitenwechsel auf die Picker-Origin (Ticket im Fragment, nie in Logs/Referer)
+      window.location.assign(issued.picker_url);
+    } catch (error) {
+      showToast(errorText(error), "error");
+      setOpening(false);
+    }
+  }
+
   return (
     <>
       <p className="muted">{t("cloud.google.driveHint")}</p>
       <p className="field-help">{t("cloud.google.driveFolders")}</p>
       <div className="modal-actions">
-        <button type="button" className="button-ghost" disabled={busy} onClick={onCancel}>{t("cancel.label")}</button>
-        {/* Voller Seitenwechsel (kein Link der App): nur die Picker-Seite bekommt die gelockerte CSP */}
-        <a className="button-primary" href={`${GOOGLE_PICKER_PAGE}?job=${encodeURIComponent(job.id)}`}>
+        <button type="button" className="button-ghost" disabled={busy || opening} onClick={onCancel}>{t("cancel.label")}</button>
+        <button type="button" className="button-primary" disabled={busy || opening} onClick={() => void openPicker()}>
           {t("cloud.google.driveChoose")}
-        </a>
+        </button>
       </div>
     </>
   );

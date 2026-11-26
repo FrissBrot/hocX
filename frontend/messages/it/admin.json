@@ -1698,7 +1698,8 @@
         "platform-settings": "Impostazioni della piattaforma e credenziali",
         "security-block": "Impostare o rimuovere blocchi di accesso",
         "security-export": "Esportare dati di sicurezza",
-        "security-resolve": "Associare uno pseudonimo a un account"
+        "security-resolve": "Associare uno pseudonimo a un account",
+        "cloud-import-cancel": "Interrompere d’emergenza un’importazione di file"
       }
     },
     "integrations": {
@@ -1843,6 +1844,7 @@
     "jobsCell": "{jobs, number} ({failed, number} interrotte)",
     "throttled": "rallentata",
     "cancel": "Annulla",
+    "cancelImport": "Interrompi l’importazione",
     "cancelConfirm": "Annullare l’importazione di «{tenant}»? I file già importati restano, l’accesso cloud viene eliminato.",
     "cancelled": "L’importazione viene annullata.",
     "cancelFailed": "Non è stato possibile annullare l’importazione."

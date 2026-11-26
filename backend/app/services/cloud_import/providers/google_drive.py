@@ -2,11 +2,11 @@
 
 - ``drive.file`` (non-sensitive) gibt nur Zugriff auf Dateien, die die Person im **Google Picker**
   ausgewählt hat. Einen Ordnerbaum gibt es deshalb nicht (``roots`` ist leer); der Wizard öffnet den
-  Picker auf einer eigenen Seite mit routenspezifischer CSP (Plan §5.3, ``frontend/lib/csp.ts``) und
-  schickt die gewählten Datei-IDs an ``/selection``. Ganze Ordner gehen über das Takeout-ZIP (P0),
+  Picker auf einer eigenen Origin ohne hocX-Sitzung (``CLOUD_IMPORT_PICKER_DOMAIN``, CSP nur dort,
+  ``frontend/lib/csp.ts``); Token und Auswahl laufen über einmalige Tickets (``picker_tickets.py``). Ganze Ordner gehen über das Takeout-ZIP (P0),
   weil eine Ordnerauswahl im Picker keinen Zugriff auf den Inhalt gibt (§3.2).
 - Picker-Token: ``picker_config`` gibt der Person ihr eigenes, kurzlebiges Access-Token (nur
-  ``drive.file``) für genau diese Seite, dazu den öffentlichen API-Key und die App-ID (Projektnummer;
+  ``drive.file``) für die Picker-Seite (nur gegen ein Picker-Ticket), dazu den öffentlichen API-Key und die App-ID (Projektnummer;
   ohne ``setAppId`` gibt der Picker der App keinen Zugriff auf die Auswahl).
 - Google-eigene Formate (§3.4): Docs → DOCX, Tabellen → XLSX, Präsentationen → PPTX, Zeichnungen →
   PDF über ``files.export`` (max. 10 MB). Grössere Exporte (``exportSizeLimitExceeded``) über die
@@ -86,8 +86,13 @@ class GoogleDriveProvider(GoogleProvider):
     )
 
     def configured(self) -> bool:
-        # Ohne Picker (API-Key + Projektnummer) lässt sich unter drive.file nichts auswählen
-        return self._client_configured() and bool(settings.cloud_import_google_api_key and settings.cloud_import_google_app_id)
+        # Ohne Picker (API-Key + Projektnummer) lässt sich unter drive.file nichts auswählen; der
+        # Picker läuft nur auf seiner eigenen Origin (CLOUD_IMPORT_PICKER_DOMAIN, kein Rückfall auf die App)
+        return (
+            self._client_configured()
+            and bool(settings.cloud_import_google_api_key and settings.cloud_import_google_app_id)
+            and bool(settings.cloud_import_picker_domain.strip())
+        )
 
     def public_info(self) -> dict:
         return {"selection": "google_picker"}

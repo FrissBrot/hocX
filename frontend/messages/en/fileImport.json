@@ -377,7 +377,8 @@
       "photos_session_expired": "The selection in Google Photos has expired. Please start again.",
       "photos_session_missing": "Please start the selection in Google Photos first.",
       "wrong_source": "This step does not match the selected source.",
-      "invalid_status": "This import is no longer a draft. Please continue in the wizard."
+      "invalid_status": "This import is no longer a draft. Please continue in the wizard.",
+      "ticket_invalid": "Access to the Google picker has expired or was already used. Please choose “Select in Google Drive” again in the import wizard."
     },
     "adminConsent": {
       "title": "Help: approval by the organisation’s IT",

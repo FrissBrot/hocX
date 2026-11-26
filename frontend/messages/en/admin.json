@@ -1698,7 +1698,8 @@
         "platform-settings": "Platform settings and credentials",
         "security-block": "Set or lift sign-in blocks",
         "security-export": "Export security data",
-        "security-resolve": "Map pseudonym to an account"
+        "security-resolve": "Map pseudonym to an account",
+        "cloud-import-cancel": "Emergency-cancel a file import"
       }
     },
     "integrations": {
@@ -1843,6 +1844,7 @@
     "jobsCell": "{jobs, number} ({failed, number} interrupted)",
     "throttled": "throttled",
     "cancel": "Cancel",
+    "cancelImport": "Cancel import",
     "cancelConfirm": "Cancel the import of “{tenant}”? Files already imported stay, the cloud access is deleted.",
     "cancelled": "The import is being cancelled.",
     "cancelFailed": "The import could not be cancelled."

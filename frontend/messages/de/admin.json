@@ -1698,7 +1698,8 @@
         "platform-settings": "Plattform-Einstellungen und Zugangsdaten",
         "security-block": "Anmeldesperren setzen oder aufheben",
         "security-export": "Sicherheitsdaten exportieren",
-        "security-resolve": "Pseudonym einem Konto zuordnen"
+        "security-resolve": "Pseudonym einem Konto zuordnen",
+        "cloud-import-cancel": "Datei-Import notfallmässig abbrechen"
       }
     },
     "integrations": {
@@ -1843,6 +1844,7 @@
     "jobsCell": "{jobs, number} ({failed, number} unterbrochen)",
     "throttled": "gedrosselt",
     "cancel": "Abbrechen",
+    "cancelImport": "Import abbrechen",
     "cancelConfirm": "Import von «{tenant}» abbrechen? Bereits importierte Dateien bleiben, der Cloud-Zugang wird gelöscht.",
     "cancelled": "Der Import wird abgebrochen.",
     "cancelFailed": "Der Import konnte nicht abgebrochen werden."

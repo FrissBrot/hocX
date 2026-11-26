@@ -73,6 +73,8 @@ def reserved_system_domains() -> set[str]:
                 settings.traefik_admin_domain,
                 settings.traefik_docs_domain,
                 settings.traefik_website_domain,
+                # Eigene Origin des Google Pickers (Datei-Import 1.7): nie eine Mandanten-Domain
+                (settings.cloud_import_picker_domain or "").split(":")[0],
             ),
         )
         if d

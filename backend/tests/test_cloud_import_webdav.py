@@ -591,14 +591,14 @@ def test_full_import_via_worker_and_credentials_deleted_at_the_end(db, dav, capl
     job = _job(db, user)
     password = _password()
     _connect(db, user, job.id, password=password)
-    roots = routes.browse_cloud_folder(job.id, ref=None, cursor=None, db=db, user=user)
+    roots = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=None, cursor=None), db=db, user=user)
     assert [(n.ref, n.label_key, n.kind) for n in roots.nodes] == [("p", "webdav", "folder")]
-    top = routes.browse_cloud_folder(job.id, ref="p", cursor=None, db=db, user=user)
+    top = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="p", cursor=None), db=db, user=user)
     assert [n.name for n in top.nodes] == ["Fotos", "Protokolle"] and top.cursor is None
-    fotos = routes.browse_cloud_folder(job.id, ref=top.nodes[0].ref, cursor=None, db=db, user=user)
+    fotos = routes.browse_cloud_folder(job.id, routes.BrowseIn(ref=top.nodes[0].ref, cursor=None), db=db, user=user)
     assert [(n.name, n.kind) for n in fotos.nodes] == [("2024", "folder"), ("Ausflug.png", "file")]
     with pytest.raises(HTTPException) as error:
-        routes.browse_cloud_folder(job.id, ref="p" + base64.urlsafe_b64encode(b"../x").decode().rstrip("="), cursor=None, db=db, user=user)
+        routes.browse_cloud_folder(job.id, routes.BrowseIn(ref="p" + base64.urlsafe_b64encode(b"../x").decode().rstrip("="), cursor=None), db=db, user=user)
     assert _code(error) == "invalid_ref"
     # Keine Anfrage mit Depth: infinity
     assert all(r.headers.get("Depth") in ("0", "1", None) for r in dav.requests)

@@ -31,13 +31,12 @@ export function ImportCloudTree({ jobId, selected, onToggle, onRequestTier }: Pr
         ...current,
         [key]: { nodes: cursor ? current[key]?.nodes ?? [] : [], cursor: null, loading: true, error: null },
       }));
-      const params = new URLSearchParams();
-      if (ref) params.set("ref", ref);
-      if (cursor) params.set("cursor", cursor);
       try {
-        const page = await browserApiFetch<{ nodes: CloudNode[]; cursor: string | null }>(
-          `/api/cloud-import/jobs/${jobId}/browse${params.toString() ? `?${params.toString()}` : ""}`,
-        );
+        // POST: das Lesen erneuert Tokens beim Anbieter (zustandsändernd, nie per GET)
+        const page = await browserApiFetch<{ nodes: CloudNode[]; cursor: string | null }>(`/api/cloud-import/jobs/${jobId}/browse`, {
+          method: "POST",
+          body: JSON.stringify({ ref, cursor }),
+        });
         setBranches((current) => ({
           ...current,
           [key]: { nodes: [...(cursor ? current[key]?.nodes ?? [] : []), ...page.nodes], cursor: page.cursor, loading: false, error: null },

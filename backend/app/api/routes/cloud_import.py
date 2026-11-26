@@ -1064,11 +1064,21 @@ def _provider_failure(exc: Exception) -> HTTPException:
     return _http(ImportFailure(status_code, f"provider_{code}"))
 
 
-@router.get("/cloud-import/jobs/{job_id}/browse", response_model=BrowseRead)
+class BrowseIn(BaseModel):
+    """Ebene des Ordnerbaums: ohne ref die Wurzeln; cursor = nächste Seite derselben Ebene."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ref: str | None = Field(default=None, max_length=600)
+    cursor: str | None = Field(default=None, max_length=4000)
+
+
+# POST statt GET (Security-Review 1.7, I1): das Lesen erneuert Tokens bzw. setzt die Verbindung auf
+# needs_reauth - zustandsändernd, also nie per GET (SECURITY-RULES §3.1, Origin-Prüfung greift).
+@router.post("/cloud-import/jobs/{job_id}/browse", response_model=BrowseRead)
 def browse_cloud_folder(
     job_id: uuid.UUID,
-    ref: str | None = Query(default=None, max_length=600),
-    cursor: str | None = Query(default=None, max_length=4000),
+    payload: BrowseIn,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -1079,6 +1089,7 @@ def browse_cloud_folder(
     if not providers.is_api_source(job.source) or job.status != "draft":
         raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
     provider, ctx, _connection = _remote_context(db, job)
+    ref, cursor = payload.ref, payload.cursor
     if ref is not None and not provider.validate_ref(ref):
         raise _http(ImportFailure(422, "invalid_ref"))
     try:
@@ -1116,6 +1127,9 @@ def set_cloud_selection(
     job_id: uuid.UUID, payload: SelectionIn, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
 ):
     """Gewählte Ordner/Dateien speichern und das Auflisten im Hintergrund starten (``listing``)."""
+    _require_import(user)
+    # Löscht Einträge und startet das Auflisten beim Anbieter (Security-Review 1.7, I5)
+    enforce_rate_limit(f"cloud-import-selection:{user.user_id}", limit=30, period_seconds=600)
     job = _load(db, user, job_id, owner=True, lock=True)
     if not providers.is_api_source(job.source) or job.status != "draft":
         raise _http(ImportFailure(409, "invalid_status", {"status": job.status}))
@@ -1139,6 +1153,9 @@ def set_cloud_selection(
 @router.post("/cloud-import/jobs/{job_id}/disconnect", response_model=ImportJobRead)
 def disconnect_cloud_account(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Verbindung (Tokens) sofort löschen. Ein laufender Import wartet danach auf eine neue Anmeldung."""
+    _require_import(user)
+    # Widerruf beim Anbieter je Aufruf (Security-Review 1.7, I5)
+    enforce_rate_limit(f"cloud-import-disconnect:{user.user_id}", limit=20, period_seconds=600)
     job = _load(db, user, job_id, owner=True, lock=True)
     if not providers.is_api_source(job.source):
         raise _http(ImportFailure(409, "wrong_source"))

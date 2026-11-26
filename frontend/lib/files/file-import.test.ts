@@ -7,8 +7,8 @@ import {
   isPhotosPickerUri,
   photosPickerUrl,
   pickedFileIds,
-  pickerJobId,
-  wizardUrl,
+  pickerTicket,
+  safeReturnUrl,
   cleanRule,
   importProgress,
   isHiddenPath,
@@ -115,12 +115,16 @@ describe("Google-Auswahl", () => {
     expect(pickedFileIds(docs, 1)).toEqual(["abc_DEF-1"]);
   });
 
-  it("liest nur eine gültige Auftrags-ID und springt relativ zurück", () => {
-    const id = "0194f1c2-1111-7aaa-8bbb-123456789abc";
-    expect(pickerJobId(`?job=${id}`)).toBe(id);
-    expect(pickerJobId("?job=https://evil.example")).toBeNull();
-    expect(wizardUrl(id)).toBe(`/files/import?job=${id}`);
-    expect(wizardUrl(null)).toBe("/files/import");
+  it("liest das Picker-Ticket nur aus dem Fragment und springt nur in den Wizard zurück", () => {
+    const ticket = "Ab-_0123456789abcdefghijKLMN";
+    expect(pickerTicket(`#ticket=${ticket}`)).toBe(ticket);
+    expect(pickerTicket("#ticket=kurz")).toBeNull();
+    expect(pickerTicket("#ticket=<script>alert(1)</script>xxxxxxxxxxxx")).toBeNull();
+    expect(safeReturnUrl("https://hocx.example/files/import?job=1")).toBe("https://hocx.example/files/import?job=1");
+    expect(safeReturnUrl("javascript:alert(1)")).toBeNull();
+    expect(safeReturnUrl("https://hocx.example/admin")).toBeNull();
+    expect(safeReturnUrl("https://user@evil.example/files/import")).toBeNull();
+    expect(safeReturnUrl(5)).toBeNull();
   });
 
   it("öffnet nur Auswahlseiten von Google Fotos", () => {

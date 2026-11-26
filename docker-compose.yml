@@ -271,6 +271,7 @@ services:
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET: ${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}
       CLOUD_IMPORT_GOOGLE_API_KEY: ${CLOUD_IMPORT_GOOGLE_API_KEY:-}
       CLOUD_IMPORT_GOOGLE_APP_ID: ${CLOUD_IMPORT_GOOGLE_APP_ID:-}
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
       CLOUD_IMPORT_DROPBOX_APP_SECRET: ${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}
       CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}
@@ -332,6 +333,13 @@ services:
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
+      # Picker-Origin (Datei-Import 1.7): nur die Ticket-Routen des Google Pickers, nur POST
+      - "traefik.http.routers.hocx-picker-api.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && PathPrefix(`/api/cloud-import/picker/`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-picker-api.middlewares=api-inflight"
+      - "traefik.http.routers.hocx-picker-api.entrypoints=websecure"
+      - "traefik.http.routers.hocx-picker-api.tls.certresolver=${CLOUD_IMPORT_PICKER_DOMAIN:+letsencrypt}"
+      - "traefik.http.routers.hocx-picker-api.priority=100"
+      - "traefik.http.routers.hocx-picker-api.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.api-inflight.inflightreq.amount=100"
       - "traefik.http.middlewares.api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
@@ -519,6 +527,8 @@ services:
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
       TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
+      # Eigene Origin des Google Pickers (proxy.ts: nur /google-picker, gelockerte CSP nur dort)
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
       # Hilfe-Links in der App (lib/docs.ts); leer = keine Links
       TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
@@ -569,6 +579,13 @@ services:
       - "traefik.http.routers.hocx-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+letsencrypt}"
       - "traefik.http.routers.hocx-website-frontend.priority=10"
       - "traefik.http.routers.hocx-website-frontend.service=hocx-frontend"
+      # Eigene Origin des Google Pickers (Datei-Import 1.7): nur die Picker-Seite und ihre Assets
+      - "traefik.http.routers.hocx-picker-frontend.rule=Host(`${CLOUD_IMPORT_PICKER_DOMAIN:-picker.invalid}`) && (Path(`/google-picker`) || PathPrefix(`/_next/`))"
+      - "traefik.http.routers.hocx-picker-frontend.middlewares=web-inflight"
+      - "traefik.http.routers.hocx-picker-frontend.entrypoints=websecure"
+      - "traefik.http.routers.hocx-picker-frontend.tls.certresolver=${CLOUD_IMPORT_PICKER_DOMAIN:+letsencrypt}"
+      - "traefik.http.routers.hocx-picker-frontend.priority=10"
+      - "traefik.http.routers.hocx-picker-frontend.service=hocx-frontend"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).
@@ -948,6 +965,7 @@ services:
       CLOUD_IMPORT_GOOGLE_CLIENT_SECRET: ${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET:-}
       CLOUD_IMPORT_GOOGLE_API_KEY: ${CLOUD_IMPORT_GOOGLE_API_KEY:-}
       CLOUD_IMPORT_GOOGLE_APP_ID: ${CLOUD_IMPORT_GOOGLE_APP_ID:-}
+      CLOUD_IMPORT_PICKER_DOMAIN: ${CLOUD_IMPORT_PICKER_DOMAIN:-}
       CLOUD_IMPORT_DROPBOX_APP_KEY: ${CLOUD_IMPORT_DROPBOX_APP_KEY:-}
       CLOUD_IMPORT_DROPBOX_APP_SECRET: ${CLOUD_IMPORT_DROPBOX_APP_SECRET:-}
       CLOUD_IMPORT_WEBDAV_ENABLED: ${CLOUD_IMPORT_WEBDAV_ENABLED:-true}

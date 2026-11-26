@@ -462,6 +462,23 @@ run_preflight() {
       return 1
     fi
   fi
+  # Eigene Origin des Google Pickers: ein Hostname, nicht die App-, Admin-, Abgabebox-, Doku- oder
+  # Website-Domain. Ohne ihn wird Google Drive nicht angeboten (kein Rueckfall auf die App-Origin).
+  if [ -n "${CLOUD_IMPORT_PICKER_DOMAIN:-}" ]; then
+    if ! [[ "${CLOUD_IMPORT_PICKER_DOMAIN}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]]; then
+      echo "CLOUD_IMPORT_PICKER_DOMAIN muss ein Hostname sein (z. B. picker.hocx.ch, ohne https:// und ohne Port)." >&2
+      return 1
+    fi
+    local picker_other
+    for picker_other in "${TRAEFIK_DOMAIN:-}" "${TRAEFIK_ADMIN_DOMAIN:-}" "${TRAEFIK_ABGABEBOX_DOMAIN:-}" "${TRAEFIK_DOCS_DOMAIN:-}" "${TRAEFIK_WEBSITE_DOMAIN:-}"; do
+      if [ -n "$picker_other" ] && [ "$picker_other" = "$CLOUD_IMPORT_PICKER_DOMAIN" ]; then
+        echo "CLOUD_IMPORT_PICKER_DOMAIN muss eine eigene Subdomain sein (nicht $picker_other)." >&2
+        return 1
+      fi
+    done
+  elif [ -n "${CLOUD_IMPORT_GOOGLE_API_KEY:-}" ]; then
+    echo "Hinweis: CLOUD_IMPORT_PICKER_DOMAIN fehlt - Google Drive wird nicht angeboten (RUNBOOK 27.2)." >&2
+  fi
   if [ -n "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES:-}" ] && ! [[ "${CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
     echo "CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES muss leer oder ein Datum (JJJJ-MM-TT) sein." >&2
     return 1

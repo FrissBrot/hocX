@@ -390,6 +390,14 @@ class Settings(BaseSettings):
     cloud_import_google_api_key: str = Field(default="", max_length=200, pattern=r"^[A-Za-z0-9_-]*$", validation_alias="CLOUD_IMPORT_GOOGLE_API_KEY")
     # Projektnummer des Google-Cloud-Projekts (PickerBuilder.setAppId; ohne sie gibt drive.file keinen Zugriff)
     cloud_import_google_app_id: str = Field(default="", max_length=30, pattern=r"^[0-9]*$", validation_alias="CLOUD_IMPORT_GOOGLE_APP_ID")
+    # Eigene Origin der Google-Picker-Seite (Security-Review 1.7, N3): Subdomain ohne hocX-Sitzung,
+    # z. B. picker.hocx.ch (Traefik-Router, Zertifikat). Ohne sie wird Google Drive nicht angeboten.
+    # Port nur im E2E-Stack (picker.localhost:13000).
+    cloud_import_picker_domain: str = Field(
+        default="", max_length=260,
+        pattern=r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?)?$",
+        validation_alias="CLOUD_IMPORT_PICKER_DOMAIN",
+    )
     # Dropbox-App (Scoped access, files.metadata.read + files.content.read). Ohne App-Key/Secret wird
     # Dropbox nicht angeboten. Produktionsfreigabe bei Dropbox ab 50 verknüpften Konten (RUNBOOK).
     cloud_import_dropbox_app_key: str = Field(default="", validation_alias="CLOUD_IMPORT_DROPBOX_APP_KEY")
@@ -550,6 +558,13 @@ class Settings(BaseSettings):
             if value and (value in _INSECURE_DEFAULTS or len(value) < 32):
                 print(f"FATAL: {name} must be empty or a random value of at least 32 characters.", file=sys.stderr)
                 sys.exit(1)
+        picker_host = self.cloud_import_picker_domain.strip().lower()
+        if picker_host and (
+            picker_host in {d.strip().lower() for d in (self.traefik_domain, self.traefik_admin_domain) if d}
+            or (self.is_production and ":" in picker_host)
+        ):
+            print("FATAL: CLOUD_IMPORT_PICKER_DOMAIN must be its own host (not the app or admin domain, no port in production).", file=sys.stderr)
+            sys.exit(1)
         if self.is_production and self.cloud_import_redirect_base_url and not self.cloud_import_redirect_base_url.startswith("https://"):
             print("FATAL: CLOUD_IMPORT_REDIRECT_BASE_URL must use https:// in production.", file=sys.stderr)
             sys.exit(1)

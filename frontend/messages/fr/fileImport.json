@@ -377,7 +377,8 @@
       "photos_session_expired": "La sélection dans Google Photos a expiré. Recommence.",
       "photos_session_missing": "Commence d’abord la sélection dans Google Photos.",
       "wrong_source": "Cette étape ne correspond pas à la source choisie.",
-      "invalid_status": "Cet import n’est plus un brouillon. Continue dans l’assistant."
+      "invalid_status": "Cet import n’est plus un brouillon. Continue dans l’assistant.",
+      "ticket_invalid": "L’accès au sélecteur Google a expiré ou a déjà été utilisé. Veuillez choisir à nouveau « Choisir dans Google Drive » dans l’assistant d’importation."
     },
     "adminConsent": {
       "title": "Aide : autorisation par le service informatique de l’organisation",

@@ -101,6 +101,7 @@ EXEMPT_PUBLIC_ROUTES: dict[str, str] = {
     "/api/public/plan-comparison": "Funktionsvergleich der Website, keine Daten einer Organisation",
     "/api/public/customers": "Namen und Logos der Organisationen, die auf der Website erscheinen wollen (show_on_website), sonst nichts; Logo nur über nicht erratbare Kennung (HMAC)",
     "/api/system-status/summary": "Plattform-Statusseite mit eigenem Token, kein Mandant",
+    "/api/cloud-import/picker/google-drive/": "Google-Picker auf eigener Origin ohne hocX-Sitzung (Datei-Import, Security-Review 1.7): Tickets einmalig, 10 min, an Person und Auftrag gebunden, vom Wizard mit Sitzung ausgestellt; Rate-Limit; keine Dauer-Links",
     "/api/cloud-import/oauth/{provider_key}/callback": "OAuth-Rückkehr vom Cloud-Anbieter (Datei-Import): einmaliger state + PKCE, Rate-Limit; legt nichts an - die Verbindung entsteht erst mit der Sitzung derselben Person (/oauth/finish)",
     "/api/tenants/{tenant_id}/profile-image": "Logo der Organisation: ohne Anmeldung nur bei aktiver eigener App-Domain (Login-Branding) oder freigegebener Identität auf der Prüfseite, sonst nur für Angemeldete des Mandanten/vertraute Partner",
 }

@@ -350,13 +350,11 @@ export async function startCloudLogin(
 
 // --- Google (Drive-Picker, Fotos-Sitzung) -----------------------------------------------------
 
-/** Eigene Seite des Google Pickers (gelockerte CSP nur dort, lib/csp.ts). */
-export const GOOGLE_PICKER_PAGE = "/files/import/google-picker";
 /** Loader des Google Pickers bzw. sein Nachbau im E2E-Stack (Backend, nur CLOUD_IMPORT_FAKE_PROVIDERS). */
 export const GOOGLE_PICKER_SCRIPT = "https://apis.google.com/js/api.js";
 export const GOOGLE_PICKER_FAKE_SCRIPT = "/api/cloud-import/fake-google/picker.js";
-const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Antwort beim Einlösen des Token-Tickets (Picker-Origin, ohne Sitzung). */
 export type GooglePickerConfig = {
   access_token: string;
   api_key: string;
@@ -364,7 +362,26 @@ export type GooglePickerConfig = {
   expires_in: number;
   max_items: number;
   fake: boolean;
+  apply_ticket: string;
+  return_url: string;
 };
+
+/** Ticket aus dem Fragment der Picker-Seite (#ticket=…), sonst null. */
+export function pickerTicket(hash: string): string | null {
+  const ticket = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash).get("ticket");
+  return ticket && /^[A-Za-z0-9_-]{20,100}$/.test(ticket) ? ticket : null;
+}
+
+/** Rücksprung in den Wizard nur auf eine http(s)-Adresse des Wizards (das Backend bestimmt sie). */
+export function safeReturnUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.pathname === "/files/import" && !url.username ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export type PhotosSession = { picker_uri: string; poll_seconds: number; timeout_seconds: number | null };
 export type PhotosPoll = { done: boolean; poll_seconds: number; job: ImportJob };
@@ -373,17 +390,6 @@ export type PhotosPoll = { done: boolean; poll_seconds: number; job: ImportJob }
 export function cloudSelectionMode(provider: CloudProvider | null): "tree" | "google_picker" | "photos_picker" {
   const mode = provider?.info.selection;
   return mode === "google_picker" || mode === "photos_picker" ? mode : "tree";
-}
-
-/** Gültige Auftrags-ID aus der Adresszeile der Picker-Seite, sonst null. */
-export function pickerJobId(search: string): string | null {
-  const job = new URLSearchParams(search).get("job");
-  return job && JOB_ID.test(job) ? job : null;
-}
-
-/** Zurück in den Wizard - immer als voller Seitenwechsel (die Picker-Seite hat eine eigene CSP). */
-export function wizardUrl(jobId: string | null): string {
-  return jobId ? `/files/import?job=${encodeURIComponent(jobId)}` : "/files/import";
 }
 
 /** Nur IDs gewählter Dateien (Ordner gibt drive.file nicht frei), ohne Doppelte, höchstens max. */

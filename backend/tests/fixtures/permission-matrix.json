@@ -144,7 +144,7 @@
         "admin"
       ]
     },
-    "GET /api/cloud-import/jobs/{job_id}/browse": {
+    "POST /api/cloud-import/jobs/{job_id}/browse": {
       "handler": "cloud_import.browse_cloud_folder",
       "allowed": [
         "admin"
@@ -168,8 +168,8 @@
         "admin"
       ]
     },
-    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker": {
-      "handler": "cloud_import_google.google_drive_picker",
+    "POST /api/cloud-import/jobs/{job_id}/google-drive/picker-ticket": {
+      "handler": "cloud_import_google.google_drive_picker_ticket",
       "allowed": [
         "admin"
       ]
@@ -242,6 +242,18 @@
     },
     "POST /api/cloud-import/oauth/{provider_key}/start": {
       "handler": "cloud_import.start_cloud_oauth",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/apply": {
+      "handler": "cloud_import_google.google_drive_picker_apply",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "POST /api/cloud-import/picker/google-drive/token": {
+      "handler": "cloud_import_google.google_drive_picker_token",
       "allowed": [
         "admin"
       ]

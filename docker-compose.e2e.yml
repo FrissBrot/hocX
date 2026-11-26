@@ -38,12 +38,18 @@ services:
       # Wegwerf-Stack. Token-Schlüssel erzeugt scripts/e2e.sh je Stack.
       CLOUD_IMPORT_FAKE_PROVIDERS: "true"
       CLOUD_IMPORT_REDIRECT_BASE_URL: http://127.0.0.1:13000
+      # Eigene Origin des Google Pickers: anderer Host als die App (Cookies host-only), Chromium
+      # löst *.localhost selbst auf 127.0.0.1 auf
+      CLOUD_IMPORT_PICKER_DOMAIN: picker.localhost:13000
   job-worker:
     environment:
       # Datei-Import: nachgebaute Cloud-Anbieter (services/cloud_import/fake_*.py), nur dieser
       # Wegwerf-Stack. Token-Schlüssel erzeugt scripts/e2e.sh je Stack.
       CLOUD_IMPORT_FAKE_PROVIDERS: "true"
       CLOUD_IMPORT_REDIRECT_BASE_URL: http://127.0.0.1:13000
+      # Eigene Origin des Google Pickers: anderer Host als die App (Cookies host-only), Chromium
+      # löst *.localhost selbst auf 127.0.0.1 auf
+      CLOUD_IMPORT_PICKER_DOMAIN: picker.localhost:13000
       PASSWORD_LEAK_CHECK: ${PASSWORD_LEAK_CHECK:-local-only}
       GEOIP_AUTO_UPDATE: ${GEOIP_AUTO_UPDATE:-false}
       # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im
@@ -61,6 +67,7 @@ services:
       INTERNAL_API_URL: http://backend:8000
       FRONTEND_API_PROXY_TARGET: http://backend:8000
       HOCX_VERSION: e2e
+      CLOUD_IMPORT_PICKER_DOMAIN: picker.localhost:13000
   abgabebox-backend:
     # Wie das Backend oben: ohne --reload und mit Keep-Alive 75 s (Abgabebox-Frontend proxyt
     # /api über ABGABEBOX_API_PROXY_TARGET, sonst ECONNRESET bei wiederverwendeten Verbindungen).

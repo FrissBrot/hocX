@@ -156,6 +156,7 @@ class AdminStepUpStart(BaseModel):
         "passkey-manage", "admin-manage", "tenant-delete", "tenant-export", "storage-destructive",
         "backup-restore", "backup-settings", "catalog-change", "user-mfa-reset", "user-manage", "platform-settings",
         "user-credentials", "tenant-import", "security-block", "security-export", "security-resolve",
+        "cloud-import-cancel",
     ]
     method: Literal["POST", "PUT", "PATCH", "DELETE"]
     path: str = Field(pattern=r"^/api/admin/[A-Za-z0-9/_.%-]+$", max_length=500)

@@ -1531,7 +1531,7 @@ Ordner-Import brauchen nichts davon. Dieselbe Anleitung liegt für die Planung u
   job-worker. Zusätzlich bremst ein Token-Bucket je Konto in Redis (der job-worker ist dafür im Netz
   `cache`). Bei vielen 429 im Log den Wert senken.
 - Laufende Importe aller Mandanten, Kennzahlen und Notfall-Abbruch: Adminportal → Betrieb →
-  **Datei-Importe** (`/admin/cloud-imports`).
+  **Datei-Importe** (`/admin/cloud-imports`). Der Notfall-Abbruch verlangt eine Passkey-Bestätigung.
 - Nach jeder Änderung: `scripts/deploy.sh`; Kontrolle unter /admin/system, Prüfung **Cloud-Import**
   (aktive Importe, hängende Importe, warten auf Anmeldung, Ablauf der Client-Secrets).
 - Tokens werden gelöscht, sobald ein Import endet; unterbrochene Importe behalten sie höchstens 7 Tage
@@ -1775,7 +1775,9 @@ Keine weiteren APIs (insbesondere nicht die «Photos Library API»).
 
 1. **Google Auth Platform → Clients → Client erstellen**, Anwendungstyp **Webanwendung**, Name z. B.
    `hocX Produktion`.
-2. **Autorisierte JavaScript-Quellen:** leer lassen (hocX holt die Tokens serverseitig).
+2. **Autorisierte JavaScript-Quellen:** nur die Picker-Domain je Umgebung, z. B.
+   `https://picker.hocx.ch` (`CLOUD_IMPORT_PICKER_DOMAIN`, siehe Schritt 5a). Keine App-Domain:
+   der Picker läuft nur dort.
 3. **Autorisierte Weiterleitungs-URIs** - je Umgebung beide (zentrale Domain, keine Vereinsdomain):
    ```
    https://<TRAEFIK_DOMAIN>/api/cloud-import/oauth/google_drive/callback
@@ -1793,15 +1795,34 @@ eingeschränkt werden, damit niemand ihn auf fremden Seiten oder für andere API
 
 1. **APIs und Dienste → Anmeldedaten → Anmeldedaten erstellen → API-Schlüssel**.
 2. Schlüssel bearbeiten, Name `hocX Picker`.
-3. **Anwendungseinschränkungen:** **Websites** (HTTP-Verweis-URLs), je Umgebung:
+3. **Anwendungseinschränkungen:** **Websites** (HTTP-Verweis-URLs), je Umgebung nur die Picker-Domain:
    ```
-   https://<TRAEFIK_DOMAIN>/*
-   https://*.<TRAEFIK_DOMAIN>/*
+   https://<CLOUD_IMPORT_PICKER_DOMAIN>/*
    ```
-   plus jede **eigene App-Domain** eines Vereins (`https://intern.verein.ch/*`), die den Import nutzt -
-   sonst lehnt Google den Picker auf dieser Domain ab.
+   Vereins- und App-Domains gehören **nicht** dazu: der Picker läuft seit 1.7 nur auf seiner eigenen
+   Origin, auch wenn der Verein hocX über eine eigene App-Domain nutzt.
 4. **API-Einschränkungen:** **Schlüssel einschränken** → nur **Google Picker API** → **Speichern**.
 5. Den Schlüssel als `CLOUD_IMPORT_GOOGLE_API_KEY` notieren.
+
+#### Schritt 5a - Eigene Subdomain für den Picker (DNS, Zertifikat)
+
+Der Google Picker lädt Code von Google. Damit dieser Code nie neben der Vereins-Sitzung läuft, liegt
+die Picker-Seite auf einer **eigenen Subdomain ohne hocX-Sitzung** (Security-Review 1.7). Die Seite
+erhält nur ein einmaliges Ticket (10 min, an Person und Auftrag gebunden) und schickt die Auswahl
+damit zurück; danach springt sie in den Wizard zurück.
+
+1. Namen wählen, z. B. `picker.hocx.ch` (Test-Host: `picker.test.hocx.ch`). Nicht die App-, Admin-,
+   Abgabebox-, Doku- oder Website-Domain und keine Vereinsdomain (`deploy.sh` und das Backend
+   prüfen das).
+2. **DNS:** A- bzw. AAAA-Eintrag (oder CNAME) auf denselben Server wie `TRAEFIK_DOMAIN`.
+3. **Zertifikat:** holt Traefik selbst (Router `picker-frontend` und `picker-api`, gleicher
+   Cert-Resolver wie die App). Mit DNS-Challenge oder Wildcard-Zertifikat ist nichts weiter zu tun.
+4. `.env`: `CLOUD_IMPORT_PICKER_DOMAIN=picker.hocx.ch`, danach `scripts/deploy.sh`.
+5. Kontrolle: `https://picker.hocx.ch/google-picker` zeigt die Picker-Seite mit dem Hinweis «Zugang
+   abgelaufen» (ohne Ticket), `https://picker.hocx.ch/` und `/login` antworten mit 404.
+
+Ohne `CLOUD_IMPORT_PICKER_DOMAIN` wird **Google Drive nicht angeboten** (kein Rückfall auf die
+App-Domain). Google Fotos braucht die Subdomain nicht (Auswahl direkt bei Google).
 
 #### Schritt 6 - Testmodus (Dev und Test-Host)
 
@@ -1834,12 +1855,13 @@ CLOUD_IMPORT_GOOGLE_CLIENT_ID=<Client-ID>.apps.googleusercontent.com
 CLOUD_IMPORT_GOOGLE_CLIENT_SECRET=<Clientschlüssel>
 CLOUD_IMPORT_GOOGLE_API_KEY=<API-Schlüssel aus Schritt 5>
 CLOUD_IMPORT_GOOGLE_APP_ID=<Projektnummer aus Schritt 1>
+CLOUD_IMPORT_PICKER_DOMAIN=<Picker-Subdomain aus Schritt 5a>
 # Optional: nur setzen, wenn der Schlüssel ablaufen soll (Monitoring warnt 30 Tage vorher)
 # CLOUD_IMPORT_GOOGLE_CLIENT_SECRET_EXPIRES=JJJJ-MM-TT
 ```
 
-- Google Drive erscheint nur mit allen vier Werten (ohne API-Key/App-ID kein Picker). Google Fotos
-  braucht nur Client-ID und Clientschlüssel.
+- Google Drive erscheint nur mit allen fünf Werten (ohne API-Key/App-ID/Picker-Domain kein Picker).
+  Google Fotos braucht nur Client-ID und Clientschlüssel.
 - `scripts/deploy.sh` prüft die Werte (Client-ID nur mit Secret, API-Key und App-ID nur gemeinsam) und
   legt das Secret als Datei für backend und job-worker ab (`cloud_import_google_client_secret`).
 - `CLOUD_IMPORT_TOKEN_KEY` erzeugt deploy.sh selbst - nicht eintragen.
@@ -1850,7 +1872,7 @@ CLOUD_IMPORT_GOOGLE_APP_ID=<Projektnummer aus Schritt 1>
   Exporte), `photospicker.googleapis.com`, `lh*.googleusercontent.com` und Umleitungen auf
   `*.googleusercontent.com`. hocX verbindet sich zu keinem anderen Host (Allowlist im Code).
 - Browser der Vereine: `accounts.google.com` (Anmeldung), `apis.google.com` und `docs.google.com` (nur
-  auf der Picker-Seite, eigene CSP), `photos.google.com` (neues Fenster).
+  auf der Picker-Subdomain, eigene CSP nur dort), `photos.google.com` (neues Fenster).
 
 #### Schritt 10 - Abnahme mit echten Konten
 
@@ -1863,8 +1885,10 @@ CLOUD_IMPORT_GOOGLE_APP_ID=<Projektnummer aus Schritt 1>
    bietet «Neu anmelden».
 4. Google Fotos: **In Google Fotos auswählen** → im neuen Fenster drei Fotos und ein Video wählen →
    **Fertig** → Wizard listet von selbst auf → Import; das Video steht als «nicht unterstützt» im Bericht.
-5. Picker auf einer Vereins-Subdomain und (falls vorhanden) auf einer eigenen App-Domain öffnen
-   (Referrer-Einschränkung des API-Keys prüfen).
+5. Den Import von der zentralen Domain und (falls vorhanden) von einer eigenen App-Domain eines
+   Vereins starten: der Picker öffnet sich immer auf der Picker-Subdomain, nach der Auswahl geht es
+   auf die Ausgangsdomain zurück. Im Picker-Tab `document.cookie` bzw. die Entwicklertools: kein
+   hocX-Sitzungscookie.
 6. Nach dem Import unter <https://myaccount.google.com/connections> prüfen: hocX hat keinen Zugriff mehr
    (Token widerrufen).
 

@@ -377,7 +377,8 @@
       "photos_session_expired": "La selezione in Google Foto è scaduta. Ricomincia.",
       "photos_session_missing": "Avvia prima la selezione in Google Foto.",
       "wrong_source": "Questo passo non corrisponde alla fonte scelta.",
-      "invalid_status": "Questa importazione non è più una bozza. Prosegui nell’assistente."
+      "invalid_status": "Questa importazione non è più una bozza. Prosegui nell’assistente.",
+      "ticket_invalid": "L’accesso al selettore Google è scaduto o è già stato utilizzato. Scegli di nuovo «Scegli in Google Drive» nell’assistente di importazione."
     },
     "adminConsent": {
       "title": "Aiuto: approvazione da parte dell’IT dell’organizzazione",

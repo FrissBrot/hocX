@@ -6,13 +6,28 @@ import { expect, type Page } from "@playwright/test";
 // Hauptseite schaltet AppShell zwischen Desktop- und Mobil-Shell um, der Wizard würde neu
 // gemountet und verlöre Formulareingaben und den aufgeklappten Ordnerbaum mitten im Test.
 // Die zweite Seite zeigt den Stand des Auftrags auf dem Server (?job=<id>).
-export async function shootCloud(page: Page, dir: string, name: string) {
+// Seiten ohne App-Shell (Google-Picker-Origin) behalten ihren Zustand beim Größenwechsel: dort
+// `inPlace`, denn eine zweite Seite hätte kein (einmaliges) Ticket mehr.
+export async function shootCloud(page: Page, dir: string, name: string, options: { inPlace?: boolean } = {}) {
   for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
     await page.waitForTimeout(150);
     await page.screenshot({ path: `test-results/${dir}/${name}-${theme}-1440.png`, fullPage: true });
   }
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+
+  if (options.inPlace) {
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: `test-results/${dir}/${name}-${theme}-390.png`, fullPage: true });
+      expect.soft(await page.evaluate(() => document.documentElement.scrollWidth), `${name} ${theme}: Seitenbreite bei 390 px`).toBeLessThanOrEqual(390);
+    }
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    return;
+  }
 
   const url = new URL(page.url());
   if (url.pathname === "/files/import" && !url.searchParams.get("job")) {

@@ -15,6 +15,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
+from app.core.admin_step_up import require_step_up
 from app.core.db import get_db
 from app.models.entities import Tenant
 from app.models.import_entities import IMPORT_JOB_ACTIVE_STATUSES, ImportJob
@@ -96,7 +97,8 @@ def get_cloud_imports(db: Session = Depends(get_db), _admin: CurrentAdmin = Depe
     return AdminImportOverview(active=active, metrics=metrics, days=METRIC_DAYS)
 
 
-@router.post("/cloud-imports/{job_id}/cancel", response_model=AdminImportRead)
+# Passkey-Bestätigung je Abbruch (Security-Review 1.7, I4), gebunden an Methode, Pfad und Body
+@router.post("/cloud-imports/{job_id}/cancel", response_model=AdminImportRead, dependencies=[Depends(require_step_up("cloud-import-cancel"))])
 def cancel_cloud_import(job_id: uuid.UUID, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     """Notfall-Abbruch: wie der Abbruch im Verein (bereits importierte Dateien bleiben, Tokens weg)."""
     row = db.execute(
