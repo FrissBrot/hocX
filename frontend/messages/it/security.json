@@ -154,7 +154,8 @@
     "auth_email_unavailable": "Accesso attualmente non possibile, rivolgiti al tuo amministratore.",
     "password_leaked": "Questa password è nota da una fuga di dati e quindi non è sicura. Scegline un’altra.",
     "password_breached": "Questa password è nota da una violazione di dati. Falla reimpostare da un'altra persona owner o tramite admin_cli.",
-    "own_account_delete": "Non puoi eliminare il tuo account. Rimuovilo dalla selezione."
+    "own_account_delete": "Non puoi eliminare il tuo account. Rimuovilo dalla selezione.",
+    "user_limit_reached": "Il limite di utenti dell'abbonamento è stato raggiunto ({limit, number} account con accesso, inclusi gli inviti aperti). Ritira un invito, disattiva un account o amplia l'abbonamento."
   },
   "grace": {
     "title": "Il secondo fattore diventa obbligatorio",

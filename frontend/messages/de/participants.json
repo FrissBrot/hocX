@@ -281,7 +281,8 @@
       "rate_limited": "zu viele Einladungen",
       "not_found": "nicht gefunden",
       "failed": "fehlgeschlagen",
-      "protected": "Schutzregel, z. B. letzter Admin"
+      "protected": "Schutzregel, z. B. letzter Admin",
+      "user_limit": "Benutzerlimit erreicht"
     }
   }
 }

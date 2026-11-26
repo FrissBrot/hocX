@@ -281,7 +281,8 @@
       "rate_limited": "too many invitations",
       "not_found": "not found",
       "failed": "failed",
-      "protected": "protection rule, e.g. last admin"
+      "protected": "protection rule, e.g. last admin",
+      "user_limit": "user limit reached"
     }
   }
 }
