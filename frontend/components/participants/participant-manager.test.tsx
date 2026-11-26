@@ -61,3 +61,15 @@ it("keeps the created person when the follow-up invite fails, so a retry cannot 
   expect(screen.getAllByText("Neu Mitglied").length).toBeGreaterThan(0);
   expect(api.mock.calls.filter(([url, init]) => url === "/api/participants" && (init as { method?: string })?.method === "POST")).toHaveLength(1);
 });
+
+it("shows «Login gesperrt» instead of «Login aktiv» for former members with a login", async () => {
+  const former = { ...created, id: "p-left", display_name: "Ehemals Mitglied", left_at: "2020-01-31", login_enabled: true, login_status: "active" } as unknown as ParticipantSummary;
+  render(
+    <ParticipantManager initialParticipants={[former]} templates={[]} tenantId="t1" roles={[role]} tariffs={[]}
+      permissions={{ access: true, financeRead: false, financeManage: false }} />,
+  );
+  fireEvent.click(screen.getByRole("tab", { name: /Ausgetreten/ }));
+  const row = (await screen.findByText("Ehemals Mitglied")).closest("tr") as HTMLElement;
+  expect(within(row).getByText("Login gesperrt")).toBeInTheDocument();
+  expect(within(row).queryByText("Login aktiv")).toBeNull();
+});

@@ -282,7 +282,8 @@
       "not_found": "nicht gefunden",
       "failed": "fehlgeschlagen",
       "protected": "Schutzregel, z. B. letzter Admin",
-      "user_limit": "Benutzerlimit erreicht"
+      "user_limit": "Benutzerlimit erreicht",
+      "email_taken": "E-Mail wird schon für einen Login verwendet"
     }
   }
 }

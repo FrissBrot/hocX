@@ -315,7 +315,8 @@ class MfaService:
         if self.user_requires_mfa(db, actor.user_id) and remaining == 0:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten",
+                # Code: das Frontend übersetzt (security.apiErrors.mfa_last_factor_required)
+                detail={"code": "mfa_last_factor_required", "message": "Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten"},
             )
         factor_type = factor.factor_type
         db.delete(factor)
@@ -382,7 +383,7 @@ class MfaService:
         if factor_type not in {factor.factor_type for factor in factors}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Diese MFA-Methode ist für dieses Konto noch nicht eingerichtet",
+                detail={"code": "mfa_method_not_configured", "message": "Diese MFA-Methode ist für dieses Konto noch nicht eingerichtet"},
             )
         user.preferred_mfa_factor_type = factor_type
         db.add(user)

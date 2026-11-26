@@ -184,3 +184,13 @@ def test_user_limit_has_stable_code_and_own_bulk_reason(db, mail):
     assert single.value.detail["params"] == {"limit": 1}
     result = participant_routes.bulk_invite_participants(ParticipantBulkInvite(participant_ids=[person.public_id]), db=db, user=actor)
     assert [(item.participant_id, item.reason) for item in result.skipped] == [(person.public_id, "user_limit")]
+
+
+def test_bulk_invite_names_taken_login_email_as_own_reason(db, mail):
+    """Login-E-Mail schon vergeben: in der Mehrfach-Einladung hiess der Grund «Schutzregel, z. B.
+    letzter Admin» (Nachtlauf 2026-11-26)."""
+    tenant = make_tenant(db)
+    actor = _actor(db, tenant)
+    person = _person(db, tenant, "Doppelt", f"actor-admin-{tenant.id}@example.com")  # E-Mail des Admins
+    result = participant_routes.bulk_invite_participants(ParticipantBulkInvite(participant_ids=[person.public_id]), db=db, user=actor)
+    assert [(item.participant_id, item.reason) for item in result.skipped] == [(person.public_id, "email_taken")]

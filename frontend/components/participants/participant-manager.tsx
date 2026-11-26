@@ -604,11 +604,13 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
                 {participant.is_active ? null : <> <Badge variant="neutral">{t("statusInactive")}</Badge></>}
               </td>
               <td>
-                {login === "none" ? <span className="muted">–</span> : (
+                {/* Ausgetretene können sich nicht mehr anmelden (Backend: AppUser.has_left): nur «Login gesperrt»,
+                    nicht zusätzlich «Login aktiv» */}
+                {login === "none" ? <span className="muted">–</span> : login === "active" && participantCategory(participant, today) === "left" ? (
+                  <Badge variant="warning">{t("membership.loginBlocked")}</Badge>
+                ) : (
                   <Badge variant={login === "active" ? "success" : "info"}>{t(`person.loginStatus.${login}`)}</Badge>
                 )}
-                {/* Ausgetretene können sich nicht mehr anmelden (Backend: AppUser.has_left) */}
-                {login === "active" && participantCategory(participant, today) === "left" ? <Badge variant="warning">{t("membership.loginBlocked")}</Badge> : null}
               </td>
               <td>
                 <span className="access-role-chips">

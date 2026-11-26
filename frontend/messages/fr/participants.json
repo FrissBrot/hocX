@@ -282,7 +282,8 @@
       "not_found": "introuvable",
       "failed": "échec",
       "protected": "règle de protection, p. ex. dernier admin",
-      "user_limit": "limite d'utilisateurs atteinte"
+      "user_limit": "limite d'utilisateurs atteinte",
+      "email_taken": "e-mail déjà utilisée pour une connexion"
     }
   }
 }

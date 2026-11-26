@@ -155,7 +155,9 @@
     "password_leaked": "Dieses Passwort ist aus einem Datenleck bekannt und daher unsicher. Bitte wähle ein anderes.",
     "password_breached": "Dieses Passwort ist aus einem Datenleck bekannt. Lass es von einer anderen Owner-Person oder über admin_cli neu setzen.",
     "own_account_delete": "Dein eigenes Konto kannst du nicht löschen. Entferne es aus der Auswahl.",
-    "user_limit_reached": "Das Benutzerlimit des Abos ist erreicht ({limit, number} Konten mit Login inkl. offener Einladungen). Ziehe eine Einladung zurück, deaktiviere ein Konto oder erweitere das Abo."
+    "user_limit_reached": "Das Benutzerlimit des Abos ist erreicht ({limit, number} Konten mit Login inkl. offener Einladungen). Ziehe eine Einladung zurück, deaktiviere ein Konto oder erweitere das Abo.",
+    "mfa_last_factor_required": "Dein Konto braucht mindestens einen zweiten Faktor. Richte zuerst einen weiteren ein, bevor du diesen entfernst.",
+    "mfa_method_not_configured": "Diese Methode ist für dein Konto noch nicht eingerichtet."
   },
   "grace": {
     "title": "Zweiter Faktor wird Pflicht",
