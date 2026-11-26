@@ -14,7 +14,7 @@ import { TenantStatusBadges } from "@/components/admin/tenant-detail/tenant-stat
 import { ActionMenu } from "@/components/ui/action-menu";
 import { CopyField } from "@/components/ui/copy-field";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { formatDate } from "@/lib/utils/format";
+import { formatTimestampDate } from "@/lib/utils/format";
 import { AdminTenantSummary } from "@/types/api";
 
 /** Unterrouten der Detailseite; `owner` = Tab zeigt Daten aus require_admin_owner-Quellen (für support ausgeblendet). */
@@ -61,7 +61,7 @@ export function TenantDetailHeader({ tenant, isOwner }: { tenant: AdminTenantSum
             <div className="admin-tenant-detail-meta">
               <TenantStatusBadges tenant={tenant} />
               {tenant.plan_code ? <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone="neutral" /> : null}
-              <span className="muted">{t("header.created", { date: formatDate(tenant.created_at) })}</span>
+              <span className="muted">{t("header.created", { date: formatTimestampDate(tenant.created_at) })}</span>
             </div>
           </div>
         </div>

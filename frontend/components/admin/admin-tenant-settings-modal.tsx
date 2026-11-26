@@ -25,7 +25,7 @@ import { stepUpFetch } from "@/lib/admin-step-up";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatDate, formatFileSize, formatPercentNumber } from "@/lib/utils/format";
+import { formatFileSize, formatPercentNumber, formatTimestampDate } from "@/lib/utils/format";
 import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
 import { primarySystemRole } from "@/components/users/user-form-shared";
@@ -592,7 +592,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                 </div>
                 <div className="admin-tenant-meta">
                   <span>
-                    {t("tenantModal.meta.createdAt")} <strong>{formatDate(tenant.created_at)}</strong>
+                    {t("tenantModal.meta.createdAt")} <strong>{formatTimestampDate(tenant.created_at)}</strong>
                   </span>
                   <span>
                     {t("tenantModal.meta.participants")} <strong>{tenant.participant_count}</strong>
@@ -743,7 +743,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved, embed
                       onChange={(value) => setSubscriptionForm((current) => ({ ...current, billing_start_date: value || null }))}
                     />
                     <span className="field-help">
-                      {t("tenantModal.fields.billingStartHelp", { date: formatDate(tenant.created_at) })}
+                      {t("tenantModal.fields.billingStartHelp", { date: formatTimestampDate(tenant.created_at) })}
                     </span>
                   </label>
                   <label className="field-stack">

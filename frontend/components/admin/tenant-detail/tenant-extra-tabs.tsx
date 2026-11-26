@@ -13,7 +13,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { CHART_COLORS } from "@/lib/constants/chart-colors";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { formatDate, formatDateTime, formatTimestampDate } from "@/lib/utils/format";
 
 // Mandanten-Detail-Tabs Features, Nutzung, Sicherheit (1.5.1, Plan §5.2).
 
@@ -65,7 +65,7 @@ export function TenantFeaturesTab({ tenantId, readOnly }: { tenantId: string; re
             </td>
             <td><Badge variant={ACCESS_VARIANT[row.access] ?? "neutral"} dot>{t(`access.${row.access}`)}</Badge></td>
             <td>{row.source ? t(`source.${row.source === "plan" ? "plan" : "addon"}`) : <span className="muted">—</span>}</td>
-            <td>{row.enabled_at ? formatDate(row.enabled_at) : <span className="muted">—</span>}</td>
+            <td>{row.enabled_at ? formatTimestampDate(row.enabled_at) : <span className="muted">—</span>}</td>
           </tr>
         ))}
       </DataTable>
