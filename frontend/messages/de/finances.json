@@ -415,6 +415,7 @@
   "docsLink": "Hilfe zu Finanzen",
   "noTransactionsReadOnly": "Auf diesem Konto gibt es noch keine Buchungen.",
   "noTransactionsYear": "Keine Buchungen in {year}.",
+  "noTransactionsFilter": "Keine Buchungen für diesen Filter.",
   "txSaved": "Buchung gespeichert",
   "txDeleted": "Buchung gelöscht",
   "accountSaved": "Konto gespeichert",
