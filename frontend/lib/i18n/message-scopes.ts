@@ -121,6 +121,8 @@ export const AREA_NAMESPACES = {
   myTasks: ["connections", "documentStudio", "finances", "protocols", "todos"],
   tools: ["files", "photos", "protocols", "sharedLinks", "templates", "todos", "tools", "uploads"],
   website: ["website"],
+  // Datenschutzerklärung und Nutzungsbedingungen (app/website/privacy, app/website/terms)
+  websiteLegal: ["legal", "website"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type MessageArea = keyof typeof AREA_NAMESPACES;

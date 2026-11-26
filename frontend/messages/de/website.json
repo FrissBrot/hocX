@@ -155,7 +155,10 @@
   "footer": {
     "copyright": "© {year} hocX",
     "contact": "Kontakt",
-    "login": "Anmelden"
+    "login": "Anmelden",
+    "privacy": "Datenschutzerklärung",
+    "terms": "Nutzungsbedingungen",
+    "navLabel": "Fusszeile"
   },
   "customers": {
     "label": "Im Einsatz bei"

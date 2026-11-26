@@ -1,0 +1,260 @@
+{
+  "common": {
+    "eyebrow": "Legal",
+    "navLabel": "Legal",
+    "updated": "Last updated: {date}",
+    "contactLabel": "Contact:",
+    "toc": "Contents",
+    "authoritative": "This translation is provided for convenience. The German version is authoritative.",
+    "seeAlso": "See also:",
+    "backToTop": "Back to top",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use"
+  },
+  "privacy": {
+    "meta": {
+      "title": "Privacy Policy – hocX",
+      "description": "How hocX project processes personal data on the website and in the hocX club platform."
+    },
+    "title": "Privacy Policy",
+    "lead": "This policy describes which personal data we process on the website and in the hocX club platform, for what purposes, for how long, and what rights you have. It is based on the Swiss Federal Act on Data Protection (FADP) and, where applicable, the EU General Data Protection Regulation (GDPR).",
+    "sections": {
+      "controller": {
+        "title": "Controller and contact",
+        "p1": "The website and the hocX platform are operated by hocX project.",
+        "p2": "For all questions about data protection and to exercise your rights, you can reach us at info@hocx.ch.",
+        "p3": "[[BITTE ERGÄNZEN: Vertreter in der EU nach Art. 27 DSGVO, falls erforderlich – sonst diesen Absatz streichen]]"
+      },
+      "roles": {
+        "title": "Who is responsible for what?",
+        "p1": "hocX is a platform for clubs and organizations. Depending on the type of data, we have a different role:",
+        "list1": {
+          "club": "Data that a club records in hocX or has uploaded (members, minutes, events, todos, finances, files and photos, submissions via the submission box, imported files): here the club is the controller. hocX project processes this data only on its behalf and according to its instructions as a processor (Art. 9 FADP, Art. 28 GDPR).",
+          "platform": "Data for operating the platform itself (sign-in and security of user accounts, platform administration accounts, subscription billing) and data collected when you visit this website: here hocX project itself is the controller."
+        },
+        "p2": "If, as a member of a club, you would like information about your data or its deletion, please contact your club first. If we receive such a request, we forward it to the club and support it in responding.",
+        "p3": "The details of the processing on behalf are governed by the contract with the club. [[BITTE ERGÄNZEN: Verweis auf den Auftragsbearbeitungsvertrag (AVV) und wo Vereine ihn erhalten]]"
+      },
+      "website": {
+        "title": "Visiting this website",
+        "p1": "When you access the website, the server processes technically necessary information such as IP address, time, requested address and browser details in order to deliver the page and protect it against misuse. We do not keep an access log with IP addresses.",
+        "p2": "The website does not use any analytics or advertising services, tracking pixels or social media plugins, and does not load fonts or scripts from third-party servers. Prices and the list of customers are loaded from our own server; a club appears in the customer list only if it has agreed to this.",
+        "p3": "If you send us an email, we use your information only to answer your inquiry."
+      },
+      "accounts": {
+        "title": "User accounts and sign-in",
+        "p1": "There is no public registration. Accounts are created when a club invites a person or records them as a member. For an account, we process name, email address, roles in the club, chosen language, password (only as a secure hash, never in plain text) and, if set up, second factors such as an authenticator app or passkey.",
+        "p2": "A session ends after 8 hours of inactivity, and after 14 days at the latest. Important actions in the club (for example changes to permissions, exports, deletions) are recorded in the audit log for traceability, with the email address of the person acting and a non-reversible network identifier instead of the IP address.",
+        "p3": "Under Profile › My data you can download a copy of your personal data as a password-protected ZIP file at any time. Accounts are deleted by your club's administrator; you can also request deletion via info@hocx.ch."
+      },
+      "club-data": {
+        "title": "Club data",
+        "p1": "In hocX, clubs record, for example, members and participants, meetings and minutes, attendance, events, todos, fines, cash and financial data, lists, files and photos. The club determines which data this is and for what purpose. We use this data only to provide, secure and support the platform for the club, and never for our own purposes such as advertising or training AI models.",
+        "p2": "Uploaded files are scanned locally for malware before being stored (ClamAV on our own server). Full-text search also runs exclusively on our server.",
+        "p3": "The club decides whether fines and attendance per person are visible to all members in the statistics; this is switched off by default."
+      },
+      "submission-box": {
+        "title": "Submission box",
+        "p1": "Via the submission box, people without an account can send files and photos to a club. The club is the controller for these files; this is shown before uploading, together with its privacy notices if it has provided any.",
+        "p2": "We do not require a name or email address for this. We store the files with their metadata, the time, the assignment to the request and an upload log (file name, size, scan result), which is deleted after 90 days. The IP address is used only in pseudonymized form (as a hash) to limit misuse.",
+        "p3": "Location data (GPS) of a photo is retained only if you explicitly choose this when uploading; otherwise hocX removes it from the file.",
+        "p4": "To protect against spam, the submission box uses Friendly Captcha from Friendly Captcha GmbH (Germany). Your browser solves a computational puzzle and sends the result to Friendly Captcha for verification; no cookies are set for this. [[BITTE ERGÄNZEN: ob der globale oder der EU-Endpunkt von Friendly Captcha konfiguriert ist]]"
+      },
+      "photos": {
+        "title": "Photos, locations and photo analysis",
+        "p1": "If a photo contains location data, hocX derives a place name from it. This happens entirely on our server using open gazetteers (GeoNames and swissNAMES3D from swisstopo), which we download monthly. The coordinates of your photos are never sent to third parties. Place names are visible only to people in your own club, not to partners of shared albums or recipients of public links.",
+        "p2": "After uploading, hocX assesses sharpness, exposure and whether an image contains faces in the background, in order to sort photos by quality and suggest a selection. The analysis runs on our own server without external services. No persons are recognized or identified, and no biometric features are stored."
+      },
+      "emails": {
+        "title": "Emails",
+        "p1": "hocX sends emails about your account and security (invitation, password reset, notices about sign-ins and changes to your account) as well as notifications from the club (for example new or due todos, received submissions, completed exports, cloud import). Notifications can be switched off per category in your profile under “Notifications”; account and security messages cannot.",
+        "p2": "Sent messages and one-time links are deleted after 90 days; undeliverable messages are discarded after 7 days. A password reset link is valid for 60 minutes, an invitation for 7 days.",
+        "p3": "We use an email service for sending: [[BITTE ERGÄNZEN: Anbieter des E-Mail-Versands (SMTP) und Standort]]."
+      },
+      "security": {
+        "title": "Protecting your account",
+        "p1": "To protect accounts against takeover, we process security events such as sign-ins, failed attempts, new devices and changes to the password or second factor. We do not store IP addresses and entered email addresses in plain text, but only as a pseudonym (HMAC-SHA256, the key changes weekly). These events are deleted after 90 days, security incidents including notes 365 days after the last activity.",
+        "p2": "We recognize known devices by a cookie; they are forgotten after 120 days without use.",
+        "p3": "For the risk signal “sign-in from a new country”, hocX determines the country of the IP address using a local database (DB-IP “IP to Country Lite”, updated monthly). No third parties are queried; only the country code is stored.",
+        "p4": "We check new passwords and passwords at sign-in to see whether they come from known data breaches. To do this, a SHA-1 hash is computed locally and only its first 5 characters are sent to the “Pwned Passwords” service (Have I Been Pwned) (k-anonymity); the password and the full hash never leave the server. If the service is unavailable, we check against a local list. Only the time of the check is stored."
+      },
+      "cloud-import": {
+        "title": "Import from cloud storage",
+        "p1": "Authorized people in a club can transfer files and photos from cloud storage into the club's file storage: Microsoft OneDrive and SharePoint, Google Drive, Google Photos, Dropbox and WebDAV storage (for example kDrive, Nextcloud or SwissDisk). The import is carried out on behalf of the club; the club is responsible for the imported content.",
+        "p2": "For this, we process:",
+        "list1": {
+          "tokens": "access keys (OAuth tokens) or, for WebDAV, an app password, stored exclusively in encrypted form;",
+          "account": "the identifier of the connected account (email address or name), so that you can see which account is connected;",
+          "metadata": "metadata of the selected files and folders (names, paths, sizes, dates);",
+          "content": "the content of the selected files. It may contain personal data of third parties, for example photos of members."
+        },
+        "p3": "For all providers, hocX has read-only access and transfers only what you have selected. We do not change or delete anything in your cloud storage and do not transmit any content from hocX to the providers.",
+        "p4": "The access keys are deleted as soon as the import is completed or cancelled, and at the latest 7 days after their last use. For Google and Dropbox, hocX additionally revokes access with the provider. The import report is retained as long as imported files exist; imported files are then subject to the club's rules.",
+        "p5": "You can disconnect a connection in hocX at any time and additionally revoke the authorization with the provider: Microsoft at https://account.live.com/consent/Manage (personal accounts) or https://myapps.microsoft.com (work accounts), Google at https://myaccount.google.com/connections, Dropbox at https://www.dropbox.com/account/connected_apps.",
+        "p6": "Microsoft, Google and Dropbox are not our processors in this context: your cloud account is your own relationship with the provider, to which its privacy policy applies."
+      },
+      "cloud-import-google": {
+        "title": "Google data",
+        "p1": "If you connect Google Drive or Google Photos, the following also applies:",
+        "list1": {
+          "what": "What data hocX reads: only the files or photos that you explicitly select in Google's selection window (Google Picker or Google Photos Picker), as well as the identifier of your Google account (email address). For this, hocX uses the scopes «drive.file» and «photospicker.mediaitems.readonly» and has no access to your other files or photos.",
+          "why": "Why: exclusively for the one-time import of the selected files into your club's file storage in hocX.",
+          "howLong": "How long: the access keys are kept only until the end of the import, then revoked with Google and deleted (at the latest 7 days after their last use).",
+          "sharing": "No sharing: data from Google services is not shared with or sold to third parties, not used for advertising and not used to train AI or machine learning models. Humans read this data only if you explicitly request it (for example in support), or if it is necessary for security or under applicable law."
+        },
+        "p2": "hocX's use and transfer of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements: https://developers.google.com/terms/api-services-user-data-policy"
+      },
+      "cloud-import-other": {
+        "title": "Microsoft, Dropbox and WebDAV data",
+        "p1": "Microsoft (OneDrive, SharePoint): after you sign in, hocX reads your profile (name, email address) and the folders and files you select in the import. The permissions «Files.Read» (and, if you import shared files or SharePoint, «Files.Read.All» and «Sites.Read.All») are read-only; as a technically enforced rule, hocX transfers only files within your selection. Microsoft does not offer apps a way to revoke individual access keys; hocX deletes them, and you can remove the authorization in your Microsoft account.",
+        "p2": "Dropbox: hocX reads your account details (name, email address) as well as metadata and content of the selected files (permissions «account_info.read», «files.metadata.read», «files.content.read»). At the end of the import, hocX revokes access with Dropbox.",
+        "p3": "WebDAV: hocX connects to the server you specify and uses the app password only for the import.",
+        "p4": "We also use this data exclusively for the import, do not share it and use it neither for advertising nor for training AI models."
+      },
+      "calendar": {
+        "title": "Calendar feeds",
+        "p1": "You can add events to a calendar app as a calendar feed (iCal). The personal link contains a secret key, which we store only in encrypted form or as a hash. Your calendar app (for example from Apple or Google) then retrieves the events itself; you thereby trigger the transfer to this provider yourself. You can regenerate the link at any time, which invalidates the old one."
+      },
+      "cookies": {
+        "title": "Cookies and browser storage",
+        "p1": "hocX sets only cookies that are technically necessary for operation. No consent is required for these, and there are no cookies for analytics or advertising purposes.",
+        "list1": {
+          "session": "hocx_session: keeps you signed in (session, at most 72 hours in the browser, shorter on the server side).",
+          "device": "hocx_device: recognizes a known device for security notices (90 days).",
+          "admin": "hocx_admin_session: platform administration session, only on its own address (12 hours).",
+          "locale": "hocx_locale: chosen language (72 hours in the app; 1 year on the website and in the submission box when a language is selected)."
+        },
+        "p2": "In your browser's storage (localStorage), hocX also stores settings such as light/dark mode, view and columns, your recent searches, and drafts and changes not yet sent, so that nothing is lost if the connection is interrupted. This information remains on your device."
+      },
+      "recipients": {
+        "title": "Hosting, storage location and recipients",
+        "p1": "We do not disclose personal data to third parties, except to the following service providers to the extent necessary for operation, or if we are legally obliged to do so:",
+        "list1": {
+          "hosting": "Server operation: [[BITTE ERGÄNZEN: Hosting-Anbieter und Standort des Rechenzentrums (Land)]]",
+          "storage": "Files and photos are kept in S3-compatible object storage. [[BITTE ERGÄNZEN: auf dem eigenen Server oder bei welchem Anbieter, mit Standort]]",
+          "backup": "Encrypted backups: Hetzner Online GmbH (Storage Box). The backups are encrypted on our server before transfer (BorgBackup, AES-256); Hetzner has no access to the content. [[BITTE ERGÄNZEN: Standort der Storage Box (Deutschland oder Finnland)]]",
+          "mail": "Email delivery: see section “Emails”.",
+          "captcha": "Spam protection for the submission box: Friendly Captcha GmbH, Germany.",
+          "dns": "Name resolution (DNS): Cloudflare, Inc. No hocX content passes through Cloudflare."
+        },
+        "p2": "For the password check (Have I Been Pwned) and for updating the country and place directories (DB-IP, GeoNames, swisstopo), our server retrieves data but does not transmit any personal data in doing so.",
+        "p3": "Disclosure to the EU or EEA is permitted because, in the view of the Swiss Federal Council, these states ensure an adequate level of data protection. For recipients in other states (for example in the case of cloud import from the USA), we rely on the exceptions for the performance of a contract or on your own initiation, or on recognized safeguards such as standard contractual clauses."
+      },
+      "retention": {
+        "title": "Retention and deletion",
+        "p1": "We retain personal data only as long as necessary for the purpose or as required by law. Automatic deletion periods include:",
+        "list1": {
+          "security": "security events 90 days, security incidents 365 days after the last activity;",
+          "sessions": "expired or ended sessions 30 days, unused known devices 120 days;",
+          "audit": "audit log 730 days, error log 90 days;",
+          "mail": "sent email messages 90 days;",
+          "uploads": "submission box upload log 90 days, processing jobs for uploads, photo analysis and PDF 30 days;",
+          "exports": "generated PDF exports 30 days, exports of all club data 7 days after creation;",
+          "trash": "files in the trash 30 days;",
+          "cloud": "cloud import access keys until the end of the import, at most 7 days after their last use."
+        },
+        "p2": "Other club data remains stored until the club deletes it or defines retention rules for its data. After a contract ends, the club's data is deleted; see the Terms of Use.",
+        "p3": "We create backups every 6 hours and retain them on a tiered basis for up to 12 months (all for 14 days, plus 14 daily, 8 weekly and 12 monthly). Deleted data may therefore remain in backups until this period expires; protected restore points created before updates may persist longer. Backups are used only for restoration; after a restoration, a deletion journal ensures that data already deleted is removed again."
+      },
+      "data-security": {
+        "title": "Data security",
+        "p1": "We protect your data with appropriate technical and organizational measures, including: encrypted transmission (HTTPS), strict separation of club data in the database (row-level security), roles and permissions, second factor and passkeys, encrypted storage of access keys, virus scanning of uploads, encrypted exports of personal data, encrypted backups and a strict Content Security Policy in the browser. The platform administration is accessible only via its own address and with a passkey."
+      },
+      "legal-basis": {
+        "title": "Legal bases under the GDPR",
+        "p1": "Where the GDPR applies, we process personal data on the basis of: the performance of the contract with the club or with you (Art. 6(1)(b) GDPR), our legitimate interest in secure and stable operation and in protection against misuse (Art. 6(1)(f) GDPR), legal obligations (Art. 6(1)(c) GDPR) and, where we ask for it, your consent (Art. 6(1)(a) GDPR), for example when retaining the location data of a photo. We process club data as a processor under Art. 28 GDPR."
+      },
+      "rights": {
+        "title": "Your rights",
+        "p1": "Within the scope of applicable law, you have the right to access, rectification, erasure, restriction of processing, objection, and to receive or port your data, as well as to withdraw consent with effect for the future.",
+        "p2": "You can obtain a copy of your data directly in hocX under Profile › My data. For all other matters, write to info@hocx.ch; if it concerns a club's data, we forward your request to the club. We may request proof of identity.",
+        "p3": "You can also lodge a complaint with a supervisory authority: in Switzerland, the Federal Data Protection and Information Commissioner (FDPIC, https://www.edoeb.admin.ch); in the EU, the authority at your place of residence or work."
+      },
+      "changes": {
+        "title": "Changes",
+        "p1": "We amend this privacy policy when our processing or the law changes. The version published on this page with the date indicated above is authoritative."
+      }
+    }
+  },
+  "terms": {
+    "meta": {
+      "title": "Terms of Use – hocX",
+      "description": "Terms for using the hocX club platform."
+    },
+    "title": "Terms of Use",
+    "lead": "These terms govern the use of the hocX platform by clubs and organizations and by the people who have an account in hocX or submit files via the submission box.",
+    "sections": {
+      "scope": {
+        "title": "Provider and scope",
+        "p1": "hocX is operated by hocX project (contact: info@hocx.ch). These terms apply to the website and the hocX platform. For the club as a customer, the agreements on its subscription also apply; in the event of conflict, these take precedence.",
+        "p2": "By using hocX, you accept these terms. Anyone acting on behalf of a club confirms that they are authorized to do so."
+      },
+      "service": {
+        "title": "Services",
+        "p1": "hocX is an online platform for organizing clubs, including meetings and minutes, events, todos, attendance, finances, members, files and photos, submissions via the submission box, and document exports. Which features a club can use depends on its subscription.",
+        "p2": "We continuously develop hocX and may change, add or replace features. If an essential feature of a paid subscription is discontinued, we inform the club in advance."
+      },
+      "accounts": {
+        "title": "Accounts and access",
+        "p1": "The club sets up accounts for its members. Each person is responsible for their credentials, does not share them, and promptly reports any suspected misuse to the club or to us. We recommend a second factor or a passkey.",
+        "p2": "The club determines, through roles and permissions, who may see and change what, and is responsible for this assignment.",
+        "p3": "We may temporarily suspend accounts in the event of misuse, a threat to security or a serious breach of these terms."
+      },
+      "club-duties": {
+        "title": "Obligations of clubs and users",
+        "p1": "Clubs and users undertake in particular:",
+        "list1": {
+          "lawful": "not to store or distribute unlawful content, in particular no content that infringes the rights of third parties (copyright, trademark or personality rights), or that is offensive, discriminatory or criminal;",
+          "dataProtection": "to process personal data only lawfully. The club is responsible for its members' data and for the content it records or receives via the submission box, and informs the data subjects where necessary;",
+          "noAbuse": "not to misuse hocX, for example through attacks, circumventing security or access restrictions, introducing malware or excessive automated load;",
+          "security": "not to exploit security vulnerabilities, but to report them to info@hocx.ch."
+        }
+      },
+      "content": {
+        "title": "Content and rights",
+        "p1": "The content that a club and its members record or upload in hocX continues to belong to them or to the respective rights holders. Anyone who uploads content warrants that they have the necessary rights and consents, for example for photos of people.",
+        "p2": "The club grants us only the rights we need to operate hocX for it: storing, backing up and processing content (for example thumbnails, search, PDF generation) and displaying it to the people it has authorized. We do not use the content for any other purpose.",
+        "p3": "If we become aware of clearly unlawful content, we may block it and will inform the club.",
+        "p4": "The hocX software, design and brand remain the property of hocX project."
+      },
+      "data-protection": {
+        "title": "Data protection",
+        "p1": "How we process personal data is described in the Privacy Policy. The club is the controller for a club's data; hocX project processes it as a processor according to the club's instructions. [[BITTE ERGÄNZEN: Verweis auf den Auftragsbearbeitungsvertrag (AVV)]]"
+      },
+      "availability": {
+        "title": "Availability",
+        "p1": "We strive for stable and secure operation and regular backups. However, no particular level of availability or uninterrupted operation is guaranteed. During maintenance, updates and disruptions, hocX may be temporarily unavailable or only partially available; where possible, we announce planned maintenance in the app.",
+        "p2": "Clubs are themselves responsible for additionally exporting and retaining important data where needed, for example via the export of all club data."
+      },
+      "pricing": {
+        "title": "Subscriptions, prices and trial period",
+        "p1": "hocX is offered in various subscriptions that differ in features, number of users and storage space. The prices agreed upon conclusion of the contract apply; the current overview is available on the website. All prices in CHF, excluding VAT.",
+        "p2": "A subscription can be billed monthly or annually. Invoices are payable within 30 days from the start of the billing period. We change a subscription at the club's request.",
+        "p3": "When switching to a smaller subscription, no data is deleted: features that are no longer included remain readable but can no longer be changed.",
+        "p4": "A free trial period is possible. We notify the club of price changes in advance; they apply from the next billing period. [[BITTE ERGÄNZEN: Dauer und Bedingungen der Testphase, Ankündigungsfrist für Preisänderungen, Folgen bei Zahlungsverzug]]"
+      },
+      "termination": {
+        "title": "Term, termination and data after the contract ends",
+        "p1": "The subscription runs for the chosen billing period. [[BITTE ERGÄNZEN: Verlängerung, Kündigungsfrist, Form der Kündigung und Rückerstattung bei Kündigung während der Laufzeit]]",
+        "p2": "In the event of serious breaches of these terms, we may terminate the contract early for good cause.",
+        "p3": "Before the contract ends, the club can export all of its data. After that, we delete the club's data. [[BITTE ERGÄNZEN: Frist für die Löschung nach Vertragsende]] It remains in backups until they expire (at most around 12 months)."
+      },
+      "liability": {
+        "title": "Liability",
+        "p1": "We are liable for damage that we cause intentionally or through gross negligence. Any further liability, in particular for slight negligence, for indirect and consequential damage, lost profits or loss of data, is excluded to the extent permitted by law. Liability for personal injury and under mandatory law remains reserved.",
+        "p2": "We are not liable for content that clubs or users record in hocX, nor for third-party services that you connect to hocX (for example cloud storage or calendar apps).",
+        "p3": "The club indemnifies us against third-party claims based on unlawful content or unlawful use by the club or its members."
+      },
+      "changes": {
+        "title": "Changes to the terms",
+        "p1": "We may amend these terms. We will notify clubs of material changes in good time beforehand. If hocX continues to be used after the changes take effect, the changes are deemed accepted; if a club does not agree, it may terminate with effect from that date."
+      },
+      "law": {
+        "title": "Governing law and place of jurisdiction",
+        "p1": "These terms are governed exclusively by Swiss law, excluding the United Nations Convention on Contracts for the International Sale of Goods (CISG).",
+        "p2": "The place of jurisdiction is [[BITTE ERGÄNZEN: Gerichtsstand (Ort)]], unless mandatory provisions provide otherwise.",
+        "p3": "Should any provision be invalid, the remaining provisions remain valid."
+      }
+    }
+  }
+}

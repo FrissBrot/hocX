@@ -1573,7 +1573,10 @@ zeigt nie Test-URLs.
 3. Für die Herausgeberverifizierung: die Betreiber-Domain (z. B. die Domain der Website) als
    **verifizierte benutzerdefinierte Domain** im Tenant und ein Konto im **Microsoft AI Cloud Partner
    Program** (Partner Center), siehe Schritt 7. Vorlauf: einige Tage bis Wochen - früh starten.
-4. Öffentlich erreichbare Seiten für **Datenschutzerklärung** und **Nutzungsbedingungen** (URLs).
+4. Öffentlich erreichbare Seiten für **Datenschutzerklärung** und **Nutzungsbedingungen** (URLs). Ab 1.6
+   liefert die Website sie selbst aus: `https://<TRAEFIK_WEBSITE_DOMAIN>/privacy` und `/terms`
+   (Texte in `frontend/messages/<locale>/legal.json`, Platzhalter `[[BITTE ERGÄNZEN: …]]` vor der
+   Veröffentlichung ersetzen).
 
 #### Schritt 1 - App registrieren
 
@@ -1746,6 +1749,7 @@ Verifizierung nötig).
    liest (nur gewählte Dateien/Fotos, Kontokennung), wozu (einmaliger Import), wie lange (Tokens bis
    Importende, widerrufen) und den Satz zur Einhaltung der «Google API Services User Data Policy,
    including the Limited Use requirements». Ohne diesen Abschnitt lehnt Google die Verifizierung ab.
+   Steht ab 1.6 unter `https://<TRAEFIK_WEBSITE_DOMAIN>/privacy#cloud-import-google`.
 
 #### Schritt 1 - Projekt anlegen
 

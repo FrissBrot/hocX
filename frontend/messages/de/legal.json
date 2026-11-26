@@ -1,0 +1,260 @@
+{
+  "common": {
+    "eyebrow": "Rechtliches",
+    "navLabel": "Rechtliches",
+    "updated": "Stand: {date}",
+    "contactLabel": "Kontakt:",
+    "toc": "Inhalt",
+    "authoritative": "Diese Übersetzung dient dem Verständnis. Massgebend ist die deutsche Fassung.",
+    "seeAlso": "Siehe auch:",
+    "backToTop": "Nach oben",
+    "privacy": "Datenschutzerklärung",
+    "terms": "Nutzungsbedingungen"
+  },
+  "privacy": {
+    "meta": {
+      "title": "Datenschutzerklärung – hocX",
+      "description": "Wie hocX project Personendaten auf der Website und in der Vereinsplattform hocX bearbeitet."
+    },
+    "title": "Datenschutzerklärung",
+    "lead": "Diese Erklärung beschreibt, welche Personendaten wir auf der Website und in der Vereinsplattform hocX bearbeiten, wozu, wie lange und welche Rechte Sie haben. Sie richtet sich nach dem Schweizer Datenschutzgesetz (DSG) und, soweit anwendbar, nach der Datenschutz-Grundverordnung der EU (DSGVO).",
+    "sections": {
+      "controller": {
+        "title": "Verantwortlicher und Kontakt",
+        "p1": "Betreiber der Website und der Plattform hocX ist hocX project.",
+        "p2": "Für alle Fragen zum Datenschutz und für die Ausübung Ihrer Rechte erreichen Sie uns unter info@hocx.ch.",
+        "p3": "[[BITTE ERGÄNZEN: Vertreter in der EU nach Art. 27 DSGVO, falls erforderlich – sonst diesen Absatz streichen]]"
+      },
+      "roles": {
+        "title": "Wer ist wofür verantwortlich?",
+        "p1": "hocX ist eine Plattform für Vereine und Organisationen. Je nach Art der Daten haben wir eine andere Rolle:",
+        "list1": {
+          "club": "Daten, die ein Verein in hocX erfasst oder hochladen lässt (Mitglieder, Protokolle, Termine, Pendenzen, Finanzen, Dateien und Fotos, Abgaben über die Abgabebox, importierte Dateien): Hier ist der Verein der Verantwortliche. hocX project bearbeitet diese Daten nur in seinem Auftrag und nach seinen Weisungen als Auftragsbearbeiter (Art. 9 DSG, Art. 28 DSGVO).",
+          "platform": "Daten für den Betrieb der Plattform selbst (Anmeldung und Sicherheit der Benutzerkonten, Konten der Plattform-Administration, Abrechnung der Abos) und die Daten beim Besuch dieser Website: Hier ist hocX project selbst verantwortlich."
+        },
+        "p2": "Möchten Sie als Mitglied eines Vereins Auskunft über Ihre Daten oder deren Löschung, wenden Sie sich bitte zuerst an Ihren Verein. Erreicht uns eine solche Anfrage, leiten wir sie an den Verein weiter und unterstützen ihn bei der Beantwortung.",
+        "p3": "Die Einzelheiten der Auftragsbearbeitung regelt der Vertrag mit dem Verein. [[BITTE ERGÄNZEN: Verweis auf den Auftragsbearbeitungsvertrag (AVV) und wo Vereine ihn erhalten]]"
+      },
+      "website": {
+        "title": "Besuch dieser Website",
+        "p1": "Beim Aufruf der Website verarbeitet der Server technisch notwendige Angaben wie IP-Adresse, Zeitpunkt, aufgerufene Adresse und Browserangaben, um die Seite auszuliefern und vor Missbrauch zu schützen. Ein Zugriffsprotokoll mit IP-Adressen führen wir nicht.",
+        "p2": "Die Website verwendet keine Analyse- oder Werbedienste, keine Tracking-Pixel, keine Social-Media-Plugins und lädt keine Schriften oder Skripte von fremden Servern. Preise und die Liste der Kunden werden von unserem eigenen Server geladen; ein Verein erscheint in der Kundenliste nur, wenn er dem zugestimmt hat.",
+        "p3": "Schreiben Sie uns eine E-Mail, verwenden wir Ihre Angaben nur, um Ihre Anfrage zu beantworten."
+      },
+      "accounts": {
+        "title": "Benutzerkonten und Anmeldung",
+        "p1": "Eine öffentliche Registrierung gibt es nicht. Konten entstehen, wenn ein Verein eine Person einlädt oder als Mitglied erfasst. Für ein Konto bearbeiten wir Name, E-Mail-Adresse, die Rollen im Verein, die gewählte Sprache, das Passwort (nur als sicherer Hash, nie im Klartext) sowie, falls eingerichtet, zweite Faktoren wie Authenticator-App oder Passkey.",
+        "p2": "Eine Sitzung endet nach 8 Stunden ohne Aktivität, spätestens nach 14 Tagen. Wichtige Vorgänge im Verein (zum Beispiel Änderungen an Rechten, Exporte, Löschungen) werden zur Nachvollziehbarkeit im Audit-Log festgehalten, mit der E-Mail-Adresse der handelnden Person und einem nicht umkehrbaren Kennwert des Netzwerks statt der IP-Adresse.",
+        "p3": "Unter Profil › Meine Daten können Sie jederzeit eine Kopie Ihrer Personendaten als passwortgeschützte ZIP-Datei herunterladen. Ein Konto löscht der Administrator Ihres Vereins; Sie können die Löschung auch über info@hocx.ch verlangen."
+      },
+      "club-data": {
+        "title": "Daten der Vereine",
+        "p1": "Vereine erfassen in hocX zum Beispiel Mitglieder und Teilnehmende, Sitzungen und Protokolle, Anwesenheiten, Termine, Pendenzen, Bussen, Kassen- und Finanzdaten, Listen, Dateien und Fotos. Welche Daten das sind und zu welchem Zweck, bestimmt der Verein. Wir verwenden diese Daten nur, um die Plattform für den Verein bereitzustellen, zu sichern und zu unterstützen, und nie für eigene Zwecke wie Werbung oder das Training von KI-Modellen.",
+        "p2": "Hochgeladene Dateien werden vor der Ablage lokal auf Schadsoftware geprüft (ClamAV auf unserem eigenen Server). Die Volltextsuche läuft ebenfalls ausschliesslich auf unserem Server.",
+        "p3": "Ob Bussen und Anwesenheiten je Person in der Statistik für alle Mitglieder sichtbar sind, stellt der Verein ein; standardmässig ist das ausgeschaltet."
+      },
+      "submission-box": {
+        "title": "Abgabebox",
+        "p1": "Über die Abgabebox können Personen ohne Konto Dateien und Fotos an einen Verein übermitteln. Verantwortlich für diese Dateien ist der Verein; das wird vor dem Hochladen angezeigt, zusammen mit seinen Datenschutzhinweisen, falls er solche hinterlegt hat.",
+        "p2": "Wir verlangen dafür weder Namen noch E-Mail-Adresse. Gespeichert werden die Dateien mit ihren Metadaten, der Zeitpunkt, die Zuordnung zum Auftrag und ein Upload-Protokoll (Dateiname, Grösse, Ergebnis der Prüfung), das nach 90 Tagen gelöscht wird. Die IP-Adresse wird nur in pseudonymisierter Form (als Hash) verwendet, um Missbrauch zu begrenzen.",
+        "p3": "Standortdaten (GPS) eines Fotos werden nur übernommen, wenn Sie das beim Hochladen ausdrücklich wählen; sonst entfernt hocX sie aus der Datei.",
+        "p4": "Zum Schutz vor Spam setzt die Abgabebox Friendly Captcha der Friendly Captcha GmbH (Deutschland) ein. Dabei löst Ihr Browser eine Rechenaufgabe und sendet das Ergebnis zur Prüfung an Friendly Captcha; dafür werden keine Cookies gesetzt. [[BITTE ERGÄNZEN: ob der globale oder der EU-Endpunkt von Friendly Captcha konfiguriert ist]]"
+      },
+      "photos": {
+        "title": "Fotos, Standorte und Foto-Analyse",
+        "p1": "Enthält ein Foto Standortdaten, ermittelt hocX daraus einen Ortsnamen. Das geschieht vollständig auf unserem Server mit offenen Ortsverzeichnissen (GeoNames und swissNAMES3D von swisstopo), die wir monatlich herunterladen. Koordinaten Ihrer Fotos werden dabei nie an Dritte gesendet. Ortsnamen sehen nur Personen im eigenen Verein, nicht Partner geteilter Alben oder Empfänger öffentlicher Links.",
+        "p2": "Nach dem Hochladen bewertet hocX im Hintergrund Schärfe, Belichtung und ob ein Bild Gesichter enthält, um Fotos nach Qualität zu sortieren und Vorschläge für eine Auswahl zu machen. Die Analyse läuft auf unserem eigenen Server ohne externe Dienste. Es werden keine Personen erkannt oder identifiziert und keine biometrischen Merkmale gespeichert."
+      },
+      "emails": {
+        "title": "E-Mails",
+        "p1": "hocX versendet E-Mails zu Konto und Sicherheit (Einladung, Passwort zurücksetzen, Hinweise zu Anmeldungen und Änderungen am Konto) sowie Benachrichtigungen aus dem Verein (zum Beispiel neue oder fällige Pendenzen, eingegangene Abgaben, fertige Exporte, Cloud-Import). Benachrichtigungen lassen sich im Profil unter «Benachrichtigungen» je Kategorie abschalten; Mitteilungen zu Konto und Sicherheit nicht.",
+        "p2": "Versandte Mitteilungen und Einmal-Links werden nach 90 Tagen gelöscht, nicht zustellbare nach 7 Tagen verworfen. Ein Link zum Zurücksetzen des Passworts gilt 60 Minuten, eine Einladung 7 Tage.",
+        "p3": "Für den Versand nutzen wir einen E-Mail-Dienst: [[BITTE ERGÄNZEN: Anbieter des E-Mail-Versands (SMTP) und Standort]]."
+      },
+      "security": {
+        "title": "Schutz Ihres Kontos",
+        "p1": "Um Konten vor Übernahme zu schützen, bearbeiten wir Sicherheitsereignisse wie Anmeldungen, Fehlversuche, neue Geräte und Änderungen an Passwort oder zweitem Faktor. IP-Adressen und eingegebene E-Mail-Adressen speichern wir dabei nicht im Klartext, sondern nur als Pseudonym (HMAC-SHA256, der Schlüssel wechselt wöchentlich). Diese Ereignisse werden nach 90 Tagen gelöscht, Sicherheitsvorfälle samt Notizen 365 Tage nach der letzten Aktivität.",
+        "p2": "Bekannte Geräte erkennen wir an einem Cookie; sie werden nach 120 Tagen ohne Nutzung vergessen.",
+        "p3": "Für das Risikosignal «Anmeldung aus einem neuen Land» bestimmt hocX das Land der IP-Adresse mit einer lokalen Datenbank (DB-IP «IP to Country Lite», monatlich aktualisiert). Es findet keine Abfrage bei Dritten statt; gespeichert wird nur der Ländercode.",
+        "p4": "Neue Passwörter und Passwörter bei der Anmeldung prüfen wir darauf, ob sie aus bekannten Datenlecks stammen. Dazu wird lokal ein SHA-1-Hash berechnet und nur dessen erste 5 Zeichen an den Dienst «Pwned Passwords» (Have I Been Pwned) gesendet (k-Anonymität); das Passwort und der vollständige Hash verlassen den Server nie. Ist der Dienst nicht erreichbar, prüfen wir gegen eine lokale Liste. Gespeichert wird nur der Zeitpunkt der Prüfung."
+      },
+      "cloud-import": {
+        "title": "Import aus Cloud-Speichern",
+        "p1": "Berechtigte Personen eines Vereins können Dateien und Fotos aus einem Cloud-Speicher in die Ablage des Vereins übernehmen: Microsoft OneDrive und SharePoint, Google Drive, Google Fotos, Dropbox sowie WebDAV-Speicher (zum Beispiel kDrive, Nextcloud oder SwissDisk). Der Import erfolgt im Auftrag des Vereins; der Verein ist für die importierten Inhalte verantwortlich.",
+        "p2": "Dafür bearbeiten wir:",
+        "list1": {
+          "tokens": "Zugriffsschlüssel (OAuth-Tokens) bzw. bei WebDAV ein App-Passwort, ausschliesslich verschlüsselt gespeichert;",
+          "account": "die Kennung des verbundenen Kontos (E-Mail-Adresse oder Name), damit Sie sehen, welches Konto verbunden ist;",
+          "metadata": "Metadaten der ausgewählten Dateien und Ordner (Namen, Pfade, Grössen, Datumsangaben);",
+          "content": "die Inhalte der ausgewählten Dateien. Sie können Personendaten Dritter enthalten, zum Beispiel Fotos von Mitgliedern."
+        },
+        "p3": "hocX greift bei allen Anbietern nur lesend zu und überträgt nur, was Sie ausgewählt haben. Wir ändern oder löschen nichts in Ihrem Cloud-Speicher und übermitteln den Anbietern keine Inhalte aus hocX.",
+        "p4": "Die Zugriffsschlüssel werden gelöscht, sobald der Import abgeschlossen oder abgebrochen ist, spätestens 7 Tage nach der letzten Verwendung. Bei Google und Dropbox widerruft hocX den Zugriff dabei zusätzlich beim Anbieter. Der Importbericht bleibt erhalten, solange importierte Dateien vorhanden sind; importierte Dateien unterliegen danach den Regeln des Vereins.",
+        "p5": "Sie können eine Verbindung in hocX jederzeit trennen und die Berechtigung zusätzlich beim Anbieter entziehen: Microsoft unter https://account.live.com/consent/Manage (private Konten) bzw. https://myapps.microsoft.com (Geschäftskonten), Google unter https://myaccount.google.com/connections, Dropbox unter https://www.dropbox.com/account/connected_apps.",
+        "p6": "Microsoft, Google und Dropbox sind dabei nicht unsere Auftragsbearbeiter: Ihr Cloud-Konto ist Ihre eigene Beziehung zum Anbieter, für die dessen Datenschutzbestimmungen gelten."
+      },
+      "cloud-import-google": {
+        "title": "Google-Daten",
+        "p1": "Wenn Sie Google Drive oder Google Fotos verbinden, gilt zusätzlich:",
+        "list1": {
+          "what": "Welche Daten hocX liest: nur die Dateien bzw. Fotos, die Sie im Auswahlfenster von Google (Google Picker bzw. Google Photos Picker) ausdrücklich auswählen, sowie die Kennung Ihres Google-Kontos (E-Mail-Adresse). hocX verwendet dafür die Berechtigungen «drive.file» und «photospicker.mediaitems.readonly» und hat keinen Zugriff auf Ihre übrigen Dateien oder Fotos.",
+          "why": "Wozu: ausschliesslich für den einmaligen Import der ausgewählten Dateien in die Ablage Ihres Vereins in hocX.",
+          "howLong": "Wie lange: Die Zugriffsschlüssel werden nur bis zum Ende des Imports aufbewahrt, danach bei Google widerrufen und gelöscht (spätestens 7 Tage nach der letzten Verwendung).",
+          "sharing": "Keine Weitergabe: Daten aus Google-Diensten werden nicht an Dritte weitergegeben oder verkauft, nicht für Werbung verwendet und nicht zum Training von KI- oder Machine-Learning-Modellen genutzt. Menschen lesen diese Daten nur, wenn Sie es ausdrücklich wünschen (zum Beispiel im Support), wenn es für die Sicherheit oder nach geltendem Recht nötig ist."
+        },
+        "p2": "Die Nutzung und Übertragung von Informationen, die hocX von Google-APIs erhält, entspricht der Google API Services User Data Policy, einschliesslich der Anforderungen zur eingeschränkten Nutzung (Limited Use): https://developers.google.com/terms/api-services-user-data-policy"
+      },
+      "cloud-import-other": {
+        "title": "Microsoft-, Dropbox- und WebDAV-Daten",
+        "p1": "Microsoft (OneDrive, SharePoint): hocX liest nach Ihrer Anmeldung Ihr Profil (Name, E-Mail-Adresse) und die Ordner und Dateien, die Sie im Import auswählen. Die Berechtigungen «Files.Read» (und, falls Sie freigegebene Dateien oder SharePoint importieren, «Files.Read.All» und «Sites.Read.All») sind nur lesend; technisch durchgesetzt überträgt hocX nur Dateien unterhalb Ihrer Auswahl. Microsoft bietet keinen Widerruf einzelner Zugriffsschlüssel durch die App an; hocX löscht sie, und Sie können die Berechtigung im Microsoft-Konto entfernen.",
+        "p2": "Dropbox: hocX liest Ihre Kontoangaben (Name, E-Mail-Adresse) sowie Metadaten und Inhalte der ausgewählten Dateien (Berechtigungen «account_info.read», «files.metadata.read», «files.content.read»). Am Ende des Imports widerruft hocX den Zugriff bei Dropbox.",
+        "p3": "WebDAV: hocX verbindet sich mit dem Server, den Sie angeben, und verwendet das App-Passwort nur für den Import.",
+        "p4": "Auch diese Daten verwenden wir ausschliesslich für den Import, geben sie nicht weiter und nutzen sie weder für Werbung noch zum Training von KI-Modellen."
+      },
+      "calendar": {
+        "title": "Kalender-Abos",
+        "p1": "Sie können Termine als Kalender-Abo (iCal) in eine Kalender-App übernehmen. Der persönliche Link enthält einen geheimen Schlüssel, den wir nur verschlüsselt bzw. als Hash speichern. Ihre Kalender-App (zum Beispiel von Apple oder Google) ruft die Termine dann selbst ab; die Übermittlung an diesen Anbieter lösen Sie damit selbst aus. Den Link können Sie jederzeit neu erzeugen, der alte wird dabei ungültig."
+      },
+      "cookies": {
+        "title": "Cookies und Speicher im Browser",
+        "p1": "hocX setzt nur Cookies, die für den Betrieb technisch nötig sind. Eine Einwilligung ist dafür nicht erforderlich, und es gibt keine Cookies zu Analyse- oder Werbezwecken.",
+        "list1": {
+          "session": "hocx_session: hält Sie angemeldet (Sitzung, höchstens 72 Stunden im Browser, serverseitig kürzer).",
+          "device": "hocx_device: erkennt ein bekanntes Gerät für Sicherheitshinweise (90 Tage).",
+          "admin": "hocx_admin_session: Sitzung der Plattform-Administration, nur auf deren eigener Adresse (12 Stunden).",
+          "locale": "hocx_locale: gewählte Sprache (in der App 72 Stunden, auf der Website und in der Abgabebox bei Sprachwahl 1 Jahr)."
+        },
+        "p2": "Im Speicher Ihres Browsers (localStorage) legt hocX zudem Einstellungen wie hell/dunkel, Ansicht und Spalten, Ihre letzten Suchen sowie Entwürfe und noch nicht gesendete Änderungen ab, damit bei einem Verbindungsunterbruch nichts verloren geht. Diese Angaben bleiben auf Ihrem Gerät."
+      },
+      "recipients": {
+        "title": "Hosting, Speicherort und Empfänger",
+        "p1": "Wir geben Personendaten nicht an Dritte weiter, ausser an die folgenden Dienstleister, soweit es für den Betrieb nötig ist, oder wenn wir gesetzlich dazu verpflichtet sind:",
+        "list1": {
+          "hosting": "Betrieb der Server: [[BITTE ERGÄNZEN: Hosting-Anbieter und Standort des Rechenzentrums (Land)]]",
+          "storage": "Dateien und Fotos liegen in einem S3-kompatiblen Objektspeicher. [[BITTE ERGÄNZEN: auf dem eigenen Server oder bei welchem Anbieter, mit Standort]]",
+          "backup": "Verschlüsselte Datensicherungen: Hetzner Online GmbH (Storage Box). Die Sicherungen werden vor der Übertragung auf unserem Server verschlüsselt (BorgBackup, AES-256); Hetzner hat keinen Zugriff auf die Inhalte. [[BITTE ERGÄNZEN: Standort der Storage Box (Deutschland oder Finnland)]]",
+          "mail": "E-Mail-Versand: siehe Abschnitt «E-Mails».",
+          "captcha": "Spam-Schutz der Abgabebox: Friendly Captcha GmbH, Deutschland.",
+          "dns": "Namensauflösung (DNS): Cloudflare, Inc. Über Cloudflare laufen keine Inhalte von hocX."
+        },
+        "p2": "Für die Passwort-Prüfung (Have I Been Pwned) und die Aktualisierung der Länder- und Ortsverzeichnisse (DB-IP, GeoNames, swisstopo) ruft unser Server Daten ab, übermittelt dabei aber keine Personendaten.",
+        "p3": "Die Bekanntgabe in die EU bzw. den EWR ist zulässig, weil diese Staaten nach Auffassung des Bundesrats einen angemessenen Datenschutz gewährleisten. Bei Empfängern in anderen Staaten (zum Beispiel beim Cloud-Import aus den USA) stützen wir uns auf die Ausnahmen für die Vertragsabwicklung bzw. auf Ihre Veranlassung, oder auf anerkannte Garantien wie Standardvertragsklauseln."
+      },
+      "retention": {
+        "title": "Aufbewahrung und Löschung",
+        "p1": "Wir bewahren Personendaten nur so lange auf, wie es für den Zweck nötig ist oder das Gesetz es verlangt. Automatische Löschfristen sind unter anderem:",
+        "list1": {
+          "security": "Sicherheitsereignisse 90 Tage, Sicherheitsvorfälle 365 Tage nach der letzten Aktivität;",
+          "sessions": "abgelaufene oder beendete Sitzungen 30 Tage, unbenutzte bekannte Geräte 120 Tage;",
+          "audit": "Audit-Log 730 Tage, Fehlerprotokoll 90 Tage;",
+          "mail": "versandte E-Mail-Mitteilungen 90 Tage;",
+          "uploads": "Upload-Protokoll der Abgabebox 90 Tage, Verarbeitungsaufträge für Uploads, Foto-Analyse und PDF 30 Tage;",
+          "exports": "erzeugte PDF-Exporte 30 Tage, Exporte aller Vereinsdaten 7 Tage nach der Erstellung;",
+          "trash": "Dateien im Papierkorb 30 Tage;",
+          "cloud": "Zugangsschlüssel des Cloud-Imports bis zum Ende des Imports, höchstens 7 Tage nach der letzten Verwendung."
+        },
+        "p2": "Die übrigen Vereinsdaten bleiben gespeichert, bis der Verein sie löscht oder Aufbewahrungsregeln für seine Daten festlegt. Nach dem Ende eines Vertrags werden die Daten des Vereins gelöscht, siehe Nutzungsbedingungen.",
+        "p3": "Datensicherungen erstellen wir alle 6 Stunden und bewahren sie gestaffelt bis zu 12 Monate auf (14 Tage alle, dazu 14 tägliche, 8 wöchentliche und 12 monatliche). Gelöschte Daten können deshalb bis zum Ablauf dieser Frist in Sicherungen enthalten sein; vor Updates angelegte, geschützte Sicherungspunkte können länger bestehen. Sicherungen werden nur zur Wiederherstellung verwendet; nach einer Wiederherstellung sorgt ein Löschjournal dafür, dass bereits gelöschte Daten wieder entfernt werden."
+      },
+      "data-security": {
+        "title": "Datensicherheit",
+        "p1": "Wir schützen Ihre Daten mit angemessenen technischen und organisatorischen Massnahmen, unter anderem: verschlüsselte Übertragung (HTTPS), strikte Trennung der Daten der Vereine in der Datenbank (Row-Level Security), Rollen und Berechtigungen, zweiter Faktor und Passkeys, verschlüsselte Speicherung von Zugangsschlüsseln, Virenprüfung von Uploads, verschlüsselte Exporte von Personendaten, verschlüsselte Datensicherungen und eine strenge Content Security Policy im Browser. Die Plattform-Administration ist nur über eine eigene Adresse und mit Passkey erreichbar."
+      },
+      "legal-basis": {
+        "title": "Rechtsgrundlagen nach DSGVO",
+        "p1": "Soweit die DSGVO anwendbar ist, bearbeiten wir Personendaten gestützt auf: die Erfüllung des Vertrags mit dem Verein bzw. Ihnen (Art. 6 Abs. 1 lit. b), unser berechtigtes Interesse an einem sicheren und stabilen Betrieb und am Schutz vor Missbrauch (Art. 6 Abs. 1 lit. f), rechtliche Pflichten (Art. 6 Abs. 1 lit. c) und, wo wir darum bitten, Ihre Einwilligung (Art. 6 Abs. 1 lit. a), zum Beispiel beim Übernehmen von Standortdaten eines Fotos. Daten der Vereine bearbeiten wir als Auftragsbearbeiter nach Art. 28 DSGVO."
+      },
+      "rights": {
+        "title": "Ihre Rechte",
+        "p1": "Sie haben im Rahmen des anwendbaren Rechts das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Bearbeitung, Widerspruch, Herausgabe bzw. Übertragung Ihrer Daten sowie auf Widerruf einer Einwilligung mit Wirkung für die Zukunft.",
+        "p2": "Eine Kopie Ihrer Daten erhalten Sie direkt in hocX unter Profil › Meine Daten. Für alle anderen Anliegen schreiben Sie an info@hocx.ch; betrifft es Daten eines Vereins, leiten wir Ihre Anfrage an den Verein weiter. Wir können einen Identitätsnachweis verlangen.",
+        "p3": "Sie können sich zudem bei einer Aufsichtsbehörde beschweren, in der Schweiz beim Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten (EDÖB, https://www.edoeb.admin.ch), in der EU bei der Behörde Ihres Wohnsitz- oder Arbeitsorts."
+      },
+      "changes": {
+        "title": "Änderungen",
+        "p1": "Wir passen diese Datenschutzerklärung an, wenn sich unsere Bearbeitung oder das Recht ändert. Massgebend ist die auf dieser Seite veröffentlichte Fassung mit dem oben angegebenen Stand."
+      }
+    }
+  },
+  "terms": {
+    "meta": {
+      "title": "Nutzungsbedingungen – hocX",
+      "description": "Bedingungen für die Nutzung der Vereinsplattform hocX."
+    },
+    "title": "Nutzungsbedingungen",
+    "lead": "Diese Bedingungen regeln die Nutzung der Plattform hocX durch Vereine und Organisationen und durch die Personen, die in hocX ein Konto haben oder Dateien über die Abgabebox übermitteln.",
+    "sections": {
+      "scope": {
+        "title": "Anbieter und Geltungsbereich",
+        "p1": "hocX wird von hocX project betrieben (Kontakt: info@hocx.ch). Die Bedingungen gelten für die Website und die Plattform hocX. Für den Verein als Kunden gelten zusätzlich die Vereinbarungen zu seinem Abo; bei Widersprüchen gehen diese vor.",
+        "p2": "Mit der Nutzung von hocX akzeptieren Sie diese Bedingungen. Wer für einen Verein handelt, bestätigt, dazu berechtigt zu sein."
+      },
+      "service": {
+        "title": "Leistungen",
+        "p1": "hocX ist eine Online-Plattform für die Organisation von Vereinen: unter anderem Sitzungen und Protokolle, Termine, Pendenzen, Anwesenheiten, Finanzen, Mitglieder, Dateien und Fotos, Abgaben über die Abgabebox und Dokumentexporte. Welche Funktionen ein Verein nutzen kann, hängt von seinem Abo ab.",
+        "p2": "Wir entwickeln hocX laufend weiter und dürfen Funktionen ändern, ergänzen oder ersetzen. Fällt eine wesentliche Funktion eines bezahlten Abos weg, informieren wir den Verein vorgängig."
+      },
+      "accounts": {
+        "title": "Konten und Zugang",
+        "p1": "Konten richtet der Verein für seine Mitglieder ein. Jede Person ist für ihre Zugangsdaten verantwortlich, gibt sie nicht weiter und meldet einen Verdacht auf Missbrauch umgehend dem Verein oder uns. Wir empfehlen einen zweiten Faktor oder einen Passkey.",
+        "p2": "Der Verein bestimmt über Rollen und Berechtigungen, wer was sehen und ändern darf, und ist für diese Zuteilung verantwortlich.",
+        "p3": "Wir dürfen Konten vorübergehend sperren, wenn ein Missbrauch, eine Gefährdung der Sicherheit oder ein schwerer Verstoss gegen diese Bedingungen vorliegt."
+      },
+      "club-duties": {
+        "title": "Pflichten der Vereine und Nutzenden",
+        "p1": "Vereine und Nutzende verpflichten sich insbesondere:",
+        "list1": {
+          "lawful": "keine rechtswidrigen Inhalte zu speichern oder zu verbreiten, insbesondere keine Inhalte, die Rechte Dritter (Urheber-, Marken- oder Persönlichkeitsrechte) verletzen, beleidigend, diskriminierend oder strafbar sind;",
+          "dataProtection": "Personendaten nur rechtmässig zu bearbeiten. Der Verein ist für die Daten seiner Mitglieder und für die Inhalte, die er erfasst oder über die Abgabebox entgegennimmt, verantwortlich und informiert die Betroffenen, soweit nötig;",
+          "noAbuse": "hocX nicht zu missbrauchen, etwa durch Angriffe, das Umgehen von Sicherheits- oder Zugriffsbeschränkungen, das Einschleusen von Schadsoftware oder eine übermässige automatisierte Belastung;",
+          "security": "Sicherheitslücken nicht auszunutzen, sondern an info@hocx.ch zu melden."
+        }
+      },
+      "content": {
+        "title": "Inhalte und Rechte",
+        "p1": "Die Inhalte, die ein Verein und seine Mitglieder in hocX erfassen oder hochladen, gehören weiterhin ihnen bzw. den Berechtigten. Wer Inhalte hochlädt, sichert zu, die dafür nötigen Rechte und Einwilligungen zu haben, zum Beispiel bei Fotos von Personen.",
+        "p2": "Der Verein räumt uns nur die Rechte ein, die wir brauchen, um hocX für ihn zu betreiben: Inhalte speichern, sichern, verarbeiten (zum Beispiel Vorschaubilder, Suche, PDF-Erzeugung) und den von ihm berechtigten Personen anzeigen. Wir verwenden die Inhalte nicht für andere Zwecke.",
+        "p3": "Erhalten wir Kenntnis von offensichtlich rechtswidrigen Inhalten, dürfen wir sie sperren und informieren den Verein.",
+        "p4": "Die Software, das Design und die Marke hocX bleiben Eigentum von hocX project."
+      },
+      "data-protection": {
+        "title": "Datenschutz",
+        "p1": "Wie wir Personendaten bearbeiten, beschreibt die Datenschutzerklärung. Für die Daten eines Vereins ist der Verein verantwortlich; hocX project bearbeitet sie als Auftragsbearbeiter nach seinen Weisungen. [[BITTE ERGÄNZEN: Verweis auf den Auftragsbearbeitungsvertrag (AVV)]]"
+      },
+      "availability": {
+        "title": "Verfügbarkeit",
+        "p1": "Wir bemühen uns um einen stabilen und sicheren Betrieb und um regelmässige Datensicherungen. Eine bestimmte Verfügbarkeit oder ein unterbruchsfreier Betrieb wird jedoch nicht garantiert. Für Wartungsarbeiten, Updates und bei Störungen kann hocX vorübergehend nicht oder nur eingeschränkt erreichbar sein; geplante Wartungen kündigen wir nach Möglichkeit in der App an.",
+        "p2": "Vereine sind selbst dafür verantwortlich, wichtige Daten bei Bedarf zusätzlich zu exportieren und aufzubewahren, zum Beispiel über den Export aller Vereinsdaten."
+      },
+      "pricing": {
+        "title": "Abos, Preise und Testphase",
+        "p1": "hocX wird in verschiedenen Abos angeboten, die sich im Funktionsumfang, in der Anzahl Benutzer und im Speicherplatz unterscheiden. Es gelten die bei Vertragsabschluss vereinbarten Preise; die aktuelle Übersicht steht auf der Website. Alle Preise in CHF, exklusive MWST.",
+        "p2": "Ein Abo kann monatlich oder jährlich abgerechnet werden. Rechnungen sind innert 30 Tagen ab Beginn der Abrechnungsperiode zahlbar. Einen Abo-Wechsel nehmen wir auf Anfrage des Vereins vor.",
+        "p3": "Bei einem Wechsel auf ein kleineres Abo werden keine Daten gelöscht: Funktionen, die nicht mehr enthalten sind, bleiben lesbar, können aber nicht mehr geändert werden.",
+        "p4": "Eine kostenlose Testphase ist möglich. Preisänderungen teilen wir dem Verein im Voraus mit; sie gelten ab der nächsten Abrechnungsperiode. [[BITTE ERGÄNZEN: Dauer und Bedingungen der Testphase, Ankündigungsfrist für Preisänderungen, Folgen bei Zahlungsverzug]]"
+      },
+      "termination": {
+        "title": "Laufzeit, Kündigung und Daten nach Vertragsende",
+        "p1": "Das Abo läuft für die gewählte Abrechnungsperiode. [[BITTE ERGÄNZEN: Verlängerung, Kündigungsfrist, Form der Kündigung und Rückerstattung bei Kündigung während der Laufzeit]]",
+        "p2": "Bei schweren Verstössen gegen diese Bedingungen können wir den Vertrag aus wichtigem Grund vorzeitig beenden.",
+        "p3": "Vor dem Vertragsende kann der Verein alle seine Daten exportieren. Danach löschen wir die Daten des Vereins. [[BITTE ERGÄNZEN: Frist für die Löschung nach Vertragsende]] In Datensicherungen bleiben sie bis zu deren Ablauf (höchstens rund 12 Monate) enthalten."
+      },
+      "liability": {
+        "title": "Haftung",
+        "p1": "Wir haften für Schäden, die wir absichtlich oder grobfahrlässig verursachen. Jede weitere Haftung, insbesondere für leichte Fahrlässigkeit, für indirekte Schäden und Folgeschäden, entgangenen Gewinn oder Datenverlust, ist ausgeschlossen, soweit das Gesetz es zulässt. Die Haftung für Personenschäden und nach zwingendem Recht bleibt vorbehalten.",
+        "p2": "Wir haften nicht für Inhalte, die Vereine oder Nutzende in hocX erfassen, und nicht für Dienste Dritter, die Sie mit hocX verbinden (zum Beispiel Cloud-Speicher oder Kalender-Apps).",
+        "p3": "Der Verein stellt uns von Ansprüchen Dritter frei, die auf rechtswidrigen Inhalten oder einer rechtswidrigen Nutzung durch den Verein oder seine Mitglieder beruhen."
+      },
+      "changes": {
+        "title": "Änderungen der Bedingungen",
+        "p1": "Wir können diese Bedingungen anpassen. Wesentliche Änderungen teilen wir den Vereinen rechtzeitig vorher mit. Wird hocX nach Inkrafttreten weiter genutzt, gelten die Änderungen als angenommen; ist ein Verein nicht einverstanden, kann er auf diesen Zeitpunkt hin kündigen."
+      },
+      "law": {
+        "title": "Anwendbares Recht und Gerichtsstand",
+        "p1": "Es gilt ausschliesslich Schweizer Recht unter Ausschluss des UN-Kaufrechts.",
+        "p2": "Gerichtsstand ist [[BITTE ERGÄNZEN: Gerichtsstand (Ort)]], soweit nicht zwingende Bestimmungen etwas anderes vorsehen.",
+        "p3": "Sollte eine Bestimmung unwirksam sein, bleiben die übrigen gültig."
+      }
+    }
+  }
+}

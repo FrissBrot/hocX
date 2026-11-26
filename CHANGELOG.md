@@ -12,6 +12,14 @@ Installationen aktualisieren können.
 
 ### Hinzugefügt
 
+- **Datenschutzerklärung und Nutzungsbedingungen auf der Website:** zwei neue öffentliche Seiten
+  `https://<website-domain>/privacy` und `/terms` (ohne Anmeldung, in allen vier Sprachen, Deutsch
+  massgebend), mit Inhaltsverzeichnis und Ankern, verlinkt in der Fusszeile der Website und
+  gegenseitig. Die Datenschutzerklärung beschreibt die tatsächliche Bearbeitung (Rollen Verein/hocX,
+  Abgabebox, Passwort-Leak-Prüfung, GeoIP, Foto-Standorte, Sicherheitsereignisse, Aufbewahrung,
+  Backups) und den Cloud-Import mit eigenem Abschnitt zu Google-Daten (Limited Use), wie ihn Google
+  und Microsoft für die App-Registrierung verlangen. Offene Angaben sind als `[[BITTE ERGÄNZEN: …]]`
+  markiert (`frontend/messages/<locale>/legal.json`).
 - **Protokoll-Editor neu (Design «Protokoll-Editor 1a», 1.6):** Kopf mit Status, Titel,
   Speicherstatus (speichert / gespeichert / offline mit wartenden Änderungen / Fehler mit Sprung zum
   Block), Anwesenden, Suche, Export und dem Knopf für den nächsten Schritt; links eine Gliederung

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
+import { WebsiteFooter } from "@/components/website/website-footer";
 import { WebsiteCustomers } from "@/components/website/website-customers";
 import { WebsiteLanguageSwitcher } from "@/components/website/website-language-switcher";
 import { WebsitePlanComparison } from "@/components/website/website-plan-comparison";
 import { WebsitePricing } from "@/components/website/website-pricing";
 import { backendFetch } from "@/lib/api/client";
 import { getMainAppUrl } from "@/lib/site-config";
+import { websiteBasePath } from "@/lib/website/paths";
 import type { PublicCustomer, PublicPlanComparison } from "@/types/api";
 
 // Oeffentliche Landing Page (Hauptdomain, siehe TRAEFIK_WEBSITE_DOMAIN in proxy.ts). Texte kommen
@@ -40,6 +42,7 @@ export default async function WebsitePage() {
     backendFetch<PublicCustomer[]>("/api/public/customers").then((result) => result ?? []),
   ]);
   const plans = comparison.plans;
+  const base = await websiteBasePath();
   const appUrl = getMainAppUrl() ?? "";
   const appLoginUrl = `${appUrl}/login`;
   const contactEmail = process.env.WEBSITE_CONTACT_EMAIL?.trim() || null;
@@ -355,20 +358,7 @@ export default async function WebsitePage() {
         </section>
       </main>
 
-      <footer className="ws-footer">
-        <div className="ws-container ws-footer-inner">
-          <div className="ws-brand">
-            <span className="ws-logo ws-logo-small" aria-hidden="true">
-              h
-            </span>
-            <span className="ws-footer-copy">{t("footer.copyright", { year: new Date().getFullYear() })}</span>
-          </div>
-          <div className="ws-footer-links">
-            {contactHref ? <a href={contactHref}>{t("footer.contact")}</a> : null}
-            <a href={appLoginUrl}>{t("footer.login")}</a>
-          </div>
-        </div>
-      </footer>
+      <WebsiteFooter t={(key, values) => t(`footer.${key}`, values)} base={base} appLoginUrl={appLoginUrl} contactHref={contactHref} />
     </div>
   );
 }
